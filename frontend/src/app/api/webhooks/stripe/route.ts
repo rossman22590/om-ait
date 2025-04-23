@@ -163,22 +163,27 @@ export async function POST(req: Request) {
         }
         
         // Insert subscription record
-        await supabase
-          .from('billing_subscriptions')
-          .insert({
-            id: randomUUID(),
-            created_at: new Date().toISOString(),
-            account_id: accountId,
-            subscription_id: subscription.id,
-            customer_id: subscription.customer as string,
-            price_id: subscription.items.data[0].price.id,
-            plan_name: resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname),
-            status: subscription.status,
-            current_period_start: safeIsoDate((subscription as any).current_period_start),
-            current_period_end: safeIsoDate((subscription as any).current_period_end),
-          });
-        
-        console.log(`Subscription created for account ${accountId} - plan ${resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname)}`);
+        try {
+          await supabase
+            .from('billing_subscriptions')  // This uses public schema by default
+            .insert({
+              id: randomUUID(),
+              created_at: new Date().toISOString(),
+              account_id: accountId,
+              subscription_id: subscription.id,
+              customer_id: subscription.customer as string,
+              price_id: subscription.items.data[0].price.id,
+              plan_name: resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname),
+              status: subscription.status,
+              current_period_start: safeIsoDate((subscription as any).current_period_start),
+              current_period_end: safeIsoDate((subscription as any).current_period_end),
+            });
+          
+          console.log(`Subscription created in public schema for account ${accountId} - plan ${resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname)}`);
+        } catch (err) {
+          console.error(`Error saving subscription to public schema: ${err}`);
+          // Continue execution - don't let this error stop the webhook
+        }
       }, event.type, { subscriptionId: (event.data.object as Stripe.Subscription).id });
       break;
       
@@ -216,21 +221,27 @@ export async function POST(req: Request) {
           }
           
           // Then add subscription
-          await supabase
-            .from('billing_subscriptions')
-            .insert({
-              account_id: accountId,
-              subscription_id: subscription.id,
-              customer_id: subscription.customer as string,
-              price_id: subscription.items.data[0].price.id,
-              plan_name: resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname),
-              status: subscription.status,
-              current_period_start: safeIsoDate((subscription as any).current_period_start),
-              current_period_end: safeIsoDate((subscription as any).current_period_end),
-              created_at: new Date().toISOString()
-            });
+          try {
+            await supabase
+              .from('billing_subscriptions')  // This uses public schema by default
+              .insert({
+                id: randomUUID(),
+                account_id: accountId,
+                subscription_id: subscription.id,
+                customer_id: subscription.customer as string,
+                price_id: subscription.items.data[0].price.id,
+                plan_name: resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname),
+                status: subscription.status,
+                current_period_start: safeIsoDate((subscription as any).current_period_start),
+                current_period_end: safeIsoDate((subscription as any).current_period_end),
+                created_at: new Date().toISOString()
+              });
             
-          console.log(`Subscription activated for account ${accountId} - plan ${resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname)}`);
+            console.log(`Checkout subscription created in public schema for account ${accountId} - plan ${resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname)}`);
+          } catch (err) {
+            console.error(`Error saving checkout subscription to public schema: ${err}`);
+            // Continue execution - don't let this error stop the webhook
+          }
         }, event.type, { accountId, subscriptionId: subscription.id });
         
         if (success) {
@@ -280,6 +291,67 @@ export async function POST(req: Request) {
       
     default:
       console.log(`Unhandled event type: ${event.type}`);
+      
+      // Special handling for users who might be stuck - check if this is a checkout-related event
+      if (event.type.startsWith('checkout.') || event.type.includes('checkout')) {
+        try {
+          const eventObject = event.data.object as any;
+          if (eventObject && eventObject.customer && eventObject.metadata?.account_id) {
+            const accountId = eventObject.metadata.account_id;
+            const customerId = eventObject.customer;
+            
+            console.log(`Special handling for potential stuck user: ${accountId} with customer ID: ${customerId}`);
+            
+            // Check if user has subscriptions in Stripe but not in our database
+            const stripeSubscriptions = await stripe.subscriptions.list({
+              customer: customerId,
+              status: 'active',
+              limit: 1
+            });
+            
+            if (stripeSubscriptions.data.length > 0) {
+              const subscription = stripeSubscriptions.data[0];
+              
+              // Check if subscription exists in our database
+              const { data: existingSubscription } = await supabase
+                .from('billing_subscriptions')
+                .select('subscription_id')
+                .eq('account_id', accountId)
+                .eq('subscription_id', subscription.id)
+                .single();
+              
+              // If no record found, add the subscription
+              if (!existingSubscription) {
+                console.log(`Fixing stuck user: Adding missing subscription ${subscription.id} for ${accountId}`);
+                
+                try {
+                  await supabase
+                    .from('billing_subscriptions')
+                    .insert({
+                      id: randomUUID(),
+                      account_id: accountId,
+                      subscription_id: subscription.id,
+                      customer_id: customerId,
+                      price_id: subscription.items.data[0].price.id,
+                      plan_name: resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname),
+                      status: subscription.status,
+                      current_period_start: safeIsoDate((subscription as any).current_period_start),
+                      current_period_end: safeIsoDate((subscription as any).current_period_end),
+                      created_at: new Date().toISOString()
+                    });
+                  
+                  console.log(`Successfully fixed subscription for stuck user ${accountId}`);
+                } catch (err) {
+                  console.error(`Error fixing stuck user subscription: ${err}`);
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.error(`Error in special stuck user handling: ${err}`);
+          // Continue with normal webhook processing
+        }
+      }
   }
 
   return NextResponse.json({ received: true });

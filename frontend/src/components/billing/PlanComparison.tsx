@@ -72,6 +72,7 @@ interface PlanComparisonProps {
   returnUrl?: string;
   isManaged?: boolean;
   onPlanSelect?: (planId: string) => void;
+  onUpgradeClick?: () => void;
   className?: string;
   isCompact?: boolean; // When true, uses vertical stacked layout for modals
 }
@@ -100,6 +101,7 @@ export function PlanComparison({
   returnUrl = typeof window !== 'undefined' ? window.location.href : '',
   isManaged = true,
   onPlanSelect,
+  onUpgradeClick,
   className = "",
   isCompact = false
 }: PlanComparisonProps) {
@@ -265,6 +267,7 @@ export function PlanComparison({
                   buttonText={tier.name === "Free" ? tier.buttonText : "Upgrade"}
                   buttonColor={tier.buttonColor}
                   isCompact={isCompact}
+                  onUpgradeClick={onUpgradeClick}
                 />
               ) : (
                 <Button
@@ -278,7 +281,10 @@ export function PlanComparison({
                       : tier.buttonColor
                   )}
                   disabled={isCurrentPlan}
-                  onClick={() => onPlanSelect?.(tier.name.toLowerCase())}
+                  onClick={() => {
+                    onPlanSelect?.(tier.name.toLowerCase());
+                    onUpgradeClick?.();
+                  }}
                 >
                   {isCurrentPlan ? "Current Plan" : (tier.name === "Free" ? tier.buttonText : "Upgrade")}
                 </Button>

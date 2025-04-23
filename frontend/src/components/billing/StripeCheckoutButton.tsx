@@ -22,6 +22,7 @@ interface StripeCheckoutButtonProps {
   buttonText: string;
   buttonColor: string;
   isCompact?: boolean;
+  onUpgradeClick?: () => void;
 }
 
 export function StripeCheckoutButton({
@@ -32,7 +33,8 @@ export function StripeCheckoutButton({
   isCurrentPlan = false,
   buttonText,
   buttonColor,
-  isCompact = false
+  isCompact = false,
+  onUpgradeClick
 }: StripeCheckoutButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +46,16 @@ export function StripeCheckoutButton({
     
     setIsLoading(true);
     setError(null);
+    
+    // Notify parent component that upgrade is being initiated
+    // Important: We're NOT showing our dialog immediately anymore
+    if (onUpgradeClick) {
+      onUpgradeClick();
+      // Wait briefly before showing our dialog to allow parent modal to close/hide
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+    
+    // Now open our dialog, which should appear on top
     setDialogOpen(true);
     
     try {
@@ -127,7 +139,7 @@ export function StripeCheckoutButton({
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md z-[10000]"> 
           <DialogHeader>
             <DialogTitle>Confirm Subscription Upgrade</DialogTitle>
             <DialogDescription>

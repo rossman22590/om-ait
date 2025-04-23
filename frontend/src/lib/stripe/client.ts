@@ -30,7 +30,7 @@ export const SUBSCRIPTION_TIERS = {
     minutes: 300,
     displayName: 'Pro'
   },
-  [process.env.STRIPE_ENTERPRISE_PLAN_ID || 'price_1RGtkVG23sSyONuF8kQcAclk']: { 
+  [process.env.STRIPE_ENTERPRISE_PLAN_ID || 'price_1RGw3iG23sSyONuFGk8uD3XV']: { 
     name: 'enterprise', 
     minutes: 2400,
     displayName: 'Enterprise'

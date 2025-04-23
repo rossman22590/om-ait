@@ -21,11 +21,32 @@ export function useBillingError(accountId?: string) {
   useEffect(() => {
     let isMounted = true;
 
+    // Check for Stripe success parameter in URL to force refresh after checkout
+    const isReturningFromStripe = typeof window !== 'undefined' && 
+      (window.location.search.includes('success=true') || 
+       window.location.search.includes('session_id='));
+
     const checkBilling = async () => {
       if (!accountId) return;
 
       try {
+        // Force cache bypass for billing data after returning from Stripe
         const data = await checkBillingStatus(accountId);
+        
+        // If returning from Stripe, clear any errors and refresh
+        if (isReturningFromStripe) {
+          console.log('Detected return from Stripe checkout, refreshing subscription status');
+          if (isMounted) {
+            setBillingError(null);
+            // Remove the query parameters to avoid repeat refreshes
+            if (typeof window !== 'undefined') {
+              const url = new URL(window.location.href);
+              url.search = '';
+              window.history.replaceState({}, '', url.toString());
+            }
+          }
+          return;
+        }
 
         // Only show billing alert when usage reaches 45 minutes (0.75 hours)
         const minimumUsageToShowAlert = 0.75; // 45 minutes in hours

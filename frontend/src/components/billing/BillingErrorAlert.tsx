@@ -4,6 +4,7 @@ import { Portal } from "@/components/ui/portal";
 import { PlanComparison } from "./PlanComparison";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import { useState } from "react";
 
 interface BillingErrorAlertProps {
   message?: string;
@@ -27,24 +28,42 @@ export function BillingErrorAlert({
   const returnUrl = typeof window !== 'undefined' ? window.location.href : '';
   // Override the limit to 50 minutes (0.833 hours) regardless of what the backend returns
   const actualLimit = 0.833; // 50 minutes in hours
+  
+  // Add state to track upgrade click
+  const [isUpgrading, setIsUpgrading] = useState(false);
+  // Add state to explicitly track when we should be hiding
+  const [shouldBeHidden, setShouldBeHidden] = useState(false);
 
   // Default handler for close button if onDismiss not provided
   const handleClose = () => {
+    // Don't close if upgrading is in progress
+    if (isUpgrading) return;
+    
     if (onDismiss) {
       onDismiss();
     } else {
       console.warn("BillingErrorAlert: No onDismiss handler provided");
-      // Try to force close by manipulating DOM directly (fallback)
-      const modalElements = document.querySelectorAll('[role="dialog"]');
-      modalElements.forEach(el => {
-        if (el.parentElement) {
-          el.parentElement.style.display = 'none';
-        }
-      });
     }
   };
+  
+  // Callback for when a plan button is clicked
+  const handleUpgradeClick = () => {
+    setIsUpgrading(true);
+    // Immediately set flag to hide visually
+    setShouldBeHidden(true);
+    
+    // Then let the parent component know after a brief delay
+    setTimeout(() => {
+      if (onDismiss) {
+        onDismiss();
+      }
+      setIsUpgrading(false);
+      setShouldBeHidden(false);
+    }, 300);
+  };
 
-  if (!isOpen) return null;
+  // Don't render if we're not open or if we should be hidden
+  if (!isOpen || shouldBeHidden) return null;
 
   return (
     <Portal>
@@ -56,7 +75,7 @@ export function BillingErrorAlert({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto py-4"
+              className="fixed inset-0 z-[9995] flex items-center justify-center overflow-y-auto py-4"
             >
               {/* Backdrop */}
               <motion.div
@@ -67,7 +86,7 @@ export function BillingErrorAlert({
                 className="fixed inset-0 bg-black/40 backdrop-blur-sm"
                 onClick={handleClose}
                 aria-hidden="true"
-                style={{ zIndex: 9998 }}
+                style={{ zIndex: 9996 }}
               />
               
               {/* Modal */}
@@ -83,11 +102,11 @@ export function BillingErrorAlert({
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="billing-modal-title"
-                style={{ zIndex: 9999 }}
+                style={{ zIndex: 9997 }}
                 onClick={(e) => e.stopPropagation()} // Prevent clicks from closing when clicking on the modal itself
               >
                 <div className="p-4">
-                  {/* Close button - ALWAYS VISIBLE */}
+                  {/* Close button */}
                   <button
                     onClick={handleClose}
                     className="absolute top-2 right-2 text-foreground hover:text-destructive transition-colors p-1.5 rounded-md hover:bg-gray-100 z-50 border border-gray-200 shadow-sm"
@@ -139,14 +158,16 @@ export function BillingErrorAlert({
                     returnUrl={returnUrl}
                     className="mb-3"
                     isCompact={true}
+                    onUpgradeClick={handleUpgradeClick}
                   />
 
-                  {/* Dismiss Button - ALWAYS VISIBLE */}
+                  {/* Dismiss Button */}
                   <Button
                     variant="ghost"
                     size="sm"
                     className="w-full text-muted-foreground hover:text-foreground hover:bg-gray-100 text-xs h-8 mt-2"
                     onClick={handleClose}
+                    disabled={isUpgrading}
                   >
                     Continue with Current Plan
                   </Button>
@@ -158,4 +179,4 @@ export function BillingErrorAlert({
       </AnimatePresence>
     </Portal>
   );
-} 
+}
