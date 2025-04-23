@@ -938,7 +938,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   useEffect(() => {
     if (projectName) {
       // Update document title when project name changes
-      document.title = `${projectName} | Kortix Suna`;
+      document.title = `${projectName} | AI Tutor Machine`;
       
       // Update meta tags for SEO
       const metaDescription = document.querySelector('meta[name="description"]');
@@ -949,7 +949,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
       // Update OpenGraph tags if they exist
       const ogTitle = document.querySelector('meta[property="og:title"]');
       if (ogTitle) {
-        ogTitle.setAttribute('content', `${projectName} | Kortix Suna`);
+        ogTitle.setAttribute('content', `${projectName} | AI Tutor Machine`);
       }
       
       const ogDescription = document.querySelector('meta[property="og:description"]');

@@ -14,6 +14,7 @@ import {
   CardTitle 
 } from "@/components/ui/card";
 import Script from "next/script";
+import { FlickeringGrid } from "@/components/home/ui/flickering-grid";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState(0);
@@ -116,25 +117,17 @@ export default function Home() {
   return (
     <main className="flex flex-col items-center min-h-screen w-full overflow-hidden bg-white dark:bg-black">
       {/* Hero Section */}
-      <section className="w-full py-24 md:py-32 relative overflow-hidden mt-16 bg-white dark:bg-black" style={{ zIndex: 1 }}>
-        {/* Animated Grid Background */}
-        <div className="absolute inset-0 z-0 opacity-30">
-          <div className="absolute inset-0">
-            <div className="h-full w-full bg-grid-black/[0.2] dark:bg-grid-white/[0.2] flex items-center justify-center">
-              <motion.div 
-                className="h-32 w-32 rounded-full bg-gradient-to-r from-primary/40 to-secondary/40 blur-xl"
-                animate={{ 
-                  scale: [1, 1.2, 1],
-                  opacity: [0.5, 0.8, 0.5],
-                  rotate: [0, 90, 180, 270, 360]
-                }}
-                transition={{ 
-                  duration: 10, 
-                  repeat: Infinity,
-                  ease: "linear" 
-                }}
-              />
-            </div>
+      <section className="w-full py-24 md:py-32 relative overflow-hidden bg-white dark:bg-black" style={{ zIndex: 1 }}>
+        {/* Sleek animated dots background */}
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <div className="absolute w-full h-full">
+            <FlickeringGrid
+              squareSize={2.2}
+              gridGap={20}
+              color="var(--primary)"
+              maxOpacity={0.5}
+              flickerChance={0.04}
+            />
           </div>
         </div>
         
@@ -981,9 +974,7 @@ export default function Home() {
                     whileHover={{ x: "100%", opacity: 0.4 }}
                     transition={{ duration: 0.6 }}
                   />
-                  <Link href="/dashboard" className="flex items-center gap-2 relative z-10 text-white dark:text-white font-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
-                    Get Started <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                  </Link>
+                  <Link href="/dashboard" className="flex items-center gap-2 relative z-10 text-white dark:text-white font-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>Get Started <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" /></Link>
                 </Button>
               </motion.div>
             </div>

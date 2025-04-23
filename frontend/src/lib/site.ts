@@ -1,5 +1,5 @@
 export const siteConfig = {
-  name: "Kortix Suna",
+  name: "AI Tutor Machine",
   url: "https://suna.so/",
   description: "Kortix AI",
   links: {
