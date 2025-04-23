@@ -3,57 +3,33 @@ from typing import Dict, Optional, Tuple
 import os
 
 # Define subscription tiers and their monthly limits (in minutes)
-# All tiers share the same price_id in Stripe - they're differentiated by plan_name only
 SUBSCRIPTION_TIERS: Dict[str, Dict] = {
-    'Free':        {'minutes': 50},     # 50 minutes
-    'Pro':         {'minutes': 300},    # 5 hours
-    'Enterprise':  {'minutes': 2400}    # 40 hours
+    'price_1RGtl4G23sSyONuFYWYsA0HK': {'name': 'free', 'minutes': 50},  # Free tier - 50 minutes
+    'price_1RGtkVG23sSyONuF8kQcAclk': {'name': 'pro', 'minutes': 300},  # Pro tier - 300 minutes (5 hours)
+    'price_1RGw3iG23sSyONuFGk8uD3XV': {'name': 'enterprise', 'minutes': 2400}  # Enterprise tier - 2400 minutes (40 hours)
 }
-
-# Standardized price ID used for all plans (matching your Stripe config)
-STRIPE_STANDARD_PRICE_ID = 'price_1RGtkVG23sSyONuF8kQcAclk'
 
 async def get_account_subscription(client, account_id: str) -> Optional[Dict]:
     """Get the current subscription for an account."""
     try:
+        # NOTE: Development mode check REMOVED to always read actual subscriptions
+            
         # Try to access subscriptions in public schema first (our primary storage location)
-        subscription_result = await client.from_('billing_subscriptions')\
-            .select('price_id,plan_name,status')\
-            .eq('account_id', account_id)\
-            .eq('status', 'active')\
-            .order('created_at', desc=True)\
-            .limit(1)\
-            .execute()
+        subscription_result = await client.from_('billing_subscriptions').select('price_id,plan_name').eq('account_id', account_id).order('created_at', desc=True).limit(1).execute()
          
         if subscription_result.data and len(subscription_result.data) > 0:
-            plan_name = subscription_result.data[0].get('plan_name', '').split()[0]  # Get base name
-            # Find matching tier or default to Free
-            tier_info = SUBSCRIPTION_TIERS.get(plan_name, SUBSCRIPTION_TIERS['Free'])
-            return {
-                'price_id': subscription_result.data[0].get('price_id', STRIPE_STANDARD_PRICE_ID),
-                'plan_name': plan_name,
-                'minutes': tier_info['minutes']
-            }
+            from utils.logger import logger
+            logger.info(f"Found subscription in public schema: {subscription_result.data[0]}")
+            return subscription_result.data[0]
          
         # As fallback, check basejump schema
         try:
-            subscription_result = await client.schema('basejump')\
-                .from_('billing_subscriptions')\
-                .select('price_id,plan_name,status')\
-                .eq('account_id', account_id)\
-                .eq('status', 'active')\
-                .order('created_at', desc=True)\
-                .limit(1)\
-                .execute()
+            subscription_result = await client.schema('basejump').from_('billing_subscriptions').select('price_id,plan_name').eq('account_id', account_id).order('created_at', desc=True).limit(1).execute()
             
             if subscription_result.data and len(subscription_result.data) > 0:
-                plan_name = subscription_result.data[0].get('plan_name', '').split()[0]
-                tier_info = SUBSCRIPTION_TIERS.get(plan_name, SUBSCRIPTION_TIERS['Free'])
-                return {
-                    'price_id': subscription_result.data[0].get('price_id', STRIPE_STANDARD_PRICE_ID),
-                    'plan_name': plan_name,
-                    'minutes': tier_info['minutes']
-                }
+                from utils.logger import logger
+                logger.info(f"Found subscription in basejump schema: {subscription_result.data[0]}")
+                return subscription_result.data[0]
         except Exception as e:
             from utils.logger import logger
             logger.warning(f"Error checking basejump schema: {str(e)}")
@@ -62,76 +38,72 @@ async def get_account_subscription(client, account_id: str) -> Optional[Dict]:
         from utils.logger import logger
         logger.info(f"No subscription found for account {account_id}, using free tier")
         return {
-            'price_id': STRIPE_STANDARD_PRICE_ID,
-            'plan_name': 'Free',
-            'minutes': SUBSCRIPTION_TIERS['Free']['minutes']
+            'price_id': 'price_1RGtl4G23sSyONuFYWYsA0HK',  # Free tier
+            'plan_name': 'Free'
         }
     except Exception as e:
         # Log the error but continue with free tier
         from utils.logger import logger
         logger.warning(f"Error fetching subscription: {str(e)}, using free tier")
         return {
-            'price_id': STRIPE_STANDARD_PRICE_ID,
-            'plan_name': 'Free (Error)',
-            'minutes': SUBSCRIPTION_TIERS['Free']['minutes']
+            'price_id': 'price_1RGtl4G23sSyONuFYWYsA0HK',  # Free tier
+            'plan_name': 'Free (Error)'
         }
 
 async def calculate_monthly_usage(client, account_id: str) -> float:
     """Calculate total agent run minutes for the current month for an account."""
-    # Get start of current month in UTC
+    # Calculate first day of current month
     now = datetime.now(timezone.utc)
-    start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    first_day = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
     
     # First get all threads for this account
     try:
         # Try to get threads from public schema
         threads_result = await client.schema('public').from_('threads').select('thread_id').eq('account_id', account_id).execute()
-         
-        # If no results, try basejump schema
-        if not threads_result.data:
-            threads_result = await client.schema('basejump').from_('threads').select('thread_id').eq('account_id', account_id).execute()
-     
-        if not threads_result.data:
-            return 0.0
-     
-        thread_ids = [t['thread_id'] for t in threads_result.data]
-     
-        # Then get all agent runs for these threads in current month
-        try:
-            # Try public schema
-            runs_result = await client.schema('public').from_('agent_runs').select('started_at,completed_at').in_('thread_id', thread_ids).gte('started_at', start_of_month.isoformat()).execute()
-             
-            # If no results, try basejump schema
-            if not runs_result.data:
-                runs_result = await client.schema('basejump').from_('agent_runs').select('started_at,completed_at').in_('thread_id', thread_ids).gte('started_at', start_of_month.isoformat()).execute()
-        except Exception as e:
-            from utils.logger import logger
-            logger.warning(f"Error fetching agent runs: {str(e)}")
-            return 0.0
-    
-        if not runs_result.data:
-            return 0.0
-    
-        # Calculate total minutes
-        total_seconds = 0
-        now_ts = now.timestamp()
         
-        for run in runs_result.data:
-            start_time = datetime.fromisoformat(run['started_at'].replace('Z', '+00:00')).timestamp()
-            if run['completed_at']:
-                end_time = datetime.fromisoformat(run['completed_at'].replace('Z', '+00:00')).timestamp()
-            else:
-                # For running jobs, use current time
-                end_time = now_ts
+        thread_ids = [thread['thread_id'] for thread in threads_result.data] if threads_result.data else []
         
-            total_seconds += (end_time - start_time)
+        # If no threads found, try basejump schema
+        if not thread_ids:
+            try:
+                threads_result = await client.schema('basejump').from_('threads').select('thread_id').eq('account_id', account_id).execute()
+                thread_ids = [thread['thread_id'] for thread in threads_result.data] if threads_result.data else []
+            except Exception as e:
+                from utils.logger import logger
+                logger.warning(f"Error fetching threads from basejump schema: {str(e)}")
+        
+        # If still no threads, return 0 usage
+        if not thread_ids:
+            return 0.0
+        
+        # Get agent runs for these threads in the current month
+        agent_runs_result = await client.schema('public').from_('agent_runs').select('started_at,completed_at').in_('thread_id', thread_ids).gte('started_at', first_day.isoformat()).execute()
+        
+        # If no agent runs in public schema, try basejump schema
+        if not agent_runs_result.data:
+            try:
+                agent_runs_result = await client.schema('basejump').from_('agent_runs').select('started_at,completed_at').in_('thread_id', thread_ids).gte('started_at', first_day.isoformat()).execute()
+            except Exception as e:
+                from utils.logger import logger
+                logger.warning(f"Error fetching agent runs from basejump schema: {str(e)}")
+        
+        # Calculate total run time in minutes
+        total_minutes = 0.0
+        for run in agent_runs_result.data if agent_runs_result.data else []:
+            start_time = datetime.fromisoformat(run['started_at'].replace('Z', '+00:00'))
+            end_time = datetime.fromisoformat(run['completed_at'].replace('Z', '+00:00')) if run['completed_at'] else datetime.now(timezone.utc)
+            duration_minutes = (end_time - start_time).total_seconds() / 60
+            total_minutes += duration_minutes
+        
+        from utils.logger import logger
+        logger.info(f"Total usage for account {account_id} this month: {total_minutes:.2f} minutes")
+        return total_minutes
     
-        return total_seconds / 60  # Convert to minutes
     except Exception as e:
         from utils.logger import logger
-        logger.warning(f"Error calculating monthly usage: {str(e)}")
+        logger.error(f"Error calculating monthly usage: {str(e)}")
         return 0.0
-
+    
 async def check_billing_status(client, account_id: str) -> Tuple[bool, str, Optional[Dict]]:
     """
     Check if an account can run agents based on their subscription and usage.
@@ -145,13 +117,13 @@ async def check_billing_status(client, account_id: str) -> Tuple[bool, str, Opti
     # If no subscription, they can use free tier
     if not subscription:
         subscription = {
-            'price_id': STRIPE_STANDARD_PRICE_ID,
+            'price_id': 'price_1RGtl4G23sSyONuFYWYsA0HK',  # Free tier
             'plan_name': 'Free',
-            'minutes': SUBSCRIPTION_TIERS['Free']['minutes']
+            'minutes': SUBSCRIPTION_TIERS['price_1RGtl4G23sSyONuFYWYsA0HK']['minutes']
         }
     
     # Get tier info
-    tier_info = SUBSCRIPTION_TIERS.get(subscription['plan_name'], {'minutes': 0})
+    tier_info = SUBSCRIPTION_TIERS.get(subscription['price_id'], {'minutes': 0})
     
     # Calculate current month's usage
     current_usage = await calculate_monthly_usage(client, account_id)

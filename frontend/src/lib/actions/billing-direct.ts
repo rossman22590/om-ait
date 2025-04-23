@@ -18,14 +18,27 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 export async function getBillingStatus(accountId: string) {
   const supabase = await createClient()
   
-  // Get subscription data
-  const { data: subscriptionData } = await supabase
-    .schema('basejump')
-    .from('billing_subscriptions')
-    .select('price_id, plan_name, status')
-    .eq('account_id', accountId)
-    .eq('status', 'active')
-    .single()
+  // Get subscription data - ONLY from public schema now
+  let subscriptionData = null;
+  
+  try {
+    // Only check public schema - basejump schema no longer used for billing
+    const { data: publicSubscription } = await supabase
+      .from('billing_subscriptions')
+      .select('price_id, plan_name, status')
+      .eq('account_id', accountId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (publicSubscription) {
+      console.log('Found subscription in public schema:', publicSubscription);
+      subscriptionData = publicSubscription;
+    }
+  } catch (error) {
+    console.error('Error fetching subscription data:', error);
+  }
   
   // Default to free tier if no subscription found
   const priceId = subscriptionData?.price_id || process.env.STRIPE_FREE_PLAN_ID || 'price_1RGtl4G23sSyONuFYWYsA0HK'
@@ -36,47 +49,25 @@ export async function getBillingStatus(accountId: string) {
   const now = new Date()
   const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
   
-  // First get threads for this account
+  // First get threads for this account - only from public schema
   const { data: threadsData } = await supabase
     .from('threads')
     .select('thread_id')
     .eq('account_id', accountId)
   
-  // Try basejump schema if no results
-  let threadIds = threadsData?.map(t => t.thread_id) || []
-  if (threadIds.length === 0) {
-    const { data: basejumpThreadsData } = await supabase
-      .schema('basejump')
-      .from('threads')
-      .select('thread_id')
-      .eq('account_id', accountId)
-    
-    threadIds = basejumpThreadsData?.map(t => t.thread_id) || []
-  }
+  const threadIds = threadsData?.map(t => t.thread_id) || [];
   
-  // Then get agent runs for those threads
-  let agentRunData: any[] = []
+  // Then get agent runs for those threads - only from public schema
+  let agentRunData: any[] = [];
   if (threadIds.length > 0) {
     const { data: runsData } = await supabase
       .from('agent_runs')
       .select('started_at, completed_at')
       .in('thread_id', threadIds)
-      .gte('started_at', startOfMonth.toISOString())
+      .gte('started_at', startOfMonth.toISOString());
     
     if (runsData && runsData.length > 0) {
-      agentRunData = runsData
-    } else {
-      // Try basejump schema
-      const { data: basejumpRunsData } = await supabase
-        .schema('basejump')
-        .from('agent_runs')
-        .select('started_at, completed_at')
-        .in('thread_id', threadIds)
-        .gte('started_at', startOfMonth.toISOString())
-      
-      if (basejumpRunsData) {
-        agentRunData = basejumpRunsData
-      }
+      agentRunData = runsData;
     }
   }
   
@@ -141,27 +132,15 @@ export async function createCheckoutSession(formData: FormData) {
   let accountData;
   
   try {
-    // Try basejump schema first
-    const { data: basejumpAccountData, error: basejumpError } = await supabase
-      .schema('basejump')
+    // Try public schema
+    const { data: publicAccountData, error: publicError } = await supabase
       .from('accounts')
       .select('created_by')
       .eq('account_id', accountId)
       .single()
     
-    if (basejumpAccountData) {
-      accountData = basejumpAccountData;
-    } else {
-      // Try public schema if basejump fails
-      const { data: publicAccountData, error: publicError } = await supabase
-        .from('accounts')
-        .select('created_by')
-        .eq('account_id', accountId)
-        .single()
-      
-      if (publicAccountData) {
-        accountData = publicAccountData;
-      }
+    if (publicAccountData) {
+      accountData = publicAccountData;
     }
   } catch (error) {
     console.error('Error fetching account:', error);
@@ -184,7 +163,7 @@ export async function createCheckoutSession(formData: FormData) {
   let userData;
   
   try {
-    // Try public schema first
+    // Try public schema
     const { data: publicUserData } = await supabase
       .from('users')
       .select('email')
@@ -193,18 +172,6 @@ export async function createCheckoutSession(formData: FormData) {
     
     if (publicUserData) {
       userData = publicUserData;
-    } else {
-      // Try basejump schema if public fails
-      const { data: basejumpUserData } = await supabase
-        .schema('basejump')
-        .from('users')
-        .select('email')
-        .eq('id', userId)
-        .single()
-      
-      if (basejumpUserData) {
-        userData = basejumpUserData;
-      }
     }
   } catch (error) {
     console.error('Error fetching user:', error);
@@ -226,7 +193,6 @@ export async function createCheckoutSession(formData: FormData) {
   
   // Check if customer already exists
   const { data: customerData } = await supabase
-    .schema('basejump')
     .from('billing_customers')
     .select('customer_id')
     .eq('account_id', accountId)
@@ -245,7 +211,6 @@ export async function createCheckoutSession(formData: FormData) {
     
     // Save customer ID
     await supabase
-      .schema('basejump')
       .from('billing_customers')
       .insert({
         account_id: accountId,
@@ -296,33 +261,20 @@ export async function createPortalSession(formData: FormData) {
   
   const supabase = await createClient()
   
-  // Get customer ID - try both schemas
+  // Get customer ID - only from public schema now
   let customerData;
   
   try {
-    // Try basejump schema first
-    const { data: basejumpCustomerData } = await supabase
-      .schema('basejump')
+    // Only check public schema for customers
+    const { data: publicCustomerData } = await supabase
       .from('billing_customers')
       .select('customer_id, email')
       .eq('account_id', accountId)
       .single();
     
-    if (basejumpCustomerData?.customer_id) {
-      console.log('Found customer in basejump schema:', basejumpCustomerData.customer_id);
-      customerData = basejumpCustomerData;
-    } else {
-      // Try public schema
-      const { data: publicCustomerData } = await supabase
-        .from('billing_customers')
-        .select('customer_id, email')
-        .eq('account_id', accountId)
-        .single();
-      
-      if (publicCustomerData?.customer_id) {
-        console.log('Found customer in public schema:', publicCustomerData.customer_id);
-        customerData = publicCustomerData;
-      }
+    if (publicCustomerData?.customer_id) {
+      console.log('Found customer in public schema:', publicCustomerData.customer_id);
+      customerData = publicCustomerData;
     }
   } catch (error) {
     console.error('Error fetching customer data:', error);
@@ -333,7 +285,6 @@ export async function createPortalSession(formData: FormData) {
     try {
       // Check for subscriptions in Stripe directly
       const { data: subscriptionData } = await supabase
-        .schema('basejump')
         .from('billing_subscriptions')
         .select('stripe_customer_id')
         .eq('account_id', accountId)
@@ -389,7 +340,6 @@ export async function createPortalSession(formData: FormData) {
         
         // Save the new customer ID
         await supabase
-          .schema('basejump')
           .from('billing_customers')
           .insert({
             account_id: accountId,
