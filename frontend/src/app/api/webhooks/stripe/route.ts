@@ -7,6 +7,64 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2025-03-31.basil',
 });
 
+// Maximum retries for database operations
+const MAX_RETRIES = 3;
+
+// Utility function to add a delay
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Function to log webhook events to a reliable source
+async function logWebhookEvent(eventType: string, details: any, error?: any) {
+  try {
+    // Create a more permanent record of the event
+    const supabase = await createClient();
+    await supabase
+      .from('webhook_logs')
+      .insert({
+        event_type: eventType,
+        data: JSON.stringify(details),
+        error: error ? JSON.stringify(error) : null,
+        created_at: new Date().toISOString()
+      });
+      
+    console.log(`Webhook event logged: ${eventType}`, { details: details, error: error });
+  } catch (logError) {
+    // Even our logging failed, so use console as last resort
+    console.error('Failed to log webhook event', { 
+      eventType, 
+      details, 
+      originalError: error,
+      loggingError: logError 
+    });
+  }
+}
+
+// Function to perform reliable database operations with retries
+async function reliableDbOperation(operation: () => Promise<any>, eventType: string, details: any): Promise<boolean> {
+  let retries = 0;
+  
+  while (retries < MAX_RETRIES) {
+    try {
+      await operation();
+      console.log(`Successfully performed database operation for ${eventType}`);
+      return true;
+    } catch (error) {
+      retries++;
+      console.error(`Error in database operation (attempt ${retries}/${MAX_RETRIES}):`, error);
+      
+      if (retries >= MAX_RETRIES) {
+        await logWebhookEvent(eventType, details, error);
+        return false;
+      }
+      
+      // Exponential backoff
+      await delay(Math.pow(2, retries) * 100);
+    }
+  }
+  
+  return false;
+}
+
 export async function POST(req: Request) {
   const body = await req.text();
   const signature = req.headers.get('stripe-signature') as string;
@@ -24,8 +82,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
 
-  const supabase = await createClient();
-
+  // We'll use the service role client to bypass RLS policies
+  const supabaseAdmin = await createClient();
+  
   // Handle the event
   switch (event.type) {
     case 'checkout.session.completed':
@@ -38,60 +97,95 @@ export async function POST(req: Request) {
         // Get subscription details
         const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
         
-        // Insert into billing_subscriptions table
-        await supabase
-          .schema('basejump')
-          .from('billing_subscriptions')
-          .insert({
-            account_id: accountId,
-            subscription_id: subscription.id,
-            customer_id: subscription.customer as string,
-            price_id: subscription.items.data[0].price.id,
-            plan_name: subscription.items.data[0].price.nickname || 'Unknown Plan',
-            status: subscription.status,
-            current_period_start: new Date((subscription as any).current_period_start * 1000).toISOString(),
-            current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
-            created_at: new Date().toISOString()
-          });
+        // Create reliable record in database
+        const success = await reliableDbOperation(async () => {
+          // First ensure the customer exists
+          const { data: existingCustomer } = await supabaseAdmin
+            .schema('basejump')
+            .from('billing_customers')
+            .select('customer_id')
+            .eq('account_id', accountId)
+            .single();
+            
+          if (!existingCustomer) {
+            // Create customer record first
+            await supabaseAdmin
+              .schema('basejump')
+              .from('billing_customers')
+              .insert({
+                account_id: accountId,
+                customer_id: subscription.customer as string,
+                email: session.customer_details?.email || 'unknown@example.com',
+                created_at: new Date().toISOString()
+              });
+            
+            console.log(`Created new customer for account ${accountId}`);
+          }
           
-        // Reset usage for the account to ensure they get immediate access to their plan
-        // Note: The system calculates usage on-the-fly from agent runs, so we don't need
-        // to update any usage_records table. The new plan's limits will apply automatically
-        // on the next usage check.
-        console.log(`Subscription activated for account ${accountId} - plan ${subscription.items.data[0].price.nickname || 'Unknown'}`);
+          // Then add subscription
+          await supabaseAdmin
+            .schema('basejump')
+            .from('billing_subscriptions')
+            .insert({
+              account_id: accountId,
+              subscription_id: subscription.id,
+              customer_id: subscription.customer as string,
+              price_id: subscription.items.data[0].price.id,
+              plan_name: subscription.items.data[0].price.nickname || 'Unknown Plan',
+              status: subscription.status,
+              current_period_start: new Date((subscription as any).current_period_start * 1000).toISOString(),
+              current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
+              created_at: new Date().toISOString()
+            });
+            
+          console.log(`Subscription activated for account ${accountId} - plan ${subscription.items.data[0].price.nickname || 'Unknown'}`);
+        }, event.type, { accountId, subscriptionId: subscription.id });
+        
+        if (success) {
+          await logWebhookEvent(event.type, { 
+            accountId, 
+            subscriptionId: subscription.id,
+            planName: subscription.items.data[0].price.nickname,
+            status: 'success'
+          });
+        }
       }
       break;
       
     case 'customer.subscription.updated':
       const updatedSubscription = event.data.object as Stripe.Subscription;
       
-      // Update subscription in database
-      await supabase
-        .schema('basejump')
-        .from('billing_subscriptions')
-        .update({
-          price_id: updatedSubscription.items.data[0].price.id,
-          plan_name: updatedSubscription.items.data[0].price.nickname || 'Unknown Plan',
-          status: updatedSubscription.status,
-          current_period_start: new Date((updatedSubscription as any).current_period_start * 1000).toISOString(),
-          current_period_end: new Date((updatedSubscription as any).current_period_end * 1000).toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('subscription_id', updatedSubscription.id);
+      await reliableDbOperation(async () => {
+        // Update subscription in database
+        await supabaseAdmin
+          .schema('basejump')
+          .from('billing_subscriptions')
+          .update({
+            price_id: updatedSubscription.items.data[0].price.id,
+            plan_name: updatedSubscription.items.data[0].price.nickname || 'Unknown Plan',
+            status: updatedSubscription.status,
+            current_period_start: new Date((updatedSubscription as any).current_period_start * 1000).toISOString(),
+            current_period_end: new Date((updatedSubscription as any).current_period_end * 1000).toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('subscription_id', updatedSubscription.id);
+      }, event.type, { subscriptionId: updatedSubscription.id });
       break;
       
     case 'customer.subscription.deleted':
       const deletedSubscription = event.data.object as Stripe.Subscription;
       
-      // Update subscription status to canceled
-      await supabase
-        .schema('basejump')
-        .from('billing_subscriptions')
-        .update({
-          status: 'canceled',
-          updated_at: new Date().toISOString()
-        })
-        .eq('subscription_id', deletedSubscription.id);
+      await reliableDbOperation(async () => {
+        // Update subscription status to canceled
+        await supabaseAdmin
+          .schema('basejump')
+          .from('billing_subscriptions')
+          .update({
+            status: 'canceled',
+            updated_at: new Date().toISOString()
+          })
+          .eq('subscription_id', deletedSubscription.id);
+      }, event.type, { subscriptionId: deletedSubscription.id });
       break;
       
     default:
