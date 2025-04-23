@@ -28,6 +28,22 @@ export function BillingErrorAlert({
   // Override the limit to 50 minutes (0.833 hours) regardless of what the backend returns
   const actualLimit = 0.833; // 50 minutes in hours
 
+  // Default handler for close button if onDismiss not provided
+  const handleClose = () => {
+    if (onDismiss) {
+      onDismiss();
+    } else {
+      console.warn("BillingErrorAlert: No onDismiss handler provided");
+      // Try to force close by manipulating DOM directly (fallback)
+      const modalElements = document.querySelectorAll('[role="dialog"]');
+      modalElements.forEach(el => {
+        if (el.parentElement) {
+          el.parentElement.style.display = 'none';
+        }
+      });
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -49,7 +65,7 @@ export function BillingErrorAlert({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.2 }}
                 className="fixed inset-0 bg-black/40 backdrop-blur-sm"
-                onClick={onDismiss}
+                onClick={handleClose}
                 aria-hidden="true"
                 style={{ zIndex: 9998 }}
               />
@@ -71,16 +87,14 @@ export function BillingErrorAlert({
                 onClick={(e) => e.stopPropagation()} // Prevent clicks from closing when clicking on the modal itself
               >
                 <div className="p-4">
-                  {/* Close button */}
-                  {onDismiss && (
-                    <button
-                      onClick={onDismiss}
-                      className="absolute top-2 right-2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded-md hover:bg-gray-100 z-50"
-                      aria-label="Close dialog"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  )}
+                  {/* Close button - ALWAYS VISIBLE */}
+                  <button
+                    onClick={handleClose}
+                    className="absolute top-2 right-2 text-foreground hover:text-destructive transition-colors p-1.5 rounded-md hover:bg-gray-100 z-50 border border-gray-200 shadow-sm"
+                    aria-label="Close dialog"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
 
                   {/* Header */}
                   <div className="text-center mb-4">
@@ -127,17 +141,15 @@ export function BillingErrorAlert({
                     isCompact={true}
                   />
 
-                  {/* Dismiss Button */}
-                  {onDismiss && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full text-muted-foreground hover:text-foreground hover:bg-gray-100 text-xs h-8 mt-2"
-                      onClick={onDismiss}
-                    >
-                      Continue with Current Plan
-                    </Button>
-                  )}
+                  {/* Dismiss Button - ALWAYS VISIBLE */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full text-muted-foreground hover:text-foreground hover:bg-gray-100 text-xs h-8 mt-2"
+                    onClick={handleClose}
+                  >
+                    Continue with Current Plan
+                  </Button>
                 </div>
               </motion.div>
             </motion.div>

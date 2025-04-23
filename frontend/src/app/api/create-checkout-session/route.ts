@@ -22,6 +22,14 @@ export async function POST(request: NextRequest) {
 
     // Get the price ID from the plan ID
     let priceId = '';
+    
+    // Log ALL price ID environment variables for debugging
+    console.log('ENVIRONMENT VARIABLES FOR PRICING:', {
+      FREE: process.env.STRIPE_FREE_PLAN_ID,
+      PRO: process.env.STRIPE_PRO_PLAN_ID,
+      ENTERPRISE: process.env.STRIPE_ENTERPRISE_PLAN_ID
+    });
+    
     if (planId === 'pro') {
       // Use the Pro plan price ID from environment variables
       priceId = process.env.STRIPE_PRO_PLAN_ID || '';
