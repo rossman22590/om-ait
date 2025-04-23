@@ -22,12 +22,12 @@ function DashboardContent() {
   const [inputValue, setInputValue] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [autoSubmit, setAutoSubmit] = useState(false);
-  const { billingError, handleBillingError, clearBillingError } = useBillingError();
   const router = useRouter();
   const isMobile = useIsMobile();
   const { setOpenMobile } = useSidebar();
   const { data: accounts } = useAccounts();
   const personalAccount = accounts?.find(account => account.personal_account);
+  const { billingError, handleBillingError, clearBillingError } = useBillingError(personalAccount?.account_id);
 
   const handleSubmit = async (message: string, options?: { model_name?: string; enable_thinking?: boolean }) => {
     if (!message.trim() || isSubmitting) return;

@@ -7,10 +7,10 @@ const nextConfig = {
       canvas: false,
     };
     
-    // Handle binary files like canvas.node
-    config.module.rules.push({
-      test: /node_modules\/canvas\/build\/Release\/canvas\.node$/,
-      use: 'null-loader',
+    // Ignore canvas.node binary files
+    config.externals.push({
+      'canvas': 'commonjs canvas',
+      'pdfjs-dist/build/pdf.worker.min': 'pdfjs-dist/build/pdf.worker.min',
     });
     
     return config;

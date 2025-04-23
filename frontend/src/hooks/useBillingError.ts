@@ -9,6 +9,8 @@ interface BillingErrorState {
   subscription: {
     price_id: string;
     plan_name: string;
+    current_usage?: number;
+    limit?: number;
   };
 }
 
