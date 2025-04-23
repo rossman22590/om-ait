@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import Stripe from 'stripe';
+import { randomUUID } from 'crypto'; // Use Node.js built-in UUID instead of external package
 
 // Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
@@ -23,6 +24,18 @@ const safeIsoDate = (timestamp: number | null | undefined): string => {
     return new Date().toISOString();
   }
 };
+
+// Price‑ID → human plan name mapping (fallback when Stripe price.nickname is empty)
+const PRICE_ID_TO_PLAN: Record<string, string> = {
+  'price_1RGtl4G23sSyONuFYWYsA0HK': 'Free',
+  'price_1RGtkVG23sSyONuF8kQcAclk': 'Pro',
+  'price_1RGw3iG23sSyONuFGk8uD3XV': 'Enterprise'
+};
+
+function resolvePlanName(priceId: string, stripeNickname?: string | null): string {
+  if (stripeNickname && stripeNickname.trim().length > 0) return stripeNickname;
+  return PRICE_ID_TO_PLAN[priceId] || 'Unknown Plan';
+}
 
 // Function to log webhook events to a reliable source
 async function logWebhookEvent(eventType: string, details: any, error?: any) {
@@ -86,7 +99,7 @@ export async function POST(req: Request) {
     event = stripe.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET || ''
+      process.env.STRIPE_WEBHOOK_SECRET
     );
   } catch (err: any) {
     console.error(`Webhook signature verification failed: ${err.message}`);
@@ -94,32 +107,79 @@ export async function POST(req: Request) {
   }
 
   // We'll use the service role client to bypass RLS policies
-  const supabaseAdmin = await createClient();
+  const supabase = await createClient();
   
   // Handle the event
   switch (event.type) {
     case 'customer.created':
-      const customer = event.data.object as Stripe.Customer;
-      console.log(`Customer created: ${customer.id}`);
+      await reliableDbOperation(async () => {
+        const customer = event.data.object as Stripe.Customer;
+        
+        // Extract account_id from metadata if it exists
+        const customerAccountId = customer.metadata?.account_id;
+        
+        if (!customerAccountId) {
+          console.warn('Missing account_id in customer metadata:', customer.id);
+          return;
+        }
+
+        // Insert into public schema billing_customers table
+        await supabase
+          .from('billing_customers')
+          .insert({
+            id: randomUUID(),
+            created_at: new Date().toISOString(),
+            account_id: customerAccountId,
+            customer_id: customer.id,
+            email: customer.email || ''
+          });
+        
+        console.log(`Customer record created for account ${customerAccountId}`);
+      }, event.type, { customerId: (event.data.object as Stripe.Customer).id });
+      break;
       
-      // Extract account_id from metadata if it exists
-      const customerAccountId = customer.metadata?.account_id;
-      
-      if (customerAccountId) {
-        // Store customer in database
-        await reliableDbOperation(async () => {
-          await supabaseAdmin
-            .from('billing_customers')
-            .insert({
-              account_id: customerAccountId,
-              customer_id: customer.id,
-              email: customer.email || 'unknown@example.com',
-              created_at: new Date().toISOString()
-            });
-            
-          console.log(`Customer ${customer.id} stored in database for account ${customerAccountId}`);
-        }, event.type, { customerId: customer.id, accountId: customerAccountId });
-      }
+    case 'customer.subscription.created':
+      await reliableDbOperation(async () => {
+        const subscription = event.data.object as Stripe.Subscription;
+        // Safely get customer details
+        let accountId: string | undefined = undefined;
+        
+        try {
+          const customerObj = await stripe.customers.retrieve(
+            subscription.customer as string
+          );
+          
+          // Only access metadata if customer is not deleted
+          if (!(customerObj as any).deleted) {
+            accountId = (customerObj as Stripe.Customer).metadata?.account_id;
+          }
+        } catch (err) {
+          console.error('Error retrieving customer:', err);
+        }
+        
+        if (!accountId) {
+          console.warn('Missing account_id in customer metadata:', subscription.customer);
+          return;
+        }
+        
+        // Insert subscription record
+        await supabase
+          .from('billing_subscriptions')
+          .insert({
+            id: randomUUID(),
+            created_at: new Date().toISOString(),
+            account_id: accountId,
+            subscription_id: subscription.id,
+            customer_id: subscription.customer as string,
+            price_id: subscription.items.data[0].price.id,
+            plan_name: resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname),
+            status: subscription.status,
+            current_period_start: safeIsoDate((subscription as any).current_period_start),
+            current_period_end: safeIsoDate((subscription as any).current_period_end),
+          });
+        
+        console.log(`Subscription created for account ${accountId} - plan ${resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname)}`);
+      }, event.type, { subscriptionId: (event.data.object as Stripe.Subscription).id });
       break;
       
     case 'checkout.session.completed':
@@ -135,7 +195,7 @@ export async function POST(req: Request) {
         // Create reliable record in database
         const success = await reliableDbOperation(async () => {
           // First ensure the customer exists
-          const { data: existingCustomer } = await supabaseAdmin
+          const { data: existingCustomer } = await supabase
             .from('billing_customers')
             .select('customer_id')
             .eq('account_id', accountId)
@@ -143,7 +203,7 @@ export async function POST(req: Request) {
             
           if (!existingCustomer) {
             // Create customer record first
-            await supabaseAdmin
+            await supabase
               .from('billing_customers')
               .insert({
                 account_id: accountId,
@@ -156,28 +216,28 @@ export async function POST(req: Request) {
           }
           
           // Then add subscription
-          await supabaseAdmin
+          await supabase
             .from('billing_subscriptions')
             .insert({
               account_id: accountId,
               subscription_id: subscription.id,
               customer_id: subscription.customer as string,
               price_id: subscription.items.data[0].price.id,
-              plan_name: subscription.items.data[0].price.nickname || 'Unknown Plan',
+              plan_name: resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname),
               status: subscription.status,
               current_period_start: safeIsoDate((subscription as any).current_period_start),
               current_period_end: safeIsoDate((subscription as any).current_period_end),
               created_at: new Date().toISOString()
             });
             
-          console.log(`Subscription activated for account ${accountId} - plan ${subscription.items.data[0].price.nickname || 'Unknown'}`);
+          console.log(`Subscription activated for account ${accountId} - plan ${resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname)}`);
         }, event.type, { accountId, subscriptionId: subscription.id });
         
         if (success) {
           await logWebhookEvent(event.type, { 
             accountId, 
             subscriptionId: subscription.id,
-            planName: subscription.items.data[0].price.nickname,
+            planName: resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname),
             status: 'success'
           });
         }
@@ -189,11 +249,11 @@ export async function POST(req: Request) {
       
       await reliableDbOperation(async () => {
         // Update subscription in database
-        await supabaseAdmin
+        await supabase
           .from('billing_subscriptions')
           .update({
             price_id: updatedSubscription.items.data[0].price.id,
-            plan_name: updatedSubscription.items.data[0].price.nickname || 'Unknown Plan',
+            plan_name: resolvePlanName(updatedSubscription.items.data[0].price.id, updatedSubscription.items.data[0].price.nickname),
             status: updatedSubscription.status,
             current_period_start: safeIsoDate((updatedSubscription as any).current_period_start),
             current_period_end: safeIsoDate((updatedSubscription as any).current_period_end),
@@ -208,7 +268,7 @@ export async function POST(req: Request) {
       
       await reliableDbOperation(async () => {
         // Update subscription status to canceled
-        await supabaseAdmin
+        await supabase
           .from('billing_subscriptions')
           .update({
             status: 'canceled',

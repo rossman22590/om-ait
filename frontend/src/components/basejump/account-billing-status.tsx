@@ -15,16 +15,40 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     const { checkBillingStatus } = await import('@/lib/actions/billing-new');
     const billingData = await checkBillingStatus(accountId);
 
-    // Get current subscription details
-    const { data: subscriptionData } = await supabaseClient
-        .schema('basejump')
+    // Get current subscription details - first check public schema (primary storage)
+    let subscriptionData = null;
+    
+    // Try public schema first
+    const { data: publicSubscription } = await supabaseClient
         .from('billing_subscriptions')
-        .select('price_id')
+        .select('price_id, plan_name, status')
         .eq('account_id', accountId)
         .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
         .single();
+    
+    if (publicSubscription) {
+        subscriptionData = publicSubscription;
+        console.log("Found subscription in public schema:", subscriptionData);
+    } else {
+        // Fall back to basejump schema
+        const { data: basejumpSubscription } = await supabaseClient
+            .schema('basejump')
+            .from('billing_subscriptions')
+            .select('price_id, plan_name')
+            .eq('account_id', accountId)
+            .eq('status', 'active')
+            .single();
+        
+        if (basejumpSubscription) {
+            subscriptionData = basejumpSubscription;
+            console.log("Found subscription in basejump schema:", subscriptionData);
+        }
+    }
 
     const currentPlanId = subscriptionData?.price_id;
+    const currentPlanName = subscriptionData?.plan_name;
 
     // Get agent run hours for current month
     const startOfMonth = new Date();
@@ -79,10 +103,10 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                                     {(!currentPlanId || currentPlanId === SUBSCRIPTION_PLANS.FREE) ? 'Active (Free)' : billingData.status === 'active' ? 'Active' : 'Inactive'}
                                 </span>
                             </div>
-                            {billingData.plan_name && (
+                            {(billingData.plan_name || currentPlanName) && (
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm font-medium text-foreground/90">Plan</span>
-                                    <span className="text-sm font-medium text-card-title">{billingData.plan_name}</span>
+                                    <span className="text-sm font-medium text-card-title">{currentPlanName || billingData.plan_name}</span>
                                 </div>
                             )}
                             <div className="flex justify-between items-center">

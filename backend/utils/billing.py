@@ -3,36 +3,57 @@ from typing import Dict, Optional, Tuple
 import os
 
 # Define subscription tiers and their monthly limits (in minutes)
-SUBSCRIPTION_TIERS = {
-    'price_1RGtl4G23sSyONuFYWYsA0HK': {'name': 'free', 'minutes': 50},  # Free tier - 50 minutes
-    'price_1RGtkVG23sSyONuF8kQcAclk': {'name': 'pro', 'minutes': 300},  # Pro tier - 300 minutes (5 hours)
-    'price_1RGw3iG23sSyONuFGk8uD3XV': {'name': 'enterprise', 'minutes': 2400}  # Enterprise tier - 2400 minutes (40 hours)
+# All tiers share the same price_id in Stripe - they're differentiated by plan_name only
+SUBSCRIPTION_TIERS: Dict[str, Dict] = {
+    'Free':        {'minutes': 50},     # 50 minutes
+    'Pro':         {'minutes': 300},    # 5 hours
+    'Enterprise':  {'minutes': 2400}    # 40 hours
 }
+
+# Standardized price ID used for all plans (matching your Stripe config)
+STRIPE_STANDARD_PRICE_ID = 'price_1RGtkVG23sSyONuF8kQcAclk'
 
 async def get_account_subscription(client, account_id: str) -> Optional[Dict]:
     """Get the current subscription for an account."""
     try:
-        # In development mode, return a mock subscription
-        if os.environ.get('ENVIRONMENT', 'development') == 'development':
-            from utils.logger import logger
-            logger.info(f"Development mode: Using mock subscription for account {account_id}")
-            return {
-                'price_id': 'price_1RGtl4G23sSyONuFYWYsA0HK',  # Free tier
-                'plan_name': 'Free (Development)'
-            }
-            
         # Try to access subscriptions in public schema first (our primary storage location)
-        subscription_result = await client.from_('billing_subscriptions').select('price_id,plan_name').eq('account_id', account_id).order('created_at', desc=True).limit(1).execute()
+        subscription_result = await client.from_('billing_subscriptions')\
+            .select('price_id,plan_name,status')\
+            .eq('account_id', account_id)\
+            .eq('status', 'active')\
+            .order('created_at', desc=True)\
+            .limit(1)\
+            .execute()
          
         if subscription_result.data and len(subscription_result.data) > 0:
-            return subscription_result.data[0]
+            plan_name = subscription_result.data[0].get('plan_name', '').split()[0]  # Get base name
+            # Find matching tier or default to Free
+            tier_info = SUBSCRIPTION_TIERS.get(plan_name, SUBSCRIPTION_TIERS['Free'])
+            return {
+                'price_id': subscription_result.data[0].get('price_id', STRIPE_STANDARD_PRICE_ID),
+                'plan_name': plan_name,
+                'minutes': tier_info['minutes']
+            }
          
         # As fallback, check basejump schema
         try:
-            subscription_result = await client.schema('basejump').from_('billing_subscriptions').select('price_id,plan_name').eq('account_id', account_id).order('created_at', desc=True).limit(1).execute()
+            subscription_result = await client.schema('basejump')\
+                .from_('billing_subscriptions')\
+                .select('price_id,plan_name,status')\
+                .eq('account_id', account_id)\
+                .eq('status', 'active')\
+                .order('created_at', desc=True)\
+                .limit(1)\
+                .execute()
             
             if subscription_result.data and len(subscription_result.data) > 0:
-                return subscription_result.data[0]
+                plan_name = subscription_result.data[0].get('plan_name', '').split()[0]
+                tier_info = SUBSCRIPTION_TIERS.get(plan_name, SUBSCRIPTION_TIERS['Free'])
+                return {
+                    'price_id': subscription_result.data[0].get('price_id', STRIPE_STANDARD_PRICE_ID),
+                    'plan_name': plan_name,
+                    'minutes': tier_info['minutes']
+                }
         except Exception as e:
             from utils.logger import logger
             logger.warning(f"Error checking basejump schema: {str(e)}")
@@ -41,16 +62,18 @@ async def get_account_subscription(client, account_id: str) -> Optional[Dict]:
         from utils.logger import logger
         logger.info(f"No subscription found for account {account_id}, using free tier")
         return {
-            'price_id': 'price_1RGtl4G23sSyONuFYWYsA0HK',  # Free tier
-            'plan_name': 'Free'
+            'price_id': STRIPE_STANDARD_PRICE_ID,
+            'plan_name': 'Free',
+            'minutes': SUBSCRIPTION_TIERS['Free']['minutes']
         }
     except Exception as e:
         # Log the error but continue with free tier
         from utils.logger import logger
         logger.warning(f"Error fetching subscription: {str(e)}, using free tier")
         return {
-            'price_id': 'price_1RGtl4G23sSyONuFYWYsA0HK',  # Free tier
-            'plan_name': 'Free (Error)'
+            'price_id': STRIPE_STANDARD_PRICE_ID,
+            'plan_name': 'Free (Error)',
+            'minutes': SUBSCRIPTION_TIERS['Free']['minutes']
         }
 
 async def calculate_monthly_usage(client, account_id: str) -> float:
@@ -61,12 +84,6 @@ async def calculate_monthly_usage(client, account_id: str) -> float:
     
     # First get all threads for this account
     try:
-        # In development mode, return minimal usage
-        if os.environ.get('ENVIRONMENT', 'development') == 'development':
-            from utils.logger import logger
-            logger.info(f"Development mode: Using minimal usage for account {account_id}")
-            return 5.0  # 5 minutes of usage in development mode
-
         # Try to get threads from public schema
         threads_result = await client.schema('public').from_('threads').select('thread_id').eq('account_id', account_id).execute()
          
@@ -128,14 +145,13 @@ async def check_billing_status(client, account_id: str) -> Tuple[bool, str, Opti
     # If no subscription, they can use free tier
     if not subscription:
         subscription = {
-            'price_id': 'price_1RGtl4G23sSyONuFYWYsA0HK',  # Free tier
-            'plan_name': 'Free'
+            'price_id': STRIPE_STANDARD_PRICE_ID,
+            'plan_name': 'Free',
+            'minutes': SUBSCRIPTION_TIERS['Free']['minutes']
         }
     
     # Get tier info
-    tier_info = SUBSCRIPTION_TIERS.get(subscription['price_id'])
-    if not tier_info:
-        return False, "Invalid subscription tier", subscription
+    tier_info = SUBSCRIPTION_TIERS.get(subscription['plan_name'], {'minutes': 0})
     
     # Calculate current month's usage
     current_usage = await calculate_monthly_usage(client, account_id)
@@ -143,7 +159,7 @@ async def check_billing_status(client, account_id: str) -> Tuple[bool, str, Opti
     # Check if within limits
     if current_usage >= tier_info['minutes']:
         return False, f"Monthly limit of {tier_info['minutes']} minutes reached. Please upgrade your plan or wait until next month.", subscription
-    elif subscription['price_id'] == 'price_1RGtl4G23sSyONuFYWYsA0HK' and current_usage >= 45:
+    elif subscription['plan_name'] == 'Free' and current_usage >= 45:
         # Still allow usage but return a warning message
         return True, f"You've used {current_usage:.1f} minutes out of your {tier_info['minutes']} minute monthly limit. Consider upgrading your plan.", subscription
     
