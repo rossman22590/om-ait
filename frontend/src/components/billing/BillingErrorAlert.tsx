@@ -4,7 +4,7 @@ import { Portal } from "@/components/ui/portal";
 import { PlanComparison } from "./PlanComparison";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface BillingErrorAlertProps {
   message?: string;
@@ -14,6 +14,10 @@ interface BillingErrorAlertProps {
   onDismiss?: () => void;
   className?: string;
   isOpen: boolean;
+  subscription?: {
+    price_id?: string;
+    plan_name?: string;
+  };
 }
 
 export function BillingErrorAlert({
@@ -23,7 +27,8 @@ export function BillingErrorAlert({
   accountId,
   onDismiss,
   className = "",
-  isOpen
+  isOpen,
+  subscription
 }: BillingErrorAlertProps) {
   const returnUrl = typeof window !== 'undefined' ? window.location.href : '';
   // Override the limit to 50 minutes (0.833 hours) regardless of what the backend returns
@@ -33,6 +38,28 @@ export function BillingErrorAlert({
   const [isUpgrading, setIsUpgrading] = useState(false);
   // Add state to explicitly track when we should be hiding
   const [shouldBeHidden, setShouldBeHidden] = useState(false);
+  // Track if user is on pro plan to ensure we don't show this at all
+  const [isProOrEnterprise, setIsProOrEnterprise] = useState(false);
+
+  useEffect(() => {
+    // Check if user is on Pro or Enterprise plan
+    if (subscription) {
+      const planName = subscription.plan_name?.toLowerCase() || '';
+      const priceId = subscription.price_id || '';
+      
+      // Same logic as in useBillingError.ts
+      if (planName.includes('pro') || planName.includes('enterprise') ||
+          priceId === 'price_1RGtkVG23sSyONuF8kQcAclk' || // Pro price ID
+          priceId === 'price_1RGw3iG23sSyONuFGk8uD3XV') { // Enterprise price ID
+        console.log('BillingErrorAlert: User is on paid plan, should never show');
+        setIsProOrEnterprise(true);
+        // Auto-dismiss if already open
+        if (onDismiss) {
+          onDismiss();
+        }
+      }
+    }
+  }, [subscription, onDismiss]);
 
   // Default handler for close button if onDismiss not provided
   const handleClose = () => {
@@ -62,8 +89,8 @@ export function BillingErrorAlert({
     }, 300);
   };
 
-  // Don't render if we're not open or if we should be hidden
-  if (!isOpen || shouldBeHidden) return null;
+  // Don't render if we're not open or if we should be hidden or if user is on Pro/Enterprise
+  if (!isOpen || shouldBeHidden || isProOrEnterprise) return null;
 
   return (
     <Portal>

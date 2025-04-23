@@ -27,7 +27,7 @@ function DashboardContent() {
   const { setOpenMobile } = useSidebar();
   const { data: accounts } = useAccounts();
   const personalAccount = accounts?.find(account => account.personal_account);
-  const { billingError, handleBillingError, clearBillingError } = useBillingError(personalAccount?.account_id);
+  const { billingError, handleBillingError, clearBillingError, subscription } = useBillingError(personalAccount?.account_id);
 
   const handleSubmit = async (message: string, options?: { model_name?: string; enable_thinking?: boolean }) => {
     if (!message.trim() || isSubmitting) return;
@@ -224,6 +224,7 @@ function DashboardContent() {
         accountId={personalAccount?.account_id}
         onDismiss={clearBillingError}
         isOpen={!!billingError}
+        subscription={subscription}
       />
     </div>
   );

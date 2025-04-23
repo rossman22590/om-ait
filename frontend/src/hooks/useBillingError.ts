@@ -48,6 +48,23 @@ export function useBillingError(accountId?: string) {
           return;
         }
 
+        // NEVER show billing alerts for Pro or Enterprise users
+        const planName = data?.subscription?.plan_name?.toLowerCase() || '';
+        const priceId = data?.subscription?.price_id || '';
+        
+        console.log('Billing check - plan details:', { planName, priceId });
+        
+        // Check if user is on Pro or Enterprise plan by name or price ID
+        if (planName.includes('pro') || planName.includes('enterprise') ||
+            priceId === 'price_1RGtkVG23sSyONuF8kQcAclk' || // Pro price ID
+            priceId === 'price_1RGw3iG23sSyONuFGk8uD3XV') { // Enterprise price ID
+          console.log('User is on paid plan, clearing any billing errors');
+          if (isMounted) {
+            setBillingError(null);
+          }
+          return;
+        }
+
         // Only show billing alert when usage reaches 45 minutes (0.75 hours)
         const minimumUsageToShowAlert = 0.75; // 45 minutes in hours
         
@@ -128,6 +145,7 @@ export function useBillingError(accountId?: string) {
   return {
     billingError,
     handleBillingError,
-    clearBillingError
+    clearBillingError,
+    subscription: billingError?.subscription
   };
 }
