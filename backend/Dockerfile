@@ -9,6 +9,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the backend code
 COPY . .
 
+# Copy environment variables
+COPY .env .
+
 # Set environment variable
 ENV PYTHONPATH=/app
 
@@ -16,4 +19,4 @@ ENV PYTHONPATH=/app
 EXPOSE 8000
 
 # Command to run the application
-CMD ["python", "api.py"]
+CMD python api.py
