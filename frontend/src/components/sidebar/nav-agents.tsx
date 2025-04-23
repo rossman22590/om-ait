@@ -49,8 +49,9 @@ type ThreadWithProject = {
 export function NavAgents() {
   const { isMobile, state } = useSidebar()
   const [threads, setThreads] = useState<ThreadWithProject[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [loadingThreadId, setLoadingThreadId] = useState<string | null>(null)
+  const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null)
   const pathname = usePathname()
   const router = useRouter()
 
@@ -173,6 +174,42 @@ export function NavAgents() {
     router.push(url)
   }
 
+  // Function to delete a thread
+  const handleDeleteThread = async (threadId: string, projectId: string) => {
+    if (!threadId) return;
+    
+    try {
+      setDeletingThreadId(threadId);
+      
+      // Call API to delete the thread
+      const response = await fetch(`/api/threads/${threadId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ projectId }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete thread');
+      }
+      
+      // Remove the thread from state
+      setThreads(prevThreads => prevThreads.filter(t => t.threadId !== threadId));
+      toast.success('Thread deleted successfully');
+      
+      // If on the deleted thread page, redirect to dashboard
+      if (pathname.includes(threadId)) {
+        router.push('/dashboard');
+      }
+    } catch (error) {
+      console.error('Error deleting thread:', error);
+      toast.error('Failed to delete thread. Please try again.');
+    } finally {
+      setDeletingThreadId(null);
+    }
+  };
+
   return (
     <SidebarGroup>
       <div className="flex justify-between items-center">
@@ -285,8 +322,15 @@ export function NavAgents() {
                           </a>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem>
-                          <Trash2 className="text-muted-foreground" />
+                        <DropdownMenuItem 
+                          onClick={() => handleDeleteThread(thread.threadId, thread.projectId)}
+                          disabled={deletingThreadId === thread.threadId}
+                        >
+                          {deletingThreadId === thread.threadId ? (
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          ) : (
+                            <Trash2 className="text-muted-foreground" />
+                          )}
                           <span>Delete</span>
                         </DropdownMenuItem>
                       </DropdownMenuContent>

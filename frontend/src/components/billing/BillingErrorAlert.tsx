@@ -51,6 +51,7 @@ export function BillingErrorAlert({
                 className="fixed inset-0 bg-black/40 backdrop-blur-sm"
                 onClick={onDismiss}
                 aria-hidden="true"
+                style={{ zIndex: 9998 }}
               />
               
               {/* Modal */}
@@ -66,16 +67,18 @@ export function BillingErrorAlert({
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="billing-modal-title"
+                style={{ zIndex: 9999 }}
+                onClick={(e) => e.stopPropagation()} // Prevent clicks from closing when clicking on the modal itself
               >
                 <div className="p-4">
                   {/* Close button */}
                   {onDismiss && (
                     <button
                       onClick={onDismiss}
-                      className="absolute top-2 right-2 text-muted-foreground hover:text-foreground transition-colors"
+                      className="absolute top-2 right-2 text-muted-foreground hover:text-foreground transition-colors p-1 rounded-md hover:bg-gray-100 z-50"
                       aria-label="Close dialog"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-5 w-5" />
                     </button>
                   )}
 
@@ -129,7 +132,7 @@ export function BillingErrorAlert({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full text-muted-foreground hover:text-foreground text-xs h-7"
+                      className="w-full text-muted-foreground hover:text-foreground hover:bg-gray-100 text-xs h-8 mt-2"
                       onClick={onDismiss}
                     >
                       Continue with Current Plan

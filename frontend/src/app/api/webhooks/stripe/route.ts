@@ -53,6 +53,12 @@ export async function POST(req: Request) {
             current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
             created_at: new Date().toISOString()
           });
+          
+        // Reset usage for the account to ensure they get immediate access to their plan
+        // Note: The system calculates usage on-the-fly from agent runs, so we don't need
+        // to update any usage_records table. The new plan's limits will apply automatically
+        // on the next usage check.
+        console.log(`Subscription activated for account ${accountId} - plan ${subscription.items.data[0].price.nickname || 'Unknown'}`);
       }
       break;
       
