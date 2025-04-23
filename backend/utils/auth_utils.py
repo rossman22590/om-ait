@@ -141,12 +141,12 @@ async def verify_thread_access(client, thread_id: str, user_id: str):
     if account_id:
         try:
             # First try to check in the public schema
-            account_user_result = await client.from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
+            account_user_result = await client.schema('public').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
             if account_user_result.data and len(account_user_result.data) > 0:
                 return True
             
             # If not found in public schema, try the basejump schema
-            account_user_result = await client.from_('basejump.account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
+            account_user_result = await client.schema('basejump').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
             if account_user_result.data and len(account_user_result.data) > 0:
                 return True
         except Exception as e:
