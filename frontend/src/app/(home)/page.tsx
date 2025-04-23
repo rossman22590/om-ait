@@ -785,9 +785,9 @@ export default function Home() {
               }
             ].map((example, i) => (
               <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden h-[280px] flex flex-col relative group cursor-pointer hover:shadow-md transition-shadow" style={{ position: 'relative', zIndex: 1 }}>
-                <a href="/auth" className="absolute inset-0 z-1">
+                <Link href="/auth" className="absolute inset-0 z-1">
                   <span className="sr-only">Try {example.title}</span>
-                </a>
+                </Link>
                 <div className="p-6 flex-grow relative z-0">
                   <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center mb-4">
                     {example.icon}
