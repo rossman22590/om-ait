@@ -13,6 +13,17 @@ const MAX_RETRIES = 3;
 // Utility function to add a delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Safely convert timestamps
+const safeIsoDate = (timestamp: number | null | undefined): string => {
+  if (!timestamp) return new Date().toISOString();
+  try {
+    return new Date(timestamp * 1000).toISOString();
+  } catch (e) {
+    console.error('Invalid timestamp:', timestamp);
+    return new Date().toISOString();
+  }
+};
+
 // Function to log webhook events to a reliable source
 async function logWebhookEvent(eventType: string, details: any, error?: any) {
   try {
@@ -87,6 +98,31 @@ export async function POST(req: Request) {
   
   // Handle the event
   switch (event.type) {
+    case 'customer.created':
+      const customer = event.data.object as Stripe.Customer;
+      console.log(`Customer created: ${customer.id}`);
+      
+      // Extract account_id from metadata if it exists
+      const customerAccountId = customer.metadata?.account_id;
+      
+      if (customerAccountId) {
+        // Store customer in database
+        await reliableDbOperation(async () => {
+          await supabaseAdmin
+            .schema('basejump')
+            .from('billing_customers')
+            .insert({
+              account_id: customerAccountId,
+              customer_id: customer.id,
+              email: customer.email || 'unknown@example.com',
+              created_at: new Date().toISOString()
+            });
+            
+          console.log(`Customer ${customer.id} stored in database for account ${customerAccountId}`);
+        }, event.type, { customerId: customer.id, accountId: customerAccountId });
+      }
+      break;
+      
     case 'checkout.session.completed':
       const session = event.data.object as Stripe.Checkout.Session;
       
@@ -133,8 +169,8 @@ export async function POST(req: Request) {
               price_id: subscription.items.data[0].price.id,
               plan_name: subscription.items.data[0].price.nickname || 'Unknown Plan',
               status: subscription.status,
-              current_period_start: new Date((subscription as any).current_period_start * 1000).toISOString(),
-              current_period_end: new Date((subscription as any).current_period_end * 1000).toISOString(),
+              current_period_start: safeIsoDate((subscription as any).current_period_start),
+              current_period_end: safeIsoDate((subscription as any).current_period_end),
               created_at: new Date().toISOString()
             });
             
@@ -164,8 +200,8 @@ export async function POST(req: Request) {
             price_id: updatedSubscription.items.data[0].price.id,
             plan_name: updatedSubscription.items.data[0].price.nickname || 'Unknown Plan',
             status: updatedSubscription.status,
-            current_period_start: new Date((updatedSubscription as any).current_period_start * 1000).toISOString(),
-            current_period_end: new Date((updatedSubscription as any).current_period_end * 1000).toISOString(),
+            current_period_start: safeIsoDate((updatedSubscription as any).current_period_start),
+            current_period_end: safeIsoDate((updatedSubscription as any).current_period_end),
             updated_at: new Date().toISOString()
           })
           .eq('subscription_id', updatedSubscription.id);
