@@ -4,10 +4,10 @@ import { createClient } from '@/lib/supabase/client';
 // DELETE /api/threads/[threadId]
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { threadId: string } }
+  context: { params: { threadId: string } }
 ) {
   try {
-    const threadId = params.threadId;
+    const threadId = context.params.threadId;
     
     if (!threadId) {
       return NextResponse.json({ error: 'Thread ID is required' }, { status: 400 });
