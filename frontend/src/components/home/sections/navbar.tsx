@@ -6,9 +6,10 @@ import { ThemeToggle } from "@/components/home/theme-toggle";
 import { siteConfig } from "@/lib/home";
 import { cn } from "@/lib/utils";
 import { Menu, X, Github } from "lucide-react";
-import { AnimatePresence, motion, useScroll } from "motion/react";
+import { AnimatePresence, motion, useScroll } from "framer-motion";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/components/AuthProvider";
@@ -100,9 +101,6 @@ export function Navbar() {
   const toggleDrawer = () => setIsDrawerOpen((prev) => !prev);
   const handleOverlayClick = () => setIsDrawerOpen(false);
 
-  const logoSrc = !mounted ? "/kortix-logo.svg" : 
-    (resolvedTheme === "dark" ? "/kortix-logo-white.svg" : "/kortix-logo.svg");
-
   return (
     <header
       className={cn(
@@ -124,13 +122,20 @@ export function Navbar() {
           )}
         >
           <div className="flex h-[56px] items-center justify-between p-4">
-            <Link href="/" className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-6">
               <Image 
-                src={logoSrc} 
-                alt="Kortix Logo" 
-                width={140} 
-                height={22} 
-                priority
+                src="https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745430984238-gxDs711.png" 
+                alt="Kortix AI" 
+                width={80} 
+                height={23} 
+                className="w-auto h-6 dark:hidden" 
+              />
+              <Image 
+                src="https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745430984238-gxDs711.png" 
+                alt="Kortix AI" 
+                width={80} 
+                height={23} 
+                className="w-auto h-6 hidden dark:block" 
               />
             </Link>
 
@@ -160,7 +165,7 @@ export function Navbar() {
                     className="bg-secondary h-8 hidden md:flex items-center justify-center text-sm font-normal tracking-wide rounded-full text-primary-foreground dark:text-secondary-foreground w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-white/[0.12]"
                     href="/auth"
                   >
-                    Hire Suna
+                    Hire AI Tutor
                   </Link>
                 )}
               </div>
@@ -204,13 +209,13 @@ export function Navbar() {
               {/* Mobile menu content */}
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
-                  <Link href="/" className="flex items-center gap-3">
+                  <Link href="/" className="flex items-center gap-6">
                     <Image 
-                      src={logoSrc} 
-                      alt="Kortix Logo" 
-                      width={120} 
-                      height={22} 
-                      priority
+                      src="https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745430984238-gxDs711.png" 
+                      alt="Kortix AI" 
+                      width={80} 
+                      height={23} 
+                      className="w-auto h-6" 
                     />
                     <span className="font-medium text-primary text-sm">/ Suna</span>
                   </Link>
@@ -270,7 +275,7 @@ export function Navbar() {
                       href="/auth"
                       className="bg-secondary h-8 flex items-center justify-center text-sm font-normal tracking-wide rounded-full text-primary-foreground dark:text-secondary-foreground w-full px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-white/[0.12] hover:bg-secondary/80 transition-all ease-out active:scale-95"
                     >
-                      Hire Suna
+                      Hire AI Tutor
                     </Link>
                   )}
                   <div className="flex justify-between">

@@ -299,7 +299,7 @@ export function PricingSection() {
                 </div>
 
                 <div className="flex flex-col gap-2 p-4">
-                  {tier.buttonText === "Hire Suna" ? (
+                  {tier.buttonText === "Hire AI Tutor" ? (
                     <Link 
                       href="/auth"
                       className={`h-10 w-full flex items-center justify-center text-sm font-normal tracking-wide rounded-full px-4 cursor-pointer transition-all ease-out active:scale-95 ${

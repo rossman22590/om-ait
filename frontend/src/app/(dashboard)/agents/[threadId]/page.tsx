@@ -1008,71 +1008,80 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     try {
       // Check subscription status
       const { data: subscriptionData } = await supabase
-        .schema('basejump')
         .from('billing_subscriptions')
-        .select('price_id')
+        .select('price_id, plan_name')
         .eq('account_id', project.account_id)
-        .eq('status', 'active')
-        .single();
-      
-      const currentPlanId = subscriptionData?.price_id || SUBSCRIPTION_PLANS.FREE;
-      
-      // Only check usage limits for free tier users
-      if (currentPlanId === SUBSCRIPTION_PLANS.FREE) {
-        // Calculate usage
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
+        .order('created_at', { ascending: false })
+        .limit(1);
+          
+      // If user has a Pro or Enterprise subscription, don't show billing alert
+      if (subscriptionData && subscriptionData.length > 0) {
+        const subscription = subscriptionData[0];
+        const planName = subscription.plan_name?.toLowerCase() || '';
+        const priceId = subscription.price_id || '';
         
-        // Get threads for this account
-        const { data: threadsData } = await supabase
-          .from('threads')
-          .select('thread_id')
-          .eq('account_id', project.account_id);
-        
-        const threadIds = threadsData?.map(t => t.thread_id) || [];
-        
-        // Get agent runs for those threads
-        const { data: agentRunData } = await supabase
-          .from('agent_runs')
-          .select('started_at, completed_at')
-          .in('thread_id', threadIds)
-          .gte('started_at', startOfMonth.toISOString());
-        
-        let totalSeconds = 0;
-        if (agentRunData) {
-          totalSeconds = agentRunData.reduce((acc, run) => {
-            const start = new Date(run.started_at);
-            const end = run.completed_at ? new Date(run.completed_at) : new Date();
-            const seconds = (end.getTime() - start.getTime()) / 1000;
-            return acc + seconds;
-          }, 0);
+        // Check if user is on Pro or Enterprise plan
+        if (planName.includes('pro') || planName.includes('enterprise') ||
+            priceId === 'price_1RGtkVG23sSyONuF8kQcAclk' || // Pro price ID
+            priceId === 'price_1RGw3iG23sSyONuFGk8uD3XV') { // Enterprise price ID
+          console.log('User is on paid plan, skipping billing alert');
+          return false; // Skip billing alert for Pro/Enterprise users
         }
-        
-        // Convert to hours for display
-        const hours = totalSeconds / 3600;
-        const minutesUsed = totalSeconds / 60;
-        
-        // The free plan has a 10 minute limit as defined in backend/utils/billing.py
-        const FREE_PLAN_LIMIT_MINUTES = 50;
-        const FREE_PLAN_LIMIT_HOURS = FREE_PLAN_LIMIT_MINUTES / 60;
-        
-        // Show alert if over limit
-        if (minutesUsed > FREE_PLAN_LIMIT_MINUTES) {
-          console.log("Usage limit exceeded:", {
-            minutesUsed,
-            hoursUsed: hours,
-            limit: FREE_PLAN_LIMIT_MINUTES
-          });
-          setBillingData({
-            currentUsage: Number(hours.toFixed(2)),
-            limit: FREE_PLAN_LIMIT_HOURS,
-            message: `You've used ${Math.floor(minutesUsed)} minutes on the Free plan. The limit is ${FREE_PLAN_LIMIT_MINUTES} minutes per month.`,
-            accountId: project.account_id
-          });
-          setShowBillingAlert(true);
-          return true; // Return true if over limit
-        }
+      }
+      
+      // Calculate usage starting from the beginning of the current month
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      
+      // Get threads for this account
+      const { data: threadsData } = await supabase
+        .from('threads')
+        .select('thread_id')
+        .eq('account_id', project.account_id);
+      
+      const threadIds = threadsData?.map(t => t.thread_id) || [];
+      
+      // Get agent runs for those threads
+      const { data: agentRunData } = await supabase
+        .from('agent_runs')
+        .select('started_at, completed_at')
+        .in('thread_id', threadIds)
+        .gte('started_at', startOfMonth.toISOString());
+      
+      let totalSeconds = 0;
+      if (agentRunData) {
+        totalSeconds = agentRunData.reduce((acc, run) => {
+          const start = new Date(run.started_at);
+          const end = run.completed_at ? new Date(run.completed_at) : new Date();
+          const seconds = (end.getTime() - start.getTime()) / 1000;
+          return acc + seconds;
+        }, 0);
+      }
+      
+      // Convert to hours for display
+      const hours = totalSeconds / 3600;
+      const minutesUsed = totalSeconds / 60;
+      
+      // The free plan has a 10 minute limit as defined in backend/utils/billing.py
+      const FREE_PLAN_LIMIT_MINUTES = 50;
+      const FREE_PLAN_LIMIT_HOURS = FREE_PLAN_LIMIT_MINUTES / 60;
+      
+      // Show alert if over limit
+      if (minutesUsed > FREE_PLAN_LIMIT_MINUTES) {
+        console.log("Usage limit exceeded:", {
+          minutesUsed,
+          hoursUsed: hours,
+          limit: FREE_PLAN_LIMIT_MINUTES
+        });
+        setBillingData({
+          currentUsage: Number(hours.toFixed(2)),
+          limit: FREE_PLAN_LIMIT_HOURS,
+          message: `You've used ${Math.floor(minutesUsed)} minutes on the Free plan. The limit is ${FREE_PLAN_LIMIT_MINUTES} minutes per month.`,
+          accountId: project.account_id
+        });
+        setShowBillingAlert(true);
+        return true; // Return true if over limit
       }
       return false; // Return false if not over limit
     } catch (err) {

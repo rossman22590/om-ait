@@ -19,8 +19,8 @@ export function FooterSection() {
     setMounted(true);
   }, []);
 
-  const logoSrc = !mounted ? "/kortix-logo.svg" : 
-    (resolvedTheme === "dark" ? "/kortix-logo-white.svg" : "/kortix-logo.svg");
+  const logoSrc = !mounted ? "https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745430984238-gxDs711.png" : 
+    (resolvedTheme === "dark" ? "https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745430984238-gxDs711.png" : "https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745430984238-gxDs711.png");
 
   return (
     <footer id="footer" className="w-full pb-0">

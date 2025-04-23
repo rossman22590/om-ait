@@ -29,9 +29,9 @@ export const Highlight = ({
 export const BLUR_FADE_DELAY = 0.15;
 
 export const siteConfig = {
-  name: "Kortix Suna",
+  name: "AI Tutor Machine",
   description: "The Generalist AI Agent that can act on your behalf.",
-  cta: "Hire Suna",
+  cta: "Hire AI Tutor",
   url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
   keywords: [
     "AI Agent",
@@ -40,8 +40,8 @@ export const siteConfig = {
     "Autonomous Agent",
   ],
   links: {
-    email: "support@kortix.ai",
-    twitter: "https://x.com/kortixai",
+    email: "rcohen@mytsi.org",
+    twitter: "https://x.com/@myaitutor",
     discord: "https://discord.gg/kortixai",
     github: "https://github.com/Kortix-ai/Suna",
     instagram: "https://instagram.com/kortixai",
@@ -50,7 +50,6 @@ export const siteConfig = {
     links: [
       { id: 1, name: "Home", href: "#hero" },
       { id: 2, name: "Use Cases", href: "#use-cases" },
-      { id: 3, name: "Open Source", href: "#open-source" },
       { id: 4, name: "Pricing", href: "#pricing" },
     ],
   },
@@ -80,7 +79,7 @@ export const siteConfig = {
       name: "Free",
       price: "$0",
       description: "For individual use and exploration",
-      buttonText: "Hire Suna",
+      buttonText: "Hire AI Tutor",
       buttonColor: "bg-secondary text-white",
       isPopular: false,
       hours: "50 minutes",
@@ -96,7 +95,7 @@ export const siteConfig = {
       name: "Pro",
       price: "$29",
       description: "For professionals and small teams",
-      buttonText: "Hire Suna",
+      buttonText: "Hire AI Tutor",
       buttonColor: "bg-primary text-white dark:text-black",
       isPopular: true,
       hours: "4 hours",
@@ -113,7 +112,7 @@ export const siteConfig = {
       name: "Enterprise",
       price: "$199",
       description: "For organizations with complex needs",
-      buttonText: "Hire Suna",
+      buttonText: "Hire AI Tutor",
       buttonColor: "bg-secondary text-white",
       isPopular: false,
       hours: "40 hours",
@@ -761,7 +760,7 @@ export const siteConfig = {
           "Community support",
         ],
         description: "Perfect for individual users and developers",
-        buttonText: "Hire Suna",
+        buttonText: "Hire AI Tutor Machine",
         buttonColor: "bg-accent text-primary",
         isPopular: false,
       },
@@ -1056,7 +1055,7 @@ export const siteConfig = {
     title: "Start Using Kortix Suna Today",
     backgroundImage: "/holo.png",
     button: {
-      text: "Hire Suna today",
+      text: "Hire AI Tutor today",
       href: "/auth",
     },
     subtext: "The generalist AI Agent that acts on your behalf",
