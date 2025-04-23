@@ -125,7 +125,7 @@ export default function Home() {
               squareSize={2.2}
               gridGap={20}
               color="var(--primary)"
-              maxOpacity={0.5}
+              maxOpacity={0.35}
               flickerChance={0.04}
             />
           </div>
