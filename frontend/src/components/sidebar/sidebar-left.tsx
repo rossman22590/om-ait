@@ -25,6 +25,7 @@ import {
   TooltipTrigger
 } from "@/components/ui/tooltip"
 import { useIsMobile } from "@/hooks/use-mobile"
+import { motion } from "framer-motion"
 
 export function SidebarLeft({
   ...props
@@ -84,7 +85,29 @@ export function SidebarLeft({
       <SidebarHeader className="px-2 py-2">
         <div className="flex h-[40px] items-center px-1 relative">
           <Link href="/dashboard">
-            <KortixLogo />
+            {state !== "collapsed" && (
+              <motion.div
+                initial={{ opacity: 0, x: -5 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -5 }}
+                transition={{ duration: 0.2 }}
+                className="flex gap-2 items-center"
+              >
+                <img 
+                  src="https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745383642204-gxDs711.png" 
+                  alt="AI Tutor Machine" 
+                  className="h-8 w-auto" 
+                />
+                <span className="font-medium text-lg">AI Tutor Machine</span>
+              </motion.div>
+            )}
+            {state === "collapsed" && (
+              <img 
+                src="https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745383642204-gxDs711.png" 
+                alt="AI Tutor Machine" 
+                className="h-8 w-auto mx-auto" 
+              />
+            )}
           </Link>
           {state !== "collapsed" && (
             <div className="ml-2 transition-all duration-200 ease-in-out whitespace-nowrap">

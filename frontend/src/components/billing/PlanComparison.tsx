@@ -11,13 +11,14 @@ import { StripeCheckoutButton } from "./StripeCheckoutButton";
 const pricingTiers = [
   {
     name: "Free",
-    description: "For personal use",
+    description: "Your Entry Into AI",
     price: "$0",
     hours: "50 minutes",
     features: [
+      "AI Tutor Machine access",
       "50 minutes of AI usage per month",
-      "Basic features",
-      "Community support"
+      "10+ Free Models",
+      "Unlimited Messages"
     ],
     buttonText: "Get Started",
     buttonColor: "bg-primary text-primary-foreground hover:bg-primary/90",
@@ -25,31 +26,36 @@ const pricingTiers = [
   },
   {
     name: "Pro",
-    description: "For power users",
+    description: "GPT 4o + Turbo",
     price: "$20",
     hours: "300 minutes",
     features: [
+      "Everything in Free tier",
       "300 minutes of AI usage per month",
-      "All features",
-      "Priority support"
+      "Multi-Modal support",
+      "Unlimited access to GPT",
+      "Advanced features",
+      "Live Support"
     ],
-    buttonText: "Upgrade",
-    buttonColor: "bg-primary text-primary-foreground hover:bg-primary/90",
+    buttonText: "Upgrade Now",
+    buttonColor: "bg-secondary text-white hover:bg-secondary/90",
     isPopular: true
   },
   {
     name: "Enterprise",
-    description: "For teams",
-    price: "$50",
+    description: "GPT 4.5 + Deep Research",
+    price: "Custom",
     hours: "2400 minutes",
     features: [
+      "Everything in Pro tier",
       "2400 minutes of AI usage per month",
-      "All features",
-      "Dedicated support",
-      "Custom integrations"
+      "Priority support",
+      "Custom development",
+      "Run Multiple Models At Once",
+      "Advanced reasoning capabilities"
     ],
-    buttonText: "Upgrade",
-    buttonColor: "bg-primary text-primary-foreground hover:bg-primary/90",
+    buttonText: "Contact Us",
+    buttonColor: "bg-accent text-primary hover:bg-accent/90",
     isPopular: false
   }
 ];
