@@ -181,13 +181,16 @@ export function NavAgents() {
     try {
       setDeletingThreadId(threadId);
       
-      // Call API to delete the thread
-      const response = await fetch(`/api/threads/${threadId}`, {
-        method: 'DELETE',
+      // Use our new deleteThread endpoint instead
+      const response = await fetch('/api/deleteThread', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ projectId }),
+        body: JSON.stringify({
+          threadId,
+          projectId,
+        }),
       });
       
       if (!response.ok) {
