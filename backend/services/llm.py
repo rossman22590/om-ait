@@ -36,13 +36,16 @@ class LLMRetryError(LLMError):
     """Exception raised when retries are exhausted."""
     pass
 
-def setup_api_keys() -> None:
-    """Set up API keys from environment variables."""
+def setup_api_keys():
+    """Set up API keys for various LLM providers."""
     providers = ['OPENAI', 'ANTHROPIC', 'GROQ', 'OPENROUTER']
     for provider in providers:
-        key = os.environ.get(f'{provider}_API_KEY')
+        key_name = f'{provider}_API_KEY'
+        key = os.environ.get(key_name)
         if key:
-            logger.debug(f"API key set for provider: {provider}")
+            # Set the key in litellm's environment
+            os.environ[key_name] = key
+            logger.debug(f"API key set for provider: {provider} - {key[:5]}...")
         else:
             logger.warning(f"No API key found for provider: {provider}")
     

@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from typing import Dict, Optional, Tuple
+import os
 
 # Define subscription tiers and their monthly limits (in minutes)
 SUBSCRIPTION_TIERS = {
@@ -11,13 +12,24 @@ SUBSCRIPTION_TIERS = {
 async def get_account_subscription(client, account_id: str) -> Optional[Dict]:
     """Get the current subscription for an account."""
     try:
-        # Try to access the basejump schema directly
-        subscription_result = await client.from_('basejump.billing_subscriptions').select('price_id,plan_name').eq('account_id', account_id).order('created_at', desc=True).limit(1).execute()
-        
+        # In development mode, return a mock subscription
+        if os.environ.get('ENVIRONMENT', 'development') == 'development':
+            from utils.logger import logger
+            logger.info(f"Development mode: Using mock subscription for account {account_id}")
+            return {
+                'price_id': 'price_1RGJ9GG6l1KZGqIroxSqgphC',  # Free tier
+                'plan_name': 'Free (Development)'
+            }
+            
+        # Try to access the basejump schema using schema() method
+        subscription_result = await client.schema('basejump').from_('billing_subscriptions').select('price_id,plan_name').eq('account_id', account_id).order('created_at', desc=True).limit(1).execute()
+         
         if subscription_result.data and len(subscription_result.data) > 0:
             return subscription_result.data[0]
-        
+         
         # If no subscription found, return free tier
+        from utils.logger import logger
+        logger.info(f"No subscription found for account {account_id}, using free tier")
         return {
             'price_id': 'price_1RGJ9GG6l1KZGqIroxSqgphC',  # Free tier
             'plan_name': 'Free'
@@ -25,9 +37,11 @@ async def get_account_subscription(client, account_id: str) -> Optional[Dict]:
     except Exception as e:
         # Log the error but continue with free tier
         from utils.logger import logger
-        logger.warning(f"Error fetching subscription: {str(e)}")
-        
-    return None
+        logger.warning(f"Error fetching subscription: {str(e)}, using free tier")
+        return {
+            'price_id': 'price_1RGJ9GG6l1KZGqIroxSqgphC',  # Free tier
+            'plan_name': 'Free (Error)'
+        }
 
 async def calculate_monthly_usage(client, account_id: str) -> float:
     """Calculate total agent run minutes for the current month for an account."""
@@ -37,26 +51,32 @@ async def calculate_monthly_usage(client, account_id: str) -> float:
     
     # First get all threads for this account
     try:
-        # Try to get threads from public schema first
-        threads_result = await client.from_('threads').select('thread_id').eq('account_id', account_id).execute()
-        
+        # In development mode, return minimal usage
+        if os.environ.get('ENVIRONMENT', 'development') == 'development':
+            from utils.logger import logger
+            logger.info(f"Development mode: Using minimal usage for account {account_id}")
+            return 5.0  # 5 minutes of usage in development mode
+
+        # Try to get threads from public schema
+        threads_result = await client.schema('public').from_('threads').select('thread_id').eq('account_id', account_id).execute()
+         
         # If no results, try basejump schema
         if not threads_result.data:
-            threads_result = await client.from_('basejump.threads').select('thread_id').eq('account_id', account_id).execute()
-    
+            threads_result = await client.schema('basejump').from_('threads').select('thread_id').eq('account_id', account_id).execute()
+     
         if not threads_result.data:
             return 0.0
-    
+     
         thread_ids = [t['thread_id'] for t in threads_result.data]
-    
+     
         # Then get all agent runs for these threads in current month
         try:
-            # Try public schema first
-            runs_result = await client.from_('agent_runs').select('started_at,completed_at').in_('thread_id', thread_ids).gte('started_at', start_of_month.isoformat()).execute()
-            
+            # Try public schema
+            runs_result = await client.schema('public').from_('agent_runs').select('started_at,completed_at').in_('thread_id', thread_ids).gte('started_at', start_of_month.isoformat()).execute()
+             
             # If no results, try basejump schema
             if not runs_result.data:
-                runs_result = await client.from_('basejump.agent_runs').select('started_at,completed_at').in_('thread_id', thread_ids).gte('started_at', start_of_month.isoformat()).execute()
+                runs_result = await client.schema('basejump').from_('agent_runs').select('started_at,completed_at').in_('thread_id', thread_ids).gte('started_at', start_of_month.isoformat()).execute()
         except Exception as e:
             from utils.logger import logger
             logger.warning(f"Error fetching agent runs: {str(e)}")
