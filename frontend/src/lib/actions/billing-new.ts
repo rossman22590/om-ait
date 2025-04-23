@@ -14,9 +14,16 @@ export async function setupNewSubscription(prevState: any, formData: FormData) {
   }
 
   try {
+    console.log('Setting up subscription with:', { accountId, planId, returnUrl });
     const { url } = await createCheckoutSession(formData);
     
     if (url) {
+      console.log('Redirecting to Stripe checkout:', url);
+      // Use window.location.href for client-side redirect instead of Next.js redirect
+      if (typeof window !== 'undefined') {
+        window.location.href = url;
+        return { success: true };
+      }
       redirect(url);
     } else {
       return { error: 'Failed to create checkout session' };
@@ -58,7 +65,7 @@ export async function checkBillingStatus(accountId: string) {
       status: 'active',
       plan_name: 'Free',
       subscription: {
-        price_id: process.env.STRIPE_FREE_PLAN_ID || 'price_1RGJ9GG6l1KZGqIroxSqgphC',
+        price_id: process.env.STRIPE_FREE_PLAN_ID || 'price_1RGtl4G23sSyONuFYWYsA0HK',
         plan_name: 'Free'
       }
     };
@@ -91,7 +98,7 @@ export async function checkBillingStatus(accountId: string) {
       status: 'active',
       plan_name: 'Free',
       subscription: {
-        price_id: process.env.STRIPE_FREE_PLAN_ID || 'price_1RGJ9GG6l1KZGqIroxSqgphC',
+        price_id: process.env.STRIPE_FREE_PLAN_ID || 'price_1RGtl4G23sSyONuFYWYsA0HK',
         plan_name: 'Free'
       }
     };

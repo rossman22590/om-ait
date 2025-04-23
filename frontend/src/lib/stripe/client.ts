@@ -20,17 +20,17 @@ export function getStripePublishableKey() {
 
 // Define plan tiers and their limits
 export const SUBSCRIPTION_TIERS = {
-  [process.env.STRIPE_FREE_PLAN_ID || 'price_1RGJ9GG6l1KZGqIroxSqgphC']: { 
+  [process.env.STRIPE_FREE_PLAN_ID || 'price_1RGtl4G23sSyONuFYWYsA0HK']: { 
     name: 'free', 
     minutes: 50,
     displayName: 'Free'
   },
-  [process.env.STRIPE_PRO_PLAN_ID || 'price_1RGJ9LG6l1KZGqIrd9pwzeNW']: { 
+  [process.env.STRIPE_PRO_PLAN_ID || 'price_1RGtkVG23sSyONuF8kQcAclk']: { 
     name: 'pro', 
     minutes: 300,
     displayName: 'Pro'
   },
-  [process.env.STRIPE_ENTERPRISE_PLAN_ID || 'price_1RGJ9JG6l1KZGqIrVUU4ZRv6']: { 
+  [process.env.STRIPE_ENTERPRISE_PLAN_ID || 'price_1RGtkVG23sSyONuF8kQcAclk']: { 
     name: 'enterprise', 
     minutes: 2400,
     displayName: 'Enterprise'
@@ -39,5 +39,5 @@ export const SUBSCRIPTION_TIERS = {
 
 // Helper function to get plan details by ID
 export function getPlanDetails(planId: string) {
-  return SUBSCRIPTION_TIERS[planId] || SUBSCRIPTION_TIERS[process.env.STRIPE_FREE_PLAN_ID || 'price_1RGJ9GG6l1KZGqIroxSqgphC'];
+  return SUBSCRIPTION_TIERS[planId] || SUBSCRIPTION_TIERS[process.env.STRIPE_FREE_PLAN_ID || 'price_1RGtkVG23sSyONuF8kQcAclk'];
 }

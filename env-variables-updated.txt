@@ -1,0 +1,4 @@
+# Update these in your frontend/.env file
+STRIPE_FREE_PLAN_ID=price_1RGtkVG23sSyONuF8kQcAclk
+STRIPE_PRO_PLAN_ID=price_1RGtkVG23sSyONuF8kQcAclk
+STRIPE_ENTERPRISE_PLAN_ID=price_1RGtkVG23sSyONuF8kQcAclk

@@ -4,16 +4,61 @@ import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
-import { setupNewSubscription } from "@/lib/actions/billing-new";
-import { SubmitButton } from "@/components/ui/submit-button";
 import { Button } from "@/components/ui/button";
-import { siteConfig } from "@/lib/home";
+import { StripeCheckoutButton } from "./StripeCheckoutButton";
 
-// Create SUBSCRIPTION_PLANS using stripePriceId from siteConfig
+// Define pricing tiers directly in the component
+const pricingTiers = [
+  {
+    name: "Free",
+    description: "For personal use",
+    price: "$0",
+    hours: "50 minutes",
+    features: [
+      "50 minutes of AI usage per month",
+      "Basic features",
+      "Community support"
+    ],
+    buttonText: "Get Started",
+    buttonColor: "bg-primary text-primary-foreground hover:bg-primary/90",
+    isPopular: false
+  },
+  {
+    name: "Pro",
+    description: "For power users",
+    price: "$20",
+    hours: "300 minutes",
+    features: [
+      "300 minutes of AI usage per month",
+      "All features",
+      "Priority support"
+    ],
+    buttonText: "Upgrade",
+    buttonColor: "bg-primary text-primary-foreground hover:bg-primary/90",
+    isPopular: true
+  },
+  {
+    name: "Enterprise",
+    description: "For teams",
+    price: "$50",
+    hours: "2400 minutes",
+    features: [
+      "2400 minutes of AI usage per month",
+      "All features",
+      "Dedicated support",
+      "Custom integrations"
+    ],
+    buttonText: "Upgrade",
+    buttonColor: "bg-primary text-primary-foreground hover:bg-primary/90",
+    isPopular: false
+  }
+];
+
+// Create SUBSCRIPTION_PLANS using simple identifiers
 export const SUBSCRIPTION_PLANS = {
-  FREE: siteConfig.cloudPricingItems.find(item => item.name === 'Free')?.stripePriceId || '',
-  PRO: siteConfig.cloudPricingItems.find(item => item.name === 'Pro')?.stripePriceId || '',
-  ENTERPRISE: siteConfig.cloudPricingItems.find(item => item.name === 'Enterprise')?.stripePriceId || '',
+  FREE: 'free',
+  PRO: 'pro',
+  ENTERPRISE: 'enterprise',
 };
 
 interface PlanComparisonProps {
@@ -26,7 +71,7 @@ interface PlanComparisonProps {
 }
 
 // Price display animation component
-const PriceDisplay = ({ tier, isCompact }: { tier: typeof siteConfig.cloudPricingItems[number]; isCompact?: boolean }) => {
+const PriceDisplay = ({ tier, isCompact }: { tier: typeof pricingTiers[number]; isCompact?: boolean }) => {
   return (
     <motion.span
       key={tier.price}
@@ -85,7 +130,7 @@ export function PlanComparison({
         className
       )}
     >
-      {siteConfig.cloudPricingItems.map((tier) => {
+      {pricingTiers.map((tier) => {
         const isCurrentPlan = currentPlanId === SUBSCRIPTION_PLANS[tier.name.toUpperCase() as keyof typeof SUBSCRIPTION_PLANS];
         
         return (
@@ -205,26 +250,16 @@ export function PlanComparison({
             )}
             
             <form>
-              <input type="hidden" name="accountId" value={accountId} />
-              <input type="hidden" name="returnUrl" value={returnUrl} />
-              <input type="hidden" name="planId" value={SUBSCRIPTION_PLANS[tier.name.toUpperCase() as keyof typeof SUBSCRIPTION_PLANS]} />
               {isManaged ? (
-                <SubmitButton
-                  pendingText="..."
-                  formAction={setupNewSubscription}
-                  // disabled={isCurrentPlan}
-                  className={cn(
-                    "w-full font-medium transition-colors",
-                    isCompact 
-                      ? "h-7 rounded-md text-xs" 
-                      : "h-10 rounded-full text-sm",
-                    isCurrentPlan 
-                      ? "bg-muted text-muted-foreground hover:bg-muted" 
-                      : tier.buttonColor
-                  )}
-                >
-                  {isCurrentPlan ? "Current Plan" : (tier.name === "Free" ? tier.buttonText : "Upgrade")}
-                </SubmitButton>
+                <StripeCheckoutButton
+                  accountId={accountId || ''}
+                  planId={tier.name.toLowerCase()}
+                  returnUrl={returnUrl || ''}
+                  isCurrentPlan={isCurrentPlan}
+                  buttonText={tier.name === "Free" ? tier.buttonText : "Upgrade"}
+                  buttonColor={tier.buttonColor}
+                  isCompact={isCompact}
+                />
               ) : (
                 <Button
                   className={cn(
@@ -237,7 +272,7 @@ export function PlanComparison({
                       : tier.buttonColor
                   )}
                   disabled={isCurrentPlan}
-                  onClick={() => onPlanSelect?.(SUBSCRIPTION_PLANS[tier.name.toUpperCase() as keyof typeof SUBSCRIPTION_PLANS])}
+                  onClick={() => onPlanSelect?.(tier.name.toLowerCase())}
                 >
                   {isCurrentPlan ? "Current Plan" : (tier.name === "Free" ? tier.buttonText : "Upgrade")}
                 </Button>

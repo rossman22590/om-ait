@@ -5,9 +5,9 @@ import Stripe from 'stripe'
 
 // Define our custom plan limits
 const SUBSCRIPTION_TIERS = {
-  [process.env.STRIPE_FREE_PLAN_ID || 'price_1RGJ9GG6l1KZGqIroxSqgphC']: { name: 'free', minutes: 50 },
-  [process.env.STRIPE_PRO_PLAN_ID || 'price_1RGJ9LG6l1KZGqIrd9pwzeNW']: { name: 'base', minutes: 300 },
-  [process.env.STRIPE_ENTERPRISE_PLAN_ID || 'price_1RGJ9JG6l1KZGqIrVUU4ZRv6']: { name: 'extra', minutes: 2400 }
+  'free': { name: 'free', minutes: 50, price_id: process.env.STRIPE_FREE_PLAN_ID || '' },
+  'pro': { name: 'base', minutes: 300, price_id: process.env.STRIPE_PRO_PLAN_ID || '' },
+  'enterprise': { name: 'extra', minutes: 2400, price_id: process.env.STRIPE_ENTERPRISE_PLAN_ID || '' }
 }
 
 // Initialize Stripe
@@ -28,7 +28,7 @@ export async function getBillingStatus(accountId: string) {
     .single()
   
   // Default to free tier if no subscription found
-  const priceId = subscriptionData?.price_id || process.env.STRIPE_FREE_PLAN_ID || 'price_1RGJ9GG6l1KZGqIroxSqgphC'
+  const priceId = subscriptionData?.price_id || process.env.STRIPE_FREE_PLAN_ID || 'price_1RGtl4G23sSyONuFYWYsA0HK'
   const planName = subscriptionData?.plan_name || 'Free'
   const status = subscriptionData?.status || 'active'
   
@@ -92,15 +92,15 @@ export async function getBillingStatus(accountId: string) {
   }
   
   const usageMinutes = totalSeconds / 60
-  const tierInfo = SUBSCRIPTION_TIERS[priceId as keyof typeof SUBSCRIPTION_TIERS]
+  const tierInfo = SUBSCRIPTION_TIERS[planName.toLowerCase()] || SUBSCRIPTION_TIERS['free']
   
   return {
     price_id: priceId,
     plan_name: planName,
     status: status,
     usage_minutes: usageMinutes,
-    limit_minutes: tierInfo?.minutes || 50,
-    can_run: usageMinutes < (tierInfo?.minutes || 50),
+    limit_minutes: tierInfo.minutes,
+    can_run: usageMinutes < tierInfo.minutes,
     billing_enabled: true
   }
 }
@@ -114,31 +114,111 @@ export async function createCheckoutSession(formData: FormData) {
     throw new Error('Missing required fields')
   }
   
+  // Get the price ID from the plan ID
+  let priceId = '';
+  if (planId === 'pro') {
+    priceId = process.env.STRIPE_PRO_PLAN_ID || '';
+  } else if (planId === 'enterprise') {
+    priceId = process.env.STRIPE_ENTERPRISE_PLAN_ID || '';
+  } else {
+    priceId = process.env.STRIPE_FREE_PLAN_ID || '';
+  }
+  
+  // Check if we have a valid price ID
+  if (!priceId) {
+    console.error(`No price ID found for plan: ${planId}`);
+    console.log('Available environment variables:', {
+      STRIPE_FREE_PLAN_ID: process.env.STRIPE_FREE_PLAN_ID ? 'Set' : 'Not set',
+      STRIPE_PRO_PLAN_ID: process.env.STRIPE_PRO_PLAN_ID ? 'Set' : 'Not set',
+      STRIPE_ENTERPRISE_PLAN_ID: process.env.STRIPE_ENTERPRISE_PLAN_ID ? 'Set' : 'Not set'
+    });
+    throw new Error(`No price ID found for plan: ${planId}. Please check your environment variables.`);
+  }
+  
   const supabase = await createClient()
   
   // Get user email for the account
-  const { data: accountData } = await supabase
-    .schema('basejump')
-    .from('accounts')
-    .select('created_by')
-    .eq('account_id', accountId)
-    .single()
+  let accountData;
+  
+  try {
+    // Try basejump schema first
+    const { data: basejumpAccountData, error: basejumpError } = await supabase
+      .schema('basejump')
+      .from('accounts')
+      .select('created_by')
+      .eq('account_id', accountId)
+      .single()
+    
+    if (basejumpAccountData) {
+      accountData = basejumpAccountData;
+    } else {
+      // Try public schema if basejump fails
+      const { data: publicAccountData, error: publicError } = await supabase
+        .from('accounts')
+        .select('created_by')
+        .eq('account_id', accountId)
+        .single()
+      
+      if (publicAccountData) {
+        accountData = publicAccountData;
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching account:', error);
+  }
   
   if (!accountData) {
-    throw new Error('Account not found')
+    // If account not found, try to use the current user's ID
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (user) {
+      accountData = { created_by: user.id };
+    } else {
+      throw new Error('Account not found')
+    }
   }
   
   const userId = accountData.created_by
   
   // Get user email
-  const { data: userData } = await supabase
-    .from('users')
-    .select('email')
-    .eq('id', userId)
-    .single()
+  let userData;
+  
+  try {
+    // Try public schema first
+    const { data: publicUserData } = await supabase
+      .from('users')
+      .select('email')
+      .eq('id', userId)
+      .single()
+    
+    if (publicUserData) {
+      userData = publicUserData;
+    } else {
+      // Try basejump schema if public fails
+      const { data: basejumpUserData } = await supabase
+        .schema('basejump')
+        .from('users')
+        .select('email')
+        .eq('id', userId)
+        .single()
+      
+      if (basejumpUserData) {
+        userData = basejumpUserData;
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching user:', error);
+  }
   
   if (!userData) {
-    throw new Error('User not found')
+    // If user not found, try to use the current user's email
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (user && user.email) {
+      userData = { email: user.email };
+    } else {
+      throw new Error('User not found')
+    }
   }
   
   // Create or retrieve customer
@@ -181,17 +261,25 @@ export async function createCheckoutSession(formData: FormData) {
     customer: customerId,
     line_items: [
       {
-        price: planId,
+        price: priceId,
         quantity: 1
       }
     ],
     mode: 'subscription',
-    success_url: returnUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-    cancel_url: returnUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+    success_url: `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3003'}/settings/billing?success=true`,
+    cancel_url: `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3003'}/settings/billing?canceled=true`,
     metadata: {
       account_id: accountId
-    }
+    },
+    expand: ['payment_intent']
   })
+  
+  console.log('Stripe session created:', {
+    id: session.id,
+    url: session.url,
+    customer: session.customer,
+    status: session.status,
+  });
   
   return { url: session.url }
 }

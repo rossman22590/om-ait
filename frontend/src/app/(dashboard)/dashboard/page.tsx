@@ -105,7 +105,7 @@ function DashboardContent() {
                 errorDetails = {
                   message: error.message,
                   subscription: {
-                    price_id: "price_1RGJ9GG6l1KZGqIroxSqgphC", // Free tier by default
+                    price_id: "price_1RGtl4G23sSyONuFYWYsA0HK", // Free tier by default
                     plan_name: "Free",
                     current_usage: minutes / 60, // Convert to hours
                     limit: minutes / 60 // Convert to hours
@@ -125,7 +125,7 @@ function DashboardContent() {
               handleBillingError({
                 message: "You've reached your monthly usage limit. Please upgrade your plan.",
                 subscription: {
-                  price_id: "price_1RGJ9GG6l1KZGqIroxSqgphC", // Free tier
+                  price_id: "price_1RGtl4G23sSyONuFYWYsA0HK", // Free tier
                   plan_name: "Free"
                 }
               });

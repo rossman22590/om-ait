@@ -4,9 +4,9 @@ import os
 
 # Define subscription tiers and their monthly limits (in minutes)
 SUBSCRIPTION_TIERS = {
-    'price_1RGJ9GG6l1KZGqIroxSqgphC': {'name': 'free', 'minutes': 50},
-    'price_1RGJ9LG6l1KZGqIrd9pwzeNW': {'name': 'base', 'minutes': 300},  # 100 hours = 6000 minutes
-    'price_1RGJ9JG6l1KZGqIrVUU4ZRv6': {'name': 'extra', 'minutes': 2400}  # 100 hours = 6000 minutes
+    'price_1RGtl4G23sSyONuFYWYsA0HK': {'name': 'free', 'minutes': 50},
+    'price_1RGtkVG23sSyONuF8kQcAclk': {'name': 'base', 'minutes': 300},  # 100 hours = 6000 minutes
+    'price_1RGtkVG23sSyONuF8kQcAclk': {'name': 'extra', 'minutes': 2400}  # 100 hours = 6000 minutes
 }
 
 async def get_account_subscription(client, account_id: str) -> Optional[Dict]:
@@ -17,7 +17,7 @@ async def get_account_subscription(client, account_id: str) -> Optional[Dict]:
             from utils.logger import logger
             logger.info(f"Development mode: Using mock subscription for account {account_id}")
             return {
-                'price_id': 'price_1RGJ9GG6l1KZGqIroxSqgphC',  # Free tier
+                'price_id': 'price_1RGtl4G23sSyONuFYWYsA0HK',  # Free tier
                 'plan_name': 'Free (Development)'
             }
             
@@ -31,7 +31,7 @@ async def get_account_subscription(client, account_id: str) -> Optional[Dict]:
         from utils.logger import logger
         logger.info(f"No subscription found for account {account_id}, using free tier")
         return {
-            'price_id': 'price_1RGJ9GG6l1KZGqIroxSqgphC',  # Free tier
+            'price_id': 'price_1RGtl4G23sSyONuFYWYsA0HK',  # Free tier
             'plan_name': 'Free'
         }
     except Exception as e:
@@ -39,7 +39,7 @@ async def get_account_subscription(client, account_id: str) -> Optional[Dict]:
         from utils.logger import logger
         logger.warning(f"Error fetching subscription: {str(e)}, using free tier")
         return {
-            'price_id': 'price_1RGJ9GG6l1KZGqIroxSqgphC',  # Free tier
+            'price_id': 'price_1RGtl4G23sSyONuFYWYsA0HK',  # Free tier
             'plan_name': 'Free (Error)'
         }
 
@@ -118,7 +118,7 @@ async def check_billing_status(client, account_id: str) -> Tuple[bool, str, Opti
     # If no subscription, they can use free tier
     if not subscription:
         subscription = {
-            'price_id': 'price_1RGJ9GG6l1KZGqIroxSqgphC',  # Free tier
+            'price_id': 'price_1RGtl4G23sSyONuFYWYsA0HK',  # Free tier
             'plan_name': 'Free'
         }
     
@@ -133,7 +133,7 @@ async def check_billing_status(client, account_id: str) -> Tuple[bool, str, Opti
     # Check if within limits
     if current_usage >= tier_info['minutes']:
         return False, f"Monthly limit of {tier_info['minutes']} minutes reached. Please upgrade your plan or wait until next month.", subscription
-    elif subscription['price_id'] == 'price_1RGJ9GG6l1KZGqIroxSqgphC' and current_usage >= 45:
+    elif subscription['price_id'] == 'price_1RGtl4G23sSyONuFYWYsA0HK' and current_usage >= 45:
         # Still allow usage but return a warning message
         return True, f"You've used {current_usage:.1f} minutes out of your {tier_info['minutes']} minute monthly limit. Consider upgrading your plan.", subscription
     

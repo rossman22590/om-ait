@@ -90,7 +90,7 @@ export const siteConfig = {
         // "Single user",
         // "Standard response time",
       ],
-      stripePriceId: 'price_1RGJ9GG6l1KZGqIroxSqgphC',
+      stripePriceId: 'price_1RGtl4G23sSyONuFYWYsA0HK',
     },
     {
       name: "Pro",
@@ -107,7 +107,7 @@ export const siteConfig = {
         // "5 team members",
         // "Custom integrations",
       ],
-      stripePriceId: 'price_1RGJ9LG6l1KZGqIrd9pwzeNW',
+      stripePriceId: 'price_1RGtkVG23sSyONuF8kQcAclk',
     },
     {
       name: "Enterprise",
