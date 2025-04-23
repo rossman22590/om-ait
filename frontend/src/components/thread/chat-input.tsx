@@ -25,7 +25,10 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 
 // Define API_URL
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+// Ensure API_URL includes the /api prefix
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL
+  ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api`
+  : '';
 
 // Local storage keys
 const STORAGE_KEY_MODEL = 'suna-preferred-model';

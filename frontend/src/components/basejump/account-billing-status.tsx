@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { SubmitButton } from "../ui/submit-button";
-import { manageSubscription } from "@/lib/actions/billing";
+import { manageSubscription } from "@/lib/actions/billing-new";
 import { PlanComparison, SUBSCRIPTION_PLANS } from "../billing/PlanComparison";
 
 type Props = {
@@ -11,14 +11,9 @@ type Props = {
 export default async function AccountBillingStatus({ accountId, returnUrl }: Props) {
     const supabaseClient = await createClient();
 
-    const { data: billingData, error: billingError } = await supabaseClient.functions.invoke('billing-functions', {
-        body: {
-            action: "get_billing_status",
-            args: {
-                account_id: accountId
-            }
-        }
-    });
+    // Use our direct billing integration instead of Supabase Edge Functions
+    const { checkBillingStatus } = await import('@/lib/actions/billing-new');
+    const billingData = await checkBillingStatus(accountId);
 
     // Get current subscription details
     const { data: subscriptionData } = await supabaseClient

@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/client';
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL
+  ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api`
+  : '';
 
 // Track active streams by agent run ID
 const activeStreams = new Map<string, EventSource>();
@@ -422,7 +424,7 @@ export const startAgent = async (
       throw new Error('Backend URL is not configured. Set NEXT_PUBLIC_BACKEND_URL in your environment.');
     }
 
-    console.log(`[API] Starting agent for thread ${threadId} using ${API_URL}/thread/${threadId}/agent/start`);
+    console.log(`[API] Starting agent for thread ${threadId}`);
     
     const response = await fetch(`${API_URL}/thread/${threadId}/agent/start`, {
       method: 'POST',
@@ -1038,4 +1040,3 @@ export const getPublicProjects = async (): Promise<Project[]> => {
     return [];
   }
 };
-

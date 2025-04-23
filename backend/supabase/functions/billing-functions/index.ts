@@ -1,7 +1,8 @@
 import {serve} from "https://deno.land/std@0.168.0/http/server.ts";
 import {stripeFunctionHandler} from "https://deno.land/x/basejump@v2.0.3/billing-functions/mod.ts";
 import { requireAuthorizedBillingUser } from "https://deno.land/x/basejump@v2.0.3/billing-functions/src/require-authorized-billing-user.ts";
-import getBillingStatus from "https://deno.land/x/basejump@v2.0.3/billing-functions/src/wrappers/get-billing-status.ts";
+// Use our custom billing status handler instead of the default one
+import getCustomBillingStatus from "./custom-billing-status.ts";
 import createSupabaseServiceClient from "https://deno.land/x/basejump@v2.0.3/billing-functions/lib/create-supabase-service-client.ts";
 import validateUrl from "https://deno.land/x/basejump@v2.0.3/billing-functions/lib/validate-url.ts";
 
@@ -219,7 +220,7 @@ serve(async (req) => {
                         const supabaseClient = createSupabaseServiceClient();
                         console.log("Getting billing status...");
                         try {
-                            const response = await getBillingStatus(
+                            const response = await getCustomBillingStatus(
                                 supabaseClient,
                                 roleInfo,
                                 stripeHandler

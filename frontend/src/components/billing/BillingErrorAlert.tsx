@@ -25,6 +25,8 @@ export function BillingErrorAlert({
   isOpen
 }: BillingErrorAlertProps) {
   const returnUrl = typeof window !== 'undefined' ? window.location.href : '';
+  // Override the limit to 50 minutes (0.833 hours) regardless of what the backend returns
+  const actualLimit = 0.833; // 50 minutes in hours
 
   if (!isOpen) return null;
 
@@ -100,13 +102,13 @@ export function BillingErrorAlert({
                         </div>
                         <div className="text-right">
                           <p className="text-xs font-medium text-muted-foreground">Limit</p>
-                          <p className="text-base font-semibold">{(limit * 60).toFixed(0)}m</p>
+                          <p className="text-base font-semibold">50m</p>
                         </div>
                       </div>
                       <div className="w-full h-1.5 bg-background rounded-full overflow-hidden">
                         <motion.div
                           initial={{ width: 0 }}
-                          animate={{ width: `${Math.min((currentUsage / limit) * 100, 100)}%` }}
+                          animate={{ width: `${Math.min((currentUsage / actualLimit) * 100, 100)}%` }}
                           transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
                           className="h-full bg-destructive rounded-full"
                         />

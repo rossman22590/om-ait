@@ -26,7 +26,10 @@ import { createClient } from "@/lib/supabase/client";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 // Define API_URL
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
+// Ensure API_URL includes the /api prefix
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL
+  ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api`
+  : '';
 
 interface FileViewerModalProps {
   open: boolean;

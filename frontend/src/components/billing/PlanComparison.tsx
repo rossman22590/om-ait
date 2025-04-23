@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
-import { setupNewSubscription } from "@/lib/actions/billing";
+import { setupNewSubscription } from "@/lib/actions/billing-new";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/home";
