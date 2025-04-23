@@ -124,16 +124,21 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                     />
 
                     {/* Manage Subscription Button */}
-                    <form>
+                    <form action={async (formData) => {
+                        const result = await manageSubscription(null, formData);
+                        if (result?.redirectUrl) {
+                            // Client-side redirect to Stripe
+                            window.location.href = result.redirectUrl;
+                        }
+                    }}>
                         <input type="hidden" name="accountId" value={accountId} />
                         <input type="hidden" name="returnUrl" value={returnUrl} />
-                        <SubmitButton
-                            pendingText="Loading..."
-                            formAction={manageSubscription}
-                            className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
+                        <button
+                            type="submit"
+                            className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all px-4 py-2 rounded-md font-medium"
                         >
                             Manage Subscription
-                        </SubmitButton>
+                        </button>
                     </form>
                 </>
             )}

@@ -82,7 +82,9 @@ export async function manageSubscription(prevState: any, formData: FormData) {
     
     if (result.url) {
       console.log('Redirecting to portal URL:', result.url);
-      redirect(result.url);
+      // Return the URL to the client instead of using redirect()
+      // The client-side JS will handle navigation
+      return { redirectUrl: result.url };
     } else {
       return { error: 'Failed to create billing portal session' };
     }
