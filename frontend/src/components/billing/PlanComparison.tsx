@@ -111,16 +111,61 @@ export function PlanComparison({
     async function fetchCurrentPlan() {
       if (accountId) {
         const supabase = createClient();
-        const { data } = await supabase
-          .schema('basejump')
+        
+        // First try the public schema
+        let { data } = await supabase
           .from('billing_subscriptions')
-          .select('price_id')
+          .select('price_id, plan_name')
           .eq('account_id', accountId)
           .eq('status', 'active')
           .single();
+          
+        // If not found, try the basejump schema as fallback
+        if (!data) {
+          const { data: basejumpData } = await supabase
+            .schema('basejump')
+            .from('billing_subscriptions')
+            .select('price_id, plan_name')
+            .eq('account_id', accountId)
+            .eq('status', 'active')
+            .single();
+          
+          data = basejumpData;
+        }
         
-        setCurrentPlanId(data?.price_id || SUBSCRIPTION_PLANS.FREE);
+        if (data) {
+          console.log('PlanComparison: Found subscription data:', data);
+          
+          // Determine the tier based on price_id
+          const priceId = data.price_id;
+          
+          // Match by price_id (most reliable approach)
+          if (priceId === 'price_1RGtkVG23sSyONuF8kQcAclk') {
+            console.log('PlanComparison: Matched Pro tier by price_id');
+            setCurrentPlanId(SUBSCRIPTION_PLANS.PRO);
+          } else if (priceId === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
+            console.log('PlanComparison: Matched Enterprise tier by price_id');
+            setCurrentPlanId(SUBSCRIPTION_PLANS.ENTERPRISE);
+          } else {
+            // Fallback to plan name if available
+            const planName = data.plan_name;
+            if (planName && planName.toLowerCase().includes('pro')) {
+              console.log('PlanComparison: Matched Pro tier by plan name');
+              setCurrentPlanId(SUBSCRIPTION_PLANS.PRO);
+            } else if (planName && planName.toLowerCase().includes('enterprise')) {
+              console.log('PlanComparison: Matched Enterprise tier by plan name');
+              setCurrentPlanId(SUBSCRIPTION_PLANS.ENTERPRISE);
+            } else {
+              console.log('PlanComparison: No plan match found, defaulting to Free tier');
+              setCurrentPlanId(SUBSCRIPTION_PLANS.FREE);
+            }
+          }
+        } else {
+          console.log('PlanComparison: No subscription data found, defaulting to Free tier');
+          setCurrentPlanId(SUBSCRIPTION_PLANS.FREE);
+        }
       } else {
+        console.log('PlanComparison: No accountId provided, defaulting to Free tier');
         setCurrentPlanId(SUBSCRIPTION_PLANS.FREE);
       }
     }

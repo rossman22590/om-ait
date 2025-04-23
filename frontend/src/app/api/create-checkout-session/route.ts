@@ -171,15 +171,32 @@ export async function POST(request: NextRequest) {
         }
       });
 
-      // Save customer ID
-      await supabase
-        .schema('basejump')
-        .from('billing_customers')
-        .insert({
-          account_id: accountId,
-          customer_id: customer.id,
-          email: userData.email
-        });
+      // Save customer ID to BOTH schemas for consistency
+      try {
+        // First save to public schema
+        await supabase
+          .from('billing_customers')
+          .insert({
+            account_id: accountId,
+            customer_id: customer.id,
+            email: userData.email
+          });
+          
+        // Then also save to basejump schema for backward compatibility
+        await supabase
+          .schema('basejump')
+          .from('billing_customers')
+          .insert({
+            account_id: accountId,
+            customer_id: customer.id,
+            email: userData.email
+          });
+            
+        console.log(`Customer ${customer.id} saved to both schemas for account ${accountId}`);
+      } catch (err) {
+        console.error('Error saving customer to database:', err);
+        // Continue even if there's an error - we have the customer in Stripe
+      }
 
       customerId = customer.id;
     }

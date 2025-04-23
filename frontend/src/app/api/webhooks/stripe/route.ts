@@ -89,6 +89,12 @@ async function reliableDbOperation(operation: () => Promise<any>, eventType: str
   return false;
 }
 
+// Helper to generate a valid UUID
+function generateValidUUID(): string {
+  // Use the proper crypto randomUUID function
+  return randomUUID();
+}
+
 export async function POST(req: Request) {
   const body = await req.text();
   const signature = req.headers.get('stripe-signature') as string;
@@ -127,7 +133,7 @@ export async function POST(req: Request) {
         await supabase
           .from('billing_customers')
           .insert({
-            id: randomUUID(),
+            id: generateValidUUID(),
             created_at: new Date().toISOString(),
             account_id: customerAccountId,
             customer_id: customer.id,
@@ -165,9 +171,9 @@ export async function POST(req: Request) {
         // Insert subscription record
         try {
           await supabase
-            .from('billing_subscriptions')  // This uses public schema by default
+            .from('billing_subscriptions')  
             .insert({
-              id: randomUUID(),
+              id: generateValidUUID(),
               created_at: new Date().toISOString(),
               account_id: accountId,
               subscription_id: subscription.id,
@@ -214,7 +220,8 @@ export async function POST(req: Request) {
                 account_id: accountId,
                 customer_id: subscription.customer as string,
                 email: session.customer_details?.email || 'unknown@example.com',
-                created_at: new Date().toISOString()
+                created_at: new Date().toISOString(),
+                id: generateValidUUID()
               });
             
             console.log(`Created new customer for account ${accountId}`);
@@ -223,9 +230,9 @@ export async function POST(req: Request) {
           // Then add subscription
           try {
             await supabase
-              .from('billing_subscriptions')  // This uses public schema by default
+              .from('billing_subscriptions')  
               .insert({
-                id: randomUUID(),
+                id: generateValidUUID(),
                 account_id: accountId,
                 subscription_id: subscription.id,
                 customer_id: subscription.customer as string,
@@ -328,7 +335,7 @@ export async function POST(req: Request) {
                   await supabase
                     .from('billing_subscriptions')
                     .insert({
-                      id: randomUUID(),
+                      id: generateValidUUID(),
                       account_id: accountId,
                       subscription_id: subscription.id,
                       customer_id: customerId,

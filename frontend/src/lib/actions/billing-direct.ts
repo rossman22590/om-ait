@@ -45,6 +45,37 @@ export async function getBillingStatus(accountId: string) {
   const planName = subscriptionData?.plan_name || 'Free'
   const status = subscriptionData?.status || 'active'
   
+  console.log('Billing status check:', { 
+    accountId, 
+    priceId, 
+    planName,
+    status 
+  });
+  
+  // Determine the tier based on price_id first (most reliable), then plan name as fallback
+  let tierName = 'free';
+  
+  // First try to match by price_id (most reliable)
+  if (priceId === process.env.STRIPE_PRO_PLAN_ID || priceId === 'price_1RGtkVG23sSyONuF8kQcAclk') {
+    tierName = 'pro';
+    console.log('Matched Pro tier by price_id');
+  } else if (priceId === process.env.STRIPE_ENTERPRISE_PLAN_ID || priceId === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
+    tierName = 'enterprise';
+    console.log('Matched Enterprise tier by price_id');
+  } else {
+    // Fallback to plan name matching (case insensitive)
+    const lowerPlanName = planName.toLowerCase();
+    if (lowerPlanName.includes('pro')) {
+      tierName = 'pro';
+      console.log('Matched Pro tier by plan name');
+    } else if (lowerPlanName.includes('enterprise')) {
+      tierName = 'enterprise';
+      console.log('Matched Enterprise tier by plan name');
+    } else {
+      console.log('Using free tier (no match found)');
+    }
+  }
+  
   // Get start of current month in UTC
   const now = new Date()
   const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
@@ -83,7 +114,16 @@ export async function getBillingStatus(accountId: string) {
   }
   
   const usageMinutes = totalSeconds / 60
-  const tierInfo = SUBSCRIPTION_TIERS[planName.toLowerCase()] || SUBSCRIPTION_TIERS['free']
+  const tierInfo = SUBSCRIPTION_TIERS[tierName] || SUBSCRIPTION_TIERS['free']
+  
+  console.log('Final billing status:', {
+    tierName,
+    planName,
+    priceId,
+    usage: usageMinutes,
+    limit: tierInfo.minutes,
+    can_run: usageMinutes < tierInfo.minutes
+  });
   
   return {
     price_id: priceId,
