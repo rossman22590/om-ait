@@ -2,19 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/client';
 
 // DELETE /api/threads/[threadId]
-export async function DELETE(
-  req: NextRequest,
-  context: { params: { threadId: string } }
-) {
+export async function DELETE(request: NextRequest) {
   try {
-    const threadId = context.params.threadId;
+    // Get the threadId from the URL
+    const threadId = request.nextUrl.pathname.split('/').pop();
     
     if (!threadId) {
       return NextResponse.json({ error: 'Thread ID is required' }, { status: 400 });
     }
     
     // Parse request body for the projectId
-    const body = await req.json();
+    const body = await request.json();
     const { projectId } = body;
     
     if (!projectId) {
