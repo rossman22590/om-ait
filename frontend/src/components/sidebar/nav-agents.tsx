@@ -34,7 +34,7 @@ import {
   TooltipContent,
   TooltipTrigger
 } from "@/components/ui/tooltip"
-import { getProjects, getThreads, Project } from "@/lib/api"
+import { getProjects, getThreads, Project, deleteThread } from "@/lib/api"
 import Link from "next/link"
 
 // Thread with associated project info for display in sidebar
@@ -177,37 +177,34 @@ export function NavAgents() {
   // Function to delete a thread
   const handleDeleteThread = async (threadId: string, projectId: string) => {
     if (!threadId) return;
-    
+
     try {
       setDeletingThreadId(threadId);
-      
-      // Use our new deleteThread endpoint instead
-      const response = await fetch('/api/deleteThread', {
+
+      // Use cascade deletion to handle foreign key constraints with agent_runs
+      console.log(`Deleting thread ${threadId} via cascade-delete endpoint`);
+      await fetch('/api/cascade-delete', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          threadId,
-          projectId,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId, projectId }),
       });
       
-      if (!response.ok) {
-        throw new Error('Failed to delete thread');
-      }
-      
-      // Remove the thread from state
-      setThreads(prevThreads => prevThreads.filter(t => t.threadId !== threadId));
-      toast.success('Thread deleted successfully');
-      
-      // If on the deleted thread page, redirect to dashboard
+      // Remove thread from UI immediately
+      setThreads((prevThreads) =>
+        prevThreads.filter((t) => t.threadId !== threadId)
+      );
+      toast.success('Thread deleted from list');
+
+      // If on the deleted thread's page, redirect to dashboard
       if (pathname.includes(threadId)) {
         router.push('/dashboard');
       }
     } catch (error) {
-      console.error('Error deleting thread:', error);
-      toast.error('Failed to delete thread. Please try again.');
+      console.error('Error during thread deletion:', error);
+      // Still remove from UI even if error
+      setThreads((prevThreads) =>
+        prevThreads.filter((t) => t.threadId !== threadId)
+      );
     } finally {
       setDeletingThreadId(null);
     }

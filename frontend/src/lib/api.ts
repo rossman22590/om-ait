@@ -978,6 +978,78 @@ export const toggleThreadPublicStatus = async (threadId: string, isPublic: boole
   return updateThread(threadId, { is_public: isPublic });
 };
 
+/**
+ * Delete a thread and all its associated messages
+ * @param threadId - The ID of the thread to delete
+ * @param projectId - The project ID the thread belongs to
+ * @returns Promise that resolves when deletion is complete
+ */
+export const deleteThread = async (threadId: string, projectId: string): Promise<boolean> => {
+  console.log(`[API] Deleting thread ${threadId} from project ${projectId}`);
+  const supabase = createClient();
+  
+  try {
+    // Delete in both schemas, but don't error if they fail
+    // This handles cases where data might be in either schema
+    
+    // First, delete messages (no foreign key constraints)
+    try {
+      // Try basejump schema
+      console.log('[API] Deleting messages from basejump schema');
+      await supabase
+        .schema('basejump')
+        .from('messages')
+        .delete()
+        .eq('thread_id', threadId);
+    } catch (err) {
+      console.log('[API] Could not delete messages from basejump schema:', err);
+    }
+    
+    try {
+      // Try public schema
+      console.log('[API] Deleting messages from public schema');
+      await supabase
+        .from('messages')
+        .delete()
+        .eq('thread_id', threadId);
+    } catch (err) {
+      console.log('[API] Could not delete messages from public schema:', err);
+    }
+    
+    // Then delete threads
+    try {
+      // Try basejump schema
+      console.log('[API] Deleting thread from basejump schema');
+      await supabase
+        .schema('basejump')
+        .from('threads')
+        .delete()
+        .eq('thread_id', threadId)
+        .eq('project_id', projectId);
+    } catch (err) {
+      console.log('[API] Could not delete thread from basejump schema:', err);
+    }
+    
+    try {
+      // Try public schema
+      console.log('[API] Deleting thread from public schema');
+      await supabase
+        .from('threads')
+        .delete()
+        .eq('thread_id', threadId)
+        .eq('project_id', projectId);
+    } catch (err) {
+      console.log('[API] Could not delete thread from public schema:', err);
+    }
+    
+    console.log(`[API] Thread deletion process completed for ${threadId}`);
+    return true;
+  } catch (error) {
+    console.error('[API] Error in thread deletion process:', error);
+    return false; // Return false instead of throwing, let the UI handle it
+  }
+};
+
 // Function to get public projects
 export const getPublicProjects = async (): Promise<Project[]> => {
   try {

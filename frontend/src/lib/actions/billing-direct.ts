@@ -6,8 +6,8 @@ import Stripe from 'stripe'
 // Define our custom plan limits
 const SUBSCRIPTION_TIERS = {
   'free': { name: 'free', minutes: 50, price_id: process.env.STRIPE_FREE_PLAN_ID || '' },
-  'pro': { name: 'base', minutes: 300, price_id: process.env.STRIPE_PRO_PLAN_ID || '' },
-  'enterprise': { name: 'extra', minutes: 2400, price_id: process.env.STRIPE_ENTERPRISE_PLAN_ID || '' }
+  'pro': { name: 'pro', minutes: 300, price_id: process.env.STRIPE_PRO_PLAN_ID || '' },
+  'enterprise': { name: 'enterprise', minutes: 2400, price_id: process.env.STRIPE_ENTERPRISE_PLAN_ID || '' }
 }
 
 // Initialize Stripe

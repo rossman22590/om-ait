@@ -18,29 +18,55 @@ export async function POST(req: NextRequest) {
     // Supabase client
     const supabase = createClient();
     
-    // First, delete all messages in the thread
-    const { error: messagesError } = await supabase
+    console.log(`Deleting thread ${threadId} from project ${projectId}`);
+    
+    // First try to delete messages from public schema
+    const { error: publicMessagesError } = await supabase
       .from('messages')
       .delete()
       .eq('thread_id', threadId);
       
-    if (messagesError) {
-      console.error('Error deleting thread messages:', messagesError);
-      return NextResponse.json({ error: 'Failed to delete thread messages' }, { status: 500 });
+    if (publicMessagesError) {
+      console.log('Could not delete messages from public schema:', publicMessagesError);
+      
+      // Try basejump schema
+      const { error: basejumpMessagesError } = await supabase
+        .schema('basejump')
+        .from('messages')
+        .delete()
+        .eq('thread_id', threadId);
+        
+      if (basejumpMessagesError) {
+        console.error('Error deleting thread messages from both schemas:', basejumpMessagesError);
+        return NextResponse.json({ error: 'Failed to delete thread messages' }, { status: 500 });
+      }
     }
     
-    // Then delete the thread itself
-    const { error: threadError } = await supabase
+    // Then delete the thread from public schema
+    const { error: publicThreadError } = await supabase
       .from('threads')
       .delete()
       .eq('thread_id', threadId)
       .eq('project_id', projectId);
       
-    if (threadError) {
-      console.error('Error deleting thread:', threadError);
-      return NextResponse.json({ error: 'Failed to delete thread' }, { status: 500 });
+    if (publicThreadError) {
+      console.log('Could not delete thread from public schema:', publicThreadError);
+      
+      // Try basejump schema
+      const { error: basejumpThreadError } = await supabase
+        .schema('basejump')
+        .from('threads')
+        .delete()
+        .eq('thread_id', threadId)
+        .eq('project_id', projectId);
+        
+      if (basejumpThreadError) {
+        console.error('Error deleting thread from both schemas:', basejumpThreadError);
+        return NextResponse.json({ error: 'Failed to delete thread' }, { status: 500 });
+      }
     }
     
+    console.log(`Successfully deleted thread ${threadId}`);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error in thread deletion:', error);
