@@ -115,27 +115,20 @@ export function Navbar() {
       >
         <div
           className={cn(
-            "mx-auto max-w-7xl rounded-2xl transition-all duration-300  xl:px-0",
+            "mx-auto max-w-7xl rounded-2xl transition-all duration-300 xl:px-0",
             hasScrolled
-              ? "px-2 border border-border backdrop-blur-lg bg-background/75"
-              : "shadow-none px-7",
+              ? "px-2 border border-border bg-background dark:bg-background"
+              : "shadow-none px-7 bg-background dark:bg-background"
           )}
         >
           <div className="flex h-[56px] items-center justify-between p-4">
             <Link href="/" className="flex items-center gap-6">
               <Image 
                 src="https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745430984238-gxDs711.png" 
-                alt="Kortix AI" 
-                width={80} 
-                height={23} 
-                className="w-auto h-6 dark:hidden" 
-              />
-              <Image 
-                src="https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745430984238-gxDs711.png" 
-                alt="Kortix AI" 
-                width={80} 
-                height={23} 
-                className="w-auto h-6 hidden dark:block" 
+                alt="AI Tutor Machine" 
+                width={100} 
+                height={30} 
+                className="w-auto h-8" 
               />
             </Link>
 
@@ -155,14 +148,14 @@ export function Navbar() {
                 </Link> */}
                 {user ? (
                   <Link
-                    className="bg-secondary h-8 hidden md:flex items-center justify-center text-sm font-normal tracking-wide rounded-full text-primary-foreground dark:text-secondary-foreground w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-white/[0.12]"
+                    className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 h-8 hidden md:flex items-center justify-center text-sm font-medium tracking-wide rounded-full text-white dark:text-white w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-transparent dark:border-white/20"
                     href="/dashboard"
                   >
                     Dashboard
                   </Link>
                 ) : (
                   <Link
-                    className="bg-secondary h-8 hidden md:flex items-center justify-center text-sm font-normal tracking-wide rounded-full text-primary-foreground dark:text-secondary-foreground w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-white/[0.12]"
+                    className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 h-8 hidden md:flex items-center justify-center text-sm font-medium tracking-wide rounded-full text-white dark:text-white w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-transparent dark:border-white/20"
                     href="/auth"
                   >
                     Hire AI Tutor
@@ -212,12 +205,11 @@ export function Navbar() {
                   <Link href="/" className="flex items-center gap-6">
                     <Image 
                       src="https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745430984238-gxDs711.png" 
-                      alt="Kortix AI" 
-                      width={80} 
-                      height={23} 
-                      className="w-auto h-6" 
+                      alt="AI Tutor Machine" 
+                      width={100} 
+                      height={30} 
+                      className="w-auto h-8" 
                     />
-                    <span className="font-medium text-primary text-sm">/ Suna</span>
                   </Link>
                   <button
                     onClick={toggleDrawer}
@@ -266,14 +258,14 @@ export function Navbar() {
                   {user ? (
                     <Link
                       href="/dashboard"
-                      className="bg-secondary h-8 flex items-center justify-center text-sm font-normal tracking-wide rounded-full text-primary-foreground dark:text-secondary-foreground w-full px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-white/[0.12] hover:bg-secondary/80 transition-all ease-out active:scale-95"
+                      className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 h-8 flex items-center justify-center text-sm font-medium tracking-wide rounded-full text-white dark:text-white w-full px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-transparent dark:border-white/20 hover:bg-pink-600 transition-all ease-out active:scale-95"
                     >
                       Dashboard
                     </Link>
                   ) : (
                     <Link
                       href="/auth"
-                      className="bg-secondary h-8 flex items-center justify-center text-sm font-normal tracking-wide rounded-full text-primary-foreground dark:text-secondary-foreground w-full px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-white/[0.12] hover:bg-secondary/80 transition-all ease-out active:scale-95"
+                      className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 h-8 flex items-center justify-center text-sm font-medium tracking-wide rounded-full text-white dark:text-white w-full px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-transparent dark:border-white/20 hover:bg-pink-600 transition-all ease-out active:scale-95"
                     >
                       Hire AI Tutor
                     </Link>

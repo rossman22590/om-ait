@@ -11,6 +11,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
 // Maximum retries for database operations
 const MAX_RETRIES = 3;
 
+// Track processed webhook events to prevent double-processing
+const processedEvents = new Set();
+
 // Utility function to add a delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -71,18 +74,21 @@ async function reliableDbOperation(operation: () => Promise<any>, eventType: str
     try {
       await operation();
       console.log(`Successfully performed database operation for ${eventType}`);
+      // Log successful operation for auditing
+      await logWebhookEvent(`${eventType}_success`, details);
       return true;
     } catch (error) {
       retries++;
       console.error(`Error in database operation (attempt ${retries}/${MAX_RETRIES}):`, error);
       
       if (retries >= MAX_RETRIES) {
-        await logWebhookEvent(eventType, details, error);
+        await logWebhookEvent(`${eventType}_failed`, { ...details, error: String(error) });
         return false;
       }
       
-      // Exponential backoff
-      await delay(Math.pow(2, retries) * 100);
+      // Exponential backoff with jitter to avoid thundering herd
+      const jitter = Math.random() * 100;
+      await delay(Math.pow(2, retries) * 100 + jitter);
     }
   }
   
@@ -91,8 +97,29 @@ async function reliableDbOperation(operation: () => Promise<any>, eventType: str
 
 // Helper to generate a valid UUID
 function generateValidUUID(): string {
-  // Use the proper crypto randomUUID function
-  return randomUUID();
+  try {
+    // Use the proper crypto randomUUID function
+    return randomUUID();
+  } catch (error) {
+    // Fallback in case randomUUID fails
+    console.error('Error generating UUID with randomUUID, using fallback:', error);
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+}
+
+// Type augmentation for Stripe types to avoid TypeScript errors
+interface StripeSubscriptionWithDates extends Stripe.Subscription {
+  current_period_start: number;
+  current_period_end: number;
+}
+
+// Utility function to add better type safety when accessing subscription dates
+function getSubscriptionWithDates(subscription: Stripe.Subscription): StripeSubscriptionWithDates {
+  return subscription as StripeSubscriptionWithDates;
 }
 
 export async function POST(req: Request) {
@@ -111,9 +138,32 @@ export async function POST(req: Request) {
     console.error(`Webhook signature verification failed: ${err.message}`);
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
   }
+  
+  // Prevent duplicate processing of the same event
+  const eventId = event.id;
+  if (processedEvents.has(eventId)) {
+    console.log(`Event ${eventId} already processed, skipping`);
+    return NextResponse.json({ received: true, status: 'already_processed' });
+  }
+  
+  // Mark event as being processed
+  processedEvents.add(eventId);
+  
+  // Limit the size of the Set to prevent memory leaks
+  if (processedEvents.size > 1000) {
+    const iterator = processedEvents.values();
+    processedEvents.delete(iterator.next().value);
+  }
 
   // We'll use the service role client to bypass RLS policies
   const supabase = await createClient();
+  
+  // Log all incoming events for debugging and auditing
+  await logWebhookEvent('webhook_received', { 
+    event_id: event.id,
+    event_type: event.type,
+    created: event.created
+  });
   
   // Handle the event
   switch (event.type) {
@@ -132,12 +182,14 @@ export async function POST(req: Request) {
         // Insert into public schema billing_customers table
         await supabase
           .from('billing_customers')
-          .insert({
+          .upsert({
             id: generateValidUUID(),
             created_at: new Date().toISOString(),
             account_id: customerAccountId,
             customer_id: customer.id,
             email: customer.email || ''
+          }, {
+            onConflict: 'customer_id'
           });
         
         console.log(`Customer record created for account ${customerAccountId}`);
@@ -170,9 +222,10 @@ export async function POST(req: Request) {
         
         // Insert subscription record
         try {
+          const typedSubscription = getSubscriptionWithDates(subscription);
           await supabase
             .from('billing_subscriptions')  
-            .insert({
+            .upsert({
               id: generateValidUUID(),
               created_at: new Date().toISOString(),
               account_id: accountId,
@@ -181,8 +234,10 @@ export async function POST(req: Request) {
               price_id: subscription.items.data[0].price.id,
               plan_name: resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname),
               status: subscription.status,
-              current_period_start: safeIsoDate((subscription as any).current_period_start),
-              current_period_end: safeIsoDate((subscription as any).current_period_end),
+              current_period_start: safeIsoDate(typedSubscription.current_period_start),
+              current_period_end: safeIsoDate(typedSubscription.current_period_end),
+            }, {
+              onConflict: 'subscription_id'
             });
           
           console.log(`Subscription created in public schema for account ${accountId} - plan ${resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname)}`);
@@ -196,93 +251,167 @@ export async function POST(req: Request) {
     case 'checkout.session.completed':
       const session = event.data.object as Stripe.Checkout.Session;
       
-      // Get account ID from metadata
-      const accountId = session.metadata?.account_id;
-      
-      if (accountId && session.subscription) {
-        // Get subscription details
-        const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+      if (session.subscription && session.customer) {
+        // Log extra details for debugging
+        console.log(`Processing checkout.session.completed event: ${session.id}`);
+        console.log(`Subscription ID: ${session.subscription}`);
+        console.log(`Customer ID: ${session.customer}`);
+        console.log(`Account ID from metadata: ${session.metadata?.account_id}`);
         
-        // Create reliable record in database
-        const success = await reliableDbOperation(async () => {
-          // First ensure the customer exists
-          const { data: existingCustomer } = await supabase
-            .from('billing_customers')
-            .select('customer_id')
-            .eq('account_id', accountId)
-            .single();
-            
-          if (!existingCustomer) {
-            // Create customer record first
-            await supabase
-              .from('billing_customers')
-              .insert({
-                account_id: accountId,
-                customer_id: subscription.customer as string,
-                email: session.customer_details?.email || 'unknown@example.com',
-                created_at: new Date().toISOString(),
-                id: generateValidUUID()
-              });
-            
-            console.log(`Created new customer for account ${accountId}`);
-          }
-          
-          // Then add subscription
+        await reliableDbOperation(async () => {
           try {
-            await supabase
-              .from('billing_subscriptions')  
-              .insert({
-                id: generateValidUUID(),
-                account_id: accountId,
-                subscription_id: subscription.id,
-                customer_id: subscription.customer as string,
-                price_id: subscription.items.data[0].price.id,
-                plan_name: resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname),
-                status: subscription.status,
-                current_period_start: safeIsoDate((subscription as any).current_period_start),
-                current_period_end: safeIsoDate((subscription as any).current_period_end),
-                created_at: new Date().toISOString()
-              });
+            // First, fetch the subscription details from Stripe
+            const subscriptionDetails = await stripe.subscriptions.retrieve(
+              session.subscription as string
+            );
             
-            console.log(`Checkout subscription created in public schema for account ${accountId} - plan ${resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname)}`);
-          } catch (err) {
-            console.error(`Error saving checkout subscription to public schema: ${err}`);
-            // Continue execution - don't let this error stop the webhook
+            // Convert to typed subscription with dates
+            const typedSubscriptionDetails = getSubscriptionWithDates(subscriptionDetails);
+            
+            // Log subscription details for debugging
+            console.log('Retrieved subscription details:', {
+              id: subscriptionDetails.id,
+              status: subscriptionDetails.status,
+              items: subscriptionDetails.items.data.map(item => ({
+                price_id: item.price.id,
+                nickname: item.price.nickname
+              }))
+            });
+            
+            if (subscriptionDetails.items.data.length > 0) {
+              const priceId = subscriptionDetails.items.data[0].price.id;
+              const planName = resolvePlanName(
+                priceId,
+                subscriptionDetails.items.data[0].price.nickname
+              );
+              
+              // Generate a valid UUID
+              const validUuid = generateValidUUID();
+              console.log(`Generated UUID for new subscription: ${validUuid}`);
+              
+              // Create new subscription entry - try public schema FIRST
+              try {
+                const result = await supabase
+                  .from('billing_subscriptions')
+                  .upsert({
+                    id: validUuid,
+                    account_id: session.metadata?.account_id,
+                    subscription_id: subscriptionDetails.id,
+                    customer_id: session.customer as string,
+                    price_id: priceId,
+                    plan_name: planName,
+                    status: subscriptionDetails.status,
+                    current_period_start: safeIsoDate(typedSubscriptionDetails.current_period_start),
+                    current_period_end: safeIsoDate(typedSubscriptionDetails.current_period_end),
+                    created_at: new Date().toISOString()
+                  }, {
+                    onConflict: 'subscription_id'
+                  });
+                  
+                console.log(`Subscription created for account ${session.metadata?.account_id} with plan ${planName}`);
+                
+                // VERIFICATION: Check that the record was actually inserted
+                const verificationCheck = await supabase
+                  .from('billing_subscriptions')
+                  .select('*')
+                  .eq('id', validUuid)
+                  .single();
+                
+                if (verificationCheck.error) {
+                  console.error('VERIFICATION FAILED: Could not find the inserted subscription record:', verificationCheck.error);
+                  await logWebhookEvent('subscription_verification_failed', {
+                    uuid: validUuid,
+                    account_id: session.metadata?.account_id,
+                    subscription_id: subscriptionDetails.id,
+                    error: verificationCheck.error
+                  });
+                } else {
+                  console.log('VERIFICATION PASSED: Subscription record confirmed in database:', verificationCheck.data);
+                }
+              } catch (publicSchemaError) {
+                console.error('Failed to insert into public schema:', publicSchemaError);
+                
+                // Try basejump schema as fallback
+                try {
+                  const fallbackResult = await supabase
+                    .schema('basejump')
+                    .from('billing_subscriptions')
+                    .upsert({
+                      id: validUuid,
+                      account_id: session.metadata?.account_id,
+                      subscription_id: subscriptionDetails.id,
+                      customer_id: session.customer as string,
+                      price_id: priceId,
+                      plan_name: planName,
+                      status: subscriptionDetails.status,
+                      current_period_start: safeIsoDate(typedSubscriptionDetails.current_period_start),
+                      current_period_end: safeIsoDate(typedSubscriptionDetails.current_period_end),
+                      created_at: new Date().toISOString()
+                    }, {
+                      onConflict: 'subscription_id'
+                    });
+                    
+                  if (fallbackResult.error) {
+                    throw new Error(`Error inserting into basejump schema: ${fallbackResult.error.message}`);
+                  }
+                  
+                  console.log(`Successfully inserted subscription ${subscriptionDetails.id} into basejump schema`);
+                } catch (basejumpSchemaError) {
+                  // If both schemas fail, log properly for debugging
+                  console.error('Failed to insert into both schemas:', basejumpSchemaError);
+                  throw new Error('Failed to insert subscription into any schema');
+                }
+              }
+            } else {
+              console.error('Subscription has no items:', subscriptionDetails);
+            }
+          } catch (error) {
+            console.error('Error processing checkout session:', error);
+            throw error; // Rethrow to trigger webhook logging
           }
-        }, event.type, { accountId, subscriptionId: subscription.id });
-        
-        if (success) {
-          await logWebhookEvent(event.type, { 
-            accountId, 
-            subscriptionId: subscription.id,
-            planName: resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname),
-            status: 'success'
-          });
-        }
+        }, event.type, { 
+          sessionId: session.id, 
+          subscriptionId: session.subscription,
+          customerId: session.customer,
+          accountId: session.metadata?.account_id
+        });
       }
       break;
       
     case 'customer.subscription.updated':
       const updatedSubscription = event.data.object as Stripe.Subscription;
+      const typedUpdatedSubscription = getSubscriptionWithDates(updatedSubscription);
       
       await reliableDbOperation(async () => {
-        // Update subscription in database
-        await supabase
-          .from('billing_subscriptions')
-          .update({
-            price_id: updatedSubscription.items.data[0].price.id,
-            plan_name: resolvePlanName(updatedSubscription.items.data[0].price.id, updatedSubscription.items.data[0].price.nickname),
-            status: updatedSubscription.status,
-            current_period_start: safeIsoDate((updatedSubscription as any).current_period_start),
-            current_period_end: safeIsoDate((updatedSubscription as any).current_period_end),
-            updated_at: new Date().toISOString()
-          })
-          .eq('subscription_id', updatedSubscription.id);
+        // Add transaction for atomicity
+        const { error } = await supabase.rpc('begin_transaction');
+        if (error) throw error;
+        
+        try {
+          // Update subscription in database
+          await supabase
+            .from('billing_subscriptions')
+            .update({
+              price_id: updatedSubscription.items.data[0].price.id,
+              plan_name: resolvePlanName(updatedSubscription.items.data[0].price.id, updatedSubscription.items.data[0].price.nickname),
+              status: updatedSubscription.status,
+              current_period_start: safeIsoDate(typedUpdatedSubscription.current_period_start),
+              current_period_end: safeIsoDate(typedUpdatedSubscription.current_period_end),
+              updated_at: new Date().toISOString()
+            })
+            .eq('subscription_id', updatedSubscription.id);
+            
+          await supabase.rpc('commit_transaction');
+        } catch (error) {
+          await supabase.rpc('rollback_transaction');
+          throw error;
+        }
       }, event.type, { subscriptionId: updatedSubscription.id });
       break;
       
     case 'customer.subscription.deleted':
       const deletedSubscription = event.data.object as Stripe.Subscription;
+      const typedDeletedSubscription = getSubscriptionWithDates(deletedSubscription);
       
       await reliableDbOperation(async () => {
         // Update subscription status to canceled
@@ -318,6 +447,7 @@ export async function POST(req: Request) {
             
             if (stripeSubscriptions.data.length > 0) {
               const subscription = stripeSubscriptions.data[0];
+              const typedSubscription = getSubscriptionWithDates(subscription);
               
               // Check if subscription exists in our database
               const { data: existingSubscription } = await supabase
@@ -334,7 +464,7 @@ export async function POST(req: Request) {
                 try {
                   await supabase
                     .from('billing_subscriptions')
-                    .insert({
+                    .upsert({
                       id: generateValidUUID(),
                       account_id: accountId,
                       subscription_id: subscription.id,
@@ -342,9 +472,11 @@ export async function POST(req: Request) {
                       price_id: subscription.items.data[0].price.id,
                       plan_name: resolvePlanName(subscription.items.data[0].price.id, subscription.items.data[0].price.nickname),
                       status: subscription.status,
-                      current_period_start: safeIsoDate((subscription as any).current_period_start),
-                      current_period_end: safeIsoDate((subscription as any).current_period_end),
+                      current_period_start: safeIsoDate(typedSubscription.current_period_start),
+                      current_period_end: safeIsoDate(typedSubscription.current_period_end),
                       created_at: new Date().toISOString()
+                    }, {
+                      onConflict: 'subscription_id'
                     });
                   
                   console.log(`Successfully fixed subscription for stuck user ${accountId}`);

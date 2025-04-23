@@ -349,3 +349,17 @@ backend/supabase/package-lock.json
 backend/supabase/package.json
 backend/supabase/functions/billing-functions/index.ts
 /backend/supabase
+frontend/fix-specific-account.js
+frontend/emergency-fix.js
+frontend/src/app/api/admin/fix-stuck-subscriptions/route.ts
+frontend/test-db-access.js
+frontend/src/app/api/admin/fix-stuck-subscriptions/route.ts
+frontend/fix-sub.sh
+frontend/fix-subscription.ps1
+frontend/fix-subscription.sql
+frontend/scripts/fix-subscription.js
+frontend/scripts/fix-subscription.mjs
+frontend/src/app/api/fix-missing-subscription/route.ts
+frontend/src/app/api/admin/fix-stuck-subscriptions/route.ts
+frontend/src/app/api/admin/fix-stuck-subscriptions/route.ts
+frontend/src/app/api/admin/fix-stuck-subscriptions/route.ts

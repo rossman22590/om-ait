@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { CheckCircle2, ArrowRight, Zap, BookOpen, Users, MessageCircle, Award, Globe, Code, Brain, Shield } from "lucide-react";
+import { CheckCircle2, ArrowRight, Check,Zap, BookOpen, Users, MessageCircle, Award, Globe, Code, Brain, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { 
   Card, 
@@ -18,6 +18,94 @@ import Script from "next/script";
 export default function Home() {
   const [activeTab, setActiveTab] = useState(0);
   
+  // Demo animation states
+  const [agentProgress, setAgentProgress] = useState(0);
+  const [searchingDatabases, setSearchingDatabases] = useState(false);
+  const [foundPapers, setFoundPapers] = useState(false);
+  const [reviewingIndustry, setReviewingIndustry] = useState(false);
+  const [generatingDocument, setGeneratingDocument] = useState(false);
+  const [documentProgress, setDocumentProgress] = useState(0);
+  const [documentSections, setDocumentSections] = useState({
+    executive: false,
+    hardware: false,
+    algorithm: false,
+    commercial: false
+  });
+  const [filesGenerated, setFilesGenerated] = useState({
+    chart: false,
+    data: false
+  });
+  
+  // Simulate agent working through the process
+  useEffect(() => {
+    // Reset states on first render
+    setAgentProgress(0);
+    setSearchingDatabases(false);
+    setFoundPapers(false);
+    setReviewingIndustry(false);
+    setGeneratingDocument(false);
+    setDocumentProgress(0);
+    setDocumentSections({
+      executive: false,
+      hardware: false,
+      algorithm: false,
+      commercial: false
+    });
+    setFilesGenerated({
+      chart: false,
+      data: false
+    });
+    
+    // Simulate agent workflow with delays
+    const timeline = [
+      // Task accepted - already showing
+      { time: 1500, action: () => setSearchingDatabases(true) },
+      { time: 4000, action: () => setFoundPapers(true) },
+      { time: 5500, action: () => setReviewingIndustry(true) },
+      { time: 7000, action: () => setGeneratingDocument(true) },
+      { time: 8000, action: () => {
+        setDocumentSections(prev => ({ ...prev, executive: true }));
+        setDocumentProgress(15);
+      }},
+      { time: 10000, action: () => {
+        setDocumentSections(prev => ({ ...prev, hardware: true }));
+        setDocumentProgress(35);
+      }},
+      { time: 11000, action: () => setFilesGenerated(prev => ({ ...prev, chart: true }))},
+      { time: 14000, action: () => {
+        setDocumentSections(prev => ({ ...prev, algorithm: true }));
+        setDocumentProgress(70);
+      }},
+      { time: 17000, action: () => {
+        setDocumentSections(prev => ({ ...prev, commercial: true }));
+        setDocumentProgress(100);
+        setFilesGenerated(prev => ({ ...prev, data: true }));
+      }}
+    ];
+    
+    // Set up the timers
+    const timers = timeline.map(({ time, action }) => 
+      setTimeout(action, time)
+    );
+    
+    // Increment progress smoothly
+    const progressInterval = setInterval(() => {
+      setAgentProgress(prev => {
+        if (prev < 100) {
+          return prev + 1;
+        }
+        clearInterval(progressInterval);
+        return 100;
+      });
+    }, 200);
+    
+    // Clean up timers on unmount
+    return () => {
+      timers.forEach(timer => clearTimeout(timer));
+      clearInterval(progressInterval);
+    };
+  }, []);
+  
   useEffect(() => {
     const interval = setInterval(() => {
       setActiveTab((prev) => (prev + 1) % 3);
@@ -26,34 +114,27 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="flex flex-col items-center min-h-screen w-full overflow-hidden bg-gradient-to-b from-white via-gray-50 to-white dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+    <main className="flex flex-col items-center min-h-screen w-full overflow-hidden bg-white dark:bg-black">
       {/* Hero Section */}
-      <section className="w-full py-24 md:py-36 relative overflow-hidden mt-16">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-transparent dark:from-primary/10 dark:via-primary/5 dark:to-transparent z-0"></div>
-        
+      <section className="w-full py-24 md:py-32 relative overflow-hidden mt-16 bg-white dark:bg-black" style={{ zIndex: 1 }}>
         {/* Animated Grid Background */}
         <div className="absolute inset-0 z-0 opacity-30">
           <div className="absolute inset-0">
-            {Array.from({ length: 200 }).map((_, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: Math.random() * 0.7 }}
-                transition={{ 
-                  duration: Math.random() * 3 + 2,
-                  repeat: Infinity,
-                  repeatType: "reverse",
-                  delay: Math.random() * 5
+            <div className="h-full w-full bg-grid-black/[0.2] dark:bg-grid-white/[0.2] flex items-center justify-center">
+              <motion.div 
+                className="h-32 w-32 rounded-full bg-gradient-to-r from-primary/40 to-secondary/40 blur-xl"
+                animate={{ 
+                  scale: [1, 1.2, 1],
+                  opacity: [0.5, 0.8, 0.5],
+                  rotate: [0, 90, 180, 270, 360]
                 }}
-                className="absolute bg-primary/20 dark:bg-primary/30 rounded-full"
-                style={{ 
-                  left: `${Math.random() * 100}%`, 
-                  top: `${Math.random() * 100}%`,
-                  width: `${Math.random() * 6 + 1}px`,
-                  height: `${Math.random() * 6 + 1}px`
+                transition={{ 
+                  duration: 10, 
+                  repeat: Infinity,
+                  ease: "linear" 
                 }}
               />
-            ))}
+            </div>
           </div>
         </div>
         
@@ -63,28 +144,95 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 rounded-full shadow-xl dark:shadow-gray-800/30 mb-6"
+              className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-900 rounded-full shadow-xl dark:shadow-gray-900/30 mb-6"
             >
               <Zap size={18} className="text-primary" />
-              <span className="text-sm font-medium">World's First Autonomous AI Agent</span>
+              <span className="text-sm font-medium">Autonomous AI Agent</span>
             </motion.div>
             
             <motion.h1 
-              initial={{ opacity: 0, y: 20 }}
+              className="font-bold text-center flex flex-col items-center mb-10 py-3"
+              initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.1 }}
-              className="text-5xl sm:text-6xl md:text-7xl font-bold tracking-tight"
+              transition={{ duration: 0.5 }}
             >
-              AI Tutor Machine
+              <style jsx global>{`
+                @keyframes gradientPulse {
+                  0% {
+                    background-position: 0% 50%;
+                  }
+                  50% {
+                    background-position: 100% 50%;
+                  }
+                  100% {
+                    background-position: 0% 50%;
+                  }
+                }
+                
+                .animated-gradient-text {
+                  background: linear-gradient(90deg, #ff36f7, #ad5eff, #f14aff, #ff00c3);
+                  background-size: 300% 100%;
+                  -webkit-background-clip: text;
+                  background-clip: text;
+                  color: transparent;
+                  animation: gradientPulse 4s ease infinite;
+                  text-shadow: none;
+                  display: block;
+                  letter-spacing: -1px;
+                  line-height: 0.9;
+                  margin-bottom: 15px;
+                  font-size: 4.5rem;
+                  font-weight: 800;
+                  transform: translateZ(0);
+                  backface-visibility: hidden;
+                  -webkit-font-smoothing: antialiased;
+                  -moz-osx-font-smoothing: grayscale;
+                }
+                
+                .animated-gradient-text-sub {
+                  background: linear-gradient(90deg, #ad5eff, #f14aff, #ff00c3, #ad5eff);
+                  background-size: 300% 100%;
+                  -webkit-background-clip: text;
+                  background-clip: text;
+                  color: transparent;
+                  animation: gradientPulse 4s ease infinite;
+                  animation-delay: 0.5s;
+                  display: block;
+                  letter-spacing: -1px;
+                  line-height: 1;
+                  font-size: 3.75rem;
+                  font-weight: 700;
+                  text-shadow: none;
+                  transform: translateZ(0);
+                  backface-visibility: hidden;
+                  -webkit-font-smoothing: antialiased;
+                  -moz-osx-font-smoothing: grayscale;
+                }
+                
+                @media (max-width: 768px) {
+                  .animated-gradient-text {
+                    font-size: 3rem;
+                    margin-bottom: 10px;
+                  }
+                  
+                  .animated-gradient-text-sub {
+                    font-size: 2.5rem;
+                  }
+                }
+              `}</style>
+              <span className="animated-gradient-text">
+                AI Tutor Machine
+              </span> 
+              <span className="animated-gradient-text-sub">Agentic Actions</span>  
             </motion.h1>
             
             <motion.p 
+              className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-xl sm:text-2xl md:text-3xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto"
+              transition={{ duration: 0.6, delay: 0.4 }}
             >
-              The world's first fully autonomous AI agent that completes complex tasks without supervision
+              The autonomous AI agent that completes complex tasks with zero human supervision
             </motion.p>
             
             <motion.div 
@@ -93,10 +241,10 @@ export default function Home() {
               transition={{ duration: 0.6, delay: 0.3 }}
               className="flex flex-col sm:flex-row gap-5 mt-10 w-full justify-center"
             >
-              <Button size="lg" className="bg-primary hover:bg-primary/90 text-white rounded-full px-10 py-7 text-lg shadow-xl shadow-primary/25 transition-all duration-300 hover:scale-105 font-medium">
-                <Link href="/auth/login" className="flex items-center gap-2">Get Started <ArrowRight className="h-5 w-5" /></Link>
+              <Button size="lg" className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 text-white dark:text-white rounded-full px-10 py-7 text-lg shadow-xl shadow-pink-500/25 dark:shadow-pink-600/50 transition-all duration-300 hover:scale-105 font-bold h-12 border-2 border-transparent dark:border-white/20">
+                <Link href="/dashboard" className="flex items-center gap-2 text-white dark:text-white font-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>Get Started <ArrowRight className="h-5 w-5" /></Link>
               </Button>
-              <Button variant="outline" size="lg" className="rounded-full px-10 py-7 text-lg border-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all duration-300 hover:scale-105 font-medium">
+              <Button variant="outline" size="lg" className="bg-white dark:bg-gray-800 rounded-full px-10 py-7 text-lg border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-300 hover:scale-105 font-medium h-12">
                 <Link href="#features" className="flex items-center gap-2">Learn More <ArrowRight className="h-5 w-5" /></Link>
               </Button>
             </motion.div>
@@ -107,109 +255,371 @@ export default function Home() {
               transition={{ duration: 0.7, delay: 0.4 }}
               className="mt-16 relative w-full max-w-4xl mx-auto"
             >
-              <div className="absolute -inset-1.5 bg-gradient-to-r from-primary/50 to-secondary/50 opacity-50 blur-xl rounded-2xl"></div>
               <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
                 <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 bg-gray-50 dark:bg-gray-900">
                   <div className="w-3 h-3 rounded-full bg-red-400"></div>
                   <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
                   <div className="w-3 h-3 rounded-full bg-green-400"></div>
-                  <div className="ml-3 text-sm text-gray-500 dark:text-gray-400 flex items-center">
-                    <Zap size={14} className="text-primary mr-1.5" /> 
-                    <span>AI Tutor Machine | Autonomous Agent</span>
+                  <div className="ml-3 text-sm text-gray-500 dark:text-gray-300 flex items-center">
+                    <Zap size={14} className="text-pink-500 mr-1.5" /> 
+                    <span>AI Tutor Machine</span>
+                    <span className="mx-1 dark:text-gray-400">|</span>
+                    <span className="text-pink-500 font-medium">Autonomous Agent</span>
+                  </div>
+                  <div className="text-xs flex items-center">
+                    <span className="mr-2 bg-green-500/10 text-green-500 px-1.5 py-0.5 rounded-full flex items-center">
+                      <span className="h-1.5 w-1.5 bg-green-500 rounded-full mr-1 animate-pulse"></span>
+                      Active
+                    </span>
+                    {agentProgress > 0 && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{agentProgress}%</span>
+                    )}
                   </div>
                 </div>
                 
-                <div className="p-6 space-y-6">
-                  <AnimatePresence mode="wait">
-                    {activeTab === 0 && (
-                      <motion.div 
-                        key="tab-0"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.3 }}
-                        className="space-y-4"
-                      >
-                        <div className="flex gap-3 items-start">
-                          <div className="w-8 h-8 flex-shrink-0 rounded-full bg-gray-200 dark:bg-gray-700"></div>
-                          <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl rounded-tl-none p-4 text-gray-700 dark:text-gray-300 text-sm">
-                            <p>Research quantum computing developments in the last 5 years and prepare a summary with key breakthroughs.</p>
-                          </div>
+                <div className="p-6 text-sm font-mono relative overflow-hidden">
+                  <div className="flex flex-col md:flex-row space-x-0 md:space-x-4">
+                    {/* Left side - Chat */}
+                    <div className="w-full md:w-1/2 space-y-6 mb-6 md:mb-0">
+                      {/* User input */}
+                      <div className="flex items-start">
+                        <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 mr-4 text-gray-800 dark:text-gray-200 shadow-sm">
+                          Research quantum computing developments in the last 5 years and prepare a summary with key breakthroughs.
                         </div>
-                        <div className="flex gap-3 items-start">
-                          <div className="w-8 h-8 flex-shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
-                            <Zap size={16} className="text-primary" />
-                          </div>
-                          <div className="bg-primary/10 rounded-2xl rounded-tl-none p-4 text-gray-700 dark:text-gray-300 text-sm">
-                            <p className="font-medium mb-2">✓ Task Accepted</p>
-                            <p>I'll research quantum computing breakthroughs from the past 5 years and prepare a comprehensive summary for you. This will include:</p>
-                            <ul className="list-disc pl-5 mt-2 space-y-1">
-                              <li>Major hardware advancements</li>
-                              <li>Algorithm developments</li>
-                              <li>Commercial applications</li>
-                              <li>Academic research highlights</li>
-                            </ul>
-                            <p className="mt-2">Starting research now, I'll update you on my progress...</p>
-                          </div>
+                      </div>
+                      
+                      {/* Agent response */}
+                      <div className="pl-4 border-l-2 border-pink-500 ml-2">
+                        <div className="flex items-center mb-2 text-pink-500">
+                          <Zap size={14} className="mr-2" />
+                          <span className="font-semibold">Task Accepted</span>
                         </div>
-                      </motion.div>
-                    )}
-                    
-                    {activeTab === 1 && (
-                      <motion.div 
-                        key="tab-1"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.3 }}
-                        className="space-y-4"
-                      >
-                        <div className="flex gap-3 items-start">
-                          <div className="w-8 h-8 flex-shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
-                            <Zap size={16} className="text-primary" />
-                          </div>
-                          <div className="bg-primary/10 rounded-2xl rounded-tl-none p-4 text-gray-700 dark:text-gray-300 text-sm">
-                            <p className="font-medium mb-2">🔍 Research Progress: 67%</p>
-                            <p>I've gathered information from 14 scientific papers, 3 industry reports, and Google's quantum computing blog. Key findings so far:</p>
-                            <ul className="list-disc pl-5 mt-2 space-y-1">
-                              <li>Google's quantum supremacy claim (2019)</li>
-                              <li>IBM's 127-qubit Eagle processor (2021)</li>
-                              <li>Error correction advancements</li>
-                            </ul>
-                            <p className="mt-2">Continuing to analyze sources and compile the summary...</p>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                    
-                    {activeTab === 2 && (
-                      <motion.div 
-                        key="tab-2"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        transition={{ duration: 0.3 }}
-                        className="space-y-4"
-                      >
-                        <div className="flex gap-3 items-start">
-                          <div className="w-8 h-8 flex-shrink-0 rounded-full bg-primary/20 flex items-center justify-center">
-                            <Zap size={16} className="text-primary" />
-                          </div>
-                          <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-2xl rounded-tl-none p-4 text-gray-700 dark:text-gray-300 text-sm">
-                            <p className="font-medium text-green-700 dark:text-green-400 mb-2">✅ Task Completed</p>
-                            <p>I've completed the research and prepared a comprehensive 12-page report on quantum computing breakthroughs in the last 5 years.</p>
-                            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 mt-3 border border-gray-200 dark:border-gray-700">
-                              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                                <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                                Quantum_Computing_Report.pdf (1.2 MB)
-                              </div>
+                        <p className="text-gray-700 dark:text-gray-300 mb-3">
+                          I'll research quantum computing breakthroughs from the past 5 years and prepare a comprehensive summary for you. This will include:
+                        </p>
+                        <ul className="space-y-1 mb-3 text-gray-700 dark:text-gray-300">
+                          <li className="flex items-center">
+                            <span className="mr-2">•</span>
+                            <span>Major hardware advancements</span>
+                          </li>
+                          <li className="flex items-center">
+                            <span className="mr-2">•</span>
+                            <span>Algorithm developments</span>
+                          </li>
+                          <li className="flex items-center">
+                            <span className="mr-2">•</span>
+                            <span>Commercial applications</span>
+                          </li>
+                          <li className="flex items-center">
+                            <span className="mr-2">•</span>
+                            <span>Academic research highlights</span>
+                          </li>
+                        </ul>
+                        <p className="text-gray-700 dark:text-gray-300">Starting research now, I'll update you on my progress...</p>
+                      </div>
+                      
+                      {/* Agent activity indicators */}
+                      <AnimatePresence>
+                        {searchingDatabases && (
+                          <motion.div 
+                            key="searching-databases"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-3 pl-4 border-l-2 border-blue-500 ml-2"
+                          >
+                            <div className="flex items-center text-blue-500">
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              <span className="font-semibold">Searching academic databases...</span>
                             </div>
-                            <p className="mt-3">Would you like me to explain any specific section in more detail?</p>
+                            <div className="flex text-xs text-gray-500 dark:text-gray-400 ml-6 animate-pulse">
+                              Accessing: Nature Quantum Information, arXiv preprints, Google Scholar...
+                            </div>
+                          </motion.div>
+                        )}
+                        
+                        {foundPapers && (
+                          <motion.div 
+                            key="found-papers"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-3 pl-4 border-l-2 border-green-500 ml-2"
+                          >
+                            <div className="flex items-center text-green-500">
+                              <Check size={14} className="mr-2" />
+                              <span className="font-semibold">Found 38 relevant papers</span>
+                            </div>
+                            <div className="flex text-xs text-gray-500 dark:text-gray-400 ml-6">
+                              Analyzing quantum supremacy demonstrations, error correction advances...
+                            </div>
+                          </motion.div>
+                        )}
+                        
+                        {reviewingIndustry && (
+                          <motion.div 
+                            key="reviewing-industry"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-3 pl-4 border-l-2 border-indigo-500 ml-2"
+                          >
+                            <div className="flex items-center text-indigo-500">
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              <span className="font-semibold">Reviewing industry developments...</span>
+                            </div>
+                            <div className="flex text-xs text-gray-500 dark:text-gray-400 ml-6">
+                              IBM Quantum, Google Quantum AI, D-Wave Systems, Rigetti...
+                            </div>
+                          </motion.div>
+                        )}
+                        
+                        {generatingDocument && (
+                          <motion.div 
+                            key="generating-document"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-3 pl-4 border-l-2 border-orange-500 ml-2"
+                          >
+                            <div className="flex items-center text-orange-500">
+                              <svg className="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              <span className="font-semibold">Generating comprehensive report...</span>
+                            </div>
+                            <div className="flex text-xs text-gray-500 dark:text-gray-400 ml-6">
+                              Synthesizing research findings into clear sections and visualizations...
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                    
+                    {/* Right side - Document generation */}
+                    <div className="w-full md:w-1/2 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center">
+                          <svg className="w-4 h-4 mr-2 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                          </svg>
+                          <span className="font-medium text-gray-800 dark:text-gray-200">Quantum_Computing_Report.pdf</span>
+                        </div>
+                        <div className="text-xs px-2 py-0.5 bg-pink-100 dark:bg-pink-900/30 text-pink-500 rounded-full flex items-center">
+                          {documentProgress < 100 ? (
+                            <>
+                              <span className="w-1.5 h-1.5 bg-pink-500 rounded-full mr-1 animate-pulse"></span>
+                              Generating
+                            </>
+                          ) : (
+                            <>
+                              <Check size={10} className="mr-1" />
+                              Complete
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white dark:bg-gray-800 p-3 rounded-md border border-gray-200 dark:border-gray-700">
+                        <div className="border-b border-gray-200 dark:border-gray-700 pb-2 mb-2">
+                          <h3 className="font-bold text-gray-900 dark:text-white">Quantum Computing: 5-Year Analysis</h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Comprehensive Research Report | April 2025</p>
+                        </div>
+                        
+                        <div className="space-y-2 text-xs text-gray-700 dark:text-gray-300">
+                          <div>
+                            <p className="font-medium flex items-center">
+                              1. Executive Summary 
+                              {!documentSections.executive ? (
+                                <svg className="animate-spin ml-1 h-2.5 w-2.5 text-pink-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                              ) : (
+                                <Check size={10} className="text-green-500 ml-1" />
+                              )}
+                            </p>
+                            {documentSections.executive && (
+                              <motion.p 
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="text-xs ml-3"
+                              >
+                                The quantum computing landscape has evolved dramatically since 2020, with significant advancements in hardware capabilities, algorithms, and practical applications...
+                              </motion.p>
+                            )}
+                          </div>
+                          
+                          <div>
+                            <p className="font-medium flex items-center">
+                              2. Hardware Advances 
+                              {!documentSections.hardware ? (
+                                documentSections.executive ? (
+                                  <svg className="animate-spin ml-1 h-2.5 w-2.5 text-pink-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                ) : null
+                              ) : (
+                                <Check size={10} className="text-green-500 ml-1" />
+                              )}
+                            </p>
+                            {documentSections.hardware && (
+                              <motion.div 
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="ml-3 text-xs"
+                              >
+                                <p>• IBM's roadmap achievement: 127-qubit (2021) → 433-qubit (2022) → 1,000+ (2023)</p>
+                                <p>• Google's error-correction milestone: first logical qubit below error threshold</p>
+                                <p>• IonQ's trapped-ion systems reaching 99.9% fidelity with 32 algorithmic qubits</p>
+                              </motion.div>
+                            )}
+                          </div>
+                          
+                          <div>
+                            <p className="font-medium flex items-center">
+                              3. Algorithm Developments 
+                              {!documentSections.algorithm ? (
+                                documentSections.hardware ? (
+                                  <svg className="animate-spin ml-1 h-2.5 w-2.5 text-pink-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                ) : null
+                              ) : (
+                                <Check size={10} className="text-green-500 ml-1" />
+                              )}
+                            </p>
+                            
+                            {documentSections.algorithm ? (
+                              <motion.div 
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="ml-3 text-xs"
+                              >
+                                <p>• Quantum error correction improvements: Surface code implementation</p>
+                                <p>• Variational quantum algorithms optimized for NISQ-era hardware</p>
+                                <p>• Quantum machine learning libraries: TensorFlow Quantum, PennyLane</p>
+                              </motion.div>
+                            ) : (
+                              documentSections.hardware && (
+                                <div className="ml-3 text-xs border-l-2 border-pink-500 pl-2 py-1">
+                                  <div className="animate-pulse">Writing content...</div>
+                                </div>
+                              )
+                            )}
+                          </div>
+                          
+                          <div>
+                            <p className="font-medium flex items-center">
+                              4. Commercial Applications
+                              {!documentSections.commercial ? (
+                                documentSections.algorithm ? (
+                                  <svg className="animate-spin ml-1 h-2.5 w-2.5 text-pink-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                  </svg>
+                                ) : null
+                              ) : (
+                                <Check size={10} className="text-green-500 ml-1" />
+                              )}
+                            </p>
+                            
+                            {documentSections.commercial ? (
+                              <motion.div 
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="ml-3 text-xs"
+                              >
+                                <p>• Financial modeling: JPMorgan Chase, Goldman Sachs quantum risk analysis</p>
+                                <p>• Material science: BMW, Volkswagen, and Daimler battery research</p>
+                                <p>• Pharmaceutical: Merck, Biogen accelerated drug discovery</p>
+                              </motion.div>
+                            ) : (
+                              documentSections.algorithm && (
+                                <div className="ml-3 h-6 bg-gray-100 dark:bg-gray-700/50 rounded animate-pulse"></div>
+                              )
+                            )}
                           </div>
                         </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                      </div>
+                      
+                      <div className="mt-3 flex items-center justify-between">
+                        <div className="w-full bg-gray-200 dark:bg-gray-700 h-1.5 rounded-full">
+                          <motion.div 
+                            className="bg-pink-500 h-1.5 rounded-full"
+                            initial={{ width: '0%' }}
+                            animate={{ width: `${documentProgress}%` }}
+                            transition={{ duration: 0.5 }}
+                          ></motion.div>
+                        </div>
+                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{documentProgress}%</span>
+                      </div>
+                      
+                      <div className="mt-4 border-t border-gray-200 dark:border-gray-700 pt-3">
+                        <div className="text-xs font-medium text-gray-800 dark:text-gray-200 mb-2">Additional Files</div>
+                        
+                        <div className="space-y-2">
+                          <AnimatePresence>
+                            {filesGenerated.chart && (
+                              <motion.div 
+                                key="chart-file"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-xs"
+                              >
+                                <div className="flex items-center">
+                                  <svg className="w-3.5 h-3.5 text-green-500 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                  </svg>
+                                  <span className="text-gray-700 dark:text-gray-300">Qubit_Growth_Chart.png</span>
+                                </div>
+                                <button className="text-xs px-2 py-0.5 bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors">
+                                  View
+                                </button>
+                              </motion.div>
+                            )}
+                            
+                            {filesGenerated.data ? (
+                              <motion.div 
+                                key="data-file"
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md text-xs"
+                              >
+                                <div className="flex items-center">
+                                  <svg className="w-3.5 h-3.5 text-blue-500 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                                  </svg>
+                                  <span className="text-gray-700 dark:text-gray-300">Research_Data.xlsx</span>
+                                </div>
+                                <button className="text-xs px-2 py-0.5 bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors">
+                                  Download
+                                </button>
+                              </motion.div>
+                            ) : (
+                              generatingDocument && (
+                                <div className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-900/50 border border-dashed border-gray-300 dark:border-gray-700 rounded-md text-xs">
+                                  <div className="flex items-center">
+                                    <svg className="animate-spin w-3.5 h-3.5 text-blue-500 mr-1.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span className="text-gray-600 dark:text-gray-400">Research_Data.xlsx</span>
+                                  </div>
+                                  <span className="text-xs text-gray-500">Preparing...</span>
+                                </div>
+                              )
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -218,13 +628,11 @@ export default function Home() {
       </section>
       
       {/* Features Section */}
-      <section id="features" className="w-full py-24 bg-white dark:bg-gray-900 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent dark:from-primary/10 dark:via-transparent dark:to-transparent z-0"></div>
-        
-        <div className="container px-4 sm:px-6 lg:px-8 mx-auto relative z-10">
+      <section id="features" className="w-full py-24 md:py-32 bg-gray-50 dark:bg-gray-900">
+        <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white">Autonomous Intelligence</h2>
-            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">Discover how our advanced AI agent works independently to complete complex tasks while you focus on what matters.</p>
+            <p className="text-lg text-gray-600 dark:text-gray-300 mt-4 max-w-3xl mx-auto">Discover how our advanced AI agent works independently to complete complex tasks while you focus on what matters.</p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-10">
@@ -273,7 +681,7 @@ export default function Home() {
                     <CardTitle className="text-xl font-semibold">{feature.title}</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-gray-600 dark:text-gray-400">{feature.description}</p>
+                    <p className="text-gray-600 dark:text-gray-300">{feature.description}</p>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -283,11 +691,11 @@ export default function Home() {
       </section>
       
       {/* Testimonials Section */}
-      <section id="testimonials" className="w-full py-24 bg-white dark:bg-gray-900">
+      <section id="testimonials" className="w-full py-24 md:py-32 bg-white dark:bg-gray-900">
         <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white">What Our Users Say</h2>
-            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">Real people sharing their experiences with AI Tutor Machine.</p>
+            <p className="text-lg text-gray-600 dark:text-gray-300 mt-4 max-w-3xl mx-auto">Join thousands of satisfied users already benefiting from our AI agent technology.</p>
           </div>
           
           <Script src="https://widget.senja.io/widget/698903f7-82e1-43c9-a1e4-507b33742e0a/platform.js" strategy="afterInteractive" />
@@ -296,7 +704,7 @@ export default function Home() {
       </section>
       
       {/* Use Cases Section */}
-      <section className="w-full py-24 bg-gray-50 dark:bg-gray-900/50">
+      <section className="w-full py-24 md:py-32 bg-gray-50 dark:bg-gray-900">
         <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="text-center mb-16">
             <div className="flex gap-2 justify-center mb-4">
@@ -313,84 +721,91 @@ export default function Home() {
             {[
               {
                 icon: <BookOpen className="h-6 w-6 text-white" />,
-                title: "Trip to Japan in april",
-                description: "AI Tutor integrates comprehensive travel information to create personalized itineraries and produces a custom travel handbook tailored specifically for your Japanese adventure.",
+                title: "Write product launch email series",
+                description: "AI Tutor creates a strategic 5-email sequence for your product launch with compelling subject lines, engaging copy, and clear CTAs to maximize conversion.",
                 image: "/images/examples/japan-trip.jpg",
-                time: "10-min",
-                workflow: "Research"
+                time: "9-min",
+                workflow: "Marketing"
               },
               {
                 icon: <Code className="h-6 w-6 text-white" />,
-                title: "Deeply analyze Tesla stocks",
-                description: "AI Tutor delivers in-depth stock analysis with visually compelling dashboards that showcase comprehensive insights into Tesla's market performance and financial outlook.",
+                title: "Analyze website accessibility",
+                description: "AI Tutor performs a comprehensive accessibility audit of your website, identifying WCAG compliance issues and providing actionable recommendations for improvement.",
                 image: "/images/examples/tesla-analysis.jpg",
-                time: "12-min",
-                workflow: "Analysis"
+                time: "11-min",
+                workflow: "Development"
               },
               {
-                icon: <Globe className="h-6 w-6 text-white" />,
-                title: "Interactive course on the momentum theorem",
-                description: "AI Tutor develops engaging video presentations for middle school educators, clearly explaining the momentum theorem through accessible and educational content.",
-                image: "/images/examples/momentum-course.jpg",
+                icon: <Brain className="h-6 w-6 text-white" />,
+                title: "Create interactive lesson plan",
+                description: "AI Tutor designs an engaging, standards-aligned lesson plan with interactive activities, discussion prompts, and assessment strategies for your specific grade level and subject.",
+                image: "/images/examples/meeting-summary.jpg",
                 time: "8-min",
                 workflow: "Education"
               },
               {
                 icon: <Shield className="h-6 w-6 text-white" />,
-                title: "Comparative analysis of insurance policies",
-                description: "Looking to compare insurance options? AI Tutor generates clear, structured comparison tables highlighting key policy information with optimal recommendations.",
-                image: "/images/examples/insurance-compare.jpg",
-                time: "6-min",
-                workflow: "Comparison"
+                title: "Draft privacy policy document",
+                description: "AI Tutor generates a comprehensive, legally-sound privacy policy tailored to your business type, location, and data collection practices to ensure regulatory compliance.",
+                image: "/images/examples/job-email.jpg",
+                time: "7-min",
+                workflow: "Legal"
+              },
+              {
+                icon: <Globe className="h-6 w-6 text-white" />,
+                title: "Research emerging market trends",
+                description: "AI Tutor analyzes global market data to identify emerging trends, growth opportunities, and potential disruptions in your industry with actionable strategic recommendations.",
+                image: "/images/examples/job-email.jpg",
+                time: "12-min",
+                workflow: "Business"
               },
               {
                 icon: <Users className="h-6 w-6 text-white" />,
-                title: "B2B supplier sourcing",
-                description: "AI Tutor conducts comprehensive research across extensive networks to identify the most suitable suppliers for your specific requirements. As your dedicated agent, AI Tutor works exclusively in your interest.",
-                image: "/images/examples/supplier-sourcing.jpg",
-                time: "14-min",
-                workflow: "Research"
+                title: "Generate competitive analysis report",
+                description: "AI Tutor creates a detailed competitive landscape analysis comparing your product against key competitors across features, pricing, market position, and customer sentiment.",
+                image: "/images/examples/meeting-summary.jpg",
+                time: "10-min",
+                workflow: "Strategy"
               },
               {
                 icon: <MessageCircle className="h-6 w-6 text-white" />,
-                title: "Research on AI products for the clothing industry",
-                description: "AI Tutor conducted in-depth research on AI search products in the clothing industry with comprehensive product analysis and competitive positioning.",
-                image: "/images/examples/clothing-ai.jpg",
-                time: "9-min",
-                workflow: "Market"
-              },
-              {
-                icon: <Zap className="h-6 w-6 text-white" />,
-                title: "List of YC companies",
-                description: "AI Tutor expertly navigated the YC W25 database to identify all qualifying 528 companies, meticulously compiling this valuable information into a structured table.",
-                image: "/images/examples/yc-companies.jpg",
-                time: "13-min",
-                workflow: "Data"
+                title: "Create social media content calendar",
+                description: "AI Tutor develops a month-long social media content plan with platform-specific post ideas, optimal posting times, hashtag strategies, and engagement tactics.",
+                image: "/images/examples/tesla-analysis.jpg",
+                time: "8-min",
+                workflow: "Social"
               },
               {
                 icon: <Award className="h-6 w-6 text-white" />,
-                title: "Online store operation analysis",
-                description: "Upload your Amazon store sales data and AI Tutor delivers actionable insights, detailed visualizations, and customized strategies designed to increase your sales performance.",
-                image: "/images/examples/store-analysis.jpg",
-                time: "8-min",
-                workflow: "Business"
+                title: "Design customer feedback survey",
+                description: "AI Tutor crafts a comprehensive customer feedback survey with strategic questions to gather actionable insights on satisfaction, preferences, and improvement areas.",
+                image: "/images/examples/japan-trip.jpg",
+                time: "6-min",
+                workflow: "Research"
               }
             ].map((example, i) => (
-              <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
-                <div className="p-6">
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden h-[280px] flex flex-col relative group cursor-pointer hover:shadow-md transition-shadow" style={{ position: 'relative', zIndex: 1 }}>
+                <a href="/auth" className="absolute inset-0 z-1">
+                  <span className="sr-only">Try {example.title}</span>
+                </a>
+                <div className="p-6 flex-grow relative z-0">
                   <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center mb-4">
                     {example.icon}
                   </div>
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">{example.title}</h3>
-                  <p className="text-gray-600 dark:text-gray-400 text-sm h-[80px] overflow-hidden">{example.description}</p>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2 select-text">{example.title}</h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-3 select-text">{example.description}</p>
                 </div>
-                <div className="h-[120px] bg-gray-100 dark:bg-gray-700 w-full relative flex items-center justify-center">
-                  <div className="absolute bottom-3 left-3">
-                    <div className="bg-black text-white text-xs px-3 py-1.5 rounded-full font-medium">
-                      Try for free • {example.time} task
-                    </div>
+                <div className="h-[60px] bg-gray-100 dark:bg-gray-700 w-full relative flex items-center z-0">
+                  <div className="absolute left-3">
+                    <motion.div 
+                      className="bg-black group-hover:bg-primary dark:bg-gray-800 dark:group-hover:bg-primary text-white text-xs px-4 py-1.5 rounded-full font-medium h-8 flex items-center justify-center w-[180px] transition-colors"
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      Try for free • {example.time}
+                    </motion.div>
                   </div>
-                  <div className="absolute top-3 right-3 flex items-center space-x-1">
+                  <div className="absolute right-3 flex items-center space-x-1">
                     <div className={`w-2 h-2 rounded-full ${
                       example.workflow === "Research" ? 
                       "bg-blue-400" :
@@ -401,7 +816,7 @@ export default function Home() {
                       example.workflow === "Data" ? "bg-indigo-400" :
                       "bg-orange-400"
                     }`}></div>
-                    <div className="text-[10px] bg-black/70 text-white px-2 py-0.5 rounded-full">{example.workflow}</div>
+                    <div className="text-[10px] bg-black/70 text-white px-2 py-0.5 rounded-full select-text">{example.workflow}</div>
                   </div>
                 </div>
               </div>
@@ -411,146 +826,173 @@ export default function Home() {
       </section>
       
       {/* Pricing Section */}
-      <section id="pricing" className="w-full py-24 bg-white dark:bg-gray-900">
+      <section id="pricing" className="w-full py-24 md:py-32 bg-white dark:bg-gray-900" style={{ position: 'relative', zIndex: 2 }}>
         <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-primary dark:from-white dark:to-primary-foreground">Flexible Pricing Plans</h2>
-            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">Choose the right plan for your autonomous agent needs with transparent, usage-based pricing.</p>
+            <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-primary dark:from-white dark:to-primary-foreground">Pricing Plans</h2>
+            <p className="text-lg text-gray-600 dark:text-gray-300 mt-4 max-w-3xl mx-auto">Choose the right plan for your autonomous agent needs with transparent, usage-based pricing.</p>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {[
               {
-                title: "Free",
-                price: "$0",
-                period: "forever",
-                description: "For exploration and personal use",
+                id: 'free',
+                name: 'Free',
+                description: 'For exploration and personal use',
+                price: '$0',
+                duration: '/forever',
+                popular: false,
                 features: [
-                  "50 minutes per month",
-                  "Basic autonomous actions",
-                  "Text-based inputs & outputs",
-                  "Core tools access",
-                  "Community support"
+                  '50 minutes per month',
+                  'Basic autonomous actions',
+                  'Text-based inputs & outputs',
+                  'Core tools access',
+                  'Community support'
                 ],
-                buttonText: "Get Started Free",
-                popular: false
+                buttonText: 'Get Started Free',
+                priceCaption: 'No credit card required'
               },
               {
-                title: "Pro",
-                price: "$20",
-                period: "per month",
-                description: "For professionals and power users",
+                id: 'pro',
+                name: 'Pro',
+                description: 'For professionals and power users',
+                price: '$20',
+                duration: '/per month',
+                popular: true,
                 features: [
-                  "300 minutes per month",
-                  "Advanced autonomous capabilities",
-                  "Priority processing",
-                  "Full tools access",
-                  "Progress monitoring",
-                  "Email support"
+                  '300 minutes per month',
+                  'Advanced autonomous capabilities',
+                  'Priority processing',
+                  'Full tools access',
+                  'Progress monitoring',
+                  'Email support'
                 ],
-                buttonText: "Upgrade to Pro",
-                popular: true
+                buttonText: 'Upgrade to Pro',
+                priceCaption: 'Billed monthly'
               },
               {
-                title: "Enterprise",
-                price: "$100",
-                period: "per month",
-                description: "For organizations and teams",
+                id: 'enterprise',
+                name: 'Enterprise',
+                description: 'For organizations and teams',
+                price: '$100',
+                duration: '/per month',
+                popular: false,
                 features: [
-                  "2400 minutes per month",
-                  "Maximum autonomous capabilities",
-                  "Custom integrations",
-                  "Advanced analytics",
-                  "API access",
-                  "Dedicated support"
+                  '2400 minutes per month',
+                  'Maximum autonomous capabilities',
+                  'Custom integrations',
+                  'Advanced analytics',
+                  'API access',
+                  'Dedicated support'
                 ],
-                buttonText: "Contact Sales",
-                popular: false
+                buttonText: 'Contact Sales',
+                priceCaption: 'Volume discounts available'
               }
             ].map((plan, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-                viewport={{ once: true }}
-                className="flex"
-              >
-                <Card 
-                  className={`border rounded-2xl overflow-hidden relative flex flex-col h-full w-full ${
-                    plan.popular ? 
-                    "border-primary shadow-xl shadow-primary/20 dark:shadow-primary/10" : 
-                    "border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all duration-300"
-                  }`}
+              <div key={plan.id} className="flex">
+                <motion.div 
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: i * 0.1 }}
+                  viewport={{ once: true }}
+                  className="flex flex-col w-full"
+                  whileHover={{ 
+                    y: -8,
+                    transition: { duration: 0.2 }
+                  }}
                 >
-                  {plan.popular && (
-                    <div className="absolute top-0 right-0 bg-primary text-white text-xs font-medium px-3 py-1.5 rounded-bl-lg">
-                      Most Popular
+                  <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-lg border ${plan.popular ? 'border-primary' : 'border-gray-200 dark:border-gray-700'} overflow-hidden h-full flex flex-col relative`}>
+                    {plan.popular && (
+                      <motion.div 
+                        className="bg-primary text-primary-foreground text-xs font-bold uppercase tracking-wider py-1.5 text-center"
+                        initial={{ opacity: 0, x: -50 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.4, delay: 0.3 }}
+                      >
+                        Most Popular
+                      </motion.div>
+                    )}
+                    <div className="p-6 flex-grow">
+                      <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">{plan.name}</h3>
+                      <p className="text-gray-600 dark:text-gray-300 mb-6 h-12">{plan.description}</p>
+                      
+                      <div className="mb-6">
+                        <span className="text-4xl font-bold text-gray-900 dark:text-white">{plan.price}</span>
+                        <span className="text-gray-600 dark:text-gray-300">{plan.duration}</span>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{plan.priceCaption}</p>
+                      </div>
+                      
+                      <ul className="space-y-3 mb-6">
+                        {plan.features.map((feature, j) => (
+                          <li key={j} className="flex items-start">
+                            <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0 mr-2" />
+                            <span className="text-gray-600 dark:text-gray-300 text-sm">{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
-                  )}
-                  <CardHeader className="text-center pb-2">
-                    <CardTitle className="text-2xl">{plan.title}</CardTitle>
-                    <div className="flex justify-center items-baseline mt-4">
-                      <span className="text-4xl font-bold text-gray-900 dark:text-white">{plan.price}</span>
-                      <span className="text-gray-500 dark:text-gray-400 ml-1.5">/{plan.period}</span>
+                    
+                    <div className="p-6 pt-0 mt-auto">
+                      <motion.div
+                        whileHover={{ scale: 1.03 }}
+                        whileTap={{ scale: 0.97 }}
+                      >
+                        <Button 
+                          size="lg" 
+                          className={`w-full h-12 ${
+                            plan.popular ? 
+                            "bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 text-white shadow-lg shadow-pink-500/25 dark:shadow-pink-600/50 transition-all duration-300 hover:scale-105 font-bold border-2 border-transparent dark:border-white/20" : 
+                            "bg-gray-100 hover:bg-gray-200 text-gray-900 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-white"
+                          }`}
+                        >
+                          {plan.buttonText}
+                        </Button>
+                      </motion.div>
                     </div>
-                    <CardDescription className="mt-3 text-base">{plan.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-4 flex-grow">
-                    <ul className="space-y-3">
-                      {plan.features.map((feature, j) => (
-                        <li key={j} className="flex items-start gap-3">
-                          <div className="mt-1 bg-primary/10 p-1 rounded-full">
-                            <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
-                          </div>
-                          <span className="text-gray-700 dark:text-gray-300">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </CardContent>
-                  <CardFooter>
-                    <Button 
-                      className={`w-full py-6 text-lg font-medium ${
-                        plan.popular ? 
-                        "bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20" : 
-                        "bg-gray-100 hover:bg-gray-200 text-gray-900 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-white"
-                      }`}
-                    >
-                      {plan.buttonText}
-                    </Button>
-                  </CardFooter>
-                </Card>
-              </motion.div>
+                  </div>
+                </motion.div>
+              </div>
             ))}
           </div>
           
-          <div className="mt-10 text-center text-sm text-gray-500 dark:text-gray-400">
-            All plans include access to our core autonomous agent capabilities. <Link href="#" className="text-primary hover:underline">See all plan details</Link>
+          <div className="mt-10 text-center text-sm text-gray-500 dark:text-gray-300">
+            All plans include access to our core autonomous agent capabilities. <Link href="#" className="text-primary underline hover:text-primary/90">See all plan details</Link>
           </div>
         </div>
       </section>
       
       {/* CTA Section */}
-      <section className="w-full py-24 bg-gradient-to-br from-primary/15 via-primary/5 to-white dark:from-primary/30 dark:via-primary/15 dark:to-transparent">
+      <section className="w-full py-24 md:py-32 bg-gray-50 dark:bg-gray-900" style={{ position: 'relative', zIndex: 2 }}>
         <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="max-w-4xl mx-auto text-center space-y-8">
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white">Experience the Power of Autonomous AI</h2>
-            <p className="text-xl text-gray-700 dark:text-gray-300 max-w-3xl mx-auto">
+            <p className="text-lg text-gray-700 dark:text-gray-300 max-w-3xl mx-auto">
               Join forward-thinking professionals who are revolutionizing their workflow with AI Tutor Machine's autonomous capabilities.
             </p>
             <div className="pt-4">
-              <Button size="lg" className="bg-primary hover:bg-primary/90 text-white px-10 py-7 rounded-xl text-xl shadow-xl shadow-primary/20 font-medium hover:translate-y-[-2px] transition-all duration-300">
-                <Link href="/auth/login" className="flex items-center gap-2">
-                  Get Started Now <ArrowRight className="h-5 w-5" />
-                </Link>
-              </Button>
+              <motion.div
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Button size="lg" className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 text-white dark:text-white h-12 px-8 relative overflow-hidden group border-2 border-transparent dark:border-white/20">
+                  <motion.span
+                    className="absolute inset-0 bg-white/20 rounded-lg"
+                    initial={{ x: "-100%", opacity: 0 }}
+                    whileHover={{ x: "100%", opacity: 0.4 }}
+                    transition={{ duration: 0.6 }}
+                  />
+                  <Link href="/dashboard" className="flex items-center gap-2 relative z-10 text-white dark:text-white font-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
+                    Get Started <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  </Link>
+                </Button>
+              </motion.div>
             </div>
           </div>
         </div>
       </section>
       
       {/* Footer */}
-      <footer className="w-full py-16 bg-gray-100 dark:bg-gray-800/70 border-t border-gray-200 dark:border-gray-700">
+      <footer className="w-full py-16 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800" style={{ position: 'relative', zIndex: 2 }}>
         <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
             <div className="col-span-1 md:col-span-2">
@@ -562,51 +1004,51 @@ export default function Home() {
                 The autonomous general-purpose AI agent that completes complex tasks without supervision.
               </p>
               <div className="flex space-x-5">
-                <Link href="#" className="text-gray-500 hover:text-primary transition-colors">
+                {/* <Link href="#" className="text-gray-500 dark:text-gray-300 hover:text-primary transition-colors">
                   <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"></path>
                   </svg>
                 </Link>
-                <Link href="#" className="text-gray-500 hover:text-primary transition-colors">
+                <Link href="#" className="text-gray-500 dark:text-gray-300 hover:text-primary transition-colors">
                   <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84"></path>
                   </svg>
                 </Link>
-                <Link href="#" className="text-gray-500 hover:text-primary transition-colors">
+                <Link href="#" className="text-gray-500 dark:text-gray-300 hover:text-primary transition-colors">
                   <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"></path>
                   </svg>
-                </Link>
+                </Link> */}
               </div>
             </div>
             
             <div>
               <h3 className="text-base font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-5">Product</h3>
               <ul className="space-y-4">
-                <li><Link href="#features" className="text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">Features</Link></li>
-                <li><Link href="#pricing" className="text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">Pricing</Link></li>
-                <li><Link href="#" className="text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">Use Cases</Link></li>
-                <li><Link href="#" className="text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">Documentation</Link></li>
+                <li><Link href="#features" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Features</Link></li>
+                <li><Link href="#pricing" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Pricing</Link></li>
+                <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Use Cases</Link></li>
+                <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Documentation</Link></li>
               </ul>
             </div>
             
             <div>
               <h3 className="text-base font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-5">Company</h3>
               <ul className="space-y-4">
-                <li><Link href="#" className="text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">About</Link></li>
-                <li><Link href="#" className="text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">Blog</Link></li>
-                <li><Link href="#" className="text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">Careers</Link></li>
-                <li><Link href="#" className="text-gray-600 dark:text-gray-400 hover:text-primary transition-colors">Contact</Link></li>
+                <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">About</Link></li>
+                <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Blog</Link></li>
+                <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Careers</Link></li>
+                <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Contact</Link></li>
               </ul>
             </div>
           </div>
           
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-10 flex flex-col md:flex-row justify-between items-center">
-            <p className="text-gray-500 dark:text-gray-400"> 2025 AI Tutor Machine. All rights reserved.</p>
+          <div className="border-t border-gray-200 dark:border-gray-800 pt-10 flex flex-col md:flex-row justify-between items-center">
+            <p className="text-gray-500 dark:text-gray-300"> 2025 AI Tutor Machine. All rights reserved.</p>
             <div className="flex space-x-8 mt-6 md:mt-0">
-              <Link href="#" className="text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">Privacy Policy</Link>
-              <Link href="#" className="text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">Terms of Service</Link>
-              <Link href="#" className="text-gray-500 dark:text-gray-400 hover:text-primary transition-colors">Cookie Policy</Link>
+              <Link href="#" className="text-gray-500 dark:text-gray-300 hover:text-primary transition-colors">Privacy Policy</Link>
+              <Link href="#" className="text-gray-500 dark:text-gray-300 hover:text-primary transition-colors">Terms of Service</Link>
+              <Link href="#" className="text-gray-500 dark:text-gray-300 hover:text-primary transition-colors">Cookie Policy</Link>
             </div>
           </div>
         </div>
