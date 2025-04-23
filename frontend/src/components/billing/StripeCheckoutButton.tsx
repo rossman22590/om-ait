@@ -53,7 +53,11 @@ export function StripeCheckoutButton({
       formData.append('returnUrl', returnUrl);
       formData.append('planId', planId);
       
-      console.log('Starting checkout with:', { accountId, planId, returnUrl });
+      console.log('Starting checkout with:', { 
+        accountId, 
+        planId, 
+        returnUrl
+      });
       
       // Make a direct fetch request to the API endpoint
       const response = await fetch('/api/create-checkout-session', {
@@ -125,17 +129,7 @@ export function StripeCheckoutButton({
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle>Confirm Subscription Upgrade</DialogTitle>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-6 w-6" 
-                onClick={handleCloseDialog}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+            <DialogTitle>Confirm Subscription Upgrade</DialogTitle>
             <DialogDescription>
               You're about to upgrade to the {planId.charAt(0).toUpperCase() + planId.slice(1)} plan.
             </DialogDescription>
@@ -153,7 +147,7 @@ export function StripeCheckoutButton({
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           ) : (
-            <DialogFooter className="flex sm:justify-between">
+            <DialogFooter className="flex sm:justify-between mt-4">
               <Button 
                 variant="outline" 
                 onClick={handleCloseDialog}

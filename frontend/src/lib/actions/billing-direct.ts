@@ -292,25 +292,131 @@ export async function createPortalSession(formData: FormData) {
     throw new Error('Missing account ID')
   }
   
+  console.log(`Creating portal session for account: ${accountId}`);
+  
   const supabase = await createClient()
   
-  // Get customer ID
-  const { data: customerData } = await supabase
-    .schema('basejump')
-    .from('billing_customers')
-    .select('customer_id')
-    .eq('account_id', accountId)
-    .single()
+  // Get customer ID - try both schemas
+  let customerData;
   
+  try {
+    // Try basejump schema first
+    const { data: basejumpCustomerData } = await supabase
+      .schema('basejump')
+      .from('billing_customers')
+      .select('customer_id, email')
+      .eq('account_id', accountId)
+      .single();
+    
+    if (basejumpCustomerData?.customer_id) {
+      console.log('Found customer in basejump schema:', basejumpCustomerData.customer_id);
+      customerData = basejumpCustomerData;
+    } else {
+      // Try public schema
+      const { data: publicCustomerData } = await supabase
+        .from('billing_customers')
+        .select('customer_id, email')
+        .eq('account_id', accountId)
+        .single();
+      
+      if (publicCustomerData?.customer_id) {
+        console.log('Found customer in public schema:', publicCustomerData.customer_id);
+        customerData = publicCustomerData;
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching customer data:', error);
+  }
+  
+  // If no customer found, check if they have any active subscriptions
   if (!customerData?.customer_id) {
-    throw new Error('Customer not found')
+    try {
+      // Check for subscriptions in Stripe directly
+      const { data: subscriptionData } = await supabase
+        .schema('basejump')
+        .from('billing_subscriptions')
+        .select('stripe_customer_id')
+        .eq('account_id', accountId)
+        .eq('status', 'active')
+        .single();
+      
+      if (subscriptionData?.stripe_customer_id) {
+        console.log('Found customer ID in subscriptions:', subscriptionData.stripe_customer_id);
+        customerData = { customer_id: subscriptionData.stripe_customer_id };
+      }
+    } catch (error) {
+      console.error('Error checking subscriptions:', error);
+    }
+  }
+  
+  // If still no customer, create one
+  if (!customerData?.customer_id) {
+    // Get user email from account
+    let userEmail;
+    
+    try {
+      // Get created_by from accounts
+      let userId;
+      
+      const { data: accountData } = await supabase
+        .from('accounts')
+        .select('created_by')
+        .eq('account_id', accountId)
+        .single();
+      
+      if (accountData?.created_by) {
+        userId = accountData.created_by;
+        
+        // Get email from users
+        const { data: userData } = await supabase
+          .from('users')
+          .select('email')
+          .eq('id', userId)
+          .single();
+        
+        if (userData?.email) {
+          userEmail = userData.email;
+        }
+      }
+      
+      // If we have an email, create a new customer
+      if (userEmail) {
+        console.log(`Creating new Stripe customer for email: ${userEmail}`);
+        const customer = await stripe.customers.create({
+          email: userEmail,
+          metadata: { account_id: accountId }
+        });
+        
+        // Save the new customer ID
+        await supabase
+          .schema('basejump')
+          .from('billing_customers')
+          .insert({
+            account_id: accountId,
+            customer_id: customer.id,
+            email: userEmail
+          });
+        
+        customerData = { customer_id: customer.id };
+        console.log(`Created new customer: ${customer.id}`);
+      }
+    } catch (err) {
+      console.error('Error creating new customer:', err);
+    }
+  }
+  
+  // Final check for customer
+  if (!customerData?.customer_id) {
+    console.error('Could not find or create customer for account:', accountId);
+    throw new Error('Customer not found and could not be created. Please contact support.');
   }
   
   // Create portal session
   const session = await stripe.billingPortal.sessions.create({
     customer: customerData.customer_id,
-    return_url: returnUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    return_url: returnUrl || process.env.NEXT_PUBLIC_URL || 'http://localhost:3003'
   })
   
+  console.log(`Created portal session: ${session.url}`);
   return { url: session.url }
 }

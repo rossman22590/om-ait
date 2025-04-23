@@ -1613,10 +1613,13 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
         currentUsage={billingData.currentUsage}
         limit={billingData.limit}
         accountId={billingData.accountId || null}
-        onDismiss={() => setShowBillingAlert(false)}
+        onDismiss={() => {
+          console.log("User dismissed billing alert");
+          setShowBillingAlert(false);
+        }}
         isOpen={showBillingAlert}
+        className="z-[9999]"
       />
     </div>
   );
 }
-

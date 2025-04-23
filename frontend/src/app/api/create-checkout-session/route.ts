@@ -13,12 +13,18 @@ export async function POST(request: NextRequest) {
     const accountId = formData.get('accountId') as string;
     const planId = formData.get('planId') as string;
     const returnUrl = formData.get('returnUrl') as string;
+    const promoCode = formData.get('promoCode') as string || null;
 
     if (!accountId || !planId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    console.log('Creating checkout session with:', { accountId, planId, returnUrl });
+    console.log('Creating checkout session with:', { 
+      accountId, 
+      planId, 
+      returnUrl,
+      promoCode: promoCode || 'None' 
+    });
 
     // Get the price ID from the plan ID
     let priceId = '';
@@ -179,7 +185,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create checkout session
-    const session = await stripe.checkout.sessions.create({
+    const sessionConfig: Stripe.Checkout.SessionCreateParams = {
       customer: customerId,
       line_items: [
         {
@@ -192,14 +198,29 @@ export async function POST(request: NextRequest) {
       cancel_url: `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3003'}/settings/billing?canceled=true`,
       metadata: {
         account_id: accountId
-      }
-    });
+      },
+      // Allow promotion codes to be entered at checkout
+      allow_promotion_codes: true
+    };
+    
+    // If promo code is provided, pre-fill it
+    if (promoCode) {
+      console.log(`Pre-filling promo code: ${promoCode}`);
+      sessionConfig.discounts = [
+        {
+          promotion_code: promoCode
+        }
+      ];
+    }
+    
+    const session = await stripe.checkout.sessions.create(sessionConfig);
 
     console.log('Stripe session created:', {
       id: session.id,
       url: session.url,
       customer: session.customer,
       status: session.status,
+      promoApplied: promoCode ? true : false
     });
 
     return NextResponse.json({ url: session.url });
