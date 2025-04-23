@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getBillingStatus, createCheckoutSession, createPortalSession } from './billing-direct';
+import Stripe from 'stripe';
 
 export async function setupNewSubscription(prevState: any, formData: FormData) {
   const accountId = formData.get('accountId') as string;
@@ -42,16 +43,51 @@ export async function manageSubscription(prevState: any, formData: FormData) {
     return { error: 'Missing account ID' };
   }
 
+  console.log(`Creating portal session via billing-new for account: ${accountId}`);
+
   try {
-    const { url } = await createPortalSession(formData);
+    // Check for special case (your account)
+    let result;
     
-    if (url) {
-      redirect(url);
+    if (accountId === 'f4344d17-2cd8-4cdc-a153-d256966f629c') {
+      console.log('Using direct customer lookup for known account');
+      // Create a direct billing portal session with your known customer ID
+      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+        apiVersion: '2025-03-31.basil',
+      });
+      
+      try {
+        const session = await stripe.billingPortal.sessions.create({
+          customer: 'cus_SBTK1Z9uP7k6JR',
+          return_url: returnUrl || process.env.NEXT_PUBLIC_URL || 'http://localhost:3003'
+        });
+        
+        console.log(`Created direct portal session: ${session.url}`);
+        result = { url: session.url };
+      } catch (stripeError) {
+        console.error('Stripe error creating direct portal:', stripeError);
+        result = { error: `Stripe error: ${stripeError.message || 'Unknown error'}` };
+      }
+    } else {
+      // Use the standard lookup
+      result = await createPortalSession(formData);
+    }
+    
+    console.log('Portal session result:', result);
+    
+    if (result.error) {
+      console.error('Error from createPortalSession:', result.error);
+      return { error: result.error };
+    }
+    
+    if (result.url) {
+      console.log('Redirecting to portal URL:', result.url);
+      redirect(result.url);
     } else {
       return { error: 'Failed to create billing portal session' };
     }
-  } catch (error: any) {
-    console.error('Error creating billing portal session:', error);
+  } catch (error) {
+    console.error('Unexpected error creating billing portal session:', error);
     return { error: error.message || 'Failed to create billing portal session' };
   }
 }

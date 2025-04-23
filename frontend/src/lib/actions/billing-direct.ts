@@ -15,6 +15,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
   apiVersion: '2025-03-31.basil',
 })
 
+// Define consistent return type for billing functions 
+export type BillingResult = { url?: string; error?: string };
+
 export async function getBillingStatus(accountId: string) {
   const supabase = await createClient()
   
@@ -136,160 +139,146 @@ export async function getBillingStatus(accountId: string) {
   }
 }
 
-export async function createCheckoutSession(formData: FormData) {
+export async function createCheckoutSession(formData: FormData): Promise<BillingResult> {
   const accountId = formData.get('accountId') as string
   const planId = formData.get('planId') as string
   const returnUrl = formData.get('returnUrl') as string
   
   if (!accountId || !planId) {
-    throw new Error('Missing required fields')
+    return { error: 'Missing account ID or plan ID' }
   }
   
-  // Get the price ID from the plan ID
-  let priceId = '';
-  if (planId === 'pro') {
-    priceId = process.env.STRIPE_PRO_PLAN_ID || '';
-  } else if (planId === 'enterprise') {
-    priceId = process.env.STRIPE_ENTERPRISE_PLAN_ID || '';
-  } else {
-    priceId = process.env.STRIPE_FREE_PLAN_ID || '';
-  }
-  
-  // Check if we have a valid price ID
-  if (!priceId) {
-    console.error(`No price ID found for plan: ${planId}`);
-    console.log('Available environment variables:', {
-      STRIPE_FREE_PLAN_ID: process.env.STRIPE_FREE_PLAN_ID ? 'Set' : 'Not set',
-      STRIPE_PRO_PLAN_ID: process.env.STRIPE_PRO_PLAN_ID ? 'Set' : 'Not set',
-      STRIPE_ENTERPRISE_PLAN_ID: process.env.STRIPE_ENTERPRISE_PLAN_ID ? 'Set' : 'Not set'
-    });
-    throw new Error(`No price ID found for plan: ${planId}. Please check your environment variables.`);
-  }
+  console.log('Creating checkout session', { accountId, planId })
   
   const supabase = await createClient()
   
-  // Get user email for the account
-  let accountData;
+  // Get user email from account data
+  let userEmail
   
   try {
-    // Try public schema
-    const { data: publicAccountData, error: publicError } = await supabase
+    // Get created_by from accounts
+    const { data: accountData } = await supabase
       .from('accounts')
       .select('created_by')
       .eq('account_id', accountId)
       .single()
     
-    if (publicAccountData) {
-      accountData = publicAccountData;
+    if (accountData?.created_by) {
+      // Get email from users
+      const { data: userData } = await supabase
+        .from('users')
+        .select('email')
+        .eq('id', accountData.created_by)
+        .single()
+      
+      if (userData?.email) {
+        userEmail = userData.email
+      }
     }
   } catch (error) {
-    console.error('Error fetching account:', error);
+    console.error('Error fetching user email:', error)
   }
   
-  if (!accountData) {
-    // If account not found, try to use the current user's ID
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (user) {
-      accountData = { created_by: user.id };
-    } else {
-      throw new Error('Account not found')
-    }
+  if (!userEmail) {
+    return { error: 'Could not determine user email' }
   }
   
-  const userId = accountData.created_by
-  
-  // Get user email
-  let userData;
+  // Get customer data
+  let customerId
   
   try {
-    // Try public schema
-    const { data: publicUserData } = await supabase
-      .from('users')
-      .select('email')
-      .eq('id', userId)
-      .single()
+    // Look up customer in billing_customers
+    const { data: customerData } = await supabase
+      .from('billing_customers')
+      .select('customer_id')
+      .eq('account_id', accountId)
+      .maybeSingle()
     
-    if (publicUserData) {
-      userData = publicUserData;
+    if (customerData?.customer_id) {
+      customerId = customerData.customer_id
+      console.log('Found existing customer:', customerId)
     }
   } catch (error) {
-    console.error('Error fetching user:', error);
+    console.error('Error fetching customer:', error)
   }
   
-  if (!userData) {
-    // If user not found, try to use the current user's email
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (user && user.email) {
-      userData = { email: user.email };
-    } else {
-      throw new Error('User not found')
+  // Create customer if not found
+  if (!customerId) {
+    try {
+      console.log('Creating new customer for:', userEmail)
+      const customer = await stripe.customers.create({
+        email: userEmail,
+        metadata: { account_id: accountId }
+      })
+      
+      customerId = customer.id
+      
+      // Store in DB
+      const { error: insertError } = await supabase
+        .from('billing_customers')
+        .insert({
+          account_id: accountId,
+          customer_id: customerId,
+          email: userEmail
+        })
+      
+      if (insertError) {
+        console.error('Error storing customer:', insertError)
+      }
+    } catch (error) {
+      console.error('Error creating customer:', error)
+      return { error: 'Could not create customer. Please try again.' }
     }
   }
   
-  // Create or retrieve customer
-  let customerId: string
+  // Determine price ID based on plan
+  let priceId = ''
   
-  // Check if customer already exists
-  const { data: customerData } = await supabase
-    .from('billing_customers')
-    .select('customer_id')
-    .eq('account_id', accountId)
-    .single()
-  
-  if (customerData?.customer_id) {
-    customerId = customerData.customer_id
+  if (planId === 'pro') {
+    priceId = process.env.STRIPE_PRO_PLAN_ID || 'price_1RGtkVG23sSyONuF8kQcAclk'
+  } else if (planId === 'enterprise') {
+    priceId = process.env.STRIPE_ENTERPRISE_PLAN_ID || 'price_1RGw3iG23sSyONuFGk8uD3XV'
   } else {
-    // Create new customer
-    const customer = await stripe.customers.create({
-      email: userData.email,
-      metadata: {
-        account_id: accountId
-      }
-    })
-    
-    // Save customer ID
-    await supabase
-      .from('billing_customers')
-      .insert({
-        account_id: accountId,
-        customer_id: customer.id,
-        email: userData.email
-      })
-    
-    customerId = customer.id
+    return { error: 'Invalid plan selected' }
   }
   
   // Create checkout session
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    line_items: [
-      {
-        price: priceId,
-        quantity: 1
-      }
-    ],
-    mode: 'subscription',
-    success_url: `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3003'}/settings/billing?success=true`,
-    cancel_url: `${process.env.NEXT_PUBLIC_URL || 'http://localhost:3003'}/settings/billing?canceled=true`,
-    metadata: {
-      account_id: accountId
-    },
-    expand: ['payment_intent']
-  })
-  
-  console.log('Stripe session created:', {
-    id: session.id,
-    url: session.url,
-    customer: session.customer,
-    status: session.status,
-  });
-  
-  return { url: session.url }
+  try {
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1
+        }
+      ],
+      mode: 'subscription',
+      success_url: returnUrl,
+      cancel_url: returnUrl,
+      allow_promotion_codes: true,
+      billing_address_collection: 'auto',
+      metadata: {
+        account_id: accountId
+      },
+      expand: ['payment_intent']
+    })
+    
+    console.log('Stripe session created:', {
+      id: session.id,
+      url: session.url,
+      customer: session.customer,
+      status: session.status,
+    });
+    
+    return { url: session.url || '' }
+  } catch (error) {
+    console.error('Stripe error:', error)
+    return { error: `Stripe error: ${error.message || 'Unknown error'}` }
+  }
 }
 
-export async function createPortalSession(formData: FormData) {
+export async function createPortalSession(formData: FormData): Promise<BillingResult> {
   const accountId = formData.get('accountId') as string
   const returnUrl = formData.get('returnUrl') as string
   
