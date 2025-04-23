@@ -21,11 +21,21 @@ async def get_account_subscription(client, account_id: str) -> Optional[Dict]:
                 'plan_name': 'Free (Development)'
             }
             
-        # Try to access the basejump schema using schema() method
-        subscription_result = await client.schema('basejump').from_('billing_subscriptions').select('price_id,plan_name').eq('account_id', account_id).order('created_at', desc=True).limit(1).execute()
+        # Try to access subscriptions in public schema first (our primary storage location)
+        subscription_result = await client.from_('billing_subscriptions').select('price_id,plan_name').eq('account_id', account_id).order('created_at', desc=True).limit(1).execute()
          
         if subscription_result.data and len(subscription_result.data) > 0:
             return subscription_result.data[0]
+         
+        # As fallback, check basejump schema
+        try:
+            subscription_result = await client.schema('basejump').from_('billing_subscriptions').select('price_id,plan_name').eq('account_id', account_id).order('created_at', desc=True).limit(1).execute()
+            
+            if subscription_result.data and len(subscription_result.data) > 0:
+                return subscription_result.data[0]
+        except Exception as e:
+            from utils.logger import logger
+            logger.warning(f"Error checking basejump schema: {str(e)}")
          
         # If no subscription found, return free tier
         from utils.logger import logger

@@ -109,7 +109,6 @@ export async function POST(req: Request) {
         // Store customer in database
         await reliableDbOperation(async () => {
           await supabaseAdmin
-            .schema('basejump')
             .from('billing_customers')
             .insert({
               account_id: customerAccountId,
@@ -137,7 +136,6 @@ export async function POST(req: Request) {
         const success = await reliableDbOperation(async () => {
           // First ensure the customer exists
           const { data: existingCustomer } = await supabaseAdmin
-            .schema('basejump')
             .from('billing_customers')
             .select('customer_id')
             .eq('account_id', accountId)
@@ -146,7 +144,6 @@ export async function POST(req: Request) {
           if (!existingCustomer) {
             // Create customer record first
             await supabaseAdmin
-              .schema('basejump')
               .from('billing_customers')
               .insert({
                 account_id: accountId,
@@ -160,7 +157,6 @@ export async function POST(req: Request) {
           
           // Then add subscription
           await supabaseAdmin
-            .schema('basejump')
             .from('billing_subscriptions')
             .insert({
               account_id: accountId,
@@ -194,7 +190,6 @@ export async function POST(req: Request) {
       await reliableDbOperation(async () => {
         // Update subscription in database
         await supabaseAdmin
-          .schema('basejump')
           .from('billing_subscriptions')
           .update({
             price_id: updatedSubscription.items.data[0].price.id,
@@ -214,7 +209,6 @@ export async function POST(req: Request) {
       await reliableDbOperation(async () => {
         // Update subscription status to canceled
         await supabaseAdmin
-          .schema('basejump')
           .from('billing_subscriptions')
           .update({
             status: 'canceled',
