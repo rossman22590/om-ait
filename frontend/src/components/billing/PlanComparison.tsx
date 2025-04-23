@@ -44,7 +44,7 @@ const pricingTiers = [
   {
     name: "Enterprise",
     description: "GPT 4.5 + Deep Research",
-    price: "Custom",
+    price: "$100",
     hours: "2400 minutes",
     features: [
       "Everything in Pro tier",

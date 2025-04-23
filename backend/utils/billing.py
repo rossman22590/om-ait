@@ -4,14 +4,33 @@ import os
 
 # Define subscription tiers and their monthly limits (in minutes)
 SUBSCRIPTION_TIERS = {
-    'price_1RGtl4G23sSyONuFYWYsA0HK': {'name': 'free', 'minutes': 50},
-    'price_1RGtkVG23sSyONuF8kQcAclk': {'name': 'base', 'minutes': 300},  # 100 hours = 6000 minutes
-    'price_1RGtkVG23sSyONuF8kQcAclk': {'name': 'extra', 'minutes': 2400}  # 100 hours = 6000 minutes
+    'price_1RGtl4G23sSyONuFYWYsA0HK': {'name': 'free', 'minutes': 50},  # Free tier - 50 minutes
+    'price_1RGtkVG23sSyONuF8kQcAclk': {'name': 'pro', 'minutes': 300},  # Pro tier - 300 minutes (5 hours)
+    'price_1RGw3iG23sSyONuFGk8uD3XV': {'name': 'enterprise', 'minutes': 2400}  # Enterprise tier - 2400 minutes (40 hours)
 }
+
+# List of account IDs that get unlimited access (admin friends)
+UNLIMITED_ACCESS_ACCOUNTS = [
+    # Add account IDs for admin friends here
+    # Example: "f4344d17-2cd8-4cdc-a153-d256966f629c",
+    "4a0b5aac-42f6-47a1-b671-751123c3540a",  # User added on 2025-04-23
+]
+
+# Simple function to check if an account ID should have unlimited access
+def has_unlimited_access(account_id: str) -> bool:
+    """Check if an account has unlimited access (admin friend)"""
+    return account_id in UNLIMITED_ACCESS_ACCOUNTS
 
 async def get_account_subscription(client, account_id: str) -> Optional[Dict]:
     """Get the current subscription for an account."""
     try:
+        # Check if this is an admin account with unlimited access
+        if has_unlimited_access(account_id):
+            return {
+                'price_id': 'price_1RGw3iG23sSyONuFGk8uD3XV',  # Enterprise tier
+                'plan_name': 'Enterprise'
+            }
+            
         # In development mode, return a mock subscription
         if os.environ.get('ENVIRONMENT', 'development') == 'development':
             from utils.logger import logger
@@ -112,6 +131,13 @@ async def check_billing_status(client, account_id: str) -> Tuple[bool, str, Opti
     Returns:
         Tuple[bool, str, Optional[Dict]]: (can_run, message, subscription_info)
     """
+    # Check if this is an admin account with unlimited access
+    if has_unlimited_access(account_id):
+        return True, "Enterprise plan", {
+            'price_id': 'price_1RGw3iG23sSyONuFGk8uD3XV',  # Enterprise tier
+            'plan_name': 'Enterprise'
+        }
+    
     # Get current subscription
     subscription = await get_account_subscription(client, account_id)
     
