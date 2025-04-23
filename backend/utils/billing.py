@@ -80,6 +80,10 @@ async def calculate_monthly_usage(client, account_id: str) -> float:
             total_seconds += (end_time - start_time)
     
         return total_seconds / 60  # Convert to minutes
+    except Exception as e:
+        from utils.logger import logger
+        logger.warning(f"Error calculating monthly usage: {str(e)}")
+        return 0.0
 
 async def check_billing_status(client, account_id: str) -> Tuple[bool, str, Optional[Dict]]:
     """

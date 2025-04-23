@@ -16,6 +16,13 @@ from sandbox import api as sandbox_api
 # Load environment variables
 load_dotenv()
 
+# Debug environment variables
+import os
+print("OPENAI_API_KEY:", os.environ.get("OPENAI_API_KEY", "Not found")[:10] + "..." if os.environ.get("OPENAI_API_KEY") else "Not found")
+print("ANTHROPIC_API_KEY:", os.environ.get("ANTHROPIC_API_KEY", "Not found")[:10] + "..." if os.environ.get("ANTHROPIC_API_KEY") else "Not found")
+print("GROQ_API_KEY:", os.environ.get("GROQ_API_KEY", "Not found")[:10] + "..." if os.environ.get("GROQ_API_KEY") else "Not found")
+print("OPENROUTER_API_KEY:", os.environ.get("OPENROUTER_API_KEY", "Not found")[:10] + "..." if os.environ.get("OPENROUTER_API_KEY") else "Not found")
+
 # Initialize managers
 db = DBConnection()
 thread_manager = None
