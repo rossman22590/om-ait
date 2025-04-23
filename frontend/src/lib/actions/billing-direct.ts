@@ -279,163 +279,51 @@ export async function createCheckoutSession(formData: FormData): Promise<Billing
 }
 
 export async function createPortalSession(formData: FormData): Promise<BillingResult> {
-  const accountId = formData.get('accountId') as string
-  const returnUrl = formData.get('returnUrl') as string
+  const accountId = formData.get('accountId') as string;
+  const returnUrl = formData.get('returnUrl') as string;
   
   if (!accountId) {
-    throw new Error('Missing account ID')
+    return { error: 'Missing account ID' };
   }
-  
-  console.log(`Creating portal session for account: ${accountId}`);
-  
-  const supabase = await createClient()
-  
-  // Get customer ID - check both tables and log all steps for debugging
-  let customerData;
-  let debugInfo = { 
-    steps: [], 
-    account_id: accountId 
-  };
-  
+
   try {
-    // 1. First check billing_customers table
-    const { data: customerResult } = await supabase
-      .from('billing_customers')
-      .select('customer_id, email')
+    // Get the subscription data directly from database
+    const supabase = await createClient();
+    
+    console.log(`Looking up subscription data for account: ${accountId}`);
+    
+    // Get the subscription with customer_id from database
+    const { data: subscription } = await supabase
+      .from('billing_subscriptions')
+      .select('customer_id, subscription_id')
       .eq('account_id', accountId)
-      .maybeSingle();
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
     
-    debugInfo.steps.push("1_customerLookup: " + (customerResult?.customer_id ? "Found" : "Not found"));
-    
-    if (customerResult?.customer_id) {
-      console.log('Found customer in billing_customers:', customerResult.customer_id);
-      customerData = customerResult;
-    } else {
-      // 2. Check subscription table - the data shows you have customer_id here
-      const { data: subResult } = await supabase
-        .from('billing_subscriptions')
-        .select('customer_id')
-        .eq('account_id', accountId)
-        .maybeSingle();
+    // Check if we found the subscription with customer_id
+    if (subscription?.customer_id) {
+      console.log(`Found customer_id in subscription: ${subscription.customer_id}`);
       
-      debugInfo.steps.push("2_subscriptionLookup: " + (subResult?.customer_id ? "Found" : "Not found"));
-      
-      if (subResult?.customer_id) {
-        console.log('Found customer in billing_subscriptions:', subResult.customer_id);
-        customerData = { customer_id: subResult.customer_id };
-      } else {
-        // 3. Try a more general search based on your data showing customer_id exists
-        const { data: allSubs } = await supabase
-          .from('billing_subscriptions')
-          .select('customer_id, subscription_id')
-          .eq('account_id', accountId);
-        
-        debugInfo.steps.push("3_allSubscriptions: " + JSON.stringify(allSubs));
-        
-        if (allSubs && allSubs.length > 0) {
-          // Try to use any customer_id found
-          for (const sub of allSubs) {
-            if (sub.customer_id) {
-              console.log('Found customer ID in subscription records:', sub.customer_id);
-              customerData = { customer_id: sub.customer_id };
-              break;
-            }
-          }
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error fetching customer data:', error);
-    debugInfo.steps.push("error: " + JSON.stringify(error));
-  }
-  
-  // IMPORTANT: Special case for the known account we're fixing
-  if (accountId === 'f4344d17-2cd8-4cdc-a153-d256966f629c' && !customerData?.customer_id) {
-    // Use the customer ID you showed from your data
-    customerData = { customer_id: 'cus_SBTK1Z9uP7k6JR' };
-    console.log('Using hardcoded customer ID for known account');
-    debugInfo.steps.push("4_usingHardcodedId: cus_SBTK1Z9uP7k6JR");
-  }
-  
-  // If still no customer, try create a new one
-  if (!customerData?.customer_id) {
-    debugInfo.steps.push("5_attemptingCustomerCreation");
-    
-    // Get user email from account
-    let userEmail;
-    
-    try {
-      // Get created_by from accounts
-      let userId;
-      
-      const { data: accountData } = await supabase
-        .from('accounts')
-        .select('created_by')
-        .eq('account_id', accountId)
-        .single();
-      
-      if (accountData?.created_by) {
-        userId = accountData.created_by;
-        
-        // Get email from users
-        const { data: userData } = await supabase
-          .from('users')
-          .select('email')
-          .eq('id', userId)
-          .single();
-        
-        if (userData?.email) {
-          userEmail = userData.email;
-        }
-      }
-      
-      // If we have an email, create a new customer
-      if (userEmail) {
-        console.log(`Creating new Stripe customer for email: ${userEmail}`);
-        const customer = await stripe.customers.create({
-          email: userEmail,
-          metadata: { account_id: accountId }
+      try {
+        // Create Stripe portal session with the customer_id
+        const session = await stripe.billingPortal.sessions.create({
+          customer: subscription.customer_id,
+          return_url: returnUrl
         });
         
-        // Save the new customer ID
-        await supabase
-          .from('billing_customers')
-          .insert({
-            account_id: accountId,
-            customer_id: customer.id,
-            email: userEmail
-          });
-        
-        customerData = { customer_id: customer.id };
-        console.log(`Created new customer: ${customer.id}`);
-        debugInfo.steps.push("6_createdNewCustomer: " + customer.id);
+        console.log(`Created portal session: ${session.url}`);
+        return { url: session.url };
+      } catch (stripeError) {
+        console.error('Stripe portal creation error:', stripeError);
+        return { error: `Stripe error: ${stripeError.message}` };
       }
-    } catch (err) {
-      console.error('Error creating new customer:', err);
-      debugInfo.steps.push("7_customerCreationError: " + JSON.stringify(err));
+    } else {
+      console.error('No customer_id found in subscription');
+      return { error: 'Could not find customer ID in subscription' };
     }
-  }
-  
-  // Log all debug info before final check
-  console.log("Billing portal debug:", debugInfo);
-  
-  // Final check for customer
-  if (!customerData?.customer_id) {
-    console.error('Could not find or create customer for account:', accountId);
-    return { error: 'Customer not found and could not be created. Please contact support.' };
-  }
-  
-  // Create portal session
-  try {
-    const session = await stripe.billingPortal.sessions.create({
-      customer: customerData.customer_id,
-      return_url: returnUrl || process.env.NEXT_PUBLIC_URL || 'http://localhost:3003'
-    })
-    
-    console.log(`Created portal session: ${session.url}`);
-    return { url: session.url }
   } catch (error) {
-    console.error('Stripe error creating portal:', error);
-    return { error: `Stripe error: ${error.message || 'Unknown error'}` };
+    console.error('Error fetching subscription:', error);
+    return { error: 'Error accessing your subscription data' };
   }
 }

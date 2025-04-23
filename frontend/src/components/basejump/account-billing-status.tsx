@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { SubmitButton } from "../ui/submit-button";
 import { manageSubscription } from "@/lib/actions/billing-new";
 import { PlanComparison, SUBSCRIPTION_PLANS } from "../billing/PlanComparison";
 
@@ -124,13 +123,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                     />
 
                     {/* Manage Subscription Button */}
-                    <form action={async (formData) => {
-                        const result = await manageSubscription(null, formData);
-                        if (result?.redirectUrl) {
-                            // Client-side redirect to Stripe
-                            window.location.href = result.redirectUrl;
-                        }
-                    }}>
+                    <form action={manageSubscription}>
                         <input type="hidden" name="accountId" value={accountId} />
                         <input type="hidden" name="returnUrl" value={returnUrl} />
                         <button
@@ -140,6 +133,20 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                             Manage Subscription
                         </button>
                     </form>
+                    
+                    {/* Direct portal link for backup access */}
+                    {accountId === 'f4344d17-2cd8-4cdc-a153-d256966f629c' && (
+                        <div className="mt-2 text-center">
+                            <a 
+                                href="https://billing.stripe.com/p/login/00gbME8hR30T9I43cc" 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-sm text-muted-foreground hover:text-primary underline"
+                            >
+                                Direct billing portal link
+                            </a>
+                        </div>
+                    )}
                 </>
             )}
         </div>

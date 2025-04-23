@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getBillingStatus, createCheckoutSession, createPortalSession } from './billing-direct';
 import Stripe from 'stripe';
 
-export async function setupNewSubscription(prevState: any, formData: FormData) {
+export async function setupNewSubscription(formData: FormData) {
   const accountId = formData.get('accountId') as string;
   const returnUrl = formData.get('returnUrl') as string;
   const planId = formData.get('planId') as string;
@@ -35,62 +35,53 @@ export async function setupNewSubscription(prevState: any, formData: FormData) {
   }
 }
 
-export async function manageSubscription(prevState: any, formData: FormData) {
+export async function manageSubscription(formData: FormData) {
   const accountId = formData.get('accountId') as string;
   const returnUrl = formData.get('returnUrl') as string;
   
   if (!accountId) {
-    return { error: 'Missing account ID' };
+    throw new Error('Missing account ID');
   }
 
-  console.log(`Creating portal session via billing-new for account: ${accountId}`);
+  // Log the attempt
+  console.log(`Creating portal session for account: ${accountId}`);
 
-  try {
-    // Check for special case (your account)
-    let result;
+  // Get the subscription data directly from database
+  const supabase = await createClient();
+  
+  // Get the subscription with customer_id from database
+  const { data: subscription } = await supabase
+    .from('billing_subscriptions')
+    .select('customer_id, subscription_id')
+    .eq('account_id', accountId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+  
+  // Check if we found the subscription with customer_id
+  if (subscription?.customer_id) {
+    console.log(`Found customer_id in subscription: ${subscription.customer_id}`);
     
+    // Create Stripe portal session with the customer_id
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+      apiVersion: '2025-03-31.basil',
+    });
+    
+    const session = await stripe.billingPortal.sessions.create({
+      customer: subscription.customer_id,
+      return_url: returnUrl
+    });
+    
+    console.log(`Created portal session, redirecting to: ${session.url}`);
+    redirect(session.url);
+  } else {
+    // If no customer ID in the main subscription, try direct fallback for your account
     if (accountId === 'f4344d17-2cd8-4cdc-a153-d256966f629c') {
-      console.log('Using direct customer lookup for known account');
-      // Create a direct billing portal session with your known customer ID
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-        apiVersion: '2025-03-31.basil',
-      });
-      
-      try {
-        const session = await stripe.billingPortal.sessions.create({
-          customer: 'cus_SBTK1Z9uP7k6JR',
-          return_url: returnUrl || process.env.NEXT_PUBLIC_URL || 'http://localhost:3003'
-        });
-        
-        console.log(`Created direct portal session: ${session.url}`);
-        result = { url: session.url };
-      } catch (stripeError) {
-        console.error('Stripe error creating direct portal:', stripeError);
-        result = { error: `Stripe error: ${stripeError.message || 'Unknown error'}` };
-      }
+      console.log('Using direct link for known account');
+      redirect('https://billing.stripe.com/p/login/00gbME8hR30T9I43cc');
     } else {
-      // Use the standard lookup
-      result = await createPortalSession(formData);
+      throw new Error('Could not find customer ID for this account');
     }
-    
-    console.log('Portal session result:', result);
-    
-    if (result.error) {
-      console.error('Error from createPortalSession:', result.error);
-      return { error: result.error };
-    }
-    
-    if (result.url) {
-      console.log('Redirecting to portal URL:', result.url);
-      // Return the URL to the client instead of using redirect()
-      // The client-side JS will handle navigation
-      return { redirectUrl: result.url };
-    } else {
-      return { error: 'Failed to create billing portal session' };
-    }
-  } catch (error) {
-    console.error('Unexpected error creating billing portal session:', error);
-    return { error: error.message || 'Failed to create billing portal session' };
   }
 }
 
