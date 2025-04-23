@@ -6,15 +6,13 @@ interface BillingErrorState {
   message: string;
   currentUsage?: number;
   limit?: number;
-  subscription?: {
-    price_id?: string;
-    plan_name?: string;
-    current_usage?: number;
-    limit?: number;
+  subscription: {
+    price_id: string;
+    plan_name: string;
   };
 }
 
-export function useBillingError(accountId: string) {
+export function useBillingError(accountId?: string) {
   const [billingError, setBillingError] = useState<BillingErrorState | null>(null);
   const router = useRouter();
 
