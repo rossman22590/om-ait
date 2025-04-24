@@ -30,13 +30,13 @@ export const metadata: Metadata = {
     default: siteConfig.name,
     template: `%s - ${siteConfig.name}`,
   },
-  description: "Suna is a fully open source AI assistant that helps you accomplish real-world tasks with ease. Through natural conversation, Suna becomes your digital companion for research, data analysis, and everyday challenges.",
+  description: siteConfig.description,
   keywords: ["AI", "artificial intelligence", "browser automation", "web scraping", "file management", "AI assistant", "open source", "research", "data analysis"],
-  authors: [{ name: "Kortix Team", url: "https://suna.so" }],
-  creator: "Kortix Team - Adam Cohen Hillel, Marko Kraemer, Domenico Gagliardi, and Quoc Dat Le",
-  publisher: "Kortix Team - Adam Cohen Hillel, Marko Kraemer, Domenico Gagliardi, and Quoc Dat Le",
+  authors: [{ name: "AI Tutor Team", url: "https://machine.myapps.ai" }],
+  creator: "AI Tutor Machine",
+  publisher: "AI Tutor Machine",
   category: "Technology",
-  applicationName: "Suna",
+  applicationName: "AI Tutor Machine",
   formatDetection: {
     telephone: false,
     email: false,
@@ -68,7 +68,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "AI Tutor Machine- Generalist AI Agent",
-    description: "Suna is a fully open source AI assistant that helps you accomplish real-world tasks with ease through natural conversation.",
+    description: "AI Tutor Machine is a AI assistant that helps you accomplish real-world tasks with ease through natural conversation.",
     creator: "@myaitutor",
     site: "@myaitutor",
     images: [{
@@ -83,6 +83,9 @@ export const metadata: Metadata = {
       { url: "/favicon.png", sizes: "any" },
     ],
     shortcut: "/favicon.png",
+  },
+  other: {
+    'og:logo': '/logo.png',
   },
   // manifest: "/manifest.json",
   alternates: {
