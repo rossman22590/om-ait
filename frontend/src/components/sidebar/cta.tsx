@@ -11,8 +11,8 @@ export function CTACard() {
         <span className="text-xs text-muted-foreground mt-0.5">AI employees for your company</span>
       </div>
       <div className="flex flex-col space-y-2">
-        <KortixProcessModal />
-        {/* <Link href="https://cal.com/marko-kraemer/15min" target="_blank" rel="noopener noreferrer">
+        {/* <KortixProcessModal /> */}
+        <Link href="https://calendly.com/techinschools/30min" target="_blank" rel="noopener noreferrer">
           <Button 
             variant="outline" 
             size="sm" 
@@ -21,11 +21,11 @@ export function CTACard() {
             Schedule Demo
             <ExternalLink className="ml-1.5 h-3 w-3" />
           </Button>
-        </Link> */}
+        </Link>
       </div>
       
       <div className="flex items-center mt-1">
-        <Link 
+        {/* <Link 
           href="https://www.kortix.ai/careers" 
           target="_blank" 
           rel="noopener noreferrer"
@@ -33,7 +33,7 @@ export function CTACard() {
         >
           <Briefcase className="mr-1.5 h-3.5 w-3.5" />
           Join Our Team! 🚀
-        </Link>
+        </Link> */}
       </div>
     </div>
   )

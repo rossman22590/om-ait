@@ -5,17 +5,17 @@ export const metadata: Metadata = {
   title: siteConfig.name,
   description: siteConfig.description,
   keywords: [
-    "Kortix Suna",
+    "AI Tutor Machine",
     "AI",
     "Agent",
   ],
   authors: [
     {
-      name: "Kortix AI Corp",
-      url: "https://kortix.ai",
+      name: "AI Tutor Machine",
+      url: "https://myapps.ai",
     },
   ],
-  creator: "Kortix AI Corp",
+  creator: "AI Tutor Machine",
   openGraph: {
     type: "website",
     locale: "en_US",
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: siteConfig.name,
     description: siteConfig.description,
-    creator: "@kortixai",
+    creator: "@myaittuor",
   },
   robots: {
     index: true,
