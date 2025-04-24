@@ -5,9 +5,9 @@ from utils.config import config, EnvMode
 
 # Define subscription tiers and their monthly limits (in minutes)
 SUBSCRIPTION_TIERS = {
-    'price_1RGtl4G23sSyONuFYWYsA0HK': {'name': 'free', 'minutes': 8},
-    'price_1RGtkVG23sSyONuF8kQcAclk': {'name': 'base', 'minutes': 300},
-    'price_1RGw3iG23sSyONuFGk8uD3XV': {'name': 'extra', 'minutes': 2400}
+    'price_1RGtl4G23sSyONuFYWYsA0HK': {'name': 'free', 'minutes': 25},
+    'price_1RGtkVG23sSyONuF8kQcAclk': {'name': 'base', 'minutes': 500},
+    'price_1RGw3iG23sSyONuFGk8uD3XV': {'name': 'extra', 'minutes': 3000}
 }
 
 async def get_account_subscription(client, account_id: str) -> Optional[Dict]:
