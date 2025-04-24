@@ -1,9 +1,8 @@
-import { headers } from "next/headers";
 import { ImageResponse } from "next/og";
 
 // Configuration exports
 export const runtime = "edge";
-export const alt = "Kortix Suna";
+export const alt = "AI Tutor Machine";
 export const size = {
   width: 1200,
   height: 630,
@@ -12,11 +11,8 @@ export const contentType = "image/png";
 
 export default async function Image() {
   try {
-    // Get the host from headers
-    const headersList = await headers();
-    const host = headersList.get("host") || "";
-    const protocol = process.env.NODE_ENV === "development" ? "http" : "https";
-    const baseUrl = `${protocol}://${host}`;
+    // Use the direct Vercel URL for the banner image
+    const imageUrl = "https://ai-tutor-machine.vercel.app/banner.png";
 
     return new ImageResponse(
       (
@@ -31,7 +27,7 @@ export default async function Image() {
           }}
         >
           <img
-            src={`${baseUrl}/meta.png`}
+            src={imageUrl}
             alt={alt}
             style={{
               width: "100%",
