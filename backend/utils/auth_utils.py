@@ -164,16 +164,8 @@ async def verify_thread_access(client, thread_id: str, user_id: str):
             # Log the error but DO NOT bypass security
             logger.error(f"Error checking account membership for user {user_id}, thread {thread_id}: {str(e)}")
             
-            # Check if this is a development environment - ONLY bypass in dev, never in production
-            import os
-            is_development = os.getenv("ENVIRONMENT", "").lower() == "development"
-            
-            if is_development:
-                logger.warning(f"DEVELOPMENT MODE: Allowing access for user {user_id} to thread {thread_id} due to DB error")
-                return True
-            else:
-                # In production, security is more important than availability
-                raise HTTPException(status_code=500, detail="Error verifying access permissions")
+            # Always fail closed for security - no development mode bypass
+            raise HTTPException(status_code=500, detail="Error verifying access permissions")
         
     # If we reach here, the user doesn't have access
     raise HTTPException(status_code=403, detail="Not authorized to access this thread")

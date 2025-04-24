@@ -81,16 +81,8 @@ async def verify_sandbox_access(client, sandbox_id: str, user_id: Optional[str] 
             return project_data
     except Exception as e:
         logger.error(f"Error checking sandbox account membership: {str(e)}")
-        # Check if this is a development environment - ONLY bypass in dev, never in production
-        import os
-        is_development = os.getenv("ENVIRONMENT", "").lower() == "development"
-        
-        if is_development:
-            logger.warning(f"DEVELOPMENT MODE: Allowing sandbox access for user {user_id} and account {account_id} due to DB error")
-            return project_data
-        else:
-            # In production, security is more important than availability
-            raise HTTPException(status_code=500, detail="Error verifying sandbox access permissions")
+        # Always fail closed for security - no development mode bypass
+        raise HTTPException(status_code=500, detail="Error verifying sandbox access permissions")
     
     raise HTTPException(status_code=403, detail="Not authorized to access this sandbox")
 
@@ -280,15 +272,8 @@ async def ensure_project_sandbox_active(
                         raise HTTPException(status_code=403, detail="Not authorized to access this project")
         except Exception as e:
             logger.error(f"Error checking project account membership: {str(e)}")
-            # Check if this is a development environment - ONLY bypass in dev, never in production
-            import os
-            is_development = os.getenv("ENVIRONMENT", "").lower() == "development"
-            
-            if is_development:
-                logger.warning(f"DEVELOPMENT MODE: Allowing project access for user {user_id} and account {account_id} due to DB error")
-            else:
-                # In production, security is more important than availability
-                raise HTTPException(status_code=500, detail="Error verifying project access permissions")
+            # Always fail closed for security - no development mode bypass
+            raise HTTPException(status_code=500, detail="Error verifying project access permissions")
     
     # Check if project has a sandbox
     sandbox_id = project_data.get('sandbox', {}).get('id')
