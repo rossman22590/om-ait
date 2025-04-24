@@ -113,15 +113,15 @@ app = FastAPI(lifespan=lifespan)
 #     return await call_next(request)
 
 # Define allowed origins based on environment
-allowed_origins = ["https://www.suna.so", "https://suna.so", "https://staging.suna.so", "http://localhost:3000"] #"http://localhost:3000"
+allowed_origins = ["https://www.suna.so", "https://suna.so", "https://staging.suna.so", "http://localhost:3001"] #"http://localhost:3001"
 
 # Add staging-specific origins
 if config.ENV_MODE == EnvMode.STAGING:
-    allowed_origins.append("http://localhost:3000")
+    allowed_origins.append("http://localhost:3001")
     
 # Add local-specific origins
 if config.ENV_MODE == EnvMode.LOCAL:
-    allowed_origins.append("http://localhost:3000")
+    allowed_origins.append("http://localhost:3001")
 
 app.add_middleware(
     CORSMiddleware,

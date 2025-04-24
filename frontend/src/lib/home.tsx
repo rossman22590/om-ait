@@ -32,7 +32,7 @@ export const siteConfig = {
   name: "Kortix Suna",
   description: "The Generalist AI Agent that can act on your behalf.",
   cta: "Hire Suna",
-  url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+  url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001",
   keywords: [
     "AI Agent",
     "Generalist AI",

@@ -144,7 +144,7 @@ cp .env.example .env  # Create from example if available, or use the following t
 
 Edit the `.env` file and fill in your credentials:
 ```bash
-NEXT_PUBLIC_URL="http://localhost:3000"
+NEXT_PUBLIC_URL="http://localhost:3001"
 
 # Supabase credentials from step 1
 SUPABASE_URL=your_supabase_url
@@ -201,7 +201,7 @@ cp .env.example .env.local  # Create from example if available, or use the follo
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 NEXT_PUBLIC_BACKEND_URL="http://localhost:8000/api"
-NEXT_PUBLIC_URL="http://localhost:3000"
+NEXT_PUBLIC_URL="http://localhost:3001"
 ```
 
 5. **Install dependencies**:
@@ -230,7 +230,7 @@ python api.py
 ```
 
 7. **Access Suna**:
-   - Open your browser and navigate to `http://localhost:3000`
+   - Open your browser and navigate to `http://localhost:3001`
    - Sign up for an account using the Supabase authentication
    - Start using your self-hosted Suna instance!
 
