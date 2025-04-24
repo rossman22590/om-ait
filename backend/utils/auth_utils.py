@@ -124,6 +124,7 @@ async def verify_thread_access(client, thread_id: str, user_id: str) -> bool:
     thread_result = await client.table('threads').select('*').eq('thread_id', thread_id).execute()
     
     if not thread_result.data or len(thread_result.data) == 0:
+        logger.error(f"Thread not found: {thread_id}")
         raise HTTPException(status_code=404, detail="Thread not found")
     
     thread_data = thread_result.data[0]
@@ -134,9 +135,24 @@ async def verify_thread_access(client, thread_id: str, user_id: str) -> bool:
     if account_id == user_id:
         logger.info(f"User {user_id} has direct ownership access to thread {thread_id}")
         return True
-    else:
-        logger.warning(f"Security: Denied access for user {user_id} to thread {thread_id} (account: {account_id})")
-        raise HTTPException(status_code=403, detail="Not authorized to access this thread")
+    
+    # If not direct ownership, check membership in basejump schema ONLY
+    try:
+        # Skip public schema check entirely and go straight to basejump
+        account_user_result = await client.schema('basejump').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
+        
+        if account_user_result.data and len(account_user_result.data) > 0:
+            logger.info(f"User {user_id} has membership access to thread {thread_id} (basejump schema)")
+            return True
+    except Exception as e:
+        # Log the error but DO NOT bypass security
+        logger.error(f"Error checking account membership: {str(e)}")
+        # Always fail closed for security - no development mode bypass
+        raise HTTPException(status_code=500, detail="Error verifying access permissions")
+    
+    # If we reach here, the user doesn't have access
+    logger.warning(f"Security: Denied access for user {user_id} to thread {thread_id} (account: {account_id})")
+    raise HTTPException(status_code=403, detail="Not authorized to access this thread")
 
 async def get_optional_user_id(request: Request) -> Optional[str]:
     """

@@ -50,19 +50,34 @@ async def verify_sandbox_access(client, sandbox_id: str, user_id: str):
     project_result = await client.table('projects').select('*').filter('sandbox->>id', 'eq', sandbox_id).execute()
     
     if not project_result.data or len(project_result.data) == 0:
+        logger.error(f"Sandbox not found: {sandbox_id}")
         raise HTTPException(status_code=404, detail="Sandbox not found")
     
     project_data = project_result.data[0]
     account_id = project_data.get('account_id')
 
-    # STRICT SECURITY: Only allow access to your own account's files
-    # This is the most restrictive approach to ensure complete isolation
+    # STRICT SECURITY: Direct account ownership check first (most secure)
     if account_id == user_id:
         logger.info(f"User {user_id} has direct ownership access to project account {account_id}")
         return project_data
-    else:
-        logger.warning(f"Security: Denied access for user {user_id} to sandbox {sandbox_id} (account: {account_id})")
-        raise HTTPException(status_code=403, detail="Not authorized to access this sandbox")
+    
+    # If not direct ownership, check membership in basejump schema ONLY
+    try:
+        # Skip public schema check entirely and go straight to basejump
+        account_user_result = await client.schema('basejump').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
+        
+        if account_user_result.data and len(account_user_result.data) > 0:
+            logger.info(f"User {user_id} has membership access to sandbox {sandbox_id} (basejump schema)")
+            return project_data
+    except Exception as e:
+        # Log the error but DO NOT bypass security
+        logger.error(f"Error checking sandbox account membership: {str(e)}")
+        # Always fail closed for security - no development mode bypass
+        raise HTTPException(status_code=500, detail="Error verifying sandbox access permissions")
+    
+    # If we reach here, the user doesn't have access
+    logger.warning(f"Security: Denied access for user {user_id} to sandbox {sandbox_id} (account: {account_id})")
+    raise HTTPException(status_code=403, detail="Not authorized to access this sandbox")
 
 @router.post("/sandboxes/{sandbox_id}/files")
 async def create_file(
