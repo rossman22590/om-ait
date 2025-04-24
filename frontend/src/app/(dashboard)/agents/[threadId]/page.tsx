@@ -1577,7 +1577,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
             value={newMessage}
             onChange={setNewMessage}
             onSubmit={handleSubmitMessage}
-            placeholder="Ask Suna anything..."
+            placeholder="Ask Machine anything..."
             loading={isSending}
             disabled={isSending || agentStatus === 'running' || agentStatus === 'connecting'}
             isAgentRunning={agentStatus === 'running' || agentStatus === 'connecting'}
