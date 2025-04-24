@@ -836,7 +836,7 @@ export default function Home() {
                 duration: '/forever',
                 popular: false,
                 features: [
-                  '50 minutes per month',
+                  '25 minutes per month',
                   'Basic autonomous actions',
                   'Text-based inputs & outputs',
                   'Core tools access',
