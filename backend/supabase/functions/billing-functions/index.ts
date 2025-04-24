@@ -9,7 +9,7 @@ import Stripe from "https://esm.sh/stripe@11.1.0?target=deno";
 
 console.log("Starting billing functions...");
 
-const defaultAllowedHost = Deno.env.get("ALLOWED_HOST") || "http://localhost:3001";
+const defaultAllowedHost = Deno.env.get("ALLOWED_HOST") || "https://machine.myapps.ai";
 const allowedHosts = [defaultAllowedHost, "https://machine.myapps.ai", "https://ait-machine-production.up.railway.app", "https://staging.suna.so"];
 console.log("Default allowed host:", defaultAllowedHost);
 
