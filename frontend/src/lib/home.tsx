@@ -29,14 +29,13 @@ export const Highlight = ({
 export const BLUR_FADE_DELAY = 0.15;
 
 export const siteConfig = {
-  name: "Kortix Suna",
+  name: "AI Tutor Machine",
   description: "The Generalist AI Agent that can act on your behalf.",
-  cta: "Hire Suna",
+  cta: "Hire AI Tutor Machine",
   url: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001",
   keywords: [
     "AI Agent",
     "Generalist AI",
-    "Open Source AI",
     "Autonomous Agent",
   ],
   links: {
@@ -49,8 +48,8 @@ export const siteConfig = {
   nav: {
     links: [
       { id: 1, name: "Home", href: "#hero" },
-      { id: 2, name: "Use Cases", href: "#use-cases" },
-      { id: 3, name: "Open Source", href: "#open-source" },
+      // { id: 2, name: "Use Cases", href: "#use-cases" },
+      // { id: 3, name: "Open Source", href: "#open-source" },
       { id: 4, name: "Pricing", href: "#pricing" },
     ],
   },
