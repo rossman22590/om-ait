@@ -139,24 +139,41 @@ async def verify_thread_access(client, thread_id: str, user_id: str):
     account_id = thread_data.get('account_id')
     # When using service role, we need to manually check account membership instead of using current_user_account_role
     if account_id:
+        # If the account_id matches the user_id directly (personal workspace ownership)
+        # This is always safe and should be checked first
+        if account_id == user_id:
+            logger.info(f"User {user_id} has direct ownership access to thread {thread_id}")
+            return True
+            
         try:
             # First try to check in the public schema
             account_user_result = await client.schema('public').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
             if account_user_result.data and len(account_user_result.data) > 0:
+                logger.info(f"User {user_id} has membership access to thread {thread_id} (public schema)")
                 return True
             
             # If not found in public schema, try the basejump schema
             account_user_result = await client.schema('basejump').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
             if account_user_result.data and len(account_user_result.data) > 0:
+                logger.info(f"User {user_id} has membership access to thread {thread_id} (basejump schema)")
                 return True
+                
+            # If we get here with no errors but also no access, the user simply doesn't have permission
+            logger.warning(f"User {user_id} denied access to thread {thread_id} - not a member of account {account_id}")
         except Exception as e:
-            logger.warning(f"Error checking account membership: {str(e)}")
-            # Fall back to direct user_id check for development
-            if account_id == user_id:
+            # Log the error but DO NOT bypass security
+            logger.error(f"Error checking account membership for user {user_id}, thread {thread_id}: {str(e)}")
+            
+            # Check if this is a development environment - ONLY bypass in dev, never in production
+            import os
+            is_development = os.getenv("ENVIRONMENT", "").lower() == "development"
+            
+            if is_development:
+                logger.warning(f"DEVELOPMENT MODE: Allowing access for user {user_id} to thread {thread_id} due to DB error")
                 return True
-            # For development, allow access to all threads
-            logger.warning(f"Bypassing account membership check for user {user_id} on thread {thread_id}")
-            return True
+            else:
+                # In production, security is more important than availability
+                raise HTTPException(status_code=500, detail="Error verifying access permissions")
         
     # If we reach here, the user doesn't have access
     raise HTTPException(status_code=403, detail="Not authorized to access this thread")

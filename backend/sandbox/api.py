@@ -64,22 +64,33 @@ async def verify_sandbox_access(client, sandbox_id: str, user_id: Optional[str] 
     account_id = project_data.get('account_id')
     
     # Verify account membership
-    if account_id:
-        try:
-            # First try to check in the public schema
-            account_user_result = await client.schema('public').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
-            if account_user_result.data and len(account_user_result.data) > 0:
-                return project_data
-            
-            # If not found in public schema, try the basejump schema
-            account_user_result = await client.schema('basejump').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
-            if account_user_result.data and len(account_user_result.data) > 0:
-                return project_data
-        except Exception as e:
-            logger.error(f"Error checking account membership: {str(e)}")
-            # Fall back to development mode if there's an error
-            logger.info(f"Development mode: Bypassing account membership check for user {user_id} and account {account_id}")
+    try:
+        # First try to check in the public schema
+        account_user_result = await client.schema('public').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
+        if account_user_result.data and len(account_user_result.data) > 0:
             return project_data
+        
+        # If not found in public schema, try the basejump schema
+        account_user_result = await client.schema('basejump').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
+        if account_user_result.data and len(account_user_result.data) > 0:
+            return project_data
+            
+        # Direct account ownership check
+        if account_id == user_id:
+            logger.info(f"User {user_id} has direct ownership access to project account {account_id}")
+            return project_data
+    except Exception as e:
+        logger.error(f"Error checking sandbox account membership: {str(e)}")
+        # Check if this is a development environment - ONLY bypass in dev, never in production
+        import os
+        is_development = os.getenv("ENVIRONMENT", "").lower() == "development"
+        
+        if is_development:
+            logger.warning(f"DEVELOPMENT MODE: Allowing sandbox access for user {user_id} and account {account_id} due to DB error")
+            return project_data
+        else:
+            # In production, security is more important than availability
+            raise HTTPException(status_code=500, detail="Error verifying sandbox access permissions")
     
     raise HTTPException(status_code=403, detail="Not authorized to access this sandbox")
 
@@ -251,22 +262,33 @@ async def ensure_project_sandbox_active(
         account_id = project_data.get('account_id')
         
         # Verify account membership
-        if account_id:
-            try:
-                # First try to check in the public schema
-                account_user_result = await client.schema('public').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
-                if account_user_result.data and len(account_user_result.data) > 0:
-                    # User has access, continue
-                    pass
-                else:
-                    # If not found in public schema, try the basejump schema
-                    account_user_result = await client.schema('basejump').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
-                    if not (account_user_result.data and len(account_user_result.data) > 0):
+        try:
+            # First try to check in the public schema
+            account_user_result = await client.schema('public').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
+            if account_user_result.data and len(account_user_result.data) > 0:
+                # User has access, continue
+                pass
+            else:
+                # If not found in public schema, try the basejump schema
+                account_user_result = await client.schema('basejump').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
+                if not (account_user_result.data and len(account_user_result.data) > 0):
+                    # Direct account ownership check
+                    if account_id == user_id:
+                        logger.info(f"User {user_id} has direct ownership access to project account {account_id}")
+                        pass
+                    else:
                         raise HTTPException(status_code=403, detail="Not authorized to access this project")
-            except Exception as e:
-                logger.error(f"Error checking account membership: {str(e)}")
-                # Fall back to development mode if there's an error
-                logger.info(f"Development mode: Bypassing account membership check for user {user_id} and account {account_id}")
+        except Exception as e:
+            logger.error(f"Error checking project account membership: {str(e)}")
+            # Check if this is a development environment - ONLY bypass in dev, never in production
+            import os
+            is_development = os.getenv("ENVIRONMENT", "").lower() == "development"
+            
+            if is_development:
+                logger.warning(f"DEVELOPMENT MODE: Allowing project access for user {user_id} and account {account_id} due to DB error")
+            else:
+                # In production, security is more important than availability
+                raise HTTPException(status_code=500, detail="Error verifying project access permissions")
     
     # Check if project has a sandbox
     sandbox_id = project_data.get('sandbox', {}).get('id')
