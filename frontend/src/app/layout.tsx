@@ -56,7 +56,7 @@ export const metadata: Metadata = {
     url: siteConfig.url,
     siteName: "AI Tutor Machine",
     images: [{
-      url: "/banner.png",
+      url: "https://ai-tutor-machine.vercel.app/banner.png",
       width: 1200,
       height: 630,
       alt: "AI Tutor Machine a Generalist AI Agent",
@@ -72,7 +72,7 @@ export const metadata: Metadata = {
     creator: "@myaitutor",
     site: "@myaitutor",
     images: [{
-      url: "/banner.png",
+      url: "https://ai-tutor-machine.vercel.app/banner.png",
       width: 1200,
       height: 630,
       alt: "AI Tutor Machine a Generalist AI Agent",
@@ -107,6 +107,9 @@ export default function RootLayout({
           })(window,document,'script','dataLayer','GTM-PCHSN4M2');`}
         </Script>
         {/* End Google Tag Manager */}
+        
+        {/* Custom Open Graph logo tag */}
+        <meta property="og:logo" content="https://ai-tutor-machine.vercel.app/favicon.png" />
       </head>
 
       <body
