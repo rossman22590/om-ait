@@ -100,8 +100,8 @@ export function Navbar() {
   const toggleDrawer = () => setIsDrawerOpen((prev) => !prev);
   const handleOverlayClick = () => setIsDrawerOpen(false);
 
-  const logoSrc = !mounted ? "/kortix-logo.svg" : 
-    (resolvedTheme === "dark" ? "/kortix-logo-white.svg" : "/kortix-logo.svg");
+  const logoSrc = !mounted ? "/logo.png" : 
+    (resolvedTheme === "dark" ? "/logo.png" : "/logo.png");
 
   return (
     <header

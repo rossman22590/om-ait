@@ -19,8 +19,8 @@ export function FooterSection() {
     setMounted(true);
   }, []);
 
-  const logoSrc = !mounted ? "/kortix-logo.svg" : 
-    (resolvedTheme === "dark" ? "/kortix-logo-white.svg" : "/kortix-logo.svg");
+  const logoSrc = !mounted ? "/logo.png" : 
+    (resolvedTheme === "dark" ? "/logo.png" : "/logo.png");
 
   return (
     <footer id="footer" className="w-full pb-0">
