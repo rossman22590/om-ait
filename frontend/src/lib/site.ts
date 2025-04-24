@@ -1,6 +1,6 @@
 export const siteConfig = {
   name: "AI Tutor Machine",
-  url: "https://myapps.ai/",
+  url: "https://ai-tutor-machine.vercel.app/",
   description: "AI Tutor Machine",
   links: {
     twitter: "https://x.com/myaitutor",

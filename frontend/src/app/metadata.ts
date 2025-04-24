@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   authors: [
     {
       name: "AI Tutor Team",
-      url: "https://myapps.ai",
+      url: "https://ai-tutor-machine.vercel.app",
     },
   ],
   creator: "AI Tutor Team",

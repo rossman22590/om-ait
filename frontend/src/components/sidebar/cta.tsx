@@ -26,7 +26,7 @@ export function CTACard() {
       
       <div className="flex items-center mt-1">
         <Link 
-          href="https://myapps.ai" 
+          href="https://ai-tutor-machine.vercel.app" 
           target="_blank" 
           rel="noopener noreferrer"
           className="flex items-center text-xs text-muted-foreground hover:text-foreground transition-colors"
