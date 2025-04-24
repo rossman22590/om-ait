@@ -25,14 +25,14 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://myapps.ai"),
+  metadataBase: new URL("https://ai-tutor-machine.vercel.app"),
   title: {
     default: siteConfig.name,
     template: `%s - ${siteConfig.name}`,
   },
   description: "AI Tutor is a AI assistant that helps you accomplish real-world tasks with ease. Through natural conversation, Suna becomes your digital companion for research, data analysis, and everyday challenges.",
   keywords: ["AI", "artificial intelligence", "browser automation", "web scraping", "file management", "AI assistant", "open source", "research", "data analysis"],
-  authors: [{ name: "AI Tutor Team", url: "https://myapps.ai" }],
+  authors: [{ name: "AI Tutor Team", url: "https://ai-tutor-machine.vercel.app" }],
   creator: "AI Tutor Team",
   publisher: "AI Tutor Team",
   category: "Technology",
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "AI Tutor Machine - Generalist AI Agent",
     description: "AI Tutor Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation.",
-    url: "https://myapps.ai",
+    url: "https://ai-tutor-machine.vercel.app",
     siteName: "AI Tutor Machine",
     images: [{
       url: "https://ai-tutor-machine.vercel.app/banner.png",
@@ -86,7 +86,7 @@ export const metadata: Metadata = {
   },
   // manifest: "/manifest.json",
   alternates: {
-    canonical: "https://myapps.ai",
+    canonical: "https://ai-tutor-machine.vercel.app",
   },
 };
 
