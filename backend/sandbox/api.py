@@ -31,14 +31,14 @@ class FileInfo(BaseModel):
     mod_time: str
     permissions: Optional[str] = None
 
-async def verify_sandbox_access(client, sandbox_id: str, user_id: Optional[str] = None):
+async def verify_sandbox_access(client, sandbox_id: str, user_id: str):
     """
     Verify that a user has access to a specific sandbox based on account membership.
     
     Args:
         client: The Supabase client
         sandbox_id: The sandbox ID to check access for
-        user_id: The user ID to check permissions for. Can be None for public resource access.
+        user_id: The user ID to check permissions for.
         
     Returns:
         dict: Project data containing sandbox information
@@ -53,38 +53,16 @@ async def verify_sandbox_access(client, sandbox_id: str, user_id: Optional[str] 
         raise HTTPException(status_code=404, detail="Sandbox not found")
     
     project_data = project_result.data[0]
-
-    if project_data.get('is_public'):
-        return project_data
-    
-    # For private projects, we must have a user_id
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Authentication required for this resource")
-    
     account_id = project_data.get('account_id')
-    
-    # Verify account membership
-    try:
-        # First try to check in the public schema
-        account_user_result = await client.schema('public').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
-        if account_user_result.data and len(account_user_result.data) > 0:
-            return project_data
-        
-        # If not found in public schema, try the basejump schema
-        account_user_result = await client.schema('basejump').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
-        if account_user_result.data and len(account_user_result.data) > 0:
-            return project_data
-            
-        # Direct account ownership check
-        if account_id == user_id:
-            logger.info(f"User {user_id} has direct ownership access to project account {account_id}")
-            return project_data
-    except Exception as e:
-        logger.error(f"Error checking sandbox account membership: {str(e)}")
-        # Always fail closed for security - no development mode bypass
-        raise HTTPException(status_code=500, detail="Error verifying sandbox access permissions")
-    
-    raise HTTPException(status_code=403, detail="Not authorized to access this sandbox")
+
+    # STRICT SECURITY: Only allow access to your own account's files
+    # This is the most restrictive approach to ensure complete isolation
+    if account_id == user_id:
+        logger.info(f"User {user_id} has direct ownership access to project account {account_id}")
+        return project_data
+    else:
+        logger.warning(f"Security: Denied access for user {user_id} to sandbox {sandbox_id} (account: {account_id})")
+        raise HTTPException(status_code=403, detail="Not authorized to access this sandbox")
 
 @router.post("/sandboxes/{sandbox_id}/files")
 async def create_file(
@@ -92,7 +70,7 @@ async def create_file(
     path: str = Form(...),
     file: UploadFile = File(...),
     request: Request = None,
-    user_id: Optional[str] = Depends(get_optional_user_id)
+    user_id: str = Depends(get_current_user_id)
 ):
     """Create a file in the sandbox using direct file upload"""
     client = await db.client
@@ -122,7 +100,7 @@ async def create_file_json(
     sandbox_id: str, 
     file_request: dict,
     request: Request = None,
-    user_id: Optional[str] = Depends(get_optional_user_id)
+    user_id: str = Depends(get_current_user_id)
 ):
     """Create a file in the sandbox using JSON (legacy support)"""
     client = await db.client
@@ -159,7 +137,7 @@ async def list_files(
     sandbox_id: str, 
     path: str,
     request: Request = None,
-    user_id: Optional[str] = Depends(get_optional_user_id)
+    user_id: str = Depends(get_current_user_id)
 ):
     """List files and directories at the specified path"""
     client = await db.client
@@ -199,7 +177,7 @@ async def read_file(
     sandbox_id: str, 
     path: str,
     request: Request = None,
-    user_id: Optional[str] = Depends(get_optional_user_id)
+    user_id: str = Depends(get_current_user_id)
 ):
     """Read a file from the sandbox"""
     client = await db.client
@@ -229,7 +207,7 @@ async def read_file(
 async def ensure_project_sandbox_active(
     project_id: str,
     request: Request = None,
-    user_id: Optional[str] = Depends(get_optional_user_id)
+    user_id: str = Depends(get_current_user_id)
 ):
     """
     Ensure that a project's sandbox is active and running.
@@ -244,36 +222,15 @@ async def ensure_project_sandbox_active(
         raise HTTPException(status_code=404, detail="Project not found")
     
     project_data = project_result.data[0]
+    account_id = project_data.get('account_id')
     
-    # For public projects, no authentication is needed
-    if not project_data.get('is_public'):
-        # For private projects, we must have a user_id
-        if not user_id:
-            raise HTTPException(status_code=401, detail="Authentication required for this resource")
-            
-        account_id = project_data.get('account_id')
-        
-        # Verify account membership
-        try:
-            # First try to check in the public schema
-            account_user_result = await client.schema('public').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
-            if account_user_result.data and len(account_user_result.data) > 0:
-                # User has access, continue
-                pass
-            else:
-                # If not found in public schema, try the basejump schema
-                account_user_result = await client.schema('basejump').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
-                if not (account_user_result.data and len(account_user_result.data) > 0):
-                    # Direct account ownership check
-                    if account_id == user_id:
-                        logger.info(f"User {user_id} has direct ownership access to project account {account_id}")
-                        pass
-                    else:
-                        raise HTTPException(status_code=403, detail="Not authorized to access this project")
-        except Exception as e:
-            logger.error(f"Error checking project account membership: {str(e)}")
-            # Always fail closed for security - no development mode bypass
-            raise HTTPException(status_code=500, detail="Error verifying project access permissions")
+    # STRICT SECURITY: Only allow access to your own account's projects
+    # This is the most restrictive approach to ensure complete isolation
+    if account_id == user_id:
+        logger.info(f"User {user_id} has direct ownership access to project {project_id}")
+    else:
+        logger.warning(f"Security: Denied access for user {user_id} to project {project_id} (account: {account_id})")
+        raise HTTPException(status_code=403, detail="Not authorized to access this project")
     
     # Check if project has a sandbox
     sandbox_id = project_data.get('sandbox', {}).get('id')

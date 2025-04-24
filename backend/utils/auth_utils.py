@@ -105,7 +105,7 @@ async def get_user_id_from_stream_auth(
         detail="No valid authentication credentials found",
         headers={"WWW-Authenticate": "Bearer"}
     )
-async def verify_thread_access(client, thread_id: str, user_id: str):
+async def verify_thread_access(client, thread_id: str, user_id: str) -> bool:
     """
     Verify that a user has access to a specific thread based on account membership.
     
@@ -115,60 +115,28 @@ async def verify_thread_access(client, thread_id: str, user_id: str):
         user_id: The user ID to check permissions for
         
     Returns:
-        bool: True if the user has access
+        bool: True if the user has access to the thread
         
     Raises:
         HTTPException: If the user doesn't have access to the thread
     """
-    # Query the thread to get account information
-    thread_result = await client.table('threads').select('*,project_id').eq('thread_id', thread_id).execute()
-
+    # Find the thread and its associated account
+    thread_result = await client.table('threads').select('*').eq('thread_id', thread_id).execute()
+    
     if not thread_result.data or len(thread_result.data) == 0:
         raise HTTPException(status_code=404, detail="Thread not found")
     
     thread_data = thread_result.data[0]
-    
-    # Check if project is public
-    project_id = thread_data.get('project_id')
-    if project_id:
-        project_result = await client.table('projects').select('is_public').eq('project_id', project_id).execute()
-        if project_result.data and len(project_result.data) > 0:
-            if project_result.data[0].get('is_public'):
-                return True
-        
     account_id = thread_data.get('account_id')
-    # When using service role, we need to manually check account membership instead of using current_user_account_role
-    if account_id:
-        # If the account_id matches the user_id directly (personal workspace ownership)
-        # This is always safe and should be checked first
-        if account_id == user_id:
-            logger.info(f"User {user_id} has direct ownership access to thread {thread_id}")
-            return True
-            
-        try:
-            # First try to check in the public schema
-            account_user_result = await client.schema('public').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
-            if account_user_result.data and len(account_user_result.data) > 0:
-                logger.info(f"User {user_id} has membership access to thread {thread_id} (public schema)")
-                return True
-            
-            # If not found in public schema, try the basejump schema
-            account_user_result = await client.schema('basejump').from_('account_user').select('account_role').eq('user_id', user_id).eq('account_id', account_id).execute()
-            if account_user_result.data and len(account_user_result.data) > 0:
-                logger.info(f"User {user_id} has membership access to thread {thread_id} (basejump schema)")
-                return True
-                
-            # If we get here with no errors but also no access, the user simply doesn't have permission
-            logger.warning(f"User {user_id} denied access to thread {thread_id} - not a member of account {account_id}")
-        except Exception as e:
-            # Log the error but DO NOT bypass security
-            logger.error(f"Error checking account membership for user {user_id}, thread {thread_id}: {str(e)}")
-            
-            # Always fail closed for security - no development mode bypass
-            raise HTTPException(status_code=500, detail="Error verifying access permissions")
-        
-    # If we reach here, the user doesn't have access
-    raise HTTPException(status_code=403, detail="Not authorized to access this thread")
+    
+    # STRICT SECURITY: Only allow access to your own account's threads
+    # This is the most restrictive approach to ensure complete isolation
+    if account_id == user_id:
+        logger.info(f"User {user_id} has direct ownership access to thread {thread_id}")
+        return True
+    else:
+        logger.warning(f"Security: Denied access for user {user_id} to thread {thread_id} (account: {account_id})")
+        raise HTTPException(status_code=403, detail="Not authorized to access this thread")
 
 async def get_optional_user_id(request: Request) -> Optional[str]:
     """
