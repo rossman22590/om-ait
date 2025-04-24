@@ -1,11 +1,11 @@
 export const siteConfig = {
   name: "AI Tutor Machine",
-  url: "https://suna.so/",
-  description: "Kortix AI",
+  url: "https://myapps.ai/",
+  description: "AI Tutor Machine",
   links: {
-    twitter: "https://x.com/kortixai",
-    github: "https://github.com/kortix-ai/",
-    linkedin: "https://www.linkedin.com/company/kortix/",
+    twitter: "https://x.com/myaitutor",
+    github: "https://github.com/myaitutor/",
+    linkedin: "https://www.linkedin.com/company/myaitutor/",
   },
 };
 

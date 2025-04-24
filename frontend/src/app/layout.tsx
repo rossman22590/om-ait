@@ -25,7 +25,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteConfig.url),
+  metadataBase: new URL("https://myapps.ai"),
   title: {
     default: siteConfig.name,
     template: `%s - ${siteConfig.name}`,
@@ -53,7 +53,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "AI Tutor Machine - Generalist AI Agent",
     description: "AI Tutor Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation.",
-    url: siteConfig.url,
+    url: "https://myapps.ai",
     siteName: "AI Tutor Machine",
     images: [{
       url: "https://ai-tutor-machine.vercel.app/banner.png",
@@ -86,7 +86,7 @@ export const metadata: Metadata = {
   },
   // manifest: "/manifest.json",
   alternates: {
-    canonical: siteConfig.url,
+    canonical: "https://myapps.ai",
   },
 };
 
