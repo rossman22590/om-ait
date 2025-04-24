@@ -90,7 +90,7 @@ async def check_billing_status(client, account_id: str) -> Tuple[bool, str, Opti
     # If no subscription, they can use free tier
     if not subscription:
         subscription = {
-            'price_id': 'price_1RGJ9GG6l1KZGqIroxSqgphC',  # Free tier
+            'price_id': 'price_1RGtl4G23sSyONuFYWYsA0HK',  # Free tier
             'plan_name': 'free'
         }
 
