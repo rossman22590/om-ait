@@ -104,12 +104,16 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     }
     
     if (threadIds.length > 0) {
-        // Try both schemas - first public schema (which is likely to work)
+        console.log('[USAGE DEBUG] Querying agent runs for threads:', threadIds);
+        console.log('[USAGE DEBUG] Start month filter:', isoStartOfMonth);
+        
         const { data: agentRuns } = await supabaseClient
             .from('agent_runs')
             .select('started_at, completed_at')
             .in('thread_id', threadIds)
             .gte('started_at', isoStartOfMonth);
+        
+        console.log('[USAGE DEBUG] Final agent runs count:', agentRuns?.length);
         
         if (agentRuns && agentRuns.length > 0) {
             const nowTimestamp = now.getTime();
