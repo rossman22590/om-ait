@@ -4,6 +4,7 @@ from agentpress.tool import ToolResult, openapi_schema, xml_schema
 from sandbox.sandbox import SandboxToolsBase, Sandbox
 from utils.files_utils import clean_path
 from agentpress.thread_manager import ThreadManager
+import json
 
 # Load environment variables
 load_dotenv()
@@ -108,23 +109,18 @@ class SandboxDeployTool(SandboxToolsBase):
                 print(f"Deployment command output: {response.result}")
                 
                 if response.exit_code == 0:
-                    # Extract the correct URL from the output
+                    # Extract the correct URL from the output - ONLY look for the main project URL
                     import re
                     
-                    # First look for the main project URL (without prefix) which works after DNS propagation
-                    project_url_match = re.search(r'available at (https?://[a-zA-Z0-9-]+\.pages\.dev)', response.result)
+                    # Look specifically for the main project URL format - this is the one that works
+                    main_url_match = re.search(r'will be available at (https?://[a-zA-Z0-9-]+\.pages\.dev)', response.result)
                     
-                    if project_url_match:
+                    if main_url_match:
                         # Use the main project URL which will work after DNS propagation
-                        deployment_url = project_url_match.group(1).strip()
+                        deployment_url = main_url_match.group(1).strip()
                     else:
-                        # Fallback: try to extract any pages.dev URL
-                        url_match = re.search(r'https?://[a-zA-Z0-9-]+\.pages\.dev', response.result)
-                        if url_match:
-                            deployment_url = url_match.group(0).strip()
-                        else:
-                            # Last resort: construct from project name
-                            deployment_url = f"https://{project_name}.pages.dev"
+                        # Fallback: construct from project name (most reliable)
+                        deployment_url = f"https://{project_name}.pages.dev"
                     
                     # Remove any trailing slashes for consistency
                     deployment_url = deployment_url.rstrip('/')
@@ -132,11 +128,19 @@ class SandboxDeployTool(SandboxToolsBase):
                     # Log the extracted URL for debugging
                     print(f"Extracted deployment URL: {deployment_url}")
                     
-                    return self.success_response({
-                        "message": f"Website deployed successfully. The URL may take a few minutes to become accessible due to DNS propagation.",
+                    # Create a simple object without any special characters or escapes
+                    result = {
+                        "message": "Website deployed successfully. The URL may take a few minutes to become accessible due to DNS propagation.",
                         "url": deployment_url,
-                        "output": response.result
-                    })
+                        "output_summary": "Deployment completed successfully."
+                    }
+                    
+                    # Return a clean success response - explicitly avoiding the raw output
+                    # This ensures no special characters or escape sequences cause JSON issues
+                    return ToolResult(
+                        success=True,
+                        output=json.dumps(result)
+                    )
                 else:
                     return self.fail_response(f"Deployment failed with exit code {response.exit_code}: {response.result}")
             except Exception as e:
