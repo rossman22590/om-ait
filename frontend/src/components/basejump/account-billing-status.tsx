@@ -6,9 +6,6 @@ import { manageSubscription } from "@/lib/actions/billing";
 import { PlanComparison, SUBSCRIPTION_PLANS } from "../billing/plan-comparison";
 import { isLocalMode } from "@/lib/config";
 
-// Import client component for plan display
-import { DynamicPlanHeader } from "../billing/dynamic-plan-header";
-
 type Props = {
     accountId: string;
     returnUrl: string;
@@ -57,49 +54,37 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     // Get current month usage
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    startOfMonth.setHours(0, 0, 0, 0); // Match the exact pattern in ThreadPage
     const isoStartOfMonth = startOfMonth.toISOString();
     
     let totalAgentTime = 0;
     let usageDisplay = "No usage this month";
     
-    // Set the total minutes based on plan
-    let totalPlanMinutes = 25; // Default free plan minutes
-    if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.PRO) {
-        totalPlanMinutes = 500; // Pro plan
-    } else if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
-        totalPlanMinutes = 3000; // Enterprise plan
-    }
-    
     if (threadIds.length > 0) {
-        // COPY EXACT CODE FROM THREADPAGE - using same variable names, spacing, everything
-        const { data: agentRunData } = await supabaseClient
-          .from('agent_runs')
-          .select('started_at, completed_at')
-          .in('thread_id', threadIds)
-          .gte('started_at', startOfMonth.toISOString());
+        const { data: agentRuns } = await supabaseClient
+            .from('agent_runs')
+            .select('started_at, completed_at')
+            .in('thread_id', threadIds)
+            .gte('started_at', isoStartOfMonth);
         
-        console.log('[DEBUG] Found agent runs:', agentRunData?.length);
-        
-        let totalSeconds = 0;
-        if (agentRunData) {
-          totalSeconds = agentRunData.reduce((acc, run) => {
-            const start = new Date(run.started_at);
-            const end = run.completed_at ? new Date(run.completed_at) : new Date();
-            const seconds = (end.getTime() - start.getTime()) / 1000;
-            return acc + seconds;
-          }, 0);
+        if (agentRuns && agentRuns.length > 0) {
+            const nowTimestamp = now.getTime();
+            
+            totalAgentTime = agentRuns.reduce((total, run) => {
+                const startTime = new Date(run.started_at).getTime();
+                const endTime = run.completed_at 
+                    ? new Date(run.completed_at).getTime()
+                    : nowTimestamp;
+                
+                return total + (endTime - startTime) / 1000; // In seconds
+            }, 0);
+            
+            // Convert to minutes
+            const totalMinutes = Math.round(totalAgentTime / 60);
+            usageDisplay = `${totalMinutes} minutes`;
         }
-        
-        // Convert seconds to minutes
-        const totalMinutes = Math.round(totalSeconds / 60);
-        const remainingMinutes = Math.max(0, totalPlanMinutes - totalMinutes);
-        usageDisplay = `${totalMinutes}/${totalPlanMinutes} minutes (${remainingMinutes} remaining)`;
-    } else {
-        usageDisplay = `0/${totalPlanMinutes} minutes (${totalPlanMinutes} remaining)`;
     }
     
-    // Determine plan name based on total minutes
+    // Direct check for price_id against SUBSCRIPTION_PLANS constants
     let planName = "Free"; // Default
     if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.PRO) {
         planName = "Pro";
@@ -115,7 +100,17 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                 <>
                     <div className="mb-6">
                         <div className="rounded-lg border bg-background p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DynamicPlanHeader initialUsage={Math.round(totalAgentTime / 60)} fallbackPlan={planName} />
+                            <div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm font-medium text-foreground/90">Current Plan</span>
+                                    <span className="text-sm font-medium text-card-title">{planName}</span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
+                                <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
+                            </div>
                         </div>
                     </div>
 
@@ -143,7 +138,15 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                 <>
                     <div className="mb-6">
                         <div className="rounded-lg border bg-background p-4 gap-4">
-                            <DynamicPlanHeader initialUsage={0} fallbackPlan="Free" />
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-foreground/90">Current Plan</span>
+                                <span className="text-sm font-medium text-card-title">Free</span>
+                            </div>
+                            
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
+                                <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
+                            </div>
                         </div>
                     </div>
 
