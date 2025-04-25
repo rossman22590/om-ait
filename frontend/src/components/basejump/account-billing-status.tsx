@@ -29,7 +29,16 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
 
     const supabaseClient = await createClient();
     
-    // Get account subscription and usage data
+    // Get account subscription and usage data - first get ALL subscriptions to debug
+    const { data: allSubscriptions } = await supabaseClient
+        .schema('basejump')
+        .from('billing_subscriptions')
+        .select('*')
+        .eq('account_id', accountId);
+    
+    console.log('[DIRECT DEBUG] All subscriptions:', allSubscriptions);
+    
+    // Now get the active one
     const { data: subscriptionData } = await supabaseClient
         .schema('basejump')
         .from('billing_subscriptions')
@@ -56,6 +65,15 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     
     let totalAgentTime = 0;
     let usageDisplay = "No usage this month";
+    let usageLimitDisplay = "";
+    
+    // Set the total minutes based on plan
+    let totalPlanMinutes = 25; // Default free plan minutes
+    if (subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
+        totalPlanMinutes = 500; // Pro plan
+    } else if (subscriptionData?.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
+        totalPlanMinutes = 3000; // Enterprise plan
+    }
     
     if (threadIds.length > 0) {
         const { data: agentRuns } = await supabaseClient
@@ -78,13 +96,20 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
             
             // Convert to minutes
             const totalMinutes = Math.round(totalAgentTime / 60);
+            const remainingMinutes = Math.max(0, totalPlanMinutes - totalMinutes);
             usageDisplay = `${totalMinutes} minutes`;
+            usageLimitDisplay = `${totalMinutes}/${totalPlanMinutes} minutes (${remainingMinutes} remaining)`;
         }
+    } else {
+        usageDisplay = "0 minutes";
+        usageLimitDisplay = `0/${totalPlanMinutes} minutes (${totalPlanMinutes} remaining)`;
     }
     
-    // Debug the issue
-    console.log('SUBSCRIPTION_PLANS.PRO', SUBSCRIPTION_PLANS.PRO);
-    console.log('subscriptionData?.price_id', subscriptionData?.price_id);
+    // Debug the issue - FORCE UPDATE
+    console.log('[UPDATED LOG] subscriptionData:', subscriptionData);
+    console.log('[UPDATED LOG] price_id:', subscriptionData?.price_id);
+    console.log('[UPDATED LOG] PRO price ID should be:', 'price_1RGtkVG23sSyONuF8kQcAclk');
+    console.log('[UPDATED LOG] is Pro?', subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk');
     
     // Directly determine plan name based on price_id
     let planName = "Unknown";
@@ -128,13 +153,16 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                             <div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                                    <span className="text-sm font-medium text-card-title">{planName}</span>
+                                    <span className="text-sm font-medium text-card-title">
+                                        {/* Direct override to show Pro */}
+                                        {subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk' ? "Pro" : planName}
+                                    </span>
                                 </div>
                             </div>
                             
                             <div className="flex justify-between items-center">
                                 <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
-                                <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
+                                <span className="text-sm font-medium text-card-title">{usageLimitDisplay}</span>
                             </div>
                         </div>
                     </div>
@@ -170,7 +198,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                             
                             <div className="flex justify-between items-center">
                                 <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
-                                <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
+                                <span className="text-sm font-medium text-card-title">{usageLimitDisplay}</span>
                             </div>
                         </div>
                     </div>
