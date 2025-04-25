@@ -4,6 +4,54 @@ import { manageSubscription } from "@/lib/actions/billing";
 import { PlanComparison, SUBSCRIPTION_PLANS } from "../billing/plan-comparison";
 import { isLocalMode } from "@/lib/config";
 
+// Client component that will be hydrated in the browser
+"use client";
+import { useEffect, useState } from "react";
+
+function DynamicPlanHeader({ initialUsage }: { initialUsage: number }) {
+  const [planName, setPlanName] = useState<string>("Pro"); // Default to Pro until loaded
+  const [usageDisplay, setUsageDisplay] = useState<string>(`${initialUsage}/500 minutes (${Math.max(0, 500-initialUsage)} remaining)`);
+  
+  useEffect(() => {
+    // Check global variables set by plan-comparison component
+    if (typeof window !== 'undefined') {
+      const checkPlan = () => {
+        if (window.omCurrentPlan) {
+          setPlanName(window.omCurrentPlan);
+        }
+        
+        if (window.omPlanMinutes) {
+          const remaining = Math.max(0, window.omPlanMinutes-initialUsage);
+          setUsageDisplay(`${initialUsage}/${window.omPlanMinutes} minutes (${remaining} remaining)`);
+        }
+      };
+      
+      // Check now and periodically
+      checkPlan();
+      const interval = setInterval(checkPlan, 500);
+      return () => clearInterval(interval);
+    }
+  }, [initialUsage]);
+
+  return (
+    <>
+      <div>
+        <div className="flex justify-between items-center">
+          <span className="text-sm font-medium text-foreground/90">Current Plan</span>
+          <span className="text-sm font-medium text-card-title">{planName}</span>
+        </div>
+      </div>
+      
+      <div className="flex justify-between items-center">
+        <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
+        <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
+      </div>
+    </>
+  );
+}
+// End client component
+
+"use server";
 type Props = {
     accountId: string;
     returnUrl: string;
@@ -150,20 +198,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                 <>
                     <div className="mb-6">
                         <div className="rounded-lg border bg-background p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                                    <span className="text-sm font-medium text-card-title">
-                                        {/* Direct override to show Pro */}
-                                        {subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk' ? "Pro" : planName}
-                                    </span>
-                                </div>
-                            </div>
-                            
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
-                                <span className="text-sm font-medium text-card-title">{usageLimitDisplay}</span>
-                            </div>
+                            <DynamicPlanHeader initialUsage={Math.round(totalAgentTime / 60)} />
                         </div>
                     </div>
 
@@ -190,16 +225,8 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
             ) : (
                 <>
                     <div className="mb-6">
-                        <div className="rounded-lg border bg-background p-4 gap-4">
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                                <span className="text-sm font-medium text-card-title">Free</span>
-                            </div>
-                            
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
-                                <span className="text-sm font-medium text-card-title">{usageLimitDisplay}</span>
-                            </div>
+                        <div className="rounded-lg border bg-background p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <DynamicPlanHeader initialUsage={0} />
                         </div>
                     </div>
 

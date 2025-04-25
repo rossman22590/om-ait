@@ -1,5 +1,13 @@
 'use client';
 
+// Add TypeScript declarations for our global variables
+declare global {
+  interface Window {
+    omCurrentPlan?: string;
+    omPlanMinutes?: number;
+  }
+}
+
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -57,6 +65,7 @@ export function PlanComparison({
 
   useEffect(() => {
     async function fetchCurrentPlan() {
+      // This function runs on every page refresh to detect the current plan
       if (accountId) {
         const supabase = createClient();
         const { data } = await supabase
@@ -68,8 +77,28 @@ export function PlanComparison({
           .single();
         
         setCurrentPlanId(data?.price_id || SUBSCRIPTION_PLANS.FREE);
+        
+        // Make plan name accessible globally
+        if (typeof window !== 'undefined') {
+          // Calculate current plan
+          if (data?.price_id === SUBSCRIPTION_PLANS.PRO) {
+            window.omCurrentPlan = "Pro";
+            window.omPlanMinutes = 500;
+          } else if (data?.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
+            window.omCurrentPlan = "Enterprise";
+            window.omPlanMinutes = 3000;
+          } else {
+            window.omCurrentPlan = "Free";
+            window.omPlanMinutes = 25;
+          }
+          console.log('Set global plan:', window.omCurrentPlan, window.omPlanMinutes);
+        }
       } else {
         setCurrentPlanId(SUBSCRIPTION_PLANS.FREE);
+        if (typeof window !== 'undefined') {
+          window.omCurrentPlan = "Free";
+          window.omPlanMinutes = 25;
+        }
       }
     }
     
