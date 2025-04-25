@@ -1,20 +1,16 @@
-import { createClient } from "@/lib/supabase/server";
+'use client';
+
 import { SubmitButton } from "../ui/submit-button";
 import { manageSubscription } from "@/lib/actions/billing";
-import { PlanComparison, SUBSCRIPTION_PLANS } from "../billing/plan-comparison";
+import { PlanComparison } from "../billing/plan-comparison";
 import { isLocalMode } from "@/lib/config";
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type Props = {
     accountId: string;
     returnUrl: string;
 }
-
-// Exact plan IDs from the environment and client logs for reliability
-const PLAN_IDS = {
-    FREE: 'price_1RGtl4G23sSyONuFYWYsA0HK',
-    PRO: 'price_1RGtkVG23sSyONuF8kQcAclk',
-    ENTERPRISE: 'price_1RGw3iG23sSyONuFGk8uD3XV',
-};
 
 // Plan limits mapping
 const PLAN_LIMITS = {
@@ -23,7 +19,11 @@ const PLAN_LIMITS = {
     "Enterprise": 3000
 };
 
-export default async function AccountBillingStatus({ accountId, returnUrl }: Props) {
+export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
+    // Setup state for client-side rendering
+    const [planName, setPlanName] = useState<string>("Free");
+    const [usageDisplay, setUsageDisplay] = useState<string>("Calculating...");
+
     // In local development mode, show a simplified component
     if (isLocalMode()) {
         return (
@@ -41,163 +41,110 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         );
     }
 
-    const supabaseClient = await createClient();
-    
-    // Get account subscription and usage data
-    const { data: subscriptionData } = await supabaseClient
-        .schema('basejump')
-        .from('billing_subscriptions')
-        .select('*')
-        .eq('account_id', accountId)
-        .eq('status', 'active')
-        .limit(1)
-        .order('created_at', { ascending: false })
-        .single();
-    
-    // Detect plan name from subscription data
-    let planName = "Free"; // Default to Free
+    // Use effect to calculate usage and read the plan from window after component mounts
+    useEffect(() => {
+        async function calculateUsage() {
+            // Get the current plan from window global (set by PlanComparison component)
+            const currentPlan = window.omCurrentPlan || "Free";
+            setPlanName(currentPlan);
 
-    if (subscriptionData?.status === 'active' && subscriptionData?.price_id) {
-        const priceId = String(subscriptionData.price_id).trim();
-        
-        // Check for Pro plan ID with multiple ways of identifying it
-        if (priceId === PLAN_IDS.PRO || 
-            priceId === SUBSCRIPTION_PLANS.PRO) {
-            planName = "Pro";
-        } 
-        // Check for Enterprise plan ID
-        else if (priceId === PLAN_IDS.ENTERPRISE || 
-                 priceId === SUBSCRIPTION_PLANS.ENTERPRISE) {
-            planName = "Enterprise";
-        }
-    }
-    
-    // Get agent runs for this account
-    const { data: threads } = await supabaseClient
-        .from('threads')
-        .select('thread_id')
-        .eq('account_id', accountId);
-    
-    const threadIds = threads?.map(t => t.thread_id) || [];
-    
-    // Get current month usage
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const isoStartOfMonth = startOfMonth.toISOString();
-    
-    // Calculate usage in minutes
-    let minutes = 0;
-    
-    if (threadIds.length > 0) {
-        const { data: agentRuns } = await supabaseClient
-            .from('agent_runs')
-            .select('started_at, completed_at')
-            .in('thread_id', threadIds)
-            .gte('started_at', isoStartOfMonth);
-        
-        if (agentRuns && agentRuns.length > 0) {
-            const nowTimestamp = now.getTime();
+            // Get agent runs for this account
+            const supabase = createClient();
             
-            const totalAgentTime = agentRuns.reduce((total, run) => {
-                const startTime = new Date(run.started_at).getTime();
-                const endTime = run.completed_at 
-                    ? new Date(run.completed_at).getTime()
-                    : nowTimestamp;
+            // Get the account's threads
+            const { data: threads } = await supabase
+                .from('threads')
+                .select('thread_id')
+                .eq('account_id', accountId);
+            
+            const threadIds = threads?.map(t => t.thread_id) || [];
+            
+            // Get current month usage
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const isoStartOfMonth = startOfMonth.toISOString();
+            
+            // Calculate usage in minutes
+            let minutes = 0;
+            
+            if (threadIds.length > 0) {
+                const { data: agentRuns } = await supabase
+                    .from('agent_runs')
+                    .select('started_at, completed_at')
+                    .in('thread_id', threadIds)
+                    .gte('started_at', isoStartOfMonth);
                 
-                return total + (endTime - startTime) / 1000; // In seconds
-            }, 0);
-            
-            // Convert to minutes
-            minutes = Math.round(totalAgentTime / 60);
-        }
-    }
+                if (agentRuns && agentRuns.length > 0) {
+                    const nowTimestamp = now.getTime();
+                    
+                    const totalAgentTime = agentRuns.reduce((total, run) => {
+                        const startTime = new Date(run.started_at).getTime();
+                        const endTime = run.completed_at 
+                            ? new Date(run.completed_at).getTime()
+                            : nowTimestamp;
+                        
+                        return total + (endTime - startTime) / 1000; // In seconds
+                    }, 0);
+                    
+                    // Convert to minutes
+                    minutes = Math.round(totalAgentTime / 60);
+                }
+            }
 
-    // Format usage with accurate plan limits
-    const planLimit = PLAN_LIMITS[planName as keyof typeof PLAN_LIMITS];
-    const remaining = Math.max(0, planLimit - minutes);
-    const usageDisplay = minutes > 0 
-        ? `${minutes}/${planLimit} minutes (${remaining} remaining)` 
-        : "No usage this month";
+            // Format usage based on the current plan limit
+            const planLimit = PLAN_LIMITS[currentPlan as keyof typeof PLAN_LIMITS] || PLAN_LIMITS.Free;
+            const remaining = Math.max(0, planLimit - minutes);
+            
+            const formattedUsage = minutes > 0 
+                ? `${minutes}/${planLimit} minutes (${remaining} remaining)` 
+                : "No usage this month";
+                
+            setUsageDisplay(formattedUsage);
+        }
+
+        // Call the function to calculate usage
+        calculateUsage();
+    }, [accountId]);
 
     return (
         <div className="rounded-xl border shadow-sm bg-card p-6">
             <h2 className="text-xl font-semibold mb-4">Billing Status</h2>
             
-            {subscriptionData ? (
-                <>
-                    <div className="mb-6">
-                        <div className="rounded-lg border bg-background p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                                    <span className="text-sm font-medium text-card-title">{planName}</span>
-                                </div>
-                            </div>
-                            
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
-                                <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
-                            </div>
+            <div className="mb-6">
+                <div className="rounded-lg border bg-background p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-foreground/90">Current Plan</span>
+                            <span className="text-sm font-medium text-card-title">{planName}</span>
                         </div>
                     </div>
-
-                    {/* Plans Comparison */}
-                    <PlanComparison
-                        accountId={accountId}
-                        returnUrl={returnUrl}
-                        className="mb-6"
-                    />
-
-                    {/* Manage Subscription Button */}
-                    <form>
-                        <input type="hidden" name="accountId" value={accountId} />
-                        <input type="hidden" name="returnUrl" value={returnUrl} />
-                        <SubmitButton
-                            pendingText="Loading..."
-                            formAction={manageSubscription}
-                            className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
-                        >
-                            Manage Subscription
-                        </SubmitButton>
-                    </form>
-                </>
-            ) : (
-                <>
-                    <div className="mb-6">
-                        <div className="rounded-lg border bg-background p-4 gap-4">
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                                <span className="text-sm font-medium text-card-title">{planName}</span>
-                            </div>
-                            
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
-                                <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
-                            </div>
-                        </div>
+                    
+                    <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
+                        <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
                     </div>
+                </div>
+            </div>
 
-                    {/* Plans Comparison */}
-                    <PlanComparison
-                        accountId={accountId}
-                        returnUrl={returnUrl}
-                        className="mb-6"
-                    />
+            {/* Plans Comparison */}
+            <PlanComparison
+                accountId={accountId}
+                returnUrl={returnUrl}
+                className="mb-6"
+            />
 
-                    {/* Manage Subscription Button */}
-                    <form>
-                        <input type="hidden" name="accountId" value={accountId} />
-                        <input type="hidden" name="returnUrl" value={returnUrl} />
-                        <SubmitButton
-                            pendingText="Loading..."
-                            formAction={manageSubscription}
-                            className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
-                        >
-                            Manage Subscription
-                        </SubmitButton>
-                    </form>
-                </>
-            )}
+            {/* Manage Subscription Button */}
+            <form>
+                <input type="hidden" name="accountId" value={accountId} />
+                <input type="hidden" name="returnUrl" value={returnUrl} />
+                <SubmitButton
+                    pendingText="Loading..."
+                    formAction={manageSubscription}
+                    className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
+                >
+                    Manage Subscription
+                </SubmitButton>
+            </form>
         </div>
     )
 }
