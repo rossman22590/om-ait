@@ -71,11 +71,21 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     }
     
     if (threadIds.length > 0) {
-        const { data: agentRuns } = await supabaseClient
-            .from('agent_runs')
+        // Add some debug logs to understand what's happening
+        console.log('[DEBUG] Querying agent runs with threadIds:', threadIds.length);
+        
+        // Explicitly access the public schema for agent_runs, following your previous pattern
+        const { data: agentRuns, error: agentRunError } = await supabaseClient
+            .from('agent_runs') // This uses the default public schema
             .select('started_at, completed_at')
             .in('thread_id', threadIds)
             .gte('started_at', isoStartOfMonth);
+        
+        // Log results to help diagnose
+        if (agentRunError) {
+            console.error('[DEBUG] Error fetching agent runs:', agentRunError);
+        }
+        console.log('[DEBUG] Found agent runs:', agentRuns?.length);
         
         if (agentRuns && agentRuns.length > 0) {
             const nowTimestamp = now.getTime();
