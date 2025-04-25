@@ -1069,22 +1069,22 @@ export const siteConfig = {
         { id: 4, title: "Careers", url: "https://kortix.ai/careers" },
       ],
     },
-    {
-      title: "Resources",
-      links: [
-        { id: 5, title: "Documentation", url: "https://github.com/Kortix-ai/Suna" },
-        { id: 7, title: "Discord", url: "https://discord.gg/Py6pCBUUPw" },
-        { id: 8, title: "GitHub", url: "https://github.com/Kortix-ai/Suna" },
-      ],
-    },
-    {
-      title: "Legal",
-      links: [
-        { id: 9, title: "Privacy Policy", url: "https://suna.so/legal?tab=privacy" },
-        { id: 10, title: "Terms of Service", url: "https://suna.so/legal?tab=terms" },
-        { id: 11, title: "License Apache 2.0", url: "https://github.com/Kortix-ai/Suna/blob/main/LICENSE" },
-      ],
-    },
+    // {
+    //   title: "Resources",
+    //   links: [
+    //     { id: 5, title: "Documentation", url: "https://github.com/Kortix-ai/Suna" },
+    //     { id: 7, title: "Discord", url: "https://discord.gg/Py6pCBUUPw" },
+    //     { id: 8, title: "GitHub", url: "https://github.com/Kortix-ai/Suna" },
+    //   ],
+    // },
+    // {
+    //   title: "Legal",
+    //   links: [
+    //     { id: 9, title: "Privacy Policy", url: "https://suna.so/legal?tab=privacy" },
+    //     { id: 10, title: "Terms of Service", url: "https://suna.so/legal?tab=terms" },
+    //     { id: 11, title: "License Apache 2.0", url: "https://github.com/Kortix-ai/Suna/blob/main/LICENSE" },
+    //   ],
+    // },
   ],
   useCases: [
     {
