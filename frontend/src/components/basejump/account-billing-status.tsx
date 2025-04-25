@@ -6,6 +6,9 @@ import { manageSubscription } from "@/lib/actions/billing";
 import { PlanComparison, SUBSCRIPTION_PLANS } from "../billing/plan-comparison";
 import { isLocalMode } from "@/lib/config";
 
+// Import client component for plan display
+import { DynamicPlanHeader } from "../billing/dynamic-plan-header";
+
 type Props = {
     accountId: string;
     returnUrl: string;
@@ -139,17 +142,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                 <>
                     <div className="mb-6">
                         <div className="rounded-lg border bg-background p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                                    <span className="text-sm font-medium text-card-title">{planName}</span>
-                                </div>
-                            </div>
-                            
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
-                                <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
-                            </div>
+                            <DynamicPlanHeader initialUsage={Math.round(totalAgentTime / 60)} fallbackPlan={planName} />
                         </div>
                     </div>
 
@@ -177,15 +170,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                 <>
                     <div className="mb-6">
                         <div className="rounded-lg border bg-background p-4 gap-4">
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                                <span className="text-sm font-medium text-card-title">Free</span>
-                            </div>
-                            
-                            <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
-                                <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
-                            </div>
+                            <DynamicPlanHeader initialUsage={0} fallbackPlan="Free" />
                         </div>
                     </div>
 

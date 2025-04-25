@@ -10,9 +10,31 @@ declare global {
   }
 }
 
-export function DynamicPlanHeader({ initialUsage }: { initialUsage: number }) {
-  const [planName, setPlanName] = useState<string>("Pro"); // Default to Pro until loaded
-  const [usageDisplay, setUsageDisplay] = useState<string>(`${initialUsage}/500 minutes (${Math.max(0, 500-initialUsage)} remaining)`);
+export function DynamicPlanHeader({ 
+  initialUsage, 
+  fallbackPlan = "Pro" 
+}: { 
+  initialUsage: number;
+  fallbackPlan?: string;
+}) {
+  const [planName, setPlanName] = useState<string>(fallbackPlan);
+  
+  // Default plan limits based on plan name
+  const defaultLimits = {
+    "Free": 25,
+    "Pro": 500,
+    "Enterprise": 3000
+  };
+  
+  // Default to the right limit based on fallbackPlan
+  const defaultLimit = defaultLimits[fallbackPlan as keyof typeof defaultLimits] || 500;
+  const [planLimit, setPlanLimit] = useState<number>(defaultLimit);
+  
+  // Initialize with correct format based on the fallback plan
+  const remaining = Math.max(0, defaultLimit - initialUsage);
+  const [usageDisplay, setUsageDisplay] = useState<string>(
+    `${initialUsage}/${defaultLimit} minutes (${remaining} remaining)`
+  );
   
   useEffect(() => {
     // Check global variables set by plan-comparison component
@@ -23,7 +45,8 @@ export function DynamicPlanHeader({ initialUsage }: { initialUsage: number }) {
         }
         
         if (window.omPlanMinutes) {
-          const remaining = Math.max(0, window.omPlanMinutes-initialUsage);
+          setPlanLimit(window.omPlanMinutes);
+          const remaining = Math.max(0, window.omPlanMinutes - initialUsage);
           setUsageDisplay(`${initialUsage}/${window.omPlanMinutes} minutes (${remaining} remaining)`);
         }
       };
@@ -31,6 +54,8 @@ export function DynamicPlanHeader({ initialUsage }: { initialUsage: number }) {
       // Check now and periodically
       checkPlan();
       const interval = setInterval(checkPlan, 500);
+      
+      // Cleanup interval
       return () => clearInterval(interval);
     }
   }, [initialUsage]);
