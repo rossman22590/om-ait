@@ -853,7 +853,7 @@ export default function Home() {
                 duration: '/per month',
                 popular: true,
                 features: [
-                  '300 minutes per month',
+                  '500 minutes per month',
                   'Advanced autonomous capabilities',
                   'Priority processing',
                   'Full tools access',
@@ -871,7 +871,7 @@ export default function Home() {
                 duration: '/per month',
                 popular: false,
                 features: [
-                  '2400 minutes per month',
+                  '3000 minutes per month',
                   'Maximum autonomous capabilities',
                   'Custom integrations',
                   'Advanced analytics',
