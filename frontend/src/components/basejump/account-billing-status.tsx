@@ -89,10 +89,33 @@ function BillingStatusContent({ accountId, returnUrl }: Props) {
                 console.log('[Client] Subscription data:', subscriptionData);
                 
                 // Fetch agent usage
-                const { data: threads } = await supabase
-                    .from('agent_threads')
-                    .select('thread_id')
-                    .eq('account_id', accountId);
+                let threads;
+                try {
+                    // Try basejump schema first
+                    const result = await supabase
+                        .schema('basejump')
+                        .from('agent_threads')
+                        .select('thread_id')
+                        .eq('account_id', accountId);
+                        
+                    threads = result.data;
+                } catch (err) {
+                    console.log('[Client] Error with basejump schema for agent_threads, falling back to public schema:', err);
+                    // Fall back to public schema if basejump fails
+                    try {
+                        const result = await supabase
+                            .from('agent_threads')
+                            .select('thread_id')
+                            .eq('account_id', accountId);
+                            
+                        threads = result.data;
+                    } catch (err) {
+                        console.log('[Client] Error with public schema for agent_threads too:', err);
+                        threads = [];
+                    }
+                }
+                
+                console.log('[Client] Thread data:', threads);
                 
                 const threadIds = threads?.map(t => t.thread_id) || [];
                 
@@ -104,11 +127,35 @@ function BillingStatusContent({ accountId, returnUrl }: Props) {
                 let totalAgentTime = 0;
                 
                 if (threadIds.length > 0) {
-                    const { data: agentRuns } = await supabase
-                        .from('agent_runs')
-                        .select('run_time')
-                        .in('thread_id', threadIds)
-                        .gte('created_at', isoStartOfMonth);
+                    let agentRuns;
+                    try {
+                        // Try basejump schema first
+                        const result = await supabase
+                            .schema('basejump')
+                            .from('agent_runs')
+                            .select('run_time')
+                            .in('thread_id', threadIds)
+                            .gte('created_at', isoStartOfMonth);
+                            
+                        agentRuns = result.data;
+                    } catch (err) {
+                        console.log('[Client] Error with basejump schema for agent_runs, falling back to public schema:', err);
+                        // Fall back to public schema if basejump fails
+                        try {
+                            const result = await supabase
+                                .from('agent_runs')
+                                .select('run_time')
+                                .in('thread_id', threadIds)
+                                .gte('created_at', isoStartOfMonth);
+                                
+                            agentRuns = result.data;
+                        } catch (err) {
+                            console.log('[Client] Error with public schema for agent_runs too:', err);
+                            agentRuns = [];
+                        }
+                    }
+                    
+                    console.log('[Client] Agent runs data:', agentRuns);
                     
                     if (agentRuns && agentRuns.length > 0) {
                         totalAgentTime = agentRuns.reduce((sum, run) => {
@@ -119,6 +166,7 @@ function BillingStatusContent({ accountId, returnUrl }: Props) {
                 
                 // Convert to minutes
                 const totalMinutes = Math.round(totalAgentTime / 60);
+                console.log('[Client] Total usage minutes calculated:', totalMinutes);
                 
                 // Get current plan from client-side detection
                 if (typeof window !== 'undefined' && window.omCurrentPlan) {
