@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
-import { getPlanMetadata, formatUsageDisplay } from "@/lib/plan-labels";
+import { formatUsageDisplay, getPlanMinutes } from "@/lib/plan-labels";
 
 // Add TypeScript declarations for our global variables
 declare global {
@@ -19,36 +19,42 @@ export function DynamicPlanHeader({
   fallbackPlan?: string;
 }) {
   const [planName, setPlanName] = useState<string>(fallbackPlan);
-  const [usageDisplay, setUsageDisplay] = useState<string>("");
+  
+  // Default plan limits based on plan name
+  const defaultLimits = {
+    "Free": 25,
+    "Pro": 500,
+    "Enterprise": 3000
+  };
+  
+  // Default to the right limit based on fallbackPlan
+  const defaultLimit = defaultLimits[fallbackPlan as keyof typeof defaultLimits] || 500;
+  const [planLimit, setPlanLimit] = useState<number>(defaultLimit);
+  
+  // Initialize with formatted usage display
+  const [usageDisplay, setUsageDisplay] = useState<string>(
+    formatUsageDisplay(initialUsage, defaultLimit)
+  );
   
   useEffect(() => {
     // Check global variables set by plan-comparison component
-    if (typeof window !== 'undefined') {
-      const checkPlan = () => {
+    const checkPlan = () => {
+      if (typeof window !== 'undefined') {
         if (window.omCurrentPlan) {
           setPlanName(window.omCurrentPlan);
         }
         
         if (window.omPlanMinutes) {
-          const display = formatUsageDisplay(initialUsage, window.omCurrentPlan);
-          setUsageDisplay(display);
+          setPlanLimit(window.omPlanMinutes);
+          setUsageDisplay(formatUsageDisplay(initialUsage, window.omPlanMinutes));
         }
       };
       
-      // Check now and periodically
-      checkPlan();
-      const interval = setInterval(checkPlan, 500);
-      
-      // Cleanup interval
-      return () => clearInterval(interval);
+      // Schedule a check after component mounts to allow plan-comparison to set globals
+      setTimeout(checkPlan, 500);
     }
+    checkPlan();
   }, [initialUsage]);
-
-  useEffect(() => {
-    // Format usage display using helper
-    const display = formatUsageDisplay(initialUsage, planName);
-    setUsageDisplay(display);
-  }, [initialUsage, planName]);
 
   return (
     <>

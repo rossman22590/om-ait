@@ -3,9 +3,7 @@ import { SubmitButton } from "../ui/submit-button";
 import { manageSubscription } from "@/lib/actions/billing";
 import { PlanComparison, SUBSCRIPTION_PLANS } from "../billing/plan-comparison";
 import { isLocalMode } from "@/lib/config";
-import { calculateAgentUsage } from "@/lib/usage-calculator";
-import { getPlanMetadata, formatUsageDisplay } from "@/lib/plan-labels";
-import { getPlanName } from "@/lib/plan-labels";
+import { formatUsageDisplay, getPlanMinutes } from "@/lib/plan-labels";
 
 type Props = {
     accountId: string;
@@ -15,7 +13,6 @@ type Props = {
 export default async function AccountBillingStatus({ accountId, returnUrl }: Props) {
     // In local development mode, show a simplified component
     if (isLocalMode()) {
-        const planMeta = getPlanMetadata("Free");
         return (
             <div className="rounded-xl border shadow-sm bg-card p-6">
                 <h2 className="text-xl font-semibold mb-4">Billing Status</h2>
@@ -33,7 +30,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
 
     const supabaseClient = await createClient();
     
-    // Get account subscription data
+    // Get account subscription and usage data
     const { data: subscriptionData } = await supabaseClient
         .schema('basejump')
         .from('billing_subscriptions')
@@ -44,13 +41,65 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         .order('created_at', { ascending: false })
         .single();
     
-    // Determine plan name and get metadata
-    const planName = getPlanName(subscriptionData, SUBSCRIPTION_PLANS);
-    const planMeta = getPlanMetadata(planName);
+    // Get agent runs for this account
+    // Get the account's threads
+    const { data: threads } = await supabaseClient
+        .from('threads')
+        .select('thread_id')
+        .eq('account_id', accountId);
     
-    // Calculate usage with the helper function
-    const { totalMinutes } = await calculateAgentUsage(accountId, planMeta.minutes);
-    const usageDisplay = formatUsageDisplay(totalMinutes, planName);
+    const threadIds = threads?.map(t => t.thread_id) || [];
+    
+    // Get current month usage
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const isoStartOfMonth = startOfMonth.toISOString();
+    
+    let totalAgentTime = 0;
+    let usageDisplay = "No usage this month";
+    let totalMinutes = 0;
+    
+    if (threadIds.length > 0) {
+        const { data: agentRuns } = await supabaseClient
+            .from('agent_runs')
+            .select('started_at, completed_at')
+            .in('thread_id', threadIds)
+            .gte('started_at', isoStartOfMonth);
+        
+        if (agentRuns && agentRuns.length > 0) {
+            const nowTimestamp = now.getTime();
+            
+            totalAgentTime = agentRuns.reduce((total, run) => {
+                const startTime = new Date(run.started_at).getTime();
+                const endTime = run.completed_at 
+                    ? new Date(run.completed_at).getTime()
+                    : nowTimestamp;
+                
+                return total + (endTime - startTime) / 1000; // In seconds
+            }, 0);
+            
+            // Convert to minutes
+            totalMinutes = Math.round(totalAgentTime / 60);
+        }
+    }
+    
+    const isPlan = (planId?: string) => {
+        return subscriptionData?.price_id === planId;
+    };
+    
+    const planName = isPlan(SUBSCRIPTION_PLANS.FREE) 
+        ? "Free" 
+        : isPlan(SUBSCRIPTION_PLANS.PRO)
+            ? "Pro"
+            : isPlan(SUBSCRIPTION_PLANS.ENTERPRISE)
+                ? "Enterprise"
+                : "Free";
+
+    // Use the helper to format the usage display
+    const planMinutes = getPlanMinutes(planName);
+    usageDisplay = totalMinutes > 0 
+        ? formatUsageDisplay(totalMinutes, planMinutes)
+        : "No usage this month";
 
     return (
         <div className="rounded-xl border shadow-sm bg-card p-6">
@@ -63,7 +112,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                             <div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                                    <span className="text-sm font-medium text-card-title">{planMeta.displayName}</span>
+                                    <span className="text-sm font-medium text-card-title">{planName}</span>
                                 </div>
                             </div>
                             
@@ -100,7 +149,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                         <div className="rounded-lg border bg-background p-4 gap-4">
                             <div className="flex justify-between items-center">
                                 <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                                <span className="text-sm font-medium text-card-title">{planMeta.displayName}</span>
+                                <span className="text-sm font-medium text-card-title">Free</span>
                             </div>
                             
                             <div className="flex justify-between items-center">
