@@ -1,4 +1,4 @@
-"use server";
+"use client";
 
 import { createClient } from "@/lib/supabase/server";
 import { SubmitButton } from "../ui/submit-button";
