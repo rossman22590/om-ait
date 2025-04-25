@@ -20,9 +20,9 @@ import { isLocalMode } from "@/lib/config";
 
 // Create SUBSCRIPTION_PLANS using stripePriceId from siteConfig
 export const SUBSCRIPTION_PLANS = {
-  FREE: siteConfig.cloudPricingItems.find(item => item.name === 'Free')?.stripePriceId || '',
-  PRO: siteConfig.cloudPricingItems.find(item => item.name === 'Pro')?.stripePriceId || '',
-  ENTERPRISE: siteConfig.cloudPricingItems.find(item => item.name === 'Enterprise')?.stripePriceId || '',
+  FREE: process.env.NEXT_PUBLIC_STRIPE_FREE_PLAN_ID || 'price_1RGtl4G23sSyONuFYWYsA0HK',
+  PRO: process.env.NEXT_PUBLIC_STRIPE_PRO_PLAN_ID || 'price_1RGtkVG23sSyONuF8kQcAclk',
+  ENTERPRISE: process.env.NEXT_PUBLIC_STRIPE_ENTERPRISE_PLAN_ID || 'price_1RGw3iG23sSyONuFGk8uD3XV',
 };
 
 // Price display animation component

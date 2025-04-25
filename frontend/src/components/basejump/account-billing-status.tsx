@@ -9,9 +9,6 @@ type Props = {
     returnUrl: string;
 }
 
-// The exact Pro plan ID that we know works from client-side logs
-const PRO_PLAN_ID = 'price_1RGtkVG23sSyONuF8kQcAclk';
-
 export default async function AccountBillingStatus({ accountId, returnUrl }: Props) {
     // In local development mode, show a simplified component
     if (isLocalMode()) {
@@ -42,6 +39,8 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         .limit(1)
         .order('created_at', { ascending: false })
         .single();
+
+    console.log('Server-side subscription data:', subscriptionData);
     
     // Get agent runs for this account
     // Get the account's threads
@@ -85,13 +84,40 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         }
     }
     
-    // Simple direct check for the exact Pro plan ID we know works
+    // Pro plan detection with string comparison exactly like client-side does
     let planName = "Free";
-    if (subscriptionData?.status === 'active') {
-        if (subscriptionData.price_id === PRO_PLAN_ID) {
+    if (subscriptionData?.status === 'active' && subscriptionData?.price_id) {
+        const priceId = String(subscriptionData.price_id).trim();
+        
+        if (priceId === 'price_1RGtkVG23sSyONuF8kQcAclk' || 
+            priceId === SUBSCRIPTION_PLANS.PRO) {
             planName = "Pro";
-        } else if (subscriptionData.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
+        } else if (priceId === SUBSCRIPTION_PLANS.ENTERPRISE) {
             planName = "Enterprise";
+        }
+    }
+
+    // Formatter for usage display with count against plan limit
+    function formatUsageDisplay(minutes: number, planName: string): string {
+        const planLimits = {
+            "Free": 25,
+            "Pro": 500,
+            "Enterprise": 3000
+        };
+        const limit = planLimits[planName as keyof typeof planLimits] || 25;
+        const remaining = Math.max(0, limit - minutes);
+        
+        // Format with minutes remaining
+        return minutes > 0 ? 
+            `${minutes}/${limit} minutes (${remaining} remaining)` : 
+            "No usage this month";
+    }
+    
+    // Format usage nicely if we have real usage
+    if (usageDisplay !== "No usage this month") {
+        const minutes = parseInt(usageDisplay);
+        if (!isNaN(minutes)) {
+            usageDisplay = formatUsageDisplay(minutes, planName);
         }
     }
 
@@ -143,7 +169,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                         <div className="rounded-lg border bg-background p-4 gap-4">
                             <div className="flex justify-between items-center">
                                 <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                                <span className="text-sm font-medium text-card-title">Free</span>
+                                <span className="text-sm font-medium text-card-title">{planName}</span>
                             </div>
                             
                             <div className="flex justify-between items-center">
