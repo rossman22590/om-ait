@@ -68,6 +68,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     }
     
     if (threadIds.length > 0) {
+        // Try both schemas - first public schema (which is likely to work)
         const { data: agentRuns } = await supabaseClient
             .from('agent_runs')
             .select('started_at, completed_at')
@@ -97,13 +98,11 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         usageDisplay = `0/${totalPlanMinutes} minutes (${totalPlanMinutes} remaining)`;
     }
     
-    // Debug the issue
-    console.log('[UPDATED LOG] subscriptionData:', subscriptionData);
-    console.log('[UPDATED LOG] price_id:', subscriptionData?.price_id);
-    console.log('[UPDATED LOG] PRO price ID:', 'price_1RGtkVG23sSyONuF8kQcAclk');
-    console.log('[UPDATED LOG] is Pro?', subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk');
-    
     // Directly determine plan name based on price_id
+    const isPlan = (planId?: string) => {
+        return subscriptionData?.price_id === planId;
+    };
+    
     let planName = "Free";
     if (subscriptionData) {
         if (subscriptionData.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
@@ -112,46 +111,86 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
             planName = "Enterprise";
         }
     }
-    
+
     return (
         <div className="rounded-xl border shadow-sm bg-card p-6">
             <h2 className="text-xl font-semibold mb-4">Billing Status</h2>
             
-            <div className="mb-6">
-                <div className="rounded-lg border bg-background p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                            <span className="text-sm font-medium text-card-title">{planName}</span>
+            {subscriptionData ? (
+                <>
+                    <div className="mb-6">
+                        <div className="rounded-lg border bg-background p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm font-medium text-foreground/90">Current Plan</span>
+                                    <span className="text-sm font-medium text-card-title">{planName}</span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
+                                <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div className="flex justify-between items-center">
-                        <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
-                        <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
+
+                    {/* Plans Comparison */}
+                    <PlanComparison
+                        accountId={accountId}
+                        returnUrl={returnUrl}
+                        className="mb-6"
+                    />
+
+                    {/* Manage Subscription Button */}
+                    <form>
+                        <input type="hidden" name="accountId" value={accountId} />
+                        <input type="hidden" name="returnUrl" value={returnUrl} />
+                        <SubmitButton
+                            pendingText="Loading..."
+                            formAction={manageSubscription}
+                            className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
+                        >
+                            Manage Subscription
+                        </SubmitButton>
+                    </form>
+                </>
+            ) : (
+                <>
+                    <div className="mb-6">
+                        <div className="rounded-lg border bg-background p-4 gap-4">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-foreground/90">Current Plan</span>
+                                <span className="text-sm font-medium text-card-title">Free</span>
+                            </div>
+                            
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
+                                <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
+                            </div>
+                        </div>
                     </div>
-                </div>
-            </div>
 
-            {/* Plans Comparison */}
-            <PlanComparison
-                accountId={accountId}
-                returnUrl={returnUrl}
-                className="mb-6"
-            />
+                    {/* Plans Comparison */}
+                    <PlanComparison
+                        accountId={accountId}
+                        returnUrl={returnUrl}
+                        className="mb-6"
+                    />
 
-            {/* Manage Subscription Button */}
-            <form>
-                <input type="hidden" name="accountId" value={accountId} />
-                <input type="hidden" name="returnUrl" value={returnUrl} />
-                <SubmitButton
-                    pendingText="Loading..."
-                    formAction={manageSubscription}
-                    className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
-                >
-                    Manage Subscription
-                </SubmitButton>
-            </form>
+                    {/* Manage Subscription Button */}
+                    <form>
+                        <input type="hidden" name="accountId" value={accountId} />
+                        <input type="hidden" name="returnUrl" value={returnUrl} />
+                        <SubmitButton
+                            pendingText="Loading..."
+                            formAction={manageSubscription}
+                            className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
+                        >
+                            Manage Subscription
+                        </SubmitButton>
+                    </form>
+                </>
+            )}
         </div>
     )
 }
