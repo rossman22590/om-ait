@@ -4,7 +4,7 @@ import { SubmitButton } from "../ui/submit-button";
 import { manageSubscription } from "@/lib/actions/billing";
 import { PlanComparison } from "../billing/plan-comparison";
 import { isLocalMode } from "@/lib/config";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type Props = {
@@ -41,9 +41,9 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
         );
     }
 
-    // Use effect to calculate usage and read the plan from window after component mounts
-    useEffect(() => {
-        async function calculateUsage() {
+    // Define calculateUsage in a useCallback
+    const calculateUsage = useCallback(async () => {
+        try {
             // Get the current plan from window global (set by PlanComparison component)
             const currentPlan = window.omCurrentPlan || "Free";
             setPlanName(currentPlan);
@@ -100,11 +100,16 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
                 : "No usage this month";
                 
             setUsageDisplay(formattedUsage);
+        } catch (error) {
+            console.error("Error calculating usage:", error);
+            setUsageDisplay("Error calculating usage");
         }
+    }, [accountId]); // Properly include accountId dependency
 
-        // Call the function to calculate usage
+    // Use effect to calculate usage and read the plan from window after component mounts
+    useEffect(() => {
         calculateUsage();
-    }, [accountId]);
+    }, [calculateUsage]); // This ensures proper dependency tracking
 
     return (
         <div className="rounded-xl border shadow-sm bg-card p-6">
