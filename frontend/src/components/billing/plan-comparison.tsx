@@ -71,18 +71,23 @@ export function PlanComparison({
         const { data } = await supabase
           .schema('basejump')
           .from('billing_subscriptions')
-          .select('price_id')
+          .select('price_id, status')
           .eq('account_id', accountId)
           .eq('status', 'active')
           .single();
         
+        console.log('[CLIENT] Raw subscription data:', data);
+        
+        // Set the currentPlanId state for UI highlighting
         setCurrentPlanId(data?.price_id || SUBSCRIPTION_PLANS.FREE);
         
         // Make plan name accessible globally
         if (typeof window !== 'undefined') {
           // Calculate current plan - FIXED to ensure it defaults to Free unless exact match found
-          const isPro = data?.price_id === SUBSCRIPTION_PLANS.PRO;
-          const isEnterprise = data?.price_id === SUBSCRIPTION_PLANS.ENTERPRISE;
+          // Only consider active subscriptions with valid price_id
+          const validSubscription = data && data.status === 'active' && data.price_id;
+          const isPro = validSubscription && data.price_id === SUBSCRIPTION_PLANS.PRO;
+          const isEnterprise = validSubscription && data.price_id === SUBSCRIPTION_PLANS.ENTERPRISE;
           
           if (isPro) {
             window.omCurrentPlan = "Pro";
@@ -95,7 +100,7 @@ export function PlanComparison({
             window.omCurrentPlan = "Free";
             window.omPlanMinutes = 25;
           }
-          console.log('[DEBUG] Set global plan:', window.omCurrentPlan, window.omPlanMinutes);
+          console.log('[CLIENT] Set global plan:', window.omCurrentPlan, window.omPlanMinutes, 'based on price_id:', data?.price_id);
         }
       } else {
         setCurrentPlanId(SUBSCRIPTION_PLANS.FREE);

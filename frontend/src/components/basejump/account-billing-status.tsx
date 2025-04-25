@@ -61,11 +61,28 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     
     // Direct check for price_id against SUBSCRIPTION_PLANS constants
     let planName = "Free"; // Default
-    if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.PRO) {
-        planName = "Pro";
-    } else if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
-        planName = "Enterprise"; 
+    
+    // Add additional logging to help debug
+    console.log('[Server] Checking subscription data:', subscriptionData?.price_id, 
+                'PRO ID:', SUBSCRIPTION_PLANS.PRO, 
+                'ENTERPRISE ID:', SUBSCRIPTION_PLANS.ENTERPRISE);
+    
+    // Only consider active subscriptions with matching price IDs
+    if (subscriptionData?.status === 'active') {
+        if (subscriptionData.price_id === SUBSCRIPTION_PLANS.PRO) {
+            planName = "Pro";
+        } else if (subscriptionData.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
+            planName = "Enterprise"; 
+        } else {
+            // If there's a subscription but not matching our known plans, default to Free
+            planName = "Free";
+        }
+    } else {
+        // No active subscription means Free plan
+        planName = "Free";
     }
+    
+    console.log('[Server] Detected plan:', planName);
 
     // Set plan minutes based on detected plan
     let totalPlanMinutes = 25; // Default free plan
