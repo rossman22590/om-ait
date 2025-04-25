@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
+import { getPlanMetadata, formatUsageDisplay } from "@/lib/plan-labels";
 
 // Add TypeScript declarations for our global variables
 declare global {
@@ -18,23 +19,7 @@ export function DynamicPlanHeader({
   fallbackPlan?: string;
 }) {
   const [planName, setPlanName] = useState<string>(fallbackPlan);
-  
-  // Default plan limits based on plan name
-  const defaultLimits = {
-    "Free": 25,
-    "Pro": 500,
-    "Enterprise": 3000
-  };
-  
-  // Default to the right limit based on fallbackPlan
-  const defaultLimit = defaultLimits[fallbackPlan as keyof typeof defaultLimits] || 500;
-  const [planLimit, setPlanLimit] = useState<number>(defaultLimit);
-  
-  // Initialize with correct format based on the fallback plan
-  const remaining = Math.max(0, defaultLimit - initialUsage);
-  const [usageDisplay, setUsageDisplay] = useState<string>(
-    `${initialUsage}/${defaultLimit} minutes (${remaining} remaining)`
-  );
+  const [usageDisplay, setUsageDisplay] = useState<string>("");
   
   useEffect(() => {
     // Check global variables set by plan-comparison component
@@ -45,9 +30,8 @@ export function DynamicPlanHeader({
         }
         
         if (window.omPlanMinutes) {
-          setPlanLimit(window.omPlanMinutes);
-          const remaining = Math.max(0, window.omPlanMinutes - initialUsage);
-          setUsageDisplay(`${initialUsage}/${window.omPlanMinutes} minutes (${remaining} remaining)`);
+          const display = formatUsageDisplay(initialUsage, window.omCurrentPlan);
+          setUsageDisplay(display);
         }
       };
       
@@ -59,6 +43,12 @@ export function DynamicPlanHeader({
       return () => clearInterval(interval);
     }
   }, [initialUsage]);
+
+  useEffect(() => {
+    // Format usage display using helper
+    const display = formatUsageDisplay(initialUsage, planName);
+    setUsageDisplay(display);
+  }, [initialUsage, planName]);
 
   return (
     <>

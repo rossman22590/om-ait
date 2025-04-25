@@ -3,7 +3,9 @@ import { SubmitButton } from "../ui/submit-button";
 import { manageSubscription } from "@/lib/actions/billing";
 import { PlanComparison, SUBSCRIPTION_PLANS } from "../billing/plan-comparison";
 import { isLocalMode } from "@/lib/config";
-import { calculateAgentUsage, getPlanName, getPlanMinutes } from "@/lib/usage-calculator";
+import { calculateAgentUsage } from "@/lib/usage-calculator";
+import { getPlanMetadata, formatUsageDisplay } from "@/lib/plan-labels";
+import { getPlanName } from "@/lib/plan-labels";
 
 type Props = {
     accountId: string;
@@ -13,6 +15,7 @@ type Props = {
 export default async function AccountBillingStatus({ accountId, returnUrl }: Props) {
     // In local development mode, show a simplified component
     if (isLocalMode()) {
+        const planMeta = getPlanMetadata("Free");
         return (
             <div className="rounded-xl border shadow-sm bg-card p-6">
                 <h2 className="text-xl font-semibold mb-4">Billing Status</h2>
@@ -41,12 +44,13 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         .order('created_at', { ascending: false })
         .single();
     
-    // Determine plan name and minutes
+    // Determine plan name and get metadata
     const planName = getPlanName(subscriptionData, SUBSCRIPTION_PLANS);
-    const planMinutes = getPlanMinutes(planName);
+    const planMeta = getPlanMetadata(planName);
     
     // Calculate usage with the helper function
-    const { usageDisplay } = await calculateAgentUsage(accountId, planMinutes);
+    const { totalMinutes } = await calculateAgentUsage(accountId, planMeta.minutes);
+    const usageDisplay = formatUsageDisplay(totalMinutes, planName);
 
     return (
         <div className="rounded-xl border shadow-sm bg-card p-6">
@@ -59,7 +63,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                             <div>
                                 <div className="flex justify-between items-center">
                                     <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                                    <span className="text-sm font-medium text-card-title">{planName}</span>
+                                    <span className="text-sm font-medium text-card-title">{planMeta.displayName}</span>
                                 </div>
                             </div>
                             
@@ -96,7 +100,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                         <div className="rounded-lg border bg-background p-4 gap-4">
                             <div className="flex justify-between items-center">
                                 <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                                <span className="text-sm font-medium text-card-title">Free</span>
+                                <span className="text-sm font-medium text-card-title">{planMeta.displayName}</span>
                             </div>
                             
                             <div className="flex justify-between items-center">
