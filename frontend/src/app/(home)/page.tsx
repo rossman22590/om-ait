@@ -949,7 +949,7 @@ export default function Home() {
           </div>
           
           <div className="mt-10 text-center text-sm text-gray-500 dark:text-gray-300">
-            All plans include access to our core autonomous agent capabilities. <Link href="#" className="text-primary underline hover:text-primary/90">See all plan details</Link>
+            All plans include access to our core autonomous agent capabilities. <Link href="https://machine.myapps.ai/settings/billing" className="text-primary underline hover:text-primary/90">See all plan details</Link>
           </div>
         </div>
       </section>
