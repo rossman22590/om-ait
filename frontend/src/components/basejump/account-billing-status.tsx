@@ -94,23 +94,23 @@ function BillingStatusContent({ accountId, returnUrl }: Props) {
                     // Try basejump schema first
                     const result = await supabase
                         .schema('basejump')
-                        .from('agent_threads')
+                        .from('threads')
                         .select('thread_id')
                         .eq('account_id', accountId);
                         
                     threads = result.data;
                 } catch (err) {
-                    console.log('[Client] Error with basejump schema for agent_threads, falling back to public schema:', err);
+                    console.log('[Client] Error with basejump schema for threads, falling back to public schema:', err);
                     // Fall back to public schema if basejump fails
                     try {
                         const result = await supabase
-                            .from('agent_threads')
+                            .from('threads')
                             .select('thread_id')
                             .eq('account_id', accountId);
                             
                         threads = result.data;
                     } catch (err) {
-                        console.log('[Client] Error with public schema for agent_threads too:', err);
+                        console.log('[Client] Error with public schema for threads too:', err);
                         threads = [];
                     }
                 }
@@ -133,9 +133,9 @@ function BillingStatusContent({ accountId, returnUrl }: Props) {
                         const result = await supabase
                             .schema('basejump')
                             .from('agent_runs')
-                            .select('run_time')
+                            .select('started_at, completed_at')
                             .in('thread_id', threadIds)
-                            .gte('created_at', isoStartOfMonth);
+                            .gte('started_at', isoStartOfMonth);
                             
                         agentRuns = result.data;
                     } catch (err) {
@@ -144,9 +144,9 @@ function BillingStatusContent({ accountId, returnUrl }: Props) {
                         try {
                             const result = await supabase
                                 .from('agent_runs')
-                                .select('run_time')
+                                .select('started_at, completed_at')
                                 .in('thread_id', threadIds)
-                                .gte('created_at', isoStartOfMonth);
+                                .gte('started_at', isoStartOfMonth);
                                 
                             agentRuns = result.data;
                         } catch (err) {
@@ -158,8 +158,15 @@ function BillingStatusContent({ accountId, returnUrl }: Props) {
                     console.log('[Client] Agent runs data:', agentRuns);
                     
                     if (agentRuns && agentRuns.length > 0) {
-                        totalAgentTime = agentRuns.reduce((sum, run) => {
-                            return sum + (run.run_time || 0);
+                        const nowTimestamp = now.getTime();
+                        
+                        totalAgentTime = agentRuns.reduce((total, run) => {
+                            const startTime = new Date(run.started_at).getTime();
+                            const endTime = run.completed_at 
+                                ? new Date(run.completed_at).getTime()
+                                : nowTimestamp;
+                            
+                            return total + (endTime - startTime) / 1000; // In seconds
                         }, 0);
                     }
                 }
