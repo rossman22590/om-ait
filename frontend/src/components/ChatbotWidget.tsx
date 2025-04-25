@@ -52,21 +52,38 @@ const ChatbotWidget = () => {
         }
       }
     })();
+
+    // Add custom positioning styles for Intercom
+    const style = document.createElement('style');
+    style.innerHTML = `
+      .intercom-lightweight-app-launcher {
+        bottom: 100px !important;
+      }
+      #intercom-container .intercom-launcher-frame {
+        bottom: 100px !important;
+      }
+      #intercom-container {
+        bottom: 100px !important;
+      }
+    `;
+    document.head.appendChild(style);
   }, []);
 
   return (
-    <Script 
-      id="intercom-script"
-      strategy="afterInteractive"
-      dangerouslySetInnerHTML={{
-        __html: `
-          window.intercomSettings = {
-            api_base: "https://api-iam.intercom.io",
-            app_id: "cqwzmjsm",
-          };
-        `,
-      }}
-    />
+    <>
+      <Script 
+        id="intercom-script"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `
+            window.intercomSettings = {
+              api_base: "https://api-iam.intercom.io",
+              app_id: "cqwzmjsm",
+            };
+          `,
+        }}
+      />
+    </>
   );
 }
 
