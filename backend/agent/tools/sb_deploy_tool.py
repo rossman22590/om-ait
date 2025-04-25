@@ -110,16 +110,30 @@ class SandboxDeployTool(SandboxToolsBase):
                 if response.exit_code == 0:
                     # Extract the correct URL from the output
                     import re
-                    # Look for the proper pages.dev URL format
-                    url_match = re.search(r'https?://([a-zA-Z0-9-]+\.pages\.dev)', response.result)
-                    deployment_url = url_match.group(0) if url_match else None
                     
-                    # If we couldn't find the URL, construct it from the project name
-                    if not deployment_url:
-                        deployment_url = f"https://{project_name}.pages.dev"
+                    # First look for the main project URL (without prefix) which works after DNS propagation
+                    project_url_match = re.search(r'available at (https?://[a-zA-Z0-9-]+\.pages\.dev)', response.result)
+                    
+                    if project_url_match:
+                        # Use the main project URL which will work after DNS propagation
+                        deployment_url = project_url_match.group(1).strip()
+                    else:
+                        # Fallback: try to extract any pages.dev URL
+                        url_match = re.search(r'https?://[a-zA-Z0-9-]+\.pages\.dev', response.result)
+                        if url_match:
+                            deployment_url = url_match.group(0).strip()
+                        else:
+                            # Last resort: construct from project name
+                            deployment_url = f"https://{project_name}.pages.dev"
+                    
+                    # Remove any trailing slashes for consistency
+                    deployment_url = deployment_url.rstrip('/')
+                    
+                    # Log the extracted URL for debugging
+                    print(f"Extracted deployment URL: {deployment_url}")
                     
                     return self.success_response({
-                        "message": f"Website deployed successfully",
+                        "message": f"Website deployed successfully. The URL may take a few minutes to become accessible due to DNS propagation.",
                         "url": deployment_url,
                         "output": response.result
                     })
