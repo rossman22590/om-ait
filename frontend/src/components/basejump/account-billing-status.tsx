@@ -35,7 +35,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         .from('billing_subscriptions')
         .select('*')
         .eq('account_id', accountId)
-        .eq('status', 'active')
+        .in('status', ['active', 'trialing'])
         .limit(1)
         .order('created_at', { ascending: false })
         .single();
@@ -83,14 +83,26 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     }
     
     const isPlan = (planId?: string) => {
-        // Direct mapping for Pro plan by price ID
-        if (subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
-            return planId === SUBSCRIPTION_PLANS.PRO;
+        // Direct check for Pro by price ID
+        if (planId === SUBSCRIPTION_PLANS.PRO && 
+            subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
+            return true;
         }
-        // Direct mapping for Enterprise plan by price ID
-        if (subscriptionData?.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
-            return planId === SUBSCRIPTION_PLANS.ENTERPRISE;
+        
+        // Direct check for Enterprise by price ID
+        if (planId === SUBSCRIPTION_PLANS.ENTERPRISE && 
+            subscriptionData?.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
+            return true;
         }
+        
+        // Free plan check - only true if not matching pro or enterprise price IDs
+        if (planId === SUBSCRIPTION_PLANS.FREE && 
+            subscriptionData?.price_id !== 'price_1RGtkVG23sSyONuF8kQcAclk' && 
+            subscriptionData?.price_id !== 'price_1RGw3iG23sSyONuFGk8uD3XV') {
+            return true;
+        }
+        
+        // Default case - check if price_id exactly matches the requested planId
         return subscriptionData?.price_id === planId;
     };
     
