@@ -726,7 +726,7 @@ export default function Home() {
                 description: "AI Tutor performs a comprehensive accessibility audit of your website, identifying WCAG compliance issues and providing actionable recommendations for improvement.",
                 image: "/images/examples/tesla-analysis.jpg",
                 time: "11-min",
-                workflow: "Development"
+                workflow: "Coding"
               },
               {
                 icon: <Brain className="h-6 w-6 text-white" />,
