@@ -57,6 +57,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     // Get current month usage
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    startOfMonth.setHours(0, 0, 0, 0); // Match the exact pattern in ThreadPage
     const isoStartOfMonth = startOfMonth.toISOString();
     
     let totalAgentTime = 0;
@@ -71,41 +72,29 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     }
     
     if (threadIds.length > 0) {
-        // Add some debug logs to understand what's happening
-        console.log('[DEBUG] Querying agent runs with threadIds:', threadIds.length);
+        // COPY EXACT CODE FROM THREADPAGE - using same variable names, spacing, everything
+        const { data: agentRunData } = await supabaseClient
+          .from('agent_runs')
+          .select('started_at, completed_at')
+          .in('thread_id', threadIds)
+          .gte('started_at', startOfMonth.toISOString());
         
-        // Explicitly access the public schema for agent_runs, following your previous pattern
-        const { data: agentRuns, error: agentRunError } = await supabaseClient
-            .from('agent_runs') // This uses the default public schema
-            .select('started_at, completed_at')
-            .in('thread_id', threadIds)
-            .gte('started_at', isoStartOfMonth);
+        console.log('[DEBUG] Found agent runs:', agentRunData?.length);
         
-        // Log results to help diagnose
-        if (agentRunError) {
-            console.error('[DEBUG] Error fetching agent runs:', agentRunError);
+        let totalSeconds = 0;
+        if (agentRunData) {
+          totalSeconds = agentRunData.reduce((acc, run) => {
+            const start = new Date(run.started_at);
+            const end = run.completed_at ? new Date(run.completed_at) : new Date();
+            const seconds = (end.getTime() - start.getTime()) / 1000;
+            return acc + seconds;
+          }, 0);
         }
-        console.log('[DEBUG] Found agent runs:', agentRuns?.length);
         
-        if (agentRuns && agentRuns.length > 0) {
-            const nowTimestamp = now.getTime();
-            
-            totalAgentTime = agentRuns.reduce((total, run) => {
-                const startTime = new Date(run.started_at).getTime();
-                const endTime = run.completed_at 
-                    ? new Date(run.completed_at).getTime()
-                    : nowTimestamp;
-                
-                return total + (endTime - startTime) / 1000; // In seconds
-            }, 0);
-            
-            // Convert to minutes
-            const totalMinutes = Math.round(totalAgentTime / 60);
-            const remainingMinutes = Math.max(0, totalPlanMinutes - totalMinutes);
-            usageDisplay = `${totalMinutes}/${totalPlanMinutes} minutes (${remainingMinutes} remaining)`;
-        } else {
-            usageDisplay = `0/${totalPlanMinutes} minutes (${totalPlanMinutes} remaining)`;
-        }
+        // Convert seconds to minutes
+        const totalMinutes = Math.round(totalSeconds / 60);
+        const remainingMinutes = Math.max(0, totalPlanMinutes - totalMinutes);
+        usageDisplay = `${totalMinutes}/${totalPlanMinutes} minutes (${remainingMinutes} remaining)`;
     } else {
         usageDisplay = `0/${totalPlanMinutes} minutes (${totalPlanMinutes} remaining)`;
     }
