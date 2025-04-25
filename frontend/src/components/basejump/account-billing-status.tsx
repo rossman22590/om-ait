@@ -82,27 +82,12 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         }
     }
     
+    // Debug the issue
+    console.log('SUBSCRIPTION_PLANS.PRO', SUBSCRIPTION_PLANS.PRO);
+    console.log('subscriptionData?.price_id', subscriptionData?.price_id);
+    
     const isPlan = (planId?: string) => {
-        // Direct check for Pro by price ID
-        if (planId === SUBSCRIPTION_PLANS.PRO && 
-            subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
-            return true;
-        }
-        
-        // Direct check for Enterprise by price ID
-        if (planId === SUBSCRIPTION_PLANS.ENTERPRISE && 
-            subscriptionData?.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
-            return true;
-        }
-        
-        // Free plan check - only true if not matching pro or enterprise price IDs
-        if (planId === SUBSCRIPTION_PLANS.FREE && 
-            subscriptionData?.price_id !== 'price_1RGtkVG23sSyONuF8kQcAclk' && 
-            subscriptionData?.price_id !== 'price_1RGw3iG23sSyONuFGk8uD3XV') {
-            return true;
-        }
-        
-        // Default case - check if price_id exactly matches the requested planId
+        // Just do a direct comparison since SUBSCRIPTION_PLANS.XXX already contains the price_id
         return subscriptionData?.price_id === planId;
     };
     
