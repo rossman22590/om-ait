@@ -86,13 +86,37 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         return subscriptionData?.price_id === planId;
     };
     
-    const planName = isPlan(SUBSCRIPTION_PLANS.FREE) 
-        ? "Free" 
-        : isPlan(SUBSCRIPTION_PLANS.PRO)
-            ? "Pro"
-            : isPlan(SUBSCRIPTION_PLANS.ENTERPRISE)
-                ? "Enterprise"
-                : "Unknown";
+    // Get plan name with enhanced detection similar to client-side
+    let planName = "Free";
+    
+    if (subscriptionData?.status === 'active') {
+        // Check for the hardcoded Pro plan ID first (like in client-side)
+        if (subscriptionData.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
+            planName = "Pro";
+        } 
+        // Otherwise do normal checks
+        else if (isPlan(SUBSCRIPTION_PLANS.FREE)) {
+            planName = "Free";
+        } else if (isPlan(SUBSCRIPTION_PLANS.PRO)) {
+            planName = "Pro";
+        } else if (isPlan(SUBSCRIPTION_PLANS.ENTERPRISE)) {
+            planName = "Enterprise";
+        }
+        
+        // If we have a price_id but don't know what it is, try string comparisons
+        else if (subscriptionData.price_id) {
+            // Try string comparison
+            const priceIdString = String(subscriptionData.price_id).trim();
+            const proIdString = String(SUBSCRIPTION_PLANS.PRO).trim();
+            const enterpriseIdString = String(SUBSCRIPTION_PLANS.ENTERPRISE).trim();
+            
+            if (priceIdString === proIdString) {
+                planName = "Pro";
+            } else if (priceIdString === enterpriseIdString) {
+                planName = "Enterprise";
+            }
+        }
+    }
 
     return (
         <div className="rounded-xl border shadow-sm bg-card p-6">
