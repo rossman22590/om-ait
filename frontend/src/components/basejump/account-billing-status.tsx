@@ -63,15 +63,52 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     let planName = "Free"; // Default
     
     // Add additional logging to help debug
-    console.log('[Server] Checking subscription data:', subscriptionData?.price_id, 
+    console.log('[Server] FULL subscription data:', JSON.stringify(subscriptionData));
+    console.log('[Server] Checking subscription data:', 
+                'price_id:', subscriptionData?.price_id,
+                'status:', subscriptionData?.status,
                 'PRO ID:', SUBSCRIPTION_PLANS.PRO, 
                 'ENTERPRISE ID:', SUBSCRIPTION_PLANS.ENTERPRISE);
     
+    // Print actual constants for debugging
+    console.log('[Server] SUBSCRIPTION_PLANS constants:', {
+      FREE: SUBSCRIPTION_PLANS.FREE,
+      PRO: SUBSCRIPTION_PLANS.PRO,
+      ENTERPRISE: SUBSCRIPTION_PLANS.ENTERPRISE
+    });
+    
     // Only consider active subscriptions with matching price IDs
     if (subscriptionData?.status === 'active') {
-        if (subscriptionData.price_id === SUBSCRIPTION_PLANS.PRO) {
+        // Log the exact values and types for comparison
+        console.log('[Server] Comparison test:', {
+            price_id: subscriptionData.price_id,
+            pro_id: SUBSCRIPTION_PLANS.PRO,
+            enterprise_id: SUBSCRIPTION_PLANS.ENTERPRISE,
+            price_id_type: typeof subscriptionData.price_id,
+            pro_id_type: typeof SUBSCRIPTION_PLANS.PRO,
+            isPro: subscriptionData.price_id === SUBSCRIPTION_PLANS.PRO,
+            isEnterprise: subscriptionData.price_id === SUBSCRIPTION_PLANS.ENTERPRISE
+        });
+        
+        // Use string comparison as backup if direct equality fails
+        const proIdString = String(SUBSCRIPTION_PLANS.PRO).trim();
+        const enterpriseIdString = String(SUBSCRIPTION_PLANS.ENTERPRISE).trim();
+        const priceIdString = String(subscriptionData.price_id || '').trim();
+        
+        console.log('[Server] String comparison:', {
+          priceIdString,
+          proIdString,
+          enterpriseIdString,
+          stringMatchPro: priceIdString === proIdString,
+          stringMatchEnterprise: priceIdString === enterpriseIdString
+        });
+        
+        // Try both direct comparison and string comparison
+        if (subscriptionData.price_id === SUBSCRIPTION_PLANS.PRO || 
+            priceIdString === proIdString) {
             planName = "Pro";
-        } else if (subscriptionData.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
+        } else if (subscriptionData.price_id === SUBSCRIPTION_PLANS.ENTERPRISE || 
+                  priceIdString === enterpriseIdString) {
             planName = "Enterprise"; 
         } else {
             // If there's a subscription but not matching our known plans, default to Free

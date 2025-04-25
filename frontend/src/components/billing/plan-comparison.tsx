@@ -76,18 +76,60 @@ export function PlanComparison({
           .eq('status', 'active')
           .single();
         
-        console.log('[CLIENT] Raw subscription data:', data);
+        console.log('[CLIENT] Raw subscription data:', JSON.stringify(data));
+        console.log('[CLIENT] Checking subscription data:',
+                    'price_id:', data?.price_id,
+                    'status:', data?.status,
+                    'PRO ID:', SUBSCRIPTION_PLANS.PRO,
+                    'ENTERPRISE ID:', SUBSCRIPTION_PLANS.ENTERPRISE);
+        
+        // Print actual constants for debugging
+        console.log('[CLIENT] SUBSCRIPTION_PLANS constants:', {
+          FREE: SUBSCRIPTION_PLANS.FREE,
+          PRO: SUBSCRIPTION_PLANS.PRO,
+          ENTERPRISE: SUBSCRIPTION_PLANS.ENTERPRISE
+        });
         
         // Set the currentPlanId state for UI highlighting
         setCurrentPlanId(data?.price_id || SUBSCRIPTION_PLANS.FREE);
         
         // Make plan name accessible globally
         if (typeof window !== 'undefined') {
-          // Calculate current plan - FIXED to ensure it defaults to Free unless exact match found
-          // Only consider active subscriptions with valid price_id
+          // Calculate current plan - Using a more reliable string comparison
           const validSubscription = data && data.status === 'active' && data.price_id;
-          const isPro = validSubscription && data.price_id === SUBSCRIPTION_PLANS.PRO;
-          const isEnterprise = validSubscription && data.price_id === SUBSCRIPTION_PLANS.ENTERPRISE;
+          
+          // Log the exact values and types for comparison
+          console.log('[CLIENT] Comparison test:', {
+            price_id: data?.price_id,
+            pro_id: SUBSCRIPTION_PLANS.PRO,
+            enterprise_id: SUBSCRIPTION_PLANS.ENTERPRISE,
+            price_id_type: typeof data?.price_id,
+            pro_id_type: typeof SUBSCRIPTION_PLANS.PRO,
+            isPro: data?.price_id === SUBSCRIPTION_PLANS.PRO,
+            isEnterprise: data?.price_id === SUBSCRIPTION_PLANS.ENTERPRISE
+          });
+          
+          // Use string comparison as backup if direct equality fails
+          const proIdString = String(SUBSCRIPTION_PLANS.PRO).trim();
+          const enterpriseIdString = String(SUBSCRIPTION_PLANS.ENTERPRISE).trim();
+          const priceIdString = String(data?.price_id || '').trim();
+          
+          console.log('[CLIENT] String comparison:', {
+            priceIdString,
+            proIdString,
+            enterpriseIdString,
+            stringMatchPro: priceIdString === proIdString,
+            stringMatchEnterprise: priceIdString === enterpriseIdString
+          });
+          
+          // Try both direct comparison and string comparison
+          const isPro = validSubscription && 
+                       (data.price_id === SUBSCRIPTION_PLANS.PRO || 
+                        priceIdString === proIdString);
+                        
+          const isEnterprise = validSubscription && 
+                              (data.price_id === SUBSCRIPTION_PLANS.ENTERPRISE || 
+                               priceIdString === enterpriseIdString);
           
           if (isPro) {
             window.omCurrentPlan = "Pro";
