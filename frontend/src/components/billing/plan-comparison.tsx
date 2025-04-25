@@ -81,10 +81,10 @@ export function PlanComparison({
         // Make plan name accessible globally
         if (typeof window !== 'undefined') {
           // Calculate current plan
-          if (data?.price_id === SUBSCRIPTION_PLANS.PRO) {
+          if (data?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
             window.omCurrentPlan = "Pro";
             window.omPlanMinutes = 500;
-          } else if (data?.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
+          } else if (data?.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
             window.omCurrentPlan = "Enterprise";
             window.omPlanMinutes = 3000;
           } else {

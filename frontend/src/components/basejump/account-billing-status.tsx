@@ -5,7 +5,6 @@ import { SubmitButton } from "../ui/submit-button";
 import { manageSubscription } from "@/lib/actions/billing";
 import { PlanComparison, SUBSCRIPTION_PLANS } from "../billing/plan-comparison";
 import { isLocalMode } from "@/lib/config";
-import { DynamicPlanHeader } from "../billing/dynamic-plan-header";
 
 type Props = {
     accountId: string;
@@ -32,16 +31,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
 
     const supabaseClient = await createClient();
     
-    // Get account subscription and usage data - first get ALL subscriptions to debug
-    const { data: allSubscriptions } = await supabaseClient
-        .schema('basejump')
-        .from('billing_subscriptions')
-        .select('*')
-        .eq('account_id', accountId);
-    
-    console.log('[DIRECT DEBUG] All subscriptions:', allSubscriptions);
-    
-    // Now get the active one
+    // Get account subscription and usage data
     const { data: subscriptionData } = await supabaseClient
         .schema('basejump')
         .from('billing_subscriptions')
@@ -68,7 +58,6 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     
     let totalAgentTime = 0;
     let usageDisplay = "No usage this month";
-    let usageLimitDisplay = "";
     
     // Set the total minutes based on plan
     let totalPlanMinutes = 25; // Default free plan minutes
@@ -100,112 +89,69 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
             // Convert to minutes
             const totalMinutes = Math.round(totalAgentTime / 60);
             const remainingMinutes = Math.max(0, totalPlanMinutes - totalMinutes);
-            usageDisplay = `${totalMinutes} minutes`;
-            usageLimitDisplay = `${totalMinutes}/${totalPlanMinutes} minutes (${remainingMinutes} remaining)`;
+            usageDisplay = `${totalMinutes}/${totalPlanMinutes} minutes (${remainingMinutes} remaining)`;
+        } else {
+            usageDisplay = `0/${totalPlanMinutes} minutes (${totalPlanMinutes} remaining)`;
         }
     } else {
-        usageDisplay = "0 minutes";
-        usageLimitDisplay = `0/${totalPlanMinutes} minutes (${totalPlanMinutes} remaining)`;
+        usageDisplay = `0/${totalPlanMinutes} minutes (${totalPlanMinutes} remaining)`;
     }
     
-    // Debug the issue - FORCE UPDATE
+    // Debug the issue
     console.log('[UPDATED LOG] subscriptionData:', subscriptionData);
     console.log('[UPDATED LOG] price_id:', subscriptionData?.price_id);
-    console.log('[UPDATED LOG] PRO price ID should be:', 'price_1RGtkVG23sSyONuF8kQcAclk');
+    console.log('[UPDATED LOG] PRO price ID:', 'price_1RGtkVG23sSyONuF8kQcAclk');
     console.log('[UPDATED LOG] is Pro?', subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk');
     
     // Directly determine plan name based on price_id
-    let planName = "Unknown";
+    let planName = "Free";
     if (subscriptionData) {
         if (subscriptionData.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
             planName = "Pro";
         } else if (subscriptionData.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
             planName = "Enterprise";
-        } else if (!subscriptionData.price_id || subscriptionData.price_id === SUBSCRIPTION_PLANS.FREE) {
-            planName = "Free";
         }
-    } else {
-        planName = "Free";
     }
-    
-    // Keep isPlan for compatibility with other code
-    const isPlan = (planId?: string) => {
-        // Direct checks for known price IDs
-        if (planId === SUBSCRIPTION_PLANS.PRO && subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
-            return true;
-        }
-        if (planId === SUBSCRIPTION_PLANS.ENTERPRISE && subscriptionData?.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
-            return true;
-        }
-        if (planId === SUBSCRIPTION_PLANS.FREE && 
-            subscriptionData?.price_id !== 'price_1RGtkVG23sSyONuF8kQcAclk' && 
-            subscriptionData?.price_id !== 'price_1RGw3iG23sSyONuFGk8uD3XV') {
-            return true;
-        }
-        return subscriptionData?.price_id === planId;
-    };
     
     return (
         <div className="rounded-xl border shadow-sm bg-card p-6">
             <h2 className="text-xl font-semibold mb-4">Billing Status</h2>
             
-            {subscriptionData ? (
-                <>
-                    <div className="mb-6">
-                        <div className="rounded-lg border bg-background p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DynamicPlanHeader initialUsage={Math.round(totalAgentTime / 60)} />
+            <div className="mb-6">
+                <div className="rounded-lg border bg-background p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-foreground/90">Current Plan</span>
+                            <span className="text-sm font-medium text-card-title">{planName}</span>
                         </div>
                     </div>
-
-                    {/* Plans Comparison */}
-                    <PlanComparison
-                        accountId={accountId}
-                        returnUrl={returnUrl}
-                        className="mb-6"
-                    />
-
-                    {/* Manage Subscription Button */}
-                    <form>
-                        <input type="hidden" name="accountId" value={accountId} />
-                        <input type="hidden" name="returnUrl" value={returnUrl} />
-                        <SubmitButton
-                            pendingText="Loading..."
-                            formAction={manageSubscription}
-                            className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
-                        >
-                            Manage Subscription
-                        </SubmitButton>
-                    </form>
-                </>
-            ) : (
-                <>
-                    <div className="mb-6">
-                        <div className="rounded-lg border bg-background p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <DynamicPlanHeader initialUsage={0} />
-                        </div>
+                    
+                    <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
+                        <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
                     </div>
+                </div>
+            </div>
 
-                    {/* Plans Comparison */}
-                    <PlanComparison
-                        accountId={accountId}
-                        returnUrl={returnUrl}
-                        className="mb-6"
-                    />
+            {/* Plans Comparison */}
+            <PlanComparison
+                accountId={accountId}
+                returnUrl={returnUrl}
+                className="mb-6"
+            />
 
-                    {/* Manage Subscription Button */}
-                    <form>
-                        <input type="hidden" name="accountId" value={accountId} />
-                        <input type="hidden" name="returnUrl" value={returnUrl} />
-                        <SubmitButton
-                            pendingText="Loading..."
-                            formAction={manageSubscription}
-                            className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
-                        >
-                            Manage Subscription
-                        </SubmitButton>
-                    </form>
-                </>
-            )}
+            {/* Manage Subscription Button */}
+            <form>
+                <input type="hidden" name="accountId" value={accountId} />
+                <input type="hidden" name="returnUrl" value={returnUrl} />
+                <SubmitButton
+                    pendingText="Loading..."
+                    formAction={manageSubscription}
+                    className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
+                >
+                    Manage Subscription
+                </SubmitButton>
+            </form>
         </div>
     )
 }
