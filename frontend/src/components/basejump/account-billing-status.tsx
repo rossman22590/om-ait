@@ -100,13 +100,11 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     }
     
     // Determine plan name based on total minutes
-    let planName = "Free";
-    if (subscriptionData) {
-        if (subscriptionData.price_id === SUBSCRIPTION_PLANS.PRO) {
-            planName = "Pro";
-        } else if (subscriptionData.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
-            planName = "Enterprise";
-        }
+    let planName = "Free"; // Default
+    if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.PRO) {
+        planName = "Pro";
+    } else if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
+        planName = "Enterprise"; 
     }
 
     return (
