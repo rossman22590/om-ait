@@ -108,8 +108,19 @@ class SandboxDeployTool(SandboxToolsBase):
                 print(f"Deployment command output: {response.result}")
                 
                 if response.exit_code == 0:
+                    # Extract the correct URL from the output
+                    import re
+                    # Look for the proper pages.dev URL format
+                    url_match = re.search(r'https?://([a-zA-Z0-9-]+\.pages\.dev)', response.result)
+                    deployment_url = url_match.group(0) if url_match else None
+                    
+                    # If we couldn't find the URL, construct it from the project name
+                    if not deployment_url:
+                        deployment_url = f"https://{project_name}.pages.dev"
+                    
                     return self.success_response({
                         "message": f"Website deployed successfully",
+                        "url": deployment_url,
                         "output": response.result
                     })
                 else:
@@ -139,4 +150,3 @@ if __name__ == "__main__":
         print(f"Deployment result: {result}")
             
     asyncio.run(test_deploy())
-
