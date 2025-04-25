@@ -80,18 +80,22 @@ export function PlanComparison({
         
         // Make plan name accessible globally
         if (typeof window !== 'undefined') {
-          // Calculate current plan
-          if (data?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
+          // Calculate current plan - FIXED to ensure it defaults to Free unless exact match found
+          const isPro = data?.price_id === SUBSCRIPTION_PLANS.PRO;
+          const isEnterprise = data?.price_id === SUBSCRIPTION_PLANS.ENTERPRISE;
+          
+          if (isPro) {
             window.omCurrentPlan = "Pro";
             window.omPlanMinutes = 500;
-          } else if (data?.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
+          } else if (isEnterprise) {
             window.omCurrentPlan = "Enterprise";
             window.omPlanMinutes = 3000;
           } else {
+            // Any non-matching price_id or no subscription should be Free
             window.omCurrentPlan = "Free";
             window.omPlanMinutes = 25;
           }
-          console.log('Set global plan:', window.omCurrentPlan, window.omPlanMinutes);
+          console.log('[DEBUG] Set global plan:', window.omCurrentPlan, window.omPlanMinutes);
         }
       } else {
         setCurrentPlanId(SUBSCRIPTION_PLANS.FREE);
