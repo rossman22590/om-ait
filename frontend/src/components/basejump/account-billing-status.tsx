@@ -124,10 +124,38 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
 
     // Set plan minutes based on detected plan
     let totalPlanMinutes = 25; // Default free plan
+    
+    // BETTER APPROACH: Use client-side globals on the server if available
+    if (typeof window !== 'undefined' && window.omCurrentPlan) {
+      console.log('[Server] Using client detection from window:', window.omCurrentPlan, window.omPlanMinutes);
+      planName = window.omCurrentPlan;
+      if (window.omPlanMinutes) {
+        totalPlanMinutes = window.omPlanMinutes;
+      }
+    } else {
+      // Fallback to more reliable string comparison for server
+      if (subscriptionData?.status === 'active' && subscriptionData.price_id) {
+        const priceIdString = String(subscriptionData.price_id).trim();
+        const proIdString = String(SUBSCRIPTION_PLANS.PRO).trim();
+        const enterpriseIdString = String(SUBSCRIPTION_PLANS.ENTERPRISE).trim();
+        
+        if (priceIdString === proIdString) {
+          planName = "Pro";
+          totalPlanMinutes = 500;
+        } else if (priceIdString === enterpriseIdString) {
+          planName = "Enterprise";
+          totalPlanMinutes = 3000;
+        }
+      }
+    }
+    
+    console.log('[Server] Final plan determination:', planName, totalPlanMinutes);
+    
+    // This is redundant but kept for safety
     if (planName === "Pro") {
-        totalPlanMinutes = 500; // Pro plan minutes
+        totalPlanMinutes = 500;
     } else if (planName === "Enterprise") {
-        totalPlanMinutes = 3000; // Enterprise plan minutes
+        totalPlanMinutes = 3000;
     }
     
     if (threadIds.length > 0) {
@@ -162,10 +190,13 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
 
     return (
         <div className="not-prose grid gap-2">
+            {/* Force reuse the client side detection result when rendering */}
             <ClientSideDetectionFallback 
                 planName={planName} 
                 totalPlanMinutes={totalPlanMinutes} 
                 agentMinutesUsed={Math.round(totalAgentTime / 60)} 
+                accountId={accountId}
+                returnUrl={returnUrl}
             />
         </div>
     );
@@ -175,11 +206,15 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
 function ClientSideDetectionFallback({ 
   planName: serverPlanName, 
   totalPlanMinutes: serverTotalMinutes,
-  agentMinutesUsed
+  agentMinutesUsed,
+  accountId,
+  returnUrl
 }: { 
   planName: string, 
   totalPlanMinutes: number,
-  agentMinutesUsed: number
+  agentMinutesUsed: number,
+  accountId: string,
+  returnUrl: string
 }) {
   const [planName, setPlanName] = useState(serverPlanName);
   const [totalPlanMinutes, setTotalPlanMinutes] = useState(serverTotalMinutes);
