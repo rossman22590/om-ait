@@ -86,19 +86,37 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     console.log('SUBSCRIPTION_PLANS.PRO', SUBSCRIPTION_PLANS.PRO);
     console.log('subscriptionData?.price_id', subscriptionData?.price_id);
     
+    // Directly determine plan name based on price_id
+    let planName = "Unknown";
+    if (subscriptionData) {
+        if (subscriptionData.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
+            planName = "Pro";
+        } else if (subscriptionData.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
+            planName = "Enterprise";
+        } else if (!subscriptionData.price_id || subscriptionData.price_id === SUBSCRIPTION_PLANS.FREE) {
+            planName = "Free";
+        }
+    } else {
+        planName = "Free";
+    }
+    
+    // Keep isPlan for compatibility with other code
     const isPlan = (planId?: string) => {
-        // Just do a direct comparison since SUBSCRIPTION_PLANS.XXX already contains the price_id
+        // Direct checks for known price IDs
+        if (planId === SUBSCRIPTION_PLANS.PRO && subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
+            return true;
+        }
+        if (planId === SUBSCRIPTION_PLANS.ENTERPRISE && subscriptionData?.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
+            return true;
+        }
+        if (planId === SUBSCRIPTION_PLANS.FREE && 
+            subscriptionData?.price_id !== 'price_1RGtkVG23sSyONuF8kQcAclk' && 
+            subscriptionData?.price_id !== 'price_1RGw3iG23sSyONuFGk8uD3XV') {
+            return true;
+        }
         return subscriptionData?.price_id === planId;
     };
     
-    const planName = isPlan(SUBSCRIPTION_PLANS.FREE) 
-        ? "Free" 
-        : isPlan(SUBSCRIPTION_PLANS.PRO)
-            ? "Pro"
-            : isPlan(SUBSCRIPTION_PLANS.ENTERPRISE)
-                ? "Enterprise"
-                : "Unknown";
-
     return (
         <div className="rounded-xl border shadow-sm bg-card p-6">
             <h2 className="text-xl font-semibold mb-4">Billing Status</h2>
