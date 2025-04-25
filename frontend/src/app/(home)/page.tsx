@@ -1014,23 +1014,23 @@ export default function Home() {
             </div>
             
             <div>
-              <h3 className="text-base font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-5">Product</h3>
-              <ul className="space-y-4">
+              {/* <h3 className="text-base font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-5">Product</h3> */}
+              {/* <ul className="space-y-4">
                 <li><Link href="#features" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Features</Link></li>
                 <li><Link href="#pricing" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Pricing</Link></li>
                 <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Use Cases</Link></li>
                 <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Documentation</Link></li>
-              </ul>
+              </ul> */}
             </div>
             
             <div>
-              <h3 className="text-base font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-5">Company</h3>
-              <ul className="space-y-4">
+              {/* <h3 className="text-base font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-5">Company</h3> */}
+              {/* <ul className="space-y-4">
                 <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">About</Link></li>
                 <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Blog</Link></li>
                 <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Careers</Link></li>
                 <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Contact</Link></li>
-              </ul>
+              </ul> */}
             </div>
           </div>
           
