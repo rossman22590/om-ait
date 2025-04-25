@@ -9,6 +9,20 @@ type Props = {
     returnUrl: string;
 }
 
+// Exact plan IDs from the environment and client logs for reliability
+const PLAN_IDS = {
+    FREE: 'price_1RGtl4G23sSyONuFYWYsA0HK',
+    PRO: 'price_1RGtkVG23sSyONuF8kQcAclk',
+    ENTERPRISE: 'price_1RGw3iG23sSyONuFGk8uD3XV',
+};
+
+// Plan limits mapping
+const PLAN_LIMITS = {
+    "Free": 25,
+    "Pro": 500,
+    "Enterprise": 3000
+};
+
 export default async function AccountBillingStatus({ accountId, returnUrl }: Props) {
     // In local development mode, show a simplified component
     if (isLocalMode()) {
@@ -39,11 +53,26 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         .limit(1)
         .order('created_at', { ascending: false })
         .single();
+    
+    // Detect plan name from subscription data
+    let planName = "Free"; // Default to Free
 
-    console.log('Server-side subscription data:', subscriptionData);
+    if (subscriptionData?.status === 'active' && subscriptionData?.price_id) {
+        const priceId = String(subscriptionData.price_id).trim();
+        
+        // Check for Pro plan ID with multiple ways of identifying it
+        if (priceId === PLAN_IDS.PRO || 
+            priceId === SUBSCRIPTION_PLANS.PRO) {
+            planName = "Pro";
+        } 
+        // Check for Enterprise plan ID
+        else if (priceId === PLAN_IDS.ENTERPRISE || 
+                 priceId === SUBSCRIPTION_PLANS.ENTERPRISE) {
+            planName = "Enterprise";
+        }
+    }
     
     // Get agent runs for this account
-    // Get the account's threads
     const { data: threads } = await supabaseClient
         .from('threads')
         .select('thread_id')
@@ -56,8 +85,8 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const isoStartOfMonth = startOfMonth.toISOString();
     
-    let totalAgentTime = 0;
-    let usageDisplay = "No usage this month";
+    // Calculate usage in minutes
+    let minutes = 0;
     
     if (threadIds.length > 0) {
         const { data: agentRuns } = await supabaseClient
@@ -69,7 +98,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         if (agentRuns && agentRuns.length > 0) {
             const nowTimestamp = now.getTime();
             
-            totalAgentTime = agentRuns.reduce((total, run) => {
+            const totalAgentTime = agentRuns.reduce((total, run) => {
                 const startTime = new Date(run.started_at).getTime();
                 const endTime = run.completed_at 
                     ? new Date(run.completed_at).getTime()
@@ -79,47 +108,16 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
             }, 0);
             
             // Convert to minutes
-            const totalMinutes = Math.round(totalAgentTime / 60);
-            usageDisplay = `${totalMinutes} minutes`;
-        }
-    }
-    
-    // Pro plan detection with string comparison exactly like client-side does
-    let planName = "Free";
-    if (subscriptionData?.status === 'active' && subscriptionData?.price_id) {
-        const priceId = String(subscriptionData.price_id).trim();
-        
-        if (priceId === 'price_1RGtkVG23sSyONuF8kQcAclk' || 
-            priceId === SUBSCRIPTION_PLANS.PRO) {
-            planName = "Pro";
-        } else if (priceId === SUBSCRIPTION_PLANS.ENTERPRISE) {
-            planName = "Enterprise";
+            minutes = Math.round(totalAgentTime / 60);
         }
     }
 
-    // Formatter for usage display with count against plan limit
-    function formatUsageDisplay(minutes: number, planName: string): string {
-        const planLimits = {
-            "Free": 25,
-            "Pro": 500,
-            "Enterprise": 3000
-        };
-        const limit = planLimits[planName as keyof typeof planLimits] || 25;
-        const remaining = Math.max(0, limit - minutes);
-        
-        // Format with minutes remaining
-        return minutes > 0 ? 
-            `${minutes}/${limit} minutes (${remaining} remaining)` : 
-            "No usage this month";
-    }
-    
-    // Format usage nicely if we have real usage
-    if (usageDisplay !== "No usage this month") {
-        const minutes = parseInt(usageDisplay);
-        if (!isNaN(minutes)) {
-            usageDisplay = formatUsageDisplay(minutes, planName);
-        }
-    }
+    // Format usage with accurate plan limits
+    const planLimit = PLAN_LIMITS[planName as keyof typeof PLAN_LIMITS];
+    const remaining = Math.max(0, planLimit - minutes);
+    const usageDisplay = minutes > 0 
+        ? `${minutes}/${planLimit} minutes (${remaining} remaining)` 
+        : "No usage this month";
 
     return (
         <div className="rounded-xl border shadow-sm bg-card p-6">
