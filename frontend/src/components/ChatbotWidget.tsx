@@ -20,27 +20,27 @@ const ChatbotWidget = () => {
     
     // Intercom script
     (function(){
-      var w = window as any;
-      var ic = w.Intercom;
+      const w = window as any;
+      const ic = w.Intercom;
       if(typeof ic === "function"){
         ic('reattach_activator');
         ic('update', w.intercomSettings);
       } else {
-        var d = document;
-        var i: any = function(){
-          (i.c as any)(arguments);
+        const d = document;
+        const i: any = function(...args: any[]){
+          (i.c as any)(args);
         };
         i.q = [];
         i.c = function(args: any){
           i.q.push(args);
         };
         w.Intercom = i;
-        var l = function(){
-          var s = d.createElement('script');
+        const l = function(){
+          const s = d.createElement('script');
           s.type = 'text/javascript';
           s.async = true;
           s.src = 'https://widget.intercom.io/widget/cqwzmjsm';
-          var x = d.getElementsByTagName('script')[0];
+          const x = d.getElementsByTagName('script')[0];
           x.parentNode?.insertBefore(s,x);
         };
         if(document.readyState === 'complete'){
