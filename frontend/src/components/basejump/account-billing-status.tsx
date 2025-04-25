@@ -19,32 +19,26 @@ const PLAN_LIMITS = {
     "Enterprise": 3000
 };
 
-// Cache for subscription plan - used to force "Pro" display when we know the account has Pro
-// This hardcoded override ensures the UI shows correctly even if window.omCurrentPlan isn't set yet
-const FORCE_PLAN = "Pro";
-
 export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
     // Setup state for client-side rendering
-    const [planName, setPlanName] = useState<string>(FORCE_PLAN);
+    const [planName, setPlanName] = useState<string>("Free");
     const [usageDisplay, setUsageDisplay] = useState<string>("Calculating...");
-    const [planLimit, setPlanLimit] = useState<number>(PLAN_LIMITS[FORCE_PLAN]);
+    const [planLimit, setPlanLimit] = useState<number>(PLAN_LIMITS["Free"]);
 
     // Define calculateUsage in a useCallback - MUST BE BEFORE ANY RETURNS
     const calculateUsage = useCallback(async () => {
         try {
-            // Default to our known plan setting for this account
-            let currentPlan = FORCE_PLAN;
-            
-            // Try to get plan from window, but don't wait for it specifically
-            if (typeof window !== 'undefined' && window.omCurrentPlan) {
-                currentPlan = window.omCurrentPlan;
-                console.log("Plan detected from window:", currentPlan);
-            }
-            
+            // Get the current plan from window global (set by PlanComparison component) 
+            // The PlanComparison component should be the source of truth for plan status
+            const currentPlan = typeof window !== 'undefined' && window.omCurrentPlan 
+                ? window.omCurrentPlan 
+                : "Free"; // Default to Free if not set
+                
+            console.log("Current plan from window:", currentPlan);
             setPlanName(currentPlan);
-            
+
             // Determine plan limit (Free=25, Pro=500, Enterprise=3000)
-            const limit = PLAN_LIMITS[currentPlan as keyof typeof PLAN_LIMITS] || 500;
+            const limit = PLAN_LIMITS[currentPlan as keyof typeof PLAN_LIMITS] || PLAN_LIMITS.Free;
             setPlanLimit(limit);
 
             // Get agent runs for this account
@@ -91,10 +85,10 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
             }
 
             // Format usage based on the current plan limit
-            const remaining = Math.max(0, limit - minutes);
+            const remaining = Math.max(0, planLimit - minutes);
             
             const formattedUsage = minutes > 0 
-                ? `${minutes}/${limit} minutes (${remaining} remaining)` 
+                ? `${minutes}/${planLimit} minutes (${remaining} remaining)` 
                 : "No usage this month";
                 
             setUsageDisplay(formattedUsage);
@@ -102,19 +96,25 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
             console.error("Error calculating usage:", error);
             setUsageDisplay("Error calculating usage");
         }
-    }, [accountId]); // Properly include accountId dependency
+    }, [accountId, planLimit]); // Properly include accountId dependency
 
     // Use effect to calculate usage - MUST BE BEFORE ANY RETURNS
     useEffect(() => {
+        // Initial calculation
         calculateUsage();
         
-        // Additionally, listen for changes to window.omCurrentPlan
+        // Set up a listener for the PlanComparison component to set the plan
+        // This ensures our header always matches what's shown in the plan comparison
         const checkInterval = setInterval(() => {
-            if (typeof window !== 'undefined' && window.omCurrentPlan && window.omCurrentPlan !== planName) {
-                console.log("Plan updated from window:", window.omCurrentPlan);
-                calculateUsage();
+            if (typeof window !== 'undefined' && window.omCurrentPlan) {
+                const windowPlan = window.omCurrentPlan;
+                // Only recalculate if the plan changed
+                if (windowPlan !== planName) {
+                    console.log("Plan changed from window:", windowPlan);
+                    calculateUsage();
+                }
             }
-        }, 500); // Check every 500ms
+        }, 500);
         
         return () => clearInterval(checkInterval);
     }, [calculateUsage, planName]);
