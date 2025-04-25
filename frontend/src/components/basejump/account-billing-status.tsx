@@ -3,7 +3,6 @@ import { SubmitButton } from "../ui/submit-button";
 import { manageSubscription } from "@/lib/actions/billing";
 import { PlanComparison, SUBSCRIPTION_PLANS } from "../billing/plan-comparison";
 import { isLocalMode } from "@/lib/config";
-import { formatUsageDisplay, getPlanMinutes } from "@/lib/plan-labels";
 
 type Props = {
     accountId: string;
@@ -57,7 +56,6 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     
     let totalAgentTime = 0;
     let usageDisplay = "No usage this month";
-    let totalMinutes = 0;
     
     if (threadIds.length > 0) {
         const { data: agentRuns } = await supabaseClient
@@ -79,7 +77,8 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
             }, 0);
             
             // Convert to minutes
-            totalMinutes = Math.round(totalAgentTime / 60);
+            const totalMinutes = Math.round(totalAgentTime / 60);
+            usageDisplay = `${totalMinutes} minutes`;
         }
     }
     
@@ -93,13 +92,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
             ? "Pro"
             : isPlan(SUBSCRIPTION_PLANS.ENTERPRISE)
                 ? "Enterprise"
-                : "Free";
-
-    // Use the helper to format the usage display
-    const planMinutes = getPlanMinutes(planName);
-    usageDisplay = totalMinutes > 0 
-        ? formatUsageDisplay(totalMinutes, planMinutes)
-        : "No usage this month";
+                : "Unknown";
 
     return (
         <div className="rounded-xl border shadow-sm bg-card p-6">

@@ -1,28 +1,20 @@
 'use client';
 
-// Add TypeScript declarations for our global variables
-declare global {
-  interface Window {
-    omCurrentPlan?: string;
-    omPlanMinutes?: number;
-  }
-}
-
-import { Button } from "@/components/ui/button";
-import { SubmitButton } from "@/components/ui/submit-button";
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { motion } from "motion/react";
 import { setupNewSubscription } from "@/lib/actions/billing";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/home";
 import { isLocalMode } from "@/lib/config";
 
 // Create SUBSCRIPTION_PLANS using stripePriceId from siteConfig
 export const SUBSCRIPTION_PLANS = {
-  FREE: process.env.NEXT_PUBLIC_STRIPE_FREE_PLAN_ID || '',
-  PRO: process.env.NEXT_PUBLIC_STRIPE_PRO_PLAN_ID || '',
-  ENTERPRISE: process.env.NEXT_PUBLIC_STRIPE_ENTERPRISE_PLAN_ID || '',
+  FREE: siteConfig.cloudPricingItems.find(item => item.name === 'Free')?.stripePriceId || '',
+  PRO: siteConfig.cloudPricingItems.find(item => item.name === 'Pro')?.stripePriceId || '',
+  ENTERPRISE: siteConfig.cloudPricingItems.find(item => item.name === 'Enterprise')?.stripePriceId || '',
 };
 
 // Price display animation component
@@ -65,148 +57,24 @@ export function PlanComparison({
 
   useEffect(() => {
     async function fetchCurrentPlan() {
-      // This function runs on every page refresh to detect the current plan
       if (accountId) {
         const supabase = createClient();
-        let data;
+        const { data } = await supabase
+          .schema('basejump')
+          .from('billing_subscriptions')
+          .select('price_id')
+          .eq('account_id', accountId)
+          .eq('status', 'active')
+          .single();
         
-        try {
-          // Try basejump schema first
-          const result = await supabase
-            .schema('basejump')
-            .from('billing_subscriptions')
-            .select('price_id, status')
-            .eq('account_id', accountId)
-            .eq('status', 'active')
-            .single();
-            
-          data = result.data;
-        } catch (err) {
-          console.log('[CLIENT] Error with basejump schema, falling back to public schema:', err.message);
-          // Fall back to public schema if basejump fails
-          try {
-            const result = await supabase
-              .from('billing_subscriptions')
-              .select('price_id, status')
-              .eq('account_id', accountId)
-              .eq('status', 'active')
-              .single();
-              
-            data = result.data;
-          } catch (err) {
-            console.log('[CLIENT] Error with public schema too:', err.message);
-            data = null;
-          }
-        }
-        
-        console.log('[CLIENT] Raw subscription data:', JSON.stringify(data));
-        console.log('[CLIENT] Checking subscription data:',
-                    'price_id:', data?.price_id,
-                    'status:', data?.status,
-                    'PRO ID:', SUBSCRIPTION_PLANS.PRO,
-                    'ENTERPRISE ID:', SUBSCRIPTION_PLANS.ENTERPRISE);
-        
-        // Print actual constants for debugging
-        console.log('[CLIENT] SUBSCRIPTION_PLANS constants:', {
-          FREE: SUBSCRIPTION_PLANS.FREE,
-          PRO: SUBSCRIPTION_PLANS.PRO,
-          ENTERPRISE: SUBSCRIPTION_PLANS.ENTERPRISE
-        });
-        
-        // Set the currentPlanId state for UI highlighting
         setCurrentPlanId(data?.price_id || SUBSCRIPTION_PLANS.FREE);
-        
-        // Make plan name accessible globally
-        if (typeof window !== 'undefined') {
-          // Calculate current plan - Using a more reliable string comparison
-          const validSubscription = data && data.status === 'active' && data.price_id;
-          
-          // Log the exact values and types for comparison
-          console.log('[CLIENT] Comparison test:', {
-            price_id: data?.price_id,
-            pro_id: SUBSCRIPTION_PLANS.PRO,
-            enterprise_id: SUBSCRIPTION_PLANS.ENTERPRISE,
-            price_id_type: typeof data?.price_id,
-            pro_id_type: typeof SUBSCRIPTION_PLANS.PRO,
-            isPro: data?.price_id === SUBSCRIPTION_PLANS.PRO,
-            isEnterprise: data?.price_id === SUBSCRIPTION_PLANS.ENTERPRISE
-          });
-          
-          // Make our string comparison more robust with explicit type conversion
-          const priceIdString = String(data?.price_id || '').trim();
-          const proIdString = String(SUBSCRIPTION_PLANS.PRO).trim();
-          const enterpriseIdString = String(SUBSCRIPTION_PLANS.ENTERPRISE).trim();
-          
-          console.log('[CLIENT] String comparison:', {
-            priceIdString,
-            proIdString,
-            enterpriseIdString,
-            stringMatchPro: priceIdString === proIdString,
-            stringMatchEnterprise: priceIdString === enterpriseIdString
-          });
-          
-          // SPECIAL HARDCODED DETECTION: If we see the exact Pro plan ID from logs, force Pro status
-          if (data?.status === 'active' && data?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
-            console.log('[CLIENT] HARDCODED PRO MATCH DETECTED!');
-            
-            // Force Pro plan detection on the page
-            if (typeof window !== 'undefined') {
-              window.omCurrentPlan = "Pro";
-              window.omPlanMinutes = 500;
-            }
-            
-            setCurrentPlanId(SUBSCRIPTION_PLANS.PRO);
-          }
-          // Otherwise do normal detection
-          else if (validSubscription) {
-            // Use string comparison as backup if direct equality fails
-            const proIdString = String(SUBSCRIPTION_PLANS.PRO).trim();
-            const enterpriseIdString = String(SUBSCRIPTION_PLANS.ENTERPRISE).trim();
-            const priceIdString = String(data?.price_id || '').trim();
-            
-            console.log('[CLIENT] String comparison:', {
-              priceIdString,
-              proIdString,
-              enterpriseIdString,
-              stringMatchPro: priceIdString === proIdString,
-              stringMatchEnterprise: priceIdString === enterpriseIdString
-            });
-            
-            // Try both direct comparison and string comparison
-            const isPro = validSubscription && 
-                         (data.price_id === SUBSCRIPTION_PLANS.PRO || 
-                          priceIdString === proIdString);
-                          
-            const isEnterprise = validSubscription && 
-                                (data.price_id === SUBSCRIPTION_PLANS.ENTERPRISE || 
-                                 priceIdString === enterpriseIdString);
-            
-            if (isPro) {
-              window.omCurrentPlan = "Pro";
-              window.omPlanMinutes = 500;
-            } else if (isEnterprise) {
-              window.omCurrentPlan = "Enterprise";
-              window.omPlanMinutes = 3000;
-            } else {
-              // Any non-matching price_id or no subscription should be Free
-              window.omCurrentPlan = "Free";
-              window.omPlanMinutes = 25;
-            }
-            console.log('[CLIENT] Set global plan:', window.omCurrentPlan, window.omPlanMinutes, 'based on price_id:', data?.price_id);
-          }
-        }
       } else {
         setCurrentPlanId(SUBSCRIPTION_PLANS.FREE);
-        if (typeof window !== 'undefined') {
-          window.omCurrentPlan = "Free";
-          window.omPlanMinutes = 25;
-        }
       }
     }
     
     fetchCurrentPlan();
   }, [accountId]);
-
 
   // For local development mode, show a message instead
   if (isLocalMode()) {
@@ -356,7 +224,7 @@ export function PlanComparison({
                 <SubmitButton
                   pendingText="..."
                   formAction={setupNewSubscription}
-                  disabled={isCurrentPlan}
+                  // disabled={isCurrentPlan}
                   className={cn(
                     "w-full font-medium transition-colors",
                     isCompact 
