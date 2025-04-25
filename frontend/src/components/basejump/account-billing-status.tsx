@@ -56,8 +56,11 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         .eq('account_id', accountId);
     
     console.log('[DEBUG] All subscriptions:', allSubscriptions?.length);
+    console.log('[DEBUG] SUBSCRIPTION_PLANS:', SUBSCRIPTION_PLANS);
+    console.log('[DEBUG] PRO plan ID from constants:', SUBSCRIPTION_PLANS.PRO);
+    
     allSubscriptions?.forEach((sub, i) => {
-        console.log(`[DEBUG] Subscription ${i}:`, sub.price_id, sub.status);
+        console.log(`[DEBUG] Subscription ${i}:`, sub.price_id, sub.status, 'Is PRO match?', sub.price_id === SUBSCRIPTION_PLANS.PRO);
     });
     
     // Get agent runs for this account
@@ -79,10 +82,22 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     
     // Set the total minutes based on plan
     let totalPlanMinutes = 25; // Default free plan minutes
-    if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.PRO) {
+    if (subscriptionData?.price_id && 
+        (subscriptionData.price_id === SUBSCRIPTION_PLANS.PRO || 
+         subscriptionData.price_id.includes('RGtkVG23sSyONuF8kQcAclk'))) {
         totalPlanMinutes = 500; // Pro plan
-    } else if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
+    } else if (subscriptionData?.price_id && 
+               (subscriptionData.price_id === SUBSCRIPTION_PLANS.ENTERPRISE || 
+                subscriptionData.price_id.includes('RGw3iG23sSyONuFGk8uD3XV'))) {
         totalPlanMinutes = 3000; // Enterprise plan
+    }
+    
+    // Determine plan name based on total minutes
+    let planName = "Free";
+    if (totalPlanMinutes === 500) {
+        planName = "Pro";
+    } else if (totalPlanMinutes === 3000) {
+        planName = "Enterprise";
     }
     
     if (threadIds.length > 0) {
@@ -116,20 +131,6 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         usageDisplay = `0/${totalPlanMinutes} minutes (${totalPlanMinutes} remaining)`;
     }
     
-    // Directly determine plan name based on price_id
-    const isPlan = (planId?: string) => {
-        return subscriptionData?.price_id === planId;
-    };
-    
-    let planName = "Free";
-    if (subscriptionData) {
-        if (subscriptionData.price_id === SUBSCRIPTION_PLANS.PRO) {
-            planName = "Pro";
-        } else if (subscriptionData.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
-            planName = "Enterprise";
-        }
-    }
-
     return (
         <div className="rounded-xl border shadow-sm bg-card p-6">
             <h2 className="text-xl font-semibold mb-4">Billing Status</h2>
