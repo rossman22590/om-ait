@@ -24,24 +24,7 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
     const [planName, setPlanName] = useState<string>("Free");
     const [usageDisplay, setUsageDisplay] = useState<string>("Calculating...");
 
-    // In local development mode, show a simplified component
-    if (isLocalMode()) {
-        return (
-            <div className="rounded-xl border shadow-sm bg-card p-6">
-                <h2 className="text-xl font-semibold mb-4">Billing Status</h2>
-                <div className="p-4 mb-4 bg-muted/30 border border-border rounded-lg text-center">
-                    <p className="text-sm text-muted-foreground">
-                        Running in local development mode - billing features are disabled
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                        Agent usage limits are not enforced in this environment
-                    </p>
-                </div>
-            </div>
-        );
-    }
-
-    // Define calculateUsage in a useCallback
+    // Define calculateUsage in a useCallback - MUST BE BEFORE ANY RETURNS
     const calculateUsage = useCallback(async () => {
         try {
             // Get the current plan from window global (set by PlanComparison component)
@@ -106,10 +89,27 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
         }
     }, [accountId]); // Properly include accountId dependency
 
-    // Use effect to calculate usage and read the plan from window after component mounts
+    // Use effect to calculate usage - MUST BE BEFORE ANY RETURNS
     useEffect(() => {
         calculateUsage();
     }, [calculateUsage]); // This ensures proper dependency tracking
+
+    // In local development mode, show a simplified component
+    if (isLocalMode()) {
+        return (
+            <div className="rounded-xl border shadow-sm bg-card p-6">
+                <h2 className="text-xl font-semibold mb-4">Billing Status</h2>
+                <div className="p-4 mb-4 bg-muted/30 border border-border rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground">
+                        Running in local development mode - billing features are disabled
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                        Agent usage limits are not enforced in this environment
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="rounded-xl border shadow-sm bg-card p-6">
