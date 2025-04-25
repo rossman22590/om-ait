@@ -42,6 +42,24 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         .order('created_at', { ascending: false })
         .single();
     
+    console.log('[DEBUG] Subscription Data:', JSON.stringify(subscriptionData, null, 2));
+    console.log('[DEBUG] Raw price_id:', subscriptionData?.price_id);
+    console.log('[DEBUG] Expected Pro price_id: price_1RGtkVG23sSyONuF8kQcAclk');
+    console.log('[DEBUG] Direct comparison result:', subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk');
+    console.log('[DEBUG] SUBSCRIPTION_PLANS:', SUBSCRIPTION_PLANS);
+    
+    // Also check if we have MULTIPLE subscriptions
+    const { data: allSubscriptions } = await supabaseClient
+        .schema('basejump')
+        .from('billing_subscriptions')
+        .select('*')
+        .eq('account_id', accountId);
+    
+    console.log('[DEBUG] All subscriptions:', allSubscriptions?.length);
+    allSubscriptions?.forEach((sub, i) => {
+        console.log(`[DEBUG] Subscription ${i}:`, sub.price_id, sub.status);
+    });
+    
     // Get agent runs for this account
     // Get the account's threads
     const { data: threads } = await supabaseClient
@@ -61,9 +79,9 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     
     // Set the total minutes based on plan
     let totalPlanMinutes = 25; // Default free plan minutes
-    if (subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
+    if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.PRO) {
         totalPlanMinutes = 500; // Pro plan
-    } else if (subscriptionData?.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
+    } else if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
         totalPlanMinutes = 3000; // Enterprise plan
     }
     
@@ -105,9 +123,9 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     
     let planName = "Free";
     if (subscriptionData) {
-        if (subscriptionData.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
+        if (subscriptionData.price_id === SUBSCRIPTION_PLANS.PRO) {
             planName = "Pro";
-        } else if (subscriptionData.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
+        } else if (subscriptionData.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
             planName = "Enterprise";
         }
     }
