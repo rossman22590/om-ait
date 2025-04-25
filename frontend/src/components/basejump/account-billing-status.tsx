@@ -35,7 +35,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
         .from('billing_subscriptions')
         .select('*')
         .eq('account_id', accountId)
-        .in('status', ['active', 'trialing'])
+        .eq('status', 'active')
         .limit(1)
         .order('created_at', { ascending: false })
         .single();
