@@ -153,7 +153,7 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
                         <div className="rounded-lg border bg-background p-4 gap-4">
                             <div className="flex justify-between items-center">
                                 <span className="text-sm font-medium text-foreground/90">Current Plan</span>
-                                <span className="text-sm font-medium text-card-title">Free</span>
+                                <span className="text-sm font-medium text-card-title">{planName}</span>
                             </div>
                             
                             <div className="flex justify-between items-center">
