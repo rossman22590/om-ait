@@ -59,6 +59,22 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     let totalAgentTime = 0;
     let usageDisplay = "No usage this month";
     
+    // Direct check for price_id against SUBSCRIPTION_PLANS constants
+    let planName = "Free"; // Default
+    if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.PRO) {
+        planName = "Pro";
+    } else if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
+        planName = "Enterprise"; 
+    }
+
+    // Set plan minutes based on detected plan
+    let totalPlanMinutes = 25; // Default free plan
+    if (planName === "Pro") {
+        totalPlanMinutes = 500; // Pro plan minutes
+    } else if (planName === "Enterprise") {
+        totalPlanMinutes = 3000; // Enterprise plan minutes
+    }
+    
     if (threadIds.length > 0) {
         const { data: agentRuns } = await supabaseClient
             .from('agent_runs')
@@ -80,16 +96,13 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
             
             // Convert to minutes
             const totalMinutes = Math.round(totalAgentTime / 60);
-            usageDisplay = `${totalMinutes} minutes`;
+            const remainingMinutes = Math.max(0, totalPlanMinutes - totalMinutes);
+            usageDisplay = `${totalMinutes}/${totalPlanMinutes} minutes (${remainingMinutes} remaining)`;
+        } else {
+            usageDisplay = `0/${totalPlanMinutes} minutes (${totalPlanMinutes} remaining)`;
         }
-    }
-    
-    // Direct check for price_id against SUBSCRIPTION_PLANS constants
-    let planName = "Free"; // Default
-    if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.PRO) {
-        planName = "Pro";
-    } else if (subscriptionData?.price_id === SUBSCRIPTION_PLANS.ENTERPRISE) {
-        planName = "Enterprise"; 
+    } else {
+        usageDisplay = `0/${totalPlanMinutes} minutes (${totalPlanMinutes} remaining)`;
     }
 
     return (
