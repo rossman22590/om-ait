@@ -1,20 +1,18 @@
 /* eslint-disable */
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/server";
 import { SubmitButton } from "../ui/submit-button";
 import { manageSubscription } from "@/lib/actions/billing";
 import { PlanComparison, SUBSCRIPTION_PLANS } from "../billing/plan-comparison";
 import { isLocalMode } from "@/lib/config";
-import { useState, useEffect } from 'react';
 
 type Props = {
     accountId: string;
     returnUrl: string;
 }
 
-// Client component wrapper
-export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
+export default async function AccountBillingStatus({ accountId, returnUrl }: Props) {
     // In local development mode, show a simplified component
     if (isLocalMode()) {
         return (
@@ -32,323 +30,152 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
         );
     }
 
-    // Otherwise use the client-side component directly
-    return (
-        <div className="not-prose grid gap-2">
-            <BillingStatusContent accountId={accountId} returnUrl={returnUrl} />
-        </div>
-    );
-}
-
-// Client component that handles all the functionality
-function BillingStatusContent({ accountId, returnUrl }: Props) {
-    const [planName, setPlanName] = useState<string>("Free");
-    const [totalPlanMinutes, setTotalPlanMinutes] = useState<number>(25);
-    const [agentMinutesUsed, setAgentMinutesUsed] = useState<number>(0);
-    const [isLoading, setIsLoading] = useState<boolean>(true);
-
-    // Fetch data on component mount
-    useEffect(() => {
-        async function fetchData() {
-            setIsLoading(true);
-            try {
-                // Need to await the client creation
-                const supabase = await createClient();
-                
-                // Fetch subscription data
-                let subscriptionData;
-                try {
-                    // Try basejump schema first
-                    const result = await supabase
-                        .schema('basejump')
-                        .from('billing_subscriptions')
-                        .select('price_id, status')
-                        .eq('account_id', accountId)
-                        .eq('status', 'active')
-                        .single();
-                        
-                    subscriptionData = result.data;
-                } catch (err) {
-                    console.log('[Client] Error with basejump schema, falling back to public schema:', err);
-                    // Fall back to public schema if basejump fails
-                    try {
-                        const result = await supabase
-                            .from('billing_subscriptions')
-                            .select('price_id, status')
-                            .eq('account_id', accountId)
-                            .eq('status', 'active')
-                            .single();
-                            
-                        subscriptionData = result.data;
-                    } catch (err) {
-                        console.log('[Client] Error with public schema too:', err);
-                        subscriptionData = null;
-                    }
-                }
-                    
-                console.log('[Client] Subscription data:', subscriptionData);
-                
-                // Fetch agent usage
-                let threads;
-                try {
-                    // Try basejump schema first
-                    const result = await supabase
-                        .schema('basejump')
-                        .from('threads')
-                        .select('thread_id')
-                        .eq('account_id', accountId);
-                        
-                    threads = result.data;
-                } catch (err) {
-                    console.log('[Client] Error with basejump schema for threads, falling back to public schema:', err);
-                    // Fall back to public schema if basejump fails
-                    try {
-                        const result = await supabase
-                            .from('threads')
-                            .select('thread_id')
-                            .eq('account_id', accountId);
-                            
-                        threads = result.data;
-                    } catch (err) {
-                        console.log('[Client] Error with public schema for threads too:', err);
-                        threads = [];
-                    }
-                }
-                
-                console.log('[Client] Thread data:', threads);
-                
-                const threadIds = threads?.map(t => t.thread_id) || [];
-                
-                // Get current month usage
-                const now = new Date();
-                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-                const isoStartOfMonth = startOfMonth.toISOString();
-                
-                let totalAgentTime = 0;
-                
-                if (threadIds.length > 0) {
-                    let agentRuns;
-                    try {
-                        // Try basejump schema first
-                        const result = await supabase
-                            .schema('basejump')
-                            .from('agent_runs')
-                            .select('started_at, completed_at')
-                            .in('thread_id', threadIds)
-                            .gte('started_at', isoStartOfMonth);
-                            
-                        agentRuns = result.data;
-                    } catch (err) {
-                        console.log('[Client] Error with basejump schema for agent_runs, falling back to public schema:', err);
-                        // Fall back to public schema if basejump fails
-                        try {
-                            const result = await supabase
-                                .from('agent_runs')
-                                .select('started_at, completed_at')
-                                .in('thread_id', threadIds)
-                                .gte('started_at', isoStartOfMonth);
-                                
-                            agentRuns = result.data;
-                        } catch (err) {
-                            console.log('[Client] Error with public schema for agent_runs too:', err);
-                            agentRuns = [];
-                        }
-                    }
-                    
-                    console.log('[Client] Agent runs data:', agentRuns);
-                    
-                    if (agentRuns && agentRuns.length > 0) {
-                        const nowTimestamp = now.getTime();
-                        
-                        totalAgentTime = agentRuns.reduce((total, run) => {
-                            const startTime = new Date(run.started_at).getTime();
-                            const endTime = run.completed_at 
-                                ? new Date(run.completed_at).getTime()
-                                : nowTimestamp;
-                            
-                            return total + (endTime - startTime) / 1000; // In seconds
-                        }, 0);
-                    }
-                }
-                
-                // Convert to minutes
-                const totalMinutes = Math.round(totalAgentTime / 60);
-                console.log('[Client] Total usage minutes calculated:', totalMinutes);
-                
-                // Get current plan from client-side detection
-                if (typeof window !== 'undefined' && window.omCurrentPlan) {
-                    console.log('[Client] Using global plan:', window.omCurrentPlan, window.omPlanMinutes);
-                    setPlanName(window.omCurrentPlan);
-                    if (window.omPlanMinutes) {
-                        setTotalPlanMinutes(window.omPlanMinutes);
-                    }
-                } else {
-                    // Fallback to detection based on subscription data
-                    let detectedPlan = "Free";
-                    let detectedMinutes = 25;
-                    
-                    // CRITICAL TEST: Check if we have hard evidence from logs
-                    // If the price ID matches the Pro price ID from logs
-                    if (subscriptionData?.status === 'active' && 
-                        subscriptionData.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
-                        console.log('[Client] EXACT HARDCODED PRO MATCH DETECTED!');
-                        detectedPlan = "Pro";
-                        detectedMinutes = 500;
-                        
-                        // Force window global for client-side detection
-                        if (typeof window !== 'undefined') {
-                            window.omCurrentPlan = "Pro";
-                            window.omPlanMinutes = 500;
-                        }
-                    } 
-                    // Regular detection
-                    else if (subscriptionData?.status === 'active' && subscriptionData.price_id) {
-                        // Log raw values for debugging
-                        console.log('[Client] Comparing price IDs:', {
-                            actual: subscriptionData.price_id,
-                            pro: SUBSCRIPTION_PLANS.PRO,
-                            enterprise: SUBSCRIPTION_PLANS.ENTERPRISE,
-                            priceIdType: typeof subscriptionData.price_id,
-                            proIdType: typeof SUBSCRIPTION_PLANS.PRO
-                        });
-                        
-                        // Force string conversion and trim for reliable comparison
-                        const priceIdString = String(subscriptionData.price_id).trim();
-                        const proIdString = String(SUBSCRIPTION_PLANS.PRO).trim();
-                        const enterpriseIdString = String(SUBSCRIPTION_PLANS.ENTERPRISE).trim();
-                        
-                        // DIRECT PRICE ID MATCH - First priority
-                        if (priceIdString === proIdString) {
-                            console.log('[Client] DIRECT PRO MATCH DETECTED!');
-                            detectedPlan = "Pro";
-                            detectedMinutes = 500;
-                            
-                            // Force window global for client-side detection
-                            if (typeof window !== 'undefined') {
-                                window.omCurrentPlan = "Pro";
-                                window.omPlanMinutes = 500;
-                            }
-                        } else if (priceIdString === enterpriseIdString) {
-                            console.log('[Client] DIRECT ENTERPRISE MATCH DETECTED!');
-                            detectedPlan = "Enterprise";
-                            detectedMinutes = 3000;
-                            
-                            // Force window global for client-side detection
-                            if (typeof window !== 'undefined') {
-                                window.omCurrentPlan = "Enterprise";
-                                window.omPlanMinutes = 3000;
-                            }
-                        } 
-                        // Fallback to substring match
-                        else if (priceIdString.includes(proIdString) && proIdString.length > 5) {
-                            console.log('[Client] SUBSTRING PRO MATCH DETECTED!');
-                            detectedPlan = "Pro";
-                            detectedMinutes = 500;
-                            
-                            // Force window global for client-side detection
-                            if (typeof window !== 'undefined') {
-                                window.omCurrentPlan = "Pro";
-                                window.omPlanMinutes = 500;
-                            }
-                        } else if (priceIdString.includes(enterpriseIdString) && enterpriseIdString.length > 5) {
-                            console.log('[Client] SUBSTRING ENTERPRISE MATCH DETECTED!');
-                            detectedPlan = "Enterprise";
-                            detectedMinutes = 3000;
-                            
-                            // Force window global for client-side detection
-                            if (typeof window !== 'undefined') {
-                                window.omCurrentPlan = "Enterprise";
-                                window.omPlanMinutes = 3000;
-                            }
-                        }
-                    }
-                    
-                    console.log('[Client] Final detected plan:', detectedPlan, detectedMinutes);
-                    setPlanName(detectedPlan);
-                    setTotalPlanMinutes(detectedMinutes);
-                }
-                
-                setAgentMinutesUsed(totalMinutes);
-            } catch (error) {
-                console.error('Error fetching billing data:', error);
-                // Set defaults on error
-                setPlanName("Free");
-                setTotalPlanMinutes(25);
-            } finally {
-                setIsLoading(false);
-            }
-        }
+    const supabaseClient = await createClient();
+    
+    // Get account subscription and usage data
+    const { data: subscriptionData } = await supabaseClient
+        .schema('basejump')
+        .from('billing_subscriptions')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('status', 'active')
+        .limit(1)
+        .order('created_at', { ascending: false })
+        .single();
+    
+    // Get agent runs for this account
+    // Get the account's threads
+    const { data: threads } = await supabaseClient
+        .from('threads')
+        .select('thread_id')
+        .eq('account_id', accountId);
+    
+    const threadIds = threads?.map(t => t.thread_id) || [];
+    
+    // Get current month usage
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const isoStartOfMonth = startOfMonth.toISOString();
+    
+    let totalAgentTime = 0;
+    let usageDisplay = "No usage this month";
+    
+    if (threadIds.length > 0) {
+        const { data: agentRuns } = await supabaseClient
+            .from('agent_runs')
+            .select('started_at, completed_at')
+            .in('thread_id', threadIds)
+            .gte('started_at', isoStartOfMonth);
         
-        fetchData();
-    }, [accountId]);
-    
-    // Calculate remaining minutes
-    const remainingMinutes = Math.max(0, totalPlanMinutes - agentMinutesUsed);
-    const usageDisplay = `${agentMinutesUsed}/${totalPlanMinutes} minutes (${remainingMinutes} remaining)`;
-    
-    if (isLoading) {
-        return <div>Loading billing information...</div>;
+        if (agentRuns && agentRuns.length > 0) {
+            const nowTimestamp = now.getTime();
+            
+            totalAgentTime = agentRuns.reduce((total, run) => {
+                const startTime = new Date(run.started_at).getTime();
+                const endTime = run.completed_at 
+                    ? new Date(run.completed_at).getTime()
+                    : nowTimestamp;
+                
+                return total + (endTime - startTime) / 1000; // In seconds
+            }, 0);
+            
+            // Convert to minutes
+            const totalMinutes = Math.round(totalAgentTime / 60);
+            usageDisplay = `${totalMinutes} minutes`;
+        }
     }
+    
+    const isPlan = (planId?: string) => {
+        return subscriptionData?.price_id === planId;
+    };
+    
+    const planName = isPlan(SUBSCRIPTION_PLANS.FREE) 
+        ? "Free" 
+        : isPlan(SUBSCRIPTION_PLANS.PRO)
+            ? "Pro"
+            : isPlan(SUBSCRIPTION_PLANS.ENTERPRISE)
+                ? "Enterprise"
+                : "Unknown";
 
     return (
-        <>
-          <div className="rounded-lg border shadow-sm">
-            <div className="flex flex-col space-y-1.5 p-6">
-              <h3 className="text-2xl font-semibold leading-none tracking-tight">
-                Billing Status
-              </h3>
-            </div>
-            <div className="p-6 pt-0">
-              <div className="mb-4 grid gap-6 md:grid-cols-1 lg:grid-cols-2">
-                <div className="flex items-center justify-between space-x-4">
-                  <div className="flex items-center space-x-4">
-                    <div>
-                      <p className="text-sm font-medium leading-none">
-                        Current Plan
-                      </p>
+        <div className="rounded-xl border shadow-sm bg-card p-6">
+            <h2 className="text-xl font-semibold mb-4">Billing Status</h2>
+            
+            {subscriptionData ? (
+                <>
+                    <div className="mb-6">
+                        <div className="rounded-lg border bg-background p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm font-medium text-foreground/90">Current Plan</span>
+                                    <span className="text-sm font-medium text-card-title">{planName}</span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
+                                <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
+                            </div>
+                        </div>
                     </div>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium leading-none">
-                      {planName}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between space-x-4">
-                  <div className="flex items-center space-x-4">
-                    <div>
-                      <p className="text-sm font-medium leading-none">
-                        Agent Usage This Month
-                      </p>
+
+                    {/* Plans Comparison */}
+                    <PlanComparison
+                        accountId={accountId}
+                        returnUrl={returnUrl}
+                        className="mb-6"
+                    />
+
+                    {/* Manage Subscription Button */}
+                    <form>
+                        <input type="hidden" name="accountId" value={accountId} />
+                        <input type="hidden" name="returnUrl" value={returnUrl} />
+                        <SubmitButton
+                            pendingText="Loading..."
+                            formAction={manageSubscription}
+                            className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
+                        >
+                            Manage Subscription
+                        </SubmitButton>
+                    </form>
+                </>
+            ) : (
+                <>
+                    <div className="mb-6">
+                        <div className="rounded-lg border bg-background p-4 gap-4">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-foreground/90">Current Plan</span>
+                                <span className="text-sm font-medium text-card-title">Free</span>
+                            </div>
+                            
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-foreground/90">Agent Usage This Month</span>
+                                <span className="text-sm font-medium text-card-title">{usageDisplay}</span>
+                            </div>
+                        </div>
                     </div>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium leading-none">
-                      {usageDisplay}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <PlanComparison
-            accountId={accountId}
-            returnUrl={returnUrl}
-            className="mb-6"
-          />
+                    {/* Plans Comparison */}
+                    <PlanComparison
+                        accountId={accountId}
+                        returnUrl={returnUrl}
+                        className="mb-6"
+                    />
 
-          <form>
-            <input type="hidden" name="accountId" value={accountId} />
-            <input type="hidden" name="returnUrl" value={returnUrl} />
-            <SubmitButton
-              pendingText="Loading..."
-              formAction={manageSubscription}
-              className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
-            >
-              Manage Subscription
-            </SubmitButton>
-          </form>
-        </>
-    );
+                    {/* Manage Subscription Button */}
+                    <form>
+                        <input type="hidden" name="accountId" value={accountId} />
+                        <input type="hidden" name="returnUrl" value={returnUrl} />
+                        <SubmitButton
+                            pendingText="Loading..."
+                            formAction={manageSubscription}
+                            className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
+                        >
+                            Manage Subscription
+                        </SubmitButton>
+                    </form>
+                </>
+            )}
+        </div>
+    )
 }
