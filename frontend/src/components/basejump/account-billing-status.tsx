@@ -83,6 +83,14 @@ export default async function AccountBillingStatus({ accountId, returnUrl }: Pro
     }
     
     const isPlan = (planId?: string) => {
+        // Direct mapping for Pro plan by price ID
+        if (subscriptionData?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
+            return planId === SUBSCRIPTION_PLANS.PRO;
+        }
+        // Direct mapping for Enterprise plan by price ID
+        if (subscriptionData?.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV') {
+            return planId === SUBSCRIPTION_PLANS.ENTERPRISE;
+        }
         return subscriptionData?.price_id === planId;
     };
     
