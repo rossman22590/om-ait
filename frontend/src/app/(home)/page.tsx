@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { CheckCircle2, ArrowRight, Check,Zap, BookOpen, Users, MessageCircle, Award, Globe, Code, Brain, Shield } from "lucide-react";
+import { CheckCircle2, ArrowRight, Check, Zap, BookOpen, Users, MessageCircle, Award, Globe, Code, Brain, Shield, AlertCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { 
   Card, 
@@ -18,6 +18,7 @@ import { FlickeringGrid } from "@/components/home/ui/flickering-grid";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState(0);
+  const [showRegistrationPopup, setShowRegistrationPopup] = useState(true);
   
   // Demo animation states
   const [agentProgress, setAgentProgress] = useState(0);
@@ -116,6 +117,90 @@ export default function Home() {
 
   return (
     <main className="flex flex-col items-center min-h-screen w-full overflow-x-hidden bg-white dark:bg-black">
+      {/* Registration Disabled Popup */}
+      <AnimatePresence>
+        {showRegistrationPopup && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ type: "spring", damping: 20, stiffness: 300 }}
+              className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl max-w-md w-full overflow-hidden"
+            >
+              <div className="relative p-6">
+                <button 
+                  onClick={() => setShowRegistrationPopup(false)}
+                  className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  <X size={20} />
+                </button>
+                
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-10 h-10 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
+                    <AlertCircle className="h-5 w-5 text-pink-500" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">Registration Notice</h3>
+                </div>
+                
+                <div className="mb-6 space-y-3">
+                  <p className="text-gray-700 dark:text-gray-300">
+                    <span className="font-semibold">Registration is currently disabled</span> and there is no free tier available, but if you're an existing subscriber you can still log in.
+                  </p>
+                  
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <p className="text-gray-700 dark:text-gray-300 mb-2">
+                      If you have <span className="font-semibold text-pink-500">AI Tutor Premium</span> or higher, please reach out to:
+                    </p>
+                    <a 
+                      href="mailto:rcohen@mytsi.org" 
+                      className="text-pink-500 hover:text-pink-600 dark:hover:text-pink-400 font-medium block"
+                    >
+                      rcohen@mytsi.org
+                    </a>
+                  </div>
+                  
+                  <div className="bg-pink-50 dark:bg-pink-900/20 p-4 rounded-lg border border-pink-200 dark:border-pink-800/50">
+                    <p className="text-gray-700 dark:text-gray-300 mb-2">
+                      <span className="font-semibold">Machine is accepting new subscribers!</span> If you want to purchase a plan, click the button below or go to the pricing page.
+                    </p>
+                    <Link href="/pricing">
+                      <Button 
+                        className="w-full bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 text-white mt-2"
+                      >
+                        View Pricing Plans
+                      </Button>
+                    </Link>
+                  </div>
+                  
+                  <div className="space-y-2 pt-2">
+                    <div className="flex items-start gap-2">
+                      <Check className="h-5 w-5 text-green-500 mt-0.5" />
+                      <p className="text-gray-700 dark:text-gray-300">
+                        <span className="font-semibold">Premium</span> subscribers receive the starter tier
+                      </p>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <Check className="h-5 w-5 text-green-500 mt-0.5" />
+                      <p className="text-gray-700 dark:text-gray-300">
+                        <span className="font-semibold">Ultra</span> subscribers receive the pro tier
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                
+                <Button 
+                  onClick={() => setShowRegistrationPopup(false)} 
+                  className="w-full bg-gray-500 hover:bg-gray-600 dark:bg-gray-600 dark:hover:bg-gray-700 text-white"
+                >
+                  I understand
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
       {/* Hero Section */}
       <section id="hero" className="w-full py-24 md:py-32 relative overflow-x-hidden bg-white dark:bg-black" style={{ zIndex: 1 }}>
         {/* Sleek animated dots background */}
