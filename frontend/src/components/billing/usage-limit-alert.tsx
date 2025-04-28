@@ -60,41 +60,41 @@ export function BillingErrorAlert({
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                 transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
                 className={cn(
-                  "relative bg-background rounded-lg shadow-xl w-full max-w-sm mx-3",
+                  "relative bg-background rounded-lg shadow-xl w-full max-w-3xl mx-3",
                   className
                 )}
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="billing-modal-title"
               >
-                <div className="p-4">
+                <div className="p-5">
                   {/* Close button */}
                   {onDismiss && (
                     <button
                       onClick={onDismiss}
-                      className="absolute top-2 right-2 text-muted-foreground hover:text-foreground transition-colors"
+                      className="absolute top-3 right-3 text-muted-foreground hover:text-foreground transition-colors"
                       aria-label="Close dialog"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-5 w-5" />
                     </button>
                   )}
 
                   {/* Header */}
-                  <div className="text-center mb-4">
-                    <div className="inline-flex items-center justify-center p-1.5 bg-destructive/10 rounded-full mb-2">
-                      <AlertCircle className="h-4 w-4 text-destructive" />
+                  <div className="text-center mb-5">
+                    <div className="inline-flex items-center justify-center p-2 bg-destructive/10 rounded-full mb-3">
+                      <AlertCircle className="h-5 w-5 text-destructive" />
                     </div>
-                    <h2 id="billing-modal-title" className="text-lg font-medium tracking-tight mb-1">
+                    <h2 id="billing-modal-title" className="text-xl font-medium tracking-tight mb-2">
                       Usage Limit Reached
                     </h2>
-                    <p className="text-xs text-muted-foreground">
-                      {message || "You've reached your monthly usage limit."}
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {message || "You've reached your monthly usage limit. Please upgrade your plan."}
                     </p>
                   </div>
 
                   {/* Usage Stats */}
                   {currentUsage !== undefined && limit !== undefined && (
-                    <div className="mb-4 p-3 bg-muted/30 border border-border rounded-lg">
+                    <div className="mb-5 p-4 bg-muted/30 border border-border rounded-lg max-w-sm mx-auto">
                       <div className="flex justify-between items-center mb-2">
                         <div>
                           <p className="text-xs font-medium text-muted-foreground">Usage</p>
@@ -105,7 +105,7 @@ export function BillingErrorAlert({
                           <p className="text-base font-semibold">{(limit * 60).toFixed(0)}m</p>
                         </div>
                       </div>
-                      <div className="w-full h-1.5 bg-background rounded-full overflow-hidden">
+                      <div className="w-full h-2 bg-background rounded-full overflow-hidden">
                         <motion.div
                           initial={{ width: 0 }}
                           animate={{ width: `${Math.min((currentUsage / limit) * 100, 100)}%` }}
@@ -117,23 +117,27 @@ export function BillingErrorAlert({
                   )}
 
                   {/* Plans Comparison */}
-                  <PlanComparison
-                    accountId={accountId}
-                    returnUrl={returnUrl}
-                    className="mb-3"
-                    isCompact={true}
-                  />
+                  <div className="mb-4 w-full border-t border-border pt-4">
+                    <PlanComparison
+                      accountId={accountId}
+                      returnUrl={returnUrl}
+                      className="mb-3 w-full"
+                      isCompact={false}
+                    />
+                  </div>
 
                   {/* Dismiss Button */}
                   {onDismiss && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full text-muted-foreground hover:text-foreground text-xs h-7"
-                      onClick={onDismiss}
-                    >
-                      Continue with Current Plan
-                    </Button>
+                    <div className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground hover:text-foreground text-sm"
+                        onClick={onDismiss}
+                      >
+                        Continue with Current Plan
+                      </Button>
+                    </div>
                   )}
                 </div>
               </motion.div>
@@ -143,4 +147,4 @@ export function BillingErrorAlert({
       </AnimatePresence>
     </Portal>
   );
-} 
+}
