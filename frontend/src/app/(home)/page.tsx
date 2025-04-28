@@ -115,9 +115,9 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="flex flex-col items-center min-h-screen w-full overflow-hidden bg-white dark:bg-black">
+    <main className="flex flex-col items-center min-h-screen w-full overflow-x-hidden bg-white dark:bg-black">
       {/* Hero Section */}
-      <section className="w-full py-24 md:py-32 relative overflow-hidden bg-white dark:bg-black" style={{ zIndex: 1 }}>
+      <section id="hero" className="w-full py-24 md:py-32 relative overflow-x-hidden bg-white dark:bg-black" style={{ zIndex: 1 }}>
         {/* Sleek animated dots background */}
         <div className="absolute inset-0 z-0 overflow-hidden">
           <div className="absolute w-full h-full">
@@ -125,7 +125,7 @@ export default function Home() {
               squareSize={2.2}
               gridGap={20}
               color="var(--primary)"
-              maxOpacity={0.35}
+              maxOpacity={0.3}
               flickerChance={0.04}
             />
           </div>
@@ -621,7 +621,7 @@ export default function Home() {
       </section>
       
       {/* Features Section */}
-      <section id="features" className="w-full py-24 md:py-32 bg-gray-50 dark:bg-gray-900">
+      <section id="features" className="w-full py-24 md:py-32 bg-white dark:bg-gray-900">
         <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white">Autonomous Intelligence</h2>
@@ -661,23 +661,18 @@ export default function Home() {
                 description: "Set your task and return later - the agent works in the background, delivering results when you're ready."
               }
             ].map((feature, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: i * 0.1 }}
-                viewport={{ once: true }}
-              >
-                <Card className="border border-gray-200 dark:border-gray-700 rounded-2xl hover:shadow-xl transition-all duration-300 h-full bg-white dark:bg-gray-800">
-                  <CardHeader className="pb-2">
-                    <div className="mb-4 p-3 w-fit rounded-xl bg-primary/10">{feature.icon}</div>
-                    <CardTitle className="text-xl font-semibold">{feature.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-gray-600 dark:text-gray-300">{feature.description}</p>
-                  </CardContent>
-                </Card>
-              </motion.div>
+              <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden h-full flex flex-col relative group cursor-pointer hover:shadow-md transition-shadow" style={{ position: 'relative', zIndex: 1 }}>
+                <Link href="/auth" className="absolute inset-0 z-1">
+                  <span className="sr-only">Try {feature.title}</span>
+                </Link>
+                <div className="p-6 flex-grow relative z-0">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mb-4">
+                    {feature.icon}
+                  </div>
+                  <h3 className="text-xl font-semibold">{feature.title}</h3>
+                  <p className="text-gray-600 dark:text-gray-300">{feature.description}</p>
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -697,7 +692,7 @@ export default function Home() {
       </section>
       
       {/* Use Cases Section */}
-      <section className="w-full py-24 md:py-32 bg-gray-50 dark:bg-gray-900">
+      <section id="use-cases" className="w-full py-24 md:py-32 bg-gray-50 dark:bg-gray-900">
         <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="text-center mb-16">
             <div className="flex gap-2 justify-center mb-4">
@@ -713,7 +708,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               {
-                icon: <BookOpen className="h-6 w-6 text-white" />,
+                icon: <BookOpen className="h-6 w-6 text-pink-500" />,
                 title: "Write product launch email series",
                 description: "AI Tutor creates a strategic 5-email sequence for your product launch with compelling subject lines, engaging copy, and clear CTAs to maximize conversion.",
                 image: "/images/examples/japan-trip.jpg",
@@ -721,7 +716,7 @@ export default function Home() {
                 workflow: "Marketing"
               },
               {
-                icon: <Code className="h-6 w-6 text-white" />,
+                icon: <Code className="h-6 w-6 text-pink-500" />,
                 title: "Analyze website accessibility",
                 description: "AI Tutor performs a comprehensive accessibility audit of your website, identifying WCAG compliance issues and providing actionable recommendations for improvement.",
                 image: "/images/examples/tesla-analysis.jpg",
@@ -729,7 +724,7 @@ export default function Home() {
                 workflow: "Coding"
               },
               {
-                icon: <Brain className="h-6 w-6 text-white" />,
+                icon: <Brain className="h-6 w-6 text-pink-500" />,
                 title: "Create interactive lesson plan",
                 description: "AI Tutor designs an engaging, standards-aligned lesson plan with interactive activities, discussion prompts, and assessment strategies for your specific grade level and subject.",
                 image: "/images/examples/meeting-summary.jpg",
@@ -737,7 +732,7 @@ export default function Home() {
                 workflow: "Education"
               },
               {
-                icon: <Shield className="h-6 w-6 text-white" />,
+                icon: <Shield className="h-6 w-6 text-pink-500" />,
                 title: "Draft privacy policy document",
                 description: "AI Tutor generates a comprehensive, legally-sound privacy policy tailored to your business type, location, and data collection practices to ensure regulatory compliance.",
                 image: "/images/examples/job-email.jpg",
@@ -745,7 +740,7 @@ export default function Home() {
                 workflow: "Legal"
               },
               {
-                icon: <Globe className="h-6 w-6 text-white" />,
+                icon: <Globe className="h-6 w-6 text-pink-500" />,
                 title: "Research emerging market trends",
                 description: "AI Tutor analyzes global market data to identify emerging trends, growth opportunities, and potential disruptions in your industry with actionable strategic recommendations.",
                 image: "/images/examples/job-email.jpg",
@@ -753,7 +748,7 @@ export default function Home() {
                 workflow: "Business"
               },
               {
-                icon: <Users className="h-6 w-6 text-white" />,
+                icon: <Users className="h-6 w-6 text-pink-500" />,
                 title: "Generate competitive analysis report",
                 description: "AI Tutor creates a detailed competitive landscape analysis comparing your product against key competitors across features, pricing, market position, and customer sentiment.",
                 image: "/images/examples/meeting-summary.jpg",
@@ -761,7 +756,7 @@ export default function Home() {
                 workflow: "Strategy"
               },
               {
-                icon: <MessageCircle className="h-6 w-6 text-white" />,
+                icon: <MessageCircle className="h-6 w-6 text-pink-500" />,
                 title: "Create social media content calendar",
                 description: "AI Tutor develops a month-long social media content plan with platform-specific post ideas, optimal posting times, hashtag strategies, and engagement tactics.",
                 image: "/images/examples/tesla-analysis.jpg",
@@ -769,7 +764,7 @@ export default function Home() {
                 workflow: "Social"
               },
               {
-                icon: <Award className="h-6 w-6 text-white" />,
+                icon: <Award className="h-6 w-6 text-pink-500" />,
                 title: "Design customer feedback survey",
                 description: "AI Tutor crafts a comprehensive customer feedback survey with strategic questions to gather actionable insights on satisfaction, preferences, and improvement areas.",
                 image: "/images/examples/japan-trip.jpg",
@@ -782,11 +777,11 @@ export default function Home() {
                   <span className="sr-only">Try {example.title}</span>
                 </Link>
                 <div className="p-6 flex-grow relative z-0">
-                  <div className="w-10 h-10 rounded-full bg-black flex items-center justify-center mb-4">
+                  <div className="w-10 h-10 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center mb-4">
                     {example.icon}
                   </div>
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2 select-text">{example.title}</h3>
-                  <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-3 select-text">{example.description}</p>
+                  <h3 className="text-lg font-medium">{example.title}</h3>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-3">{example.description}</p>
                 </div>
                 <div className="h-[60px] bg-gray-100 dark:bg-gray-700 w-full relative flex items-center z-0">
                   <div className="absolute left-3">
@@ -819,7 +814,7 @@ export default function Home() {
       </section>
       
       {/* Pricing Section */}
-      <section id="pricing" className="w-full py-24 md:py-32 bg-white dark:bg-gray-900" style={{ position: 'relative', zIndex: 2 }}>
+      <section id="pricing" className="w-full py-24 md:py-32 bg-white dark:bg-gray-900">
         <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-primary dark:from-white dark:to-primary-foreground">Pricing Plans</h2>
@@ -842,14 +837,14 @@ export default function Home() {
                   'Core tools access',
                   'Community support'
                 ],
-                buttonText: 'Get Started Free',
+                buttonText: 'Get Started',
                 priceCaption: 'No credit card required'
               },
               {
                 id: 'pro',
                 name: 'Pro',
                 description: 'For professionals and power users',
-                price: '$20',
+                price: '$35',
                 duration: '/per month',
                 popular: true,
                 features: [
@@ -860,14 +855,14 @@ export default function Home() {
                   'Progress monitoring',
                   'Email support'
                 ],
-                buttonText: 'Upgrade to Pro',
+                buttonText: 'Get Started',
                 priceCaption: 'Billed monthly'
               },
               {
                 id: 'enterprise',
                 name: 'Enterprise',
                 description: 'For organizations and teams',
-                price: '$100',
+                price: '$200',
                 duration: '/per month',
                 popular: false,
                 features: [
@@ -875,10 +870,10 @@ export default function Home() {
                   'Maximum autonomous capabilities',
                   'Custom integrations',
                   'Advanced analytics',
-                  'API access',
+                  'Most Powerful Agents',
                   'Dedicated support'
                 ],
-                buttonText: 'Contact Sales',
+                buttonText: 'Get Started',
                 priceCaption: 'Volume discounts available'
               }
             ].map((plan, i) => (
@@ -937,6 +932,13 @@ export default function Home() {
                             "bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 text-white shadow-lg shadow-pink-500/25 dark:shadow-pink-600/50 transition-all duration-300 hover:scale-105 font-bold border-2 border-transparent dark:border-white/20" : 
                             "bg-gray-100 hover:bg-gray-200 text-gray-900 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-white"
                           }`}
+                          onClick={() => {
+                            if (plan.id === 'free') {
+                              window.location.href = "https://machine.myapps.ai/dashboard";
+                            } else {
+                              window.location.href = "https://machine.myapps.ai/settings/billing";
+                            }
+                          }}
                         >
                           {plan.buttonText}
                         </Button>
@@ -955,7 +957,7 @@ export default function Home() {
       </section>
       
       {/* CTA Section */}
-      <section className="w-full py-24 md:py-32 bg-gray-50 dark:bg-gray-900" style={{ position: 'relative', zIndex: 2 }}>
+      <section id="cta" className="w-full py-24 md:py-32 bg-gray-50 dark:bg-gray-900">
         <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="max-w-4xl mx-auto text-center space-y-8">
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white">Experience the Power of Autonomous AI</h2>
@@ -983,63 +985,30 @@ export default function Home() {
       </section>
       
       {/* Footer */}
-      <footer className="w-full py-16 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800" style={{ position: 'relative', zIndex: 2 }}>
-        <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
-            <div className="col-span-1 md:col-span-2">
-              <div className="flex items-center mb-6">
-                <Zap className="h-7 w-7 text-primary mr-2" />
-                <span className="text-2xl font-bold text-gray-900 dark:text-white">AI Tutor Machine</span>
-              </div>
-              <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md text-lg">
-                The autonomous general-purpose AI agent that completes complex tasks without supervision.
+      <footer className="w-full py-8 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
+        <div className="container px-4 md:px-6 mx-auto">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="mb-4 md:mb-0">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                &copy; {new Date().getFullYear()} Machine. All rights reserved.
               </p>
-              <div className="flex space-x-5">
-                {/* <Link href="#" className="text-gray-500 dark:text-gray-300 hover:text-primary transition-colors">
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"></path>
-                  </svg>
-                </Link>
-                <Link href="#" className="text-gray-500 dark:text-gray-300 hover:text-primary transition-colors">
-                  <svg className="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84"></path>
-                  </svg>
-                </Link>
-                <Link href="#" className="text-gray-500 dark:text-gray-300 hover:text-primary transition-colors">
-                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                    <path fillRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"></path>
-                  </svg>
-                </Link> */}
-              </div>
             </div>
-            
-            <div>
-              {/* <h3 className="text-base font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-5">Product</h3> */}
-              {/* <ul className="space-y-4">
-                <li><Link href="#features" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Features</Link></li>
-                <li><Link href="#pricing" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Pricing</Link></li>
-                <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Use Cases</Link></li>
-                <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Documentation</Link></li>
-              </ul> */}
-            </div>
-            
-            <div>
-              {/* <h3 className="text-base font-semibold text-gray-900 dark:text-white uppercase tracking-wider mb-5">Company</h3> */}
-              {/* <ul className="space-y-4">
-                <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">About</Link></li>
-                <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Blog</Link></li>
-                <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Careers</Link></li>
-                <li><Link href="#" className="text-gray-600 dark:text-gray-300 hover:text-primary transition-colors">Contact</Link></li>
-              </ul> */}
-            </div>
-          </div>
-          
-          <div className="border-t border-gray-200 dark:border-gray-800 pt-10 flex flex-col md:flex-row justify-between items-center">
-            <p className="text-gray-500 dark:text-gray-300"> 2025 AI Tutor Machine. All rights reserved.</p>
-            <div className="flex space-x-8 mt-6 md:mt-0">
-              <Link href="#" className="text-gray-500 dark:text-gray-300 hover:text-primary transition-colors">Privacy Policy</Link>
-              <Link href="#" className="text-gray-500 dark:text-gray-300 hover:text-primary transition-colors">Terms of Service</Link>
-              <Link href="#" className="text-gray-500 dark:text-gray-300 hover:text-primary transition-colors">Cookie Policy</Link>
+            <div className="flex space-x-6">
+              <Link href="/" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
+                Home
+              </Link>
+              <Link href="/about" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
+                About
+              </Link>
+              <Link href="/faq" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
+                FAQ
+              </Link>
+              <Link href="/legal" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
+                Legal
+              </Link>
+              <Link href="/#pricing" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
+                Pricing
+              </Link>
             </div>
           </div>
         </div>
@@ -1047,35 +1016,3 @@ export default function Home() {
     </main>
   );
 }
-// "use client";
-
-// import { useEffect, useState } from "react";
-// import { CTASection } from "@/components/home/sections/cta-section";
-// // import { FAQSection } from "@/components/sections/faq-section";
-// import { FooterSection } from "@/components/home/sections/footer-section";
-// import { HeroSection } from "@/components/home/sections/hero-section";
-// import { OpenSourceSection } from "@/components/home/sections/open-source-section";
-// import { PricingSection } from "@/components/home/sections/pricing-section";
-// import { UseCasesSection } from "@/components/home/sections/use-cases-section";
-
-// export default function Home() {
-//   return (
-//     <main className="flex flex-col items-center justify-center min-h-screen w-full">
-//       <div className="w-full divide-y divide-border">
-//         <HeroSection />
-//         <UseCasesSection />
-//         {/* <CompanyShowcase /> */}
-//         {/* <BentoSection /> */}
-//         {/* <QuoteSection /> */}
-//         {/* <FeatureSection /> */}
-//         {/* <GrowthSection /> */}
-//         <OpenSourceSection />
-//         <PricingSection />
-//         {/* <TestimonialSection /> */}
-//         {/* <FAQSection /> */}
-//         <CTASection />
-//         <FooterSection />
-//       </div>
-//     </main>
-//   );
-// } 

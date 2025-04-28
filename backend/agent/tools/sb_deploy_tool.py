@@ -31,7 +31,7 @@ class SandboxDeployTool(SandboxToolsBase):
                 "properties": {
                     "name": {
                         "type": "string",
-                        "description": "Name for the deployment, will be used in the URL as {name}.kortix.cloud"
+                        "description": "Name for the deployment, will be used in the URL as {name}.cloud.myapps.ai"
                     },
                     "directory_path": {
                         "type": "string",

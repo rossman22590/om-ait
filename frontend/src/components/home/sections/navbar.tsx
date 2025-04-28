@@ -13,6 +13,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/components/AuthProvider";
+import { ChevronRight } from "lucide-react";
 
 const INITIAL_WIDTH = "70rem";
 const MAX_WIDTH = "800px";
@@ -104,179 +105,109 @@ export function Navbar() {
   return (
     <header
       className={cn(
-        "sticky z-50 mx-4 flex justify-center transition-all duration-300 md:mx-0",
-        hasScrolled ? "top-6" : "top-4 mx-0",
+        "fixed top-0 z-50 w-full flex justify-center transition-all duration-300 px-4",
+        hasScrolled ? "py-2" : "py-4",
       )}
     >
-      <motion.div
-        initial={{ width: INITIAL_WIDTH }}
-        animate={{ width: hasScrolled ? MAX_WIDTH : INITIAL_WIDTH }}
-        transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
+      <div
+        className={cn(
+          "w-full rounded-full transition-all duration-300 border",
+          hasScrolled
+            ? "max-w-[900px] bg-white/90 dark:bg-gray-900/90 shadow-md"
+            : "max-w-[1100px] bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm"
+        )}
       >
-        <div
-          className={cn(
-            "mx-auto max-w-7xl rounded-2xl transition-all duration-300 xl:px-0",
-            hasScrolled
-              ? "px-2 border border-border bg-background dark:bg-background"
-              : "shadow-none px-7 bg-background dark:bg-background"
-          )}
-        >
-          <div className="flex h-[56px] items-center justify-between p-4">
-            <Link href="/" className="flex items-center gap-6">
-              <Image 
-                src="https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745430984238-gxDs711.png" 
-                alt="AI Tutor Machine" 
-                width={100} 
-                height={30} 
-                className="w-auto h-8" 
-              />
-            </Link>
+        <div className="flex h-[56px] items-center justify-between p-4">
+          <Link href="/" className="flex items-center gap-6">
+            <Image 
+              src="https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745430984238-gxDs711.png" 
+              alt="AI Tutor Machine" 
+              width={100} 
+              height={30} 
+              className="w-auto h-8" 
+            />
+          </Link>
 
-            <NavMenu />
+          <NavMenu />
 
-            <div className="flex flex-row items-center gap-1 md:gap-3 shrink-0">
-              <div className="flex items-center space-x-3">
-
-                {/* <Link
-                  href="https://github.com/kortix-ai/suna"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hidden md:flex items-center justify-center h-8 px-3 text-sm font-normal tracking-wide rounded-full text-primary hover:text-primary/80 transition-colors"
-                  aria-label="GitHub"
+          <div className="flex flex-row items-center gap-1 md:gap-3 shrink-0">
+            <div className="flex items-center space-x-3">
+              {user ? (
+                <Link
+                  className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 h-8 hidden md:flex items-center justify-center text-sm font-medium tracking-wide rounded-full text-white dark:text-white w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-transparent dark:border-white/20"
+                  href="/dashboard"
                 >
-                  <Github className="size-[18px]" />
-                </Link> */}
-                {user ? (
-                  <Link
-                    className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 h-8 hidden md:flex items-center justify-center text-sm font-medium tracking-wide rounded-full text-white dark:text-white w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-transparent dark:border-white/20"
-                    href="/dashboard"
-                  >
-                    Dashboard
-                  </Link>
-                ) : (
-                  <Link
-                    className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 h-8 hidden md:flex items-center justify-center text-sm font-medium tracking-wide rounded-full text-white dark:text-white w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-transparent dark:border-white/20"
-                    href="/auth"
-                  >
-                    Hire AI Tutor
-                  </Link>
-                )}
-              </div>
-              <ThemeToggle />
-              <button
-                className="md:hidden border border-border size-8 rounded-md cursor-pointer flex items-center justify-center"
-                onClick={toggleDrawer}
-              >
-                {isDrawerOpen ? (
-                  <X className="size-5" />
-                ) : (
-                  <Menu className="size-5" />
-                )}
-              </button>
+                  Dashboard
+                </Link>
+              ) : (
+                <Link
+                  className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 h-8 hidden md:flex items-center justify-center text-sm font-medium tracking-wide rounded-full text-white dark:text-white w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-transparent dark:border-white/20"
+                  href="/auth"
+                >
+                  Hire Machine
+                </Link>
+              )}
             </div>
+            <ThemeToggle />
+            <button
+              className="md:hidden border border-border size-8 rounded-md cursor-pointer flex items-center justify-center"
+              onClick={toggleDrawer}
+            >
+              {isDrawerOpen ? (
+                <X className="size-5" />
+              ) : (
+                <Menu className="size-5" />
+              )}
+            </button>
           </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* Mobile Drawer */}
       <AnimatePresence>
         {isDrawerOpen && (
-          <>
+          <motion.div
+            key="drawer"
+            className="fixed inset-0 z-50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
             <motion.div
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              variants={overlayVariants}
-              transition={{ duration: 0.2 }}
-              onClick={handleOverlayClick}
+              className="fixed inset-0 bg-background/80 backdrop-blur-sm"
+              onClick={toggleDrawer}
             />
-
             <motion.div
-              className="fixed inset-x-0 w-[95%] mx-auto bottom-3 bg-background border border-border p-4 rounded-xl shadow-lg"
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              variants={drawerVariants}
+              className="fixed bottom-0 left-0 right-0 top-20 z-50 overflow-hidden rounded-t-2xl border border-border bg-card p-4"
+              initial={{ y: "100%" }}
+              animate={{ y: "0%" }}
+              exit={{ y: "100%" }}
+              transition={{ duration: 0.3, ease: [0.33, 1, 0.68, 1] }}
             >
-              {/* Mobile menu content */}
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between">
-                  <Link href="/" className="flex items-center gap-6">
-                    <Image 
-                      src="https://pixiomedia.nyc3.digitaloceanspaces.com/uploads/1745430984238-gxDs711.png" 
-                      alt="AI Tutor Machine" 
-                      width={100} 
-                      height={30} 
-                      className="w-auto h-8" 
-                    />
-                  </Link>
-                  <button
-                    onClick={toggleDrawer}
-                    className="border border-border rounded-md p-1 cursor-pointer"
-                  >
-                    <X className="size-5" />
-                  </button>
-                </div>
-
-                <motion.ul
-                  className="flex flex-col text-sm mb-4 border border-border rounded-md"
-                  variants={drawerMenuContainerVariants}
-                >
-                  <AnimatePresence>
-                    {siteConfig.nav.links.map((item) => (
-                      <motion.li
-                        key={item.id}
-                        className="p-2.5 border-b border-border last:border-b-0"
-                        variants={drawerMenuVariants}
-                      >
-                        <a
-                          href={item.href}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            const element = document.getElementById(
-                              item.href.substring(1),
-                            );
-                            element?.scrollIntoView({ behavior: "smooth" });
-                            setIsDrawerOpen(false);
-                          }}
-                          className={`underline-offset-4 hover:text-primary/80 transition-colors ${
-                            activeSection === item.href.substring(1)
-                              ? "text-primary font-medium"
-                              : "text-primary/60"
-                          }`}
-                        >
-                          {item.name}
-                        </a>
-                      </motion.li>
-                    ))}
-                  </AnimatePresence>
-                </motion.ul>
-
-                {/* Action buttons */}
-                <div className="flex flex-col gap-2">
-                  {user ? (
-                    <Link
-                      href="/dashboard"
-                      className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 h-8 flex items-center justify-center text-sm font-medium tracking-wide rounded-full text-white dark:text-white w-full px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-transparent dark:border-white/20 hover:bg-pink-600 transition-all ease-out active:scale-95"
-                    >
-                      Dashboard
-                    </Link>
-                  ) : (
-                    <Link
-                      href="/auth"
-                      className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 h-8 flex items-center justify-center text-sm font-medium tracking-wide rounded-full text-white dark:text-white w-full px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-transparent dark:border-white/20 hover:bg-pink-600 transition-all ease-out active:scale-95"
-                    >
-                      Hire AI Tutor
-                    </Link>
-                  )}
-                  <div className="flex justify-between">
-                    <ThemeToggle />
-                  </div>
-                </div>
+              <div className="mb-6">
+                <h2 className="font-display text-xl font-semibold text-card-foreground">
+                  Menu
+                </h2>
+                <p className="text-muted-foreground">
+                  Navigate to any section.
+                </p>
               </div>
+              <motion.div className="flex flex-col gap-2 divide-y divide-border">
+                {siteConfig.nav.links.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={item.href}
+                    onClick={toggleDrawer}
+                    className="flex items-center justify-between py-2 text-lg font-medium text-card-foreground hover:text-primary"
+                  >
+                    {item.name}
+                    <ChevronRight className="size-4 text-muted-foreground" />
+                  </Link>
+                ))}
+              </motion.div>
             </motion.div>
-          </>
+          </motion.div>
         )}
       </AnimatePresence>
     </header>

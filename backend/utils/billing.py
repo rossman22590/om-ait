@@ -5,7 +5,12 @@ from utils.config import config, EnvMode
 
 # Define subscription tiers and their monthly limits (in minutes)
 SUBSCRIPTION_TIERS = {
+    # Current price IDs
     'price_1RGtl4G23sSyONuFYWYsA0HK': {'name': 'free', 'minutes': 25},
+    'price_1RIh34G23sSyONuFIpENlHw3': {'name': 'base', 'minutes': 500},
+    'price_1RIh2nG23sSyONuFeospbm4S': {'name': 'extra', 'minutes': 3000},
+    
+    # Legacy price IDs (keep for existing subscriptions)
     'price_1RGtkVG23sSyONuF8kQcAclk': {'name': 'base', 'minutes': 500},
     'price_1RGw3iG23sSyONuFGk8uD3XV': {'name': 'extra', 'minutes': 3000}
 }

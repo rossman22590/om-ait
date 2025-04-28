@@ -46,9 +46,10 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
   const gridParamsRef = useRef<any>(null);
   const [isInView, setIsInView] = useState(false);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const timeRef = useRef(0);
   
   // Throttle rendering to improve performance - adjust ms as needed
-  const FRAME_THROTTLE = 50; // Only render every ~50ms (20fps instead of 60fps)
+  const FRAME_THROTTLE = 16; // ~60fps
   const RESIZE_THROTTLE = 200; // Throttle resize events
 
   // Convert any CSS color to rgba for optimal canvas performance
@@ -178,18 +179,26 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
     [squareSize, gridGap, maxOpacity],
   );
 
+  // Simple flickering animation that matches the homepage
   const updateSquares = useCallback(
-    (squares: Float32Array, deltaTime: number) => {
-      // Only update if flickerChance is greater than 0
-      if (flickerChance <= 0) return;
+    (squares: Float32Array, time: number) => {
+      const rows = Math.floor(Math.sqrt(squares.length));
+      const cols = Math.ceil(squares.length / rows);
       
-      for (let i = 0; i < squares.length; i++) {
-        if (Math.random() < flickerChance * deltaTime) {
-          squares[i] = Math.random() * maxOpacity;
+      // Apply simple flickering with slight randomness
+      for (let i = 0; i < cols; i++) {
+        for (let j = 0; j < rows; j++) {
+          const index = i * rows + j;
+          if (index >= squares.length) continue;
+          
+          // Simple random flickering - matching the homepage pattern
+          if (Math.random() < flickerChance) {
+            squares[index] = Math.random() * maxOpacity;
+          }
         }
       }
     },
-    [flickerChance, maxOpacity],
+    [maxOpacity, flickerChance]
   );
 
   useEffect(() => {
@@ -256,10 +265,9 @@ export const FlickeringGrid: React.FC<FlickeringGridProps> = ({
       }
       
       lastRenderTimeRef.current = time;
-      const deltaTime = (time - lastTime) / 1000;
       lastTime = time;
 
-      updateSquares(gridParamsRef.current.squares, deltaTime);
+      updateSquares(gridParamsRef.current.squares, time);
       drawGrid(
         ctx,
         canvas.width,

@@ -11,7 +11,7 @@ declare global {
 import { createClient } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
-import { motion } from "motion/react";
+import { motion } from "framer-motion";
 import { setupNewSubscription } from "@/lib/actions/billing";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,8 @@ import { isLocalMode } from "@/lib/config";
 // Create SUBSCRIPTION_PLANS using stripePriceId from siteConfig
 export const SUBSCRIPTION_PLANS = {
   FREE: process.env.NEXT_PUBLIC_STRIPE_FREE_PLAN_ID || 'price_1RGtl4G23sSyONuFYWYsA0HK',
-  PRO: process.env.NEXT_PUBLIC_STRIPE_PRO_PLAN_ID || 'price_1RGtkVG23sSyONuF8kQcAclk',
-  ENTERPRISE: process.env.NEXT_PUBLIC_STRIPE_ENTERPRISE_PLAN_ID || 'price_1RGw3iG23sSyONuFGk8uD3XV',
+  PRO: process.env.NEXT_PUBLIC_STRIPE_PRO_PLAN_ID || 'price_1RIh34G23sSyONuFIpENlHw3',
+  ENTERPRISE: process.env.NEXT_PUBLIC_STRIPE_ENTERPRISE_PLAN_ID || 'price_1RIh2nG23sSyONuFeospbm4S',
 };
 
 // Price display animation component
@@ -62,8 +62,11 @@ export function PlanComparison({
   isCompact = false
 }: PlanComparisonProps) {
   const [currentPlanId, setCurrentPlanId] = useState<string | undefined>();
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // This will run whenever the component mounts
   useEffect(() => {
+    setIsLoading(true);
     async function fetchCurrentPlan() {
       // This function runs on every page refresh to detect the current plan
       if (accountId) {
@@ -146,8 +149,11 @@ export function PlanComparison({
           });
           
           // SPECIAL HARDCODED DETECTION: If we see the exact Pro plan ID from logs, force Pro status
-          if (data?.status === 'active' && data?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk') {
-            console.log('[CLIENT] HARDCODED PRO MATCH DETECTED!');
+          if (data?.status === 'active' && (
+            data?.price_id === 'price_1RGtkVG23sSyONuF8kQcAclk' || 
+            data?.price_id === 'price_1RIh34G23sSyONuFIpENlHw3'
+          )) {
+            console.log('[CLIENT] PRO MATCH DETECTED!');
             
             // Force Pro plan detection on the page
             if (typeof window !== 'undefined') {
@@ -156,6 +162,21 @@ export function PlanComparison({
             }
             
             setCurrentPlanId(SUBSCRIPTION_PLANS.PRO);
+          }
+          // SPECIAL HARDCODED DETECTION: If we see the exact Enterprise plan ID from logs, force Enterprise status
+          else if (data?.status === 'active' && (
+            data?.price_id === 'price_1RGw3iG23sSyONuFGk8uD3XV' || 
+            data?.price_id === 'price_1RIh2nG23sSyONuFeospbm4S'
+          )) {
+            console.log('[CLIENT] ENTERPRISE MATCH DETECTED!');
+            
+            // Force Enterprise plan detection on the page
+            if (typeof window !== 'undefined') {
+              window.omCurrentPlan = "Enterprise";
+              window.omPlanMinutes = 3000;
+            }
+            
+            setCurrentPlanId(SUBSCRIPTION_PLANS.ENTERPRISE);
           }
           // Otherwise do normal detection
           else if (validSubscription) {
@@ -207,6 +228,17 @@ export function PlanComparison({
     fetchCurrentPlan();
   }, [accountId]);
 
+  // Clear the loading state after data is fetched or after 1.5 seconds if fetch is taking too long
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
+    
+    return () => clearTimeout(timer);
+  }, [currentPlanId]);
+
+  // Define the current plan tiers with their details
+  const pricingTiers = siteConfig.cloudPricingItems;
 
   // For local development mode, show a message instead
   if (isLocalMode()) {
@@ -220,16 +252,11 @@ export function PlanComparison({
   }
 
   return (
-    <div 
-      className={cn(
-        "grid gap-3 w-full mx-auto", 
-        isCompact 
-          ? "grid-cols-1 max-w-md" 
-          : "grid-cols-1 md:grid-cols-3 max-w-6xl",
-        className
-      )}
-    >
-      {siteConfig.cloudPricingItems.map((tier) => {
+    <div className={cn("grid gap-6", 
+      isCompact ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3" : "grid-cols-1 md:grid-cols-3",
+      className
+    )}>
+      {!isLoading && pricingTiers.map((tier) => {
         const isCurrentPlan = currentPlanId === SUBSCRIPTION_PLANS[tier.name.toUpperCase() as keyof typeof SUBSCRIPTION_PLANS];
         
         return (
