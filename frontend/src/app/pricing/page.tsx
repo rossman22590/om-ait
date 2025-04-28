@@ -62,7 +62,7 @@ export default function PricingPage() {
             {
               id: 'free',
               name: 'Free',
-              description: 'For exploration and personal use',
+              description: 'For customers of AI Tutor Premium',
               price: '$0',
               duration: '/forever',
               popular: false,
