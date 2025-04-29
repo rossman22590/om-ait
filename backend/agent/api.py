@@ -33,7 +33,7 @@ REDIS_RESPONSE_LIST_TTL = 3600 * 24
 MODEL_NAME_ALIASES = {
     "sonnet-3.7": "anthropic/claude-3-7-sonnet-latest",
     "gpt-4.1": "openai/gpt-4.1-2025-04-14",
-    "gemini-flash-2.5": "openrouter/google/gemini-2.5-flash-preview",
+    "gemini-flash-2.0": "openrouter/google/gemini-2.0-flash-001",
     "grok-3": "xai/grok-3-fast-latest",
     "deepseek": "deepseek/deepseek-chat",
     "grok-3-mini": "xai/grok-3-mini-fast-beta",
@@ -44,7 +44,7 @@ class AgentStartRequest(BaseModel):
     enable_thinking: Optional[bool] = False
     reasoning_effort: Optional[str] = 'low'
     stream: Optional[bool] = True
-    enable_context_manager: Optional[bool] = False
+    enable_context_manager: Optional[bool] = True
 
 class InitiateAgentResponse(BaseModel):
     thread_id: str
