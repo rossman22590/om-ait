@@ -211,7 +211,16 @@ async def create_pubsub():
                     logger.warning(f"Redis SSL connection closed, ending pubsub stream gracefully")
                     # End the iteration gracefully instead of with an error
                     break
+                elif "Connection closed by server" in str(e):
+                    logger.warning(f"Redis server closed connection, ending pubsub stream gracefully")
+                    # End the iteration gracefully instead of with an error
+                    break
                 # Re-raise other errors to preserve original behavior
+                raise
+            except GeneratorExit:
+                # Handle proper cleanup when the generator is being closed
+                logger.debug("Redis pubsub generator being cleaned up")
+                # Re-raise to properly propagate cleanup
                 raise
     
     pubsub.listen = patched_listen
