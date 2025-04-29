@@ -196,4 +196,23 @@ async def create_pubsub():
     """Create a Redis pubsub object."""
     redis_client = await get_client()
     # decode_responses=True in client init applies to pubsub messages too
-    return redis_client.pubsub() 
+    pubsub = redis_client.pubsub()
+    
+    # Patch the listen method to handle SSL connection closes
+    original_listen = pubsub.listen
+    
+    async def patched_listen():
+        while True:
+            try:
+                async for message in original_listen():
+                    yield message
+            except (redis.ConnectionError, redis.TimeoutError, ssl.SSLError, ConnectionResetError) as e:
+                if "[SSL: APPLICATION_DATA_AFTER_CLOSE_NOTIFY]" in str(e):
+                    logger.warning(f"Redis SSL connection closed, ending pubsub stream gracefully")
+                    # End the iteration gracefully instead of with an error
+                    break
+                # Re-raise other errors to preserve original behavior
+                raise
+    
+    pubsub.listen = patched_listen
+    return pubsub
