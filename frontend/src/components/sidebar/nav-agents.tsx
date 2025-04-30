@@ -274,7 +274,7 @@ export function NavAgents() {
           <SidebarGroupLabel>Agents</SidebarGroupLabel>
           {state !== "collapsed" && (
             <Link 
-              href="/dashboard/new" 
+              href="/dashboard" 
               className="h-7 w-7 rounded-full hover:bg-accent flex items-center justify-center"
               aria-label="Create New Agent"
             >
@@ -288,7 +288,7 @@ export function NavAgents() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <SidebarMenuButton asChild>
-                    <Link href="/dashboard/new">
+                    <Link href="/dashboard">
                       <Plus className="h-4 w-4" />
                       <span>New Agent</span>
                     </Link>
