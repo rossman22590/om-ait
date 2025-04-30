@@ -995,8 +995,106 @@ export const updateThread = async (threadId: string, data: Partial<Thread>): Pro
 };
 
 export const toggleThreadPublicStatus = async (threadId: string, isPublic: boolean): Promise<Thread> => {
-  return updateThread(threadId, { is_public: isPublic });
+  try {
+    const supabase = createClient();
+    
+    // First get the thread to find its project ID
+    const { data: threadData, error: threadError } = await supabase
+      .from('threads')
+      .select('thread_id, project_id')
+      .eq('thread_id', threadId)
+      .single();
+      
+    if (threadError || !threadData) {
+      console.error("Error fetching thread:", threadError);
+      throw new Error("Thread not found or you don't have permission to access it");
+    }
+    
+    const projectId = threadData.project_id;
+    
+    // Update the thread first
+    const updatedThread = await updateThread(threadId, { is_public: isPublic });
+    
+    // Also update the project if it exists
+    if (projectId) {
+      const { error: projectUpdateError } = await supabase
+        .from('projects')
+        .update({ is_public: isPublic })
+        .eq('project_id', projectId);
+        
+      if (projectUpdateError) {
+        console.error("Error updating project public status:", projectUpdateError);
+        // Non-critical, we succeeded on the thread at least
+      } else {
+        console.log(`Updated public status to ${isPublic} for project: ${projectId}`);
+      }
+    }
+    
+    return updatedThread;
+  } catch (error) {
+    console.error("Failed to toggle thread public status:", error);
+    throw error;
+  }
 };
+
+/**
+ * Toggle the public status of a thread and its associated project
+ * @param threadId The thread ID to make public/private
+ * @param isPublic Whether to make the thread public (true) or private (false)
+ */
+export async function toggleThreadPublic(threadId: string, isPublic: boolean) {
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      throw new Error("No active session");
+    }
+    
+    // First get the thread to find the associated project
+    const { data: threadData, error: threadError } = await supabase
+      .from('threads')
+      .select('thread_id, project_id')
+      .eq('thread_id', threadId)
+      .single();
+      
+    if (threadError || !threadData) {
+      console.error("Error fetching thread:", threadError);
+      throw new Error("Thread not found or you don't have permission to access it");
+    }
+    
+    const projectId = threadData.project_id;
+    
+    // Update the thread's public status
+    const { error: threadUpdateError } = await supabase
+      .from('threads')
+      .update({ is_public: isPublic })
+      .eq('thread_id', threadId);
+      
+    if (threadUpdateError) {
+      console.error("Error updating thread public status:", threadUpdateError);
+      throw new Error("Failed to update thread public status");
+    }
+    
+    // Also update the project's public status
+    if (projectId) {
+      const { error: projectUpdateError } = await supabase
+        .from('projects')
+        .update({ is_public: isPublic })
+        .eq('id', projectId);
+        
+      if (projectUpdateError) {
+        console.error("Error updating project public status:", projectUpdateError);
+        // Non-critical, we succeeded on the thread at least
+      }
+    }
+    
+    return { success: true, isPublic };
+  } catch (error) {
+    console.error("Failed to toggle thread public status:", error);
+    throw error;
+  }
+}
 
 // Function to get public projects
 export const getPublicProjects = async (): Promise<Project[]> => {
@@ -1107,3 +1205,127 @@ export const initiateAgent = async (formData: FormData): Promise<InitiateAgentRe
   }
 };
 
+/**
+ * Get agent runs for a specific thread
+ */
+export async function getThreadAgentRuns(threadId: string) {
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      throw new Error("No active session");
+    }
+    
+    // Get current month
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const isoStartOfMonth = startOfMonth.toISOString();
+    
+    const { data, error } = await supabase
+      .from('agent_runs')
+      .select('started_at, completed_at')
+      .eq('thread_id', threadId)
+      .gte('started_at', isoStartOfMonth);
+      
+    if (error) {
+      console.error("Error fetching agent runs:", error);
+      throw error;
+    }
+    
+    return data || [];
+  } catch (error) {
+    console.error("Failed to get agent runs:", error);
+    return [];
+  }
+}
+
+/**
+ * Calculate minutes used for a thread in the current month
+ */
+export function calculateThreadMinutes(agentRuns: any[]) {
+  if (!agentRuns || agentRuns.length === 0) {
+    return 0;
+  }
+  
+  const now = new Date();
+  const nowTimestamp = now.getTime();
+  
+  const totalAgentTime = agentRuns.reduce((total, run) => {
+    const startTime = new Date(run.started_at).getTime();
+    const endTime = run.completed_at 
+      ? new Date(run.completed_at).getTime()
+      : nowTimestamp;
+    
+    return total + (endTime - startTime) / 1000; // In seconds
+  }, 0);
+  
+  // Convert to minutes
+  return Math.round(totalAgentTime / 60);
+}
+
+/**
+ * Delete a thread by ID
+ * @param threadId The ID of the thread to delete
+ */
+export async function deleteThread(threadId: string) {
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      throw new Error("No active session");
+    }
+    
+    // First check if the user has permission to delete this thread
+    const { data: threadData, error: threadError } = await supabase
+      .from('threads')
+      .select('*')
+      .eq('thread_id', threadId)
+      .single();
+      
+    if (threadError || !threadData) {
+      console.error("Error fetching thread for deletion:", threadError);
+      throw new Error("Thread not found or you don't have permission to delete it");
+    }
+    
+    // Delete associated messages first (foreign key constraint)
+    const { error: messagesError } = await supabase
+      .from('messages')
+      .delete()
+      .eq('thread_id', threadId);
+      
+    if (messagesError) {
+      console.error("Error deleting thread messages:", messagesError);
+      throw new Error("Failed to delete thread messages");
+    }
+    
+    // Delete associated agent runs
+    const { error: runsError } = await supabase
+      .from('agent_runs')
+      .delete()
+      .eq('thread_id', threadId);
+      
+    if (runsError) {
+      console.error("Error deleting agent runs:", runsError);
+      // Non-critical, continue with thread deletion
+    }
+    
+    // Finally delete the thread
+    const { error } = await supabase
+      .from('threads')
+      .delete()
+      .eq('thread_id', threadId);
+      
+    if (error) {
+      console.error("Error deleting thread:", error);
+      throw new Error(error.message);
+    }
+    
+    // Return success
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to delete thread:", error);
+    throw error;
+  }
+}

@@ -1,0 +1,65 @@
+/**
+ * Delete a thread by ID
+ * @param threadId The ID of the thread to delete
+ */
+export async function deleteThread(threadId: string) {
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session?.access_token) {
+      throw new Error("No active session");
+    }
+    
+    // First check if the user has permission to delete this thread
+    const { data: threadData, error: threadError } = await supabase
+      .from('threads')
+      .select('*')
+      .eq('thread_id', threadId)
+      .single();
+      
+    if (threadError || !threadData) {
+      console.error("Error fetching thread for deletion:", threadError);
+      throw new Error("Thread not found or you don't have permission to delete it");
+    }
+    
+    // Delete associated messages first (foreign key constraint)
+    const { error: messagesError } = await supabase
+      .from('messages')
+      .delete()
+      .eq('thread_id', threadId);
+      
+    if (messagesError) {
+      console.error("Error deleting thread messages:", messagesError);
+      throw new Error("Failed to delete thread messages");
+    }
+    
+    // Delete associated agent runs
+    const { error: runsError } = await supabase
+      .from('agent_runs')
+      .delete()
+      .eq('thread_id', threadId);
+      
+    if (runsError) {
+      console.error("Error deleting agent runs:", runsError);
+      // Non-critical, continue with thread deletion
+    }
+    
+    // Finally delete the thread
+    const { error } = await supabase
+      .from('threads')
+      .delete()
+      .eq('thread_id', threadId);
+      
+    if (error) {
+      console.error("Error deleting thread:", error);
+      throw new Error(error.message);
+    }
+    
+    // Return success
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to delete thread:", error);
+    throw error;
+  }
+}
