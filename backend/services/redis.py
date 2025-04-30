@@ -202,26 +202,36 @@ async def create_pubsub():
     original_listen = pubsub.listen
     
     async def patched_listen():
-        while True:
-            try:
-                async for message in original_listen():
-                    yield message
-            except (redis.ConnectionError, redis.TimeoutError, ssl.SSLError, ConnectionResetError) as e:
-                if "[SSL: APPLICATION_DATA_AFTER_CLOSE_NOTIFY]" in str(e):
-                    logger.warning(f"Redis SSL connection closed, ending pubsub stream gracefully")
-                    # End the iteration gracefully instead of with an error
-                    break
-                elif "Connection closed by server" in str(e):
-                    logger.warning(f"Redis server closed connection, ending pubsub stream gracefully")
-                    # End the iteration gracefully instead of with an error
-                    break
-                # Re-raise other errors to preserve original behavior
-                raise
-            except GeneratorExit:
-                # Handle proper cleanup when the generator is being closed
-                logger.debug("Redis pubsub generator being cleaned up")
-                # Re-raise to properly propagate cleanup
-                raise
+        _gen = None
+        try:
+            _gen = original_listen()
+            async for message in _gen:
+                yield message
+        except (redis.ConnectionError, redis.TimeoutError, ssl.SSLError, ConnectionResetError) as e:
+            if "[SSL: APPLICATION_DATA_AFTER_CLOSE_NOTIFY]" in str(e):
+                logger.warning(f"Redis SSL connection closed, ending pubsub stream gracefully")
+            elif "Connection closed by server" in str(e):
+                logger.warning(f"Redis server closed connection, ending pubsub stream gracefully")
+            else:
+                logger.warning(f"Redis connection error: {str(e)}")
+            # Don't re-raise - just end gracefully
+        except redis.ResponseError as e:
+            # Handle Upstash Redis compatibility issues
+            if "Command is not available:" in str(e):
+                logger.warning(f"Upstash Redis compatibility issue (handled): {str(e)}")
+            else:
+                logger.warning(f"Redis response error: {str(e)}")
+            # Don't re-raise - just end gracefully
+        except GeneratorExit:
+            # This is the critical part - must clean up the inner generator
+            logger.debug("Redis pubsub generator being cleaned up")
+            if _gen:
+                await _gen.aclose()
+            raise
+        except Exception as e:
+            # Catch any other unexpected errors
+            logger.error(f"Unexpected error in Redis pubsub stream: {str(e)}")
+            # Don't re-raise to avoid crashing the worker
     
     pubsub.listen = patched_listen
     return pubsub
