@@ -133,9 +133,10 @@ class SandboxDeployTool(SandboxToolsBase):
                             # Create the full custom domain with project ID as subdomain
                             full_custom_domain = f"{self.project_id}.{self.custom_domain}"
                             
-                            # Set up the custom domain
+                            # Set up the custom domain - use Cloudflare's current syntax for adding custom domains
+                            # The command format is: wrangler pages project domain add <project-name> <domain>
                             custom_domain_cmd = f'''cd {self.workspace_path} && export CLOUDFLARE_API_TOKEN={self.cloudflare_api_token} && 
-                                npx wrangler pages domain set {project_name} {full_custom_domain}'''
+                                npx wrangler pages project domain add {project_name} {full_custom_domain}'''
                                 
                             domain_response = self.sandbox.process.exec(custom_domain_cmd, timeout=120)
                             
