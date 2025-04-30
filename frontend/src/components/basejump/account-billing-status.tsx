@@ -163,9 +163,9 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
                 className="mb-6"
             />
 
-            <div className="flex gap-2 mb-6">
+            <div className="flex flex-col md:flex-row gap-2 mb-6">
                 {/* Top Up Minutes Button */}
-                <div className="w-1/3">
+                <div className="w-full md:w-1/3 mb-2 md:mb-0">
                     <a
                         href="https://buy.stripe.com/dR63cQee4dtVclqbII"
                         target="_blank"
@@ -180,7 +180,7 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
                 </div>
 
                 {/* Gift Minutes Button */}
-                <div className="w-1/3">
+                <div className="w-full md:w-1/3 mb-2 md:mb-0">
                     <a
                         href="https://buy.stripe.com/5kAdRuc5W2Phdpu6op"
                         target="_blank"
@@ -198,7 +198,7 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
                 </div>
 
                 {/* Manage Subscription Button */}
-                <div className="w-1/3">
+                <div className="w-full md:w-1/3">
                     <form>
                         <input type="hidden" name="accountId" value={accountId} />
                         <input type="hidden" name="returnUrl" value={returnUrl} />
