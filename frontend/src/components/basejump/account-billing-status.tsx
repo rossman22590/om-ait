@@ -120,7 +120,7 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
     }, [calculateUsage, planName]);
 
     // In local development mode, show a simplified component
-    if (isLocalMode()) {
+    if (false && isLocalMode()) { // Temporarily disable development mode check
         return (
             <div className="rounded-xl border shadow-sm bg-card p-6">
                 <h2 className="text-xl font-semibold mb-4">Billing Status</h2>
@@ -163,18 +163,55 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
                 className="mb-6"
             />
 
-            {/* Manage Subscription Button */}
-            <form>
-                <input type="hidden" name="accountId" value={accountId} />
-                <input type="hidden" name="returnUrl" value={returnUrl} />
-                <SubmitButton
-                    pendingText="Loading..."
-                    formAction={manageSubscription}
-                    className="w-full bg-primary text-white hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"
-                >
-                    Manage Subscription
-                </SubmitButton>
-            </form>
+            <div className="flex gap-2 mb-6">
+                {/* Top Up Minutes Button */}
+                <div className="w-1/3">
+                    <a
+                        href="https://buy.stripe.com/dR63cQee4dtVclqbII"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center h-10 w-full bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-md transition-all"
+                    >
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                        Top Up Minutes
+                    </a>
+                </div>
+
+                {/* Gift Minutes Button */}
+                <div className="w-1/3">
+                    <a
+                        href="https://buy.stripe.com/5kAdRuc5W2Phdpu6op"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center h-10 w-full bg-pink-500 hover:bg-pink-600 text-white font-medium rounded-md transition-all"
+                    >
+                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <rect x="3" y="8" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2" />
+                            <path d="M12 8v14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                            <path d="M3 12h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                            <path d="M16 8V6c0-2-1.5-4-4-4S8 4 8 6v2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                        Gift Minutes
+                    </a>
+                </div>
+
+                {/* Manage Subscription Button */}
+                <div className="w-1/3">
+                    <form>
+                        <input type="hidden" name="accountId" value={accountId} />
+                        <input type="hidden" name="returnUrl" value={returnUrl} />
+                        <SubmitButton
+                            pendingText="Loading..."
+                            formAction={manageSubscription}
+                            className="w-full bg-primary text-white hover:bg-primary/90 rounded-md h-10"
+                        >
+                            Manage Subscription
+                        </SubmitButton>
+                    </form>
+                </div>
+            </div>
         </div>
     )
 }
