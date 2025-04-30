@@ -16,7 +16,6 @@ class SandboxDeployTool(SandboxToolsBase):
         super().__init__(project_id, thread_manager)
         self.workspace_path = "/workspace"  # Ensure we're always operating in /workspace
         self.cloudflare_api_token = os.getenv("CLOUDFLARE_API_TOKEN")
-        self.custom_domain = os.getenv("CUSTOM_DOMAIN", "mymachine.space")  # Get domain from env or use default
 
     def clean_path(self, path: str) -> str:
         """Clean and normalize a path to be relative to /workspace"""
@@ -26,7 +25,7 @@ class SandboxDeployTool(SandboxToolsBase):
         "type": "function",
         "function": {
             "name": "deploy",
-            "description": "Deploy a static website (HTML+CSS+JS) from a directory in the sandbox to Cloudflare Pages. Only use this tool when permanent deployment to a production environment is needed. The directory path must be relative to /workspace. The website will be deployed to {name}.kortix.cloud.",
+            "description": "Deploy a static website (HTML+CSS+JS) from a directory in the sandbox to Cloudflare Pages. Only use this tool when permanent deployment to a production environment is needed. The directory path must be relative to /workspace. The website will be deployed to {name}.mymachine.space",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -68,7 +67,7 @@ class SandboxDeployTool(SandboxToolsBase):
         Only use this tool when permanent deployment to a production environment is needed.
         
         Args:
-            name: Name for the deployment, will be used in the URL as {name}.kortix.cloud
+            name: Name for the deployment, will be used in the URL as {name}.mymachine.space
             directory_path: Path to the directory to deploy, relative to /workspace
             
         Returns:
@@ -126,26 +125,6 @@ class SandboxDeployTool(SandboxToolsBase):
                     # Remove any trailing slashes for consistency
                     deployment_url = deployment_url.rstrip('/')
                     
-                    # Set up custom domain - just add this part
-                    custom_domain_url = None
-                    if self.custom_domain:
-                        try:
-                            # Create the full custom domain with project ID as subdomain
-                            full_custom_domain = f"{self.project_id}.{self.custom_domain}"
-                            
-                            # Set up the custom domain - use Cloudflare's current syntax for adding custom domains
-                            # The command format is: wrangler pages project domain add <project-name> <domain>
-                            custom_domain_cmd = f'''cd {self.workspace_path} && export CLOUDFLARE_API_TOKEN={self.cloudflare_api_token} && 
-                                npx wrangler pages project domain add {project_name} {full_custom_domain}'''
-                                
-                            domain_response = self.sandbox.process.exec(custom_domain_cmd, timeout=120)
-                            
-                            print(f"Custom domain setup output: {domain_response.result}")
-                            
-                            custom_domain_url = f"https://{full_custom_domain}"
-                        except Exception as domain_error:
-                            print(f"Custom domain setup failed (non-fatal): {domain_error}")
-                    
                     # Log the extracted URL for debugging
                     print(f"Extracted deployment URL: {deployment_url}")
                     
@@ -155,11 +134,6 @@ class SandboxDeployTool(SandboxToolsBase):
                         "url": deployment_url,
                         "output_summary": "Deployment completed successfully."
                     }
-                    
-                    # Add custom domain info only if it was set up
-                    if custom_domain_url:
-                        result["custom_url"] = custom_domain_url
-                        result["message"] = "Website deployed successfully. The custom domain may take 5-10 minutes to become accessible due to DNS propagation."
                     
                     # Return a clean success response - explicitly avoiding the raw output
                     # This ensures no special characters or escape sequences cause JSON issues
