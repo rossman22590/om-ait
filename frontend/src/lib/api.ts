@@ -1217,21 +1217,21 @@ export async function getThreadAgentRuns(threadId: string) {
       throw new Error("No active session");
     }
     
-    // Get current month
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const isoStartOfMonth = startOfMonth.toISOString();
+    // Get ALL agent runs for this thread, regardless of date
+    // We don't need to filter by month for the thread-specific timer
+    console.log(`Fetching ALL agent runs for thread ${threadId}`);
     
     const { data, error } = await supabase
       .from('agent_runs')
-      .select('started_at, completed_at')
-      .eq('thread_id', threadId)
-      .gte('started_at', isoStartOfMonth);
+      .select('started_at, completed_at, status')
+      .eq('thread_id', threadId);
       
     if (error) {
       console.error("Error fetching agent runs:", error);
       throw error;
     }
+    
+    console.log(`Found ${data?.length || 0} agent runs for thread ${threadId}`);
     
     return data || [];
   } catch (error) {
@@ -1255,13 +1255,17 @@ export function calculateThreadMinutes(agentRuns: any[]) {
     const startTime = new Date(run.started_at).getTime();
     const endTime = run.completed_at 
       ? new Date(run.completed_at).getTime()
-      : nowTimestamp;
+      : (run.status === 'completed' || run.status === 'stopped' || run.status === 'error')
+        ? startTime  // If completed but no timestamp, count as 0
+        : nowTimestamp;  // If still running, use current time
     
-    return total + (endTime - startTime) / 1000; // In seconds
+    // Safety check to avoid negative time values
+    const duration = Math.max(0, endTime - startTime) / 1000; // In seconds
+    return total + duration;
   }, 0);
   
-  // Convert to minutes
-  return Math.round(totalAgentTime / 60);
+  // Convert to minutes and round
+  return Math.max(0, Math.round(totalAgentTime / 60));
 }
 
 /**

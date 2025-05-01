@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import {
   ArrowUpRight,
   Link as LinkIcon,
@@ -11,6 +11,9 @@ import {
   Loader2,
   Globe,
   Lock,
+  Search,
+  X,
+  Pencil,
 } from "lucide-react"
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
@@ -29,6 +32,7 @@ import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarInput,
   useSidebar,
 } from "@/components/ui/sidebar"
 import {
@@ -36,7 +40,7 @@ import {
   TooltipContent,
   TooltipTrigger
 } from "@/components/ui/tooltip"
-import { getProjects, getThreads, deleteThread, toggleThreadPublicStatus, Project } from "@/lib/api"
+import { getProjects, getThreads, deleteThread, toggleThreadPublicStatus, updateProject, Project } from "@/lib/api"
 import Link from "next/link"
 import {
   AlertDialog,
@@ -67,6 +71,11 @@ export function NavAgents() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [threadToDelete, setThreadToDelete] = useState<ThreadWithProject | null>(null)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [editingThreadId, setEditingThreadId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState("")
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const editInputRef = useRef<HTMLInputElement>(null)
   const pathname = usePathname()
   const router = useRouter()
 
@@ -145,56 +154,158 @@ export function NavAgents() {
     }
   }
 
+  // Filter threads based on search term
+  const filteredThreads = useMemo(() => {
+    if (!searchTerm) return threads;
+    
+    return threads.filter(thread => 
+      thread.projectName.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [threads, searchTerm]);
+
+  // Handle search input key events
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setSearchTerm('')
+    }
+  }
+
   // Load data on initial render
   useEffect(() => {
     loadThreadsWithProjects()
+  }, []);
+
+  // Listen for user events that indicate thread data may have changed
+  useEffect(() => {
+    // Custom event fired when we need to reload threads
+    const handleReloadThreads = () => {
+      loadThreadsWithProjects(false);
+    };
     
-    // Set up an interval to refresh threads every 30 seconds
-    const intervalId = setInterval(() => {
-      loadThreadsWithProjects(false)
-    }, 30000)
+    window.addEventListener('reload-threads', handleReloadThreads);
     
-    // Listen for project updates
-    window.addEventListener('project-updated', handleProjectUpdate)
+    // Listen for project update events
+    window.addEventListener('project-updated', handleProjectUpdate);
     
     return () => {
-      clearInterval(intervalId)
-      window.removeEventListener('project-updated', handleProjectUpdate)
-    }
-  }, [])
-  
+      window.removeEventListener('reload-threads', handleReloadThreads);
+      window.removeEventListener('project-updated', handleProjectUpdate);
+    };
+  }, []);
+
   // Listen for project update events
   const handleProjectUpdate = (event: Event) => {
-    // Check if the event is a CustomEvent with detail
-    if (event instanceof CustomEvent && event.detail) {
-      console.log("Project update event received:", event.detail);
+    // If the custom event has project data, process it
+    const customEvent = event as CustomEvent<{project?: Project}>;
+    const updatedProject = customEvent.detail?.project;
+    
+    if (updatedProject) {
+      console.log("Project updated:", updatedProject.id, updatedProject.name);
       
-      // If this is a new project creation
-      if (event.detail.action === 'created' && event.detail.projectId && event.detail.threadId) {
-        // Reload threads to show the new one
-        loadThreadsWithProjects();
-      }
-      
-      // If this is a project rename
-      if (event.detail.action === 'renamed' && event.detail.projectId && event.detail.newName) {
-        // Update the local thread list with the new name
-        setThreads(prev => {
-          return prev.map(thread => {
-            if (thread.projectId === event.detail.projectId) {
-              return { ...thread, projectName: event.detail.newName };
-            }
-            return thread;
-          });
-        });
-      }
+      // Update the threads in state to reflect the project name change
+      setThreads(currentThreads => 
+        currentThreads.map(thread => {
+          if (thread.projectId === updatedProject.id) {
+            return {
+              ...thread,
+              projectName: updatedProject.name || 'Unnamed Project'
+            };
+          }
+          return thread;
+        })
+      );
+    } else {
+      // If no specific project was provided, reload all threads
+      loadThreadsWithProjects(false);
     }
   };
 
   // Function to handle thread click with loading state
   const handleThreadClick = (e: React.MouseEvent<HTMLAnchorElement>, threadId: string, url: string) => {
+    // Don't navigate if we're editing
+    if (editingThreadId === threadId) {
+      e.preventDefault();
+      return;
+    }
+    
     e.preventDefault()
     setLoadingThreadId(threadId)
     router.push(url)
+  }
+
+  // Start editing project name
+  const startRenaming = (thread: ThreadWithProject, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setEditingThreadId(thread.threadId);
+    setEditingName(thread.projectName);
+    
+    // Focus the input after it renders
+    setTimeout(() => {
+      if (editInputRef.current) {
+        editInputRef.current.focus();
+        editInputRef.current.select();
+      }
+    }, 10);
+  }
+  
+  // Save the edited project name
+  const saveProjectName = async () => {
+    if (!editingThreadId || !editingName.trim()) {
+      setEditingThreadId(null);
+      return;
+    }
+    
+    try {
+      // Find the thread we're editing
+      const thread = threads.find(t => t.threadId === editingThreadId);
+      if (!thread) {
+        throw new Error("Thread not found");
+      }
+      
+      // Update project name in database
+      await updateProject(thread.projectId, {
+        name: editingName.trim()
+      });
+      
+      // Update local state to show new name
+      setThreads(currentThreads => 
+        currentThreads.map(t => 
+          t.projectId === thread.projectId 
+            ? { ...t, projectName: editingName.trim() }
+            : t
+        )
+      );
+      
+      toast.success("Chat renamed successfully");
+      
+      // Dispatch event to notify other components that project was updated
+      window.dispatchEvent(new CustomEvent('project-updated', {
+        detail: { 
+          project: {
+            id: thread.projectId,
+            name: editingName.trim()
+          }
+        }
+      }));
+    } catch (error) {
+      console.error("Error renaming chat:", error);
+      toast.error("Failed to rename chat");
+    } finally {
+      setEditingThreadId(null);
+    }
+  }
+  
+  // Handle keyboard events for editing
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveProjectName();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setEditingThreadId(null);
+    }
   }
 
   // Handle thread deletion
@@ -204,31 +315,26 @@ export function NavAgents() {
     try {
       setIsDeleting(true);
       
-      // Call the delete API
-      await deleteThread(threadToDelete.threadId);
+      const { threadId } = threadToDelete;
+      const result = await deleteThread(threadId);
       
-      // Close the dialog
-      setDeleteDialogOpen(false);
-      
-      // Show success toast before reload
-      toast.success("Thread deleted successfully");
-      
-      // Check if we're on the deleted thread's page
-      const needsRedirect = pathname?.includes(threadToDelete.threadId);
-      
-      // Force a complete page refresh after a short delay
-      setTimeout(() => {
-        if (needsRedirect) {
-          // Redirect to dashboard
-          window.location.href = '/dashboard';
-        } else {
-          // Just refresh the current page
-          window.location.reload();
+      if (result?.success) {
+        toast.success('Thread deleted successfully');
+        
+        // Remove from UI
+        setThreads(currentThreads => 
+          currentThreads.filter(t => t.threadId !== threadId)
+        );
+        
+        // If we're currently on that thread's page, redirect to dashboard
+        if (pathname?.includes(threadId)) {
+          router.push('/dashboard');
         }
-      }, 500);
-    } catch (err) {
-      console.error("Error deleting thread:", err);
-      toast.error("Failed to delete thread");
+      }
+    } catch (error) {
+      console.error('Error deleting thread:', error);
+      toast.error('Failed to delete thread. Please try again.');
+    } finally {
       setIsDeleting(false);
       setDeleteDialogOpen(false);
       setThreadToDelete(null);
@@ -240,36 +346,64 @@ export function NavAgents() {
     setThreadToDelete(thread);
     setDeleteDialogOpen(true);
   };
-
+  
   // Function to toggle thread public status
   const togglePublicStatus = async (thread: ThreadWithProject) => {
     try {
-      // Toggle the current status
-      const newStatus = !(thread.isPublic || false);
+      const newStatus = !thread.isPublic;
+      const result = await toggleThreadPublicStatus(thread.threadId, newStatus);
       
-      // Update in the database
-      await toggleThreadPublicStatus(thread.threadId, newStatus);
-      
-      // Show success message
-      toast.success(`Thread is now ${newStatus ? 'public' : 'private'}`);
-      
-      // Update local state to reflect the change
-      setThreads(prev => 
-        prev.map(t => 
-          t.threadId === thread.threadId 
-            ? {...t, isPublic: newStatus} 
-            : t
-        )
-      );
-    } catch (err) {
-      console.error("Error toggling public status:", err);
-      toast.error("Failed to update public status");
+      if (result?.success) {
+        toast.success(`Thread ${newStatus ? 'is now public' : 'is now private'}`);
+        
+        // Update in the UI
+        setThreads(currentThreads => 
+          currentThreads.map(t => {
+            if (t.threadId === thread.threadId) {
+              return {
+                ...t,
+                isPublic: newStatus
+              };
+            }
+            return t;
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Error toggling thread public status:', error);
+      toast.error('Failed to update thread status. Please try again.');
     }
   };
 
   return (
     <>
       <SidebarGroup>
+        {/* Search input - positioned above the header */}
+        {state !== "collapsed" && (
+          <div className="px-3 pt-2 pb-1">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
+              <SidebarInput
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search agents..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                className="w-full pl-8"
+              />
+              {searchTerm && (
+                <button 
+                  className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60 hover:text-muted-foreground"
+                  onClick={() => setSearchTerm('')}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        
         <div className="flex justify-between items-center">
           <SidebarGroupLabel>Agents</SidebarGroupLabel>
           {state !== "collapsed" && (
@@ -282,6 +416,7 @@ export function NavAgents() {
             </Link>
           )}
         </div>
+        
         <SidebarMenu>
           {state === "collapsed" && (
             <SidebarMenuItem>
@@ -310,16 +445,30 @@ export function NavAgents() {
                 </SidebarMenuItem>
               ))}
             </>
-          ) : threads.length > 0 ? (
+          ) : filteredThreads.length > 0 ? (
             // Threads list
             <>
-              {threads.map((thread) => {
+              {filteredThreads.map((thread) => {
                 const isActive = pathname?.includes(thread.threadId) || false;
                 const isThreadLoading = loadingThreadId === thread.threadId;
                 
                 return (
                   <SidebarMenuItem key={`thread-${thread.threadId}`}>
-                    {state === "collapsed" ? (
+                    {editingThreadId === thread.threadId ? (
+                      // Edit mode
+                      <div className="flex items-center w-full px-3 py-1">
+                        <input
+                          ref={editInputRef}
+                          type="text"
+                          value={editingName}
+                          onChange={(e) => setEditingName(e.target.value)}
+                          onKeyDown={handleEditKeyDown}
+                          onBlur={saveProjectName}
+                          className="w-full h-8 px-2 py-1 rounded text-sm bg-sidebar-foreground/10 text-sidebar-foreground border border-sidebar-foreground/20 focus:outline-none focus:ring-1 focus:ring-sidebar-foreground/30"
+                          placeholder="Enter name..."
+                        />
+                      </div>
+                    ) : state === "collapsed" ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <SidebarMenuButton asChild className={isActive ? "bg-accent text-accent-foreground" : ""}>
@@ -347,32 +496,18 @@ export function NavAgents() {
                         </Link>
                       </SidebarMenuButton>
                     )}
-                    {state !== "collapsed" && (
+                    {state !== "collapsed" && !editingThreadId && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <SidebarMenuAction showOnHover>
-                            <MoreHorizontal />
-                            <span className="sr-only">More</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Thread actions</span>
                           </SidebarMenuAction>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          className="w-56 rounded-lg"
-                          side={isMobile ? "bottom" : "right"}
-                          align={isMobile ? "end" : "start"}
-                        >
-                          <DropdownMenuItem onClick={() => {
-                            navigator.clipboard.writeText(window.location.origin + thread.url)
-                            toast.success("Link copied to clipboard")
-                          }}>
-                            <LinkIcon className="text-muted-foreground" />
-                            <span>Copy Link</span>
-                          </DropdownMenuItem>
-                          
-                          {/* Share link option - only show if thread is public */}
+                        <DropdownMenuContent align="end">
                           {thread.isPublic && (
                             <DropdownMenuItem onClick={() => {
-                              // Convert /agents/ to /share/ in the URL
-                              const shareUrl = window.location.origin + thread.url.replace('/agents/', '/share/');
+                              const shareUrl = `${window.location.origin}/share/${thread.threadId}`;
                               navigator.clipboard.writeText(shareUrl);
                               toast.success("Share link copied to clipboard");
                             }}>
@@ -380,6 +515,11 @@ export function NavAgents() {
                               <span>Copy Share Link</span>
                             </DropdownMenuItem>
                           )}
+                          
+                          <DropdownMenuItem onClick={(e) => startRenaming(thread, e)}>
+                            <Pencil className="text-muted-foreground" />
+                            <span>Rename</span>
+                          </DropdownMenuItem>
                           
                           <DropdownMenuItem asChild>
                             <a href={thread.url} target="_blank" rel="noopener noreferrer">
@@ -424,6 +564,14 @@ export function NavAgents() {
                 );
               })}
             </>
+          ) : threads.length > 0 && searchTerm ? (
+            // No search results
+            <SidebarMenuItem>
+              <SidebarMenuButton className="text-sidebar-foreground/70">
+                <MessagesSquare className="h-4 w-4" />
+                <span>No matches found</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
           ) : (
             // Empty state
             <SidebarMenuItem>
