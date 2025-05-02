@@ -17,6 +17,9 @@ import {
   AlertTriangle,
   FileText,
   ChevronDown,
+  Search,
+  Archive,
+  X
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { FileRenderer, getFileTypeFromExtension } from "@/components/file-renderers";
@@ -24,6 +27,8 @@ import { listSandboxFiles, getSandboxFileContent, type FileInfo, Project } from 
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import JSZip from 'jszip';
 
 // Define API_URL
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
@@ -47,6 +52,9 @@ export function FileViewerModal({
   const [currentPath, setCurrentPath] = useState("/workspace");
   const [files, setFiles] = useState<FileInfo[]>([]);
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
+  
+  // Search state
+  const [searchText, setSearchText] = useState("");
   
   // File content state
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
@@ -651,67 +659,281 @@ export function FileViewerModal({
     }
   }, [initialPathProcessed, isLoadingFiles, files, selectedFilePath, initialFilePath, normalizePath, currentPath, openFile]);
 
+  // Get filtered files based on search text
+  const filteredFiles = useCallback(() => {
+    if (!searchText.trim()) {
+      return files;
+    }
+    
+    const searchLower = searchText.toLowerCase();
+    return files.filter(file => 
+      file.name.toLowerCase().includes(searchLower)
+    );
+  }, [files, searchText]);
+
+  // Add download all files function
+  const downloadAllFiles = useCallback(async () => {
+    if (!files.length || isLoadingFiles) return;
+    
+    try {
+      setIsDownloading(true);
+      toast.info("Preparing files for download...");
+      
+      // Filter out directories - we only want files
+      const filesToDownload = files.filter(file => !file.is_dir);
+      
+      if (filesToDownload.length === 0) {
+        toast.warning("No files to download in this directory");
+        setIsDownloading(false);
+        return;
+      }
+      
+      // If there's only one file, just download it directly
+      if (filesToDownload.length === 1) {
+        const file = filesToDownload[0];
+        await downloadSingleFile(file);
+        setIsDownloading(false);
+        return;
+      }
+      
+      // For multiple files, create a zip
+      await createAndDownloadZip(filesToDownload);
+      
+    } catch (error) {
+      console.error('Error downloading files:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to download files');
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [files, isLoadingFiles]);
+  
+  // Helper function to download a single file
+  const downloadSingleFile = async (file: FileInfo) => {
+    try {
+      // Get authenticated session
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Headers for authenticated requests
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      
+      const fileUrl = new URL(`${API_URL}/sandboxes/${sandboxId}/files/content`);
+      fileUrl.searchParams.append('path', file.path);
+      
+      const response = await fetch(fileUrl.toString(), { headers });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to download file: ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = downloadUrl;
+      downloadLink.download = file.name;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      window.URL.revokeObjectURL(downloadUrl);
+      
+      toast.success("File downloaded successfully");
+    } catch (error) {
+      console.error(`Error downloading file: ${error}`);
+      toast.error("Failed to download file");
+      throw error;
+    }
+  };
+  
+  // Helper function to create and download a zip of multiple files
+  const createAndDownloadZip = async (filesToDownload: FileInfo[]) => {
+    try {
+      // Get authenticated session
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Headers for authenticated requests
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      
+      // Create new JSZip instance
+      const zip = new JSZip();
+      
+      // Track progress
+      let processed = 0;
+      const total = filesToDownload.length;
+      
+      // Process each file
+      for (const file of filesToDownload) {
+        try {
+          // Create URL for file content
+          const fileUrl = new URL(`${API_URL}/sandboxes/${sandboxId}/files/content`);
+          fileUrl.searchParams.append('path', file.path);
+          
+          // Fetch file content
+          const response = await fetch(fileUrl.toString(), { headers });
+          
+          if (!response.ok) {
+            console.error(`Failed to download file ${file.name}: ${response.statusText}`);
+            toast.warning(`Skipping ${file.name} (${response.statusText})`);
+            processed++;
+            continue; // Skip this file but continue with others
+          }
+          
+          // Get file content as blob
+          const blob = await response.blob();
+          
+          // Add file to zip with relative path (remove /workspace/ prefix)
+          const relativePath = file.path.replace(/^\/workspace\/?/, '');
+          zip.file(relativePath || file.name, blob);
+          
+          // Update progress
+          processed++;
+          if (processed % 5 === 0 || processed === total) {
+            toast.info(`Zipping files: ${processed}/${total}`);
+          }
+          
+        } catch (error) {
+          console.error(`Error processing ${file.name}:`, error);
+          processed++;
+          // Continue with other files
+        }
+      }
+      
+      // Generate zip file
+      toast.info("Generating zip file...");
+      const zipBlob = await zip.generateAsync({ 
+        type: 'blob',
+        compression: "DEFLATE",
+        compressionOptions: { level: 6 }
+      });
+      
+      // Create download link for the zip
+      const downloadUrl = window.URL.createObjectURL(zipBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = downloadUrl;
+      
+      // Get folder name from current path or use 'workspace' as default
+      const folderName = currentPath.split('/').pop() || 'workspace';
+      downloadLink.download = `${folderName}.zip`;
+      
+      // Trigger download
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      
+      // Cleanup
+      window.URL.revokeObjectURL(downloadUrl);
+      
+      toast.success(`Downloaded ${filesToDownload.length} files as ${folderName}.zip`);
+    } catch (error) {
+      console.error('Error creating zip file:', error);
+      toast.error('Failed to create zip file');
+      throw error;
+    }
+  };
+  
   // --- Render --- //
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[90vw] md:max-w-[1200px] w-[95vw] h-[90vh] max-h-[900px] flex flex-col p-0 gap-0 overflow-hidden">
-        <DialogHeader className="px-4 py-2 border-b flex-shrink-0">
-          <DialogTitle className="text-lg font-semibold">Workspace Files</DialogTitle>
+      <DialogContent className="sm:max-w-[90vw] md:max-w-[1200px] w-[95vw] h-[90vh] max-h-[900px] p-0 gap-0 flex flex-col">
+        <DialogHeader className="px-4 py-3 border-b flex-shrink-0">
+          <DialogTitle className="text-lg">Workspace Files</DialogTitle>
         </DialogHeader>
         
-        {/* Navigation Bar */}
-        <div className="px-4 py-2 border-b flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={navigateHome}
-            className="h-8 w-8"
-            title="Go to home directory"
-          >
-            <Home className="h-4 w-4" />
-          </Button>
-          
-          <div className="flex items-center overflow-x-auto flex-1 min-w-0 scrollbar-hide whitespace-nowrap">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="h-7 px-2 text-sm font-medium min-w-fit flex-shrink-0"
+        {/* Navigation and Actions Bar */}
+        <div className="px-4 py-3 border-b flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={navigateHome}
+              className="h-8 w-8"
+              title="Go to home directory"
             >
-              home
+              <Home className="h-4 w-4" />
             </Button>
             
-            {currentPath !== '/workspace' && (
+            <div className="flex items-center overflow-x-auto flex-1 min-w-0 scrollbar-hide whitespace-nowrap">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-7 px-2 text-sm font-medium min-w-fit flex-shrink-0"
+                onClick={navigateHome}
+              >
+                home
+              </Button>
+              
+              {currentPath !== '/workspace' && (
+                <>
+                  {getBreadcrumbSegments(currentPath).map((segment, index) => (
+                    <Fragment key={segment.path}>
+                      <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground opacity-50 flex-shrink-0" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-sm font-medium truncate max-w-[200px]"
+                        onClick={() => navigateToBreadcrumb(segment.path)}
+                      >
+                        {segment.name}
+                      </Button>
+                    </Fragment>
+                  ))}
+                </>
+              )}
+              
+              {selectedFilePath && (
+                <>
+                  <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground opacity-50 flex-shrink-0" />
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium truncate">
+                      {selectedFilePath.split('/').pop()}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 ml-4">
+            {!selectedFilePath && (
               <>
-                {getBreadcrumbSegments(currentPath).map((segment, index) => (
-                  <Fragment key={segment.path}>
-                    <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground opacity-50 flex-shrink-0" />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-sm font-medium truncate max-w-[200px]"
-                      onClick={() => navigateToBreadcrumb(segment.path)}
-                    >
-                      {segment.name}
-                    </Button>
-                  </Fragment>
-                ))}
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={handleUpload}
+                  disabled={isUploading}
+                  className="h-9"
+                >
+                  {isUploading ? (
+                    <Loader className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4 mr-1.5" />
+                  )}
+                  Upload
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={downloadAllFiles}
+                  disabled={isDownloading || files.length === 0 || files.every(f => f.is_dir)}
+                  className="h-9"
+                >
+                  {isDownloading ? (
+                    <Loader className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <Archive className="h-4 w-4 mr-1.5" />
+                  )}
+                  Download All
+                </Button>
               </>
             )}
             
-            {selectedFilePath && (
-              <>
-                <ChevronRight className="h-4 w-4 mx-1 text-muted-foreground opacity-50 flex-shrink-0" />
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium truncate">
-                    {selectedFilePath.split('/').pop()}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-          
-          <div className="flex items-center gap-2 flex-shrink-0">
             {selectedFilePath && (
               <>
                 <Button
@@ -719,14 +941,14 @@ export function FileViewerModal({
                   size="sm"
                   onClick={handleDownload}
                   disabled={isDownloading || isLoadingContent}
-                  className="h-8 gap-1"
+                  className="h-9 gap-1"
                 >
                   {isDownloading ? (
-                    <Loader className="h-4 w-4 animate-spin" />
+                    <Loader className="h-4 w-4 mr-1.5 animate-spin" />
                   ) : (
-                    <Download className="h-4 w-4" />
+                    <Download className="h-4 w-4 mr-1.5" />
                   )}
-                  <span className="hidden sm:inline">Download</span>
+                  Download
                 </Button>
                 
                 {/* Replace the Export as PDF button with a dropdown */}
@@ -737,14 +959,14 @@ export function FileViewerModal({
                         variant="outline"
                         size="sm"
                         disabled={isExportingPdf || isLoadingContent || contentError !== null}
-                        className="h-8 gap-1"
+                        className="h-9 gap-1"
                       >
                         {isExportingPdf ? (
-                          <Loader className="h-4 w-4 animate-spin" />
+                          <Loader className="h-4 w-4 mr-1.5 animate-spin" />
                         ) : (
-                          <FileText className="h-4 w-4" />
+                          <FileText className="h-4 w-4 mr-1.5" />
                         )}
-                        <span className="hidden sm:inline">Export as PDF</span>
+                        Export as PDF
                         <ChevronDown className="h-3 w-3 ml-1" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -767,23 +989,6 @@ export function FileViewerModal({
               </>
             )}
             
-            {!selectedFilePath && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleUpload}
-                disabled={isUploading}
-                className="h-8 gap-1"
-              >
-                {isUploading ? (
-                  <Loader className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4" />
-                )}
-                <span className="hidden sm:inline">Upload</span>
-              </Button>
-            )}
-            
             <input
               type="file"
               ref={fileInputRef}
@@ -794,22 +999,46 @@ export function FileViewerModal({
           </div>
         </div>
         
+        {/* Search Input */}
+        <div className="px-4 py-3">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <Search className="h-4 w-4 text-muted-foreground/70" />
+            </div>
+            <Input
+              type="text"
+              placeholder="Search files..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              className="pl-10 py-2 h-9 bg-muted/40 border-muted"
+            />
+            {searchText && (
+              <button 
+                className="absolute inset-y-0 right-0 flex items-center pr-3"
+                onClick={() => setSearchText("")}
+              >
+                <X className="h-4 w-4 text-muted-foreground hover:text-foreground transition-colors" />
+              </button>
+            )}
+          </div>
+        </div>
+        
         {/* Content Area */}
         <div className="flex-1 overflow-hidden">
           {selectedFilePath ? (
             /* File Viewer */
             <div className="h-full w-full overflow-auto">
               {isLoadingContent ? (
-                <div className="h-full w-full flex flex-col items-center justify-center">
+                <div className="h-full w-full flex items-center justify-center">
                   <Loader className="h-8 w-8 animate-spin text-primary mb-3" />
                   <p className="text-sm text-muted-foreground">Loading file...</p>
                 </div>
               ) : contentError ? (
-                <div className="h-full w-full flex items-center justify-center p-4">
-                  <div className="max-w-md p-6 text-center border rounded-lg bg-muted/10">
-                    <AlertTriangle className="h-10 w-10 text-orange-500 mx-auto mb-4" />
+                <div className="h-full w-full flex flex-col items-center justify-center p-6">
+                  <div className="max-w-md text-center">
+                    <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
                     <h3 className="text-lg font-medium mb-2">Error Loading File</h3>
-                    <p className="text-sm text-muted-foreground mb-4">{contentError}</p>
+                    <p className="mb-6 text-muted-foreground">{contentError}</p>
                     <div className="flex justify-center gap-3">
                       <Button 
                         onClick={() => {
@@ -863,10 +1092,23 @@ export function FileViewerModal({
                   <Folder className="h-12 w-12 mb-2 text-muted-foreground opacity-30" />
                   <p className="text-sm text-muted-foreground">Directory is empty</p>
                 </div>
+              ) : filteredFiles().length === 0 ? (
+                <div className="h-full w-full flex flex-col items-center justify-center">
+                  <Search className="h-12 w-12 mb-2 text-muted-foreground opacity-30" />
+                  <p className="text-sm text-muted-foreground">No files match your search</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => setSearchText("")}
+                  >
+                    Clear search
+                  </Button>
+                </div>
               ) : (
                 <ScrollArea className="h-full w-full p-2">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
-                    {files.map(file => (
+                    {filteredFiles().map(file => (
                       <button
                         key={file.path}
                         className={`flex flex-col items-center p-3 rounded-lg border hover:bg-muted/50 transition-colors ${
