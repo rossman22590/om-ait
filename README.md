@@ -31,6 +31,7 @@ Suna's powerful toolkit includes seamless browser automation to navigate the web
   - [Prerequisites](#prerequisites)
   - [Installation Steps](#installation-steps)
 - [License](#license)
+- [Recent Updates](#recent-updates)
 
 ## Project Architecture
 
@@ -238,3 +239,19 @@ python api.py
 
 Kortix Suna is licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for the full license text.
 
+## Recent Updates
+
+### May 2, 2025
+1. **UI Improvements**:
+   - Restored original width for the Workspace Files modal to improve visibility and usability
+   - Added better styling and alignment for file browser buttons and search functionality
+
+2. **Thread UI Fixes**:
+   - Fixed issue where viewing previous tool calls would automatically jump to the latest tool call during agent operation
+   - Improved state management to properly track manually selected tool calls
+   - Added smooth scrolling behavior for a better user experience
+
+3. **Sandbox Enhancements**:
+   - Added support for ZIP file downloads in the Workspace Files modal
+   - Implemented client-side ZIP creation using JSZip for bundling multiple files
+   - Improved error handling and progress notifications during file operations

@@ -217,6 +217,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
   const [currentToolIndex, setCurrentToolIndex] = useState<number>(0);
   const [autoOpenedPanel, setAutoOpenedPanel] = useState(false);
   const [initialPanelOpenAttempted, setInitialPanelOpenAttempted] = useState(false);
+  const [manuallySelectedToolCall, setManuallySelectedToolCall] = useState(false);
   
   // Billing alert state
   const [showBillingAlert, setShowBillingAlert] = useState(false);
@@ -290,6 +291,7 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
 
   const handleSidePanelNavigate = useCallback((newIndex: number) => {
     setCurrentToolIndex(newIndex);
+    setManuallySelectedToolCall(true);
   }, []);
 
   useEffect(() => {
@@ -765,8 +767,10 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
     if (historicalToolPairs.length > 0) {
       // If the panel is open (or was just auto-opened) and the user didn't close it
       if (isSidePanelOpen && !userClosedPanelRef.current) {
-          // Always jump to the latest tool call index
-          setCurrentToolIndex(historicalToolPairs.length - 1);
+          // Only jump to latest if user hasn't manually selected a tool call
+          if (!manuallySelectedToolCall) {
+            setCurrentToolIndex(historicalToolPairs.length - 1);
+          }
       } else if (!isSidePanelOpen && !autoOpenedPanel && !userClosedPanelRef.current) {
           // Auto-open the panel only the first time tools are detected
           setCurrentToolIndex(historicalToolPairs.length - 1);
@@ -774,12 +778,14 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
           setAutoOpenedPanel(true); 
       }
     }
-  }, [messages, isSidePanelOpen, autoOpenedPanel]); // Rerun when messages or panel state changes
+  }, [messages, isSidePanelOpen, autoOpenedPanel, manuallySelectedToolCall]);
+  // Rerun when messages or panel state changes
 
   // Reset auto-opened state when panel is closed
   useEffect(() => {
     if (!isSidePanelOpen) {
       setAutoOpenedPanel(false);
+      setManuallySelectedToolCall(false);
     }
   }, [isSidePanelOpen]);
 
@@ -836,7 +842,10 @@ export default function ThreadPage({ params }: { params: Promise<ThreadParams> }
 
     // Reset user closed state when explicitly clicking a tool
     userClosedPanelRef.current = false;
-
+    
+    // Set flag that user manually selected a tool call
+    setManuallySelectedToolCall(true);
+    
     console.log("[PAGE] Tool Click Triggered. Assistant Message ID:", clickedAssistantMessageId, "Tool Name:", clickedToolName);
 
     // Find the index of the tool call associated with the clicked assistant message
