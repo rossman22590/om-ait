@@ -14,6 +14,7 @@ import {
   Search,
   X,
   Pencil,
+  Copy
 } from "lucide-react"
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
@@ -52,6 +53,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
 
 // Thread with associated project info for display in sidebar
 type ThreadWithProject = {
@@ -78,6 +80,11 @@ export function NavAgents() {
   const editInputRef = useRef<HTMLInputElement>(null)
   const pathname = usePathname()
   const router = useRouter()
+  
+  // Share dialog state
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [threadToShare, setThreadToShare] = useState<ThreadWithProject | null>(null)
+  const [shareLink, setShareLink] = useState("")
 
   // Helper to sort threads by updated_at (most recent first)
   const sortThreads = (threadsList: ThreadWithProject[]): ThreadWithProject[] => {
@@ -308,6 +315,90 @@ export function NavAgents() {
     }
   }
 
+  // Function to toggle thread public status
+  const togglePublicStatus = async (thread: ThreadWithProject) => {
+    try {
+      // If already public, just open share dialog
+      if (thread.isPublic) {
+        openShareDialog(thread);
+        return;
+      }
+      
+      const newStatus = true; // We're making it public
+      const result = await toggleThreadPublicStatus(thread.threadId, newStatus);
+      
+      if (result) { // Don't check for result.success
+        toast.success("Thread is now public");
+        
+        // Update in the UI
+        setThreads(currentThreads => 
+          currentThreads.map(t => {
+            if (t.threadId === thread.threadId) {
+              return {
+                ...t,
+                isPublic: true
+              };
+            }
+            return t;
+          })
+        );
+        
+        // Open share dialog
+        openShareDialog({...thread, isPublic: true});
+      } else {
+        toast.error("Failed to make thread public");
+      }
+    } catch (error) {
+      console.error('Error making thread public:', error);
+      toast.error('Failed to update thread status. Please try again.');
+    }
+  };
+  
+  // Function to make thread private
+  const makeThreadPrivate = async (thread: ThreadWithProject) => {
+    try {
+      const result = await toggleThreadPublicStatus(thread.threadId, false);
+      
+      if (result) { // Don't check for result.success
+        toast.success("Thread is now private");
+        
+        // Update in the UI
+        setThreads(currentThreads => 
+          currentThreads.map(t => {
+            if (t.threadId === thread.threadId) {
+              return {
+                ...t,
+                isPublic: false
+              };
+            }
+            return t;
+          })
+        );
+      } else {
+        toast.error("Failed to make thread private");
+      }
+    } catch (error) {
+      console.error('Error making thread private:', error);
+      toast.error('Failed to update thread status. Please try again.');
+    }
+  };
+  
+  // Function to open share dialog
+  const openShareDialog = (thread: ThreadWithProject) => {
+    const shareUrl = `${window.location.origin}/share/${thread.threadId}`;
+    setThreadToShare(thread);
+    setShareLink(shareUrl);
+    setShareDialogOpen(true);
+  };
+  
+  // Function to copy the share link to clipboard
+  const copyShareLink = () => {
+    if (shareLink) {
+      navigator.clipboard.writeText(shareLink);
+      toast.success("Share link copied to clipboard");
+    }
+  };
+
   // Handle thread deletion
   const handleDeleteThread = async () => {
     if (!threadToDelete) return;
@@ -345,34 +436,6 @@ export function NavAgents() {
   const confirmDelete = (thread: ThreadWithProject) => {
     setThreadToDelete(thread);
     setDeleteDialogOpen(true);
-  };
-  
-  // Function to toggle thread public status
-  const togglePublicStatus = async (thread: ThreadWithProject) => {
-    try {
-      const newStatus = !thread.isPublic;
-      const result = await toggleThreadPublicStatus(thread.threadId, newStatus);
-      
-      if (result?.success) {
-        toast.success(`Thread ${newStatus ? 'is now public' : 'is now private'}`);
-        
-        // Update in the UI
-        setThreads(currentThreads => 
-          currentThreads.map(t => {
-            if (t.threadId === thread.threadId) {
-              return {
-                ...t,
-                isPublic: newStatus
-              };
-            }
-            return t;
-          })
-        );
-      }
-    } catch (error) {
-      console.error('Error toggling thread public status:', error);
-      toast.error('Failed to update thread status. Please try again.');
-    }
   };
 
   return (
@@ -506,13 +569,9 @@ export function NavAgents() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           {thread.isPublic && (
-                            <DropdownMenuItem onClick={() => {
-                              const shareUrl = `${window.location.origin}/share/${thread.threadId}`;
-                              navigator.clipboard.writeText(shareUrl);
-                              toast.success("Share link copied to clipboard");
-                            }}>
+                            <DropdownMenuItem onClick={() => openShareDialog(thread)}>
                               <Globe className="text-muted-foreground" />
-                              <span>Copy Share Link</span>
+                              <span>Share Thread</span>
                             </DropdownMenuItem>
                           )}
                           
@@ -530,21 +589,17 @@ export function NavAgents() {
                           <DropdownMenuSeparator />
                           
                           {/* Toggle public/private status */}
-                          <DropdownMenuItem 
-                            onClick={() => togglePublicStatus(thread)}
-                          >
-                            {thread.isPublic ? (
-                              <>
-                                <Lock className="text-muted-foreground" />
-                                <span>Make Private</span>
-                              </>
-                            ) : (
-                              <>
-                                <Globe className="text-muted-foreground" />
-                                <span>Make Public</span>
-                              </>
-                            )}
-                          </DropdownMenuItem>
+                          {thread.isPublic ? (
+                            <DropdownMenuItem onClick={() => makeThreadPrivate(thread)}>
+                              <Lock className="text-muted-foreground" />
+                              <span>Make Private</span>
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem onClick={() => togglePublicStatus(thread)}>
+                              <Globe className="text-muted-foreground" />
+                              <span>Make Public</span>
+                            </DropdownMenuItem>
+                          )}
                           
                           <DropdownMenuItem 
                             className="text-destructive focus:text-destructive"
@@ -616,6 +671,39 @@ export function NavAgents() {
                 "Delete"
               )}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Share dialog */}
+      <AlertDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Share Thread</AlertDialogTitle>
+            <AlertDialogDescription>
+              {threadToShare && (
+                <>
+                  Share <strong>{threadToShare.projectName}</strong> with others using this link:
+                  <div className="mt-4 flex">
+                    <input
+                      type="text"
+                      value={shareLink}
+                      readOnly
+                      className="flex-1 rounded-l-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+                    />
+                    <button
+                      onClick={copyShareLink}
+                      className="rounded-r-md border border-l-0 border-input bg-accent px-3 py-2 text-sm font-medium hover:bg-accent/80"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>Close</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

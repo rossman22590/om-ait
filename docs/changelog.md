@@ -60,6 +60,89 @@ This document tracks significant updates and improvements to the Suna platform.
   }, [isSidePanelOpen]);
   ```
 
+- **Thread Sharing Improvements**:
+  - Added reliable share dialog for public threads
+  - Fixed UI issues with thread public status toggling
+  - Improved user experience by automatically opening share dialog when making threads public
+  - Added dedicated share button for threads that are already public
+  - Enhanced clipboard integration for easy sharing
+
+  ```tsx
+  // Implementation of the share dialog
+  <AlertDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen}>
+    <AlertDialogContent>
+      <AlertDialogHeader>
+        <AlertDialogTitle>Share Thread</AlertDialogTitle>
+        <AlertDialogDescription>
+          {threadToShare && (
+            <>
+              Share <strong>{threadToShare.projectName}</strong> with others using this link:
+              <div className="mt-4 flex">
+                <input
+                  type="text"
+                  value={shareLink}
+                  readOnly
+                  className="flex-1 rounded-l-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+                />
+                <button
+                  onClick={copyShareLink}
+                  className="rounded-r-md border border-l-0 border-input bg-accent px-3 py-2 text-sm font-medium hover:bg-accent/80"
+                >
+                  Copy
+                </button>
+              </div>
+            </>
+          )}
+        </AlertDialogDescription>
+      </AlertDialogHeader>
+      <AlertDialogFooter>
+        <AlertDialogAction>Close</AlertDialogAction>
+      </AlertDialogFooter>
+    </AlertDialogContent>
+  </AlertDialog>
+  ```
+
+  ```tsx
+  // Function to toggle public status with improved UX
+  const togglePublicStatus = async (thread: ThreadWithProject) => {
+    try {
+      // If already public, just open share dialog
+      if (thread.isPublic) {
+        openShareDialog(thread);
+        return;
+      }
+      
+      const newStatus = true; // We're making it public
+      const result = await toggleThreadPublicStatus(thread.threadId, newStatus);
+      
+      if (result) {
+        toast.success("Thread is now public");
+        
+        // Update in the UI
+        setThreads(currentThreads => 
+          currentThreads.map(t => {
+            if (t.threadId === thread.threadId) {
+              return {
+                ...t,
+                isPublic: true
+              };
+            }
+            return t;
+          })
+        );
+        
+        // Open share dialog
+        openShareDialog({...thread, isPublic: true});
+      } else {
+        toast.error("Failed to make thread public");
+      }
+    } catch (error) {
+      console.error('Error making thread public:', error);
+      toast.error('Failed to update thread status. Please try again.');
+    }
+  };
+  ```
+
 ### Sandbox Enhancements
 - **File Downloads**:
   - Added ZIP file download functionality in the Workspace Files modal
