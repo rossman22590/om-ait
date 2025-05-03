@@ -60,6 +60,31 @@ This document tracks significant updates and improvements to the Suna platform.
   }, [isSidePanelOpen]);
   ```
 
+- **Thread Public Status Persistence**:
+  - Fixed issue where thread public status was not persisted correctly
+  - Added `is_public` field to API response to ensure UI state matches database
+
+  ```tsx
+  // Before: is_public field missing from API response
+  const mappedThreads: Thread[] = (data || []).map(thread => ({
+    thread_id: thread.thread_id,
+    account_id: thread.account_id,
+    project_id: thread.project_id,
+    created_at: thread.created_at,
+    updated_at: thread.updated_at
+  }));
+
+  // After: Added is_public field to ensure UI state matches database
+  const mappedThreads: Thread[] = (data || []).map(thread => ({
+    thread_id: thread.thread_id,
+    account_id: thread.account_id,
+    project_id: thread.project_id,
+    created_at: thread.created_at,
+    updated_at: thread.updated_at,
+    is_public: thread.is_public || false  // Added is_public to ensure it's passed to frontend
+  }));
+  ```
+
 - **Thread Sharing Improvements**:
   - Added reliable share dialog for public threads
   - Fixed UI issues with thread public status toggling
@@ -77,24 +102,29 @@ This document tracks significant updates and improvements to the Suna platform.
           {threadToShare && (
             <>
               Share <strong>{threadToShare.projectName}</strong> with others using this link:
-              <div className="mt-4 flex">
-                <input
-                  type="text"
-                  value={shareLink}
-                  readOnly
-                  className="flex-1 rounded-l-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
-                />
-                <button
-                  onClick={copyShareLink}
-                  className="rounded-r-md border border-l-0 border-input bg-accent px-3 py-2 text-sm font-medium hover:bg-accent/80"
-                >
-                  Copy
-                </button>
-              </div>
             </>
           )}
         </AlertDialogDescription>
       </AlertDialogHeader>
+      
+      {/* Keep the div outside of AlertDialogDescription to avoid nesting div inside p */}
+      {threadToShare && (
+        <div className="mt-4 px-6 flex">
+          <input
+            type="text"
+            value={shareLink}
+            readOnly
+            className="flex-1 rounded-l-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+          />
+          <button
+            onClick={copyShareLink}
+            className="rounded-r-md border border-l-0 border-input bg-accent px-3 py-2 text-sm font-medium hover:bg-accent/80"
+          >
+            Copy
+          </button>
+        </div>
+      )}
+      
       <AlertDialogFooter>
         <AlertDialogAction>Close</AlertDialogAction>
       </AlertDialogFooter>

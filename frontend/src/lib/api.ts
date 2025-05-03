@@ -333,7 +333,8 @@ export const getThreads = async (projectId?: string): Promise<Thread[]> => {
     account_id: thread.account_id,
     project_id: thread.project_id,
     created_at: thread.created_at,
-    updated_at: thread.updated_at
+    updated_at: thread.updated_at,
+    is_public: thread.is_public || false  // Added is_public to ensure it's passed to frontend
   }));
   
   return mappedThreads;

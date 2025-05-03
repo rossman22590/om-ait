@@ -42,6 +42,7 @@ import {
   TooltipTrigger
 } from "@/components/ui/tooltip"
 import { getProjects, getThreads, deleteThread, toggleThreadPublicStatus, updateProject, Project } from "@/lib/api"
+import { createClient } from "@/lib/supabase/client"
 import Link from "next/link"
 import {
   AlertDialog,
@@ -118,7 +119,12 @@ export function NavAgents() {
       
       // Get all threads at once
       const allThreads = await getThreads() 
-      console.log("Threads loaded:", allThreads.length, allThreads.map(t => ({ thread_id: t.thread_id, project_id: t.project_id })));
+      console.log("Threads loaded:", allThreads.length, allThreads.map(t => ({ 
+        thread_id: t.thread_id, 
+        project_id: t.project_id,
+        is_public: t.is_public,
+        is_public_type: typeof t.is_public
+      })));
       
       // Create display objects for threads with their project info
       const threadsWithProjects: ThreadWithProject[] = [];
@@ -135,7 +141,7 @@ export function NavAgents() {
           continue;
         }
         
-        console.log(`✅ Thread ${thread.thread_id} matched with project "${project.name}" (${projectId})`);
+        console.log(`✅ Thread ${thread.thread_id} matched with project "${project.name}" (${projectId}), is_public=${thread.is_public}, type=${typeof thread.is_public}`);
         
         // Add to our list
         threadsWithProjects.push({
@@ -144,7 +150,7 @@ export function NavAgents() {
           projectName: project.name || 'Unnamed Project',
           url: `/agents/${thread.thread_id}`,
           updatedAt: thread.updated_at || project.updated_at || new Date().toISOString(),
-          isPublic: thread.is_public || false
+          isPublic: Boolean(thread.is_public)  // Convert to boolean to ensure proper type
         });
       }
       
@@ -159,7 +165,7 @@ export function NavAgents() {
         setIsLoading(false)
       }
     }
-  }
+  };
 
   // Filter threads based on search term
   const filteredThreads = useMemo(() => {
@@ -315,6 +321,14 @@ export function NavAgents() {
     }
   }
 
+  // Function to open the share dialog
+  const openShareDialog = (thread: ThreadWithProject) => {
+    const shareUrl = `${window.location.origin}/share/${thread.threadId}`;
+    setThreadToShare(thread);
+    setShareLink(shareUrl);
+    setShareDialogOpen(true);
+  };
+  
   // Function to toggle thread public status
   const togglePublicStatus = async (thread: ThreadWithProject) => {
     try {
@@ -327,7 +341,7 @@ export function NavAgents() {
       const newStatus = true; // We're making it public
       const result = await toggleThreadPublicStatus(thread.threadId, newStatus);
       
-      if (result) { // Don't check for result.success
+      if (result) {
         toast.success("Thread is now public");
         
         // Update in the UI
@@ -359,7 +373,7 @@ export function NavAgents() {
     try {
       const result = await toggleThreadPublicStatus(thread.threadId, false);
       
-      if (result) { // Don't check for result.success
+      if (result) {
         toast.success("Thread is now private");
         
         // Update in the UI
@@ -381,14 +395,6 @@ export function NavAgents() {
       console.error('Error making thread private:', error);
       toast.error('Failed to update thread status. Please try again.');
     }
-  };
-  
-  // Function to open share dialog
-  const openShareDialog = (thread: ThreadWithProject) => {
-    const shareUrl = `${window.location.origin}/share/${thread.threadId}`;
-    setThreadToShare(thread);
-    setShareLink(shareUrl);
-    setShareDialogOpen(true);
   };
   
   // Function to copy the share link to clipboard
@@ -684,24 +690,29 @@ export function NavAgents() {
               {threadToShare && (
                 <>
                   Share <strong>{threadToShare.projectName}</strong> with others using this link:
-                  <div className="mt-4 flex">
-                    <input
-                      type="text"
-                      value={shareLink}
-                      readOnly
-                      className="flex-1 rounded-l-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
-                    />
-                    <button
-                      onClick={copyShareLink}
-                      className="rounded-r-md border border-l-0 border-input bg-accent px-3 py-2 text-sm font-medium hover:bg-accent/80"
-                    >
-                      Copy
-                    </button>
-                  </div>
                 </>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          
+          {/* Move the div outside of the AlertDialogDescription to avoid nesting div inside p */}
+          {threadToShare && (
+            <div className="mt-4 px-6 flex">
+              <input
+                type="text"
+                value={shareLink}
+                readOnly
+                className="flex-1 rounded-l-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+              />
+              <button
+                onClick={copyShareLink}
+                className="rounded-r-md border border-l-0 border-input bg-accent px-3 py-2 text-sm font-medium hover:bg-accent/80"
+              >
+                Copy
+              </button>
+            </div>
+          )}
+          
           <AlertDialogFooter>
             <AlertDialogAction>Close</AlertDialogAction>
           </AlertDialogFooter>
