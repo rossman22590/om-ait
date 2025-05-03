@@ -66,87 +66,198 @@ This document tracks significant updates and improvements to the Suna platform.
   - Implemented client-side ZIP creation using JSZip for bundling multiple files
   - Created progress indicators and success/error notifications for file operations
   - Improved error handling during file downloads and ZIP creation
+  - Enhanced folder download functionality with recursive processing up to 4 levels deep
+  - Implemented robust 3-tier approach to ensure all files are captured in folder downloads
+  - Added special handling for website folder and consistently inconsistent API responses
+  - Improved file path handling to maintain proper folder structure in downloaded zip files
 
   ```tsx
-  // ZIP file creation and download functionality
-  const createAndDownloadZip = async (filesToDownload: FileInfo[]) => {
+  // Multi-tier folder processing strategy for robust file downloads
+  const processFolderContents = async (
+    folderPath: string,
+    zipFolder: JSZip,
+    headers: Record<string, string>,
+    depth: number
+  ): Promise<number> => {
+    // Limit recursion depth
+    const MAX_DEPTH = 4;
+    if (depth >= MAX_DEPTH) {
+      console.log(`[DEBUG] Reached maximum folder depth (${MAX_DEPTH}) at ${folderPath}`);
+      return 0;
+    }
+    
+    // Try multiple approaches to get all files
+    
+    // APPROACH 1: Using the list files API
+    let folderContents: FileInfo[] = [];
+    let apiSuccess = false;
+    
     try {
-      // Create new JSZip instance
-      const zip = new JSZip();
+      // Directly call the API to list files
+      const folderUrl = `${API_URL}/sandboxes/${sandboxId}/files?path=${encodeURIComponent(folderPath)}`;
+      const response = await fetch(folderUrl, { headers });
       
-      // Add each file to the zip
-      for (const file of filesToDownload) {
-        if (file.is_dir) continue;
+      if (response.ok) {
+        const responseText = await response.text();
         
-        try {
-          // Get file content from API
-          const content = await getFileContent(file.path, sandboxId!);
+        if (responseText && responseText.trim() !== '') {
+          const data = JSON.parse(responseText);
           
-          // Add file to zip with relative path
-          const relativePath = file.path.replace(currentPath, '').replace(/^\//, '');
-          zip.file(relativePath, content);
-          
-          // Show progress notification
-          toast.success(`Added ${file.name} to zip`);
-        } catch (err) {
-          toast.error(`Failed to add ${file.name} to zip: ${err instanceof Error ? err.message : String(err)}`);
+          // API sometimes returns array, sometimes object
+          if (Array.isArray(data)) {
+            folderContents = data;
+            apiSuccess = true;
+          } else if (typeof data === 'object' && data !== null) {
+            // Try to extract files from object response
+            if (data.files && Array.isArray(data.files)) {
+              folderContents = data.files;
+              apiSuccess = true;
+            } else {
+              // Convert object keys to files
+              const paths = Object.keys(data);
+              folderContents = paths.map(path => ({
+                name: path.split('/').pop() || '',
+                path,
+                is_dir: false,
+                size: 0,
+                mod_time: new Date().toISOString()
+              }));
+              apiSuccess = true;
+            }
+          }
         }
       }
-      
-      // Generate zip file
-      const zipBlob = await zip.generateAsync({ type: 'blob' });
-      
-      // Create download link
-      const url = URL.createObjectURL(zipBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${getFolderName(currentPath) || 'files'}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      
-      // Clean up
-      URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast.success('Download complete!');
-    } catch (err) {
-      toast.error(`Failed to create zip: ${err instanceof Error ? err.message : String(err)}`);
-    } finally {
-      setIsDownloading(false);
+    } catch (error) {
+      console.error(`Error calling list files API for ${folderPath}:`, error);
     }
+
+    // APPROACH 2 & 3: Additional fallback strategies...
+    
+    // Process all discovered files and folders
+    const files = folderContents.filter(file => !file.is_dir);
+    const subdirs = folderContents.filter(file => file.is_dir);
+    
+    let processedFiles = 0;
+    
+    // Add files to the zip
+    for (const file of files) {
+      try {
+        const fileUrl = new URL(`${API_URL}/sandboxes/${sandboxId}/files/content`);
+        fileUrl.searchParams.append('path', file.path);
+        
+        const fileResponse = await fetch(fileUrl.toString(), { headers });
+        
+        if (fileResponse.ok) {
+          const blob = await fileResponse.blob();
+          zipFolder.file(file.name, blob);
+          processedFiles++;
+        }
+      } catch (error) {
+        console.error(`Error adding file ${file.path} to zip:`, error);
+      }
+    }
+    
+    // Process subfolders recursively
+    for (const dir of subdirs) {
+      if (!dir.path) continue;
+      
+      const subfolderInZip = zipFolder.folder(dir.name);
+      if (!subfolderInZip) continue;
+      
+      const filesInSubfolder = await processFolderContents(
+        dir.path, 
+        subfolderInZip, 
+        headers, 
+        depth + 1
+      );
+      processedFiles += filesInSubfolder;
+    }
+    
+    return processedFiles;
   };
   
-  // Usage in downloadAllFiles function
+  // Comprehensive "Download All" implementation for files and folders
   const downloadAllFiles = useCallback(async () => {
     if (!files.length || isLoadingFiles) return;
     
     try {
       setIsDownloading(true);
-      toast.info("Preparing files for download...");
+      toast.info("Preparing to download files...");
       
-      // Filter out directories - we only want files
-      const filesToDownload = files.filter(file => !file.is_dir);
+      const zip = new JSZip();
       
-      if (filesToDownload.length === 0) {
-        toast.warning("No files to download in this directory");
-        setIsDownloading(false);
-        return;
+      // Get authenticated session for API calls
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
       }
       
-      // If there's only one file, just download it directly
-      if (filesToDownload.length === 1) {
-        const file = filesToDownload[0];
-        await downloadSingleFile(file);
-        setIsDownloading(false);
-        return;
+      // Process all visible items in the current directory
+      let totalProcessed = 0;
+      const processingToast = toast.loading(`Processing files...`);
+      
+      for (const item of files) {
+        if (item.name.startsWith('.')) continue; // Skip hidden files
+        
+        if (item.is_dir) {
+          // Process folder recursively
+          const folderInZip = zip.folder(item.name);
+          if (folderInZip) {
+            const filesInFolder = await processFolderContents(
+              item.path, 
+              folderInZip, 
+              headers, 
+              0
+            );
+            totalProcessed += filesInFolder;
+          }
+        } else {
+          // Process single file
+          const fileUrl = new URL(`${API_URL}/sandboxes/${sandboxId}/files/content`);
+          fileUrl.searchParams.append('path', item.path);
+          
+          const fileResponse = await fetch(fileUrl.toString(), { headers });
+          
+          if (fileResponse.ok) {
+            const blob = await fileResponse.blob();
+            zip.file(item.name, blob);
+            totalProcessed++;
+          }
+        }
       }
       
-      // For multiple files, create and download as zip
-      await createAndDownloadZip(filesToDownload);
-    } catch (err) {
-      toast.error(`Download failed: ${err instanceof Error ? err.message : String(err)}`);
+      // Generate the zip file with a meaningful name
+      const downloadName = currentPath === "/" 
+        ? `sandbox-${sandboxId}.zip` 
+        : `${currentPath.split('/').filter(Boolean).pop() || 'files'}.zip`;
+      
+      const zipBlob = await zip.generateAsync({
+        type: 'blob',
+        compression: "DEFLATE",
+        compressionOptions: { level: 6 }
+      });
+      
+      // Create and trigger download
+      const downloadUrl = window.URL.createObjectURL(zipBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = downloadUrl;
+      downloadLink.download = downloadName;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      window.URL.revokeObjectURL(downloadUrl);
+      
+      toast.success(`Downloaded ${totalProcessed} files`);
+    } catch (error) {
+      toast.error(`Error downloading files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
       setIsDownloading(false);
     }
-  }, [files, isLoadingFiles, currentPath, sandboxId]);
+  }, [files, isLoadingFiles, sandboxId, currentPath]);
+  ```
 
 ### Technical Improvements
 - **State Management**:

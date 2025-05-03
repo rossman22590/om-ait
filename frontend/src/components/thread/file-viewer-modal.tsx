@@ -143,10 +143,10 @@ export function FileViewerModal({
 
   // Helper function to navigate to home
   const navigateHome = useCallback(() => {
-    console.log('[FILE VIEWER] Navigating home from:', currentPath);
+    console.log('[FILE VIEWER] handleOpenChange: Modal closing, resetting state.');
     clearSelectedFile();
-    setCurrentPath('/workspace');
-  }, [clearSelectedFile, currentPath]);
+    setCurrentPath('/workspace'); // Reset path to root
+  }, [clearSelectedFile]);
 
   // Function to generate breadcrumb segments from a path
   const getBreadcrumbSegments = useCallback((path: string) => {
@@ -241,7 +241,7 @@ export function FileViewerModal({
       }
     }
   }, [sandboxId, selectedFilePath, rawContent, navigateToFolder, clearSelectedFile]);
-  
+
   // Effect to manage blob URL for renderer
   useEffect(() => {
     let objectUrl: string | null = null;
@@ -298,6 +298,532 @@ export function FileViewerModal({
     };
   }, [rawContent, selectedFilePath]); // Re-run when rawContent or selectedFilePath changes
 
+  // Add a special download for folders function
+  const downloadFolder = useCallback(async (folder: FileInfo) => {
+    try {
+      setIsDownloading(true);
+      toast.info(`Preparing to download folder: ${folder.name}...`);
+      
+      // Create a new zip
+      const zip = new JSZip();
+      
+      // Create folder in zip
+      const folderInZip = zip.folder(folder.name);
+      if (!folderInZip) {
+        throw new Error(`Failed to create folder ${folder.name} in zip`);
+      }
+      
+      // Get authenticated session for API calls
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Headers for authenticated requests
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      
+      // Process the folder recursively with depth tracking
+      let totalFiles = 0;
+      const processingToast = toast.loading(`Processing folder ${folder.name}...`);
+      
+      try {
+        totalFiles = await processFolderContents(folder.path, folderInZip, headers, 0);
+        toast.dismiss(processingToast);
+        
+        if (totalFiles === 0) {
+          toast.warning(`No files found in folder ${folder.name}`);
+          setIsDownloading(false);
+          return;
+        }
+        
+        toast.success(`Found ${totalFiles} files in ${folder.name}`);
+        
+        // Generate and download the zip
+        toast.info("Generating zip file...");
+        const zipBlob = await zip.generateAsync({
+          type: 'blob',
+          compression: "DEFLATE",
+          compressionOptions: { level: 6 }
+        });
+        
+        // Create download link
+        const downloadUrl = window.URL.createObjectURL(zipBlob);
+        const downloadLink = document.createElement('a');
+        downloadLink.href = downloadUrl;
+        downloadLink.download = `${folder.name}.zip`;
+        
+        // Trigger download
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        
+        // Cleanup
+        window.URL.revokeObjectURL(downloadUrl);
+        
+        toast.success(`Downloaded ${totalFiles} files from ${folder.name}`);
+      } catch (error) {
+        toast.dismiss(processingToast);
+        console.error(`Error processing folder ${folder.path}:`, error);
+        toast.error(`Failed to process folder: ${folder.name}`);
+      }
+    } catch (error) {
+      console.error(`Error downloading folder:`, error);
+      toast.error(`Error downloading folder: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [sandboxId]);
+
+  // Process a folder and its contents with depth tracking (up to 4 levels)
+  const processFolderContents = async (
+    folderPath: string,
+    zipFolder: JSZip,
+    headers: Record<string, string>,
+    depth: number
+  ): Promise<number> => {
+    // Limit recursion depth
+    const MAX_DEPTH = 4;
+    if (depth >= MAX_DEPTH) {
+      console.log(`[DEBUG] Reached maximum folder depth (${MAX_DEPTH}) at ${folderPath}`);
+      return 0;
+    }
+    
+    console.log(`[DEBUG] Processing folder at depth ${depth}: ${folderPath}`);
+    
+    try {
+      // Special handling for website folder - ALWAYS ensure index.html is included
+      const isWebsiteFolder = folderPath.endsWith('/website') || folderPath === '/website';
+      
+      // Try multiple approaches to get all files
+      
+      // APPROACH 1: Using the list files API
+      let folderContents: FileInfo[] = [];
+      let apiSuccess = false;
+      
+      try {
+        // Directly call the API to list files
+        const folderUrl = `${API_URL}/sandboxes/${sandboxId}/files?path=${encodeURIComponent(folderPath)}`;
+        console.log(`[DEBUG] APPROACH 1: Requesting folder contents from: ${folderUrl}`);
+        
+        const response = await fetch(folderUrl, { headers });
+        
+        if (response.ok) {
+          const responseText = await response.text();
+          console.log(`[DEBUG] Folder listing response (truncated):`, 
+            responseText.length > 200 ? responseText.substring(0, 200) + '...' : responseText);
+          
+          if (responseText && responseText.trim() !== '') {
+            try {
+              const data = JSON.parse(responseText);
+              
+              // API sometimes returns empty object instead of array
+              if (Array.isArray(data)) {
+                folderContents = data;
+                console.log(`[DEBUG] Found ${folderContents.length} items in folder using API`);
+                apiSuccess = true;
+              } else if (typeof data === 'object' && data !== null) {
+                console.log(`[DEBUG] API returned non-array object for folder`);
+                // Try to extract files from object response
+                if (data.files && Array.isArray(data.files)) {
+                  folderContents = data.files;
+                  console.log(`[DEBUG] Extracted ${folderContents.length} items from 'files' property`);
+                  apiSuccess = true;
+                } else {
+                  // Try to convert object keys to files
+                  const paths = Object.keys(data);
+                  folderContents = paths.map(path => {
+                    const name = path.split('/').pop() || '';
+                    // Check if this might be a directory based on the data
+                    const fileData = data[path];
+                    const isDir = typeof fileData === 'object' && fileData !== null;
+                    
+                    return {
+                      name,
+                      path,
+                      is_dir: isDir,
+                      size: 0,
+                      mod_time: new Date().toISOString()
+                    };
+                  });
+                  console.log(`[DEBUG] Converted object keys to ${folderContents.length} file entries`);
+                  apiSuccess = true;
+                }
+              }
+            } catch (error) {
+              console.error(`Failed to parse folder contents for ${folderPath}:`, error);
+            }
+          }
+        } else {
+          console.error(`Failed to list folder ${folderPath}: ${response.status} ${response.statusText}`);
+        }
+      } catch (error) {
+        console.error(`Error calling list files API for ${folderPath}:`, error);
+      }
+      
+      // APPROACH 2: Try alternative API method if the first didn't work
+      if (!apiSuccess || folderContents.length === 0) {
+        try {
+          console.log(`[DEBUG] APPROACH 2: Trying alternative API for ${folderPath}`);
+          // Some Daytona SDK implementations have an alternative API
+          const altFolderUrl = `${API_URL}/sandboxes/${sandboxId}/files/list?path=${encodeURIComponent(folderPath)}`;
+          
+          const altResponse = await fetch(altFolderUrl, { headers });
+          
+          if (altResponse.ok) {
+            const altResponseText = await altResponse.text();
+            
+            if (altResponseText && altResponseText.trim() !== '') {
+              try {
+                const altData = JSON.parse(altResponseText);
+                console.log(`[DEBUG] Alternative API response:`, 
+                  JSON.stringify(altData).length > 200 ? 
+                  JSON.stringify(altData).substring(0, 200) + '...' : 
+                  JSON.stringify(altData));
+                
+                if (Array.isArray(altData)) {
+                  folderContents = altData;
+                  console.log(`[DEBUG] Found ${folderContents.length} items using alternative API`);
+                  apiSuccess = true;
+                } else if (altData && typeof altData === 'object') {
+                  // Try to extract files/folders from response
+                  if (altData.children && Array.isArray(altData.children)) {
+                    folderContents = altData.children.map((child: any) => ({
+                      name: child.name || '',
+                      path: `${folderPath}/${child.name || ''}`,
+                      is_dir: child.type === 'directory' || child.isDirectory,
+                      size: child.size || 0,
+                      mod_time: child.modTime || new Date().toISOString()
+                    }));
+                    console.log(`[DEBUG] Extracted ${folderContents.length} items from alternative API`);
+                    apiSuccess = true;
+                  }
+                }
+              } catch (error) {
+                console.error(`Failed to parse alternative API response:`, error);
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Error with alternative API approach:`, error);
+        }
+      }
+      
+      // APPROACH 3: Fallback direct file access for known file patterns
+      if (!apiSuccess || folderContents.length === 0) {
+        console.log(`[DEBUG] APPROACH 3: Trying direct file access for common patterns in ${folderPath}`);
+        
+        // Try common file patterns
+        const commonFiles = [
+          'index.html', 'index.js', 'index.tsx', 'index.ts', 'index.css',
+          'main.js', 'main.py', 'app.js', 'app.py', 'app.tsx', 'app.ts',
+          'requirements.txt', 'package.json', 'README.md', 'readme.md'
+        ];
+        
+        for (const filename of commonFiles) {
+          const filePath = `${folderPath}/${filename}`;
+          const fileUrl = new URL(`${API_URL}/sandboxes/${sandboxId}/files/content`);
+          fileUrl.searchParams.append('path', filePath);
+          
+          try {
+            console.log(`[DEBUG] Trying direct access to ${filePath}`);
+            const fileResponse = await fetch(fileUrl.toString(), { headers });
+            
+            if (fileResponse.ok) {
+              console.log(`[DEBUG] Found file by direct access: ${filename}`);
+              folderContents.push({
+                name: filename,
+                path: filePath,
+                is_dir: false,
+                size: 0,
+                mod_time: new Date().toISOString()
+              });
+            }
+          } catch (error) {
+            // Skip silently
+          }
+        }
+        
+        // Check for common subdirectories
+        const commonDirs = [
+          'src', 'app', 'public', 'static', 'assets', 'components', 'pages', 'utils', 'lib', 'dist', 'build'
+        ];
+        
+        for (const dirname of commonDirs) {
+          const dirPath = `${folderPath}/${dirname}`;
+          const dirUrl = `${API_URL}/sandboxes/${sandboxId}/files?path=${encodeURIComponent(dirPath)}`;
+          
+          try {
+            console.log(`[DEBUG] Trying directory check for ${dirPath}`);
+            const dirResponse = await fetch(dirUrl, { headers });
+            
+            if (dirResponse.ok) {
+              // If we get a successful response, it's likely a directory
+              console.log(`[DEBUG] Found likely directory by test: ${dirname}`);
+              folderContents.push({
+                name: dirname,
+                path: dirPath,
+                is_dir: true,
+                size: 0,
+                mod_time: new Date().toISOString()
+              });
+            }
+          } catch (error) {
+            // Skip silently
+          }
+        }
+      }
+      
+      // Special handling for website folder - ensure index.html is always included
+      if (isWebsiteFolder && !folderContents.find(f => f.name === 'index.html')) {
+        console.log(`[DEBUG] Adding index.html for website folder (not found in response)`);
+        folderContents.push({
+          name: 'index.html',
+          path: `${folderPath}/index.html`,
+          is_dir: false,
+          size: 0,
+          mod_time: new Date().toISOString()
+        });
+      }
+      
+      // If after all approaches we still have no results, maybe try a fallback
+      if (folderContents.length === 0) {
+        console.log(`[DEBUG] No files found in ${folderPath} after all approaches`);
+        
+        // Add index.html as fallback for website folder even if API fails
+        if (isWebsiteFolder) {
+          console.log(`[DEBUG] Adding fallback index.html for website folder with no content`);
+          await addIndexHtmlToWebsiteFolder(zipFolder, folderPath, headers);
+          return 1; // Count the index.html we added
+        }
+        
+        return 0;
+      }
+      
+      // Process files and folders
+      console.log(`[DEBUG] Processing ${folderContents.length} items found in ${folderPath}`);
+      
+      // Process files in this folder
+      const files = folderContents.filter(file => !file.is_dir);
+      const subdirs = folderContents.filter(file => file.is_dir);
+      
+      console.log(`[DEBUG] Processing ${files.length} files and ${subdirs.length} subdirectories in ${folderPath}`);
+      
+      let processedFiles = 0;
+      
+      // Add all files to the zip first
+      for (const file of files) {
+        try {
+          const fileUrl = new URL(`${API_URL}/sandboxes/${sandboxId}/files/content`);
+          fileUrl.searchParams.append('path', file.path);
+          
+          console.log(`[DEBUG] Fetching file content: ${file.path}`);
+          const fileResponse = await fetch(fileUrl.toString(), { headers });
+          
+          if (!fileResponse.ok) {
+            console.warn(`Failed to download ${file.path}: ${fileResponse.status} ${fileResponse.statusText}`);
+            continue;
+          }
+          
+          // Get file content
+          const blob = await fileResponse.blob();
+          
+          // Add file to zip folder
+          zipFolder.file(file.name, blob);
+          console.log(`[DEBUG] Added file to zip: ${file.name} (${blob.size} bytes)`);
+          processedFiles++;
+        } catch (error) {
+          console.error(`Error adding file ${file.path} to zip:`, error);
+        }
+      }
+      
+      // Process subfolders
+      for (const dir of subdirs) {
+        if (!dir.path) {
+          console.warn(`[DEBUG] Skipping subfolder with no path: ${dir.name}`);
+          continue;
+        }
+        
+        console.log(`[DEBUG] Creating subfolder in zip: ${dir.name}`);
+        
+        // Create subfolder in zip
+        const subfolderInZip = zipFolder.folder(dir.name);
+        if (!subfolderInZip) {
+          console.error(`Failed to create subfolder ${dir.name} in zip`);
+          continue;
+        }
+        
+        // Process subfolder recursively
+        console.log(`[DEBUG] Recursively processing subfolder: ${dir.path}`);
+        const filesInSubfolder = await processFolderContents(dir.path, subfolderInZip, headers, depth + 1);
+        console.log(`[DEBUG] Subfolder ${dir.name} contained ${filesInSubfolder} files`);
+        processedFiles += filesInSubfolder;
+      }
+      
+      console.log(`[DEBUG] Finished processing folder ${folderPath}, found ${processedFiles} files total`);
+      return processedFiles;
+    } catch (error) {
+      console.error(`Error processing folder ${folderPath}:`, error);
+      return 0;
+    }
+  };
+
+  // Helper function to ensure index.html is added to website folder
+  const addIndexHtmlToWebsiteFolder = async (
+    zipFolder: JSZip,
+    folderPath: string,
+    headers: Record<string, string>
+  ) => {
+    try {
+      const indexPath = `${folderPath}/index.html`;
+      const fileUrl = new URL(`${API_URL}/sandboxes/${sandboxId}/files/content`);
+      fileUrl.searchParams.append('path', indexPath);
+      
+      console.log(`[DEBUG] Attempting to fetch index.html directly: ${indexPath}`);
+      const fileResponse = await fetch(fileUrl.toString(), { headers });
+      
+      if (fileResponse.ok) {
+        // Get file content
+        const blob = await fileResponse.blob();
+        
+        // Add file to zip folder
+        zipFolder.file('index.html', blob);
+        console.log(`[DEBUG] Successfully added index.html to website folder (${blob.size} bytes)`);
+      } else {
+        // Create a basic index.html if we can't fetch the real one
+        console.log(`[DEBUG] Could not fetch index.html, creating placeholder`);
+        const placeholder = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Website</title>
+</head>
+<body>
+  <h1>Website Content</h1>
+  <p>This is a placeholder for the website content.</p>
+</body>
+</html>`;
+        zipFolder.file('index.html', placeholder);
+        console.log(`[DEBUG] Added placeholder index.html to website folder`);
+      }
+    } catch (error) {
+      console.error(`Error adding index.html to website folder:`, error);
+      // Add a minimal fallback
+      zipFolder.file('index.html', '<!DOCTYPE html><html><body><h1>Website</h1></body></html>');
+    }
+  };
+
+  // Add download all files function
+  const downloadAllFiles = useCallback(async () => {
+    if (!files.length || isLoadingFiles) return;
+    
+    try {
+      setIsDownloading(true);
+      toast.info("Preparing to download files...");
+      
+      // Create a new zip
+      const zip = new JSZip();
+      
+      // Get authenticated session for API calls
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      // Headers for authenticated requests
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+      
+      // We'll keep track of total items processed
+      let totalProcessed = 0;
+      const processingToast = toast.loading(`Processing files...`);
+      
+      // Process all visible items in the current directory
+      for (const item of files) {
+        // Skip hidden files
+        if (item.name.startsWith('.')) continue;
+        
+        if (item.is_dir) {
+          // Create folder in zip
+          const folderInZip = zip.folder(item.name);
+          if (!folderInZip) {
+            console.error(`Failed to create folder ${item.name} in zip`);
+            continue;
+          }
+          
+          // Process folder recursively
+          const filesInFolder = await processFolderContents(item.path, folderInZip, headers, 0);
+          console.log(`[DEBUG] Processed ${filesInFolder} files in folder ${item.name}`);
+          totalProcessed += filesInFolder;
+        } else {
+          try {
+            // Fetch file content
+            const fileUrl = new URL(`${API_URL}/sandboxes/${sandboxId}/files/content`);
+            fileUrl.searchParams.append('path', item.path);
+            
+            const fileResponse = await fetch(fileUrl.toString(), { headers });
+            
+            if (!fileResponse.ok) {
+              console.warn(`Failed to download ${item.path}: ${fileResponse.statusText}`);
+              continue;
+            }
+            
+            // Add file to the zip
+            const blob = await fileResponse.blob();
+            zip.file(item.name, blob);
+            console.log(`[DEBUG] Added file to zip: ${item.name}`);
+            totalProcessed++;
+          } catch (error) {
+            console.error(`Error adding file ${item.path} to zip:`, error);
+          }
+        }
+      }
+      
+      toast.dismiss(processingToast);
+      
+      if (totalProcessed === 0) {
+        toast.warning("No files to download");
+        setIsDownloading(false);
+        return;
+      }
+      
+      toast.success(`Processed ${totalProcessed} files`);
+      
+      // Generate the zip file
+      toast.info("Generating zip file...");
+      const zipBlob = await zip.generateAsync({
+        type: 'blob',
+        compression: "DEFLATE",
+        compressionOptions: { level: 6 }
+      });
+      
+      // Create download name based on current folder
+      const downloadName = currentPath === "/" 
+        ? `sandbox-${sandboxId}.zip` 
+        : `${currentPath.split('/').filter(Boolean).pop() || 'files'}.zip`;
+      
+      // Create download link
+      const downloadUrl = window.URL.createObjectURL(zipBlob);
+      const downloadLink = document.createElement('a');
+      downloadLink.href = downloadUrl;
+      downloadLink.download = downloadName;
+      
+      // Trigger download
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+      
+      // Cleanup
+      window.URL.revokeObjectURL(downloadUrl);
+      
+      toast.success(`Downloaded ${totalProcessed} files`);
+    } catch (error) {
+      console.error("Error downloading files:", error);
+      toast.error(`Error downloading files: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [files, isLoadingFiles, sandboxId, currentPath]);
+
   // Handle file download - Define after helpers
   const handleDownload = useCallback(async () => {
     if (!selectedFilePath || isDownloading) return;
@@ -350,7 +876,7 @@ export function FileViewerModal({
       fileInputRef.current.click();
     }
   }, []);
-  
+
   // Process uploaded file - Define after helpers
   const processUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!event.target.files || event.target.files.length === 0) return;
@@ -413,7 +939,7 @@ export function FileViewerModal({
   const isMarkdownFile = useCallback((filePath: string | null) => {
     return filePath ? filePath.toLowerCase().endsWith('.md') : false;
   }, []);
-  
+
   // Handle PDF export for markdown files
   const handleExportPdf = useCallback(async (orientation: 'portrait' | 'landscape' = 'portrait') => {
     if (!selectedFilePath || isExportingPdf || !isMarkdownFile(selectedFilePath)) return;
@@ -604,7 +1130,7 @@ export function FileViewerModal({
     loadFiles();
     // Dependency: Only re-run when open, sandboxId, or currentPath changes
   }, [open, sandboxId, currentPath]);
-  
+
   // Handle initial file path - Runs ONLY ONCE on open if initialFilePath is provided
   useEffect(() => {
     // Only run if modal is open, initial path is provided, AND it hasn't been processed yet
@@ -634,7 +1160,7 @@ export function FileViewerModal({
       setInitialPathProcessed(false);
     }
   }, [open, initialFilePath, initialPathProcessed, normalizePath, currentPath]);
-  
+
   // Effect to open the initial file *after* the correct directory files are loaded
   useEffect(() => {
     // Only run if initial path was processed, files are loaded, and no file is currently selected
@@ -671,42 +1197,6 @@ export function FileViewerModal({
     );
   }, [files, searchText]);
 
-  // Add download all files function
-  const downloadAllFiles = useCallback(async () => {
-    if (!files.length || isLoadingFiles) return;
-    
-    try {
-      setIsDownloading(true);
-      toast.info("Preparing files for download...");
-      
-      // Filter out directories - we only want files
-      const filesToDownload = files.filter(file => !file.is_dir);
-      
-      if (filesToDownload.length === 0) {
-        toast.warning("No files to download in this directory");
-        setIsDownloading(false);
-        return;
-      }
-      
-      // If there's only one file, just download it directly
-      if (filesToDownload.length === 1) {
-        const file = filesToDownload[0];
-        await downloadSingleFile(file);
-        setIsDownloading(false);
-        return;
-      }
-      
-      // For multiple files, create a zip
-      await createAndDownloadZip(filesToDownload);
-      
-    } catch (error) {
-      console.error('Error downloading files:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to download files');
-    } finally {
-      setIsDownloading(false);
-    }
-  }, [files, isLoadingFiles]);
-  
   // Helper function to download a single file
   const downloadSingleFile = async (file: FileInfo) => {
     try {
@@ -737,7 +1227,7 @@ export function FileViewerModal({
       document.body.appendChild(downloadLink);
       downloadLink.click();
       document.body.removeChild(downloadLink);
-      window.URL.revokeObjectURL(downloadUrl);
+      window.URL.revokeObjectURL(downloadUrl); // Clean up the URL
       
       toast.success("File downloaded successfully");
     } catch (error) {
@@ -746,97 +1236,7 @@ export function FileViewerModal({
       throw error;
     }
   };
-  
-  // Helper function to create and download a zip of multiple files
-  const createAndDownloadZip = async (filesToDownload: FileInfo[]) => {
-    try {
-      // Get authenticated session
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // Headers for authenticated requests
-      const headers: Record<string, string> = {};
-      if (session?.access_token) {
-        headers['Authorization'] = `Bearer ${session.access_token}`;
-      }
-      
-      // Create new JSZip instance
-      const zip = new JSZip();
-      
-      // Track progress
-      let processed = 0;
-      const total = filesToDownload.length;
-      
-      // Process each file
-      for (const file of filesToDownload) {
-        try {
-          // Create URL for file content
-          const fileUrl = new URL(`${API_URL}/sandboxes/${sandboxId}/files/content`);
-          fileUrl.searchParams.append('path', file.path);
-          
-          // Fetch file content
-          const response = await fetch(fileUrl.toString(), { headers });
-          
-          if (!response.ok) {
-            console.error(`Failed to download file ${file.name}: ${response.statusText}`);
-            toast.warning(`Skipping ${file.name} (${response.statusText})`);
-            processed++;
-            continue; // Skip this file but continue with others
-          }
-          
-          // Get file content as blob
-          const blob = await response.blob();
-          
-          // Add file to zip with relative path (remove /workspace/ prefix)
-          const relativePath = file.path.replace(/^\/workspace\/?/, '');
-          zip.file(relativePath || file.name, blob);
-          
-          // Update progress
-          processed++;
-          if (processed % 5 === 0 || processed === total) {
-            toast.info(`Zipping files: ${processed}/${total}`);
-          }
-          
-        } catch (error) {
-          console.error(`Error processing ${file.name}:`, error);
-          processed++;
-          // Continue with other files
-        }
-      }
-      
-      // Generate zip file
-      toast.info("Generating zip file...");
-      const zipBlob = await zip.generateAsync({ 
-        type: 'blob',
-        compression: "DEFLATE",
-        compressionOptions: { level: 6 }
-      });
-      
-      // Create download link for the zip
-      const downloadUrl = window.URL.createObjectURL(zipBlob);
-      const downloadLink = document.createElement('a');
-      downloadLink.href = downloadUrl;
-      
-      // Get folder name from current path or use 'workspace' as default
-      const folderName = currentPath.split('/').pop() || 'workspace';
-      downloadLink.download = `${folderName}.zip`;
-      
-      // Trigger download
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
-      
-      // Cleanup
-      window.URL.revokeObjectURL(downloadUrl);
-      
-      toast.success(`Downloaded ${filesToDownload.length} files as ${folderName}.zip`);
-    } catch (error) {
-      console.error('Error creating zip file:', error);
-      toast.error('Failed to create zip file');
-      throw error;
-    }
-  };
-  
+
   // --- Render --- //
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
