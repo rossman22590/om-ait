@@ -383,7 +383,7 @@ export function FileViewerModal({
     depth: number
   ): Promise<number> => {
     // Limit recursion depth
-    const MAX_DEPTH = 4;
+    const MAX_DEPTH = 10;
     if (depth >= MAX_DEPTH) {
       console.log(`[DEBUG] Reached maximum folder depth (${MAX_DEPTH}) at ${folderPath}`);
       return 0;
