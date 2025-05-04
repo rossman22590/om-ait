@@ -139,7 +139,7 @@ export default function GoogleSignIn({ returnUrl }: GoogleSignInProps) {
       />
       
       {/* Google Sign-In button container styled to match site design */}
-      <div id="google-signin-button" className="w-full h-12">
+      <div id="google-signin-button" className="w-full h-12 flex justify-center">
         {/* The Google button will be rendered here */}
       </div>
       
@@ -166,8 +166,12 @@ export default function GoogleSignIn({ returnUrl }: GoogleSignInProps) {
                 const googleButton = buttonContainer.querySelector('div[role="button"]');
                 if (googleButton instanceof HTMLElement) {
                   googleButton.style.borderRadius = '9999px';
-                  googleButton.style.width = '100%';
-                  googleButton.style.height = '56px';
+                  googleButton.style.width = '320px';
+                  googleButton.style.maxWidth = '100%';
+                  googleButton.style.height = '48px';
+                  googleButton.style.margin = '0 auto';
+                  googleButton.style.display = 'flex';
+                  googleButton.style.justifyContent = 'center';
                   googleButton.style.border = '1px solid var(--border)';
                   googleButton.style.background = 'var(--background)';
                   googleButton.style.transition = 'all 0.2s';

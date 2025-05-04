@@ -2,6 +2,31 @@
 
 This document tracks significant updates and improvements to the Suna platform.
 
+## May 3, 2025
+
+### Authentication System Fixes
+- **Email Login Redirection Fix**:
+  - Fixed inconsistent redirection behavior where email login wasn't properly redirecting to the dashboard
+  - Modified the authentication flow to use consistent redirection techniques across both email and Google login
+  - Ensures proper session persistence by adding a small delay before navigation
+
+  ```typescript
+  // Before: Using Next.js redirect which caused session persistence issues
+  return redirect(returnUrl || "/dashboard");
+
+  // After: Using consistent redirect pattern with delay for proper session persistence
+  // In actions.ts
+  return { success: true, redirect: returnUrl || "/dashboard" };
+
+  // In page.tsx (handleSignIn and handleSignUp)
+  if (result && result.success && result.redirect) {
+    setTimeout(() => {
+      window.location.href = result.redirect;
+    }, 100);
+    return { message: "Redirecting to dashboard..." };
+  }
+  ```
+
 ## May 2, 2025
 
 ### UI Improvements

@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 
 export async function signIn(prevState: any, formData: FormData) {
   const email = formData.get("email") as string;
@@ -27,7 +26,9 @@ export async function signIn(prevState: any, formData: FormData) {
     return { message: error.message || "Could not authenticate user" };
   }
 
-  return redirect(returnUrl || "/dashboard");
+  // Return success object instead of redirecting directly
+  // This matches the pattern used in Google sign-in
+  return { success: true, redirect: returnUrl || "/dashboard" };
 }
 
 export async function signUp(prevState: any, formData: FormData) {
@@ -73,7 +74,7 @@ export async function signUp(prevState: any, formData: FormData) {
     return { message: "Account created! Check your email to confirm your registration." };
   }
 
-  return redirect(returnUrl || "/dashboard");
+  return { success: true, redirect: returnUrl || "/dashboard" };
 }
 
 export async function forgotPassword(prevState: any, formData: FormData) {
@@ -136,5 +137,5 @@ export async function signOut() {
     return { message: error.message || "Could not sign out" };
   }
 
-  return redirect("/");
+  return { success: true, redirect: "/" };
 } 

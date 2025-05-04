@@ -4,6 +4,15 @@ This document highlights recent improvements and new features added to the OM-AI
 
 ## May 3, 2025
 
+### Authentication System Fix
+
+We've fixed a critical issue with the email login process:
+
+- **Email Login Redirection Bug Fixed**:
+  - Fixed an issue where users logging in with email weren't properly redirected to the dashboard
+  - Standardized the authentication redirection process between email and Google login
+  - Enhanced session persistence to ensure seamless login experience for all authentication methods
+
 ### Thread Sharing Functionality
 
 We've completely overhauled the thread sharing system to provide a seamless user experience:
