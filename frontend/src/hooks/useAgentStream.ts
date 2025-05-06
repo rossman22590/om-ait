@@ -68,6 +68,7 @@ export function useAgentStream(callbacks: AgentStreamCallbacks, threadId: string
   const currentRunIdRef = useRef<string | null>(null); // Ref to track the run ID being processed
   const threadIdRef = useRef(threadId); // Ref to hold the current threadId
   const setMessagesRef = useRef(setMessages); // Ref to hold the setMessages function
+  const finalContentRef = useRef<string | null>(null);
 
   // Update refs if threadId or setMessages changes
   useEffect(() => {
@@ -111,38 +112,132 @@ export function useAgentStream(callbacks: AgentStreamCallbacks, threadId: string
     
     console.log(`[useAgentStream] Finalizing stream for ${runId} on thread ${currentThreadId} with status: ${finalStatus}`);
     
+    // Clean up any existing stream connection
     if (streamCleanupRef.current) {
       streamCleanupRef.current();
       streamCleanupRef.current = null;
     }
     
+    // Always keep the last content in our ref for fallback
+    if (textContent && textContent.trim()) {
+        finalContentRef.current = textContent;
+        console.log(`[useAgentStream] Stored final content (${textContent.length} chars) in ref for potential fallback`);
+    }
+    
     // Reset streaming-specific state
     setTextContent('');
     setToolCall(null);
+    // Note: We don't clear error here to match original behavior
     
     // Update status and clear run ID
     updateStatus(finalStatus);
     setAgentRunId(null);
     currentRunIdRef.current = null;
-
+    
+    // Don't call callbacks.onClose directly - it's already handled by updateStatus
+    
     // --- Reliable Message Refetch on Finalization ---
     // Only refetch if the stream ended with a terminal status indicating the run is likely over
     const terminalStatuses = ['completed', 'stopped', 'failed', 'error', 'agent_not_running'];
     if (currentThreadId && terminalStatuses.includes(finalStatus)) {
         console.log(`[useAgentStream] Refetching messages for thread ${currentThreadId} after finalization with status ${finalStatus}.`);
-        getMessages(currentThreadId).then((messagesData: ApiMessageType[]) => {
-            if (isMountedRef.current && messagesData) {
-                console.log(`[useAgentStream] Refetched ${messagesData.length} messages for thread ${currentThreadId}.`);
-                const unifiedMessages = mapApiMessagesToUnified(messagesData, currentThreadId);
-                currentSetMessages(unifiedMessages); // Use the ref'd setMessages
-            } else if (!isMountedRef.current) {
-                console.log(`[useAgentStream] Component unmounted before messages could be set after refetch for thread ${currentThreadId}.`);
-            }
-        }).catch(err => {
-            console.error(`[useAgentStream] Error refetching messages for thread ${currentThreadId} after finalization:`, err);
-            // Optionally notify the user via toast or callback
-            toast.error(`Failed to refresh messages: ${err.message}`);
-        });
+        
+        // Add a more generous delay to allow database persistence to complete
+        setTimeout(() => {
+            console.log(`[useAgentStream] Starting message refetch for thread ${currentThreadId} after 500ms delay.`);
+            getMessages(currentThreadId).then((messagesData: ApiMessageType[]) => {
+                if (isMountedRef.current && messagesData) {
+                    console.log(`[useAgentStream] Refetched ${messagesData.length} messages for thread ${currentThreadId}.`);
+                    const unifiedMessages = mapApiMessagesToUnified(messagesData, currentThreadId);
+                    
+                    // Try to find the most recent message from this response
+                    let hasRecentMessage = messagesData.some(msg => {
+                        // Check for messages with content similar to our final content
+                        if (finalContentRef.current && msg.content && msg.type === 'assistant' && msg.is_llm_message) {
+                            // For very long messages, check beginning and end for similarity
+                            if (finalContentRef.current.length > 500) {
+                                const finalStart = finalContentRef.current.substring(0, 100);
+                                const finalEnd = finalContentRef.current.substring(finalContentRef.current.length - 100);
+                                const msgStart = msg.content.substring(0, 100);
+                                const msgEnd = msg.content.length > 100 ? msg.content.substring(msg.content.length - 100) : '';
+                                
+                                const startMatch = finalStart === msgStart;
+                                const endMatch = finalEnd === msgEnd;
+                                
+                                if (startMatch && endMatch) {
+                                    console.log(`[useAgentStream] Found matching message by comparing start/end for long content`);
+                                    return true;
+                                }
+                            }
+                            
+                            // For shorter messages, direct comparison
+                            if (msg.content === finalContentRef.current) {
+                                console.log(`[useAgentStream] Found exact matching message in database`);
+                                return true;
+                            }
+                        }
+                        return false;
+                    });
+                    
+                    // If no recent message found and we had content, preserve it in UI
+                    if (!hasRecentMessage && finalContentRef.current && finalContentRef.current.trim()) {
+                        const contentToPreserve = finalContentRef.current;
+                        
+                        console.log(`[useAgentStream] No recent message found in database, preserving content in UI (${contentToPreserve.length} chars)`);
+                        const preservedMessage: UnifiedMessage = {
+                            message_id: `preserved-${Date.now()}`,
+                            thread_id: currentThreadId,
+                            type: 'assistant' as UnifiedMessage['type'],
+                            is_llm_message: true,
+                            content: contentToPreserve,
+                            metadata: '{}',
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString(),
+                        };
+                        currentSetMessages([...unifiedMessages, preservedMessage]);
+                    } else {
+                        currentSetMessages(unifiedMessages);
+                    }
+                } else if (!isMountedRef.current) {
+                    console.log(`[useAgentStream] Component unmounted before messages could be set after refetch for thread ${currentThreadId}.`);
+                }
+            }).catch(err => {
+                console.error(`[useAgentStream] Error refetching messages for thread ${currentThreadId} after finalization:`, err);
+                
+                // If there's an error but we have final content, ensure it's preserved
+                if (isMountedRef.current && finalContentRef.current && finalContentRef.current.trim()) {
+                    console.log(`[useAgentStream] Error occurred, but preserving final content in UI as fallback`);
+                    
+                    // Get current messages or empty array if undefined
+                    const currentMessages = setMessagesRef.current;
+                    
+                    if (currentMessages) {
+                        getMessages(currentThreadId).then((existingMessagesData) => {
+                            const existingMessages = mapApiMessagesToUnified(existingMessagesData, currentThreadId);
+                            
+                            const preservedMessage: UnifiedMessage = {
+                                message_id: `preserved-error-${Date.now()}`,
+                                thread_id: currentThreadId,
+                                type: 'assistant' as UnifiedMessage['type'],
+                                is_llm_message: true,
+                                content: finalContentRef.current || '',
+                                metadata: '{}',
+                                created_at: new Date().toISOString(),
+                                updated_at: new Date().toISOString(),
+                            };
+                            
+                            currentSetMessages([...existingMessages, preservedMessage]);
+                        }).catch(() => {
+                            // Last resort error handling
+                            toast.error('Failed to refresh messages, but your message has been saved');
+                        });
+                    }
+                }
+                
+                // Optionally notify the user via toast or callback
+                toast.error(`Failed to refresh messages: ${err.message}`);
+            });
+        }, 500); // Increased delay to allow database to catch up
     } else {
         console.log(`[useAgentStream] Skipping message refetch for thread ${currentThreadId}. Final status: ${finalStatus}`);
     }
@@ -153,7 +248,7 @@ export function useAgentStream(callbacks: AgentStreamCallbacks, threadId: string
         console.log(`[useAgentStream] Post-finalization status check for ${runId} failed (this might be expected if not found): ${err.message}`);
       });
     }
-  }, [agentRunId, updateStatus]);
+  }, [updateStatus]);
 
   // --- Stream Callback Handlers ---
 
@@ -370,10 +465,10 @@ export function useAgentStream(callbacks: AgentStreamCallbacks, threadId: string
              console.log(`[useAgentStream] Agent run ${runId} not found after stream close. Finalizing.`);
              // Revert to agent_not_running for this specific case
              finalizeStream('agent_not_running', runId);
-           } else {
-              // For other errors checking status, finalize with generic error
+          } else {
+             // For other errors checking status, finalize with generic error
              finalizeStream('error', runId);
-           }
+          }
        });
 
   }, [status, finalizeStream]); // Include status
