@@ -292,9 +292,28 @@ export function useAgentStream(callbacks: AgentStreamCallbacks, threadId: string
         if (parsedMetadata.stream_status === 'chunk' && parsedContent.content) {
           setTextContent(prev => prev + parsedContent.content);
         } else if (parsedMetadata.stream_status === 'complete') {
-          setTextContent('');
-          setToolCall(null);
-          if (message.message_id) callbacks.onMessage(message);
+          // Save the current content in case we need it
+          if (message.message_id) {
+            // First ensure the complete message has the accumulated content
+            if (!message.content || message.content === '{}') {
+              const accumulatedContent = JSON.stringify({ content: textContent });
+              message.content = accumulatedContent;
+            }
+            
+            // Pass the message to the callback handler BEFORE clearing
+            callbacks.onMessage(message);
+            
+            // Store final content for potential recovery
+            finalContentRef.current = textContent;
+            
+            // Only clear the streaming display after the message is delivered
+            setTimeout(() => {
+              if (isMountedRef.current) {
+                setTextContent('');
+                setToolCall(null);
+              }
+            }, 100);
+          }
         } else if (!parsedMetadata.stream_status) {
            // Handle non-chunked assistant messages if needed
            if (message.message_id) callbacks.onMessage(message);
