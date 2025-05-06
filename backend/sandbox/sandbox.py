@@ -118,7 +118,8 @@ def create_sandbox(password: str, project_id: str = None):
             "cpu": 2,
             "memory": 4,
             "disk": 2,
-        }
+        },  
+        auto_stop_interval=2880    # Disable auto-stop completely 
     )
     
     # Create the sandbox
