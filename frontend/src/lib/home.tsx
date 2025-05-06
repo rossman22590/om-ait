@@ -53,6 +53,7 @@ export const siteConfig = {
       { id: 4, name: "Pricing", href: "/pricing" },
       { id: 5, name: "About", href: "/about" },
       { id: 6, name: "FAQ", href: "/faq" },
+      { id: 7, name: "Support", href: "https://support.myapps.ai/" },
     ],
   },
   hero: {
