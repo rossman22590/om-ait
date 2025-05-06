@@ -30,7 +30,7 @@ async def run_agent(
     stream: bool,
     thread_manager: Optional[ThreadManager] = None,
     native_max_auto_continues: int = 25,
-    max_iterations: int = 1000,
+    max_iterations: int = 150,
     model_name: str = "anthropic/claude-3-7-sonnet-latest",
     enable_thinking: Optional[bool] = False,
     reasoning_effort: Optional[str] = 'low',
@@ -106,50 +106,33 @@ async def run_agent(
         # Get the latest message from messages table that its type is browser_state
         latest_browser_state = await client.table('messages').select('*').eq('thread_id', thread_id).eq('type', 'browser_state').order('created_at', desc=True).limit(1).execute()
         temporary_message = None
-        
-        # Track browser state message IDs to prevent processing duplicates
-        processed_browser_states = getattr(thread_manager, '_processed_browser_states', {})
-        if thread_id not in processed_browser_states:
-            processed_browser_states[thread_id] = set()
-        
         if latest_browser_state.data and len(latest_browser_state.data) > 0:
-            browser_state_message = latest_browser_state.data[0]
-            browser_state_id = browser_state_message.get("message_id")
-            
-            # Skip if we've already processed this browser state to prevent loops
-            if browser_state_id and browser_state_id not in processed_browser_states[thread_id]:
-                try:
-                    # Store this message ID to avoid reprocessing
-                    processed_browser_states[thread_id].add(browser_state_id)
-                    # Save back to thread_manager
-                    thread_manager._processed_browser_states = processed_browser_states
-                    
-                    content = json.loads(browser_state_message["content"])
-                    screenshot_base64 = content.get("screenshot_base64")
-                    # Create a copy of the browser state without screenshot
-                    browser_state = content.copy()
-                    browser_state.pop('screenshot_base64', None)
-                    browser_state.pop('screenshot_url', None) 
-                    browser_state.pop('screenshot_url_base64', None)
-                    temporary_message = { "role": "user", "content": [] }
-                    if browser_state:
-                        temporary_message["content"].append({
-                            "type": "text",
-                            "text": f"The following is the current state of the browser:\n{browser_state}"
-                        })
-                    if screenshot_base64:
-                        temporary_message["content"].append({
-                            "type": "image_url",
+            try:
+                content = json.loads(latest_browser_state.data[0]["content"])
+                screenshot_base64 = content["screenshot_base64"]
+                # Create a copy of the browser state without screenshot
+                browser_state = content.copy()
+                browser_state.pop('screenshot_base64', None)
+                browser_state.pop('screenshot_url', None) 
+                browser_state.pop('screenshot_url_base64', None)
+                temporary_message = { "role": "user", "content": [] }
+                if browser_state:
+                    temporary_message["content"].append({
+                        "type": "text",
+                        "text": f"The following is the current state of the browser:\n{browser_state}"
+                    })
+                if screenshot_base64:
+                    temporary_message["content"].append({
+                        "type": "image_url",
                             "image_url": {
                                 "url": f"data:image/jpeg;base64,{screenshot_base64}",
                             }
-                        })
-                    else:
-                        logger.debug("No screenshot in browser state")
-                except Exception as e:
-                    logger.error(f"Error parsing browser state: {e}")
-            else:
-                logger.debug(f"Skipping already processed browser state: {browser_state_id}")
+                    })
+                else:
+                    print("@@@@@ THIS TIME NO SCREENSHOT!!")
+            except Exception as e:
+                print(f"Error parsing browser state: {e}")
+                # print(latest_browser_state.data[0])
         
         max_tokens = 64000 if "sonnet" in model_name.lower() else None
 
@@ -376,4 +359,126 @@ async def run_agent(
 #                              # Maybe just print a summary if it's too long or contains complex XML
 #                              if '</ask>' in actual_content: print("<ask>...</ask>", end='', flush=True)
 #                              elif '</complete>' in actual_content: print("<complete>...</complete>", end='', flush=True)
-#                              else: print("
+#                              else: print("<tool_call>...</tool_call>", end='', flush=True) # Generic case
+#                     else:
+#                         # Regular text content
+#                          print(actual_content, end='', flush=True)
+#                     current_response += actual_content # Accumulate only text part
+#             except json.JSONDecodeError:
+#                  # If content is not JSON (e.g., just a string chunk), print directly
+#                  raw_content = chunk.get('content', '')
+#                  print(raw_content, end='', flush=True)
+#                  current_response += raw_content
+#             except Exception as e:
+#                  print(f"\nError processing assistant chunk: {e}\n")
+
+#         elif chunk.get('type') == 'tool': # Updated from 'tool_result'
+#             # Add timestamp and format tool result nicely
+#             tool_name = "UnknownTool" # Try to get from metadata if available
+#             result_content = "No content"
+            
+#             # Parse metadata - handle both string and dict formats
+#             metadata = chunk.get('metadata', {})
+#             if isinstance(metadata, str):
+#                 try:
+#                     metadata = json.loads(metadata)
+#                 except json.JSONDecodeError:
+#                     metadata = {}
+            
+#             linked_assistant_msg_id = metadata.get('assistant_message_id')
+#             parsing_details = metadata.get('parsing_details')
+#             if parsing_details:
+#                 tool_name = parsing_details.get('xml_tag_name', 'UnknownTool') # Get name from parsing details
+
+#             try:
+#                 # Content is a JSON string or object
+#                 content = chunk.get('content', '{}') 
+#                 if isinstance(content, str):
+#                     content_json = json.loads(content)
+#                 else:
+#                     content_json = content
+                
+#                 # The actual tool result is nested inside content.content
+#                 tool_result_str = content_json.get('content', '')
+#                  # Extract the actual tool result string (remove outer <tool_result> tag if present)
+#                 match = re.search(rf'<{tool_name}>(.*?)</{tool_name}>', tool_result_str, re.DOTALL)
+#                 if match:
+#                     result_content = match.group(1).strip()
+#                     # Try to parse the result string itself as JSON for pretty printing
+#                     try:
+#                         result_obj = json.loads(result_content)
+#                         result_content = json.dumps(result_obj, indent=2)
+#                     except json.JSONDecodeError:
+#                          # Keep as string if not JSON
+#                          pass
+#                 else:
+#                      # Fallback if tag extraction fails
+#                      result_content = tool_result_str
+
+#             except json.JSONDecodeError:
+#                 result_content = chunk.get('content', 'Error parsing tool content')
+#             except Exception as e:
+#                 result_content = f"Error processing tool chunk: {e}"
+
+#             print(f"\n\n🛠️  TOOL RESULT [{tool_name}] → {result_content}")
+
+#         elif chunk.get('type') == 'status':
+#             # Log tool status changes
+#             try:
+#                 # Handle content as string or object
+#                 status_content = chunk.get('content', '{}')
+#                 if isinstance(status_content, str):
+#                     status_content = json.loads(status_content)
+                
+#                 status_type = status_content.get('status_type')
+#                 function_name = status_content.get('function_name', '')
+#                 xml_tag_name = status_content.get('xml_tag_name', '') # Get XML tag if available
+#                 tool_name = xml_tag_name or function_name # Prefer XML tag name
+
+#                 if status_type == 'tool_started' and tool_name:
+#                     tool_usage_counter += 1
+#                     print(f"\n⏳ TOOL STARTING #{tool_usage_counter} [{tool_name}]")
+#                     print("  " + "-" * 40)
+#                     # Return to the current content display
+#                     if current_response:
+#                         print("\nContinuing response:", flush=True)
+#                         print(current_response, end='', flush=True)
+#                 elif status_type == 'tool_completed' and tool_name:
+#                      status_emoji = "✅"
+#                      print(f"\n{status_emoji} TOOL COMPLETED: {tool_name}")
+#                 elif status_type == 'finish':
+#                      finish_reason = status_content.get('finish_reason', '')
+#                      if finish_reason:
+#                          print(f"\n📌 Finished: {finish_reason}")
+#                 # else: # Print other status types if needed for debugging
+#                 #    print(f"\nℹ️ STATUS: {chunk.get('content')}")
+
+#             except json.JSONDecodeError:
+#                  print(f"\nWarning: Could not parse status content JSON: {chunk.get('content')}")
+#             except Exception as e:
+#                 print(f"\nError processing status chunk: {e}")
+
+
+#         # Removed elif chunk.get('type') == 'tool_call': block
+    
+#     # Update final message
+#     print(f"\n\n✅ Agent run completed with {tool_usage_counter} tool executions")
+    
+#     # Try to clean up the test sandbox if possible
+#     try:
+#         # Attempt to delete/archive the sandbox to clean up resources
+#         # Note: Actual deletion may depend on the Daytona SDK's capabilities
+#         logger.info(f"Attempting to clean up test sandbox {original_sandbox_id}")
+#         # If there's a method to archive/delete the sandbox, call it here
+#         # Example: daytona.archive_sandbox(sandbox.id)
+#     except Exception as e:
+#         logger.warning(f"Failed to clean up test sandbox {original_sandbox_id}: {str(e)}")
+
+# if __name__ == "__main__":
+#     import asyncio
+    
+#     # Configure any environment variables or setup needed for testing
+#     load_dotenv()  # Ensure environment variables are loaded
+    
+#     # Run the test function
+#     asyncio.run(test_agent())
