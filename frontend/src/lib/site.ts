@@ -1,7 +1,7 @@
 export const siteConfig = {
   name: 'Machine',
-  url: 'https://suna.so/',
-  description: 'Kortix AI',
+  url: 'https://beta.machine.myapps.ai/',
+  description: 'Mahchine',
   links: {
     twitter: 'https://x.com/kortixai',
     github: 'https://github.com/kortix-ai/',
