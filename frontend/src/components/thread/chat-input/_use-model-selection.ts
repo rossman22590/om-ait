@@ -4,7 +4,11 @@ import { useSubscription } from '@/hooks/react-query/subscriptions/use-subscript
 import { useState, useEffect } from 'react';
 
 export const STORAGE_KEY_MODEL = 'suna-preferred-model';
+<<<<<<< Updated upstream
 export const DEFAULT_FREE_MODEL_ID = 'deepseek';
+=======
+export const DEFAULT_FREE_MODEL_ID = 'grok-3-mini';
+>>>>>>> Stashed changes
 export const DEFAULT_PREMIUM_MODEL_ID = 'sonnet-3.7';
 
 export type SubscriptionStatus = 'no_subscription' | 'active';
@@ -18,7 +22,11 @@ export interface ModelOption {
 
 export const MODEL_OPTIONS: ModelOption[] = [
   { 
+<<<<<<< Updated upstream
     id: 'deepseek', 
+=======
+    id: 'grok-3-mini', 
+>>>>>>> Stashed changes
     label: 'Free', 
     requiresSubscription: false,
     description: 'Limited capabilities. Upgrade for full performance.'

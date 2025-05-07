@@ -33,35 +33,35 @@ interface Config {
 // Production tier IDs
 const PROD_TIERS: SubscriptionTiers = {
   FREE: {
-    priceId: 'price_1RILb4G6l1KZGqIrK4QLrx9i',
+    priceId: 'price_1RLwBMG23sSyONuFrhkNh9fe',
     name: 'Free',
   },
   TIER_2_20: {
-    priceId: 'price_1RILb4G6l1KZGqIrhomjgDnO',
-    name: '2h/$20',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
+    name: '2h/$35',
   },
   TIER_6_50: {
-    priceId: 'price_1RILb4G6l1KZGqIr5q0sybWn',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
     name: '6h/$50',
   },
   TIER_12_100: {
-    priceId: 'price_1RILb4G6l1KZGqIr5Y20ZLHm',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
     name: '12h/$100',
   },
   TIER_25_200: {
-    priceId: 'price_1RILb4G6l1KZGqIrGAD8rNjb',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
     name: '25h/$200',
   },
   TIER_50_400: {
-    priceId: 'price_1RILb4G6l1KZGqIruNBUMTF1',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
     name: '50h/$400',
   },
   TIER_125_800: {
-    priceId: 'price_1RILb3G6l1KZGqIrbJA766tN',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
     name: '125h/$800',
   },
   TIER_200_1000: {
-    priceId: 'price_1RILb3G6l1KZGqIrmauYPOiN',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
     name: '200h/$1000',
   },
 } as const;
@@ -69,35 +69,35 @@ const PROD_TIERS: SubscriptionTiers = {
 // Staging tier IDs
 const STAGING_TIERS: SubscriptionTiers = {
   FREE: {
-    priceId: 'price_1RIGvuG6l1KZGqIrw14abxeL',
+    priceId: 'price_1RLwBMG23sSyONuFrhkNh9fe',
     name: 'Free',
   },
   TIER_2_20: {
-    priceId: 'price_1RIGvuG6l1KZGqIrCRu0E4Gi',
-    name: '2h/$20',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
+    name: '2h/$35',
   },
   TIER_6_50: {
-    priceId: 'price_1RIGvuG6l1KZGqIrvjlz5p5V',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
     name: '6h/$50',
   },
   TIER_12_100: {
-    priceId: 'price_1RIGvuG6l1KZGqIrT6UfgblC',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
     name: '12h/$100',
   },
   TIER_25_200: {
-    priceId: 'price_1RIGvuG6l1KZGqIrOVLKlOMj',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
     name: '25h/$200',
   },
   TIER_50_400: {
-    priceId: 'price_1RIKNgG6l1KZGqIrvsat5PW7',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
     name: '50h/$400',
   },
   TIER_125_800: {
-    priceId: 'price_1RIKNrG6l1KZGqIrjKT0yGvI',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
     name: '125h/$800',
   },
   TIER_200_1000: {
-    priceId: 'price_1RIKQ2G6l1KZGqIrum9n8SI7',
+    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
     name: '200h/$1000',
   },
 } as const;

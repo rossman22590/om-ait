@@ -24,6 +24,7 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isManaging, setIsManaging] = useState(false);
+  const [overrideLocalMode, setOverrideLocalMode] = useState(false);
 
   useEffect(() => {
     async function fetchSubscription() {
@@ -48,6 +49,12 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
     fetchSubscription();
   }, [session, authLoading]);
 
+  useEffect(() => {
+    // Check if override is enabled
+    const showBillingInDev = localStorage.getItem('showBillingInDev') === 'true';
+    setOverrideLocalMode(showBillingInDev);
+  }, []);
+
   const handleManageSubscription = async () => {
     try {
       setIsManaging(true);
@@ -64,7 +71,7 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
   };
 
   // In local development mode, show a simplified component
-  if (isLocalMode()) {
+  if (isLocalMode() && !overrideLocalMode) {
     return (
       <div className="rounded-xl border shadow-sm bg-card p-6">
         <h2 className="text-xl font-semibold mb-4">Billing Status</h2>
@@ -76,6 +83,16 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
             Agent usage limits are not enforced in this environment
           </p>
         </div>
+        <Button
+          onClick={() => {
+            localStorage.setItem('showBillingInDev', 'true');
+            setOverrideLocalMode(true);
+          }}
+          variant="outline"
+          className="w-full mt-2"
+        >
+          Override: Show Billing UI
+        </Button>
       </div>
     );
   }

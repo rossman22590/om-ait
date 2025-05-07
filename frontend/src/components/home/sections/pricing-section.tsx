@@ -365,7 +365,7 @@ function PricingTier({
       : currentSubscription?.scheduled_price_id === tierPriceId);
   const isPlanLoading = isLoading[tierPriceId];
 
-  let buttonText = isAuthenticated ? 'Select Plan' : 'Hire Suna';
+  let buttonText = isAuthenticated ? 'Select Plan' : 'Hire Machine';
   let buttonDisabled = isPlanLoading;
   let buttonVariant: ButtonVariant = null;
   let ringClass = '';
@@ -615,6 +615,13 @@ export function PricingSection({
   const [isLoading, setIsLoading] = useState<Record<string, boolean>>({});
   const [isFetchingPlan, setIsFetchingPlan] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [overrideLocalMode, setOverrideLocalMode] = useState(false);
+
+  useEffect(() => {
+    // Check if override is enabled
+    const showBillingInDev = localStorage.getItem('showBillingInDev') === 'true';
+    setOverrideLocalMode(showBillingInDev);
+  }, []);
 
   const fetchCurrentPlan = async () => {
     setIsFetchingPlan(true);
@@ -666,12 +673,22 @@ export function PricingSection({
     }
   };
 
-  if (isLocalMode()) {
+  if (isLocalMode() && !overrideLocalMode) {
     return (
       <div className="p-4 bg-muted/30 border border-border rounded-lg text-center">
         <p className="text-sm text-muted-foreground">
           Running in local development mode - billing features are disabled
         </p>
+        <Button
+          onClick={() => {
+            localStorage.setItem('showBillingInDev', 'true');
+            setOverrideLocalMode(true);
+          }}
+          variant="outline"
+          className="w-full mt-2"
+        >
+          Override: Show Pricing UI
+        </Button>
       </div>
     );
   }

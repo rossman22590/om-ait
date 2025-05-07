@@ -1221,7 +1221,7 @@ export default function ThreadPage({
   useEffect(() => {
     if (projectName) {
       // Update document title when project name changes
-      document.title = `${projectName} | Kortix Suna`;
+      document.title = `${projectName} | Machine`;
 
       // Update meta tags for SEO
       const metaDescription = document.querySelector(
@@ -1230,14 +1230,14 @@ export default function ThreadPage({
       if (metaDescription) {
         metaDescription.setAttribute(
           'content',
-          `${projectName} - Interactive agent conversation powered by Kortix Suna`,
+          `${projectName} - Interactive agent conversation powered by Machine`,
         );
       }
 
       // Update OpenGraph tags if they exist
       const ogTitle = document.querySelector('meta[property="og:title"]');
       if (ogTitle) {
-        ogTitle.setAttribute('content', `${projectName} | Kortix Suna`);
+        ogTitle.setAttribute('content', `${projectName} | Machine`);
       }
 
       const ogDescription = document.querySelector(
@@ -1678,7 +1678,7 @@ export default function ThreadPage({
                           <div className="flex items-start gap-3">
                             <div className="flex-shrink-0 w-5 h-5 mt-2 rounded-md flex items-center justify-center overflow-hidden ml-auto mr-2">
                               <Image
-                                src="/kortix-symbol.svg"
+                                src="/logo.png"
                                 alt="Kortix"
                                 width={14}
                                 height={14}
@@ -1873,7 +1873,7 @@ export default function ThreadPage({
                       <div className="flex items-start gap-3">
                         <div className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center overflow-hidden bg-primary/10">
                           <Image
-                            src="/kortix-symbol.svg"
+                            src="/logo.png"
                             alt="Suna"
                             width={14}
                             height={14}
@@ -1916,7 +1916,7 @@ export default function ThreadPage({
             value={newMessage}
             onChange={setNewMessage}
             onSubmit={handleSubmitMessage}
-            placeholder="Ask Suna anything..."
+            placeholder="Ask Machine anything..."
             loading={isSending}
             disabled={
               isSending ||
