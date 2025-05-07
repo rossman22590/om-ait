@@ -6,7 +6,11 @@ import { useState, useEffect } from 'react';
 export const STORAGE_KEY_MODEL = 'suna-preferred-model';
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 export const DEFAULT_FREE_MODEL_ID = 'deepseek';
+=======
+export const DEFAULT_FREE_MODEL_ID = 'grok-3-mini';
+>>>>>>> Stashed changes
 =======
 export const DEFAULT_FREE_MODEL_ID = 'grok-3-mini';
 >>>>>>> Stashed changes
@@ -28,7 +32,11 @@ export const MODEL_OPTIONS: ModelOption[] = [
   { 
 <<<<<<< Updated upstream
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     id: 'deepseek', 
+=======
+    id: 'grok-3-mini', 
+>>>>>>> Stashed changes
 =======
     id: 'grok-3-mini', 
 >>>>>>> Stashed changes
