@@ -17,10 +17,10 @@ export function KortixLogo() {
     <div className="flex h-6 w-6 items-center justify-center flex-shrink-0">
       <Image
         src="/logo.png"
-        alt="Kortix"
+        alt="Machine"
         width={24}
         height={24}
-        className={`${mounted && theme === 'dark' ? 'invert' : ''}`}
+        className="invert-0"
       />
     </div>
   );

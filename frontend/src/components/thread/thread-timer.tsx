@@ -156,12 +156,10 @@ export function ThreadTimer({ threadId }: ThreadTimerProps) {
   
   // Always render the component even while loading to reserve space in the layout
   return (
-    <>
-      <style dangerouslySetInnerHTML={{ __html: pulseAnimation }} />
-      <TooltipProvider>
-        <Tooltip>
+    <TooltipProvider>
+      <Tooltip>
         <TooltipTrigger asChild>
-          <div className={`flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-md text-white cursor-help transition-all bg-pink-500 hover:bg-pink-600 ${isActivelyRunning ? 'custom-pulse' : ''}`}>
+          <div className={isActivelyRunning ? "flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-md text-white cursor-help transition-all bg-pink-500 hover:bg-pink-600 animate-pulse" : "flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-md text-white cursor-help transition-all bg-pink-500 hover:bg-pink-600"}>
             <Clock className="h-3 w-3" />
             <span>{loading && minutesUsed === null ? "..." : `${minutesUsed || 0} min`}</span>
           </div>
@@ -176,6 +174,5 @@ export function ThreadTimer({ threadId }: ThreadTimerProps) {
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
-    </>
   )
 }

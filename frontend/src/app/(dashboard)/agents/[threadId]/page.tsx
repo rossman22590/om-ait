@@ -1670,10 +1670,10 @@ export default function ThreadPage({
                             <div className="flex-shrink-0 w-5 h-5 mt-2 rounded-md flex items-center justify-center overflow-hidden ml-auto mr-2">
                               <Image
                                 src="/logo.png"
-                                alt="Kortix"
+                                alt="Machine"
                                 width={14}
                                 height={14}
-                                className="object-contain invert dark:invert-0 opacity-70"
+                                className="object-contain !invert-0 opacity-70"
                               />
                             </div>
                             <div className="flex-1">
@@ -1865,10 +1865,10 @@ export default function ThreadPage({
                         <div className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center overflow-hidden bg-primary/10">
                           <Image
                             src="/logo.png"
-                            alt="Suna"
+                            alt="Machine"
                             width={14}
                             height={14}
-                            className="object-contain"
+                            className="object-contain invert-0"
                           />
                         </div>
                         <div className="flex-1 space-y-2">

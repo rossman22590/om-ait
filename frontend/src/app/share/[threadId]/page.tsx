@@ -1547,7 +1547,7 @@ export default function ThreadPage({
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <div className="flex items-center justify-center w-6 h-6 rounded-md overflow-hidden bg-primary/10">
-                  <Image src="/logo.png" alt="Kortix" width={16} height={16} className="object-contain" />
+                  <Image src="/logo.png" alt="Machine" width={16} height={16} className="object-contain invert-0" />
                 </div>
                 <span className="font-medium text-foreground">
                   {projectName || 'Shared Conversation'}
@@ -1728,7 +1728,7 @@ export default function ThreadPage({
                         >
                           <div className="flex items-start gap-3">
                             <div className="flex-shrink-0 w-5 h-5 mt-2 rounded-md flex items-center justify-center overflow-hidden bg-primary/10">
-                              <Image src="/logo.png" alt="Suna" width={14} height={14} className="object-contain" />
+                              <Image src="/logo.png" alt="Machine" width={14} height={14} className="object-contain invert-0" />
                             </div>
                             <div className="flex-1">
                               <div className="inline-flex max-w-[90%] rounded-lg bg-muted/5 px-4 py-3 text-sm">
@@ -1860,7 +1860,7 @@ export default function ThreadPage({
                   <div ref={latestMessageRef}>
                     <div className="flex items-start gap-3">
                       <div className="flex-shrink-0 w-5 h-5 mt-2 rounded-md flex items-center justify-center overflow-hidden bg-primary/10">
-                        <Image src="/logo.png" alt="Suna" width={14} height={14} className="object-contain" />
+                        <Image src="/logo.png" alt="Machine" width={14} height={14} className="object-contain !invert-0" />
                       </div>
                       <div className="flex-1 space-y-2">
                         <div className="inline-flex items-center gap-1.5 py-1.5 px-3 text-xs font-medium text-primary bg-primary/10 rounded-md border border-primary/20">
@@ -1879,7 +1879,7 @@ export default function ThreadPage({
                   <div ref={latestMessageRef}>
                     <div className="flex items-start gap-3">
                       <div className="flex-shrink-0 w-5 h-5 mt-2 rounded-md flex items-center justify-center overflow-hidden bg-primary/10">
-                        <Image src="/logo.png" alt="Suna" width={14} height={14} className="object-contain" />
+                        <Image src="/logo.png" alt="Machine" width={14} height={14} className="object-contain !invert-0" />
                       </div>
                       <div className="flex-1 space-y-2">
                         <div className="max-w-[90%] px-4 py-3 text-sm">

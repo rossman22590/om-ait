@@ -4,6 +4,8 @@ from agentpress.tool import ToolResult, openapi_schema, xml_schema
 from sandbox.sandbox import SandboxToolsBase, Sandbox
 from utils.files_utils import clean_path
 from agentpress.thread_manager import ThreadManager
+import json
+import re
 
 # Load environment variables
 load_dotenv()
@@ -24,13 +26,13 @@ class SandboxDeployTool(SandboxToolsBase):
         "type": "function",
         "function": {
             "name": "deploy",
-            "description": "Deploy a static website (HTML+CSS+JS) from a directory in the sandbox to Cloudflare Pages. Only use this tool when permanent deployment to a production environment is needed. The directory path must be relative to /workspace. The website will be deployed to {name}.kortix.cloud.",
+            "description": "Deploy a static website (HTML+CSS+JS) from a directory in the sandbox to Cloudflare Pages. Only use this tool when permanent deployment to a production environment is needed. The directory path must be relative to /workspace. The website will be deployed to {name}.mymachine.space",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "name": {
                         "type": "string",
-                        "description": "Name for the deployment, will be used in the URL as {name}.kortix.cloud"
+                        "description": "Name for the deployment, will be used in the URL as {name}.mymachine.space"
                     },
                     "directory_path": {
                         "type": "string",
@@ -66,7 +68,7 @@ class SandboxDeployTool(SandboxToolsBase):
         Only use this tool when permanent deployment to a production environment is needed.
         
         Args:
-            name: Name for the deployment, will be used in the URL as {name}.kortix.cloud
+            name: Name for the deployment, will be used in the URL as {name}.mymachine.space
             directory_path: Path to the directory to deploy, relative to /workspace
             
         Returns:
@@ -108,12 +110,86 @@ class SandboxDeployTool(SandboxToolsBase):
                 print(f"Deployment command output: {response.result}")
                 
                 if response.exit_code == 0:
-                    return self.success_response({
-                        "message": f"Website deployed successfully",
-                        "output": response.result
-                    })
+                    # Extract the correct URL from the output using regex
+                    # First, aggressively clean the output of all special characters and escape sequences
+                    # This ensures we have plain text with no color codes or unicode symbols
+                    raw_output = response.result
+                    
+                    # Remove ANSI color codes and escape sequences completely
+                    clean_output = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', raw_output)
+                    # Remove unicode special characters that cause display issues
+                    clean_output = re.sub(r'[\u2718\u2728\ud83c\udf0e]', '', clean_output)
+                    # Fix escape sequences that might be in the string representation
+                    clean_output = clean_output.replace('\\n', '\n').replace('\\r', '\r')
+                    
+                    # Log clean output for debugging
+                    print(f"Cleaned deployment output for processing: {clean_output[:100]}...")
+                    
+                    # Extract the deployment URL using multiple patterns to ensure we catch it
+                    deployment_url = None
+                    
+                    # Try different URL patterns with very generous matching
+                    url_patterns = [
+                        r'https://[a-zA-Z0-9.-]+\.pages\.dev/?',  # Most general pattern
+                        r'Deployment complete.*?(https://[a-zA-Z0-9.-]+\.pages\.dev/?)',
+                        r'Success.*?(https://[a-zA-Z0-9.-]+\.pages\.dev/?)',
+                        r'available at\s*(https://[a-zA-Z0-9.-]+\.pages\.dev/?)',
+                        r'peek over at\s*(https://[a-zA-Z0-9.-]+\.pages\.dev/?)',
+                        r'will be available at\s*(https://[a-zA-Z0-9.-]+\.pages\.dev/?)',
+                    ]
+                    
+                    # Try each pattern until we find a match
+                    for pattern in url_patterns:
+                        matches = re.findall(pattern, clean_output, re.IGNORECASE | re.DOTALL)
+                        if matches:
+                            # Use the last match as it's typically the final deployed URL
+                            deployment_url = matches[-1].strip()
+                            if isinstance(deployment_url, tuple) and len(deployment_url) > 0:
+                                deployment_url = deployment_url[0].strip()
+                            break
+                    
+                    # If no URL was found through regex, use fallback to project name
+                    if not deployment_url:
+                        deployment_url = f"https://{project_name}.pages.dev"
+                        print(f"No URL found in output, using fallback: {deployment_url}")
+                    else:
+                        print(f"Extracted deployment URL: {deployment_url}")
+                    
+                    # Remove any trailing slashes or whitespace for consistency
+                    deployment_url = deployment_url.rstrip('/').strip()
+                    
+                    # Check if this was a new project creation
+                    is_new_project = 'project created' in clean_output.lower() or 'new project' in clean_output.lower() or 'first deployment' in clean_output.lower()
+                    
+                    # Create a clean, bold, user-friendly response
+                    result = {
+                        "message": "✅ WEBSITE DEPLOYED SUCCESSFULLY",
+                        "url": deployment_url,
+                        "note": "Your site is now live! The URL may take a few minutes to become fully accessible.",
+                        "type": "new project" if is_new_project else "update"
+                    }
+                    
+                    # Return a very clean JSON response with no chance of escape sequence issues
+                    return ToolResult(
+                        success=True,
+                        output=json.dumps(result, ensure_ascii=True)
+                    )
                 else:
-                    return self.fail_response(f"Deployment failed with exit code {response.exit_code}: {response.result}")
+                    # Clean up error message
+                    error_output = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', response.result)  # Remove ANSI codes
+                    error_output = re.sub(r'[\u2718\u2728\ud83c\udf0e]', '', error_output)  # Remove unicode symbols
+                    
+                    # Create a clean error message
+                    error_result = {
+                        "error": "DEPLOYMENT FAILED",
+                        "details": f"Exit code: {response.exit_code}",
+                        "suggestion": "Check your files and try again"
+                    }
+                    
+                    return ToolResult(
+                        success=False,
+                        output=json.dumps(error_result, ensure_ascii=True)
+                    )
             except Exception as e:
                 return self.fail_response(f"Error during deployment: {str(e)}")
         except Exception as e:
