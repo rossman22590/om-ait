@@ -48,6 +48,94 @@ export interface PricingTier {
   upgradePlans: UpgradePlan[];
 }
 
+// Centralized pricing data - matches pricing page
+export const pricingData = {
+  plans: [
+    {
+      id: 'free',
+      name: 'Free',
+      description: 'Get started with',
+      price: '$0',
+      duration: '/forever',
+      popular: false,
+      features: [
+        '60 min',
+        'Public Projects', 
+        'Basic Model (Limited capabilities)'
+      ],
+      buttonText: 'Hire Machine',
+      priceCaption: 'No credit card required',
+      stripePriceId: config.SUBSCRIPTION_TIERS.FREE.priceId,
+    },
+    {
+      id: 'pro',
+      name: 'Pro',
+      description: 'Everything in Free, plus:',
+      price: '$20',
+      duration: '/per month',
+      popular: true,
+      features: [
+        '2 hours',
+        'Private projects',
+        'Access to intelligent Model (Full Machine)',
+      ],
+      buttonText: 'Hire Machine',
+      priceCaption: 'Cancel anytime',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_2_20.priceId,
+    },
+    {
+      id: 'enterprise',
+      name: 'Custom',
+      description: 'Enterprise Plan:',
+      price: 'Contact Us',
+      duration: '',
+      popular: false,
+      features: [
+        '6 hours',
+        'Private projects',
+        'Full capability access',
+        'Custom integrations',
+        'Suited to your needs'
+      ],
+      buttonText: 'Hire Machine',
+      priceCaption: 'Volume discounts available',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_6_50.priceId,
+    }
+  ],
+  upgradePlans: [
+    {
+      hours: '6 hours',
+      price: '$50',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_6_50.priceId,
+    },
+    {
+      hours: '12 hours',
+      price: '$100',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_12_100.priceId,
+    },
+    {
+      hours: '25 hours',
+      price: '$200',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_25_200.priceId,
+    },
+    {
+      hours: '50 hours',
+      price: '$400',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_50_400.priceId,
+    },
+    {
+      hours: '125 hours',
+      price: '$800',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_125_800.priceId,
+    },
+    {
+      hours: '200 hours',
+      price: '$1000',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_200_1000.priceId,
+    },
+  ]
+}
+
 export const siteConfig = {
   name: 'Machine',
   description: 'The Generalist AI Agent that can act on your behalf.',
@@ -106,66 +194,20 @@ export const siteConfig = {
       'Machine by AI Tutor – is a generalist AI Agent that acts on your behalf.',
     inputPlaceholder: 'Ask Machine to...',
   },
-  cloudPricingItems: [
-    {
-      name: 'Free',
-      price: '$0/forever',
-      description: 'For customers of AI Tutor Premium',
-      buttonText: 'Start 7-Day Free Trial',
-      buttonColor: 'bg-secondary text-white',
-      isPopular: false,
-      hours: '25 minutes per month',
-      features: [
-        'Basic autonomous actions',
-        'Text-based inputs & outputs',
-        'Core tools access',
-        'Community support',
-      ],
-      stripePriceId: config.SUBSCRIPTION_TIERS.FREE.priceId,
-      upgradePlans: [],
-    },
-    {
-      name: 'Pro',
-      price: '$35/per month',
-      description: 'For professionals and power users',
-      buttonText: 'Start 7-Day Free Trial',
-      buttonColor: 'bg-secondary text-white',
-      isPopular: true,
-      hours: '500 minutes per month',
-      features: [
-        'Advanced autonomous capabilities',
-        'Priority processing',
-        'Full tools access',
-        'Progress monitoring',
-        'Email support',
-        '7-day free trial',
-        'Promo codes accepted',
-      ],
-      stripePriceId: 'price_1RIh34G23sSyONuFIpENlHw3', // Updated Pro Plan price ID
-      upgradePlans: [],
-    },
-    {
-      name: 'Enterprise',
-      price: '$200/per month',
-      description: 'For organizations and teams',
-      buttonText: 'Start 7-Day Free Trial',
-      buttonColor: 'bg-secondary text-white',
-      isPopular: false,
-      hours: '3000 minutes per month',
-      features: [
-        'Maximum autonomous capabilities',
-        'Custom integrations',
-        'Advanced analytics',
-        'Most Powerful Agents',
-        'Dedicated support',
-        '7-day free trial',
-        'Promo codes accepted',
-        'Volume discounts available',
-      ],
-      stripePriceId: 'price_1RIh2nG23sSyONuFeospbm4S', // Updated Enterprise Plan price ID
-      upgradePlans: [],
-    },
-  ],
+  cloudPricingItems: pricingData.plans.map(plan => {
+    return {
+      name: plan.name,
+      price: plan.price,
+      description: plan.description,
+      buttonText: plan.buttonText,
+      buttonColor: plan.id === 'pro' ? 'bg-primary text-white dark:text-black' : 'bg-secondary text-white',
+      isPopular: plan.id === 'pro',
+      hours: plan.id === 'free' ? '60 min' : (plan.id === 'pro' ? '2 hours' : '6 hours'),
+      features: plan.features,
+      stripePriceId: plan.stripePriceId,
+      upgradePlans: plan.id === 'enterprise' ? pricingData.upgradePlans : [],
+    };
+  }),
   companyShowcase: {
     companyLogos: [
       {

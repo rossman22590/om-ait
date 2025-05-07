@@ -10,6 +10,127 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useId } from 'react';
 import { FlickeringGrid } from "@/components/home/ui/flickering-grid";
 import { ArrowRight } from "lucide-react";
+import { config } from "@/lib/config";
+
+// Centralized pricing data
+const pricingData = {
+  plans: [
+    {
+      id: 'free',
+      name: 'Free',
+      description: 'Get started with',
+      price: '$0',
+      duration: '/forever',
+      popular: false,
+      features: [
+        '60 min',
+        'Public Projects', 
+        'Basic Model (Limited capabilities)'
+      ],
+      buttonText: 'Hire Machine',
+      priceCaption: 'No credit card required',
+      stripePriceId: config.SUBSCRIPTION_TIERS.FREE.priceId,
+    },
+    {
+      id: 'pro',
+      name: 'Pro',
+      description: 'Everything in Free, plus:',
+      price: '$20',
+      duration: '/per month',
+      popular: true,
+      features: [
+        '2 hours',
+        'Private projects',
+        'Access to intelligent Model (Full Machine)',
+      ],
+      buttonText: 'Hire Machine',
+      priceCaption: 'Cancel anytime',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_2_20.priceId,
+    },
+    {
+      id: 'enterprise',
+      name: 'Custom',
+      description: 'Enterprise Plan:',
+      price: 'Custom Hours',
+      duration: '',
+      popular: false,
+      features: [
+        'Starts at 6 hours',
+        'Private projects',
+        'Full capability access',
+        'Custom integrations',
+        'Suited to your needs'
+      ],
+      buttonText: 'Hire Machine',
+      priceCaption: 'Volume discounts available',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_6_50.priceId,
+    }
+  ],
+  upgradePlans: [
+    {
+      hours: '6 hours',
+      price: '$50',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_6_50.priceId,
+    },
+    {
+      hours: '12 hours',
+      price: '$100',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_12_100.priceId,
+    },
+    {
+      hours: '25 hours',
+      price: '$200',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_25_200.priceId,
+    },
+    {
+      hours: '50 hours',
+      price: '$400',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_50_400.priceId,
+    },
+    {
+      hours: '125 hours',
+      price: '$800',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_125_800.priceId,
+    },
+    {
+      hours: '200 hours',
+      price: '$1000',
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_200_1000.priceId,
+    },
+  ],
+  comparisonFeatures: [
+    {
+      feature: "Monthly Usage",
+      free: "60 min",
+      pro: "2 hours",
+      enterprise: "6+ hours"
+    },
+    {
+      feature: "Project Visibility",
+      free: "Public only",
+      pro: "Private",
+      enterprise: "Private"
+    },
+    {
+      feature: "AI Model",
+      free: "Basic",
+      pro: "Advanced",
+      enterprise: "Full Suite"
+    },
+    {
+      feature: "Custom Integrations",
+      free: "-",
+      pro: "-",
+      enterprise: "✓"
+    },
+    {
+      feature: "Support Level",
+      free: "Community",
+      pro: "Email",
+      enterprise: "Dedicated"
+    }
+  ]
+};
 
 export default function PricingPage() {
   // Adding a unique key prop for component re-render
@@ -58,94 +179,7 @@ export default function PricingPage() {
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto mb-16">
-          {[
-            {
-              id: 'free',
-              name: 'Free',
-              description: 'For customers of AI Tutor Premium',
-              price: '$0',
-              duration: '/forever',
-              popular: false,
-              features: [
-                'Basic autonomous actions',
-                'Text-based inputs & outputs',
-                'Core tools access',
-                'Community support'
-              ],
-              buttonText: 'Get Started',
-              priceCaption: 'No credit card required'
-            },
-            {
-              id: 'starter',
-              name: 'Starter',
-              description: 'For individuals getting started',
-              price: '$20',
-              duration: '/per month',
-              popular: true,
-              features: [
-                '2 hours of usage',
-                'Advanced autonomous capabilities',
-                'Priority processing',
-                'Full tools access',
-                'Progress monitoring',
-                'Email & chat support'
-              ],
-              buttonText: 'Hire Machine',
-              priceCaption: 'Billed monthly'
-            },
-            {
-              id: 'pro',
-              name: 'Pro',
-              description: 'For professionals and power users',
-              price: '$50',
-              duration: '/per month',
-              popular: false,
-              features: [
-                '6 hours of usage',
-                'All Starter features',
-                'Advanced tools access',
-                'Quick response times',
-                'Priority support'
-              ],
-              buttonText: 'Hire Machine',
-              priceCaption: 'Billed monthly'
-            },
-            {
-              id: 'team',
-              name: 'Team',
-              description: 'For teams and small businesses',
-              price: '$100',
-              duration: '/per month',
-              popular: false,
-              features: [
-                '12 hours of usage',
-                'All Pro features',
-                'Shared team workspace',
-                'Enhanced security',
-                'Priority support'
-              ],
-              buttonText: 'Hire Machine',
-              priceCaption: 'Billed monthly'
-            },
-            {
-              id: 'enterprise',
-              name: 'Enterprise',
-              description: 'For larger organizations',
-              price: '$200+',
-              duration: '/per month',
-              popular: false,
-              features: [
-                'Starting at 25 hours of usage',
-                'Custom hours packages available',
-                'Dedicated account manager',
-                'Custom integrations',
-                'Enterprise SLA',
-                'Premium support'
-              ],
-              buttonText: 'Contact Sales',
-              priceCaption: 'Custom pricing available'
-            }
-          ].map((plan, i) => (
+          {pricingData.plans.map((plan, i) => (
             <div key={plan.id} className="flex">
               <motion.div 
                 initial={{ opacity: 1, y: 0 }}
@@ -205,60 +239,11 @@ export default function PricingPage() {
                   <th className="py-4 px-6 text-left font-medium">Feature</th>
                   <th className="py-4 px-6 text-center font-medium">Free</th>
                   <th className="py-4 px-6 text-center font-medium">Pro</th>
-                  <th className="py-4 px-6 text-center font-medium">Enterprise</th>
+                  <th className="py-4 px-6 text-center font-medium">Custom</th>
                 </tr>
               </thead>
               <tbody>
-                {[
-                  {
-                    feature: "Monthly Minutes",
-                    free: "25",
-                    pro: "500",
-                    enterprise: "3000"
-                  },
-                  {
-                    feature: "Response Priority",
-                    free: "Standard",
-                    pro: "Priority",
-                    enterprise: "Highest"
-                  },
-                  {
-                    feature: "Tool Integrations",
-                    free: "Basic",
-                    pro: "Advanced",
-                    enterprise: "Custom + Advanced"
-                  },
-                  {
-                    feature: "Context Memory",
-                    free: "Limited",
-                    pro: "Extended",
-                    enterprise: "Maximum"
-                  },
-                  {
-                    feature: "Support Level",
-                    free: "Community",
-                    pro: "Email & Chat",
-                    enterprise: "Dedicated Support"
-                  },
-                  {
-                    feature: "Usage Analytics",
-                    free: "Basic",
-                    pro: "Detailed",
-                    enterprise: "Advanced"
-                  },
-                  {
-                    feature: "Custom Workflows",
-                    free: "✗",
-                    pro: "Limited",
-                    enterprise: "✓"
-                  },
-                  {
-                    feature: "API Access",
-                    free: "✗",
-                    pro: "✗",
-                    enterprise: "✗"
-                  }
-                ].map((row, index) => (
+                {pricingData.comparisonFeatures.map((row, index) => (
                   <tr key={index} className={index % 2 === 0 ? "bg-muted/30" : ""}>
                     <td className="py-3 px-6 font-medium">{row.feature}</td>
                     <td className="py-3 px-6 text-center">{row.free}</td>
