@@ -130,7 +130,7 @@ export const siteConfig = {
       features: [
         '2 hours',
         'Private projects',
-        'Access to intelligent Model (Full Suna)',
+        'Access to intelligent Model (Full Machine)',
       ],
       stripePriceId: config.SUBSCRIPTION_TIERS.TIER_2_20.priceId,
       upgradePlans: [],
