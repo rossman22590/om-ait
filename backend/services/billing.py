@@ -539,6 +539,10 @@ async def create_checkout_session(
                 mode='subscription',
                 success_url=request.success_url,
                 cancel_url=request.cancel_url,
+                allow_promotion_codes=True,  # Enable promo codes
+                subscription_data={
+                    "trial_period_days": 7  # Add 7-day free trial
+                },
                 metadata={
                         'user_id': current_user_id,
                         'product_id': product_id
