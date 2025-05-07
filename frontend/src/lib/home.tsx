@@ -137,9 +137,9 @@ export const siteConfig = {
     },
     {
       name: 'Custom',
-      price: '$50',
-      description: 'Everything in Pro, plus:',
-      buttonText: 'Hire Machine', 
+      price: 'Contact Us',
+      description: 'Enterprise Plan:',
+      buttonText: 'Hire Machine',
       buttonColor: 'bg-secondary text-white',
       isPopular: false,
       hours: '6 hours',
