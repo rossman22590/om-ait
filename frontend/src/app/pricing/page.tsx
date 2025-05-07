@@ -67,7 +67,6 @@ export default function PricingPage() {
               duration: '/forever',
               popular: false,
               features: [
-                '25 minutes per month',
                 'Basic autonomous actions',
                 'Text-based inputs & outputs',
                 'Core tools access',
@@ -77,40 +76,74 @@ export default function PricingPage() {
               priceCaption: 'No credit card required'
             },
             {
-              id: 'pro',
-              name: 'Pro',
-              description: 'For professionals and power users',
-              price: '$35',
+              id: 'starter',
+              name: 'Starter',
+              description: 'For individuals getting started',
+              price: '$20',
               duration: '/per month',
               popular: true,
               features: [
-                '500 minutes per month',
+                '2 hours of usage',
                 'Advanced autonomous capabilities',
                 'Priority processing',
                 'Full tools access',
                 'Progress monitoring',
-                'Email support'
+                'Email & chat support'
               ],
-              buttonText: 'Get Started',
+              buttonText: 'Hire Machine',
+              priceCaption: 'Billed monthly'
+            },
+            {
+              id: 'pro',
+              name: 'Pro',
+              description: 'For professionals and power users',
+              price: '$50',
+              duration: '/per month',
+              popular: false,
+              features: [
+                '6 hours of usage',
+                'All Starter features',
+                'Advanced tools access',
+                'Quick response times',
+                'Priority support'
+              ],
+              buttonText: 'Hire Machine',
+              priceCaption: 'Billed monthly'
+            },
+            {
+              id: 'team',
+              name: 'Team',
+              description: 'For teams and small businesses',
+              price: '$100',
+              duration: '/per month',
+              popular: false,
+              features: [
+                '12 hours of usage',
+                'All Pro features',
+                'Shared team workspace',
+                'Enhanced security',
+                'Priority support'
+              ],
+              buttonText: 'Hire Machine',
               priceCaption: 'Billed monthly'
             },
             {
               id: 'enterprise',
               name: 'Enterprise',
-              description: 'For organizations and teams',
-              price: '$200',
+              description: 'For larger organizations',
+              price: '$200+',
               duration: '/per month',
               popular: false,
               features: [
-                '3000 minutes per month',
-                'Maximum autonomous capabilities',
+                'Starting at 25 hours of usage',
+                'Custom hours packages available',
+                'Dedicated account manager',
                 'Custom integrations',
-                'Advanced analytics',
-                'Most Powerful Agents',
-                'Dedicated support'
+                'Enterprise SLA',
+                'Premium support'
               ],
-              buttonText: 'Get Started',
-              priceCaption: 'Volume discounts available'
+              buttonText: 'Contact Sales',
+              priceCaption: 'Custom pricing available'
             }
           ].map((plan, i) => (
             <div key={plan.id} className="flex">
