@@ -9,9 +9,25 @@ interface ThreadTimerProps {
   threadId: string
 }
 
+// Define a custom keyframes animation CSS
+const pulseAnimation = `
+  @keyframes customPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
+  .custom-pulse {
+    animation: customPulse 2s ease-in-out infinite;
+  }
+`;
+
 export function ThreadTimer({ threadId }: ThreadTimerProps) {
   const [minutesUsed, setMinutesUsed] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isActivelyRunning, setIsActivelyRunning] = useState(false)
+  
+  // Ref to track the max minutes we've seen to prevent "going backwards"
+  const maxMinutesSeenRef = useRef<number>(0)
   
   // Store the agent runs for continuous time calculation
   const agentRunsRef = useRef<AgentRun[]>([])
@@ -85,8 +101,13 @@ export function ThreadTimer({ threadId }: ThreadTimerProps) {
         
         // Calculate and update minutes - this happens on every fetch
         const calculatedMinutes = calculateRealTimeMinutes();
-        console.log(`Thread ${threadId} total minutes: ${calculatedMinutes}`);
-        setMinutesUsed(calculatedMinutes);
+        
+        // Never go backwards - always use the maximum value we've seen
+        const newMinutes = Math.max(calculatedMinutes, maxMinutesSeenRef.current);
+        maxMinutesSeenRef.current = newMinutes;
+        
+        console.log(`Thread ${threadId} total minutes: ${newMinutes} (calculated: ${calculatedMinutes})`);
+        setMinutesUsed(newMinutes);
       } catch (err) {
         console.error("Failed to fetch agent runs:", err);
         // Don't break the UI on error - keep showing previous value if available
@@ -100,10 +121,21 @@ export function ThreadTimer({ threadId }: ThreadTimerProps) {
     
     // This function updates the timer display in real-time without fetching
     function updateTimerDisplay() {
+      // Check if any agent is running
+      const hasRunningAgent = agentRunsRef.current && agentRunsRef.current.some(run => run.status === 'running');
+      
+      // Update active state for UI effects
+      setIsActivelyRunning(hasRunningAgent);
+      
       // Only calculate if we have agent runs and at least one is running
-      if (agentRunsRef.current && agentRunsRef.current.some(run => run.status === 'running')) {
+      if (hasRunningAgent) {
         const updatedMinutes = calculateRealTimeMinutes();
-        setMinutesUsed(updatedMinutes);
+        
+        // Never go backwards - always use the maximum value we've seen
+        const newMinutes = Math.max(updatedMinutes, maxMinutesSeenRef.current);
+        maxMinutesSeenRef.current = newMinutes;
+        
+        setMinutesUsed(newMinutes);
       }
     }
     
@@ -124,19 +156,26 @@ export function ThreadTimer({ threadId }: ThreadTimerProps) {
   
   // Always render the component even while loading to reserve space in the layout
   return (
-    <TooltipProvider>
-      <Tooltip>
+    <>
+      <style dangerouslySetInnerHTML={{ __html: pulseAnimation }} />
+      <TooltipProvider>
+        <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex items-center gap-1.5 text-xs bg-pink-500 px-2 py-0.5 rounded-md text-white hover:bg-pink-600 transition-colors cursor-help">
+          <div className={`flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-md text-white cursor-help transition-all bg-pink-500 hover:bg-pink-600 ${isActivelyRunning ? 'custom-pulse' : ''}`}>
             <Clock className="h-3 w-3" />
             <span>{loading && minutesUsed === null ? "..." : `${minutesUsed || 0} min`}</span>
           </div>
         </TooltipTrigger>
         <TooltipContent>
           <p>Total agent time used on this task</p>
-          <p className="text-xs opacity-70">(Updates in real-time)</p>
+          <p className="text-xs opacity-70">
+            {isActivelyRunning 
+              ? "⚡ Agent is running now - counting in real-time" 
+              : "(Updates in real-time when agent is running)"}
+          </p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
+    </>
   )
 }

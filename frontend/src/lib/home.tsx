@@ -479,7 +479,7 @@ export const siteConfig = {
         ),
         title: 'Intelligent Data Analysis',
         description:
-          "Transform raw data into actionable insights in seconds. Make better decisions with Suna's real-time, adaptive intelligence.",
+          "Transform raw data into actionable insights in seconds. Make better decisions with Machine's real-time, adaptive intelligence.",
       },
       {
         id: 4,
@@ -493,7 +493,7 @@ export const siteConfig = {
   benefits: [
     {
       id: 1,
-      text: "Automate everyday tasks with Suna's powerful AI capabilities.",
+      text: "Automate everyday tasks with Machine's powerful AI capabilities.",
       image: '/Device-6.png',
     },
     {
@@ -503,7 +503,7 @@ export const siteConfig = {
     },
     {
       id: 3,
-      text: 'Improve focus on high-value work as Suna handles the routine.',
+      text: 'Improve focus on high-value work as Machine handles the routine.',
       image: '/Device-8.png',
     },
     {
@@ -809,7 +809,7 @@ export const siteConfig = {
 
         title: 'Community Powered',
         description:
-          "Join a thriving community of developers and users continuously enhancing and expanding Suna's capabilities.",
+          "Join a thriving community of developers and users continuously enhancing and expanding Machine's capabilities.",
       },
     ],
   },
@@ -840,7 +840,7 @@ export const siteConfig = {
           'Community support',
         ],
         description: 'Perfect for individual users and developers',
-        buttonText: 'Hire Suna',
+        buttonText: 'Hire Machine',
         buttonColor: 'bg-accent text-primary',
         isPopular: false,
       },
@@ -1112,7 +1112,7 @@ export const siteConfig = {
       },
       {
         id: 4,
-        question: 'Can I integrate Suna with my existing tools?',
+        question: 'Can I integrate Machine with my existing tools?',
         answer:
           'Yes, Machine is designed to be highly compatible with popular tools and platforms. We offer APIs and pre-built integrations for seamless connection with your existing workflow tools and systems.',
       },
@@ -1120,7 +1120,7 @@ export const siteConfig = {
         id: 5,
         question: 'How can I contribute to Machine?',
         answer:
-          'You can contribute to Machine by submitting pull requests on GitHub, reporting bugs, suggesting new features, or helping with documentation. Join our Discord community to connect with other contributors and Hire Suna.',
+          'You can contribute to Machine by submitting pull requests on GitHub, reporting bugs, suggesting new features, or helping with documentation. Join our Discord community to connect with other contributors and Hire Machine.',
       },
       {
         id: 6,
@@ -1142,7 +1142,7 @@ export const siteConfig = {
   },
   footerLinks: [
     {
-      title: 'Kortix',
+      title: 'Machine',
       links: [
         { id: 1, title: 'About', url: 'https://kortix.ai' },
         { id: 3, title: 'Contact', url: 'mailto:hey@kortix.ai' },
@@ -1155,10 +1155,10 @@ export const siteConfig = {
         {
           id: 5,
           title: 'Documentation',
-          url: 'https://github.com/Kortix-ai/Suna',
+          url: 'https://github.com/Kortix-ai/Machine',
         },
         { id: 7, title: 'Discord', url: 'https://discord.gg/Py6pCBUUPw' },
-        { id: 8, title: 'GitHub', url: 'https://github.com/Kortix-ai/Suna' },
+        { id: 8, title: 'GitHub', url: 'https://github.com/Kortix-ai/Machine' },
       ],
     },
     {
@@ -1167,17 +1167,17 @@ export const siteConfig = {
         {
           id: 9,
           title: 'Privacy Policy',
-          url: 'https://suna.so/legal?tab=privacy',
+          url: 'https://Machine.so/legal?tab=privacy',
         },
         {
           id: 10,
           title: 'Terms of Service',
-          url: 'https://suna.so/legal?tab=terms',
+          url: 'https://Machine.so/legal?tab=terms',
         },
         {
           id: 11,
           title: 'License Apache 2.0',
-          url: 'https://github.com/Kortix-ai/Suna/blob/main/LICENSE',
+          url: 'https://github.com/Kortix-ai/Machine/blob/main/LICENSE',
         },
       ],
     },
