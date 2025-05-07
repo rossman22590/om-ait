@@ -76,39 +76,44 @@ export function NavMenu() {
     e: React.MouseEvent<HTMLAnchorElement>,
     item: NavItem,
   ) => {
-    e.preventDefault();
+    // Check if this is an anchor link (starts with #) or a page link
+    if (item.href.startsWith('#')) {
+      e.preventDefault();
 
-    const targetId = item.href.substring(1);
-    const element = document.getElementById(targetId);
+      const targetId = item.href.substring(1);
+      const element = document.getElementById(targetId);
 
-    if (element) {
-      // Set manual scroll flag
-      setIsManualScroll(true);
+      if (element) {
+        // Set manual scroll flag
+        setIsManualScroll(true);
 
-      // Immediately update nav state
-      setActiveSection(targetId);
-      const navItem = e.currentTarget.parentElement;
-      if (navItem) {
-        const rect = navItem.getBoundingClientRect();
-        setLeft(navItem.offsetLeft);
-        setWidth(rect.width);
+        // Immediately update nav state
+        setActiveSection(targetId);
+        const navItem = e.currentTarget.parentElement;
+        if (navItem) {
+          const rect = navItem.getBoundingClientRect();
+          setLeft(navItem.offsetLeft);
+          setWidth(rect.width);
+        }
+
+        // Calculate exact scroll position
+        const elementPosition = element.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - 100; // 100px offset
+
+        // Smooth scroll to exact position
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: 'smooth',
+        });
+
+        // Reset manual scroll flag after animation completes
+        setTimeout(() => {
+          setIsManualScroll(false);
+        }, 500); // Adjust timing to match scroll animation duration
       }
-
-      // Calculate exact scroll position
-      const elementPosition = element.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - 100; // 100px offset
-
-      // Smooth scroll to exact position
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth',
-      });
-
-      // Reset manual scroll flag after animation completes
-      setTimeout(() => {
-        setIsManualScroll(false);
-      }, 500); // Adjust timing to match scroll animation duration
     }
+    // For non-anchor links, allow default navigation behavior
+    // This will navigate to the page specified in the href
   };
 
   return (
@@ -121,7 +126,7 @@ export function NavMenu() {
           <li
             key={item.name}
             className={`z-10 cursor-pointer h-full flex items-center justify-center px-4 py-2 text-sm font-medium transition-colors duration-200 ${
-              activeSection === item.href.substring(1)
+              item.href.startsWith('#') && activeSection === item.href.substring(1)
                 ? 'text-primary'
                 : 'text-primary/60 hover:text-primary'
             } tracking-tight`}
