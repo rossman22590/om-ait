@@ -115,7 +115,7 @@ class Configuration:
     OPENROUTER_API_KEY: Optional[str] = None
     OPENROUTER_API_BASE: Optional[str] = "https://openrouter.ai/api/v1"
     OR_SITE_URL: Optional[str] = "https://beta.machine.myapps.ai"
-    OR_APP_NAME: Optional[str] = "Machine"    
+    OR_APP_NAME: Optional[str] = "The Machine"    
     
     # AWS Bedrock credentials
     AWS_ACCESS_KEY_ID: Optional[str] = None
