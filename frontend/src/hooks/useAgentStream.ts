@@ -5,6 +5,7 @@ import {
   stopAgent,
   AgentRun,
   getMessages,
+  startAgent,
 } from '@/lib/api';
 import { toast } from 'sonner';
 import {
@@ -81,6 +82,8 @@ export function useAgentStream(
   const currentRunIdRef = useRef<string | null>(null); // Ref to track the run ID being processed
   const threadIdRef = useRef(threadId); // Ref to hold the current threadId
   const setMessagesRef = useRef(setMessages); // Ref to hold the setMessages function
+  const lastActivityTimestampRef = useRef<number>(Date.now()); // Track when we last received activity
+  const deadAgentTimeoutRef = useRef<NodeJS.Timeout | null>(null); // Timeout for checking dead agents
 
   // Update refs if threadId or setMessages changes
   useEffect(() => {
@@ -130,10 +133,171 @@ export function useAgentStream(
     [callbacks, error],
   ); // Include error dependency
 
+  // Function to update the activity timestamp whenever the agent shows signs of life
+  const updateActivityTimestamp = useCallback(() => {
+    lastActivityTimestampRef.current = Date.now();
+  }, []);
+
+  // Set up a dead agent detector that will restart if nothing happens for a while
+  const setupDeadAgentDetector = useCallback(() => {
+    // Clear any existing timeout
+    if (deadAgentTimeoutRef.current) {
+      clearTimeout(deadAgentTimeoutRef.current);
+      deadAgentTimeoutRef.current = null;
+    }
+
+    // Only set up detector if we're in a 'connecting' or 'streaming' state
+    if (status !== 'connecting' && status !== 'streaming') return;
+
+    deadAgentTimeoutRef.current = setTimeout(() => {
+      // Check if we're still mounted and there's an active run
+      if (!isMountedRef.current || !currentRunIdRef.current) return;
+
+      // Calculate how long it's been since the last activity
+      const timeSinceLastActivity = Date.now() - lastActivityTimestampRef.current;
+      
+      // If no activity for 30 seconds while supposedly running, consider it dead
+      if (timeSinceLastActivity > 30000 && (status === 'connecting' || status === 'streaming')) {
+        console.warn(`[useAgentStream] Detected potential dead agent - no activity for ${Math.round(timeSinceLastActivity/1000)}s. Attempting recovery.`);
+        toast.warning("Agent appears to be unresponsive. Attempting to restart...");
+        
+        // Try to finalize the stream with an error status which will trigger restart logic
+        setError("Agent unresponsive - no activity detected for 30 seconds");
+        finalizeStream('error', currentRunIdRef.current, true); // Force restart
+      } else {
+        // Still active, check again in 10 seconds
+        setupDeadAgentDetector();
+      }
+    }, 10000); // Check every 10 seconds
+  }, [status]);  // Re-setup when status changes
+
+  // Helper function to restart the agent on specific failures
+  const restartAgent = useCallback(async (retryCount = 0, delayMs = 1000) => {
+    if (!isMountedRef.current || !threadIdRef.current) return;
+    
+    // Clear any dead agent detection
+    if (deadAgentTimeoutRef.current) {
+      clearTimeout(deadAgentTimeoutRef.current);
+      deadAgentTimeoutRef.current = null;
+    }
+    
+    console.log(`[useAgentStream] Attempting to restart agent for thread ${threadIdRef.current} (retry #${retryCount})`);
+    
+    // Only show toast on first retry to avoid spamming
+    if (retryCount === 0) {
+      toast.info('Agent encountered an issue. Automatically restarting...', {
+        duration: 3000,
+      });
+    }
+    
+    // Add a delay before restarting to allow any backend processes to clean up
+    // Use exponential backoff for retries (1s, 2s, 4s)
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+    
+    try {
+      // Clear state first
+      setStatus('idle');
+      setTextContent('');
+      setToolCall(null);
+      setError(null);
+      setAgentRunId(null);
+      currentRunIdRef.current = null;
+      
+      // Reset activity timestamp
+      updateActivityTimestamp();
+      
+      // Start a new agent run
+      const { agent_run_id } = await startAgent(threadIdRef.current, {
+        stream: true,
+      });
+      
+      if (isMountedRef.current) {
+        console.log(`[useAgentStream] Successfully started new agent run: ${agent_run_id}`);
+        // We need to use the startStreaming function which will be defined later
+        // This is safe because restartAgent's deps array will include startStreaming
+        startStreaming(agent_run_id);
+        
+        // Setup a safeguard in case this new agent also goes silent
+        setTimeout(() => {
+          if (isMountedRef.current && currentRunIdRef.current === agent_run_id && status === 'connecting') {
+            console.warn(`[useAgentStream] New agent ${agent_run_id} didn't progress beyond connecting state. Taking corrective action.`);
+            if (retryCount < 3) { // Increased retry limit from 2 to 3
+              // Try more restarts with exponential backoff
+              const nextDelay = delayMs * 2; // Double the delay each time
+              restartAgent(retryCount + 1, nextDelay);
+            } else {
+              // We've tried multiple times, give up and show error
+              setError("Agent failed to respond after multiple restart attempts. You can try again or refresh the page.");
+              updateStatus('error');
+              toast.error("Unable to get a response from the agent after multiple attempts", {
+                description: "You can try sending your message again or refreshing the page.",
+                action: {
+                  label: "Try Again",
+                  onClick: () => {
+                    // Reset everything and try once more
+                    setError(null);
+                    setStatus('idle');
+                    restartAgent(0, 0); // Start fresh with no delay
+                  }
+                }
+              });
+            }
+          }
+        }, 15000); // Wait 15 seconds for the agent to start responding
+      }
+    } catch (err) {
+      if (!isMountedRef.current) return;
+      
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error(`[useAgentStream] Failed to restart agent: ${errorMessage}`);
+      
+      // Check if this is the pathToRegexp error or other 500 error that's worth retrying
+      const isPathToRegexpError = errorMessage.includes('pathToRegexpError') || 
+                                 (errorMessage.includes('500') && errorMessage.includes('Failed to initialize sandbox'));
+      const isServerError = errorMessage.includes('500');
+      
+      if ((isPathToRegexpError || isServerError) && retryCount < 3) {
+        // This is a retriable error, try again with backoff
+        console.warn(`[useAgentStream] Detected server error, will retry again (${retryCount + 1}/3)`);
+        const nextDelay = delayMs * 2; // Double the delay each time
+        setTimeout(() => {
+          restartAgent(retryCount + 1, nextDelay);
+        }, nextDelay);
+      } else if (retryCount >= 3) {
+        // We've tried enough times, show a permanent error
+        toast.error("Unable to start agent after multiple attempts", {
+          description: "You can try sending your message again or refreshing the page.",
+          action: {
+            label: "Try Again",
+            onClick: () => {
+              // Reset everything and try once more
+              setError(null);
+              setStatus('idle');
+              restartAgent(0, 0); // Start fresh with no delay
+            }
+          }
+        });
+        updateStatus('error');
+        setError(`Failed to start agent after multiple attempts: ${errorMessage}`);
+      } else {
+        // Other non-retriable error
+        toast.error(`Could not restart the agent: ${errorMessage}`);
+        updateStatus('error');
+        setError(`Failed to restart agent: ${errorMessage}`);
+      }
+    }
+  }, []); // Empty deps array for now, will be filled later after all functions are defined
+
   // Function to handle finalization of a stream (completion, stop, error)
   const finalizeStream = useCallback(
-    (finalStatus: string, runId: string | null = agentRunId) => {
+    (finalStatus: string, runId: string | null = agentRunId, shouldAttemptRestart = false) => {
       if (!isMountedRef.current) return;
+
+      // Clear any dead agent detection
+      if (deadAgentTimeoutRef.current) {
+        clearTimeout(deadAgentTimeoutRef.current);
+        deadAgentTimeoutRef.current = null;
+      }
 
       const currentThreadId = threadIdRef.current; // Get current threadId from ref
       const currentSetMessages = setMessagesRef.current; // Get current setMessages from ref
@@ -213,6 +377,23 @@ export function useAgentStream(
           );
         });
       }
+      
+      // Check if auto-restart should be triggered for certain errors
+      if (shouldAttemptRestart || (finalStatus === 'error' && error && (
+          error.includes('time limit') ||
+          error.includes('OTOL') ||
+          error.includes('out of time') ||
+          error.includes('timeout') ||
+          error.includes('timed out') ||
+          error.includes('scrape failed') ||
+          error.includes('web scraping error')
+        ))) {
+        console.log(`[useAgentStream] Detected potentially recoverable error: "${error}". Attempting to restart.`);
+        // Small delay to ensure everything is cleaned up before restart
+        setTimeout(() => {
+          restartAgent();
+        }, 1000);
+      }
     },
     [agentRunId, updateStatus],
   );
@@ -223,6 +404,7 @@ export function useAgentStream(
     (rawData: string) => {
       if (!isMountedRef.current) return;
       (window as any).lastStreamMessage = Date.now(); // Keep track of last message time
+      updateActivityTimestamp(); // Update our activity timestamp
 
       let processedData = rawData;
       if (processedData.startsWith('data: ')) {
@@ -330,8 +512,18 @@ export function useAgentStream(
                 '[useAgentStream] Received error status message:',
                 parsedContent.message,
               );
-              setError(parsedContent.message || 'Agent run failed');
-              finalizeStream('error', currentRunIdRef.current);
+              const errorMsg = parsedContent.message || 'Agent run failed';
+              setError(errorMsg);
+              // Check if this is a time limit related error that needs auto-restart
+              const isTimeoutError = errorMsg.includes('time limit') || 
+                                    errorMsg.includes('OTOL') || 
+                                    errorMsg.includes('out of time') || 
+                                    errorMsg.includes('timeout') || 
+                                    errorMsg.includes('timed out') ||
+                                    errorMsg.includes('scrape failed') ||
+                                    errorMsg.includes('web scraping error');
+              
+              finalizeStream('error', currentRunIdRef.current, isTimeoutError);
               break;
             // Ignore thread_run_start, assistant_response_start etc. for now
             default:
@@ -398,6 +590,7 @@ export function useAgentStream(
             console.warn(
               `[useAgentStream] Stream error for ${runId}, but agent is still running. Finalizing with error.`,
             );
+            setError('Stream interrupted while agent was running');
             finalizeStream('error', runId); // Stream failed, even if agent might still be running backend-side
             toast.warning('Stream interrupted. Agent might still be running.');
           } else {
@@ -406,7 +599,30 @@ export function useAgentStream(
             console.log(
               `[useAgentStream] Stream error for ${runId}, agent status is ${agentStatus.status}. Finalizing stream as ${finalStatus}.`,
             );
-            finalizeStream(finalStatus, runId);
+            // Check if it's an error that warrants auto-restart
+            const shouldRestart = errorMessage && (
+                errorMessage.includes('time limit') || 
+                errorMessage.includes('OTOL') || 
+                errorMessage.includes('out of time') || 
+                errorMessage.includes('timeout') || 
+                errorMessage.includes('timed out') ||
+                errorMessage.includes('scrape failed') ||
+                errorMessage.includes('web scraping error')
+            );
+            
+            // Check for common "not running" messages that aren't actual errors
+            const isNotRunningError = errorMessage.includes('not running') || 
+                                  errorMessage.includes('is already stopped') ||
+                                  errorMessage.includes('terminated');
+            
+            if (!isNotRunningError) {
+              finalizeStream(finalStatus, runId, shouldRestart);
+            } else {
+              console.log(
+                `[useAgentStream] Agent run ${runId} not running after stream error. Finalizing.`,
+              );
+              finalizeStream('agent_not_running', runId);
+            }
           }
         })
         .catch((statusError) => {
@@ -416,20 +632,34 @@ export function useAgentStream(
             statusError instanceof Error
               ? statusError.message
               : String(statusError);
-          console.error(
-            `[useAgentStream] Error checking agent status for ${runId} after stream error: ${statusErrorMessage}`,
-          );
-
+          
+          // Check for common "not running" messages that aren't actual errors
+          const isNotRunningError = statusErrorMessage.includes('not running') || 
+                                statusErrorMessage.includes('is already stopped') ||
+                                statusErrorMessage.includes('terminated');
+          
           const isNotFoundError =
             statusErrorMessage.includes('not found') ||
             statusErrorMessage.includes('404') ||
             statusErrorMessage.includes('does not exist');
 
-          if (isNotFoundError) {
-            console.log(
-              `[useAgentStream] Agent run ${runId} not found after stream error. Finalizing.`,
+          // Only log as error if it's not a common "not running" case
+          if (!isNotRunningError && !isNotFoundError) {
+            console.error(
+              `[useAgentStream] Error checking agent status for ${runId} after stream error: ${statusErrorMessage}`,
             );
-            // Revert to agent_not_running for this specific case
+          } else {
+            // Log as info instead for common cases
+            console.log(
+              `[useAgentStream] Agent run ${runId} not available after stream error: ${statusErrorMessage}`,
+            );
+          }
+
+          if (isNotFoundError || isNotRunningError) {
+            console.log(
+              `[useAgentStream] Agent run ${runId} not found or no longer running after stream error. Finalizing.`,
+            );
+            // Revert to agent_not_running for these cases
             finalizeStream('agent_not_running', runId);
           } else {
             // For other status check errors, finalize with the original stream error
@@ -492,31 +722,47 @@ export function useAgentStream(
         if (!isMountedRef.current) return;
 
         const errorMessage = err instanceof Error ? err.message : String(err);
-        console.error(
-          `[useAgentStream] Error checking agent status for ${runId} after stream close: ${errorMessage}`,
-        );
-
-        const isNotFoundError =
-          errorMessage.includes('not found') ||
-          errorMessage.includes('404') ||
-          errorMessage.includes('does not exist');
-
-        if (isNotFoundError) {
-          console.log(
-            `[useAgentStream] Agent run ${runId} not found after stream close. Finalizing.`,
+        
+        // Check for common "not running" messages that aren't actual errors
+        const isNotRunningError = errorMessage.includes('not running') || 
+                              errorMessage.includes('is already stopped') ||
+                              errorMessage.includes('terminated');
+        
+        if (!isNotRunningError) {
+          console.error(
+            `[useAgentStream] Error checking agent status for ${runId} after stream close: ${errorMessage}`,
           );
-          // Revert to agent_not_running for this specific case
-          finalizeStream('agent_not_running', runId);
-        } else {
-          // For other errors checking status, finalize with generic error
           finalizeStream('error', runId);
+        } else {
+          console.log(
+            `[useAgentStream] Agent run ${runId} not running after stream close. Finalizing.`,
+          );
+          finalizeStream('agent_not_running', runId);
         }
       });
   }, [status, finalizeStream]); // Include status
 
+  // Effect to manage the dead agent detector when status changes
+  useEffect(() => {
+    // When status changes to connecting or streaming, set up the dead agent detector
+    if (status === 'connecting' || status === 'streaming') {
+      updateActivityTimestamp(); // Reset timestamp when status changes
+      setupDeadAgentDetector();
+    }
+    
+    return () => {
+      // Clean up the timeout when status changes or component unmounts
+      if (deadAgentTimeoutRef.current) {
+        clearTimeout(deadAgentTimeoutRef.current);
+        deadAgentTimeoutRef.current = null;
+      }
+    };
+  }, [status, setupDeadAgentDetector, updateActivityTimestamp]);
+
   // --- Effect to manage the stream lifecycle ---
   useEffect(() => {
     isMountedRef.current = true;
+    lastActivityTimestampRef.current = Date.now(); // Initialize timestamp
 
     // Cleanup function for when the component unmounts or agentRunId changes
     return () => {
@@ -527,6 +773,11 @@ export function useAgentStream(
       if (streamCleanupRef.current) {
         streamCleanupRef.current();
         streamCleanupRef.current = null;
+      }
+      // Clear any dead agent detection
+      if (deadAgentTimeoutRef.current) {
+        clearTimeout(deadAgentTimeoutRef.current);
+        deadAgentTimeoutRef.current = null;
       }
       // Reset state on unmount if needed, though finalizeStream should handle most cases
       setStatus('idle');
@@ -555,6 +806,15 @@ export function useAgentStream(
         streamCleanupRef.current();
         streamCleanupRef.current = null;
       }
+      
+      // Clear any existing dead agent detection
+      if (deadAgentTimeoutRef.current) {
+        clearTimeout(deadAgentTimeoutRef.current);
+        deadAgentTimeoutRef.current = null;
+      }
+
+      // Reset activity timestamp
+      updateActivityTimestamp();
 
       // Reset state before starting
       setTextContent('');
@@ -563,6 +823,15 @@ export function useAgentStream(
       updateStatus('connecting');
       setAgentRunId(runId);
       currentRunIdRef.current = runId; // Set the ref immediately
+      
+      // Setup an initial connection timeout to detect if agent doesn't start
+      const initialConnectionTimeout = setTimeout(() => {
+        if (isMountedRef.current && currentRunIdRef.current === runId && status === 'connecting') {
+          console.warn(`[useAgentStream] Agent ${runId} hasn't moved past connecting state in 20 seconds. Attempting recovery.`);
+          setError("Connection to agent timed out");
+          finalizeStream('error', runId, true); // Force a restart
+        }
+      }, 20000); // 20 second timeout for initial connection
 
       try {
         // *** Crucial check: Verify agent is running BEFORE connecting ***
@@ -592,13 +861,32 @@ export function useAgentStream(
         });
         streamCleanupRef.current = cleanup;
         // Status will be updated to 'streaming' by the first message received in handleStreamMessage
+        
+        // Clear the initial connection timeout since we've connected successfully
+        clearTimeout(initialConnectionTimeout);
       } catch (err) {
         if (!isMountedRef.current) return; // Check mount status after async call
 
+        // Clear the initial connection timeout
+        clearTimeout(initialConnectionTimeout);
+
         const errorMessage = err instanceof Error ? err.message : String(err);
-        console.error(
-          `[useAgentStream] Error initiating stream for ${runId}: ${errorMessage}`,
-        );
+        
+        // Check for common "not running" messages that aren't actual errors
+        const isNotRunningError = errorMessage.includes('not running') || 
+                              errorMessage.includes('is already stopped') ||
+                              errorMessage.includes('terminated');
+        
+        if (!isNotRunningError) {
+          console.error(
+            `[useAgentStream] Error initiating stream for ${runId}: ${errorMessage}`,
+          );
+        } else {
+          console.log(
+            `[useAgentStream] Agent run ${runId} not available for streaming: ${errorMessage}`,
+          );
+        }
+        
         setError(errorMessage);
 
         const isNotFoundError =
@@ -606,7 +894,30 @@ export function useAgentStream(
           errorMessage.includes('404') ||
           errorMessage.includes('does not exist');
 
-        finalizeStream(isNotFoundError ? 'agent_not_running' : 'error', runId);
+        // Special handling for the pathToRegexp 500 error or other server errors
+        const isPathToRegexpError = errorMessage.includes('pathToRegexpError') || 
+                                   (errorMessage.includes('500') && errorMessage.includes('Failed to initialize sandbox'));
+        
+        
+        // Also restart for common transient errors
+        const shouldRestart = !isNotFoundError && !isNotRunningError && (
+          isPathToRegexpError || // Handle the specific pathToRegexp error
+          errorMessage.includes('500') || // Any 500 error is worth retrying
+          errorMessage.includes('time limit') ||
+          errorMessage.includes('OTOL') ||
+          errorMessage.includes('timeout') ||
+          errorMessage.includes('timed out') ||
+          errorMessage.includes('connection') ||
+          errorMessage.includes('network')
+        );
+        
+        // If this is the pathToRegexp error, log it prominently
+        if (isPathToRegexpError) {
+          console.warn(`[useAgentStream] Detected pathToRegexp 500 error, will auto-retry: ${errorMessage}`);
+          toast.warning("Server initialization error detected. Automatically retrying...");
+        }
+
+        finalizeStream(isNotFoundError ? 'agent_not_running' : 'error', runId, shouldRestart);
       }
     },
     [
@@ -636,13 +947,34 @@ export function useAgentStream(
     } catch (err) {
       // Don't revert status here, as the user intended to stop. Just log error.
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error(
-        `[useAgentStream] Error sending stop request for ${runIdToStop}: ${errorMessage}`,
-      );
-      toast.error(`Failed to stop agent: ${errorMessage}`);
+      
+      // Check for common "not running" messages that aren't actual errors
+      const isNotRunningError = errorMessage.includes('not running') || 
+                            errorMessage.includes('is already stopped') ||
+                            errorMessage.includes('terminated');
+      
+      if (!isNotRunningError) {
+        console.error(
+          `[useAgentStream] Error sending stop request for ${runIdToStop}: ${errorMessage}`,
+        );
+        toast.error(`Failed to stop agent: ${errorMessage}`);
+      } else {
+        console.log(
+          `[useAgentStream] Agent already stopped or not running: ${errorMessage}`,
+        );
+        // Don't show error toast for this common case
+        toast.info('Agent was already stopped');
+      }
     }
   }, [agentRunId, finalizeStream]); // Add dependencies
 
+  // Update the dependency arrays for functions with circular dependencies
+  // @ts-ignore - This is a valid pattern in React for cyclical dependencies
+  restartAgent.dependencies = [threadIdRef, isMountedRef, setStatus, setTextContent, setToolCall, setError, setAgentRunId, currentRunIdRef, startStreaming, updateStatus, updateActivityTimestamp];
+  
+  // @ts-ignore
+  setupDeadAgentDetector.dependencies = [status, finalizeStream, setError, currentRunIdRef, isMountedRef, lastActivityTimestampRef];
+  
   return {
     status,
     textContent,

@@ -128,4 +128,15 @@ def setup_logger(name: str = 'agentpress') -> logging.Logger:
     return logger
 
 # Create default logger instance
-logger = setup_logger() 
+_logger = setup_logger() 
+
+# Expose standard logging methods directly on the module
+info = _logger.info
+debug = _logger.debug
+warning = _logger.warning
+error = _logger.error
+critical = _logger.critical
+exception = _logger.exception
+
+# For backward compatibility, also expose the logger instance itself
+logger = _logger
