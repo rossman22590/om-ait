@@ -41,23 +41,23 @@ class Configuration:
     
     # Subscription tier IDs - Production
     STRIPE_FREE_TIER_ID_PROD: str = 'price_1RLwBMG23sSyONuFrhkNh9fe'
-    STRIPE_TIER_2_20_ID_PROD: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
-    STRIPE_TIER_6_50_ID_PROD: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
-    STRIPE_TIER_12_100_ID_PROD: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
+    STRIPE_TIER_2_20_ID_PROD: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'
+    STRIPE_TIER_6_50_ID_PROD: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'
+    STRIPE_TIER_12_100_ID_PROD: str = 'price_1RLyE5G23sSyONuFHJiqvoLo'
     STRIPE_TIER_25_200_ID_PROD: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
-    STRIPE_TIER_50_400_ID_PROD: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
-    STRIPE_TIER_125_800_ID_PROD: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
-    STRIPE_TIER_200_1000_ID_PROD: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
+    STRIPE_TIER_50_400_ID_PROD: str = 'price_1RLyEhG23sSyONuFioU064nT'
+    STRIPE_TIER_125_800_ID_PROD: str = 'price_1RLyEnG23sSyONuFE9wBSfvN'
+    STRIPE_TIER_200_1000_ID_PROD: str = 'price_1RLyErG23sSyONuFjGphWKjB'
     
     # Subscription tier IDs - Staging
     STRIPE_FREE_TIER_ID_STAGING: str = 'price_1RLwBMG23sSyONuFrhkNh9fe'
-    STRIPE_TIER_2_20_ID_STAGING: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
-    STRIPE_TIER_6_50_ID_STAGING: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
-    STRIPE_TIER_12_100_ID_STAGING: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
+    STRIPE_TIER_2_20_ID_STAGING: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'
+    STRIPE_TIER_6_50_ID_STAGING: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'
+    STRIPE_TIER_12_100_ID_STAGING: str = 'price_1RLyE5G23sSyONuFHJiqvoLo'
     STRIPE_TIER_25_200_ID_STAGING: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
-    STRIPE_TIER_50_400_ID_STAGING: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
-    STRIPE_TIER_125_800_ID_STAGING: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
-    STRIPE_TIER_200_1000_ID_STAGING: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
+    STRIPE_TIER_50_400_ID_STAGING: str = 'price_1RLyEhG23sSyONuFioU064nT'
+    STRIPE_TIER_125_800_ID_STAGING: str = 'price_1RLyEnG23sSyONuFE9wBSfvN'
+    STRIPE_TIER_200_1000_ID_STAGING: str = 'price_1RLyErG23sSyONuFjGphWKjB'
     
     # Computed subscription tier IDs based on environment
     @property

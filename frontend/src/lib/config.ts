@@ -37,15 +37,15 @@ const PROD_TIERS: SubscriptionTiers = {
     name: 'Free',
   },
   TIER_2_20: {
-    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
-    name: '2h/$35',
+    priceId: 'price_1RLy9QG23sSyONuFzh2zB9Cj',
+    name: '2h/$20',
   },
   TIER_6_50: {
-    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
+    priceId: 'price_1RLyBWG23sSyONuFwZNIjbgJ',
     name: '6h/$50',
   },
   TIER_12_100: {
-    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
+    priceId: 'price_1RLyE5G23sSyONuFHJiqvoLo',
     name: '12h/$100',
   },
   TIER_25_200: {
@@ -53,15 +53,15 @@ const PROD_TIERS: SubscriptionTiers = {
     name: '25h/$200',
   },
   TIER_50_400: {
-    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
+    priceId: 'price_1RLyEhG23sSyONuFioU064nT',
     name: '50h/$400',
   },
   TIER_125_800: {
-    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
+    priceId: 'price_1RLyEnG23sSyONuFE9wBSfvN',
     name: '125h/$800',
   },
   TIER_200_1000: {
-    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
+    priceId: 'price_1RLyErG23sSyONuFjGphWKjB',
     name: '200h/$1000',
   },
 } as const;
@@ -73,15 +73,15 @@ const STAGING_TIERS: SubscriptionTiers = {
     name: 'Free',
   },
   TIER_2_20: {
-    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
-    name: '2h/$35',
+    priceId: 'price_1RLy9QG23sSyONuFzh2zB9Cj',
+    name: '2h/$20',
   },
   TIER_6_50: {
-    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
+    priceId: 'price_1RLyE5G23sSyONuFHJiqvoLo',
     name: '6h/$50',
   },
   TIER_12_100: {
-    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
+    priceId: 'price_1RLyE5G23sSyONuFHJiqvoLo',
     name: '12h/$100',
   },
   TIER_25_200: {
@@ -89,15 +89,15 @@ const STAGING_TIERS: SubscriptionTiers = {
     name: '25h/$200',
   },
   TIER_50_400: {
-    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
+    priceId: 'price_1RLyEhG23sSyONuFioU064nT',
     name: '50h/$400',
   },
   TIER_125_800: {
-    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
+    priceId: 'price_1RLyEnG23sSyONuFE9wBSfvN',
     name: '125h/$800',
   },
   TIER_200_1000: {
-    priceId: 'price_1RLwBgG23sSyONuFCzzo83e6',
+    priceId: 'price_1RLyErG23sSyONuFjGphWKjB',
     name: '200h/$1000',
   },
 } as const;
