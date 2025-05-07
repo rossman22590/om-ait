@@ -209,15 +209,33 @@ export function ThreadTimer({ threadId }: ThreadTimerProps) {
     // Force initial fetch immediately on component mount
     fetchAgentRuns()
     
-    // Fetch fresh data every 10 seconds
+    // Listen for agent status events
+    const handleAgentStatusChange = (event: CustomEvent<{status: string, threadId: string}>) => {
+      if (event.detail.threadId === threadId) {
+        console.log(`[ThreadTimer] Received agent status change: ${event.detail.status} for thread ${threadId}`);
+        if (event.detail.status === 'stopped' || event.detail.status === 'completed' || event.detail.status === 'failed') {
+          // Immediately force refresh when agent is done
+          setIsActivelyRunning(false);
+          fetchAgentRuns();
+        } else if (event.detail.status === 'running') {
+          setIsActivelyRunning(true);
+        }
+      }
+    };
+    
+    // Add custom event listener for agent status changes
+    window.addEventListener('agent-status-change', handleAgentStatusChange as EventListener);
+    
+    // Poll for updated data every 10 seconds
     const dataInterval = setInterval(fetchAgentRuns, 10000)
     
     // Update the display every second for real-time counting
     const displayInterval = setInterval(updateTimerDisplay, 1000)
     
     return () => {
-      clearInterval(dataInterval)
-      clearInterval(displayInterval)
+      window.removeEventListener('agent-status-change', handleAgentStatusChange as EventListener);
+      clearInterval(dataInterval);
+      clearInterval(displayInterval);
     }
   }, [threadId])
   
