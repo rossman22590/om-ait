@@ -157,46 +157,79 @@ async def get_user_subscription(user_id: str) -> Optional[Dict]:
 
 async def calculate_monthly_usage(client, user_id: str) -> float:
     """Calculate total agent run minutes for the current month for a user."""
-    # Get start of current month in UTC
-    now = datetime.now(timezone.utc)
-    start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
-    
-    # First get all threads for this user
-    threads_result = await client.table('threads') \
-        .select('thread_id') \
-        .eq('account_id', user_id) \
-        .execute()
-    
-    if not threads_result.data:
-        return 0.0
-    
-    thread_ids = [t['thread_id'] for t in threads_result.data]
-    
-    # Then get all agent runs for these threads in current month
-    runs_result = await client.table('agent_runs') \
-        .select('started_at, completed_at') \
-        .in_('thread_id', thread_ids) \
-        .gte('started_at', start_of_month.isoformat()) \
-        .execute()
-    
-    if not runs_result.data:
-        return 0.0
-    
-    # Calculate total minutes
-    total_seconds = 0
-    now_ts = now.timestamp()
-    
-    for run in runs_result.data:
-        start_time = datetime.fromisoformat(run['started_at'].replace('Z', '+00:00')).timestamp()
-        if run['completed_at']:
-            end_time = datetime.fromisoformat(run['completed_at'].replace('Z', '+00:00')).timestamp()
-        else:
-            # For running jobs, use current time
-            end_time = now_ts
+    try:
+        # Get start of current month in UTC
+        now = datetime.now(timezone.utc)
+        start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
         
-        total_seconds += (end_time - start_time)
-    
-    return total_seconds / 60  # Convert to minutes
+        logger.info(f"Calculating monthly usage for user {user_id} since {start_of_month.isoformat()}")
+        
+        # First get all threads for this user from the public schema
+        try:
+            threads_result = await client.table('threads') \
+                .select('thread_id') \
+                .eq('account_id', user_id) \
+                .execute()
+            
+            if not threads_result.data:
+                logger.warning(f"No threads found for user {user_id}")
+                return 0.0
+                
+            thread_ids = [t['thread_id'] for t in threads_result.data]
+            logger.info(f"Found {len(thread_ids)} threads for user {user_id}")
+            
+            # Then get all agent runs for these threads in current month from public schema
+            runs_result = await client.table('agent_runs') \
+                .select('*') \
+                .in_('thread_id', thread_ids) \
+                .gte('started_at', start_of_month.isoformat()) \
+                .execute()
+            
+            if not runs_result.data:
+                logger.info(f"No agent runs found for user {user_id} since {start_of_month.isoformat()}")
+                return 0.0
+                
+            logger.info(f"Found {len(runs_result.data)} agent runs for user {user_id}")
+            
+            # Calculate total minutes
+            total_seconds = 0
+            now_ts = now.timestamp()
+            
+            for run in runs_result.data:
+                try:
+                    # Properly handle ISO 8601 datetime strings
+                    if isinstance(run['started_at'], str):
+                        start_time = datetime.fromisoformat(run['started_at'].replace('Z', '+00:00')).timestamp()
+                    else:
+                        start_time = run['started_at'].timestamp()
+                    
+                    if run['completed_at']:
+                        if isinstance(run['completed_at'], str):
+                            end_time = datetime.fromisoformat(run['completed_at'].replace('Z', '+00:00')).timestamp()
+                        else:
+                            end_time = run['completed_at'].timestamp()
+                    else:
+                        # For running jobs, use current time
+                        end_time = now_ts
+                    
+                    duration = end_time - start_time
+                    total_seconds += duration
+                    
+                    logger.debug(f"Run {run.get('id', 'unknown')}: {duration/60:.2f} minutes")
+                except Exception as e:
+                    logger.error(f"Error calculating duration for run {run.get('id', 'unknown')}: {str(e)}")
+            
+            minutes_used = total_seconds / 60
+            logger.info(f"Total usage for user {user_id} this month: {minutes_used:.2f} minutes")
+            return minutes_used
+            
+        except Exception as e:
+            logger.error(f"Error querying threads or runs: {str(e)}")
+            return 0.0
+            
+    except Exception as e:
+        logger.exception(f"Error calculating monthly usage: {str(e)}")
+        return 0.0  # Return 0 on any error to prevent blocking users
 
 async def check_billing_status(client, user_id: str) -> Tuple[bool, str, Optional[Dict]]:
     """
@@ -637,9 +670,17 @@ async def get_subscription(
 ):
     """Get the current subscription status for the current user, including scheduled changes."""
     try:
+        # Get Supabase client for usage calculation
+        db = DBConnection()
+        client = await db.client
+        
+        # Calculate current usage first to ensure we always have a value
+        current_usage = await calculate_monthly_usage(client, current_user_id)
+        logger.info(f"Calculated usage for {current_user_id}: {current_usage:.2f} minutes")
+        
         # Get subscription from Stripe (this helper already handles filtering/cleanup)
         subscription = await get_user_subscription(current_user_id)
-        # print("Subscription data for status:", subscription)
+        logger.info(f"Subscription data for {current_user_id}: {subscription is not None}")
         
         if not subscription:
             # Default to free tier status if no active subscription for our product
@@ -649,7 +690,8 @@ async def get_subscription(
                 status="no_subscription",
                 plan_name=free_tier_info.get('name', 'free') if free_tier_info else 'free',
                 price_id=free_tier_id,
-                minutes_limit=free_tier_info.get('minutes') if free_tier_info else 0
+                minutes_limit=free_tier_info.get('minutes') if free_tier_info else 0,
+                current_usage=round(current_usage, 2)  # Set the calculated usage here
             )
         
         # Extract current plan details
@@ -661,11 +703,6 @@ async def get_subscription(
              logger.warning(f"User {current_user_id} subscribed to unknown price {current_price_id}. Defaulting info.")
              current_tier_info = {'name': 'unknown', 'minutes': 0}
         
-        # Calculate current usage
-        db = DBConnection()
-        client = await db.client
-        current_usage = await calculate_monthly_usage(client, current_user_id)
-        
         status_response = SubscriptionStatus(
             status=subscription['status'], # 'active', 'trialing', etc.
             plan_name=subscription['plan'].get('nickname') or current_tier_info['name'],
@@ -674,10 +711,10 @@ async def get_subscription(
             cancel_at_period_end=subscription['cancel_at_period_end'],
             trial_end=datetime.fromtimestamp(subscription['trial_end'], tz=timezone.utc) if subscription.get('trial_end') else None,
             minutes_limit=current_tier_info['minutes'],
-            current_usage=round(current_usage, 2),
+            current_usage=round(current_usage, 2),  # Ensure we always set the usage
             has_schedule=False # Default
         )
-
+        
         # Check for an attached schedule (indicates pending downgrade)
         schedule_id = subscription.get('schedule')
         if schedule_id:
@@ -735,6 +772,145 @@ async def check_status(
     except Exception as e:
         logger.error(f"Error checking billing status: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/debug-usage/{user_id}")
+async def debug_usage(
+    user_id: str,
+    current_user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    """Debug endpoint to diagnose usage calculation issues for a specific user."""
+    try:
+        # Security check - only allow debugging own account
+        if user_id != current_user_id:
+            raise HTTPException(status_code=403, detail="Can only debug your own account")
+            
+        db = DBConnection()
+        client = await db.client
+        
+        # Get account info from basejump
+        try:
+            account_result = await client.schema('basejump').from_('accounts') \
+                .select('id, personal_account') \
+                .eq('primary_owner_user_id', user_id) \
+                .execute()
+            basejump_accounts = account_result.data if account_result.data else []
+        except Exception as e:
+            logger.warning(f"Error querying basejump accounts: {str(e)}")
+            basejump_accounts = []
+            
+        # Get subscription info (to determine minutes limit)
+        subscription = await get_user_subscription(user_id)
+        price_id = subscription.get('price_id') if subscription else config.STRIPE_FREE_TIER_ID
+        
+        if subscription and subscription.get('items') and subscription['items'].get('data') and len(subscription['items']['data']) > 0:
+            price_id = subscription['items']['data'][0]['price']['id']
+        
+        tier_info = SUBSCRIPTION_TIERS.get(price_id, SUBSCRIPTION_TIERS[config.STRIPE_FREE_TIER_ID])
+        
+        # Get start of current month in UTC
+        now = datetime.now(timezone.utc)
+        start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+        
+        # Get threads for user ID directly 
+        direct_threads_result = await client.table('threads') \
+            .select('thread_id, created_at') \
+            .eq('account_id', user_id) \
+            .execute()
+        direct_threads = direct_threads_result.data if direct_threads_result.data else []
+        
+        # Check if any basejump accounts are found
+        alternative_threads = []
+        for account in basejump_accounts:
+            # Skip if this account ID matches the direct user ID (would be duplicate)
+            if account['id'] == user_id:
+                continue
+                
+            alt_threads_result = await client.table('threads') \
+                .select('thread_id, created_at') \
+                .eq('account_id', account['id']) \
+                .execute()
+            
+            if alt_threads_result.data:
+                alternative_threads.append({
+                    "account_id": account['id'],
+                    "is_personal": account['personal_account'],
+                    "threads": alt_threads_result.data
+                })
+        
+        # Collect all thread IDs
+        all_thread_ids = [t['thread_id'] for t in direct_threads]
+        for alt_account in alternative_threads:
+            all_thread_ids.extend([t['thread_id'] for t in alt_account['threads']])
+        
+        # Get agent runs for all thread IDs
+        runs_result = await client.table('agent_runs') \
+            .select('*') \
+            .in_('thread_id', all_thread_ids) \
+            .gte('started_at', start_of_month.isoformat()) \
+            .execute()
+        
+        all_runs = runs_result.data if runs_result.data else []
+        
+        # Calculate total minutes
+        total_seconds = 0
+        now_ts = now.timestamp()
+        runs_with_duration = []
+        
+        for run in all_runs:
+            try:
+                # Handle different timestamp formats
+                if isinstance(run['started_at'], str):
+                    start_time = datetime.fromisoformat(run['started_at'].replace('Z', '+00:00')).timestamp()
+                else:
+                    start_time = run['started_at'].timestamp()
+                
+                if run['completed_at']:
+                    if isinstance(run['completed_at'], str):
+                        end_time = datetime.fromisoformat(run['completed_at'].replace('Z', '+00:00')).timestamp()
+                    else:
+                        end_time = run['completed_at'].timestamp()
+                else:
+                    # For running jobs, use current time
+                    end_time = now_ts
+                
+                duration = end_time - start_time
+                total_seconds += duration
+                
+                runs_with_duration.append({
+                    "run_id": run.get('id', 'unknown'),
+                    "thread_id": run['thread_id'],
+                    "duration_minutes": round(duration / 60, 2),
+                    "started_at": run['started_at'],
+                    "completed_at": run['completed_at'],
+                    "status": run.get('status', 'unknown')
+                })
+            except Exception as e:
+                logger.error(f"Error calculating duration for run {run.get('id', 'unknown')}: {str(e)}")
+        
+        minutes_used = total_seconds / 60
+        
+        return {
+            "user_id": user_id,
+            "basejump_accounts": basejump_accounts,
+            "subscription": {
+                "tier": tier_info['name'],
+                "minutes_limit": tier_info['minutes'],
+                "price_id": price_id,
+            },
+            "direct_threads_count": len(direct_threads),
+            "direct_threads": direct_threads[:10],  # Limit to first 10
+            "alternative_accounts_count": len(alternative_threads),
+            "alternative_accounts": alternative_threads,
+            "total_thread_count": len(all_thread_ids),
+            "agent_runs_count": len(all_runs),
+            "agent_runs": runs_with_duration[:10],  # Limit to first 10 for display
+            "total_minutes_used": round(minutes_used, 2),
+            "currently_showing": f"{round(minutes_used, 2)} / {tier_info['minutes']} minutes"
+        }
+        
+    except Exception as e:
+        logger.exception(f"Error in debug-usage for {user_id}: {str(e)}")
+        return {"error": str(e), "user_id": user_id}
 
 @router.post("/webhook")
 async def stripe_webhook(request: Request):
