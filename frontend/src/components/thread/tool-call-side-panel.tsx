@@ -317,7 +317,7 @@ export function ToolCallSidePanel({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
-                  Suna's Computer
+                  Machine's Computer
                 </h2>
               </div>
 
@@ -365,7 +365,7 @@ export function ToolCallSidePanel({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
-                  Suna's Computer
+                Machine's Computer
                 </h2>
               </div>
 
@@ -396,7 +396,7 @@ export function ToolCallSidePanel({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
-                Suna's Computer
+              Machine's Computer
               </h2>
             </div>
 

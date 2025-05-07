@@ -1629,6 +1629,46 @@ export const createPortalSession = async (
   }
 };
 
+// Time tracking functions for threads
+export const getThreadAgentRuns = async (threadId: string): Promise<AgentRun[]> => {
+  try {
+    // We can reuse the existing getAgentRuns function
+    return await getAgentRuns(threadId);
+  } catch (error) {
+    console.error(`Failed to get agent runs for thread ${threadId}:`, error);
+    return [];
+  }
+};
+
+/**
+ * Calculate total minutes used by agent runs in a thread
+ * This uses the same formula as the backend billing system
+ */
+export const calculateThreadMinutes = (agentRuns: AgentRun[]): number => {
+  if (!agentRuns || agentRuns.length === 0) return 0;
+  
+  let totalMinutes = 0;
+  
+  for (const run of agentRuns) {
+    // Skip runs that are still running or don't have completion times
+    if (run.status !== 'completed' || !run.completed_at || !run.started_at) {
+      continue;
+    }
+    
+    const startTime = new Date(run.started_at).getTime();
+    const endTime = new Date(run.completed_at).getTime();
+    
+    // Calculate duration in minutes, round up to nearest minute with minimum of 1 minute
+    if (startTime && endTime) {
+      const durationMs = endTime - startTime;
+      const durationMinutes = Math.max(1, Math.ceil(durationMs / 60000));
+      totalMinutes += durationMinutes;
+    }
+  }
+  
+  return totalMinutes;
+};
+
 export const getSubscription = async (): Promise<SubscriptionStatus> => {
   try {
     const supabase = createClient();

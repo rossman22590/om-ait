@@ -32,7 +32,7 @@ async def run_agent(
     stream: bool,
     thread_manager: Optional[ThreadManager] = None,
     native_max_auto_continues: int = 25,
-    max_iterations: int = 150,
+    max_iterations: int = 600,
     model_name: str = "anthropic/claude-3-7-sonnet-latest",
     enable_thinking: Optional[bool] = False,
     reasoning_effort: Optional[str] = 'low',

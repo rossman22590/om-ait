@@ -9,7 +9,9 @@ import {
   Plus,
   MessagesSquare,
   Loader2,
-  Share2
+  Share2,
+  Search,
+  X
 } from "lucide-react"
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
@@ -65,6 +67,10 @@ export function NavAgents() {
   const isNavigatingRef = useRef(false)
   const { performDelete, isOperationInProgress } = useDeleteOperation();
   const isPerformingActionRef = useRef(false);
+  
+  // Search functionality
+  const [searchTerm, setSearchTerm] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Helper to sort threads by updated_at (most recent first)
   const sortThreads = (
@@ -295,6 +301,39 @@ export function NavAgents() {
       </div>
 
       <SidebarMenu className="overflow-y-auto max-h-[calc(100vh-200px)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+        {/* Search bar - only visible when expanded */}
+        {state !== 'collapsed' && (
+          <SidebarMenuItem className="sticky top-0 z-10 bg-sidebar pb-2">
+            <div className="px-1 w-full">
+              <div className="relative w-full">
+                <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search agents..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") {
+                      setSearchTerm("");
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  className="w-full h-8 rounded-md border border-input bg-transparent pl-8 pr-8 py-1 text-sm ring-offset-background placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-0"
+                />
+                {searchTerm && (
+                  <button 
+                    className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60 hover:text-muted-foreground"
+                    onClick={() => setSearchTerm('')}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </SidebarMenuItem>
+        )}
+
         {state === 'collapsed' && (
           <SidebarMenuItem>
             <Tooltip>
@@ -324,7 +363,11 @@ export function NavAgents() {
         ) : threads.length > 0 ? (
           // Show all threads with project info
           <>
-            {threads.map((thread) => {
+            {threads
+              .filter(thread => 
+                searchTerm === "" || thread.projectName.toLowerCase().includes(searchTerm.toLowerCase())
+              )
+              .map((thread) => {
               // Check if this thread is currently active
               const isActive = pathname?.includes(thread.threadId) || false;
               const isThreadLoading = loadingThreadId === thread.threadId;
@@ -429,6 +472,17 @@ export function NavAgents() {
                 </SidebarMenuItem>
               );
             })}
+            {/* No results message when filtering */}
+            {searchTerm && threads.filter(t => 
+              t.projectName.toLowerCase().includes(searchTerm.toLowerCase())
+            ).length === 0 && (
+              <SidebarMenuItem>
+                <SidebarMenuButton className="text-sidebar-foreground/70">
+                  <Search className="h-4 w-4" />
+                  <span>No matches found</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
           </>
         ) : (
           // Empty state

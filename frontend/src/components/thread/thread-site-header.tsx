@@ -10,6 +10,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { ThreadTimer } from "./thread-timer"
 import { useState, useRef, KeyboardEvent } from "react"
 import { Input } from "@/components/ui/input"
 import { updateProject } from "@/lib/api"
@@ -168,7 +169,9 @@ export function SiteHeader({
           )}
         </div>
 
-        <div className="flex items-center gap-1 pr-4">
+        <div className="flex items-center gap-3 pr-4">
+          {/* Display ThreadTimer component */}
+          <ThreadTimer threadId={threadId} />
           {isMobile ? (
             // Mobile view - only show the side panel toggle
             <Button

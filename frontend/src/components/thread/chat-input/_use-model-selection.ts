@@ -19,13 +19,13 @@ export interface ModelOption {
 export const MODEL_OPTIONS: ModelOption[] = [
   { 
     id: 'grok-3-mini', 
-    label: 'Free', 
+    label: 'Basic', 
     requiresSubscription: false,
     description: 'Limited capabilities. Upgrade for full performance.'
   },
   { 
     id: 'sonnet-3.7', 
-    label: 'Standard', 
+    label: 'Advanced', 
     requiresSubscription: true, 
     description: 'Excellent for complex tasks and nuanced conversations'
   },
