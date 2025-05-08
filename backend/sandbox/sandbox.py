@@ -118,7 +118,7 @@ def create_sandbox(password: str, project_id: str = None):
         resources={
             "cpu": 2,
             "memory": 4,
-            "disk": 5,
+            "disk": 2,
         }
     )
     
