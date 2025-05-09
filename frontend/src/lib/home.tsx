@@ -1128,6 +1128,12 @@ export const siteConfig = {
         answer:
           'Machine automates repetitive tasks, streamlines workflows, and provides quick solutions to common challenges. This automation and efficiency can save hours of manual work, allowing you to focus on more strategic activities.',
       },
+      {
+        id: 7,
+        question: 'What AI models does Machine use?',
+        answer:
+          'The Machine now uses o1-pro when coding in addition to Sonnet 3.7, Gemini 2.5 Pro, Perplexity Deep Research, and XAI Grok 3! This powerful combination of cutting-edge AI models enables Machine to handle a wide variety of tasks with exceptional quality and precision.',
+      },
     ],
   },
   ctaSection: {

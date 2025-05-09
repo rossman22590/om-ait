@@ -100,7 +100,7 @@ def create_sandbox(password: str, project_id: str = None):
     params = CreateSandboxParams(
         image="adamcohenhillel/kortix-suna:0.0.20",
         public=True,
-        auto_stop_interval=2880,  # 48 hours in minutes
+        auto_stop_interval=1440,  # 24 hours in minutes
         labels=labels,
         env_vars={
             "CHROME_PERSISTENT_SESSION": "true",

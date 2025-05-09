@@ -51,6 +51,7 @@ export type Thread = {
   account_id: string | null;
   project_id?: string | null;
   is_public?: boolean;
+  name?: string;
   created_at: string;
   updated_at: string;
   [key: string]: any; // Allow additional properties to handle database fields
@@ -81,6 +82,48 @@ export interface InitiateAgentResponse {
   thread_id: string;
   agent_run_id: string;
 }
+
+// Initiate a new agent with user input and optional files
+export const initiateAgent = async (
+  formData: FormData
+): Promise<InitiateAgentResponse> => {
+  try {
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error('No access token available');
+    }
+
+    const response = await fetch(`${API_URL}/agent/initiate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      if (response.status === 402) {
+        const data = await response.json();
+        throw new BillingError(data.detail.message, data.detail.subscription);
+      }
+      throw new Error(`Error initiating agent: ${response.statusText}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    // Rethrow BillingError instances directly
+    if (error instanceof BillingError) {
+      throw error;
+    }
+    
+    console.error('Failed to initiate agent:', error);
+    throw error;
+  }
+};
 
 export interface HealthCheckResponse {
   status: string;
@@ -1238,6 +1281,42 @@ export const updateThread = async (
   return updatedThread;
 };
 
+export const renameThread = async (threadId: string, name: string): Promise<Thread> => {
+  try {
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error('No access token available');
+    }
+
+    const response = await fetch(`${API_URL}/thread/${threadId}/rename`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({
+        thread_id: threadId,
+        name: name,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || response.statusText);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error(`Error renaming thread ${threadId}:`, error);
+    throw error;
+  }
+};
+
 export const toggleThreadPublicStatus = async (
   threadId: string,
   isPublic: boolean,
@@ -1294,149 +1373,6 @@ export const deleteThread = async (threadId: string): Promise<void> => {
   }
 };
 
-// Function to get public projects
-export const getPublicProjects = async (): Promise<Project[]> => {
-  try {
-    const supabase = createClient();
-
-    // Query for threads that are marked as public
-    const { data: publicThreads, error: threadsError } = await supabase
-      .from('threads')
-      .select('project_id')
-      .eq('is_public', true);
-
-    if (threadsError) {
-      console.error('Error fetching public threads:', threadsError);
-      return [];
-    }
-
-    // If no public threads found, return empty array
-    if (!publicThreads?.length) {
-      return [];
-    }
-
-    // Extract unique project IDs from public threads
-    const publicProjectIds = [
-      ...new Set(publicThreads.map((thread) => thread.project_id)),
-    ].filter(Boolean);
-
-    // If no valid project IDs, return empty array
-    if (!publicProjectIds.length) {
-      return [];
-    }
-
-    // Get the projects that have public threads
-    const { data: projects, error: projectsError } = await supabase
-      .from('projects')
-      .select('*')
-      .in('project_id', publicProjectIds);
-
-    if (projectsError) {
-      console.error('Error fetching public projects:', projectsError);
-      return [];
-    }
-
-    console.log(
-      '[API] Raw public projects from DB:',
-      projects?.length,
-      projects,
-    );
-
-    // Map database fields to our Project type
-    const mappedProjects: Project[] = (projects || []).map((project) => ({
-      id: project.project_id,
-      name: project.name || '',
-      description: project.description || '',
-      account_id: project.account_id,
-      created_at: project.created_at,
-      updated_at: project.updated_at,
-      sandbox: project.sandbox || {
-        id: '',
-        pass: '',
-        vnc_preview: '',
-        sandbox_url: '',
-      },
-      is_public: true, // Mark these as public projects
-    }));
-
-    console.log(
-      '[API] Mapped public projects for frontend:',
-      mappedProjects.length,
-    );
-
-    return mappedProjects;
-  } catch (err) {
-    console.error('Error fetching public projects:', err);
-    return [];
-  }
-};
-
-export const initiateAgent = async (
-  formData: FormData,
-): Promise<InitiateAgentResponse> => {
-  try {
-    const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error('No access token available');
-    }
-
-    // Check if backend URL is configured
-    if (!API_URL) {
-      throw new Error(
-        'Backend URL is not configured. Set NEXT_PUBLIC_BACKEND_URL in your environment.',
-      );
-    }
-
-    console.log(
-      `[API] Initiating agent with files using ${API_URL}/agent/initiate`,
-    );
-
-    const response = await fetch(`${API_URL}/agent/initiate`, {
-      method: 'POST',
-      headers: {
-        // Note: Don't set Content-Type for FormData
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: formData,
-      // Add cache: 'no-store' to prevent caching
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      const errorText = await response
-        .text()
-        .catch(() => 'No error details available');
-      console.error(
-        `[API] Error initiating agent: ${response.status} ${response.statusText}`,
-        errorText,
-      );
-      throw new Error(
-        `Error initiating agent: ${response.statusText} (${response.status})`,
-      );
-    }
-
-    return response.json();
-  } catch (error) {
-    console.error('[API] Failed to initiate agent:', error);
-
-    // Provide clearer error message for network errors
-    if (
-      error instanceof TypeError &&
-      error.message.includes('Failed to fetch')
-    ) {
-      throw new Error(
-        `Cannot connect to backend server. Please check your internet connection and make sure the backend is running.`,
-      );
-    }
-
-    throw error;
-  }
-};
-
 export const checkApiHealth = async (): Promise<HealthCheckResponse> => {
   try {
     const response = await fetch(`${API_URL}/health`, {
@@ -1454,7 +1390,6 @@ export const checkApiHealth = async (): Promise<HealthCheckResponse> => {
   }
 };
 
-// Billing API Types
 export interface CreateCheckoutSessionRequest {
   price_id: string;
   success_url: string;
