@@ -315,12 +315,26 @@ async def make_llm_api_call(
             await handle_error(e, attempt, MAX_RETRIES)
 
         except Exception as e:
-            logger.error(f"Unexpected error during API call: {str(e)}", exc_info=True)
-            raise LLMError(f"API call failed: {str(e)}")
+            # Special case: Check for Claude context limits to allow fallback mechanism
+            error_str = str(e).lower()
+            if "context limit" in error_str or "exceed context" in error_str or "input length and `max_tokens` exceed context" in error_str:
+                # Re-raise the original error instead of wrapping it, so the fallback mechanism can detect it
+                logger.warning(f"Detected context limit error: {str(e)}")
+                raise e
+            else:
+                logger.error(f"Unexpected error during API call: {str(e)}", exc_info=True)
+                raise LLMError(f"API call failed: {str(e)}")
 
     error_msg = f"Failed to make API call after {MAX_RETRIES} attempts"
     if last_error:
         error_msg += f". Last error: {str(last_error)}"
+        # Special case: Check for Claude context limits after retries
+        error_str = str(last_error).lower()
+        if "context limit" in error_str or "exceed context" in error_str or "input length and `max_tokens` exceed context" in error_str:
+            # Pass through context limit errors with the original error
+            logger.warning(f"Detected context limit error after retries: {str(last_error)}")
+            raise last_error
+    
     logger.error(error_msg, exc_info=True)
     raise LLMRetryError(error_msg)
 

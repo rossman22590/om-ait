@@ -895,9 +895,8 @@ async def run_agent_background(
                 await redis.publish(response_channel, "new")
                 total_responses += 1
                 
-                # Switch to Gemini model
-                fallback_model = "gemini/gemini-2.5-pro-preview-05-06"  # Must include provider prefix
-                model_name = MODEL_NAME_ALIASES.get(fallback_model, fallback_model)
+                # Switch to Gemini model - use the full model path directly
+                model_name = "gemini/gemini-2.5-pro-preview-05-06"  # Full provider-prefixed model name
                 logger.info(f"Switching to fallback model: {model_name} for agent run {agent_run_id}")
                 
                 # Re-initialize agent with new model
