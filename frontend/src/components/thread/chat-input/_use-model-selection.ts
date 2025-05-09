@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 
 export const STORAGE_KEY_MODEL = 'suna-preferred-model';
 export const DEFAULT_FREE_MODEL_ID = 'grok-3';
-export const DEFAULT_PREMIUM_MODEL_ID = 'gemini-2.5-pro';
+export const DEFAULT_PREMIUM_MODEL_ID = 'sonnet-3.7';
 
 export type SubscriptionStatus = 'no_subscription' | 'active';
 
