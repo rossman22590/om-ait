@@ -898,6 +898,8 @@ async def run_agent_background(
                 # Switch to Gemini model - use the full model path directly
                 model_name = "gemini/gemini-2.5-pro-preview-05-06"  # Full provider-prefixed model name
                 logger.info(f"Switching to fallback model: {model_name} for agent run {agent_run_id}")
+                # Very prominent log when switching to make it easy to spot
+                logger.warning(f"📢 MODEL SWITCH 📢 - Claude → Gemini - Thread: {thread_id} - Run: {agent_run_id}")
                 
                 # Re-initialize agent with new model
                 agent_gen = run_agent(

@@ -336,8 +336,21 @@ Here are the XML tools available with examples:
                     logger.debug("Successfully received raw LLM API response stream/object")
 
                 except Exception as e:
-                    logger.error(f"Failed to make LLM API call: {str(e)}", exc_info=True)
-                    raise
+                    # Check if this is a context limit error that should be handled by the fallback mechanism in api.py
+                    error_str = str(e).lower()
+                    if ("claude" in llm_model.lower() or "sonnet" in llm_model.lower()) and (
+                        "context limit" in error_str or 
+                        "exceed context" in error_str or
+                        "input length and `max_tokens` exceed context" in error_str or
+                        "token limit" in error_str
+                    ):
+                        logger.warning(f"Detected Claude context limit error in thread_manager, passing to api.py fallback handler: {str(e)}")
+                        # Re-raise the original error to be caught by the fallback mechanism in api.py
+                        raise
+                    else:
+                        # For non-context limit errors, log and raise as normal
+                        logger.error(f"Failed to make LLM API call: {str(e)}", exc_info=True)
+                        raise
 
                 # 6. Process LLM response using the ResponseProcessor
                 if stream:
