@@ -195,7 +195,8 @@ class SandboxDeployTool(SandboxToolsBase):
         return ToolResult(success=False, output={"error": message})
         
     def success_response(self, result):
-        return ToolResult(success=True, output=json.dumps(result, indent=1))
+        # Return the result directly as a dictionary to avoid JSON serialization issues
+        return ToolResult(success=True, output=result)
 
     @openapi_schema({
         "type": "function",
@@ -340,9 +341,9 @@ class SandboxDeployTool(SandboxToolsBase):
                     default_url = f"https://{project_name}.pages.dev"
                     custom_url = f"https://{custom_subdomain}.{self.custom_domain}"
                     
-                        # Prepare the success response
+                    # Prepare the success response
                     result = {
-                        "message": f"✅ Website deployed successfully!",
+                        "message": "✅ Website deployed successfully!",
                         "urls": {
                             "cloudflare": default_url
                         },
