@@ -195,7 +195,7 @@ class SandboxDeployTool(SandboxToolsBase):
         return ToolResult(success=False, output={"error": message})
         
     def success_response(self, result):
-        return ToolResult(success=True, output=json.dumps(result, indent=2, ensure_ascii=False))
+        return ToolResult(success=True, output=json.dumps(result, indent=1))
 
     @openapi_schema({
         "type": "function",
@@ -340,14 +340,13 @@ class SandboxDeployTool(SandboxToolsBase):
                     default_url = f"https://{project_name}.pages.dev"
                     custom_url = f"https://{custom_subdomain}.{self.custom_domain}"
                     
-                    # Prepare the success response - use clean formatting to avoid escaped quotes
+                        # Prepare the success response
                     result = {
-                        "message": "✅ Website deployed successfully!",
+                        "message": f"✅ Website deployed successfully!",
                         "urls": {
                             "cloudflare": default_url
                         },
-                        # Format output string to avoid weird escaping in JSON and filter out common error messages
-                        "output": response.result.replace('\\', '\\\\').replace('"', '\\"').replace('Project not found. The specified project name does not match any of your existing projects.', '')
+                        "output": response.result
                     }
                     
                     # Setup custom domain if requested
@@ -357,6 +356,7 @@ class SandboxDeployTool(SandboxToolsBase):
                         else:
                             # Attempt to set up DNS and custom domain
                             dns_created = self.create_dns_record(custom_subdomain, f"{project_name}.pages.dev")
+                            
                             if dns_created:
                                 domain_assigned = self.assign_custom_domain_to_pages(project_name, custom_subdomain)
                                 if domain_assigned:
