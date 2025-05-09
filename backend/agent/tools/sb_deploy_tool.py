@@ -191,6 +191,12 @@ class SandboxDeployTool(SandboxToolsBase):
             print(f"Exception when assigning domain to {project_name}: {str(e)}")
             return False
 
+    def fail_response(self, message):
+        return ToolResult(success=False, output={"error": message})
+        
+    def success_response(self, result):
+        return ToolResult(success=True, output=json.dumps(result, indent=2, ensure_ascii=False))
+
     @openapi_schema({
         "type": "function",
         "function": {
@@ -301,10 +307,22 @@ class SandboxDeployTool(SandboxToolsBase):
                         f"Final project name '{project_name}' exceeds 58 characters. "
                         f"Please use a shorter name (your name portion should be {58 - len('machine-' + random_digits + '-')} chars or less)."
                     )
-                deploy_cmd = f'''cd {self.workspace_path} && export CLOUDFLARE_API_TOKEN={self.cloudflare_api_token} && 
-                    (npx wrangler pages deploy {full_path} --project-name {project_name} || 
-                    (npx wrangler pages project create {project_name} --production-branch production && 
-                    npx wrangler pages deploy {full_path} --project-name {project_name}))'''
+                # First check if the project exists to avoid error messages
+                check_project_cmd = f'''cd {self.workspace_path} && export CLOUDFLARE_API_TOKEN={self.cloudflare_api_token} && 
+                    npx wrangler pages project list --json | grep -q '"name":\s*"{project_name}"' || echo "NOT_FOUND"'''
+                
+                check_result = self.sandbox.process.exec(check_project_cmd, timeout=30)
+                project_exists = "NOT_FOUND" not in check_result.result
+                
+                if project_exists:
+                    # Project exists, just deploy directly
+                    deploy_cmd = f'''cd {self.workspace_path} && export CLOUDFLARE_API_TOKEN={self.cloudflare_api_token} && 
+                        npx wrangler pages deploy {full_path} --project-name {project_name}'''
+                else:
+                    # Project doesn't exist, create first then deploy
+                    deploy_cmd = f'''cd {self.workspace_path} && export CLOUDFLARE_API_TOKEN={self.cloudflare_api_token} && 
+                        npx wrangler pages project create {project_name} --production-branch production && 
+                        npx wrangler pages deploy {full_path} --project-name {project_name}'''
 
                 # Execute the command directly using the sandbox's process.exec method
                 response = self.sandbox.process.exec(deploy_cmd, timeout=300)
@@ -322,13 +340,14 @@ class SandboxDeployTool(SandboxToolsBase):
                     default_url = f"https://{project_name}.pages.dev"
                     custom_url = f"https://{custom_subdomain}.{self.custom_domain}"
                     
-                    # Prepare the success response
+                    # Prepare the success response - use clean formatting to avoid escaped quotes
                     result = {
-                        "message": f"✅ Website deployed successfully!",
+                        "message": "✅ Website deployed successfully!",
                         "urls": {
                             "cloudflare": default_url
                         },
-                        "output": response.result
+                        # Format output string to avoid weird escaping in JSON and filter out common error messages
+                        "output": response.result.replace('\\', '\\\\').replace('"', '\\"').replace('Project not found. The specified project name does not match any of your existing projects.', '')
                     }
                     
                     # Setup custom domain if requested
@@ -338,10 +357,8 @@ class SandboxDeployTool(SandboxToolsBase):
                         else:
                             # Attempt to set up DNS and custom domain
                             dns_created = self.create_dns_record(custom_subdomain, f"{project_name}.pages.dev")
-                            
                             if dns_created:
                                 domain_assigned = self.assign_custom_domain_to_pages(project_name, custom_subdomain)
-                                
                                 if domain_assigned:
                                     result["custom_domain_status"] = "✅ Custom domain set up successfully"
                                     result["urls"]["custom_domain"] = custom_url
@@ -357,6 +374,7 @@ class SandboxDeployTool(SandboxToolsBase):
                 return self.fail_response(f"Error during deployment: {str(e)}")
         except Exception as e:
             return self.fail_response(f"Error deploying website: {str(e)}")
+
 
 if __name__ == "__main__":
     import asyncio
