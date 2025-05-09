@@ -38,7 +38,8 @@ MODEL_NAME_ALIASES = {
     "gpt-4o": "openai/gpt-4o",
     "gpt-4-turbo": "openai/gpt-4-turbo",
     "gpt-4": "openai/gpt-4",
-    "gemini-flash-2.5": "gemini/gemini-2.5-flash-preview-04-17",
+    "gemini-flash-2.5": "gemini/gemini-2.5-pro-preview-05-06",
+    "gemini-2.5-pro": "gemini/gemini-2.5-pro-preview-05-06",
     "grok-3": "xai/grok-3-fast-latest",
     "deepseek": "deepseek/deepseek-chat",
     "grok-3-mini": "xai/grok-3-mini-fast-beta",
@@ -50,7 +51,7 @@ MODEL_NAME_ALIASES = {
     "openai/gpt-4o": "openai/gpt-4o",
     "openai/gpt-4-turbo": "openai/gpt-4-turbo",
     "openai/gpt-4": "openai/gpt-4",
-    "gemini/gemini-2.5-flash-preview-04-17": "gemini/gemini-2.5-flash-preview-04-17",
+    "gemini/gemini-2.5-pro-preview-05-06": "gemini/gemini-2.5-pro-preview-05-06",
     "xai/grok-3-fast-latest": "xai/grok-3-fast-latest",
     "deepseek/deepseek-chat": "deepseek/deepseek-chat",
     "xai/grok-3-mini-fast-beta": "xai/grok-3-mini-fast-beta",
@@ -777,6 +778,7 @@ async def run_agent_background(
     pubsub = None
     stop_checker = None
     stop_signal_received = False
+    original_model_name = model_name  # Store original model for reference in fallback messages
 
     # Define Redis keys and channels
     response_list_key = f"agent_run:{agent_run_id}:responses"
@@ -819,38 +821,118 @@ async def run_agent_background(
         # Ensure active run key exists and has TTL
         await redis.set(instance_active_key, "running", ex=redis.REDIS_KEY_TTL)
 
-        # Initialize agent generator
-        agent_gen = run_agent(
-            thread_id=thread_id, project_id=project_id, stream=stream,
-            thread_manager=thread_manager, model_name=model_name,
-            enable_thinking=enable_thinking, reasoning_effort=reasoning_effort,
-            enable_context_manager=enable_context_manager
-        )
+        try:
+            # Initialize agent generator
+            agent_gen = run_agent(
+                thread_id=thread_id, project_id=project_id, stream=stream,
+                thread_manager=thread_manager, model_name=model_name,
+                enable_thinking=enable_thinking, reasoning_effort=reasoning_effort,
+                enable_context_manager=enable_context_manager
+            )
 
-        final_status = "running"
-        error_message = None
+            final_status = "running"
+            error_message = None
 
-        async for response in agent_gen:
-            if stop_signal_received:
-                logger.info(f"Agent run {agent_run_id} stopped by signal.")
-                final_status = "stopped"
-                break
+            async for response in agent_gen:
+                if stop_signal_received:
+                    logger.info(f"Agent run {agent_run_id} stopped by signal.")
+                    final_status = "stopped"
+                    break
 
-            # Store response in Redis list and publish notification
-            response_json = json.dumps(response)
-            await redis.rpush(response_list_key, response_json)
-            await redis.publish(response_channel, "new")
-            total_responses += 1
+                # Store response in Redis list and publish notification
+                response_json = json.dumps(response)
+                await redis.rpush(response_list_key, response_json)
+                await redis.publish(response_channel, "new")
+                total_responses += 1
 
-            # Check for agent-signaled completion or error
-            if response.get('type') == 'status':
-                 status_val = response.get('status')
-                 if status_val in ['completed', 'failed', 'stopped']:
-                     logger.info(f"Agent run {agent_run_id} finished via status message: {status_val}")
-                     final_status = status_val
-                     if status_val == 'failed' or status_val == 'stopped':
-                         error_message = response.get('message', f"Run ended with status: {status_val}")
-                     break
+                # Check for agent-signaled completion or error
+                if response.get('type') == 'status':
+                    status_val = response.get('status')
+                    if status_val in ['completed', 'failed', 'stopped']:
+                        logger.info(f"Agent run {agent_run_id} finished via status message: {status_val}")
+                        final_status = status_val
+                        if status_val == 'failed' or status_val == 'stopped':
+                            error_message = response.get('message', f"Run ended with status: {status_val}")
+                        break
+                        
+        except Exception as model_error:
+            # Check if this is a context window error from Claude
+            error_str = str(model_error).lower()
+            is_context_error = False
+            
+            # Detect context window errors
+            if ("sonnet" in model_name.lower() or "claude" in model_name.lower()) and (
+                "context limit" in error_str or 
+                "exceed context" in error_str or
+                "input length and `max_tokens` exceed context" in error_str or
+                "token limit" in error_str):
+                is_context_error = True
+            
+            if is_context_error:
+                logger.warning(f"Claude context limit exceeded for agent run {agent_run_id}. Falling back to Gemini model.")
+                
+                # Original model for reference in notification
+                original_model_id = "sonnet-3.7"  # Assuming Claude was being used
+                fallback_model_id = "gemini-2.5-pro"  # The short model ID
+                
+                # Push message to Redis notifying of model switch
+                fallback_message = {
+                    "type": "text", 
+                    "content": "⚠️ This thread exceeds Claude's context limit. Automatically switching to Gemini model..."
+                }
+                await redis.rpush(response_list_key, json.dumps(fallback_message))
+                await redis.publish(response_channel, "new")
+                total_responses += 1
+                
+                # Send model_changed event to update UI
+                model_change_notification = {
+                    "type": "model_changed",
+                    "from": original_model_id,
+                    "to": fallback_model_id,
+                    "reason": "context_limit_exceeded"
+                }
+                await redis.rpush(response_list_key, json.dumps(model_change_notification))
+                await redis.publish(response_channel, "new")
+                total_responses += 1
+                
+                # Switch to Gemini model
+                fallback_model = "gemini/gemini-2.5-pro-preview-05-06"  # Must include provider prefix
+                model_name = MODEL_NAME_ALIASES.get(fallback_model, fallback_model)
+                logger.info(f"Switching to fallback model: {model_name} for agent run {agent_run_id}")
+                
+                # Re-initialize agent with new model
+                agent_gen = run_agent(
+                    thread_id=thread_id, project_id=project_id, stream=stream,
+                    thread_manager=thread_manager, model_name=model_name,
+                    enable_thinking=enable_thinking, reasoning_effort=reasoning_effort,
+                    enable_context_manager=enable_context_manager
+                )
+                
+                # Process responses with new model
+                async for response in agent_gen:
+                    if stop_signal_received:
+                        logger.info(f"Agent run {agent_run_id} stopped by signal after model fallback.")
+                        final_status = "stopped"
+                        break
+
+                    # Store response in Redis list and publish notification
+                    response_json = json.dumps(response)
+                    await redis.rpush(response_list_key, response_json)
+                    await redis.publish(response_channel, "new")
+                    total_responses += 1
+
+                    # Check for agent-signaled completion or error
+                    if response.get('type') == 'status':
+                        status_val = response.get('status')
+                        if status_val in ['completed', 'failed', 'stopped']:
+                            logger.info(f"Agent run {agent_run_id} with fallback model finished via status message: {status_val}")
+                            final_status = status_val
+                            if status_val == 'failed' or status_val == 'stopped':
+                                error_message = response.get('message', f"Run ended with status: {status_val}")
+                            break
+            else:
+                # Not a context error, re-raise
+                raise
 
         # If loop finished without explicit completion/error/stop signal, mark as completed
         if final_status == "running":

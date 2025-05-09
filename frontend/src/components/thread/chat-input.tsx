@@ -119,7 +119,7 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
       { id: 'sonnet-3.7', label: 'Sonnet 3.7' },
       { id: 'sonnet-3.7-thinking', label: 'Sonnet 3.7 (Thinking)' },
       { id: 'gpt-4.1', label: 'GPT-4.1' },
-      { id: 'gemini-flash-2.5', label: 'Gemini Flash 2.5' },
+      { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
     ];
 
     // Initialize state with the default model

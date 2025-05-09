@@ -304,6 +304,45 @@ export function useAgentStream(
       if (status !== 'streaming') updateStatus('streaming');
 
       switch (message.type) {
+        case 'model_changed':
+          try {
+            // Extract model change information
+            if (parsedContent.from && parsedContent.to) {
+              console.log(`[useAgentStream] Model changed from ${parsedContent.from} to ${parsedContent.to}`);
+              
+              // Create a special system message to handle model change
+              const modelChangeMsg: UnifiedMessage = {
+                message_id: `model-change-${Date.now()}`,
+                thread_id: threadIdRef.current,
+                type: 'system', 
+                is_llm_message: false,
+                content: JSON.stringify({
+                  content: "Model changed",
+                  model_change: {
+                    from: parsedContent.from,
+                    to: parsedContent.to,
+                    reason: parsedContent.reason || 'context_limit_exceeded'
+                  }
+                }),
+                metadata: JSON.stringify({ 
+                  special_type: 'model_change',
+                  from: parsedContent.from,
+                  to: parsedContent.to
+                }),
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              };
+              
+              // Send the model change message to be handled by components
+              callbacks.onMessage(modelChangeMsg);
+              
+              // Trigger toast notification for better UX
+              toast.info(`Automatically switched to ${parsedContent.to} model due to context limits`);
+            }
+          } catch (err) {
+            console.error('[useAgentStream] Error handling model_changed event:', err);
+          }
+          break;
         case 'assistant':
           if (
             parsedMetadata.stream_status === 'chunk' &&

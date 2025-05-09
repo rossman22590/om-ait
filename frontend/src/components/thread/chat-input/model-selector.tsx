@@ -81,7 +81,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       <div className="flex flex-col w-full">
                         <div className="flex items-center justify-between w-full">
                           <div className="flex items-center gap-2">
-                            {(opt.id === 'sonnet-3.7' || opt.id === 'gemini-flash-2.5') && (
+                            {(opt.id === 'sonnet-3.7' || opt.id === 'gemini-2.5-pro') && (
                               <ZapIcon className="h-4 w-4 text-yellow-500" />
                             )}
                             <span className="font-medium">{opt.label}</span>

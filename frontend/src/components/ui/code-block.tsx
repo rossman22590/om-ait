@@ -41,8 +41,21 @@ function CodeBlockCode({
 
   useEffect(() => {
     async function highlight() {
-      const html = await codeToHtml(code, { lang: language, theme });
-      setHighlightedHtml(html);
+      // Add validation to prevent errors with Gemini outputs
+      if (!code) {
+        // If code is undefined/null, use a fallback empty string
+        setHighlightedHtml('<pre><code></code></pre>');
+        return;
+      }
+      
+      try {
+        const html = await codeToHtml(code, { lang: language, theme });
+        setHighlightedHtml(html);
+      } catch (error) {
+        console.warn('Failed to highlight code:', error);
+        // Fallback to basic formatting if highlighting fails
+        setHighlightedHtml(`<pre><code>${code}</code></pre>`);
+      }
     }
     highlight();
   }, [code, language, theme]);

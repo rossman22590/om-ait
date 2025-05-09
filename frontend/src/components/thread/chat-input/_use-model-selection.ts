@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 
 export const STORAGE_KEY_MODEL = 'suna-preferred-model';
 export const DEFAULT_FREE_MODEL_ID = 'grok-3';
-export const DEFAULT_PREMIUM_MODEL_ID = 'gemini-flash-2.5';
+export const DEFAULT_PREMIUM_MODEL_ID = 'gemini-2.5-pro';
 
 export type SubscriptionStatus = 'no_subscription' | 'active';
 
@@ -30,7 +30,7 @@ export const MODEL_OPTIONS: ModelOption[] = [
     description: 'Excellent for complex tasks and nuanced conversations'
   },
   { 
-    id: 'gemini-flash-2.5', 
+    id: 'gemini-2.5-pro', 
     label: 'Extended', 
     requiresSubscription: true, 
     description: 'Advanced reasoning and problem-solving capabilities'
@@ -52,6 +52,19 @@ export const useModelSelection = () => {
   const subscriptionStatus: SubscriptionStatus = subscriptionData?.status === 'active' 
     ? 'active' 
     : 'no_subscription';
+
+  // New function to update the model externally (e.g., when model fallback occurs)
+  const updateModelExternal = (modelId: string) => {
+    const modelOption = MODEL_OPTIONS.find(option => option.id === modelId);
+    if (!modelOption) return;
+    
+    setSelectedModel(modelId);
+    try {
+      localStorage.setItem(STORAGE_KEY_MODEL, modelId);
+    } catch (error) {
+      console.warn('Failed to save auto-switched model preference to localStorage:', error);
+    }
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -110,6 +123,7 @@ export const useModelSelection = () => {
   return {
     selectedModel,
     setSelectedModel: handleModelChange,
+    updateModelExternal,
     subscriptionStatus,
     availableModels: MODEL_OPTIONS.filter(model => 
       canAccessModel(subscriptionStatus, model.requiresSubscription)

@@ -36,6 +36,7 @@ import {
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatInput } from '@/components/thread/chat-input/chat-input';
+import { useModelSelection } from '@/components/thread/chat-input/_use-model-selection';
 import { FileViewerModal } from '@/components/thread/file-viewer-modal';
 import { SiteHeader } from '@/components/thread/thread-site-header';
 import {
@@ -418,6 +419,9 @@ export default function ThreadPage({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleSidePanel, isSidePanelOpen, leftSidebarState, setLeftSidebarOpen]);
 
+  // Get the model selection hook to update the model selector when model changes
+  const { updateModelExternal } = useModelSelection();
+
   const handleNewMessageFromStream = useCallback((message: UnifiedMessage) => {
     // Log the ID of the message received from the stream
     console.log(
@@ -442,11 +446,24 @@ export default function ThreadPage({
       }
     });
 
+    // Check for model change message and update the model selector
+    if (message.type === 'model_changed') {
+      try {
+        const parsedContent = safeJsonParse<{model_change?: {from: string, to: string}}>(message.content, {});
+        if (parsedContent.model_change?.to) {
+          console.log(`[MODEL CHANGE] Updating model selector to ${parsedContent.model_change.to}`);
+          updateModelExternal(parsedContent.model_change.to);
+        }
+      } catch (error) {
+        console.warn('[MODEL CHANGE] Failed to parse model change message:', error);
+      }
+    }
+
     // If we received a tool message, refresh the tool panel
     if (message.type === 'tool') {
       setAutoOpenedPanel(false);
     }
-  }, []);
+  }, [updateModelExternal]);
 
   const handleStreamStatusChange = useCallback((hookStatus: string) => {
     console.log(`[PAGE] Hook status changed: ${hookStatus}`);

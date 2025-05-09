@@ -33,7 +33,7 @@ async def run_agent(
     thread_manager: Optional[ThreadManager] = None,
     native_max_auto_continues: int = 25,
     max_iterations: int = 600,
-    model_name: str = "gemini/gemini-2.5-flash-preview-04-17",
+    model_name: str = "gemini/gemini-2.5-pro-preview-05-06",
     enable_thinking: Optional[bool] = False,
     reasoning_effort: Optional[str] = 'low',
     enable_context_manager: bool = True
