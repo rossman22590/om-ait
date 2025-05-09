@@ -94,9 +94,28 @@ class SandboxDeployTool(SandboxToolsBase):
                 # Get Cloudflare API token from environment
                 if not self.cloudflare_api_token:
                     return self.fail_response("CLOUDFLARE_API_TOKEN environment variable not set")
-                    
-                # Single command that creates the project if it doesn't exist and then deploys
-                project_name = f"{self.sandbox_id}-{name}"
+                
+                # Validate the project name meets Cloudflare Pages requirements
+                import re
+                if not name or not re.match(r'^[a-z0-9]([a-z0-9-]{0,56}[a-z0-9])?$', name):
+                    return self.fail_response(
+                        "Invalid project name. Project names must be 1-58 lowercase characters "
+                        "or numbers with optional dashes, and cannot start or end with a dash."
+                    )
+                
+                # Generate a 5-digit random number for the project name
+                import random
+                random_digits = str(random.randint(10000, 99999))
+                
+                # Construct the project name and check the final length
+                project_name = f"machine-{random_digits}-{name}"
+                
+                # Verify the final project name's length (Cloudflare limit is 58 chars)
+                if len(project_name) > 58:
+                    return self.fail_response(
+                        f"Final project name '{project_name}' exceeds 58 characters. "
+                        f"Please use a shorter name (your name portion should be {58 - len('machine-' + random_digits + '-')} chars or less)."
+                    )
                 deploy_cmd = f'''cd {self.workspace_path} && export CLOUDFLARE_API_TOKEN={self.cloudflare_api_token} && 
                     (npx wrangler pages deploy {full_path} --project-name {project_name} || 
                     (npx wrangler pages project create {project_name} --production-branch production && 
