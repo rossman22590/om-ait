@@ -4,8 +4,8 @@ import { useSubscription } from '@/hooks/react-query/subscriptions/use-subscript
 import { useState, useEffect } from 'react';
 
 export const STORAGE_KEY_MODEL = 'suna-preferred-model';
-export const DEFAULT_FREE_MODEL_ID = 'grok-3-mini';
-export const DEFAULT_PREMIUM_MODEL_ID = 'sonnet-3.7';
+export const DEFAULT_FREE_MODEL_ID = 'grok-3';
+export const DEFAULT_PREMIUM_MODEL_ID = 'gemini-flash-2.5';
 
 export type SubscriptionStatus = 'no_subscription' | 'active';
 
@@ -18,7 +18,7 @@ export interface ModelOption {
 
 export const MODEL_OPTIONS: ModelOption[] = [
   { 
-    id: 'grok-3-mini', 
+    id: 'grok-3', 
     label: 'Basic', 
     requiresSubscription: false,
     description: 'Limited capabilities. Upgrade for full performance.'
@@ -28,6 +28,12 @@ export const MODEL_OPTIONS: ModelOption[] = [
     label: 'Advanced', 
     requiresSubscription: true, 
     description: 'Excellent for complex tasks and nuanced conversations'
+  },
+  { 
+    id: 'gemini-flash-2.5', 
+    label: 'Extended', 
+    requiresSubscription: true, 
+    description: 'Advanced reasoning and problem-solving capabilities'
   },
 ];
 

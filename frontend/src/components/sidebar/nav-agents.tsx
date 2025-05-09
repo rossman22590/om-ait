@@ -11,7 +11,8 @@ import {
   Loader2,
   Share2,
   Search,
-  X
+  X,
+  Edit
 } from "lucide-react"
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
@@ -42,6 +43,7 @@ import Link from "next/link"
 import { ShareModal } from "./share-modal"
 import { DeleteConfirmationDialog } from "@/components/thread/DeleteConfirmationDialog"
 import { useDeleteOperation } from '@/contexts/DeleteOperationContext'
+import { RenameThreadDialog } from "@/components/thread/rename-thread-dialog";
 
 // Thread with associated project info for display in sidebar
 type ThreadWithProject = {
@@ -67,6 +69,10 @@ export function NavAgents() {
   const isNavigatingRef = useRef(false)
   const { performDelete, isOperationInProgress } = useDeleteOperation();
   const isPerformingActionRef = useRef(false);
+  
+  // For the rename dialog
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+  const [threadToRename, setThreadToRename] = useState<{ id: string; name: string } | null>(null);
   
   // Search functionality
   const [searchTerm, setSearchTerm] = useState("");
@@ -231,9 +237,36 @@ export function NavAgents() {
   }
 
   // Function to handle thread deletion
-  const handleDeleteThread = async (threadId: string, threadName: string) => {
+  const handleDeleteThread = (threadId: string, threadName: string) => {
     setThreadToDelete({ id: threadId, name: threadName });
     setIsDeleteDialogOpen(true);
+  };
+
+  // Function to handle thread renaming
+  const handleRenameThread = (threadId: string, threadName: string) => {
+    setThreadToRename({ id: threadId, name: threadName });
+    setIsRenameDialogOpen(true);
+  };
+
+  // Handle successful rename
+  const handleRenameSuccess = (newName: string) => {
+    // Update the threads list with the new name
+    setThreads(threads.map(thread => 
+      thread.threadId === threadToRename?.id 
+        ? { ...thread, projectName: newName } 
+        : thread
+    ));
+    
+    // Close the rename dialog
+    setIsRenameDialogOpen(false);
+    setThreadToRename(null);
+    
+    // Display success message
+    toast.success(`Thread renamed to "${newName}"`);
+    
+    // Reset any navigation blocking states
+    isNavigatingRef.current = false;
+    document.body.style.pointerEvents = 'auto';
   };
 
   const confirmDelete = async () => {
@@ -444,6 +477,17 @@ export function NavAgents() {
                           <Share2 className="text-muted-foreground" />
                           <span>Share Chat</span>
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            handleRenameThread(
+                              thread.threadId,
+                              thread.projectName,
+                            )
+                          }
+                        >
+                          <Edit className="text-muted-foreground" />
+                          <span>Rename</span>
+                        </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                           <a
                             href={thread.url}
@@ -508,6 +552,16 @@ export function NavAgents() {
           onConfirm={confirmDelete}
           threadName={threadToDelete.name}
           isDeleting={isDeleting}
+        />
+      )}
+      
+      {threadToRename && (
+        <RenameThreadDialog
+          threadId={threadToRename.id}
+          currentName={threadToRename.name}
+          isOpen={isRenameDialogOpen}
+          onClose={() => setIsRenameDialogOpen(false)}
+          onSuccess={handleRenameSuccess}
         />
       )}
     </SidebarGroup>

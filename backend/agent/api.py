@@ -38,7 +38,7 @@ MODEL_NAME_ALIASES = {
     "gpt-4o": "openai/gpt-4o",
     "gpt-4-turbo": "openai/gpt-4-turbo",
     "gpt-4": "openai/gpt-4",
-    "gemini-flash-2.5": "openrouter/google/gemini-2.5-flash-preview",
+    "gemini-flash-2.5": "gemini/gemini-2.5-flash-preview-04-17",
     "grok-3": "xai/grok-3-fast-latest",
     "deepseek": "deepseek/deepseek-chat",
     "grok-3-mini": "xai/grok-3-mini-fast-beta",
@@ -50,7 +50,7 @@ MODEL_NAME_ALIASES = {
     "openai/gpt-4o": "openai/gpt-4o",
     "openai/gpt-4-turbo": "openai/gpt-4-turbo",
     "openai/gpt-4": "openai/gpt-4",
-    "openrouter/google/gemini-2.5-flash-preview": "openrouter/google/gemini-2.5-flash-preview",
+    "gemini/gemini-2.5-flash-preview-04-17": "gemini/gemini-2.5-flash-preview-04-17",
     "xai/grok-3-fast-latest": "xai/grok-3-fast-latest",
     "deepseek/deepseek-chat": "deepseek/deepseek-chat",
     "xai/grok-3-mini-fast-beta": "xai/grok-3-mini-fast-beta",
@@ -66,6 +66,10 @@ class AgentStartRequest(BaseModel):
 class InitiateAgentResponse(BaseModel):
     thread_id: str
     agent_run_id: Optional[str] = None
+
+class RenameThreadRequest(BaseModel):
+    thread_id: str
+    name: str
 
 def initialize(
     _thread_manager: ThreadManager,
@@ -451,6 +455,96 @@ async def stop_agent(agent_run_id: str, user_id: str = Depends(get_current_user_
     await get_agent_run_with_access_check(client, agent_run_id, user_id)
     await stop_agent_run(agent_run_id)
     return {"status": "stopped"}
+
+@router.get("/thread/{thread_id}")
+async def get_thread(
+    thread_id: str,
+    user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    """Get thread details.
+    
+    Args:
+        thread_id: The ID of the thread to get details for
+        user_id: The ID of the authenticated user
+        
+    Returns:
+        Thread details including name, creation date, etc.
+    """
+    logger.info(f"Getting details for thread {thread_id}")
+    client = await db.client
+    
+    # Verify user has access to the thread
+    account_id = await verify_thread_access(client, thread_id, user_id)
+    if not account_id:
+        logger.warning(f"User {user_id} attempted to access thread {thread_id} without permission")
+        raise HTTPException(status_code=404, detail="Thread not found")
+    
+    try:
+        # Get the thread from the database
+        thread_result = await client.table('threads').select("*").eq("thread_id", thread_id).execute()
+        
+        if thread_result.data and len(thread_result.data) > 0:
+            thread = thread_result.data[0]
+            return thread
+        else:
+            raise HTTPException(status_code=404, detail="Thread not found")
+            
+    except Exception as e:
+        logger.error(f"Error getting thread {thread_id}: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to get thread: {str(e)}")
+
+
+@router.put("/thread/{thread_id}/rename")
+async def rename_thread(
+    thread_id: str, 
+    request: RenameThreadRequest,
+    user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    """Rename a thread.
+    
+    Args:
+        thread_id: The ID of the thread to rename
+        request: The rename request containing the new name
+        user_id: The ID of the authenticated user
+        
+    Returns:
+        Updated thread details
+    """
+    logger.info(f"Renaming thread {thread_id} to '{request.name}'")
+    client = await db.client
+    
+    # Verify user has access to the thread
+    account_id = await verify_thread_access(client, thread_id, user_id)
+    if not account_id:
+        logger.warning(f"User {user_id} attempted to rename thread {thread_id} without permission")
+        raise HTTPException(status_code=404, detail="Thread not found")
+    
+    try:
+        # Get the project_id associated with this thread
+        thread_result = await client.table('threads').select("project_id").eq("thread_id", thread_id).execute()
+        
+        if not thread_result.data or len(thread_result.data) == 0:
+            raise HTTPException(status_code=404, detail="Thread not found")
+            
+        project_id = thread_result.data[0]["project_id"]
+        
+        # Update the project name instead
+        await client.table('projects').update({
+            "name": request.name
+        }).eq("project_id", project_id).execute()
+        
+        # Get the updated thread
+        thread_result = await client.table('threads').select("*").eq("thread_id", thread_id).execute()
+        
+        if thread_result.data and len(thread_result.data) > 0:
+            thread = thread_result.data[0]
+            return thread
+        else:
+            raise HTTPException(status_code=404, detail="Thread not found after update")
+            
+    except Exception as e:
+        logger.error(f"Error renaming thread {thread_id}: {str(e)}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Failed to rename thread: {str(e)}")
 
 @router.get("/thread/{thread_id}/agent-runs")
 async def get_agent_runs(thread_id: str, user_id: str = Depends(get_current_user_id_from_jwt)):
