@@ -1029,7 +1029,7 @@ class ResponseProcessor:
             # and there's content in the XML tag, try to extract it as the new_str
             if xml_tag_name == "str-replace" and "file_path" in params and ("old_str" not in params or "new_str" not in params):
                 logger.info(f"Attempting to parse str-replace with content as parameters")
-                content, _ = self._extract_tag_content(xml_chunk)
+                content, _ = self._extract_tag_content(xml_chunk, xml_tag_name)
                 if content and content.strip():
                     # If we have content but no parameters, assume it's a full file replacement
                     if "old_str" not in params:
