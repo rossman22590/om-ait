@@ -551,6 +551,26 @@ class ResponseProcessor:
                 )
                 if finish_msg_obj: yield finish_msg_obj
 
+        except GeneratorExit:
+            # This exception is raised when the generator is closed before it's exhausted
+            # We need to catch it and handle cleanup properly
+            logger.info("Stream processing was closed early (GeneratorExit)")
+            
+            # Perform necessary cleanup
+            if 'llm_response' in locals() and hasattr(llm_response, 'aclose'):
+                try:
+                    await llm_response.aclose()
+                except Exception as close_err:
+                    logger.warning(f"Error closing LLM response stream: {close_err}")
+            
+            # Cleanup any pending tasks
+            for exec_data in pending_tool_executions:
+                if 'task' in exec_data and not exec_data['task'].done():
+                    exec_data['task'].cancel()
+            
+            # No yield here - as GeneratorExit means consumer is no longer accepting values
+            return
+            
         except Exception as e:
             logger.error(f"Error processing stream: {str(e)}", exc_info=True)
             # Save and yield error status message
@@ -562,13 +582,25 @@ class ResponseProcessor:
             if err_msg_obj: yield err_msg_obj # Yield the saved error message
 
         finally:
+            # Clean up any pending tasks if they exist
+            if 'pending_tool_executions' in locals():
+                for exec_data in pending_tool_executions:
+                    if 'task' in exec_data and not exec_data['task'].done():
+                        exec_data['task'].cancel()
+            
             # Save and Yield the final thread_run_end status
+            # Only if we're not in a GeneratorExit context
             end_content = {"status_type": "thread_run_end"}
-            end_msg_obj = await self.add_message(
-                thread_id=thread_id, type="status", content=end_content, 
-                is_llm_message=False, metadata={"thread_run_id": thread_run_id if 'thread_run_id' in locals() else None}
-            )
-            if end_msg_obj: yield end_msg_obj
+            try:
+                end_msg_obj = await self.add_message(
+                    thread_id=thread_id, type="status", content=end_content, 
+                    is_llm_message=False, metadata={"thread_run_id": thread_run_id if 'thread_run_id' in locals() else None}
+                )
+                if end_msg_obj: yield end_msg_obj
+            except RuntimeError as re:
+                if 'cannot yield from finalizer' not in str(re).lower():
+                    # If it's another error, still log it
+                    logger.error(f"Error in stream finalizer: {re}")
 
     async def process_non_streaming_response(
         self,

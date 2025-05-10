@@ -338,12 +338,8 @@ Here are the XML tools available with examples:
                 except Exception as e:
                     # Check if this is a context limit error that should be handled by the fallback mechanism in api.py
                     error_str = str(e).lower()
-                    if ("claude" in llm_model.lower() or "sonnet" in llm_model.lower()) and (
-                        "context limit" in error_str or 
-                        "exceed context" in error_str or
-                        "input length and `max_tokens` exceed context" in error_str or
-                        "token limit" in error_str
-                    ):
+                    # Simpler detection that focuses on the consistent part of the error message rather than exception type
+                    if "input length and `max_tokens` exceed context limit" in error_str or "exceed context limit" in error_str:
                         logger.warning(f"Detected Claude context limit error in thread_manager, passing to api.py fallback handler: {str(e)}")
                         # Re-raise the original error to be caught by the fallback mechanism in api.py
                         raise
