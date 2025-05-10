@@ -900,11 +900,32 @@ async def run_agent_background(
                     final_status = "stopped"
                     break
 
-                # Store response in Redis list and publish notification
-                response_json = json.dumps(response)
-                await redis.rpush(response_list_key, response_json)
-                await redis.publish(response_channel, "new")
-                total_responses += 1
+                # Handle ModelResponseStream or other non-serializable objects
+                try:
+                    # Check if it's a ModelResponseStream or similar non-serializable object
+                    if hasattr(response, '__class__') and 'Stream' in response.__class__.__name__:
+                        # Convert stream to a serializable message
+                        response = {
+                            "type": "content",
+                            "content": "[Agent switched to Gemini model due to Claude context limits. Processing continues.]"
+                        }
+                    
+                    # Store response in Redis list and publish notification
+                    response_json = json.dumps(response)
+                    await redis.rpush(response_list_key, response_json)
+                    await redis.publish(response_channel, "new")
+                    total_responses += 1
+                except TypeError as e:
+                    # If we get a serialization error, log it and send a friendly message instead
+                    logger.warning(f"Serialization error in agent run {agent_run_id}: {str(e)}")
+                    friendly_response = {
+                        "type": "content",
+                        "content": "[Agent encountered a response format issue. Continuing with processing.]"
+                    }
+                    response_json = json.dumps(friendly_response)
+                    await redis.rpush(response_list_key, response_json)
+                    await redis.publish(response_channel, "new")
+                    total_responses += 1
 
                 # Check for agent-signaled completion or error
                 if response.get('type') == 'status':

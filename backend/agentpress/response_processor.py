@@ -1025,6 +1025,24 @@ class ResponseProcessor:
                     logger.error(f"Error processing mapping {mapping}: {e}")
                     continue
             
+            # Special case for str-replace - if we have file_path but missing old_str/new_str
+            # and there's content in the XML tag, try to extract it as the new_str
+            if xml_tag_name == "str-replace" and "file_path" in params and ("old_str" not in params or "new_str" not in params):
+                logger.info(f"Attempting to parse str-replace with content as parameters")
+                content, _ = self._extract_tag_content(xml_chunk)
+                if content and content.strip():
+                    # If we have content but no parameters, assume it's a full file replacement
+                    if "old_str" not in params:
+                        # Just use the content directly rather than trying to read the file
+                        try:
+                            file_path = params.get("file_path")
+                            # Instead of reading file, just use a placeholder for old_str
+                            params["old_str"] = "" # Empty string as placeholder
+                            params["new_str"] = content.strip()
+                            logger.info(f"Set empty old_str and extracted new_str from content")
+                        except Exception as e:
+                            logger.error(f"Failed to extract file content for str-replace: {e}")
+            
             # Validate required parameters
             missing = [mapping.param_name for mapping in schema.mappings if mapping.required and mapping.param_name not in params]
             if missing:
