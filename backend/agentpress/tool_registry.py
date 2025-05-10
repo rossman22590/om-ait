@@ -150,3 +150,64 @@ class ToolRegistry:
                 examples[schema.xml_schema.tag_name] = schema.xml_schema.example
         logger.debug(f"Retrieved {len(examples)} XML examples")
         return examples
+        
+    def get_function_name_for_xml_tag(self, tag_name: str) -> Optional[str]:
+        """Get the function name associated with an XML tag.
+        
+        Args:
+            tag_name: The XML tag name to look up
+            
+        Returns:
+            Function name if found, None otherwise
+        """
+        # First try direct lookup
+        tool_info = self.xml_tools.get(tag_name, {})
+        if tool_info:
+            return tool_info.get('method')
+            
+        # Normalize tag name for better matching
+        normalized_tag = tag_name.lower().replace('_', '-')
+        
+        # Try with normalized tag name
+        for registered_tag, info in self.xml_tools.items():
+            if registered_tag.lower().replace('_', '-') == normalized_tag:
+                logger.info(f"Found function for normalized tag: {tag_name} -> {registered_tag}")
+                return info.get('method')
+                
+        # Try partial matching
+        for registered_tag, info in self.xml_tools.items():
+            if normalized_tag in registered_tag.lower().replace('_', '-') or \
+               registered_tag.lower().replace('_', '-') in normalized_tag:
+                logger.info(f"Found partial match for tag: {tag_name} -> {registered_tag}")
+                return info.get('method')
+        
+        logger.warning(f"No function found for XML tag: {tag_name}")
+        return None
+        
+    def get_param_mappings_for_xml_tag(self, tag_name: str) -> List[Dict[str, Any]]:
+        """Get parameter mappings for an XML tag.
+        
+        Args:
+            tag_name: The XML tag name to look up
+            
+        Returns:
+            List of parameter mappings if found, empty list otherwise
+        """
+        tool_info = self.xml_tools.get(tag_name, {})
+        if tool_info and tool_info.get('schema') and tool_info['schema'].xml_schema:
+            return tool_info['schema'].xml_schema.mappings or []
+        return []
+    
+    def get_schema_for_tool(self, function_name: str) -> Optional[Dict[str, Any]]:
+        """Get OpenAPI schema for a function name.
+        
+        Args:
+            function_name: Name of the function
+            
+        Returns:
+            OpenAPI schema if found, None otherwise
+        """
+        tool_info = self.tools.get(function_name, {})
+        if tool_info and tool_info.get('schema') and tool_info['schema'].schema:
+            return tool_info['schema'].schema.get('function', {})
+        return None

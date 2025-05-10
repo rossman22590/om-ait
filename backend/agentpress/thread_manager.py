@@ -336,13 +336,40 @@ Here are the XML tools available with examples:
                     logger.debug("Successfully received raw LLM API response stream/object")
 
                 except Exception as e:
-                    # Check if this is a context limit error that should be handled by the fallback mechanism in api.py
+                    # Check if this is a context limit error that should be handled by switching to Gemini
                     error_str = str(e).lower()
-                    # Simpler detection that focuses on the consistent part of the error message rather than exception type
+                    # Detect Claude's context limit errors
                     if "input length and `max_tokens` exceed context limit" in error_str or "exceed context limit" in error_str:
-                        logger.warning(f"Detected Claude context limit error in thread_manager, passing to api.py fallback handler: {str(e)}")
-                        # Re-raise the original error to be caught by the fallback mechanism in api.py
-                        raise
+                        # Get fallback model details
+                        from agent.api import detect_context_limit_error
+                        is_context_error, original_model_id, fallback_model_id, detail_msg = detect_context_limit_error(error_str, llm_model)
+                        
+                        if is_context_error:
+                            logger.warning(f"Detected context limit error for {original_model_id}. Switching to {fallback_model_id}{detail_msg}")
+                            
+                            # Try again with the fallback model
+                            fallback_model = "gemini/gemini-2.5-pro-preview-05-06"  # Use full model name
+                            
+                            # Retry the API call with the fallback model
+                            try:
+                                logger.info(f"Retrying with fallback model: {fallback_model}")
+                                llm_response = await make_llm_api_call(
+                                    prepared_messages,
+                                    fallback_model,
+                                    temperature=llm_temperature,
+                                    # Note: Don't pass max_tokens for Gemini as its limit is higher
+                                    tools=openapi_tool_schemas,
+                                    tool_choice=tool_choice if processor_config.native_tool_calling else None,
+                                    stream=stream,
+                                    enable_thinking=enable_thinking,
+                                    reasoning_effort=reasoning_effort
+                                )
+                                logger.info(f"Successfully switched to {fallback_model} after context limit with {llm_model}")
+                                return llm_response
+                            except Exception as fallback_error:
+                                logger.error(f"Error with fallback model {fallback_model}: {str(fallback_error)}", exc_info=True)
+                                # Continue to raise the original error if fallback fails
+                                raise
                     else:
                         # For non-context limit errors, log and raise as normal
                         logger.error(f"Failed to make LLM API call: {str(e)}", exc_info=True)
