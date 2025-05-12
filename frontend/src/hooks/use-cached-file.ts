@@ -77,7 +77,14 @@ export function useCachedFile<T = string>(
       // Special handling for cached blobs - return a fresh URL
       if (FileCache.isImageFile(filePath || '') && cached.content instanceof Blob) {
         console.log(`[FILE CACHE] Creating fresh blob URL for cached image`);
-        const blobUrl = URL.createObjectURL(cached.content);
+        let blobUrl;
+        try {
+          blobUrl = URL.createObjectURL(cached.content);
+        } catch (err) {
+          console.error(`[FILE CACHE] Error creating object URL from cached content: ${err}`);
+          // Force a refresh of the content
+          return getCachedFile(key, true);
+        }
         // Update the cache with the new blob URL to avoid creating multiple URLs for the same blob
         console.log(`[FILE CACHE] Updating cache with fresh blob URL: ${blobUrl}`);
         fileCache.set(key, {
@@ -151,12 +158,27 @@ export function useCachedFile<T = string>(
             });
             
             // But return a URL for immediate use
-            const blobUrl = URL.createObjectURL(blob);
+            let blobUrl;
+            try {
+              blobUrl = URL.createObjectURL(blob);
+              console.log(`[FILE CACHE] Created blob URL successfully: ${blobUrl}`);
+            } catch (err) {
+              console.error(`[FILE CACHE] Error creating object URL from blob: ${err}`);
+              // Return the raw blob instead
+              return blob;
+            }
             console.log(`[FILE CACHE] Created fresh blob URL for immediate use: ${blobUrl}`);
             return blobUrl; // Return early since we've already cached
           } else {
             // For non-images, create and return a blob URL
-            content = URL.createObjectURL(blob);
+            try {
+          content = URL.createObjectURL(blob);
+        } catch (err) {
+          console.error(`[FILE CACHE] Error creating object URL: ${err}`);
+          // Set content to null and throw error to trigger fallback logic
+          content = null;
+          throw new Error(`Failed to create object URL: ${err}`);
+        }
             cacheType = 'url';
           }
           break;
@@ -414,7 +436,14 @@ export const FileCache = {
             console.log(`[FILE CACHE] Successfully preloaded image blob: ${normalizedPath} (${blob.size} bytes)`);
           } else {
             // For other binary files, store the URL
-            content = URL.createObjectURL(blob);
+            try {
+          content = URL.createObjectURL(blob);
+        } catch (err) {
+          console.error(`[FILE CACHE] Error creating object URL: ${err}`);
+          // Set content to null and throw error to trigger fallback logic
+          content = null;
+          throw new Error(`Failed to create object URL: ${err}`);
+        }
             type = 'url';
             console.log(`[FILE CACHE] Successfully preloaded blob URL: ${normalizedPath} (${blob.size} bytes)`);
           }
@@ -515,7 +544,20 @@ export async function getCachedFile(
         // For images and PDFs, we should always have a Blob in cache
         if (cached.content instanceof Blob) {
           console.log(`[FILE CACHE] Creating new blob URL from cached ${isPdfFile ? 'PDF' : 'image'} blob (${cached.content.size} bytes)`);
-          const blobUrl = URL.createObjectURL(cached.content);
+          let blobUrl;
+          try {
+            blobUrl = URL.createObjectURL(cached.content);
+          } catch (err) {
+            console.error(`[FILE CACHE] Error creating object URL from cached content: ${err}`);
+            // Force a refresh of the content
+            // Remove the current entry from cache to force a fresh fetch
+            fileCache.delete(key);
+            
+            // For image/PDF files where blob URL creation fails, return null to trigger
+            // the fresh fetch logic in the main function flow
+            console.log(`[FILE CACHE] Triggering fresh fetch after URL creation failure`);
+            return null;
+          }
           console.log(`[FILE CACHE] Created fresh blob URL: ${blobUrl}`);
           return blobUrl;
         } else {
@@ -609,7 +651,15 @@ export async function getCachedFile(
               });
               
               // Return a URL for immediate use
-              const blobUrl = URL.createObjectURL(correctedBlob);
+                  let blobUrl;
+              try {
+                blobUrl = URL.createObjectURL(correctedBlob);
+                console.log(`[FILE CACHE] Created fresh blob URL for corrected PDF: ${blobUrl}`);
+              } catch (err) {
+                console.error(`[FILE CACHE] Error creating object URL from corrected blob: ${err}`);
+                // Return the raw corrected blob instead
+                return correctedBlob;
+              }
               console.log(`[FILE CACHE] Created fresh blob URL for corrected PDF: ${blobUrl}`);
               return blobUrl;
             }
@@ -631,12 +681,27 @@ export async function getCachedFile(
           });
           
           // But return a URL for immediate use
-          const blobUrl = URL.createObjectURL(blob);
+          let blobUrl;
+          try {
+            blobUrl = URL.createObjectURL(blob);
+            console.log(`[FILE CACHE] Created blob URL successfully: ${blobUrl}`);
+          } catch (err) {
+            console.error(`[FILE CACHE] Error creating object URL from blob: ${err}`);
+            // Return the raw blob instead
+            return blob;
+          }
           console.log(`[FILE CACHE] Created fresh blob URL for immediate use: ${blobUrl}`);
           return blobUrl; // Return early since we've already cached
         } else {
           // For other binary files, create and return a blob URL
+          try {
           content = URL.createObjectURL(blob);
+        } catch (err) {
+          console.error(`[FILE CACHE] Error creating object URL: ${err}`);
+          // Set content to null and throw error to trigger fallback logic
+          content = null;
+          throw new Error(`Failed to create object URL: ${err}`);
+        }
           cacheType = 'url';
         }
         break;

@@ -958,8 +958,34 @@ export function FileViewerModal({
         }
 
         // Create a new blob URL for download
-        const downloadUrl = URL.createObjectURL(content);
-        console.log(`[FILE VIEWER] Created download URL: ${downloadUrl}`);
+        let downloadUrl;
+        try {
+          // Check if content is a valid blob or URL
+          if (content instanceof Blob) {
+            downloadUrl = URL.createObjectURL(content);
+          } else if (typeof content === 'string' && content.startsWith('blob:')) {
+            // It's already a blob URL
+            downloadUrl = content;
+          } else {
+            console.warn(`[FILE VIEWER] Content is not a Blob or blob URL, attempting conversion`);
+            // Try to convert to a Blob if possible
+            let blob;
+            
+            if (content instanceof ArrayBuffer) {
+              blob = new Blob([content]);
+            } else if (typeof content === 'string') {
+              blob = new Blob([content], { type: 'text/plain' });
+            } else {
+              throw new Error(`Cannot convert content of type ${typeof content} to blob`);
+            }
+            
+            downloadUrl = URL.createObjectURL(blob);
+          }
+          console.log(`[FILE VIEWER] Created download URL: ${downloadUrl}`);  
+        } catch (error) {
+          console.error(`[FILE VIEWER] Error creating object URL:`, error);
+          throw new Error(`Failed to create download URL: ${error instanceof Error ? error.message : String(error)}`);
+        }
 
         // Create and trigger download
         const a = document.createElement('a');
@@ -972,10 +998,41 @@ export function FileViewerModal({
         document.body.removeChild(a);
         URL.revokeObjectURL(downloadUrl);
       } else {
-        console.log(`[FILE VIEWER] Using cached content for download`);
+        console.log(`[FILE VIEWER] Using cached content for download, type: ${typeof cachedContent}, isBlob: ${cachedContent instanceof Blob}`);
         // If we have cached content, use it directly
-        const downloadUrl = URL.createObjectURL(cachedContent);
-        console.log(`[FILE VIEWER] Created download URL from cache: ${downloadUrl}`);
+        let downloadUrl;
+        
+        try {
+          // Check if the cached content is a Blob or can be converted to one
+          if (cachedContent instanceof Blob) {
+            // It's already a Blob, use it directly
+            downloadUrl = URL.createObjectURL(cachedContent);
+          } else if (typeof cachedContent === 'string' && cachedContent.startsWith('blob:')) {
+            // It's already a blob URL, use it directly
+            downloadUrl = cachedContent;
+          } else {
+            // Try to convert to a Blob if it's another format (like ArrayBuffer)
+            console.log(`[FILE VIEWER] Attempting to convert cached content to Blob`);
+            let blob;
+            
+            if (cachedContent instanceof ArrayBuffer) {
+              blob = new Blob([cachedContent]);
+            } else if (typeof cachedContent === 'string') {
+              blob = new Blob([cachedContent], { type: 'text/plain' });
+            } else if (cachedContent?.content instanceof Blob) {
+              // Handle case where cache stores {content: Blob, timestamp: number, type: string}
+              blob = cachedContent.content;
+            } else {
+              throw new Error(`Cannot convert cached content type ${typeof cachedContent} to blob`);
+            }
+            
+            downloadUrl = URL.createObjectURL(blob);
+          }
+          console.log(`[FILE VIEWER] Created download URL from cache: ${downloadUrl}`);      
+        } catch (error) {
+          console.error(`[FILE VIEWER] Error creating object URL from cached content:`, error);
+          throw new Error(`Failed to create download URL: ${error instanceof Error ? error.message : String(error)}`);
+        }
 
         // Create and trigger download
         const a = document.createElement('a');
