@@ -37,6 +37,7 @@ class CreateCheckoutSessionRequest(BaseModel):
     price_id: str
     success_url: str
     cancel_url: str
+    promotion_code: Optional[str] = None
 
 class CreatePortalSessionRequest(BaseModel):
     return_url: str
@@ -500,18 +501,31 @@ async def create_checkout_session(
                 raise HTTPException(status_code=500, detail=f"Error updating subscription: {str(e)}")
         else:
             # --- Create New Subscription via Checkout Session ---
-            session = stripe.checkout.Session.create(
-                customer=customer_id,
-                payment_method_types=['card'],
-                    line_items=[{'price': request.price_id, 'quantity': 1}],
-                mode='subscription',
-                success_url=request.success_url,
-                cancel_url=request.cancel_url,
-                metadata={
-                        'user_id': current_user_id,
-                        'product_id': product_id
+            checkout_params = {
+                'customer': customer_id,
+                'payment_method_types': ['card'],
+                'line_items': [{'price': request.price_id, 'quantity': 1}],
+                'mode': 'subscription',
+                'success_url': request.success_url,
+                'cancel_url': request.cancel_url,
+                'subscription_data': {
+                    'trial_period_days': 7  # Add 7-day free trial
+                },
+                'metadata': {
+                    'user_id': current_user_id,
+                    'product_id': product_id
                 }
-            )
+            }
+            
+            # Handle promotion codes
+            if request.promotion_code:
+                # Apply specific promotion code if provided
+                checkout_params['subscription_data']['coupon'] = request.promotion_code
+            else:
+                # Allow user to enter promotion code during checkout
+                checkout_params['allow_promotion_codes'] = True
+                
+            session = stripe.checkout.Session.create(**checkout_params)
             
             # Update customer status to potentially active (will be confirmed by webhook)
             # This ensures customer is marked as active once payment is completed
