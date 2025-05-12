@@ -63,6 +63,7 @@
     "framer-motion": "^12.6.5",
     "geist": "^1.2.1",
     "html2pdf.js": "^0.10.3",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.479.0",
     "marked": "^15.0.7",
     "motion": "^12.5.0",

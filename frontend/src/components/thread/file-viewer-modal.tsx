@@ -44,6 +44,7 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { useCachedFile, getCachedFile, FileCache } from '@/hooks/use-cached-file';
+import JSZip from 'jszip';
 
 // Define API_URL
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
@@ -107,6 +108,7 @@ export function FileViewerModal({
   // Utility state
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // State to track if initial path has been processed
@@ -670,7 +672,7 @@ export function FileViewerModal({
                   {
                     contentType: 'blob',
                     force: true,
-                    token: session?.access_token
+                    token: session?.access_token,
                   }
                 );
 
@@ -718,12 +720,12 @@ export function FileViewerModal({
   // Modify the cleanup effect to respect active downloads
   useEffect(() => {
     return () => {
-      if (blobUrlForRenderer && !isDownloading && !activeDownloadUrls.current.has(blobUrlForRenderer)) {
+      if (blobUrlForRenderer && !isDownloading && !isDownloadingAll && !activeDownloadUrls.current.has(blobUrlForRenderer)) {
         console.log(`[FILE VIEWER] Revoking blob URL on cleanup: ${blobUrlForRenderer}`);
         URL.revokeObjectURL(blobUrlForRenderer);
       }
     };
-  }, [blobUrlForRenderer, isDownloading]);
+  }, [blobUrlForRenderer, isDownloading, isDownloadingAll]);
 
   // Modify handleOpenChange to respect active downloads
   const handleOpenChange = useCallback(
@@ -732,7 +734,7 @@ export function FileViewerModal({
         console.log('[FILE VIEWER] handleOpenChange: Modal closing, resetting state.');
 
         // Only revoke if not downloading and not an active download URL
-        if (blobUrlForRenderer && !isDownloading && !activeDownloadUrls.current.has(blobUrlForRenderer)) {
+        if (blobUrlForRenderer && !isDownloading && !isDownloadingAll && !activeDownloadUrls.current.has(blobUrlForRenderer)) {
           console.log(`[FILE VIEWER] Manually revoking blob URL on modal close: ${blobUrlForRenderer}`);
           URL.revokeObjectURL(blobUrlForRenderer);
         }
@@ -745,7 +747,7 @@ export function FileViewerModal({
       }
       onOpenChange(open);
     },
-    [onOpenChange, clearSelectedFile, setIsInitialLoad, blobUrlForRenderer, isDownloading],
+    [onOpenChange, clearSelectedFile, setIsInitialLoad, blobUrlForRenderer, isDownloading, isDownloadingAll],
   );
 
   // Helper to check if file is markdown
@@ -1055,6 +1057,103 @@ export function FileViewerModal({
     }
   };
 
+  // Function to recursively gather files from a directory
+  const gatherFilesRecursively = async (path: string, zip: JSZip, folderPath: string = ''): Promise<void> => {
+    try {
+      // List all files and directories in the current path
+      const allFiles = await listSandboxFiles(sandboxId, path);
+      
+      // Process each file/directory
+      for (const file of allFiles) {
+        const relativePath = folderPath ? `${folderPath}/${file.name}` : file.name;
+        
+        if (file.is_dir) {
+          // For directories, create a folder in the zip and recurse
+          console.log(`[ZIP] Processing directory: ${file.path}`);
+          await gatherFilesRecursively(file.path, zip, relativePath);
+        } else {
+          // For files, add to the zip
+          console.log(`[ZIP] Adding file: ${file.path}`);
+          try {
+            // Get file content using existing mechanism
+            const content = await getCachedFile(
+              sandboxId,
+              file.path,
+              {
+                contentType: 'blob', // Always get as blob for universal compatibility
+                force: false, // Use cache if available
+                token: session?.access_token,
+              }
+            );
+            
+            if (content) {
+              // Add file to the zip with proper relative path
+              if (content instanceof Blob) {
+                zip.file(relativePath, content);
+              } else if (typeof content === 'string' && !content.startsWith('blob:')) {
+                // Plain text content
+                zip.file(relativePath, content);
+              } else if (typeof content === 'string' && content.startsWith('blob:')) {
+                // Handle blob URLs by fetching the content
+                const response = await fetch(content);
+                const blob = await response.blob();
+                zip.file(relativePath, blob);
+              } else {
+                console.warn(`[ZIP] Unexpected content type for ${file.path}: ${typeof content}`);
+              }
+            }
+          } catch (error) {
+            console.error(`[ZIP] Error adding file ${file.path}:`, error);
+            // Continue with other files even if one fails
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`[ZIP] Error gathering files from ${path}:`, error);
+      throw error;
+    }
+  };
+
+  // Handle download all files as a zip
+  const handleDownloadAll = async () => {
+    if (isDownloadingAll) return;
+    
+    try {
+      setIsDownloadingAll(true);
+      toast.info('Preparing workspace download...');
+      console.log('[ZIP] Starting download all process');
+      
+      // Create a new JSZip instance
+      const zip = new JSZip();
+      
+      // Start gathering files from the workspace root
+      await gatherFilesRecursively('/workspace', zip);
+      
+      // Generate the zip file
+      console.log('[ZIP] Generating zip file...');
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      
+      // Create download link
+      const downloadUrl = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = 'workspace.zip';
+      document.body.appendChild(a);
+      a.click();
+      
+      // Clean up
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+      
+      toast.success('Workspace download started');
+    } catch (error) {
+      console.error('[ZIP] Download all failed:', error);
+      toast.error(`Failed to download workspace: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsDownloadingAll(false);
+    }
+  };
+
   // Handle file upload - Define after helpers
   const handleUpload = useCallback(() => {
     if (fileInputRef.current) {
@@ -1181,7 +1280,7 @@ export function FileViewerModal({
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
-            {selectedFilePath && (
+            {selectedFilePath ? (
               <>
                 <Button
                   variant="outline"
@@ -1238,23 +1337,38 @@ export function FileViewerModal({
                   </DropdownMenu>
                 )}
               </>
-            )}
-
-            {!selectedFilePath && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleUpload}
-                disabled={isUploading}
-                className="h-8 gap-1"
-              >
-                {isUploading ? (
-                  <Loader className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Upload className="h-4 w-4" />
-                )}
-                <span className="hidden sm:inline">Upload</span>
-              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleUpload}
+                  disabled={isUploading}
+                  className="h-8 gap-1"
+                >
+                  {isUploading ? (
+                    <Loader className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  <span className="hidden sm:inline">Upload</span>
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadAll}
+                  disabled={isDownloadingAll}
+                  className="h-8 gap-1"
+                >
+                  {isDownloadingAll ? (
+                    <Loader className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  <span className="hidden sm:inline">Download All</span>
+                </Button>
+              </>
             )}
 
             <input
