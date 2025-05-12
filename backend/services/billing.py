@@ -794,6 +794,53 @@ async def stripe_webhook(request: Request):
                         {'active': True}
                     ).eq('id', customer_id).execute()
                     logger.info(f"Webhook: Updated customer {customer_id} active status to TRUE based on {event.type}")
+                    
+                    # Get subscription data
+                    subscription_id = subscription.get('id')
+                    status = subscription.get('status')
+                    current_period_start = subscription.get('current_period_start')
+                    current_period_end = subscription.get('current_period_end')
+                    
+                    # Get price details
+                    items = subscription.get('items', {}).get('data', [])
+                    price_id = items[0].get('price', {}).get('id') if items else None
+                    product_id = items[0].get('price', {}).get('product') if items else None
+                    
+                    if subscription_id:
+                        # Check if subscription record already exists
+                        existing_sub = await client.schema('basejump').from_('billing_subscriptions')\
+                            .select('id')\
+                            .eq('id', subscription_id)\
+                            .maybe_single()\
+                            .execute()
+                        
+                        # Prepare subscription data
+                        sub_data = {
+                            'status': status,
+                            'price_id': price_id,
+                            'product_id': product_id,
+                            'customer_id': customer_id,
+                            'current_period_start': current_period_start,
+                            'current_period_end': current_period_end,
+                            'updated_at': 'now()'
+                        }
+                        
+                        if not existing_sub.data:
+                            # Insert new subscription record
+                            sub_data['id'] = subscription_id
+                            sub_data['created_at'] = 'now()'
+                            
+                            insert_result = await client.schema('basejump').from_('billing_subscriptions')\
+                                .insert(sub_data)\
+                                .execute()
+                            logger.info(f"Webhook: Created new subscription record for {subscription_id}")
+                        else:
+                            # Update existing subscription record
+                            update_result = await client.schema('basejump').from_('billing_subscriptions')\
+                                .update(sub_data)\
+                                .eq('id', subscription_id)\
+                                .execute()
+                            logger.info(f"Webhook: Updated subscription record for {subscription_id}")
                 else:
                     # Subscription is not active (e.g., past_due, canceled, etc.)
                     # Check if customer has any other active subscriptions before updating status
@@ -808,6 +855,15 @@ async def stripe_webhook(request: Request):
                             {'active': False}
                         ).eq('id', customer_id).execute()
                         logger.info(f"Webhook: Updated customer {customer_id} active status to FALSE based on {event.type}")
+                    
+                    # Update subscription status in the database if it exists
+                    subscription_id = subscription.get('id')
+                    if subscription_id:
+                        await client.schema('basejump').from_('billing_subscriptions')\
+                            .update({'status': subscription.get('status'), 'updated_at': 'now()'})\
+                            .eq('id', subscription_id)\
+                            .execute()
+                        logger.info(f"Webhook: Updated subscription status to {subscription.get('status')} for {subscription_id}")
             
             elif event.type == 'customer.subscription.deleted':
                 # Check if customer has any other active subscriptions
