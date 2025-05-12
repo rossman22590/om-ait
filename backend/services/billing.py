@@ -5,15 +5,14 @@ stripe listen --forward-to localhost:8000/api/billing/webhook
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Request
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict, Any, List, Tuple
 import stripe
-import asyncio
 from datetime import datetime, timezone
 from utils.logger import logger
 from utils.config import config, EnvMode
 from services.supabase import DBConnection
 from utils.auth_utils import get_current_user_id_from_jwt
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Initialize Stripe
 stripe.api_key = config.STRIPE_SECRET_KEY
@@ -772,8 +771,114 @@ async def stripe_webhook(request: Request):
         except stripe.error.SignatureVerificationError as e:
             raise HTTPException(status_code=400, detail="Invalid signature")
         
-        # Handle the event
-        if event.type in ['customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted']:
+        logger.info(f"Received Stripe webhook event: {event.type}")
+        
+        # Handle checkout.session.completed event
+        if event.type == 'checkout.session.completed':
+            try:
+                # Extract the checkout session data
+                checkout_session = event.data.object
+                customer_id = checkout_session.get('customer')
+                subscription_id = checkout_session.get('subscription')
+                
+                if not customer_id or not subscription_id:
+                    logger.warning(f"Missing customer or subscription ID in checkout session: {checkout_session.get('id')}")
+                    return {"status": "error", "message": "Missing customer or subscription ID"}
+                
+                # Get database connection
+                db = DBConnection()
+                client = await db.client
+                
+                # Get account_id from billing_customers table
+                customer_result = await client.schema('basejump').from_('billing_customers')\
+                    .select('account_id')\
+                    .eq('id', customer_id)\
+                    .maybe_single()\
+                    .execute()
+                
+                account_id = None
+                if customer_result.data and 'account_id' in customer_result.data:
+                    account_id = customer_result.data['account_id']
+                else:
+                    logger.warning(f"Could not find account_id for customer {customer_id}")
+                    return {"status": "error", "message": "No account ID found for customer"}
+                
+                # Get the subscription details from Stripe
+                subscription = stripe.Subscription.retrieve(subscription_id)
+                if not subscription:
+                    logger.warning(f"Could not retrieve subscription {subscription_id} from Stripe")
+                    return {"status": "error", "message": "Could not retrieve subscription"}
+                
+                status = subscription.get('status')
+                current_period_start = subscription.get('current_period_start')
+                current_period_end = subscription.get('current_period_end')
+                
+                # Get price details
+                items = subscription.get('items', {}).get('data', [])
+                price_id = items[0].get('price', {}).get('id') if items else None
+                
+                # Check if subscription record already exists
+                existing_sub = await client.schema('basejump').from_('billing_subscriptions')\
+                    .select('id')\
+                    .eq('id', subscription_id)\
+                    .maybe_single()\
+                    .execute()
+                
+                # Format timestamps as ISO format for database compatibility
+                formatted_period_start = None
+                formatted_period_end = None
+                
+                if current_period_start:
+                    formatted_period_start = datetime.fromtimestamp(
+                        current_period_start, tz=timezone.utc
+                    ).isoformat()
+                    
+                if current_period_end:
+                    formatted_period_end = datetime.fromtimestamp(
+                        current_period_end, tz=timezone.utc
+                    ).isoformat()
+                
+                # Prepare subscription data
+                sub_data = {
+                    'status': status,
+                    'price_id': price_id,
+                    'billing_customer_id': customer_id,
+                    'account_id': account_id,
+                    'current_period_start': formatted_period_start,
+                    'current_period_end': formatted_period_end,
+                    'provider': 'stripe'
+                }
+                
+                if not existing_sub.data:
+                    # Insert new subscription record
+                    sub_data['id'] = subscription_id
+                    sub_data['created'] = datetime.now(timezone.utc).isoformat()
+                    
+                    insert_result = await client.schema('basejump').from_('billing_subscriptions')\
+                        .insert(sub_data)\
+                        .execute()
+                    logger.info(f"Webhook: Created new subscription record for {subscription_id} from checkout session")
+                else:
+                    # Update existing subscription record
+                    update_result = await client.schema('basejump').from_('billing_subscriptions')\
+                        .update(sub_data)\
+                        .eq('id', subscription_id)\
+                        .execute()
+                    logger.info(f"Webhook: Updated subscription record for {subscription_id} from checkout session")
+                
+                # Update customer's active status to true
+                await client.schema('basejump').from_('billing_customers').update(
+                    {'active': True}
+                ).eq('id', customer_id).execute()
+                logger.info(f"Webhook: Updated customer {customer_id} active status to TRUE based on checkout.session.completed")
+                
+                return {"status": "success", "message": f"Processed checkout session for subscription {subscription_id}"}
+            except Exception as checkout_error:
+                logger.exception(f"Error processing checkout.session.completed: {str(checkout_error)}")
+                return {"status": "error", "message": f"Error processing checkout session: {str(checkout_error)}"}
+        
+        # Handle subscription events
+        elif event.type in ['customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted']:
             # Extract the subscription and customer information
             subscription = event.data.object
             customer_id = subscription.get('customer')
