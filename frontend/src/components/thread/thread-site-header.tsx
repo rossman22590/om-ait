@@ -18,6 +18,8 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/components/ui/sidebar"
 import { ShareModal } from "@/components/sidebar/share-modal"
+import { ThreadTimer } from "../thread/ThreadTimer"
+import ThreadRename from "../thread/ThreadRename"
 
 interface ThreadSiteHeaderProps {
   threadId: string;
@@ -110,6 +112,11 @@ export function SiteHeader({
     }
   };
 
+  // Handle thread rename completion
+  const handleThreadRenameComplete = (threadId: string, newName: string) => {
+    toast.success('Thread renamed successfully');
+  };
+
   return (
     <>
       <header className={cn(
@@ -168,6 +175,10 @@ export function SiteHeader({
               {projectName}
             </div>
           )}
+          {/* Thread Timer Component */}
+          <div className="ml-auto">
+            <ThreadTimer threadId={threadId} />
+          </div>
         </div>
 
         <div className="flex items-center gap-1 pr-4">

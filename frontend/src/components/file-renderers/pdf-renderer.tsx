@@ -1,5 +1,8 @@
 'use client';
 
+// Import the polyfill before any PDF.js imports
+import '@/lib/polyfills/promise-with-resolvers';
+
 import React, { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Document, Page, pdfjs } from 'react-pdf';

@@ -13,8 +13,9 @@ import uuid
 import time
 from collections import OrderedDict
 
-# Import the agent API module
+# Import the API modules
 from agent import api as agent_api
+from agent import thread_api
 from sandbox import api as sandbox_api
 from services import billing as billing_api
 
@@ -109,15 +110,15 @@ async def log_requests_middleware(request: Request, call_next):
         raise
 
 # Define allowed origins based on environment
-allowed_origins = ["https://www.suna.so", "https://suna.so", "https://staging.suna.so", "http://localhost:3000"]
+allowed_origins = ["https://machine.myapps.ai", "https://beta.machine.myapps.ai", "https://the-machine-api-v2-production.up.railway.app", "http://localhost:3001"]
 
 # Add staging-specific origins
 if config.ENV_MODE == EnvMode.STAGING:
-    allowed_origins.append("http://localhost:3000")
+    allowed_origins.append("http://localhost:3001")
     
 # Add local-specific origins
 if config.ENV_MODE == EnvMode.LOCAL:
-    allowed_origins.append("http://localhost:3000")
+    allowed_origins.append("http://localhost:3001")
 
 app.add_middleware(
     CORSMiddleware,
@@ -129,6 +130,9 @@ app.add_middleware(
 
 # Include the agent router with a prefix
 app.include_router(agent_api.router, prefix="/api")
+
+# Include the thread management router with a prefix
+app.include_router(thread_api.router, prefix="/api")
 
 # Include the sandbox router with a prefix
 app.include_router(sandbox_api.router, prefix="/api")

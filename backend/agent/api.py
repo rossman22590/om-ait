@@ -41,6 +41,7 @@ MODEL_NAME_ALIASES = {
     "gemini-flash-2.5": "openrouter/google/gemini-2.5-flash-preview",
     "grok-3": "xai/grok-3-fast-latest",
     "deepseek": "openrouter/deepseek/deepseek-chat",
+    "gemini/gemini-2.5-pro-preview-05-06": "gemini/gemini-2.5-pro-preview-05-06",
     "grok-3-mini": "xai/grok-3-mini-fast-beta",
     "qwen3": "openrouter/qwen/qwen3-235b-a22b", 
 
@@ -53,6 +54,7 @@ MODEL_NAME_ALIASES = {
     "openrouter/google/gemini-2.5-flash-preview": "openrouter/google/gemini-2.5-flash-preview",
     "xai/grok-3-fast-latest": "xai/grok-3-fast-latest",
     "deepseek/deepseek-chat": "openrouter/deepseek/deepseek-chat",
+    "gemini/gemini-2.5-pro-preview-05-06": "gemini/gemini-2.5-pro-preview-05-06",
     "xai/grok-3-mini-fast-beta": "xai/grok-3-mini-fast-beta",
 }
 
@@ -538,44 +540,67 @@ async def stream_agent_run(
             message_queue = asyncio.Queue()
 
             async def listen_messages():
+                # Create iterators once - prevent "already running" error
                 response_reader = pubsub_response.listen()
                 control_reader = pubsub_control.listen()
-                tasks = [asyncio.create_task(response_reader.__anext__()), asyncio.create_task(control_reader.__anext__())]
-
-                while not terminate_stream:
-                    done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-                    for task in done:
-                        try:
-                            message = task.result()
+                
+                # Use dedicated tasks that are more resilient to errors
+                async def process_response_channel():
+                    try:
+                        async for message in response_reader:
+                            if terminate_stream:
+                                break
                             if message and isinstance(message, dict) and message.get("type") == "message":
-                                channel = message.get("channel")
                                 data = message.get("data")
-                                if isinstance(data, bytes): data = data.decode('utf-8')
-
-                                if channel == response_channel and data == "new":
+                                if isinstance(data, bytes):
+                                    data = data.decode('utf-8')
+                                if data == "new":
                                     await message_queue.put({"type": "new_response"})
-                                elif channel == control_channel and data in ["STOP", "END_STREAM", "ERROR"]:
+                    except Exception as e:
+                        logger.error(f"Error in response channel listener for {agent_run_id}: {e}")
+                        await message_queue.put({"type": "error", "data": f"Response listener failed: {str(e)}"})
+                
+                async def process_control_channel():
+                    try:
+                        async for message in control_reader:
+                            if terminate_stream:
+                                break
+                            if message and isinstance(message, dict) and message.get("type") == "message":
+                                data = message.get("data")
+                                if isinstance(data, bytes):
+                                    data = data.decode('utf-8')
+                                if data in ["STOP", "END_STREAM", "ERROR"]:
                                     logger.info(f"Received control signal '{data}' for {agent_run_id}")
                                     await message_queue.put({"type": "control", "data": data})
-                                    return # Stop listening on control signal
-
-                        except StopAsyncIteration:
-                            logger.warning(f"Listener {task} stopped.")
-                            # Decide how to handle listener stopping, maybe terminate?
-                            await message_queue.put({"type": "error", "data": "Listener stopped unexpectedly"})
-                            return
-                        except Exception as e:
-                            logger.error(f"Error in listener for {agent_run_id}: {e}")
-                            await message_queue.put({"type": "error", "data": "Listener failed"})
-                            return
-                        finally:
-                            # Reschedule the completed listener task
-                            if task in tasks:
-                                tasks.remove(task)
-                                if message and isinstance(message, dict) and message.get("channel") == response_channel:
-                                     tasks.append(asyncio.create_task(response_reader.__anext__()))
-                                elif message and isinstance(message, dict) and message.get("channel") == control_channel:
-                                     tasks.append(asyncio.create_task(control_reader.__anext__()))
+                                    return  # Exit this listener on control signal
+                    except Exception as e:
+                        logger.error(f"Error in control channel listener for {agent_run_id}: {e}")
+                        await message_queue.put({"type": "error", "data": f"Control listener failed: {str(e)}"})
+                
+                # Start both listeners as tasks
+                response_task = asyncio.create_task(process_response_channel())
+                control_task = asyncio.create_task(process_control_channel())
+                
+                # Wait for either task to complete
+                try:
+                    done, pending = await asyncio.wait(
+                        [response_task, control_task],
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
+                    
+                    # If a task completed, check why and handle accordingly
+                    for task in done:
+                        if task.exception():
+                            logger.error(f"Listener task failed with exception: {task.exception()}")
+                            await message_queue.put({"type": "error", "data": "Listener task failed"})
+                finally:
+                    # Clean up tasks
+                    for task in [response_task, control_task]:
+                        if not task.done():
+                            task.cancel()
+                    
+                    # Wait for tasks to be properly cancelled
+                    await asyncio.gather(*[response_task, control_task], return_exceptions=True)
 
                 # Cancel pending listener tasks on exit
                 for p_task in pending: p_task.cancel()

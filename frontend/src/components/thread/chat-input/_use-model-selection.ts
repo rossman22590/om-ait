@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { isLocalMode } from '@/lib/config';
 
 export const STORAGE_KEY_MODEL = 'suna-preferred-model';
-export const DEFAULT_FREE_MODEL_ID = 'deepseek';
+export const DEFAULT_FREE_MODEL_ID = 'grok-3-fast-latest';
 export const DEFAULT_PREMIUM_MODEL_ID = 'sonnet-3.7';
 
 export type SubscriptionStatus = 'no_subscription' | 'active';
@@ -19,14 +19,20 @@ export interface ModelOption {
 
 export const MODEL_OPTIONS: ModelOption[] = [
   { 
-    id: 'deepseek', 
+    id: 'grok-3-fast-latest', 
     label: 'Free', 
     requiresSubscription: false,
     description: 'Limited capabilities. Upgrade for full performance.'
   },
   { 
     id: 'sonnet-3.7', 
-    label: 'Standard', 
+    label: 'Advanced', 
+    requiresSubscription: true, 
+    description: 'Excellent for complex tasks and nuanced conversations'
+  },
+  { 
+    id: 'gemini/gemini-2.5-pro-preview-05-06', 
+    label: 'Extended', 
     requiresSubscription: true, 
     description: 'Excellent for complex tasks and nuanced conversations'
   },

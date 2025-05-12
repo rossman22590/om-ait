@@ -534,6 +534,23 @@ export async function getCachedFile(
   console.log(`[FILE CACHE] Fetching fresh content for ${sandboxId}:${filePath}`);
   
   try {
+    // Simple directory detection to prevent 500 errors
+    const lastSegment = filePath.split('/').pop() || '';
+    const hasExtension = lastSegment.includes('.') && !lastSegment.endsWith('.');
+    const endsWithSlash = filePath.endsWith('/');
+    
+    // If this is likely a directory, return empty content to prevent errors
+    if (!hasExtension || endsWithSlash) {
+      console.log(`[FILE CACHE] Path appears to be a directory: ${filePath}, returning empty content`);
+      // Cache the result to prevent repeated requests
+      fileCache.set(key, {
+        content: "",
+        timestamp: Date.now(),
+        type: 'content'
+      });
+      return "";
+    }
+    
     const url = new URL(`${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${sandboxId}/files/content`);
     url.searchParams.append('path', normalizePath(filePath));
     

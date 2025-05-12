@@ -37,10 +37,13 @@ class LLMRetryError(LLMError):
 
 def setup_api_keys() -> None:
     """Set up API keys from environment variables."""
-    providers = ['OPENAI', 'ANTHROPIC', 'GROQ', 'OPENROUTER']
+    providers = ['OPENAI', 'ANTHROPIC', 'GROQ', 'OPENROUTER', 'GOOGLE']
     for provider in providers:
-        key = getattr(config, f'{provider}_API_KEY')
+        key = getattr(config, f'{provider}_API_KEY', None)
         if key:
+            # Set the environment variable for LiteLLM to use
+            if provider == 'GOOGLE':
+                os.environ['GEMINI_API_KEY'] = key
             logger.debug(f"API key set for provider: {provider}")
         else:
             logger.warning(f"No API key found for provider: {provider}")

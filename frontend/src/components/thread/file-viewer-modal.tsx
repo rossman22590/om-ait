@@ -529,15 +529,17 @@ export function FileViewerModal({
     [sandboxId],
   );
 
-  // Handle initial file path - Runs ONLY ONCE on open if initialFilePath is provided
+  // Effect to handle initializing files when component opens
   useEffect(() => {
-    // Only run if modal is open, initial path is provided, AND it hasn't been processed yet
-    if (open && initialFilePath && !initialPathProcessed) {
-      console.log(
-        `[FILE VIEWER] useEffect[initialFilePath]: Processing initial path: ${initialFilePath}`,
-      );
-
-      // Normalize the initial path
+    if (!open) return;
+    
+    // Reset state when dialog opens
+    if (isInitialLoad) {
+      // Navigate home directly on initial load to avoid workspace folder errors
+      navigateHome();
+      
+      // Only set initial path if we have one
+      if (initialFilePath && !initialPathProcessed) {
       const fullPath = normalizePath(initialFilePath);
       const lastSlashIndex = fullPath.lastIndexOf('/');
       const directoryPath =
@@ -578,10 +580,13 @@ export function FileViewerModal({
         openFile(initialFile);
       }
 
-      // Mark the initial path as processed so this doesn't run again
-      setInitialPathProcessed(true);
-    } else if (!open) {
-      // Reset the processed flag when the modal closes
+        // Mark the initial path as processed so this doesn't run again
+        setInitialPathProcessed(true);
+      }
+    }
+    
+    // Reset the processed flag when the modal closes
+    if (!open) {
       console.log(
         '[FILE VIEWER] useEffect[initialFilePath]: Modal closed, resetting initialPathProcessed flag.',
       );
