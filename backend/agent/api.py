@@ -39,6 +39,7 @@ MODEL_NAME_ALIASES = {
     "gpt-4-turbo": "openai/gpt-4-turbo",
     "gpt-4": "openai/gpt-4",
     "gemini-flash-2.5": "openrouter/google/gemini-2.5-flash-preview",
+    "gemini-2.5-flash-preview-04-17": "gemini/gemini-2.5-flash-preview-04-17",  # Added for future use
     "grok-3": "xai/grok-3-fast-latest",
     "grok-3-fast-latest": "xai/grok-3-fast-latest",  # Add explicit mapping for frontend default
     "deepseek": "openrouter/deepseek/deepseek-chat",
@@ -53,6 +54,7 @@ MODEL_NAME_ALIASES = {
     "openai/gpt-4-turbo": "openai/gpt-4-turbo",
     "openai/gpt-4": "openai/gpt-4",
     "openrouter/google/gemini-2.5-flash-preview": "openrouter/google/gemini-2.5-flash-preview",
+    "gemini/gemini-2.5-flash-preview-04-17": "gemini/gemini-2.5-flash-preview-04-17",
     "xai/grok-3-fast-latest": "xai/grok-3-fast-latest",
     "deepseek/deepseek-chat": "openrouter/deepseek/deepseek-chat",
     "gemini/gemini-2.5-pro-preview-05-06": "gemini/gemini-2.5-pro-preview-05-06",
@@ -64,7 +66,7 @@ class AgentStartRequest(BaseModel):
     enable_thinking: Optional[bool] = False
     reasoning_effort: Optional[str] = 'low'
     stream: Optional[bool] = True
-    enable_context_manager: Optional[bool] = False
+    enable_context_manager: Optional[bool] = True
 
 class InitiateAgentResponse(BaseModel):
     thread_id: str
@@ -917,7 +919,7 @@ async def initiate_agent_with_files(
     enable_thinking: Optional[bool] = Form(False),
     reasoning_effort: Optional[str] = Form("low"),
     stream: Optional[bool] = Form(True),
-    enable_context_manager: Optional[bool] = Form(False),
+    enable_context_manager: Optional[bool] = Form(True),
     files: List[UploadFile] = File(default=[]),
     user_id: str = Depends(get_current_user_id_from_jwt)
 ):
