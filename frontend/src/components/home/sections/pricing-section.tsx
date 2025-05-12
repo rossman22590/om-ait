@@ -26,7 +26,7 @@ import { toast } from 'sonner';
 import { isLocalMode } from '@/lib/config';
 
 // Constants
-const DEFAULT_SELECTED_PLAN = '6 hours';
+const DEFAULT_SELECTED_PLAN = '9 hours';
 export const SUBSCRIPTION_PLANS = {
   FREE: 'free',
   PRO: 'base',

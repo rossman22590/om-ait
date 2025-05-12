@@ -42,7 +42,7 @@ const PROD_TIERS: SubscriptionTiers = {
   },
   TIER_6_50: {
     priceId: 'price_1RLyBWG23sSyONuFwZNIjbgJ',
-    name: '6h/$50',
+    name: '9h/$50',
   },
   TIER_12_100: {
     priceId: 'price_1RLyE5G23sSyONuFHJiqvoLo',
@@ -78,7 +78,7 @@ const STAGING_TIERS: SubscriptionTiers = {
   },
   TIER_6_50: {
     priceId: 'price_1RLyE5G23sSyONuFHJiqvoLo',
-    name: '6h/$50',
+    name: '9h/$50',
   },
   TIER_12_100: {
     priceId: 'price_1RLyE5G23sSyONuFHJiqvoLo',

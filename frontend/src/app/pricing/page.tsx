@@ -80,7 +80,7 @@ export default function PricingPage() {
               id: 'pro',
               name: 'Pro',
               description: 'For professionals and power users',
-              price: '$35',
+              price: '$50',
               duration: '/per month',
               popular: true,
               features: [

@@ -91,7 +91,7 @@ export const pricingData = {
       duration: '',
       popular: false,
       features: [
-        '6 hours',
+        '9 hours',
         'Private projects',
         'Full capability access',
         'Custom integrations',
@@ -104,7 +104,7 @@ export const pricingData = {
   ],
   upgradePlans: [
     {
-      hours: '6 hours',
+      hours: '9 hours',
       price: '$50',
       stripePriceId: config.SUBSCRIPTION_TIERS.TIER_6_50.priceId,
     },
@@ -202,7 +202,7 @@ export const siteConfig = {
       buttonText: plan.buttonText,
       buttonColor: plan.id === 'pro' ? 'bg-primary text-white dark:text-black' : 'bg-secondary text-white',
       isPopular: plan.id === 'pro',
-      hours: plan.id === 'free' ? '60 min' : (plan.id === 'pro' ? '2 hours' : '6 hours'),
+      hours: plan.id === 'free' ? '60 min' : (plan.id === 'pro' ? '2 hours' : '9 hours'),
       features: plan.features,
       stripePriceId: plan.stripePriceId,
       upgradePlans: plan.id === 'enterprise' ? pricingData.upgradePlans : [],
