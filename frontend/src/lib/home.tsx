@@ -188,7 +188,7 @@ export const siteConfig = {
       </svg>
     ),
     badge: '100% OPEN SOURCE',
-    githubUrl: 'https://github.com/kortix-ai/suna',
+    githubUrl: '#',
     title: 'Machine, the AI Employee.',
     description:
       'Machine by AI Tutor – is a generalist AI Agent that acts on your behalf.',
@@ -1161,10 +1161,10 @@ export const siteConfig = {
         {
           id: 5,
           title: 'Documentation',
-          url: 'https://github.com/Kortix-ai/Machine',
+          url: '#',
         },
-        { id: 7, title: 'Discord', url: 'https://discord.gg/Py6pCBUUPw' },
-        { id: 8, title: 'GitHub', url: 'https://github.com/Kortix-ai/Machine' },
+        { id: 7, title: 'Discord', url: '#' },
+        { id: 8, title: 'GitHub', url: '#' },
       ],
     },
     {
@@ -1173,17 +1173,17 @@ export const siteConfig = {
         {
           id: 9,
           title: 'Privacy Policy',
-          url: 'https://Machine.so/legal?tab=privacy',
+          url: '#',
         },
         {
           id: 10,
           title: 'Terms of Service',
-          url: 'https://Machine.so/legal?tab=terms',
+          url: '#',
         },
         {
           id: 11,
           title: 'License Apache 2.0',
-          url: 'https://github.com/Kortix-ai/Machine/blob/main/LICENSE',
+          url: '#',
         },
       ],
     },
