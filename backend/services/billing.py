@@ -786,6 +786,20 @@ async def stripe_webhook(request: Request):
             db = DBConnection()
             client = await db.client
             
+            # Get account_id from billing_customers table - this is critical for the NOT NULL constraint
+            customer_result = await client.schema('basejump').from_('billing_customers')\
+                .select('account_id')\
+                .eq('id', customer_id)\
+                .maybe_single()\
+                .execute()
+            
+            account_id = None
+            if customer_result.data and 'account_id' in customer_result.data:
+                account_id = customer_result.data['account_id']
+            else:
+                logger.warning(f"Could not find account_id for customer {customer_id}")
+                return {"status": "error", "message": "No account ID found for customer"}
+            
             if event.type == 'customer.subscription.created' or event.type == 'customer.subscription.updated':
                 # Check if subscription is active
                 if subscription.get('status') in ['active', 'trialing']:
@@ -804,7 +818,6 @@ async def stripe_webhook(request: Request):
                     # Get price details
                     items = subscription.get('items', {}).get('data', [])
                     price_id = items[0].get('price', {}).get('id') if items else None
-                    product_id = items[0].get('price', {}).get('product') if items else None
                     
                     if subscription_id:
                         # Check if subscription record already exists
@@ -814,33 +827,50 @@ async def stripe_webhook(request: Request):
                             .maybe_single()\
                             .execute()
                         
-                        # Prepare subscription data
+                        # Format timestamps as ISO format for database compatibility
+                        formatted_period_start = None
+                        formatted_period_end = None
+                        
+                        if current_period_start:
+                            formatted_period_start = datetime.fromtimestamp(
+                                current_period_start, tz=timezone.utc
+                            ).isoformat()
+                            
+                        if current_period_end:
+                            formatted_period_end = datetime.fromtimestamp(
+                                current_period_end, tz=timezone.utc
+                            ).isoformat()
+                        
+                        # Prepare subscription data with CORRECT field names
                         sub_data = {
                             'status': status,
                             'price_id': price_id,
-                            'product_id': product_id,
-                            'customer_id': customer_id,
-                            'current_period_start': current_period_start,
-                            'current_period_end': current_period_end,
-                            'updated_at': 'now()'
+                            'billing_customer_id': customer_id,  # Correct field name
+                            'account_id': account_id,  # Required field to satisfy NOT NULL constraint
+                            'current_period_start': formatted_period_start,
+                            'current_period_end': formatted_period_end,
+                            'provider': 'stripe'  # Add provider info
                         }
                         
-                        if not existing_sub.data:
-                            # Insert new subscription record
-                            sub_data['id'] = subscription_id
-                            sub_data['created_at'] = 'now()'
-                            
-                            insert_result = await client.schema('basejump').from_('billing_subscriptions')\
-                                .insert(sub_data)\
-                                .execute()
-                            logger.info(f"Webhook: Created new subscription record for {subscription_id}")
-                        else:
-                            # Update existing subscription record
-                            update_result = await client.schema('basejump').from_('billing_subscriptions')\
-                                .update(sub_data)\
-                                .eq('id', subscription_id)\
-                                .execute()
-                            logger.info(f"Webhook: Updated subscription record for {subscription_id}")
+                        try:
+                            if not existing_sub.data:
+                                # Insert new subscription record
+                                sub_data['id'] = subscription_id
+                                sub_data['created'] = datetime.now(timezone.utc).isoformat()  # Correct field name
+                                
+                                insert_result = await client.schema('basejump').from_('billing_subscriptions')\
+                                    .insert(sub_data)\
+                                    .execute()
+                                logger.info(f"Webhook: Created new subscription record for {subscription_id}")
+                            else:
+                                # Update existing subscription record
+                                update_result = await client.schema('basejump').from_('billing_subscriptions')\
+                                    .update(sub_data)\
+                                    .eq('id', subscription_id)\
+                                    .execute()
+                                logger.info(f"Webhook: Updated subscription record for {subscription_id}")
+                        except Exception as sub_error:
+                            logger.error(f"Error managing subscription record: {str(sub_error)} - Data: {sub_data}")
                 else:
                     # Subscription is not active (e.g., past_due, canceled, etc.)
                     # Check if customer has any other active subscriptions before updating status
