@@ -1,6 +1,7 @@
 from typing import Optional
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
-from sandbox.sandbox import SandboxToolsBase, Sandbox
+from sandbox.tool_base import SandboxToolsBase
+from sandbox.sandbox import Sandbox
 from agentpress.thread_manager import ThreadManager
 
 class SandboxExposeTool(SandboxToolsBase):
