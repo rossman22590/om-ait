@@ -41,8 +41,8 @@ def initialize():
         socket_timeout=30.0,        # Increased from 5.0 to handle longer operations
         socket_connect_timeout=10.0, # Increased from 5.0
         retry_on_timeout=True,
-        health_check_interval=30,
-        retry=3                     # Add retry attempts
+        health_check_interval=30
+        # removed invalid retry parameter
     )
 
     return client
