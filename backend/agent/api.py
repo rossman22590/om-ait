@@ -40,6 +40,7 @@ MODEL_NAME_ALIASES = {
     "gpt-4": "openai/gpt-4",
     "gemini-flash-2.5": "openrouter/google/gemini-2.5-flash-preview",
     "grok-3": "xai/grok-3-fast-latest",
+    "grok-3-fast-latest": "xai/grok-3-fast-latest",  # Add explicit mapping for frontend default
     "deepseek": "openrouter/deepseek/deepseek-chat",
     "gemini/gemini-2.5-pro-preview-05-06": "gemini/gemini-2.5-pro-preview-05-06",
     "grok-3-mini": "xai/grok-3-mini-fast-beta",
@@ -604,6 +605,7 @@ async def stream_agent_run(
 
                 # Cancel pending listener tasks on exit
                 for p_task in pending: p_task.cancel()
+                for task in tasks: task.cancel()
 
 
             listener_task = asyncio.create_task(listen_messages())

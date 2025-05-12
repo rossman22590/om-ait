@@ -22,6 +22,21 @@ from utils.config import config
 # litellm.set_verbose=True
 litellm.modify_params=True
 
+# Set up model mappings to ensure provider prefixes
+litellm.model_map = {
+    "grok-3-fast-latest": "xai/grok-3-fast-latest",
+    "grok-3": "xai/grok-3-fast-latest",
+    "grok-3-mini": "xai/grok-3-mini-fast-beta",
+    "sonnet-3.7": "anthropic/claude-3-7-sonnet-latest",
+    "gpt-4o": "openai/gpt-4o",
+    "gpt-4-turbo": "openai/gpt-4-turbo",
+    "gpt-4": "openai/gpt-4",
+    "gpt-4.1": "openai/gpt-4.1-2025-04-14",
+    "gemini-flash-2.5": "openrouter/google/gemini-2.5-flash-preview",
+    "deepseek": "openrouter/deepseek/deepseek-chat",
+    "qwen3": "openrouter/qwen/qwen3-235b-a22b",
+}
+
 # Constants
 MAX_RETRIES = 2
 RATE_LIMIT_DELAY = 30
@@ -91,6 +106,25 @@ def prepare_params(
     reasoning_effort: Optional[str] = 'low'
 ) -> Dict[str, Any]:
     """Prepare parameters for the API call."""
+    # Ensure model name has a provider prefix for LiteLLM
+    # Provider prefixes map
+    model_provider_map = {
+        "grok-3": "xai/grok-3-fast-latest",
+        "grok-3-fast-latest": "xai/grok-3-fast-latest",
+        "grok-3-mini": "xai/grok-3-mini-fast-beta",
+        "sonnet-3.7": "anthropic/claude-3-7-sonnet-latest",
+        "gpt-4o": "openai/gpt-4o",
+        "gpt-4-turbo": "openai/gpt-4-turbo",
+        "gpt-4": "openai/gpt-4",
+        "gpt-4.1": "openai/gpt-4.1-2025-04-14",
+    }
+    
+    # If model doesn't contain '/' (provider prefix), try to map it
+    if '/' not in model_name and model_name in model_provider_map:
+        resolved_model = model_provider_map[model_name]
+        logger.info(f"Mapped model name from '{model_name}' to '{resolved_model}'")
+        model_name = resolved_model
+    
     params = {
         "model": model_name,
         "messages": messages,
@@ -304,10 +338,28 @@ async def make_llm_api_call(
     for attempt in range(MAX_RETRIES):
         try:
             logger.debug(f"Attempt {attempt + 1}/{MAX_RETRIES}")
-            # logger.debug(f"API request parameters: {json.dumps(params, indent=2)}")
-
+            
+            # Final check for model name provider prefixes right before LiteLLM call
+            model_param = params.get("model", "")
+            logger.info(f"Model before LiteLLM call: {model_param}")
+            
+            # Last-chance validation to ensure model has provider prefix
+            if '/' not in model_param:
+                logger.warning(f"Model name {model_param} is missing provider prefix - adding one")
+                
+                # Hardcoded mapping for emergency fallback
+                if model_param == "grok-3-fast-latest":
+                    params["model"] = "xai/grok-3-fast-latest"
+                elif model_param == "sonnet-3.7":
+                    params["model"] = "anthropic/claude-3-7-sonnet-latest"
+                elif model_param == "gpt-4o":
+                    params["model"] = "openai/gpt-4o"
+                # Add other mappings as needed
+                
+                logger.info(f"Fixed model name to: {params['model']}")
+            
             response = await litellm.acompletion(**params)
-            logger.debug(f"Successfully received API response from {model_name}")
+            logger.debug(f"Successfully received API response from {params['model']}")
             logger.debug(f"Response: {response}")
             return response
 
