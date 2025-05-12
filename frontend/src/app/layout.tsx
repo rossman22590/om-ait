@@ -10,7 +10,7 @@ import { GoogleAnalytics } from '@next/third-parties/google';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import Script from 'next/script';
 import ChatbotWidget from '@/components/ChatbotWidget';
-import GithubButton from '@/components/GithubButton';
+
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -152,7 +152,7 @@ export default function RootLayout({
             {children}
             <Toaster />
             <ChatbotWidget />
-            <GithubButton />
+           
           </Providers>
           <Analytics />
           <GoogleAnalytics gaId="G-6ETJFB3PT3" />

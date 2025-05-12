@@ -604,7 +604,6 @@ async def stream_agent_run(
 
                 # Cancel pending listener tasks on exit
                 for p_task in pending: p_task.cancel()
-                for task in tasks: task.cancel()
 
 
             listener_task = asyncio.create_task(listen_messages())
