@@ -208,7 +208,7 @@ class SandboxDeployTool(SandboxToolsBase):
                 "properties": {
                     "name": {
                         "type": "string",
-                        "description": "Name for the deployment, will be used in the URL as {name}.machine.cloud"
+                        "description": "Name for the deployment, will be used in the URL as {name}.mymachine.space"
                     },
                     "directory_path": {
                         "type": "string",
@@ -250,7 +250,7 @@ class SandboxDeployTool(SandboxToolsBase):
         Only use this tool when permanent deployment to a production environment is needed.
         
         Args:
-            name: Name for the deployment, will be used in the URL as {name}.machine.cloud
+            name: Name for the deployment, will be used in the URL as {name}.mymachine.space
             directory_path: Path to the directory to deploy, relative to /workspace
             
         Returns:
