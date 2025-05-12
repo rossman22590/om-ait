@@ -365,7 +365,7 @@ function PricingTier({
       : currentSubscription?.scheduled_price_id === tierPriceId);
   const isPlanLoading = isLoading[tierPriceId];
 
-  let buttonText = isAuthenticated ? 'Select Plan' : 'Hire Suna';
+  let buttonText = isAuthenticated ? 'Select Plan' : 'Hire Machine';
   let buttonDisabled = isPlanLoading;
   let buttonVariant: ButtonVariant = null;
   let ringClass = '';
