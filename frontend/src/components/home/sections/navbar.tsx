@@ -198,7 +198,27 @@ export function Navbar() {
                   <Link
                     key={item.id}
                     href={item.href}
-                    onClick={toggleDrawer}
+                    onClick={(e) => {
+                      // Only prevent default for hash links to handle in-page navigation
+                      if (item.href.startsWith('#')) {
+                        e.preventDefault();
+                        toggleDrawer();
+                        // Smooth scroll to the section
+                        const targetId = item.href.substring(1);
+                        const element = document.getElementById(targetId);
+                        if (element) {
+                          const elementPosition = element.getBoundingClientRect().top;
+                          const offsetPosition = elementPosition + window.pageYOffset - 100;
+                          window.scrollTo({
+                            top: offsetPosition,
+                            behavior: 'smooth',
+                          });
+                        }
+                      } else {
+                        // For regular links, just close the drawer
+                        toggleDrawer();
+                      }
+                    }}
                     className="flex items-center justify-between py-2 text-lg font-medium text-card-foreground hover:text-primary"
                   >
                     {item.name}

@@ -153,7 +153,7 @@ export const siteConfig = {
     links: [
       { id: 1, name: "Home", href: "/" },
       { id: 2, name: "Use Cases", href: "/use-cases" },
-      // { id: 3, name: "Open Source", href: "#open-source" },
+      { id: 3, name: "Example Code", href: "/example-code" },
       { id: 4, name: "Pricing", href: "/pricing" },
       { id: 5, name: "About", href: "/about" },
       { id: 6, name: "FAQ", href: "/faq" },
@@ -1320,7 +1320,7 @@ export const siteConfig = {
     {
       id: "seo-analysis",
       title: "SEO Analysis",
-      description: "Based on my website suna.so, generate an SEO report analysis, find top-ranking pages by keyword clusters, and identify topics I'm missing.",
+      description: "Based on my website https://getmytsi.org, generate an SEO report analysis, find top-ranking pages by keyword clusters, and identify topics I'm missing.",
       category: "marketing",
       featured: true,
       icon: (

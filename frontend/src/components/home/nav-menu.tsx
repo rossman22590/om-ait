@@ -3,6 +3,7 @@
 import { siteConfig } from '@/lib/home';
 import { motion } from 'motion/react';
 import React, { useRef, useState } from 'react';
+import Link from 'next/link';
 
 interface NavItem {
   name: string;
@@ -76,39 +77,44 @@ export function NavMenu() {
     e: React.MouseEvent<HTMLAnchorElement>,
     item: NavItem,
   ) => {
-    e.preventDefault();
+    // Check if this is a hash link (in-page navigation) or external page link
+    const isHashLink = item.href.startsWith('#');
+    
+    if (isHashLink) {
+      e.preventDefault();
+      const targetId = item.href.substring(1);
+      const element = document.getElementById(targetId);
 
-    const targetId = item.href.substring(1);
-    const element = document.getElementById(targetId);
+      if (element) {
+        // Set manual scroll flag
+        setIsManualScroll(true);
 
-    if (element) {
-      // Set manual scroll flag
-      setIsManualScroll(true);
+        // Immediately update nav state
+        setActiveSection(targetId);
+        const navItem = e.currentTarget.parentElement;
+        if (navItem) {
+          const rect = navItem.getBoundingClientRect();
+          setLeft(navItem.offsetLeft);
+          setWidth(rect.width);
+        }
 
-      // Immediately update nav state
-      setActiveSection(targetId);
-      const navItem = e.currentTarget.parentElement;
-      if (navItem) {
-        const rect = navItem.getBoundingClientRect();
-        setLeft(navItem.offsetLeft);
-        setWidth(rect.width);
+        // Calculate exact scroll position
+        const elementPosition = element.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - 100; // 100px offset
+
+        // Smooth scroll to exact position
+        window.scrollTo({
+          top: offsetPosition,
+          behavior: 'smooth',
+        });
+
+        // Reset manual scroll flag after animation completes
+        setTimeout(() => {
+          setIsManualScroll(false);
+        }, 500); // Adjust timing to match scroll animation duration
       }
-
-      // Calculate exact scroll position
-      const elementPosition = element.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - 100; // 100px offset
-
-      // Smooth scroll to exact position
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth',
-      });
-
-      // Reset manual scroll flag after animation completes
-      setTimeout(() => {
-        setIsManualScroll(false);
-      }, 500); // Adjust timing to match scroll animation duration
     }
+    // For non-hash links, allow normal navigation to proceed
   };
 
   return (
@@ -126,9 +132,15 @@ export function NavMenu() {
                 : 'text-primary/60 hover:text-primary'
             } tracking-tight`}
           >
-            <a href={item.href} onClick={(e) => handleClick(e, item)}>
-              {item.name}
-            </a>
+            {item.href.startsWith('#') ? (
+              <a href={item.href} onClick={(e) => handleClick(e, item)}>
+                {item.name}
+              </a>
+            ) : (
+              <Link href={item.href} onClick={(e) => handleClick(e, item)}>
+                {item.name}
+              </Link>
+            )}
           </li>
         ))}
         {isReady && (
