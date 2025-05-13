@@ -612,36 +612,36 @@ async def stream_agent_run(
                 try:
                     queue_item = await message_queue.get()
 
-                if queue_item["type"] == "new_response":
-                    # Fetch new responses from Redis list starting after the last processed index
-                    new_start_index = last_processed_index + 1
-                    new_responses_json = await redis.lrange(response_list_key, new_start_index, -1)
+                    if queue_item["type"] == "new_response":
+                        # Fetch new responses from Redis list starting after the last processed index
+                        new_start_index = last_processed_index + 1
+                        new_responses_json = await redis.lrange(response_list_key, new_start_index, -1)
 
-                    if new_responses_json:
-                        new_responses = [json.loads(r) for r in new_responses_json]
-                        num_new = len(new_responses)
-                        # logger.debug(f"Received {num_new} new responses for {agent_run_id} (index {new_start_index} onwards)")
-                        for response in new_responses:
-                            yield f"data: {json.dumps(response)}\n\n"
-                            # Check if this response signals completion
-                            if response.get('type') == 'status' and response.get('status') in ['completed', 'failed', 'stopped']:
-                                logger.info(f"Detected run completion via status message in stream: {response.get('status')}")
-                                terminate_stream = True
-                                break # Stop processing further new responses
-                        last_processed_index += num_new
-                    if terminate_stream: break
+                        if new_responses_json:
+                            new_responses = [json.loads(r) for r in new_responses_json]
+                            num_new = len(new_responses)
+                            # logger.debug(f"Received {num_new} new responses for {agent_run_id} (index {new_start_index} onwards)")
+                            for response in new_responses:
+                                yield f"data: {json.dumps(response)}\n\n"
+                                # Check if this response signals completion
+                                if response.get('type') == 'status' and response.get('status') in ['completed', 'failed', 'stopped']:
+                                    logger.info(f"Detected run completion via status message in stream: {response.get('status')}")
+                                    terminate_stream = True
+                                    break # Stop processing further new responses
+                            last_processed_index += num_new
+                        if terminate_stream: break
 
-                elif queue_item["type"] == "control":
-                    control_signal = queue_item["data"]
-                    terminate_stream = True # Stop the stream on any control signal
-                    yield f"data: {json.dumps({'type': 'status', 'status': control_signal})}\n\n"
-                    break
+                    elif queue_item["type"] == "control":
+                        control_signal = queue_item["data"]
+                        terminate_stream = True # Stop the stream on any control signal
+                        yield f"data: {json.dumps({'type': 'status', 'status': control_signal})}\n\n"
+                        break
 
-                elif queue_item["type"] == "error":
-                    logger.error(f"Listener error for {agent_run_id}: {queue_item['data']}")
-                    terminate_stream = True
-                    yield f"data: {json.dumps({'type': 'status', 'status': 'error'})}\n\n"
-                    break
+                    elif queue_item["type"] == "error":
+                        logger.error(f"Listener error for {agent_run_id}: {queue_item['data']}")
+                        terminate_stream = True
+                        yield f"data: {json.dumps({'type': 'status', 'status': 'error'})}\n\n"
+                        break
 
             except asyncio.CancelledError:
                 logger.info(f"Stream generator main loop cancelled for {agent_run_id}")
