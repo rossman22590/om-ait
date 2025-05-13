@@ -1153,7 +1153,36 @@ export default function ThreadPage({
             debugMode={debugMode}
           />
 
-          {/* Pass debugMode to ThreadContent component */}
+          {/* Warning banner for long-running agents */}
+          {!localStorage.getItem('dismissedAgentWarning') && (
+            <div className="relative bg-amber-50 border-l-4 border-amber-500 p-3 mb-3 shadow-sm rounded-r stability-warning">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-amber-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3 mr-7">
+                  <p className="text-sm text-amber-800">
+                    <span className="font-medium">Stability Tip:</span> For best results, break complex tasks into shorter sessions instead of very long runs (100+ steps).
+                  </p>
+                </div>
+                <button 
+                  onClick={() => {
+                    localStorage.setItem('dismissedAgentWarning', 'true');
+                    document.querySelector('.stability-warning')?.classList.add('hidden');
+                  }}
+                  className="absolute top-1 right-1 text-amber-500 hover:text-amber-800"
+                  aria-label="Dismiss"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
+
           <ThreadContent
             messages={messages}
             streamingTextContent={streamingTextContent}
