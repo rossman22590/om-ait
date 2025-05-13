@@ -95,7 +95,7 @@ def create_sandbox(password: str, project_id: str = None):
         public=True,
         labels=labels,
         # Set sandbox to persist for 5 hours (300 minutes) instead of default 15 minutes
-        auto_stop_interval=300,
+        auto_stop_interval=120,
         env_vars={
             "CHROME_PERSISTENT_SESSION": "true",
             "RESOLUTION": "1024x768x24",
