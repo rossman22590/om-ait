@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/client';
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 
 // Set to keep track of agent runs that are known to be non-running
-const nonRunningAgentRuns = new Set<string>();
+export const nonRunningAgentRuns = new Set<string>();
 // Map to keep track of active EventSource streams
 const activeStreams = new Map<string, EventSource>();
 
@@ -649,12 +649,20 @@ export const stopAgent = async (agentRunId: string): Promise<void> => {
 export const getAgentStatus = async (agentRunId: string): Promise<AgentRun> => {
   console.log(`[API] Requesting agent status for ${agentRunId}`);
 
-  // If we already know this agent is not running, throw an error
+  // If we already know this agent is not running, return a completed status instead of throwing an error
   if (nonRunningAgentRuns.has(agentRunId)) {
     console.log(
-      `[API] Agent run ${agentRunId} is known to be non-running, returning error`,
+      `[API] Agent run ${agentRunId} is known to be non-running, returning completed status`,
     );
-    throw new Error(`Agent run ${agentRunId} is not running`);
+    return {
+      id: agentRunId,
+      thread_id: '', // We don't have this info, but it's required by the type
+      status: 'completed',
+      responses: [],
+      error: null,
+      started_at: new Date().toISOString(),
+      completed_at: new Date().toISOString()
+    };
   }
 
   try {

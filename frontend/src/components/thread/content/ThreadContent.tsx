@@ -103,7 +103,7 @@ export function renderMarkdownContent(
 
     // If no XML tags found, just return the full content as markdown
     if (!content.match(xmlRegex)) {
-        return <Markdown className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words">{content}</Markdown>;
+        return <div className="text-container"><Markdown className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words magical-words">{content}</Markdown></div>;
     }
 
     while ((match = xmlRegex.exec(content)) !== null) {
@@ -111,7 +111,7 @@ export function renderMarkdownContent(
         if (match.index > lastIndex) {
             const textBeforeTag = content.substring(lastIndex, match.index);
             contentParts.push(
-                <Markdown key={`md-${lastIndex}`} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none inline-block mr-1 break-words">{textBeforeTag}</Markdown>
+                <div key={`md-${lastIndex}`} className="text-container inline-block"><Markdown className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none inline-block mr-1 break-words magical-words">{textBeforeTag}</Markdown></div>
             );
         }
 
@@ -133,7 +133,7 @@ export function renderMarkdownContent(
             // Render <ask> tag content with attachment UI (using the helper)
             contentParts.push(
                 <div key={`ask-${match.index}`} className="space-y-3">
-                    <Markdown className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words [&>:first-child]:mt-0 prose-headings:mt-3">{askContent}</Markdown>
+                    <div className="text-container"><Markdown className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words [&>:first-child]:mt-0 prose-headings:mt-3 magical-words">{askContent}</Markdown></div>
                     {renderAttachments(attachments, fileViewerHandler, sandboxId, project)}
                 </div>
             );
@@ -162,7 +162,7 @@ export function renderMarkdownContent(
     // Add text after the last tag
     if (lastIndex < content.length) {
         contentParts.push(
-            <Markdown key={`md-${lastIndex}`} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words">{content.substring(lastIndex)}</Markdown>
+            <div key={`md-${lastIndex}`} className="text-container"><Markdown className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words magical-words">{content.substring(lastIndex)}</Markdown></div>
         );
     }
 
@@ -359,7 +359,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                                                 <div className="inline-flex max-w-[85%] rounded-xl bg-primary/10 px-4 py-3">
                                                     <div className="space-y-3">
                                                         {cleanContent && (
-                                                            <Markdown className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none [&>:first-child]:mt-0 prose-headings:mt-3">{cleanContent}</Markdown>
+                                                            <div className="text-container"><Markdown className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none [&>:first-child]:mt-0 prose-headings:mt-3 magical-words">{cleanContent}</Markdown></div>
                                                         )}
 
                                                         {/* Use the helper function to render user attachments */}
@@ -479,12 +479,15 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
 
                                                                             const textToRender = streamingTextContent || '';
                                                                             const textBeforeTag = detectedTag ? textToRender.substring(0, tagStartIndex) : textToRender;
+                                                                            // Only show cursor when actively streaming and not at a detected tag
                                                                             const showCursor = (streamHookStatus === 'streaming' || streamHookStatus === 'connecting') && !detectedTag;
 
                                                                             return (
                                                                                 <>
                                                                                     {textBeforeTag && (
-                                                                                        <Markdown className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none [&>:first-child]:mt-0 prose-headings:mt-3">{textBeforeTag}</Markdown>
+                                                                                        <div className="text-container streaming-content">
+                                                                                            <Markdown className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none [&>:first-child]:mt-0 prose-headings:mt-3 magical-words">{textBeforeTag}</Markdown>
+                                                                                        </div>
                                                                                     )}
                                                                                     {showCursor && (
                                                                                         <span className="inline-block h-4 w-0.5 bg-primary ml-0.5 -mb-1 animate-pulse" />
@@ -559,7 +562,9 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                                                                                     ) : (
                                                                                         <>
                                                                                             {textBeforeTag && (
-                                                                                                <Markdown className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none [&>:first-child]:mt-0 prose-headings:mt-3">{textBeforeTag}</Markdown>
+                                                                                                <div className="text-container streaming-content">
+                                                                                                    <Markdown className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none [&>:first-child]:mt-0 prose-headings:mt-3 magical-words">{textBeforeTag}</Markdown>
+                                                                                                </div>
                                                                                             )}
                                                                                             {showCursor && (
                                                                                                 <span className="inline-block h-4 w-0.5 bg-primary ml-0.5 -mb-1 animate-pulse" />

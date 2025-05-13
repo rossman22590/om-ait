@@ -199,6 +199,17 @@ async def read_file(
         # Read file
         content = sandbox.fs.download_file(path)
         
+        # Handle potential Unicode encoding issues
+        # If content is a string, ensure it's properly encoded
+        if isinstance(content, str):
+            try:
+                # Try to encode as UTF-8 instead of the default Latin-1
+                content = content.encode('utf-8')
+            except UnicodeEncodeError as ue:
+                logger.warning(f"Unicode encoding issue with file {path}: {str(ue)}")
+                # Fall back to a safer encoding that can handle all Unicode characters
+                content = content.encode('utf-8', errors='xmlcharrefreplace')
+        
         # Return a Response object with the content directly
         filename = os.path.basename(path)
         logger.info(f"Successfully read file {filename} from sandbox {sandbox_id}")

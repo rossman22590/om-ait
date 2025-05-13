@@ -57,6 +57,7 @@
   --enterFromRight: enterFromRight 250ms ease;
   --exitToLeft: exitToLeft 250ms ease;
   --exitToRight: exitToRight 250ms ease;
+  --animate-fade-in: fade-in 500ms ease-out;
   --animate-elliptical-orbit: elliptical-orbit 20s linear infinite;
   @keyframes orbit {
     0% {
@@ -341,6 +342,54 @@
       'Noto Sans Mono CJK JP', 'Noto Sans Mono CJK KR', 'Noto Sans Mono CJK SC',
       'Noto Sans Mono CJK TC';
   }
+}
+
+/* Word-by-word magical fade-in animation */
+.text-container {
+  display: block;
+  position: relative;
+}
+
+/* Apply animation to the entire container */
+.magical-words {
+  position: relative;
+}
+
+/* Make every word sparkle with magic */
+.magical-words p,
+.magical-words li,
+.magical-words pre,
+.magical-words code,
+.magical-words h1,
+.magical-words h2,
+.magical-words h3,
+.magical-words h4,
+.magical-words h5,
+.magical-words h6 {
+  animation: fade-slide-up 0.5s ease-out backwards;
+}
+
+/* Replaced with a dedicated cursor in ThreadContent.tsx */
+/* This prevents random cursors from appearing during animation */
+
+@keyframes fade-slide-up {
+  from { 
+    opacity: 0;
+    transform: translateY(10px);
+    color: theme('colors.primary.DEFAULT');
+    text-shadow: 0 0 6px theme('colors.primary.DEFAULT/30%');
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0);
+    color: inherit;
+    text-shadow: none;
+  }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 0.7; }
 }
 
 /* Custom styles for Markdown chat content */

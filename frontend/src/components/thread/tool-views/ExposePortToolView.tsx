@@ -24,33 +24,82 @@ export function ExposePortToolView({
     toolTimestamp,
   });
 
-  // Parse the assistant content
+  // Parse the assistant content - handle both JSON and XML formats
   const parsedAssistantContent = React.useMemo(() => {
     if (!assistantContent) return null;
+    
+    // First try to parse as JSON
     try {
       const parsed = JSON.parse(assistantContent);
       return parsed.content;
     } catch (e) {
-      console.error('Failed to parse assistant content:', e);
-      return null;
+      // If JSON parsing fails, it might be raw XML content
+      // Just return the content as-is for further processing
+      console.log('Using assistantContent directly (not JSON)');
+      return assistantContent;
     }
   }, [assistantContent]);
 
-  // Parse the tool result
+  // Parse the tool result with improved error handling
   const toolResult = React.useMemo(() => {
     if (!toolContent) return null;
+    
+    // First try standard JSON parsing flow
     try {
       // First parse the outer JSON
       const parsed = JSON.parse(toolContent);
-      // Then extract the tool result content
-      const match = parsed.content.match(/output='(.*?)'/);
-      if (match) {
-        const jsonStr = match[1].replace(/\\n/g, '').replace(/\\"/g, '"');
-        return JSON.parse(jsonStr);
+      
+      // If parsed is already in the right format, use it directly
+      if (parsed?.url && parsed?.port) {
+        return parsed;
       }
+      
+      // Otherwise try to extract from content
+      if (parsed?.content) {
+        // Then extract the tool result content
+        const match = parsed.content.match(/output='(.*?)'/); 
+        if (match) {
+          try {
+            const jsonStr = match[1].replace(/\\n/g, '').replace(/\\"/g, '"');
+            return JSON.parse(jsonStr);
+          } catch (innerError) {
+            console.log('Failed to parse inner JSON string:', innerError);
+          }
+        }
+      }
+      
       return null;
     } catch (e) {
-      console.error('Failed to parse tool content:', e);
+      console.log('Using alternative parsing for tool content');
+      
+      // Try to extract directly from the HTML/XML-like content
+      try {
+        // Use a more compatible regex approach instead of 's' flag (which requires ES2018+)
+        const match = toolContent.match(/<tool_result>([\s\S]*?)<\/tool_result>/);
+        if (match) {
+          const innerContent = match[1];
+          // Try to parse potential JSON inside
+          try {
+            return JSON.parse(innerContent);
+          } catch {
+            // Extract URL and port directly if possible
+            const urlMatch = innerContent.match(/url["']?:\s*["']?(.*?)["']?[,}]/i);
+            const portMatch = innerContent.match(/port["']?:\s*["']?(\d+)/i);
+            
+            if (urlMatch && portMatch) {
+              return {
+                url: urlMatch[1].replace(/["']/g, ''),
+                port: portMatch[1],
+                message: 'Port exposed successfully'
+              };
+            }
+          }
+        }
+      } catch (extractError) {
+        console.log('Failed alternative extraction:', extractError);
+      }
+      
+      console.log('Could not parse tool content in any format');
       return null;
     }
   }, [toolContent]);

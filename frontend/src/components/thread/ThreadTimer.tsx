@@ -166,10 +166,9 @@ export function ThreadTimer({ threadId }: ThreadTimerProps) {
         if (retryAttemptsRef.current <= 3) {
           console.log(`Retrying agent runs fetch in ${retryDelay/1000}s (attempt ${retryAttemptsRef.current})`);
           setTimeout(fetchAgentRuns, retryDelay);
-        } else if (retryAttemptsRef.current === 4) {
-          // Only show toast on final retry
-          toast.error("Couldn't update timer data. Using cached value if available.");
-        }
+        } 
+        // Silently use cached values without showing error toast
+        // Removed error toast here to prevent user-facing error messages
         
         // Don't break the UI on error - first try to use the cached value
         if (minutesUsed === null) {

@@ -505,6 +505,7 @@ export const FileCache = {
   }
 };
 
+
 // Update the getCachedFile function to ensure PDFs are always handled as blobs
 export async function getCachedFile(
   sandboxId: string,
@@ -572,6 +573,8 @@ export async function getCachedFile(
     }
   }
   
+  // Continue with normal cache lookup and fetch logic
+
   // Fetch fresh content
   console.log(`[FILE CACHE] Fetching fresh content for ${sandboxId}:${filePath}`);
   

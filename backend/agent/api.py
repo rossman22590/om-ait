@@ -501,16 +501,8 @@ async def stream_agent_run(
     control_channel = f"agent_run:{agent_run_id}:control" # Global control channel
 
     async def stream_generator():
-        logger.debug(f"Streaming responses for {agent_run_id} using Redis list {response_list_key} and channel {response_channel}")
-        last_processed_index = -1
-        pubsub_response = None
-        pubsub_control = None
-        listener_task = None
-        terminate_stream = False
-        initial_yield_complete = False
-
+        nonlocal terminate_stream, initial_yield_complete
         try:
-            # 1. Fetch and yield initial responses from Redis list
             initial_responses_json = await redis.lrange(response_list_key, 0, -1)
             initial_responses = []
             if initial_responses_json:
@@ -607,8 +599,6 @@ async def stream_agent_run(
 
                 # Cancel pending listener tasks on exit
                 for p_task in pending: p_task.cancel()
-                for task in tasks: task.cancel()
-
 
             listener_task = asyncio.create_task(listen_messages())
 
@@ -683,7 +673,33 @@ async def stream_agent_run(
             await asyncio.sleep(0.1)
             logger.debug(f"Streaming cleanup complete for agent run: {agent_run_id}")
 
-    return StreamingResponse(stream_generator(), media_type="text/event-stream", headers={
+    # Create a wrapper function to safely handle GeneratorExit exceptions
+    async def safe_stream_generator():
+        try:
+            async for chunk in stream_generator():
+                yield chunk
+        except GeneratorExit:
+            # Client disconnected - handle gracefully
+            logger.info(f"Client disconnected from stream for agent run {agent_run_id}")
+            # Set terminate flag to clean up resources
+            terminate_stream = True
+            # Clean up any remaining tasks/connections here
+            if pubsub_response:
+                await pubsub_response.unsubscribe(response_channel)
+            if pubsub_control:
+                await pubsub_control.unsubscribe(control_channel)
+            # Close Redis connections
+            if pubsub_response:
+                await pubsub_response.close()
+            if pubsub_control:
+                await pubsub_control.close()
+            # Don't re-raise the exception - let it clean up normally
+        except Exception as e:
+            logger.error(f"Error in safe_stream_generator for {agent_run_id}: {e}")
+            # Re-raise other exceptions
+            raise
+
+    return StreamingResponse(safe_stream_generator(), media_type="text/event-stream", headers={
         "Cache-Control": "no-cache, no-transform", "Connection": "keep-alive",
         "X-Accel-Buffering": "no", "Content-Type": "text/event-stream",
         "Access-Control-Allow-Origin": "*"
@@ -764,27 +780,80 @@ async def run_agent_background(
         final_status = "running"
         error_message = None
 
-        async for response in agent_gen:
-            if stop_signal_received:
-                logger.info(f"Agent run {agent_run_id} stopped by signal.")
-                final_status = "stopped"
-                break
+        try:
+            async for response in agent_gen:
+                if stop_signal_received:
+                    logger.info(f"Agent run {agent_run_id} stopped by signal.")
+                    final_status = "stopped"
+                    break
+                
+                # Store response in Redis list and publish notification
+                try:
+                    response_json = json.dumps(response)
+                    await redis.rpush(response_list_key, response_json)
+                    await redis.publish(response_channel, "new")
+                    total_responses += 1
+                except redis.asyncio.RedisError as redis_err:
+                    logger.error(f"Redis error while processing response: {str(redis_err)}")
+                    # Try to reconnect to Redis
+                    try:
+                        await redis.initialize_async()
+                        # Retry storing the response
+                        await redis.rpush(response_list_key, response_json)
+                        await redis.publish(response_channel, "new")
+                    except Exception as retry_err:
+                        logger.error(f"Failed to reconnect to Redis: {str(retry_err)}")
+                        # Don't break the loop, try to continue without Redis
 
-            # Store response in Redis list and publish notification
-            response_json = json.dumps(response)
-            await redis.rpush(response_list_key, response_json)
-            await redis.publish(response_channel, "new")
-            total_responses += 1
-
-            # Check for agent-signaled completion or error
-            if response.get('type') == 'status':
-                 status_val = response.get('status')
-                 if status_val in ['completed', 'failed', 'stopped']:
-                     logger.info(f"Agent run {agent_run_id} finished via status message: {status_val}")
-                     final_status = status_val
-                     if status_val == 'failed' or status_val == 'stopped':
-                         error_message = response.get('message', f"Run ended with status: {status_val}")
-                     break
+                # Check for agent-signaled completion or error
+                if response.get('type') == 'status':
+                    status_val = response.get('status')
+                    if status_val in ['completed', 'failed', 'stopped']:
+                        logger.info(f"Agent run {agent_run_id} finished via status message: {status_val}")
+                        final_status = status_val
+                        if status_val == 'failed' or status_val == 'stopped':
+                            error_message = response.get('message', f"Run ended with status: {status_val}")
+                        break
+        except Exception as e:
+            error_message = str(e)
+            final_status = "failed"
+            logger.error(f"Error in agent run {agent_run_id}: {error_message}", exc_info=True)
+            
+            # Special handling for content policy violations
+            if "content filtering policy" in error_message.lower() or "blocked by content" in error_message.lower():
+                logger.warning(f"Content policy violation detected in agent run {agent_run_id}")
+                error_message = "The model refused to generate a response due to content policy restrictions. Please revise your input or try a different model."
+                
+                # Send a special error message to the client
+                try:
+                    policy_error = {
+                        "type": "status", 
+                        "status": "failed",
+                        "message": error_message,
+                        "error_type": "content_policy_violation"
+                    }
+                    await redis.rpush(response_list_key, json.dumps(policy_error))
+                    await redis.publish(response_channel, "new")
+                except Exception as redis_err:
+                    logger.error(f"Failed to send policy violation message: {redis_err}")
+            
+            # Try to notify clients of the error
+            try:
+                error_notification = {
+                    "type": "status", 
+                    "status": "error",
+                    "message": error_message
+                }
+                await redis.rpush(response_list_key, json.dumps(error_notification))
+                await redis.publish(response_channel, "new")
+            except Exception as notify_err:
+                logger.error(f"Failed to send error notification: {notify_err}")
+            
+            # Publish a control message to end streaming
+            try:
+                await redis.publish(global_control_channel, "ERROR")
+            except Exception as ctrl_err:
+                logger.error(f"Failed to publish error control message: {ctrl_err}")
 
         # If loop finished without explicit completion/error/stop signal, mark as completed
         if final_status == "running":

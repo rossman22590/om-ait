@@ -31,18 +31,22 @@ def initialize():
 
     logger.info(f"Initializing Redis connection to {redis_host}:{redis_port}")
 
-    # Create Redis client with basic configuration
+    # Create Redis client with enhanced configuration for better reliability
     client = redis.Redis(
         host=redis_host,
         port=redis_port,
         password=redis_password,
         ssl=redis_ssl,
+        ssl_cert_reqs=None,  # Don't verify SSL certs
         decode_responses=True,
-        socket_timeout=30.0,        # Increased from 5.0 to handle longer operations
-        socket_connect_timeout=10.0, # Increased from 5.0
+        socket_timeout=10.0,  # Increased timeout
+        socket_connect_timeout=5.0,
+        socket_keepalive=True,
         retry_on_timeout=True,
-        health_check_interval=30
-        # removed invalid retry parameter
+        health_check_interval=15,  # More frequent health checks
+        max_connections=10,  # Connection pooling
+        auto_close_connection_pool=True,  # Auto-close idle connections
+        reconnect_attempts=5  # Retry reconnections
     )
 
     return client
