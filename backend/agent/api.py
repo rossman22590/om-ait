@@ -499,9 +499,12 @@ async def stream_agent_run(
     response_list_key = f"agent_run:{agent_run_id}:responses"
     response_channel = f"agent_run:{agent_run_id}:new_response"
     control_channel = f"agent_run:{agent_run_id}:control" # Global control channel
-
+    
+    # Define control flags before using them as nonlocal in nested functions
+    terminate_stream = False
+    initial_yield_complete = False
+    
     async def stream_generator():
-        nonlocal terminate_stream, initial_yield_complete
         try:
             initial_responses_json = await redis.lrange(response_list_key, 0, -1)
             initial_responses = []
@@ -541,6 +544,7 @@ async def stream_agent_run(
                 
                 # Use dedicated tasks that are more resilient to errors
                 async def process_response_channel():
+                    nonlocal terminate_stream
                     try:
                         async for message in response_reader:
                             if terminate_stream:
@@ -556,6 +560,7 @@ async def stream_agent_run(
                         await message_queue.put({"type": "error", "data": f"Response listener failed: {str(e)}"})
                 
                 async def process_control_channel():
+                    nonlocal terminate_stream
                     try:
                         async for message in control_reader:
                             if terminate_stream:
@@ -603,6 +608,7 @@ async def stream_agent_run(
             listener_task = asyncio.create_task(listen_messages())
 
             # 4. Main loop to process messages from the queue
+            # Since we're in the same function where terminate_stream is defined, no nonlocal needed here
             while not terminate_stream:
                 try:
                     queue_item = await message_queue.get()
