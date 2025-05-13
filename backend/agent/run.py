@@ -32,7 +32,7 @@ async def run_agent(
     stream: bool,
     thread_manager: Optional[ThreadManager] = None,
     native_max_auto_continues: int = 25,
-    max_iterations: int = 500,
+    max_iterations: int = 750,
     model_name: str = "anthropic/claude-3-7-sonnet-latest",
     enable_thinking: Optional[bool] = False,
     reasoning_effort: Optional[str] = 'low',
@@ -197,7 +197,7 @@ async def run_agent(
                 llm_temperature=0,
                 llm_max_tokens=max_tokens,
                 tool_choice="auto",
-                max_xml_tool_calls=1,
+                max_xml_tool_calls=10,
                 temporary_message=temporary_message,
                 processor_config=ProcessorConfig(
                     xml_tool_calling=True,
