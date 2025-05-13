@@ -496,121 +496,105 @@ async def stream_agent_run(
     user_id = await get_user_id_from_stream_auth(request, token)
     agent_run_data = await get_agent_run_with_access_check(client, agent_run_id, user_id)
 
+    # Create a safe stream generator wrapper that handles client disconnections
+    return StreamingResponse(safe_stream_generator(agent_run_id, client), media_type="text/event-stream")
+
+# Separate stream generator function to avoid nesting issues
+async def safe_stream_generator(agent_run_id, client):
+    """A wrapper around the actual stream generator that catches GeneratorExit exceptions."""
+    try:
+        async for item in actual_stream_generator(agent_run_id, client):
+            yield item
+    except GeneratorExit:
+        # This is expected when client disconnects
+        logger.info(f"Client disconnected from stream for agent run: {agent_run_id}")
+    except Exception as e:
+        logger.error(f"Error in stream generator for {agent_run_id}: {str(e)}")
+        yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
+
+# The actual implementation of the streaming logic
+async def actual_stream_generator(agent_run_id, client):
+    """Stream responses for an agent run using Redis."""
     response_list_key = f"agent_run:{agent_run_id}:responses"
     response_channel = f"agent_run:{agent_run_id}:new_response"
     control_channel = f"agent_run:{agent_run_id}:control" # Global control channel
     
-    # Define control flags before using them as nonlocal in nested functions
-    terminate_stream = False
-    initial_yield_complete = False
-    
-    async def stream_generator():
+    try:
+        # 1. Get initial responses from Redis list
+        initial_responses_json = await redis.lrange(response_list_key, 0, -1)
+        initial_responses = []
+        last_processed_index = -1
+            
+        if initial_responses_json:
+            initial_responses = [json.loads(r) for r in initial_responses_json]
+            logger.debug(f"Sending {len(initial_responses)} initial responses for {agent_run_id}")
+            for response in initial_responses:
+                yield f"data: {json.dumps(response)}\n\n"
+            last_processed_index = len(initial_responses) - 1
+
+        # 2. Check run status after yielding initial data
+        run_status = await client.table('agent_runs').select('status').eq("id", agent_run_id).maybe_single().execute()
+        current_status = run_status.data.get('status') if run_status.data else None
+
+        if current_status != 'running':
+            logger.info(f"Agent run {agent_run_id} is not running (status: {current_status}). Ending stream.")
+            yield f"data: {json.dumps({'type': 'status', 'status': 'completed'})}\n\n"
+            return
+
+        # 3. Set up Pub/Sub listeners and message queue
+        pubsub_response = await redis.create_pubsub()
+        await pubsub_response.subscribe(response_channel)
+        logger.debug(f"Subscribed to response channel: {response_channel}")
+
+        pubsub_control = await redis.create_pubsub()
+        await pubsub_control.subscribe(control_channel)
+        logger.debug(f"Subscribed to control channel: {control_channel}")
+
+        # Queue to communicate between tasks
+        message_queue = asyncio.Queue()
+        
+        # Terminate flag 
+        should_terminate = False
+        
+        # Define separate tasks that will run concurrently
+        async def response_channel_listener():
+            try:
+                async for message in pubsub_response.listen():
+                    if should_terminate:
+                        break
+                    if message and isinstance(message, dict) and message.get("type") == "message":
+                        data = message.get("data")
+                        if isinstance(data, bytes):
+                            data = data.decode('utf-8')
+                        if data == "new":
+                            await message_queue.put({"type": "new_response"})
+            except Exception as e:
+                logger.error(f"Error in response channel listener for {agent_run_id}: {e}")
+                await message_queue.put({"type": "error", "data": f"Response listener failed: {str(e)}"})
+                
+        async def control_channel_listener():
+            try:
+                async for message in pubsub_control.listen():
+                    if should_terminate:
+                        break
+                    if message and isinstance(message, dict) and message.get("type") == "message":
+                        data = message.get("data")
+                        if isinstance(data, bytes):
+                            data = data.decode('utf-8')
+                        if data in ["STOP", "END_STREAM", "ERROR"]:
+                            logger.info(f"Received control signal '{data}' for {agent_run_id}")
+                            await message_queue.put({"type": "control", "data": data})
+                            return  # Exit this listener on control signal
+            except Exception as e:
+                logger.error(f"Error in control channel listener for {agent_run_id}: {e}")
+                await message_queue.put({"type": "error", "data": f"Control listener failed: {str(e)}"})
+        
+        # Start listeners as separate tasks
+        response_task = asyncio.create_task(response_channel_listener())
+        control_task = asyncio.create_task(control_channel_listener())
+        
+        # 4. Main loop to process messages from the queue
         try:
-            initial_responses_json = await redis.lrange(response_list_key, 0, -1)
-            initial_responses = []
-            if initial_responses_json:
-                initial_responses = [json.loads(r) for r in initial_responses_json]
-                logger.debug(f"Sending {len(initial_responses)} initial responses for {agent_run_id}")
-                for response in initial_responses:
-                    yield f"data: {json.dumps(response)}\n\n"
-                last_processed_index = len(initial_responses) - 1
-            initial_yield_complete = True
-
-            # 2. Check run status *after* yielding initial data
-            run_status = await client.table('agent_runs').select('status').eq("id", agent_run_id).maybe_single().execute()
-            current_status = run_status.data.get('status') if run_status.data else None
-
-            if current_status != 'running':
-                logger.info(f"Agent run {agent_run_id} is not running (status: {current_status}). Ending stream.")
-                yield f"data: {json.dumps({'type': 'status', 'status': 'completed'})}\n\n"
-                return
-
-            # 3. Set up Pub/Sub listeners for new responses and control signals
-            pubsub_response = await redis.create_pubsub()
-            await pubsub_response.subscribe(response_channel)
-            logger.debug(f"Subscribed to response channel: {response_channel}")
-
-            pubsub_control = await redis.create_pubsub()
-            await pubsub_control.subscribe(control_channel)
-            logger.debug(f"Subscribed to control channel: {control_channel}")
-
-            # Queue to communicate between listeners and the main generator loop
-            message_queue = asyncio.Queue()
-
-            async def listen_messages():
-                # Create iterators once - prevent "already running" error
-                response_reader = pubsub_response.listen()
-                control_reader = pubsub_control.listen()
-                
-                # Use dedicated tasks that are more resilient to errors
-                async def process_response_channel():
-                    nonlocal terminate_stream
-                    try:
-                        async for message in response_reader:
-                            if terminate_stream:
-                                break
-                            if message and isinstance(message, dict) and message.get("type") == "message":
-                                data = message.get("data")
-                                if isinstance(data, bytes):
-                                    data = data.decode('utf-8')
-                                if data == "new":
-                                    await message_queue.put({"type": "new_response"})
-                    except Exception as e:
-                        logger.error(f"Error in response channel listener for {agent_run_id}: {e}")
-                        await message_queue.put({"type": "error", "data": f"Response listener failed: {str(e)}"})
-                
-                async def process_control_channel():
-                    nonlocal terminate_stream
-                    try:
-                        async for message in control_reader:
-                            if terminate_stream:
-                                break
-                            if message and isinstance(message, dict) and message.get("type") == "message":
-                                data = message.get("data")
-                                if isinstance(data, bytes):
-                                    data = data.decode('utf-8')
-                                if data in ["STOP", "END_STREAM", "ERROR"]:
-                                    logger.info(f"Received control signal '{data}' for {agent_run_id}")
-                                    await message_queue.put({"type": "control", "data": data})
-                                    return  # Exit this listener on control signal
-                    except Exception as e:
-                        logger.error(f"Error in control channel listener for {agent_run_id}: {e}")
-                        await message_queue.put({"type": "error", "data": f"Control listener failed: {str(e)}"})
-                
-                # Start both listeners as tasks
-                response_task = asyncio.create_task(process_response_channel())
-                control_task = asyncio.create_task(process_control_channel())
-                
-                # Wait for either task to complete
-                try:
-                    done, pending = await asyncio.wait(
-                        [response_task, control_task],
-                        return_when=asyncio.FIRST_COMPLETED
-                    )
-                    
-                    # If a task completed, check why and handle accordingly
-                    for task in done:
-                        if task.exception():
-                            logger.error(f"Listener task failed with exception: {task.exception()}")
-                            await message_queue.put({"type": "error", "data": "Listener task failed"})
-                finally:
-                    # Clean up tasks
-                    for task in [response_task, control_task]:
-                        if not task.done():
-                            task.cancel()
-                    
-                    # Wait for tasks to be properly cancelled
-                    await asyncio.gather(*[response_task, control_task], return_exceptions=True)
-
-                # Cancel pending listener tasks on exit
-                for p_task in pending: p_task.cancel()
-
-            listener_task = asyncio.create_task(listen_messages())
-
-            # 4. Main loop to process messages from the queue
-            # Since we're in the same function where terminate_stream is defined, no nonlocal needed here
-            while not terminate_stream:
-                try:
                     queue_item = await message_queue.get()
 
                     if queue_item["type"] == "new_response":
@@ -627,20 +611,20 @@ async def stream_agent_run(
                                 # Check if this response signals completion
                                 if response.get('type') == 'status' and response.get('status') in ['completed', 'failed', 'stopped']:
                                     logger.info(f"Detected run completion via status message in stream: {response.get('status')}")
-                                    terminate_stream = True
+                                    should_terminate = True
                                     break # Stop processing further new responses
                             last_processed_index += num_new
-                        if terminate_stream: break
+                        if should_terminate: break
 
                     elif queue_item["type"] == "control":
                         control_signal = queue_item["data"]
-                        terminate_stream = True # Stop the stream on any control signal
+                        should_terminate = True # Stop the stream on any control signal
                         yield f"data: {json.dumps({'type': 'status', 'status': control_signal})}\n\n"
                         break
 
                     elif queue_item["type"] == "error":
                         logger.error(f"Listener error for {agent_run_id}: {queue_item['data']}")
-                        terminate_stream = True
+                        should_terminate = True
                         yield f"data: {json.dumps({'type': 'status', 'status': 'error'})}\n\n"
                         break
 
@@ -679,10 +663,12 @@ async def stream_agent_run(
             await asyncio.sleep(0.1)
             logger.debug(f"Streaming cleanup complete for agent run: {agent_run_id}")
 
-    # Create a wrapper function to safely handle GeneratorExit exceptions
-    async def safe_stream_generator():
+    async def stream_generator():
+        terminate_stream = False
+        initial_yield_complete = False
+        
         try:
-            async for chunk in stream_generator():
+            async for chunk in actual_stream_generator(agent_run_id, client):
                 yield chunk
         except GeneratorExit:
             # Client disconnected - handle gracefully
@@ -742,7 +728,7 @@ async def run_agent_background(
     instance_active_key = f"active_run:{instance_id}:{agent_run_id}"
 
     async def check_for_stop_signal():
-        nonlocal stop_signal_received
+        # Using the outer scope variable directly instead of nonlocal declaration
         if not pubsub: return
         try:
             while not stop_signal_received:

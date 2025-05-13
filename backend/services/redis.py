@@ -45,8 +45,8 @@ def initialize():
         retry_on_timeout=True,
         health_check_interval=15,  # More frequent health checks
         max_connections=10,  # Connection pooling
-        auto_close_connection_pool=True,  # Auto-close idle connections
-        reconnect_attempts=5  # Retry reconnections
+        auto_close_connection_pool=True  # Auto-close idle connections
+        # reconnect_attempts parameter not supported in this Redis version
     )
 
     return client
