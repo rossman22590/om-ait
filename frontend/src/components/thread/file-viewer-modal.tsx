@@ -74,6 +74,8 @@ export function FileViewerModal({
   // File navigation state
   const [currentPath, setCurrentPath] = useState('/workspace');
   const [files, setFiles] = useState<FileInfo[]>([]);
+  const [filteredFiles, setFilteredFiles] = useState<FileInfo[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
@@ -354,6 +356,34 @@ export function FileViewerModal({
     ],
   );
 
+  // Filter files based on search query
+  const filterFiles = useCallback(
+    (fileList: FileInfo[], query: string) => {
+      if (!query.trim()) {
+        setFilteredFiles(fileList);
+        return;
+      }
+      
+      const lowerCaseQuery = query.toLowerCase();
+      const filtered = fileList.filter(file => 
+        file.name.toLowerCase().includes(lowerCaseQuery)
+      );
+      
+      setFilteredFiles(filtered);
+    },
+    []
+  );
+
+  // Handle search input change
+  const handleSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newQuery = e.target.value;
+      setSearchQuery(newQuery);
+      filterFiles(files, newQuery);
+    },
+    [files, filterFiles]
+  );
+
   // Load files when modal opens or path changes - Refined
   useEffect(() => {
     if (!open || !sandboxId) {
@@ -404,6 +434,8 @@ export function FileViewerModal({
             `[FILE VIEWER] useEffect[currentPath]: Got ${filesData?.length || 0} files for ${currentPath}`,
           );
           setFiles(filesData || []);
+          // Also update filtered files when files change
+          filterFiles(filesData || [], searchQuery);
         } else {
           console.log(`[FILE VIEWER] Path changed during loading, aborting file update for ${currentPath}`);
         }
@@ -429,7 +461,7 @@ export function FileViewerModal({
 
     return () => clearTimeout(loadTimeout);
     // Dependency: Only re-run when open, sandboxId, currentPath changes
-  }, [open, sandboxId, currentPath, isInitialLoad, isLoadingFiles]);
+  }, [open, sandboxId, currentPath, isInitialLoad, isLoadingFiles, searchQuery]);
 
   // Helper function to navigate to a folder
   const navigateToFolder = useCallback(
@@ -1281,12 +1313,38 @@ export function FileViewerModal({
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-[90vw] md:max-w-[1200px] w-[95vw] h-[90vh] max-h-[900px] flex flex-col p-0 gap-0 overflow-hidden">
           <DialogHeader className="px-4 py-2 border-b flex-shrink-0">
-            <DialogTitle className="text-lg font-semibold">
-              Workspace Files
-            </DialogTitle>
+            <div className="flex justify-between items-center">
+              <DialogTitle className="text-lg font-semibold flex-shrink-0">
+                Workspace Files
+              </DialogTitle>
+            </div>
           </DialogHeader>
+          
+          {/* Navigation Bar with Search */}
+          <div className="px-4 py-2 border-b flex items-center gap-2">
+            <div className="relative flex-1 max-w-lg">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                placeholder="Search files..."
+                className="w-full px-3 py-1 border rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => {
+                    setSearchQuery('');
+                    filterFiles(files, '');
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
 
-          {/* Navigation Bar */}
+          {/* Breadcrumb Navigation */}
           <div className="px-4 py-2 border-b flex items-center gap-2">
             <Button
               variant="ghost"
@@ -1543,7 +1601,13 @@ export function FileViewerModal({
                 ) : (
                   <ScrollArea className="h-full w-full p-2">
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
-                      {files.map((file) => (
+                      {filteredFiles.length === 0 && searchQuery && (
+                        <div className="col-span-full flex flex-col items-center justify-center py-8 text-muted-foreground">
+                          <AlertTriangle className="h-8 w-8 mb-2" />
+                          <p>No files matching "{searchQuery}"</p>
+                        </div>
+                      )}
+                      {filteredFiles.map((file) => (
                         <div
                           key={file.path}
                           className="relative group"

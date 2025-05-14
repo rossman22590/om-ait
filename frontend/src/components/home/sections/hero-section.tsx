@@ -315,6 +315,31 @@ export function HeroSection() {
             <p className="text-base md:text-lg text-center text-muted-foreground font-medium text-balance leading-relaxed tracking-tight">
               {hero.description}
             </p>
+            
+            {/* Search Bar */}
+            <div className="w-full max-w-md relative mt-2">
+              <div className="flex items-center rounded-full border border-border bg-background/80 backdrop-blur px-4 shadow-md transition-all duration-200 hover:border-secondary/50 focus-within:border-secondary/50 focus-within:shadow-[0_0_15px_rgba(var(--secondary),0.2)]">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-4 w-4 text-muted-foreground mr-2"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search agents, tools, or tasks..."
+                  className="flex-1 h-10 rounded-full px-2 bg-transparent focus:outline-none text-sm py-2"
+                />
+              </div>
+            </div>
           </div>
           <div className="flex items-center w-full max-w-xl gap-2 flex-wrap justify-center">
             <form className="w-full relative" onSubmit={handleSubmit}>
