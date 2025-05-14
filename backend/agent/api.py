@@ -39,9 +39,11 @@ MODEL_NAME_ALIASES = {
     "gpt-4-turbo": "openai/gpt-4-turbo",
     "gpt-4": "openai/gpt-4",
     "gemini-flash-2.5": "openrouter/google/gemini-2.5-flash-preview",
+    "gemini-2.5-flash-preview-04-17": "gemini/gemini-2.5-flash-preview-04-17",
     "grok-3": "xai/grok-3-fast-latest",
-    "deepseek": "openrouter/deepseek/deepseek-chat",
+    "grok-3-fast-latest": "xai/grok-3-fast-latest",
     "grok-3-mini": "xai/grok-3-mini-fast-beta",
+    "deepseek": "openrouter/deepseek/deepseek-chat",
     "qwen3": "openrouter/qwen/qwen3-235b-a22b", 
 
     # Also include full names as keys to ensure they map to themselves
@@ -51,9 +53,12 @@ MODEL_NAME_ALIASES = {
     "openai/gpt-4-turbo": "openai/gpt-4-turbo",
     "openai/gpt-4": "openai/gpt-4",
     "openrouter/google/gemini-2.5-flash-preview": "openrouter/google/gemini-2.5-flash-preview",
+    "gemini/gemini-2.5-flash-preview-04-17": "gemini/gemini-2.5-flash-preview-04-17",
+    "gemini/gemini-2.5-pro-preview-05-06": "gemini/gemini-2.5-pro-preview-05-06",
     "xai/grok-3-fast-latest": "xai/grok-3-fast-latest",
-    "deepseek/deepseek-chat": "openrouter/deepseek/deepseek-chat",
     "xai/grok-3-mini-fast-beta": "xai/grok-3-mini-fast-beta",
+    "openrouter/deepseek/deepseek-chat": "openrouter/deepseek/deepseek-chat",
+    "openrouter/qwen/qwen3-235b-a22b": "openrouter/qwen/qwen3-235b-a22b",
 }
 
 class AgentStartRequest(BaseModel):

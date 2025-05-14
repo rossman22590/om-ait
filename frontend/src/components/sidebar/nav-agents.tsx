@@ -9,7 +9,8 @@ import {
   Plus,
   MessagesSquare,
   Loader2,
-  Share2
+  Share2,
+  Pencil
 } from "lucide-react"
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
@@ -35,11 +36,14 @@ import {
   TooltipContent,
   TooltipTrigger
 } from "@/components/ui/tooltip"
-import { getProjects, getThreads, Project, deleteThread } from "@/lib/api"
+import { getProjects, getThreads, Project, deleteThread, updateProject } from "@/lib/api"
 import Link from "next/link"
 import { ShareModal } from "./share-modal"
 import { DeleteConfirmationDialog } from "@/components/thread/DeleteConfirmationDialog"
 import { useDeleteOperation } from '@/contexts/DeleteOperationContext'
+import { useSearch } from '@/components/sidebar/search-context'
+import { RenameDialog } from '@/components/sidebar/rename-dialog'
+import { createClient } from '@/lib/supabase/client'
 
 // Thread with associated project info for display in sidebar
 type ThreadWithProject = {
@@ -50,9 +54,10 @@ type ThreadWithProject = {
   updatedAt: string;
 };
 
-export function NavAgents() {
+export function NavAgents({ isCollapsed = false } = {}) {
   const { isMobile, state } = useSidebar()
   const [threads, setThreads] = useState<ThreadWithProject[]>([])
+  const [filteredThreads, setFilteredThreads] = useState<ThreadWithProject[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadingThreadId, setLoadingThreadId] = useState<string | null>(null)
   const [showShareModal, setShowShareModal] = useState(false)
@@ -65,6 +70,10 @@ export function NavAgents() {
   const isNavigatingRef = useRef(false)
   const { performDelete, isOperationInProgress } = useDeleteOperation();
   const isPerformingActionRef = useRef(false);
+  const { searchQuery } = useSearch();
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
+  const [threadToRename, setThreadToRename] = useState<{ id: string; name: string; projectId: string } | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
 
   // Helper to sort threads by updated_at (most recent first)
   const sortThreads = (
@@ -189,6 +198,21 @@ export function NavAgents() {
     };
   }, []);
 
+  // Filter threads based on search query
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredThreads(threads);
+      return;
+    }
+    
+    const query = searchQuery.toLowerCase();
+    const filtered = threads.filter((thread) =>
+      thread.projectName.toLowerCase().includes(query),
+    );
+    
+    setFilteredThreads(filtered);
+  }, [searchQuery, threads]);
+
   // Reset loading state when navigation completes (pathname changes)
   useEffect(() => {
     setLoadingThreadId(null);
@@ -228,6 +252,53 @@ export function NavAgents() {
   const handleDeleteThread = async (threadId: string, threadName: string) => {
     setThreadToDelete({ id: threadId, name: threadName });
     setIsDeleteDialogOpen(true);
+  };
+
+  // Function to handle thread renaming
+  const handleRenameThread = (threadId: string, threadName: string, projectId: string) => {
+    setThreadToRename({ id: threadId, name: threadName, projectId });
+    setIsRenameDialogOpen(true);
+  };
+
+  // Function to perform the rename operation
+  const confirmRename = async (newName: string) => {
+    if (!threadToRename) return;
+    
+    setIsRenaming(true);
+    try {
+      console.log('Attempting to update project:', threadToRename.projectId, 'to name:', newName);
+      
+      // Use the proper API function to update the project
+      const updatedProject = await updateProject(threadToRename.projectId, { name: newName });
+      
+      console.log('Project updated successfully:', updatedProject);
+      
+      // Update the thread in the local state
+      setThreads(prevThreads => {
+        // Make a copy of the threads array with the updated name
+        const updated = prevThreads.map(thread => {
+          // Update any thread associated with this project
+          if (thread.projectId === threadToRename.projectId) {
+            console.log(`Updating thread ${thread.threadId} with project ${thread.projectId} to new name: ${newName}`);
+            return { ...thread, projectName: newName };
+          }
+          return thread;
+        });
+        return updated;
+      });
+      
+      // Trigger project update event
+      window.dispatchEvent(new CustomEvent('project-updated'));
+      
+      toast.success(`Renamed agent to "${newName}"`);
+    } catch (error) {
+      console.error('Error renaming agent:', error);
+      toast.error('Failed to rename agent');
+    } finally {
+      setIsRenaming(false);
+      setIsRenameDialogOpen(false);
+      setThreadToRename(null);
+    }
   };
 
   const confirmDelete = async () => {
@@ -321,10 +392,10 @@ export function NavAgents() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))
-        ) : threads.length > 0 ? (
+        ) : filteredThreads.length > 0 ? (
           // Show all threads with project info
           <>
-            {threads.map((thread) => {
+            {filteredThreads.map((thread, index) => {
               // Check if this thread is currently active
               const isActive = pathname?.includes(thread.threadId) || false;
               const isThreadLoading = loadingThreadId === thread.threadId;
@@ -401,6 +472,18 @@ export function NavAgents() {
                           <Share2 className="text-muted-foreground" />
                           <span>Share Chat</span>
                         </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => 
+                            handleRenameThread(
+                              thread.threadId,
+                              thread.projectName,
+                              thread.projectId
+                            )
+                          }
+                        >
+                          <Pencil className="text-muted-foreground" />
+                          <span>Rename</span>
+                        </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                           <a
                             href={thread.url}
@@ -454,6 +537,16 @@ export function NavAgents() {
           onConfirm={confirmDelete}
           threadName={threadToDelete.name}
           isDeleting={isDeleting}
+        />
+      )}
+      
+      {threadToRename && (
+        <RenameDialog
+          isOpen={isRenameDialogOpen}
+          onClose={() => setIsRenameDialogOpen(false)}
+          onConfirm={confirmRename}
+          currentName={threadToRename.name}
+          isRenaming={isRenaming}
         />
       )}
     </SidebarGroup>

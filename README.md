@@ -1,6 +1,6 @@
 <div align="center">
 
-# Suna - Open Source Generalist AI Agent
+# Machine - A Generalist AI Agent
 
 (that acts on your behalf)
 
@@ -285,5 +285,5 @@ The Docker Compose setup includes a Redis service that will be used by the backe
 
 ## License
 
-Kortix Suna is licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for the full license text.
+Machine is licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for the full license text.
 

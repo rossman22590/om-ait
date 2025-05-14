@@ -382,7 +382,7 @@ export const PlaybackControls = ({
                 <div className="flex-1">
                     <div className="flex items-center gap-2">
                         <div className="flex items-center justify-center w-6 h-6 rounded-md overflow-hidden bg-primary/10">
-                            <img src="/kortix-symbol.svg" alt="Kortix" width={16} height={16} className="object-contain" />
+                            <img src="/logo.png" alt="Kortix" width={16} height={16} className="object-contain" />
                         </div>
                         <span className="font-medium text-foreground">{projectName}</span>
                     </div>

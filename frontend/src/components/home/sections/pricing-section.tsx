@@ -26,7 +26,7 @@ import { toast } from 'sonner';
 import { isLocalMode } from '@/lib/config';
 
 // Constants
-const DEFAULT_SELECTED_PLAN = '6 hours';
+const DEFAULT_SELECTED_PLAN = '9 hours';
 export const SUBSCRIPTION_PLANS = {
   FREE: 'free',
   PRO: 'base',
@@ -365,7 +365,7 @@ function PricingTier({
       : currentSubscription?.scheduled_price_id === tierPriceId);
   const isPlanLoading = isLoading[tierPriceId];
 
-  let buttonText = isAuthenticated ? 'Select Plan' : 'Try Free';
+  let buttonText = isAuthenticated ? 'Select Plan' : 'Hire Machine';
   let buttonDisabled = isPlanLoading;
   let buttonVariant: ButtonVariant = null;
   let ringClass = '';
@@ -666,15 +666,15 @@ export function PricingSection({
     }
   };
 
-  if (isLocalMode()) {
-    return (
-      <div className="p-4 bg-muted/30 border border-border rounded-lg text-center">
-        <p className="text-sm text-muted-foreground">
-          Running in local development mode - billing features are disabled
-        </p>
-      </div>
-    );
-  }
+  // if (isLocalMode()) {
+  //   return (
+  //     <div className="p-4 bg-muted/30 border border-border rounded-lg text-center">
+  //       <p className="text-sm text-muted-foreground">
+  //         Running in local development mode - billing features are disabled
+  //       </p>
+  //     </div>
+  //   );
+  // }
 
   return (
     <section

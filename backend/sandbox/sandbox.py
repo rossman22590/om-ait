@@ -91,7 +91,7 @@ def create_sandbox(password: str, project_id: str = None):
         labels = {'id': project_id}
         
     params = CreateSandboxParams(
-        image="kortix/suna:0.1.2",
+        image="kortix/suna:0.1",
         public=True,
         labels=labels,
         env_vars={
@@ -110,7 +110,7 @@ def create_sandbox(password: str, project_id: str = None):
         resources={
             "cpu": 2,
             "memory": 4,
-            "disk": 5,
+            "disk": 2,
         }
     )
     

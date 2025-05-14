@@ -46,6 +46,7 @@ import { useAgentStream } from '@/hooks/useAgentStream';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { BillingErrorAlert } from '@/components/billing/usage-limit-alert';
+import { StabilityTipBanner } from '@/components/thread/stability-tip-banner';
 import { isLocalMode } from '@/lib/config';
 import { ThreadContent } from '@/components/thread/content/ThreadContent';
 import { ThreadSkeleton } from '@/components/thread/content/ThreadSkeleton';
@@ -1153,6 +1154,9 @@ export default function ThreadPage({
             debugMode={debugMode}
           />
 
+          {/* Stability Tip Banner */}
+          <StabilityTipBanner />
+
           {/* Pass debugMode to ThreadContent component */}
           <ThreadContent
             messages={messages}
@@ -1183,7 +1187,7 @@ export default function ThreadPage({
                 value={newMessage}
                 onChange={setNewMessage}
                 onSubmit={handleSubmitMessage}
-                placeholder="Ask Suna anything..."
+                placeholder="Ask Machine anything..."
                 loading={isSending}
                 disabled={isSending || agentStatus === 'running' || agentStatus === 'connecting'}
                 isAgentRunning={agentStatus === 'running' || agentStatus === 'connecting'}
