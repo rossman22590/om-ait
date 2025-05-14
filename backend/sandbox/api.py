@@ -303,6 +303,37 @@ async def read_file(
         raise HTTPException(status_code=500, detail=str(e))
 
 # Should happen on server-side fully
+@router.delete("/sandboxes/{sandbox_id}/files")
+async def delete_file(
+    sandbox_id: str, 
+    path: str,
+    request: Request = None,
+    user_id: Optional[str] = Depends(get_optional_user_id)
+):
+    """Delete a file or directory from the sandbox"""
+    logger.info(f"Received delete file request for sandbox {sandbox_id}, path: {path}, user_id: {user_id}")
+    client = await db.client
+    
+    # Verify access to the sandbox
+    project_data = await verify_sandbox_access(client, sandbox_id, user_id)
+    
+    try:
+        # Get the sandbox object
+        sandbox = await get_sandbox_by_id_safely(client, sandbox_id)
+        
+        # Normalize the path
+        path = normalize_path(path)
+        logger.info(f"Normalized path for deletion: {path}")
+        
+        # Delete the file
+        sandbox.fs.delete_file(path)
+        
+        logger.info(f"Successfully deleted file/folder {path} from sandbox {sandbox_id}")
+        return {"status": "success", "message": "File deleted successfully"}
+    except Exception as e:
+        logger.error(f"Error deleting file in sandbox {sandbox_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/project/{project_id}/sandbox/ensure-active")
 async def ensure_project_sandbox_active(
     project_id: str,

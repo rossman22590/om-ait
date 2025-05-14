@@ -1152,6 +1152,46 @@ function normalizePathWithUnicode(path: string): string {
 
 
 
+export const deleteSandboxFile = async (
+  sandboxId: string,
+  path: string,
+  is_dir?: boolean,
+): Promise<boolean> => {
+  try {
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const url = new URL(`${API_URL}/sandboxes/${sandboxId}/files`);
+    
+    // Normalize the path to handle Unicode escape sequences
+    const normalizedPath = normalizePathWithUnicode(path);
+    
+    // Properly encode the path parameter for UTF-8 support
+    url.searchParams.append('path', normalizedPath);
+
+    const headers: Record<string, string> = {};
+    if (session?.access_token) {
+      headers['Authorization'] = `Bearer ${session.access_token}`;
+    }
+
+    const response = await fetch(url.toString(), {
+      method: 'DELETE',
+      headers,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to delete file: ${response.statusText}`);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting sandbox file:', error);
+    return false;
+  }
+};
+
 export const listSandboxFiles = async (
   sandboxId: string,
   path: string,

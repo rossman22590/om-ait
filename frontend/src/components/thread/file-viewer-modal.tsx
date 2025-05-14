@@ -6,6 +6,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -117,6 +119,10 @@ export function FileViewerModal({
   // State to track if initial path has been processed
   const [initialPathProcessed, setInitialPathProcessed] = useState(false);
 
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<FileInfo | null>(null);
+
   // Project state
   const [projectWithSandbox, setProjectWithSandbox] = useState<
     Project | undefined
@@ -195,20 +201,22 @@ export function FileViewerModal({
     return value instanceof Blob;
   };
 
-  // Handle file/folder deletion
-  const handleDeleteFile = useCallback(async (file: FileInfo, event?: React.MouseEvent) => {
+  // Show delete confirmation dialog
+  const showDeleteDialog = useCallback((file: FileInfo, event?: React.MouseEvent) => {
     // Stop propagation to prevent opening the file/folder
     if (event) {
       event.stopPropagation();
       event.preventDefault();
     }
     
-    if (!sandboxId || !projectWithSandbox) return;
+    setFileToDelete(file);
+    setDeleteDialogOpen(true);
+  }, []);
 
-    // Ask for confirmation before deleting
-    if (!window.confirm(`Are you sure you want to delete ${file.name}${file.is_dir ? ' and all its contents' : ''}?`)) {
-      return;
-    }
+  // Handle file/folder deletion
+  const handleDeleteFile = useCallback(async (file: FileInfo) => {
+    if (!sandboxId || !projectWithSandbox) return;
+    setDeleteDialogOpen(false);
 
     // Get the direct sandbox URL from the project data
     const sandboxData = projectWithSandbox.sandbox || {};
@@ -223,38 +231,31 @@ export function FileViewerModal({
     // Save the URL to localStorage for future use
     localStorage.setItem(`daytona:container:${sandboxId}`, sandboxUrl);
 
+    // Immediately update UI by removing the file from the list
+    if (selectedFilePath === file.path) {
+      clearSelectedFile();
+    }
+    
+    // Optimistically update the files list
+    setFiles(prevFiles => prevFiles.filter(f => f.path !== file.path));
+
     try {
       const success = await deleteSandboxFile(sandboxId, file.path, file.is_dir);
       
       if (success) {
         toast.success(`${file.is_dir ? 'Folder' : 'File'} deleted successfully`);
-        
-        // If the file being viewed is deleted, clear it
-        if (selectedFilePath === file.path) {
-          clearSelectedFile();
-        }
-        
-        // Refresh the file list
-        // We'll need to fetch the files again after deletion
-        setIsLoadingFiles(true);
-        try {
-          const filesData = await listSandboxFiles(sandboxId, currentPath);
-          setFiles(filesData);
-        } catch (error) {
-          console.error('Error refreshing files after deletion:', error);
-          toast.error('Failed to refresh file list');
-        } finally {
-          setIsLoadingFiles(false);
-        }
       } else {
         toast.error(`Failed to delete ${file.is_dir ? 'folder' : 'file'}`);
+        // Refresh the file list to restore the original state
+        refreshFiles();
       }
     } catch (error) {
-      console.error('Error deleting file:', error);
       toast.error(`Error deleting ${file.is_dir ? 'folder' : 'file'}: ${error}`);
+      // Refresh the file list to restore the original state
+      refreshFiles();
     }
   }, [sandboxId, currentPath, selectedFilePath]);
-  
+
   // Helper function to clear the selected file
   const clearSelectedFile = useCallback(() => {
     setSelectedFilePath(null);
@@ -829,6 +830,22 @@ export function FileViewerModal({
     };
   }, [blobUrlForRenderer, isDownloading, isDownloadingAll]);
 
+  // Refresh files in the current directory
+  const refreshFiles = useCallback(async () => {
+    if (!sandboxId) return;
+    
+    setIsLoadingFiles(true);
+    try {
+      const filesData = await listSandboxFiles(sandboxId, currentPath);
+      setFiles(filesData);
+    } catch (error) {
+      console.error('Error refreshing files:', error);
+      toast.error('Failed to refresh file list');
+    } finally {
+      setIsLoadingFiles(false);
+    }
+  }, [sandboxId, currentPath]);
+
   // Modify handleOpenChange to respect active downloads
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -842,6 +859,14 @@ export function FileViewerModal({
         }
 
         clearSelectedFile();
+        setCurrentPath('/workspace');
+        setFiles([]);
+        setInitialPathProcessed(false);
+        setIsInitialLoad(true);
+      }
+      onOpenChange(open);
+    },
+    [onOpenChange, clearSelectedFile, blobUrlForRenderer, isDownloading, isDownloadingAll],edFile();
         setCurrentPath('/workspace');
         setFiles([]);
         setInitialPathProcessed(false);
@@ -1319,6 +1344,22 @@ export function FileViewerModal({
     [currentPath, sandboxId],
   );
 
+  // Refresh files in the current directory
+  const refreshFiles = useCallback(async () => {
+    if (!sandboxId) return;
+    
+    setIsLoadingFiles(true);
+    try {
+      const filesData = await listSandboxFiles(sandboxId, currentPath);
+      setFiles(filesData);
+    } catch (error) {
+      console.error('Error refreshing files:', error);
+      toast.error('Failed to refresh file list');
+    } finally {
+      setIsLoadingFiles(false);
+    }
+  }, [sandboxId, currentPath]);
+
   // --- Render --- //
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -1623,7 +1664,7 @@ export function FileViewerModal({
                         {/* Delete button that appears on hover */}
                         <button 
                           className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600" 
-                          onClick={(e) => handleDeleteFile(file, e)}
+                          onClick={(e) => showDeleteDialog(file, e)}
                           title={`Delete ${file.is_dir ? 'folder' : 'file'}`}
                           aria-label={`Delete ${file.is_dir ? 'folder' : 'file'}`}
                         >
@@ -1639,5 +1680,39 @@ export function FileViewerModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Delete Confirmation Dialog */}
+    {fileToDelete && (
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-center">
+              Delete {fileToDelete.is_dir ? 'Folder' : 'File'}
+            </DialogTitle>
+            <DialogDescription className="text-center pt-2">
+              Are you sure you want to delete <span className="font-semibold">{fileToDelete.name}</span>{fileToDelete.is_dir ? ' and all its contents' : ''}?
+              <br />
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex justify-between sm:justify-between">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              className="mt-4 sm:mt-0"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => handleDeleteFile(fileToDelete)}
+              className="mt-4 sm:mt-0"
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )}
   );
 }
