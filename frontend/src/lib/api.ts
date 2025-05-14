@@ -1170,6 +1170,11 @@ export const deleteSandboxFile = async (
     
     // Properly encode the path parameter for UTF-8 support
     url.searchParams.append('path', normalizedPath);
+    
+    // Add recursive flag for directory deletion
+    if (is_dir) {
+      url.searchParams.append('recursive', 'true');
+    }
 
     const headers: Record<string, string> = {};
     if (session?.access_token) {

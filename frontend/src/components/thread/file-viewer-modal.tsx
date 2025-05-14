@@ -1262,38 +1262,15 @@ export function FileViewerModal({
     if (!fileToDelete) return;
 
     try {
-      const supabase = createClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session?.access_token) {
-        throw new Error('No access token available');
-      }
-      
-      // Create URL with the path as a query parameter
-      const url = new URL(`${API_URL}/sandboxes/${sandboxId}/files`);
-      url.searchParams.append('path', fileToDelete.path);
-      
-      // Add recursive flag when deleting directories
-      if (fileToDelete.is_dir) {
-        url.searchParams.append('recursive', 'true');
-      }
-
-      const response = await fetch(
-        url.toString(),
-        {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          // No body needed as we're using URL parameters
-        },
+      // Use the API helper function with the is_dir flag
+      const success = await deleteSandboxFile(
+        sandboxId,
+        fileToDelete.path,
+        fileToDelete.is_dir // Pass the is_dir flag to ensure recursive deletion for directories
       );
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Delete failed');
+      if (!success) {
+        throw new Error('Delete operation failed');
       }
 
       // Reload the file list
