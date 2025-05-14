@@ -1576,7 +1576,7 @@ export function FileViewerModal({
                             </span>
                           </div>
                           <div
-                            className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
+                            className="absolute top-1 right-1 bg-red-500 hover:bg-black text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
                             onClick={(e) => {
                               e.stopPropagation();
                               setFileToDelete(file);
@@ -1604,7 +1604,7 @@ export function FileViewerModal({
             <DialogDescription>
               Are you sure you want to delete {fileToDelete?.is_dir ? 'folder' : 'file'} <span className="font-semibold">"{fileToDelete?.name}"</span>?
               {fileToDelete?.is_dir && (
-                <p className="text-red-500 mt-2">Warning: This will delete all contents of the folder.</p>
+                <span className="text-red-500 mt-2 block">Warning: This will delete all contents of the folder.</span>
               )}
             </DialogDescription>
           </DialogHeader>
@@ -1620,6 +1620,7 @@ export function FileViewerModal({
             </Button>
             <Button 
               variant="destructive"
+              className="hover:bg-black"
               onClick={() => {
                 if (fileToDelete) {
                   handleConfirmDelete();
