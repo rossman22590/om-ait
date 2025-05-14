@@ -307,6 +307,7 @@ async def read_file(
 async def delete_file(
     sandbox_id: str, 
     path: str,
+    recursive: bool = False,
     request: Request = None,
     user_id: Optional[str] = Depends(get_optional_user_id)
 ):
@@ -323,10 +324,10 @@ async def delete_file(
         
         # Normalize the path
         path = normalize_path(path)
-        logger.info(f"Normalized path for deletion: {path}")
+        logger.info(f"Normalized path for deletion: {path} (recursive: {recursive})")
         
-        # Delete the file
-        sandbox.fs.delete_file(path)
+        # Delete the file with recursive flag if provided
+        sandbox.fs.delete_file(path, recursive=recursive)
         
         logger.info(f"Successfully deleted file/folder {path} from sandbox {sandbox_id}")
         return {"status": "success", "message": "File deleted successfully"}
