@@ -2,17 +2,35 @@
 
 import React, { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { Document, Page, pdfjs } from 'react-pdf';
+import dynamic from 'next/dynamic';
 
 // Import styles for annotations and text layer
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-// Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString();
+// Dynamically import react-pdf components to avoid SSR issues
+const Document = dynamic(
+  () => import('react-pdf').then((mod) => mod.Document),
+  { ssr: false }
+);
+
+const Page = dynamic(
+  () => import('react-pdf').then((mod) => mod.Page),
+  { ssr: false }
+);
+
+// Initialize PDF.js only on the client side
+const PDFWorker = () => {
+  useEffect(() => {
+    const initPdfjs = async () => {
+      const pdfjs = await import('react-pdf');
+      pdfjs.pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.pdfjs.version}/build/pdf.worker.min.js`;
+    };
+    initPdfjs();
+  }, []);
+
+  return null;
+};
 
 interface PdfRendererProps {
   url: string;
@@ -23,6 +41,12 @@ export function PdfRenderer({ url, className }: PdfRendererProps) {
   const [numPages, setNumPages] = useState<number | null>(null);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.0);
+  const [isClient, setIsClient] = useState(false);
+
+  // Initialize PDF.js worker and set client-side rendering flag
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }): void {
     setNumPages(numPages);
@@ -53,8 +77,16 @@ export function PdfRenderer({ url, className }: PdfRendererProps) {
     setScale((prevScale) => Math.max(prevScale - 0.2, 0.5));
   }
 
+  // Only render PDF components on the client side
+  if (!isClient) {
+    return <div className={cn('flex flex-col w-full h-full', className)}>
+      <div className="flex-1 flex items-center justify-center">Loading PDF viewer...</div>
+    </div>;
+  }
+
   return (
     <div className={cn('flex flex-col w-full h-full', className)}>
+      <PDFWorker />
       <div className="flex-1 overflow-auto rounded-md">
         <Document
           file={url}
