@@ -22,6 +22,8 @@ import {
   AlertTriangle,
   FileText,
   ChevronDown,
+  X,
+  Trash2,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -31,6 +33,7 @@ import {
 import {
   listSandboxFiles,
   getSandboxFileContent,
+  deleteSandboxFile,
   type FileInfo,
   Project,
 } from '@/lib/api';
@@ -136,6 +139,37 @@ export function FileViewerModal({
   useEffect(() => {
     if (project) {
       setProjectWithSandbox(project);
+      
+      // Debug: Log the entire project structure to see where the URL might be stored
+      console.log('[FILE VIEWER] Project data structure:', JSON.stringify(project, null, 2));
+      
+      // Try to find sandbox URL from different possible locations
+      const sandboxData = project.sandbox || {};
+      console.log('[FILE VIEWER] Sandbox data:', sandboxData);
+      
+      // Check for URL in different possible locations
+      const possibleUrls = [
+        sandboxData.sandbox_url,
+        sandboxData.vnc_preview,  // Sometimes the VNC URL contains the base sandbox URL
+        // Try to access direct properties that might contain the URL
+        project.sandbox_url,
+        // Also try to extract URL from VNC preview if it exists
+        sandboxData.vnc_preview ? sandboxData.vnc_preview.split('?')[0] : null
+      ];
+      
+      // Log all possible URLs for debugging
+      console.log('[FILE VIEWER] Possible URLs:', possibleUrls);
+      
+      // Find the first non-empty URL
+      const sandboxUrl = possibleUrls.find(url => url && typeof url === 'string') || '';
+      
+      if (sandboxUrl && sandboxId) {
+        console.log(`[FILE VIEWER] Storing container URL for sandbox ${sandboxId}: ${sandboxUrl}`);
+        // Store in localStorage instead of sessionStorage for persistence
+        localStorage.setItem(`daytona:container:${sandboxId}`, sandboxUrl);
+      } else {
+        console.warn('[FILE VIEWER] No sandbox URL found in project data', project);
+      }
     }
   }, [project, sandboxId]);
 
@@ -161,6 +195,66 @@ export function FileViewerModal({
     return value instanceof Blob;
   };
 
+  // Handle file/folder deletion
+  const handleDeleteFile = useCallback(async (file: FileInfo, event?: React.MouseEvent) => {
+    // Stop propagation to prevent opening the file/folder
+    if (event) {
+      event.stopPropagation();
+      event.preventDefault();
+    }
+    
+    if (!sandboxId || !projectWithSandbox) return;
+
+    // Ask for confirmation before deleting
+    if (!window.confirm(`Are you sure you want to delete ${file.name}${file.is_dir ? ' and all its contents' : ''}?`)) {
+      return;
+    }
+
+    // Get the direct sandbox URL from the project data
+    const sandboxData = projectWithSandbox.sandbox || {};
+    const sandboxUrl = sandboxData.sandbox_url || '';
+    
+    if (!sandboxUrl) {
+      toast.error('Cannot delete file: Sandbox URL not found');
+      console.error('Sandbox URL not found in project data', projectWithSandbox);
+      return;
+    }
+    
+    // Save the URL to localStorage for future use
+    localStorage.setItem(`daytona:container:${sandboxId}`, sandboxUrl);
+
+    try {
+      const success = await deleteSandboxFile(sandboxId, file.path, file.is_dir);
+      
+      if (success) {
+        toast.success(`${file.is_dir ? 'Folder' : 'File'} deleted successfully`);
+        
+        // If the file being viewed is deleted, clear it
+        if (selectedFilePath === file.path) {
+          clearSelectedFile();
+        }
+        
+        // Refresh the file list
+        // We'll need to fetch the files again after deletion
+        setIsLoadingFiles(true);
+        try {
+          const filesData = await listSandboxFiles(sandboxId, currentPath);
+          setFiles(filesData);
+        } catch (error) {
+          console.error('Error refreshing files after deletion:', error);
+          toast.error('Failed to refresh file list');
+        } finally {
+          setIsLoadingFiles(false);
+        }
+      } else {
+        toast.error(`Failed to delete ${file.is_dir ? 'folder' : 'file'}`);
+      }
+    } catch (error) {
+      console.error('Error deleting file:', error);
+      toast.error(`Error deleting ${file.is_dir ? 'folder' : 'file'}: ${error}`);
+    }
+  }, [sandboxId, currentPath, selectedFilePath]);
+  
   // Helper function to clear the selected file
   const clearSelectedFile = useCallback(() => {
     setSelectedFilePath(null);
@@ -1495,34 +1589,47 @@ export function FileViewerModal({
                 <ScrollArea className="h-full w-full p-2">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
                     {files.map((file) => (
-                      <button
+                      <div
                         key={file.path}
-                        className={`flex flex-col items-center p-3 rounded-lg border hover:bg-muted/50 transition-colors ${selectedFilePath === file.path
-                          ? 'bg-muted border-primary/20'
-                          : ''
-                          }`}
-                        onClick={() => {
-                          if (file.is_dir) {
-                            console.log(
-                              `[FILE VIEWER] Folder clicked: ${file.name}, path: ${file.path}`,
-                            );
-                            navigateToFolder(file);
-                          } else {
-                            openFile(file);
-                          }
-                        }}
+                        className="relative group"
                       >
-                        <div className="w-12 h-12 flex items-center justify-center mb-1">
-                          {file.is_dir ? (
-                            <Folder className="h-9 w-9 text-blue-500" />
-                          ) : (
-                            <File className="h-8 w-8 text-muted-foreground" />
-                          )}
-                        </div>
-                        <span className="text-xs text-center font-medium truncate max-w-full">
-                          {file.name}
-                        </span>
-                      </button>
+                        <button
+                          className={`flex flex-col items-center p-3 rounded-lg border hover:bg-muted/50 transition-colors ${selectedFilePath === file.path
+                            ? 'bg-muted border-primary/20'
+                            : ''
+                            } w-full h-full`}
+                          onClick={() => {
+                            if (file.is_dir) {
+                              console.log(
+                                `[FILE VIEWER] Folder clicked: ${file.name}, path: ${file.path}`,
+                              );
+                              navigateToFolder(file);
+                            } else {
+                              openFile(file);
+                            }
+                          }}
+                        >
+                          <div className="w-12 h-12 flex items-center justify-center mb-1">
+                            {file.is_dir ? (
+                              <Folder className="h-9 w-9 text-blue-500" />
+                            ) : (
+                              <File className="h-8 w-8 text-muted-foreground" />
+                            )}
+                          </div>
+                          <span className="text-xs text-center font-medium truncate max-w-full">
+                            {file.name}
+                          </span>
+                        </button>
+                        {/* Delete button that appears on hover */}
+                        <button 
+                          className="absolute top-1 right-1 p-1 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600" 
+                          onClick={(e) => handleDeleteFile(file, e)}
+                          title={`Delete ${file.is_dir ? 'folder' : 'file'}`}
+                          aria-label={`Delete ${file.is_dir ? 'folder' : 'file'}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 </ScrollArea>
