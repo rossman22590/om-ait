@@ -28,7 +28,7 @@ export const MODEL_OPTIONS: ModelOption[] = [
     id: 'sonnet-3.7', 
     label: 'Advanced', 
     requiresSubscription: true, 
-    description: 'Excellent for complex tasks and nuanced conversations'
+    description: 'Excellent for complex tasks and with auto mode enabled'
   },
   { 
     id: 'gemini/gemini-2.5-pro-preview-05-06', 

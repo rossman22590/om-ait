@@ -215,7 +215,8 @@ export function Navbar() {
                           });
                         }
                       } else {
-                        // For regular links, just close the drawer
+                        // For regular links, let the browser handle navigation naturally
+                        // Just close the drawer first
                         toggleDrawer();
                       }
                     }}
