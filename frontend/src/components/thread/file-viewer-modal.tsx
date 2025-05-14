@@ -1274,6 +1274,11 @@ export function FileViewerModal({
       // Create URL with the path as a query parameter
       const url = new URL(`${API_URL}/sandboxes/${sandboxId}/files`);
       url.searchParams.append('path', fileToDelete.path);
+      
+      // Add recursive flag when deleting directories
+      if (fileToDelete.is_dir) {
+        url.searchParams.append('recursive', 'true');
+      }
 
       const response = await fetch(
         url.toString(),
