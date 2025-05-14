@@ -5,6 +5,7 @@ import { useState, createContext, useEffect } from 'react';
 import { AuthProvider } from '@/components/AuthProvider';
 import { ReactQueryProvider } from '@/providers/react-query-provider';
 import { dehydrate, QueryClient } from '@tanstack/react-query';
+import { SearchProvider } from '@/components/sidebar/search-context';
 
 export interface ParsedTag {
   tagName: string;
@@ -44,9 +45,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <AuthProvider>
       <ToolCallsContext.Provider value={{ toolCalls, setToolCalls }}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <ReactQueryProvider dehydratedState={dehydratedState}>
-            {children}
-          </ReactQueryProvider>
+          <SearchProvider>
+            <ReactQueryProvider dehydratedState={dehydratedState}>
+              {children}
+            </ReactQueryProvider>
+          </SearchProvider>
         </ThemeProvider>
       </ToolCallsContext.Provider>
     </AuthProvider>

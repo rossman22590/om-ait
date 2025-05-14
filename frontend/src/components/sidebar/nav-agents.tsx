@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import {
   ArrowUpRight,
   Link as LinkIcon,
@@ -57,7 +57,7 @@ type ThreadWithProject = {
 export function NavAgents({ isCollapsed = false } = {}) {
   const { isMobile, state } = useSidebar()
   const [threads, setThreads] = useState<ThreadWithProject[]>([])
-  const [filteredThreads, setFilteredThreads] = useState<ThreadWithProject[]>([])
+  // We don't need a separate state for filteredThreads - we'll filter directly in the render method
   const [isLoading, setIsLoading] = useState(true)
   const [loadingThreadId, setLoadingThreadId] = useState<string | null>(null)
   const [showShareModal, setShowShareModal] = useState(false)
@@ -198,20 +198,7 @@ export function NavAgents({ isCollapsed = false } = {}) {
     };
   }, []);
 
-  // Filter threads based on search query
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredThreads(threads);
-      return;
-    }
-    
-    const query = searchQuery.toLowerCase();
-    const filtered = threads.filter((thread) =>
-      thread.projectName.toLowerCase().includes(query),
-    );
-    
-    setFilteredThreads(filtered);
-  }, [searchQuery, threads]);
+  // No need for a separate useMemo or effect just for filtering threads
 
   // Reset loading state when navigation completes (pathname changes)
   useEffect(() => {
@@ -392,10 +379,12 @@ export function NavAgents({ isCollapsed = false } = {}) {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))
-        ) : filteredThreads.length > 0 ? (
+        ) : threads.length > 0 ? (
           // Show all threads with project info
           <>
-            {filteredThreads.map((thread, index) => {
+            {threads
+              .filter(thread => !searchQuery || thread.projectName.toLowerCase().includes(searchQuery.toLowerCase()))
+              .map((thread, index) => {
               // Check if this thread is currently active
               const isActive = pathname?.includes(thread.threadId) || false;
               const isThreadLoading = loadingThreadId === thread.threadId;
@@ -514,11 +503,11 @@ export function NavAgents({ isCollapsed = false } = {}) {
             })}
           </>
         ) : (
-          // Empty state
+          // Empty state or no search results
           <SidebarMenuItem>
             <SidebarMenuButton className="text-sidebar-foreground/70">
               <MessagesSquare className="h-4 w-4" />
-              <span>No agents yet</span>
+              <span>{searchQuery ? `No matching agents found for "${searchQuery}"` : 'No agents yet'}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         )}

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Menu } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
+import { SidebarSearch } from '@/components/sidebar/SidebarSearch';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
 import { CTACard } from '@/components/sidebar/cta';
@@ -126,6 +127,7 @@ export function SidebarLeft({
         </div>
       </SidebarHeader>
       <SidebarContent className="[&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+        {state !== 'collapsed' && <SidebarSearch />}
         <NavAgents />
       </SidebarContent>
       {state !== 'collapsed' && (
