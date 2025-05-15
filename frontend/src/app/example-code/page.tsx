@@ -300,7 +300,11 @@ const CodeCard = ({ example }: { example: CodeExample }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
-  const copyToClipboard = async () => {
+  const copyToClipboard = async (e: React.MouseEvent) => {
+    // Prevent the link navigation when clicking the copy button
+    e.stopPropagation();
+    e.preventDefault();
+    
     try {
       await navigator.clipboard.writeText(example.code);
       setIsCopied(true);
@@ -311,94 +315,83 @@ const CodeCard = ({ example }: { example: CodeExample }) => {
   };
 
   return (
-    <div 
-      className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl border border-transparent hover:border-pink-200 dark:hover:border-pink-800"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-3">
-            <motion.span 
-              className="text-2xl"
-              animate={{ scale: isHovered ? 1.1 : 1 }}
-              transition={{ type: "spring", stiffness: 200, damping: 10 }}
-            >
-              {example.icon || "📄"}
-            </motion.span>
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{example.title}</h3>
-          </div>
-          <motion.button
-            onClick={copyToClipboard}
-            className={cn(
-              "p-2 rounded-md text-white transition-all duration-300 flex items-center gap-2",
-              isCopied 
-                ? "bg-green-600 hover:bg-green-700" 
-                : "bg-gray-800 hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600"
-            )}
-            title="Copy code"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            {isCopied ? (
-              <>
-                <span className="text-sm font-medium">Copied!</span>
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M11.4669 3.72684C11.7558 3.91574 11.8369 4.30308 11.648 4.59198L7.39799 11.092C7.29783 11.2452 7.13556 11.3467 6.95402 11.3699C6.77247 11.3931 6.58989 11.3355 6.45446 11.2124L3.70446 8.71241C3.44905 8.48022 3.43023 8.08494 3.66242 7.82953C3.89461 7.57412 4.28989 7.55529 4.5453 7.78749L6.75292 9.79441L10.6018 3.90792C10.7907 3.61902 11.178 3.53795 11.4669 3.72684Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd" />
-                </svg>
-              </>
-            ) : (
-              <>
-                <span className="text-sm font-medium">Copy</span>
-                <Copy size={15} />
-              </>
-            )}
-          </motion.button>
-        </div>
-        
-        <p className="mt-2 mb-4 text-gray-600 dark:text-gray-300">{example.description}</p>
-        
-        <div className="relative group">
-          <div className="absolute -inset-0.5 bg-gradient-to-r from-pink-600 to-purple-600 rounded-lg blur opacity-30 group-hover:opacity-80 transition duration-1000 group-hover:duration-200"></div>
-          <div className="relative mt-4 mb-4 overflow-hidden rounded-md bg-gray-900 p-4 h-64 overflow-y-auto">
-            <pre className="text-gray-300 text-sm">
-              <code>{example.code}</code>
-            </pre>
-            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-              <button
-                onClick={copyToClipboard}
-                className={cn(
-                  "p-2 rounded-md text-white transition-all duration-300",
-                  isCopied ? "bg-green-600" : "bg-gray-700 hover:bg-gray-600"
-                )}
-                title="Copy code"
+    <Link href={`/example-code/${example.id}`} className="block">
+      <div 
+        className="bg-white dark:bg-gray-800 rounded-xl overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl border border-transparent hover:border-pink-200 dark:hover:border-pink-800 cursor-pointer"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-3">
+              <motion.span 
+                className="text-2xl"
+                animate={{ scale: isHovered ? 1.1 : 1 }}
+                transition={{ type: "spring", stiffness: 200, damping: 10 }}
               >
-                {isCopied ? (
+                {example.icon || "📄"}
+              </motion.span>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">{example.title}</h3>
+            </div>
+            <motion.button
+              onClick={copyToClipboard}
+              className={cn(
+                "p-2 rounded-md text-white transition-all duration-300 flex items-center gap-2",
+                isCopied 
+                  ? "bg-green-600 hover:bg-green-700" 
+                  : "bg-gray-800 hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600"
+              )}
+              title="Copy code"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              {isCopied ? (
+                <>
+                  <span className="text-sm font-medium">Copied!</span>
                   <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M11.4669 3.72684C11.7558 3.91574 11.8369 4.30308 11.648 4.59198L7.39799 11.092C7.29783 11.2452 7.13556 11.3467 6.95402 11.3699C6.77247 11.3931 6.58989 11.3355 6.45446 11.2124L3.70446 8.71241C3.44905 8.48022 3.43023 8.08494 3.66242 7.82953C3.89461 7.57412 4.28989 7.55529 4.5453 7.78749L6.75292 9.79441L10.6018 3.90792C10.7907 3.61902 11.178 3.53795 11.4669 3.72684Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd" />
                   </svg>
-                ) : (
+                </>
+              ) : (
+                <>
+                  <span className="text-sm font-medium">Copy</span>
                   <Copy size={15} />
-                )}
-              </button>
+                </>
+              )}
+            </motion.button>
+          </div>
+          
+          <p className="mt-2 mb-4 text-gray-600 dark:text-gray-300">{example.description}</p>
+          
+          <div className="relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-pink-600 to-purple-600 rounded-lg blur opacity-30 group-hover:opacity-80 transition duration-1000 group-hover:duration-200"></div>
+            <div className="relative mt-4 mb-4 overflow-hidden rounded-md bg-gray-900 p-4 h-64 overflow-y-auto">
+              <pre className="text-gray-300 text-sm">
+                <code>{example.code}</code>
+              </pre>
+              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                <button
+                  onClick={copyToClipboard}
+                  className={cn(
+                    "p-2 rounded-md text-white transition-all duration-300",
+                    isCopied ? "bg-green-600" : "bg-gray-700 hover:bg-gray-600"
+                  )}
+                  title="Copy code"
+                >
+                  {isCopied ? (
+                    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M11.4669 3.72684C11.7558 3.91574 11.8369 4.30308 11.648 4.59198L7.39799 11.092C7.29783 11.2452 7.13556 11.3467 6.95402 11.3699C6.77247 11.3931 6.58989 11.3355 6.45446 11.2124L3.70446 8.71241C3.44905 8.48022 3.43023 8.08494 3.66242 7.82953C3.89461 7.57412 4.28989 7.55529 4.5453 7.78749L6.75292 9.79441L10.6018 3.90792C10.7907 3.61902 11.178 3.53795 11.4669 3.72684Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd" />
+                    </svg>
+                  ) : (
+                    <Copy size={15} />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
-        
-        <div className="flex flex-wrap gap-2 mt-4">
-          {example.tags.map((tag, index) => (
-            <motion.span 
-              key={index} 
-              className="px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-full"
-              whileHover={{ y: -2, scale: 1.05 }}
-              transition={{ type: "spring", stiffness: 400, damping: 10 }}
-            >
-              {tag}
-            </motion.span>
-          ))}
-        </div>
       </div>
-    </div>
+    </Link>
   );
 };
 
@@ -411,7 +404,7 @@ export default function ExampleCodePage() {
   useEffect(() => {
     async function loadApiExamples() {
       try {
-        const response = await fetch('/data/api-examples.json');
+        const response = await fetch('/data/code-examples.json');
         
         if (!response.ok) {
           throw new Error(`Failed to load API examples: ${response.status}`);
