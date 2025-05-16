@@ -110,7 +110,7 @@ class SandboxShellTool(SandboxToolsBase):
         folder: Optional[str] = None,
         session_name: Optional[str] = None,
         blocking: bool = False,
-        timeout: int = 60
+        timeout: int = 120
     ) -> ToolResult:
         try:
             # Ensure sandbox is initialized
@@ -210,7 +210,7 @@ class SandboxShellTool(SandboxToolsBase):
         response = self.sandbox.process.execute_session_command(
             session_id=session_id,
             req=req,
-            timeout=30  # Short timeout for utility commands
+            timeout=60  # Timeout for utility commands
         )
         
         logs = self.sandbox.process.get_session_command_logs(
