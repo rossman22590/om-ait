@@ -1155,7 +1155,6 @@ function normalizePathWithUnicode(path: string): string {
 export const deleteSandboxFile = async (
   sandboxId: string,
   path: string,
-  is_dir?: boolean,
 ): Promise<boolean> => {
   try {
     const supabase = createClient();
@@ -1170,11 +1169,6 @@ export const deleteSandboxFile = async (
     
     // Properly encode the path parameter for UTF-8 support
     url.searchParams.append('path', normalizedPath);
-    
-    // Add recursive flag for directory deletion
-    if (is_dir) {
-      url.searchParams.append('recursive', 'true');
-    }
 
     const headers: Record<string, string> = {};
     if (session?.access_token) {
@@ -1378,6 +1372,177 @@ export const deleteThread = async (threadId: string): Promise<void> => {
     );
   } catch (error) {
     console.error('Error deleting thread and related items:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete all threads and related data (for debug purposes only)
+ * This is a dangerous operation and should only be used in development
+ */
+export const deleteAllThreads = async (): Promise<void> => {
+  try {
+    const supabase = createClient();
+    
+    // Get the current user's session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('No active session found');
+    }
+    
+    // First get all threads for the current user
+    const { data: threads, error: threadsError } = await supabase
+      .from('threads')
+      .select('thread_id')
+      .eq('account_id', session.user.id);
+    
+    if (threadsError) {
+      console.error('Error fetching threads:', threadsError);
+      throw new Error(`Error fetching threads: ${threadsError.message}`);
+    }
+    
+    if (!threads || threads.length === 0) {
+      console.log('No threads found to delete');
+      return;
+    }
+    
+    console.log(`Found ${threads.length} threads to delete`);
+    
+    // Delete all agent runs for all threads
+    const threadIds = threads.map(t => t.thread_id);
+    console.log('Deleting all agent runs...');
+    const { error: agentRunsError } = await supabase
+      .from('agent_runs')
+      .delete()
+      .in('thread_id', threadIds);
+    
+    if (agentRunsError) {
+      console.error('Error deleting agent runs:', agentRunsError);
+      throw new Error(`Error deleting agent runs: ${agentRunsError.message}`);
+    }
+    
+    // Delete all messages for all threads
+    console.log('Deleting all messages...');
+    const { error: messagesError } = await supabase
+      .from('messages')
+      .delete()
+      .in('thread_id', threadIds);
+    
+    if (messagesError) {
+      console.error('Error deleting messages:', messagesError);
+      throw new Error(`Error deleting messages: ${messagesError.message}`);
+    }
+    
+    // Delete all threads
+    console.log('Deleting all threads...');
+    const { error: threadsDeleteError } = await supabase
+      .from('threads')
+      .delete()
+      .in('thread_id', threadIds);
+    
+    if (threadsDeleteError) {
+      console.error('Error deleting threads:', threadsDeleteError);
+      throw new Error(`Error deleting threads: ${threadsDeleteError.message}`);
+    }
+    
+    console.log(`Successfully deleted ${threads.length} threads with all related items`);
+  } catch (error) {
+    console.error('Error deleting all threads:', error);
+    throw error;
+  }
+};
+
+/**
+ * Stop all running agents
+ * This will stop all currently running agent activities without deleting any data
+ */
+export const stopAllAgents = async (): Promise<{stopped: number}> => {
+  try {
+    const supabase = createClient();
+    
+    // Get the current user's session
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('No active session found');
+    }
+    
+    // First get all threads for the current user
+    const { data: threads, error: threadsError } = await supabase
+      .from('threads')
+      .select('thread_id')
+      .eq('account_id', session.user.id);
+    
+    if (threadsError) {
+      console.error('Error fetching threads:', threadsError);
+      throw new Error(`Error fetching threads: ${threadsError.message}`);
+    }
+    
+    if (!threads || threads.length === 0) {
+      console.log('No threads found');
+      return { stopped: 0 };
+    }
+    
+    const threadIds = threads.map(t => t.thread_id);
+    
+    // Find all running agent runs
+    const { data: runningAgents, error: runningAgentsError } = await supabase
+      .from('agent_runs')
+      .select('id')
+      .in('thread_id', threadIds)
+      .eq('status', 'running');
+    
+    if (runningAgentsError) {
+      console.error('Error fetching running agents:', runningAgentsError);
+      throw new Error(`Error fetching running agents: ${runningAgentsError.message}`);
+    }
+    
+    if (!runningAgents || runningAgents.length === 0) {
+      console.log('No running agents found');
+      return { stopped: 0 };
+    }
+    
+    console.log(`Found ${runningAgents.length} running agents to stop`);
+    
+    // Update all running agent runs to 'stopped' status
+    const { error: updateError } = await supabase
+      .from('agent_runs')
+      .update({ 
+        status: 'stopped',
+        completed_at: new Date().toISOString()
+      })
+      .in('id', runningAgents.map(a => a.id));
+    
+    if (updateError) {
+      console.error('Error stopping agents:', updateError);
+      throw new Error(`Error stopping agents: ${updateError.message}`);
+    }
+    
+    // For each running agent, call the stop endpoint if available
+    try {
+      // This is a best-effort attempt to notify the backend to stop processing
+      const response = await fetch(`${API_URL}/agent/stop-all`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          agent_run_ids: runningAgents.map(a => a.id)
+        })
+      });
+      
+      if (!response.ok) {
+        console.warn('Backend stop-all endpoint returned non-OK response:', response.status);
+        // Continue anyway, as we've already updated the database
+      }
+    } catch (stopError) {
+      console.warn('Error calling stop-all endpoint:', stopError);
+      // Continue anyway, as we've already updated the database
+    }
+    
+    return { stopped: runningAgents.length };
+  } catch (error) {
+    console.error('Error stopping all agents:', error);
     throw error;
   }
 };

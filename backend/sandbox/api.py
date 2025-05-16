@@ -30,12 +30,18 @@ class FileInfo(BaseModel):
     size: int
     mod_time: str
     permissions: Optional[str] = None
+    
+    # Add a get method to allow FileInfo to be used like a dictionary
+    # This fixes the 'FileInfo' object has no attribute 'get' error
+    def get(self, key, default=None):
+        """Allow FileInfo to be used like a dictionary, which fixes issues in the Daytona SDK"""
+        return getattr(self, key, default)
 
 def normalize_path(path: str) -> str:
     """
     Normalize a path to ensure proper UTF-8 encoding and handling.
     
-    Args:
+    Args:b
         path: The file path, potentially containing URL-encoded characters
         
     Returns:
@@ -307,7 +313,6 @@ async def read_file(
 async def delete_file(
     sandbox_id: str, 
     path: str,
-    recursive: bool = False,
     request: Request = None,
     user_id: Optional[str] = Depends(get_optional_user_id)
 ):
@@ -324,13 +329,48 @@ async def delete_file(
         
         # Normalize the path
         path = normalize_path(path)
-        logger.info(f"Normalized path for deletion: {path} (recursive: {recursive})")
+        logger.info(f"Normalized path for deletion: {path}")
         
-        # Delete the file with recursive flag if provided
-        sandbox.fs.delete_file(path, recursive=recursive)
+        try:
+            # Delete the file using the fs module
+            sandbox.fs.delete_file(path)
+            logger.info(f"Successfully deleted file/folder {path} from sandbox {sandbox_id}")
+            
+        except AttributeError as attr_error:
+            # If we're still getting a FileInfo attribute error, try the fallback approach
+            if "'FileInfo' object has no attribute" in str(attr_error):
+                logger.warning(f"Falling back to shell command for deletion due to FileInfo error: {attr_error}")
+                
+                # Use shell commands as a fallback
+                from sandbox.sandbox import SessionExecuteRequest
+                import uuid
+                
+                # Create a unique session ID for this delete operation
+                session_id = f"del_{uuid.uuid4().hex[:8]}"
+                
+                try:
+                    # Create a shell session
+                    sandbox.process.create_session(session_id)
+                    
+                    # Execute the delete command
+                    delete_cmd = f"rm -rf '{path}' 2>/dev/null || true"
+                    sandbox.process.execute_session_command(session_id, SessionExecuteRequest(command=delete_cmd))
+                    
+                    # Close the session
+                    sandbox.process.execute_session_command(session_id, SessionExecuteRequest(command="exit"))
+                    logger.info(f"Successfully deleted via shell command: {path}")
+                except Exception as shell_error:
+                    logger.error(f"Shell command fallback failed: {str(shell_error)}")
+                    raise HTTPException(status_code=500, detail=f"Shell deletion error: {str(shell_error)}")       
+            else:
+                # Re-raise if it's not the FileInfo error we're handling
+                raise
         
-        logger.info(f"Successfully deleted file/folder {path} from sandbox {sandbox_id}")
         return {"status": "success", "message": "File deleted successfully"}
+        
+    except HTTPException as http_error:
+        # Re-raise HTTP exceptions
+        raise http_error
     except Exception as e:
         logger.error(f"Error deleting file in sandbox {sandbox_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

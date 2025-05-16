@@ -11,6 +11,12 @@ import {
 } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 type Props = {
   accountId: string;
@@ -69,6 +75,7 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isManaging, setIsManaging] = useState(false);
+  const [isAddingMinutes, setIsAddingMinutes] = useState(false);
 
   useEffect(() => {
     async function fetchSubscription() {
@@ -106,6 +113,11 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
     } finally {
       setIsManaging(false);
     }
+  };
+
+  const handleBuyAdditionalMinutes = () => {
+    setIsAddingMinutes(true);
+    window.location.href = "https://buy.stripe.com/4gMdR9gyU22V5hC74i8AE02";
   };
 
   // In local development mode, show a simplified component
@@ -174,9 +186,28 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
           <div className="mb-6">
             <div className="rounded-lg border bg-background p-6 space-y-4">
               <div className="flex flex-col space-y-1">
-                <h3 className="text-md font-semibold text-foreground">
-                  Agent Usage This Month
-                </h3>
+                <div className="flex justify-between items-center">
+                  <h3 className="text-md font-semibold text-foreground">
+                    Agent Usage This Month
+                  </h3>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={handleBuyAdditionalMinutes}
+                          disabled={isAddingMinutes}
+                          size="sm"
+                          className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm hover:shadow-md transition-all"
+                        >
+                          {isAddingMinutes ? 'Redirecting...' : 'Buy Additional Minutes'}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="w-64 p-2">
+                        <p className="text-sm text-center">One hour costs $10. You can purchase up to 50 additional hours. If you need more, please reach out to support.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <div className="flex flex-col space-y-1 mt-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -235,9 +266,28 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
               </div>
 
               <div className="flex flex-col space-y-1 pt-2">
-                <h3 className="text-md font-semibold text-foreground">
-                  Agent Usage This Month
-                </h3>
+                <div className="flex justify-between items-center">
+                  <h3 className="text-md font-semibold text-foreground">
+                    Agent Usage This Month
+                  </h3>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={handleBuyAdditionalMinutes}
+                          disabled={isAddingMinutes}
+                          size="sm"
+                          className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm hover:shadow-md transition-all"
+                        >
+                          {isAddingMinutes ? 'Redirecting...' : 'Buy Additional Minutes'}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="w-64 p-2">
+                        <p className="text-sm text-center">One hour costs $10. You can purchase up to 50 additional hours. If you need more, please reach out to support.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <div className="flex flex-col space-y-1 mt-2">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">

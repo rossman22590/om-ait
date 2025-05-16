@@ -228,7 +228,7 @@ npm run dev
 
    In another terminal, start the backend:
 ```bash
-cd backend
+cd backend 
 poetry run python3.11 api.py
 ```
 
