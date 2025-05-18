@@ -1107,6 +1107,13 @@ export function FileViewerModal({
       for (const file of allFiles) {
         const relativePath = folderPath ? `${folderPath}/${file.name}` : file.name;
         
+        // Skip node_modules, package-lock.json, and folders starting with a dot
+        if ((file.is_dir && (file.name === 'node_modules' || file.name.startsWith('.'))) || 
+            (!file.is_dir && file.name === 'package-lock.json')) {
+          console.log(`[ZIP] Skipping excluded item: ${file.path}`);
+          continue;
+        }
+        
         if (file.is_dir) {
           // For directories, create a folder in the zip and recurse
           console.log(`[ZIP] Processing directory: ${file.path}`);

@@ -9,7 +9,7 @@ export function CTACard() {
         <div className="flex flex-col">
           <span className="text-sm font-medium text-foreground flex items-center">
             <Zap className="h-4 w-4 mr-1.5 text-pink-500" />
-            Upgrade to Pro
+            Upgrade
           </span>
           <span className="text-xs text-muted-foreground mt-0.5">
             Get access to premium models
