@@ -12,6 +12,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    supervisor \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and set up directories
@@ -29,6 +30,13 @@ USER appuser
 # Copy application code
 COPY --chown=appuser:appuser . .
 
+# Create supervisor configuration
+USER root
+RUN mkdir -p /etc/supervisor/conf.d
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+RUN chown -R appuser:appuser /etc/supervisor/
+USER appuser
+
 # Expose the port the app runs on
 EXPOSE 8000
 
@@ -38,23 +46,5 @@ ENV WORKERS=33
 ENV THREADS=2
 ENV WORKER_CONNECTIONS=2000
 
-# Gunicorn configuration
-CMD ["sh", "-c", "gunicorn api:app \
-     --workers $WORKERS \
-     --worker-class uvicorn.workers.UvicornWorker \
-     --bind 0.0.0.0:8000 \
-     --timeout 1800 \
-     --graceful-timeout 600 \
-     --keep-alive 1800 \
-     --max-requests 0 \
-     --max-requests-jitter 0 \
-     --forwarded-allow-ips '*' \
-     --worker-connections $WORKER_CONNECTIONS \
-     --worker-tmp-dir /dev/shm \
-     --preload \
-     --log-level info \
-     --access-logfile - \
-     --error-logfile - \
-     --capture-output \
-     --enable-stdio-inheritance \
-     --threads $THREADS"]
+# Run supervisord to manage both processes
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

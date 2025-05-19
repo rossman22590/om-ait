@@ -11,13 +11,68 @@ import uuid
 from agentpress.thread_manager import ThreadManager
 from services.supabase import DBConnection
 from services import redis
-from dramatiq.brokers.rabbitmq import RabbitmqBroker
 import os
 
-rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
-rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
-rabbitmq_broker = RabbitmqBroker(host=rabbitmq_host, port=rabbitmq_port, middleware=[dramatiq.middleware.AsyncIO()])
-dramatiq.set_broker(rabbitmq_broker)
+# Import the Results middleware for store_results=True support
+from dramatiq.results import Results
+from dramatiq.results.backends import RedisBackend
+
+# Set up Redis for results backend
+redis_host = os.getenv('REDIS_HOST', 'localhost')
+redis_port = int(os.getenv('REDIS_PORT', 6379))
+redis_password = os.getenv('REDIS_PASSWORD', None)
+redis_ssl = os.getenv('REDIS_SSL', 'True').lower() in ('true', 't', 'yes', 'y', '1')
+
+# Create the results backend using Redis
+result_backend = RedisBackend(
+    host=redis_host,
+    port=redis_port,
+    password=redis_password,
+    ssl=redis_ssl
+)
+
+# Create the middleware list
+middleware = [
+    dramatiq.middleware.AsyncIO(),
+    Results(backend=result_backend)
+]
+
+# Try to use RabbitMQ first, then fall back to Redis if that fails
+try:
+    # Import RabbitMQ broker
+    from dramatiq.brokers.rabbitmq import RabbitmqBroker
+    import pika
+    
+    # Use the private URL for RabbitMQ from Railway
+    rabbitmq_url = os.getenv('RABBITMQ_URL', 'amqp://axCjB8F1uqm3bbaT:NAzyxiEGjQ14~mhZ.IW2YliWst.USQC-@rabbitmq.railway.internal:5672')
+    
+    # Test the connection first
+    connection_params = pika.URLParameters(rabbitmq_url)
+    connection = pika.BlockingConnection(connection_params)
+    connection.close()
+    
+    # If we get here, the connection was successful
+    rabbitmq_broker = RabbitmqBroker(url=rabbitmq_url, middleware=middleware)
+    broker = rabbitmq_broker
+    logger.info(f"Using RabbitMQ broker at {connection_params.host}:{connection_params.port}")
+    
+except Exception as e:
+    # Fall back to Redis if RabbitMQ connection fails
+    logger.warning(f"Failed to connect to RabbitMQ: {e}. Falling back to Redis.")
+    from dramatiq.brokers.redis import RedisBroker
+    
+    redis_broker = RedisBroker(
+        host=redis_host,
+        port=redis_port,
+        password=redis_password,
+        ssl=redis_ssl,
+        middleware=middleware
+    )
+    broker = redis_broker
+    logger.info(f"Using Redis broker at {redis_host}:{redis_port}")
+
+# Set the broker
+dramatiq.set_broker(broker)
 
 _initialized = False
 db = DBConnection()
@@ -42,8 +97,8 @@ async def initialize():
     logger.info(f"Initialized agent API with instance ID: {instance_id}")
 
 
-@dramatiq.actor
-async def run_agent_background(
+@dramatiq.actor(store_results=True)
+def run_agent_background(
     agent_run_id: str,
     thread_id: str,
     instance_id: str, # Use the global instance ID passed during initialization
@@ -55,8 +110,34 @@ async def run_agent_background(
     enable_context_manager: bool
 ):
     """Run the agent in the background using Redis for state."""
-    await initialize()
+    try:
+        # Use asyncio.run to run the async code
+        asyncio.run(_run_agent_async(
+            agent_run_id, thread_id, instance_id, project_id, model_name,
+            enable_thinking, reasoning_effort, stream, enable_context_manager
+        ))
+    except Exception as e:
+        logger.error(f"Error running agent background task: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+    
+    return {"status": "success"}
 
+
+async def _run_agent_async(
+    agent_run_id: str,
+    thread_id: str,
+    instance_id: str,
+    project_id: str,
+    model_name: str,
+    enable_thinking: Optional[bool],
+    reasoning_effort: Optional[str],
+    stream: bool,
+    enable_context_manager: bool
+):
+    """Async implementation of the agent background task."""
+    # Initialize resources
+    await initialize()
+    
     logger.info(f"Starting background agent run: {agent_run_id} for thread: {thread_id} (Instance: {instance_id})")
     logger.info(f"🚀 Using model: {model_name} (thinking: {enable_thinking}, reasoning_effort: {reasoning_effort})")
 
@@ -65,8 +146,7 @@ async def run_agent_background(
     total_responses = 0
     pubsub = None
     stop_checker = None
-    stop_signal_received = False
-
+    
     # Define Redis keys and channels
     response_list_key = f"agent_run:{agent_run_id}:responses"
     response_channel = f"agent_run:{agent_run_id}:new_response"
@@ -74,19 +154,23 @@ async def run_agent_background(
     global_control_channel = f"agent_run:{agent_run_id}:control"
     instance_active_key = f"active_run:{instance_id}:{agent_run_id}"
 
+    # We'll use an asyncio.Event to signal when to stop
+    stop_event = asyncio.Event()
+    
+    # Define the check_for_stop_signal function
     async def check_for_stop_signal():
-        nonlocal stop_signal_received
+        nonlocal pubsub, total_responses
         if not pubsub: return
         try:
-            while not stop_signal_received:
+            while not stop_event.is_set():
                 message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=0.5)
                 if message and message.get("type") == "message":
                     data = message.get("data")
                     if isinstance(data, bytes): data = data.decode('utf-8')
                     if data == "STOP":
                         logger.info(f"Received STOP signal for agent run {agent_run_id} (Instance: {instance_id})")
-                        stop_signal_received = True
-                        break
+                        stop_event.set()  # Signal to stop
+                        return
                 # Periodically refresh the active run key TTL
                 if total_responses % 50 == 0: # Refresh every 50 responses or so
                     try: await redis.expire(instance_active_key, redis.REDIS_KEY_TTL)
@@ -96,7 +180,7 @@ async def run_agent_background(
             logger.info(f"Stop signal checker cancelled for {agent_run_id} (Instance: {instance_id})")
         except Exception as e:
             logger.error(f"Error in stop signal checker for {agent_run_id}: {e}", exc_info=True)
-            stop_signal_received = True # Stop the run if the checker fails
+            stop_event.set()  # Signal to stop if the checker fails
 
     try:
         # Setup Pub/Sub listener for control signals
@@ -120,7 +204,7 @@ async def run_agent_background(
         error_message = None
 
         async for response in agent_gen:
-            if stop_signal_received:
+            if stop_event.is_set():
                 logger.info(f"Agent run {agent_run_id} stopped by signal.")
                 final_status = "stopped"
                 break
@@ -133,13 +217,13 @@ async def run_agent_background(
 
             # Check for agent-signaled completion or error
             if response.get('type') == 'status':
-                 status_val = response.get('status')
-                 if status_val in ['completed', 'failed', 'stopped']:
-                     logger.info(f"Agent run {agent_run_id} finished via status message: {status_val}")
-                     final_status = status_val
-                     if status_val == 'failed' or status_val == 'stopped':
-                         error_message = response.get('message', f"Run ended with status: {status_val}")
-                     break
+                status_val = response.get('status')
+                if status_val in ['completed', 'failed', 'stopped']:
+                    logger.info(f"Agent run {agent_run_id} finished via status message: {status_val}")
+                    final_status = status_val
+                    if status_val == 'failed' or status_val == 'stopped':
+                        error_message = response.get('message', f"Run ended with status: {status_val}")
+                    break
 
         # If loop finished without explicit completion/error/stop signal, mark as completed
         if final_status == "running":
@@ -218,7 +302,7 @@ async def run_agent_background(
                 logger.warning(f"Error closing pubsub for {agent_run_id}: {str(e)}")
 
         # Set TTL on the response list in Redis
-        await _cleanup_redis_response_list(agent_run_id)
+        await _cleanup_redis_response_list_async(agent_run_id)
 
         # Remove the instance-specific active run key
         await _cleanup_redis_instance_key(agent_run_id)
@@ -241,7 +325,7 @@ async def _cleanup_redis_instance_key(agent_run_id: str):
 # TTL for Redis response lists (24 hours)
 REDIS_RESPONSE_LIST_TTL = 3600 * 24
 
-async def _cleanup_redis_response_list(agent_run_id: str):
+async def _cleanup_redis_response_list_async(agent_run_id: str):
     """Set TTL on the Redis response list."""
     response_list_key = f"agent_run:{agent_run_id}:responses"
     try:
@@ -250,7 +334,47 @@ async def _cleanup_redis_response_list(agent_run_id: str):
     except Exception as e:
         logger.warning(f"Failed to set TTL on response list {response_list_key}: {str(e)}")
 
-async def update_agent_run_status(
+# Non-async wrapper for the async function
+def _cleanup_redis_response_list(agent_run_id: str):
+    """Non-async wrapper for _cleanup_redis_response_list_async."""
+    try:
+        asyncio.run(_cleanup_redis_response_list_async(agent_run_id))
+    except Exception as e:
+        logger.warning(f"Error in _cleanup_redis_response_list: {e}")
+        return False
+    return True
+
+async def update_agent_run_status_async(
+    client,
+    agent_run_id: str,
+    status: str,
+    error: Optional[str] = None,
+    responses: Optional[list[any]] = None # Expects parsed list of dicts
+) -> bool:
+    """
+    Centralized function to update agent run status.
+    Returns True if update was successful.
+    """
+
+# Non-async wrapper for the async function
+def update_agent_run_status(
+    client,
+    agent_run_id: str,
+    status: str,
+    error: Optional[str] = None,
+    responses: Optional[list[any]] = None # Expects parsed list of dicts
+) -> bool:
+    """
+    Non-async wrapper for update_agent_run_status_async.
+    Returns True if update was successful.
+    """
+    try:
+        return asyncio.run(update_agent_run_status_async(client, agent_run_id, status, error, responses))
+    except Exception as e:
+        logger.error(f"Error in update_agent_run_status: {e}", exc_info=True)
+        return False
+
+async def update_agent_run_status_async(
     client,
     agent_run_id: str,
     status: str,

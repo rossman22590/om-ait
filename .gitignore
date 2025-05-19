@@ -194,3 +194,7 @@ supabase/.temp/storage-version
 
 redis_data
 rabbitmq_data
+/backend/logs
+/backend/logs
+/backend/logs/message_fallback
+/backend/backups
