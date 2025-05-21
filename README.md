@@ -1,6 +1,6 @@
 <div align="center">
 
-# Suna - Open Source Generalist AI Agent
+# Machine - Generalist AI Agent
 
 (that acts on your behalf)
 
