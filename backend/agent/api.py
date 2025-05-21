@@ -39,12 +39,14 @@ MODEL_NAME_ALIASES = {
     "gpt-4o": "openai/gpt-4o",
     # "gpt-4-turbo": "openai/gpt-4-turbo",  # Commented out in constants.py
     # "gpt-4": "openai/gpt-4",  # Commented out in constants.py
-    # "gemini-flash-2.5": "openrouter/google/gemini-2.5-flash-preview",  # Commented out in constants.py
-    # "grok-3": "xai/grok-3-fast-latest",  # Commented out in constants.py
+    "gemini-flash-2.5": "openrouter/google/gemini-2.5-flash-preview",
+    "gemini-2.5-flash-preview-04-17": "gemini/gemini-2.5-flash-preview-04-17",
+    "grok-3": "xai/grok-3-fast-latest",
+    "grok-3-fast-latest": "xai/grok-3-fast-latest",
+    "grok-3-mini": "xai/grok-3-mini-fast-beta",
     "deepseek": "openrouter/deepseek/deepseek-chat",
     # "deepseek-r1": "openrouter/deepseek/deepseek-r1",
-    # "grok-3-mini": "xai/grok-3-mini-fast-beta",  # Commented out in constants.py
-    "qwen3": "openrouter/qwen/qwen3-235b-a22b",  # Commented out in constants.py
+    "qwen3": "openrouter/qwen/qwen3-235b-a22b",
 
 
 
@@ -54,13 +56,14 @@ MODEL_NAME_ALIASES = {
     "openai/gpt-4o": "openai/gpt-4o",
     # "openai/gpt-4-turbo": "openai/gpt-4-turbo",  # Commented out in constants.py
     # "openai/gpt-4": "openai/gpt-4",  # Commented out in constants.py
-    # "openrouter/google/gemini-2.5-flash-preview": "openrouter/google/gemini-2.5-flash-preview",  # Commented out in constants.py
-    # "xai/grok-3-fast-latest": "xai/grok-3-fast-latest",  # Commented out in constants.py
+    "openrouter/google/gemini-2.5-flash-preview": "openrouter/google/gemini-2.5-flash-preview",
+    "gemini/gemini-2.5-flash-preview-04-17": "gemini/gemini-2.5-flash-preview-04-17",
+    "xai/grok-3-fast-latest": "xai/grok-3-fast-latest",
+    "xai/grok-3-mini-fast-beta": "xai/grok-3-mini-fast-beta",
     "deepseek/deepseek-chat": "openrouter/deepseek/deepseek-chat",
     # "deepseek/deepseek-r1": "openrouter/deepseek/deepseek-r1",
 
     "qwen/qwen3-235b-a22b": "openrouter/qwen/qwen3-235b-a22b",
-    # "xai/grok-3-mini-fast-beta": "xai/grok-3-mini-fast-beta",  # Commented out in constants.py
 }
 
 class AgentStartRequest(BaseModel):
@@ -113,6 +116,7 @@ async def cleanup():
                     await stop_agent_run(agent_run_id, error_message=f"Instance {instance_id} shutting down")
                 else:
                     logger.warning(f"Unexpected key format found: {key}")
+
         else:
             logger.warning("Instance ID not set, cannot clean up instance-specific agent runs.")
 

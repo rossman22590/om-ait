@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
 
-const LOW_QUALITY_MODELS = ['deepseek', 'grok-3-mini', 'qwen3'];
+const LOW_QUALITY_MODELS = ['deepseek', 'grok-3-mini', 'qwen3', 'grok-3-mini'];
 
 interface ModelSelectorProps {
   selectedModel: string;
