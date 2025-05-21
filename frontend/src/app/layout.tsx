@@ -43,11 +43,11 @@ export const metadata: Metadata = {
     'research',
     'data analysis',
   ],
-  authors: [{ name: 'Kortix Team', url: 'https://suna.so' }],
+  authors: [{ name: 'Machine Team', url: 'https://myapps.ai' }],
   creator:
-    'Kortix Team - Adam Cohen Hillel, Marko Kraemer, Domenico Gagliardi, and Quoc Dat Le',
+    'Machine Team - Ross, Nick, Alisher',
   publisher:
-    'Kortix Team - Adam Cohen Hillel, Marko Kraemer, Domenico Gagliardi, and Quoc Dat Le',
+    'Machine Team - Ross, Nick, Alisher',
   category: 'Technology',
   applicationName: 'Machine',
   formatDetection: {
@@ -71,7 +71,7 @@ export const metadata: Metadata = {
     siteName: 'Machine',
     images: [
       {
-        url: '/banner.png',
+        url: `${siteConfig.url}/banner.png`,
         width: 1200,
         height: 630,
         alt: 'Machine - Generalist AI Agent',
@@ -86,11 +86,11 @@ export const metadata: Metadata = {
     title: 'Machine - Generalist AI Agent',
     description:
       'Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
-    creator: '@kortixai',
-    site: '@kortixai',
+    creator: '@myaitutor',
+    site: '@myaitutor',
     images: [
       {
-        url: '/banner.png',
+        url: `${siteConfig.url}/banner.png`,
         width: 1200,
         height: 630,
         alt: 'Machine - Generalist AI Agent',
