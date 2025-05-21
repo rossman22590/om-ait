@@ -27,7 +27,7 @@ MODEL_NAME_ALIASES = {
     "gpt-4o": "openai/gpt-4o",
     # "gpt-4-turbo": "openai/gpt-4-turbo",  # Commented out in constants.py
     # "gpt-4": "openai/gpt-4",  # Commented out in constants.py
-    # "gemini-flash-2.5": "openrouter/google/gemini-2.5-flash-preview",  # Commented out in constants.py
+    "gemini-pro-2.5": "openrouter/google/gemini-2.5-pro-preview",  # Using Pro Preview instead of Flash
     # "grok-3": "xai/grok-3-fast-latest",  # Commented out in constants.py
     "deepseek": "openrouter/deepseek/deepseek-chat",
     # "deepseek-r1": "openrouter/deepseek/deepseek-r1",
@@ -42,7 +42,7 @@ MODEL_NAME_ALIASES = {
     "openai/gpt-4o": "openai/gpt-4o",
     # "openai/gpt-4-turbo": "openai/gpt-4-turbo",  # Commented out in constants.py
     # "openai/gpt-4": "openai/gpt-4",  # Commented out in constants.py
-    # "openrouter/google/gemini-2.5-flash-preview": "openrouter/google/gemini-2.5-flash-preview",  # Commented out in constants.py
+    "openrouter/google/gemini-2.5-pro-preview": "openrouter/google/gemini-2.5-pro-preview",  # Using Pro Preview instead of Flash
     # "xai/grok-3-fast-latest": "xai/grok-3-fast-latest",  # Commented out in constants.py
     "deepseek/deepseek-chat": "openrouter/deepseek/deepseek-chat",
     # "deepseek/deepseek-r1": "openrouter/deepseek/deepseek-r1",
