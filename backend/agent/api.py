@@ -39,9 +39,8 @@ MODEL_NAME_ALIASES = {
     "gpt-4o": "openai/gpt-4o",
     # "gpt-4-turbo": "openai/gpt-4-turbo",
     # "gpt-4": "openai/gpt-4",
-    "gemini-flash-2.5": "gemini/gemini-2.5-flash-preview",  # Changed from openrouter to gemini provider
-    "gemini-2.5-flash-preview-04-17": "gemini/gemini-2.5-flash-preview-04-17",
-    "gemini-pro-preview": "gemini/gemini-2.5-pro-preview-05-06",
+    "gemini-2.5-flash-preview-04-17": "openrouter/google/gemini-2.5-flash-preview-04-17",
+    "gemini-pro-preview": "openrouter/google/gemini-2.5-pro-preview-05-06",
     "grok-3": "xai/grok-3-fast-latest",
     "grok-3-fast-latest": "xai/grok-3-fast-latest",
     "grok-3-mini": "xai/grok-3-mini-fast-beta",
@@ -55,9 +54,8 @@ MODEL_NAME_ALIASES = {
     "openai/gpt-4o": "openai/gpt-4o",
     # "openai/gpt-4-turbo": "openai/gpt-4-turbo",
     # "openai/gpt-4": "openai/gpt-4",
-    "gemini/gemini-2.5-flash-preview": "gemini/gemini-2.5-flash-preview",  # Changed from openrouter to gemini provider
-    "gemini/gemini-2.5-flash-preview-04-17": "gemini/gemini-2.5-flash-preview-04-17",
-    "gemini/gemini-2.5-pro-preview-05-06": "gemini/gemini-2.5-pro-preview-05-06",
+    "openrouter/google/gemini-2.5-flash-preview-04-17": "openrouter/google/gemini-2.5-flash-preview-04-17",
+    "openrouter/google/gemini-2.5-pro-preview-05-06": "openrouter/google/gemini-2.5-pro-preview-05-06",
     "xai/grok-3-fast-latest": "xai/grok-3-fast-latest",
     "xai/grok-3-mini-fast-beta": "xai/grok-3-mini-fast-beta",
     "openrouter/deepseek/deepseek-chat": "openrouter/deepseek/deepseek-chat",
