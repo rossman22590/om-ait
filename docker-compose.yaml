@@ -77,12 +77,12 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3001:3001"
     volumes:
       - ./frontend/.env.local:/app/.env.local:ro
     environment:
       - NODE_ENV=production
-    command: ["npm", "run", "start"]
+    command: ["npm", "run", "start", "--", "-p", "3001"]
     depends_on:
       - backend
 
