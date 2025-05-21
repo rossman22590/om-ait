@@ -27,6 +27,7 @@ const MODEL_DESCRIPTIONS: Record<string, string> = {
   'gpt-4': 'GPT-4 - OpenAI\'s highly capable model with advanced reasoning',
   'gemini-flash-2.5': 'Gemini Flash 2.5 - Google\'s fast, responsive AI model',
   'gemini-2.5-flash-preview-04-17': 'Gemini 2.5 Flash Preview - Google\'s latest fast, responsive AI model',
+  'gemini-pro-preview': 'Gemini 2.5 Pro Preview - Google\'s most powerful model with enhanced reasoning',
   'grok-3': 'Grok-3 - xAI\'s latest large language model with enhanced capabilities',
   'grok-3-fast-latest': 'Grok-3 Fast - xAI\'s latest large language model optimized for speed',
   'deepseek': 'DeepSeek - Free tier model with good general capabilities',
@@ -75,7 +76,7 @@ export const useModelSelection = () => {
       ];
     }
 
-    const topModels = ['sonnet-3.7', 'gemini-flash-2.5'];
+    const topModels = ['sonnet-3.7', 'gemini-flash-2.5', 'gemini-pro-preview', 'grok-3', 'gemini-2.5-flash-preview-04-17'];
 
     return modelsData.models.map(model => {
       const shortName = model.short_name || model.id;
@@ -92,7 +93,8 @@ export const useModelSelection = () => {
         .map(word => word.charAt(0).toUpperCase() + word.slice(1))
         .join(' ');
       
-      const isPremium = shortName !== DEFAULT_FREE_MODEL_ID;
+      // Grok-3-mini is free tier, all others are premium
+      const isPremium = !['deepseek', 'grok-3-mini', 'qwen3'].includes(shortName);
       
       return {
         id: shortName,
