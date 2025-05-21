@@ -43,11 +43,11 @@ export const metadata: Metadata = {
     'research',
     'data analysis',
   ],
-  authors: [{ name: 'Machine Team', url: 'https://myapps.ai' }],
+  authors: [{ name: 'Machine Team', url: 'https://beta-machinev5.vercel.app/' }],
   creator:
-    'Machine Team - Ross, Nick, Alisher',
+    'Machine Team - AI Tutor Team',
   publisher:
-    'Machine Team - Ross, Nick, Alisher',
+    'Machine Team - AI Tutor Team',
   category: 'Technology',
   applicationName: 'Machine',
   formatDetection: {

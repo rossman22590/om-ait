@@ -25,7 +25,7 @@ const MODEL_DESCRIPTIONS: Record<string, string> = {
   'gpt-4o': 'GPT-4o - Optimized for speed, reliability, and cost-effectiveness',
   'gpt-4-turbo': 'GPT-4 Turbo - OpenAI\'s powerful model with a great balance of performance and cost',
   'gpt-4': 'GPT-4 - OpenAI\'s highly capable model with advanced reasoning',
-  'gemini-flash-2.5': 'Gemini Pro 2.5 - Google\'s powerful AI model with enhanced reasoning',
+  'gemini-flash-2.5': 'Gemini Flash 2.5 - Google\'s fast, responsive AI model',
   'grok-3': 'Grok-3 - xAI\'s latest large language model with enhanced capabilities',
   'deepseek': 'DeepSeek - Free tier model with good general capabilities',
   'deepseek-r1': 'DeepSeek R1 - Advanced model with enhanced reasoning and coding capabilities',
