@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   authors: [
     {
       name: 'Machine AI Corp',
-      url: 'https://machine.ai',
+      url: 'https://beta-machinev5.vercel.app',
     },
   ],
   creator: 'Machine AI Corp',
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: siteConfig.name,
     description: siteConfig.description,
-    creator: '@kortixai',
+    creator: '@myaitutor',
   },
   robots: {
     index: true,

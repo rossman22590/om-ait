@@ -1,11 +1,11 @@
 export const siteConfig = {
   name: 'Machine',
-  url: 'https://machine.ai/',
+  url: 'https://beta-machinev5.vercel.app ',
   description: 'Machine AI',
   links: {
-    twitter: 'https://x.com/machineai',
-    github: 'https://github.com/machine-ai/',
-    linkedin: 'https://www.linkedin.com/company/kortix/',
+    twitter: 'https://x.com/myaitutor',
+    github: 'https://github.com/myaitutor/',
+    linkedin: 'https://www.linkedin.com/company/myaitutor/',
   },
 };
 
