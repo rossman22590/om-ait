@@ -18,6 +18,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/components/ui/sidebar"
 import { ShareModal } from "@/components/sidebar/share-modal"
+import { ThreadTimer } from "@/components/thread/thread-timer"
 
 interface ThreadSiteHeaderProps {
   threadId: string;
@@ -177,6 +178,11 @@ export function SiteHeader({
               Debug
             </div>
           )}
+          
+          {/* Thread Timer */}
+          <div className="mr-2">
+            <ThreadTimer threadId={threadId} />
+          </div>
 
           {isMobile ? (
             // Mobile view - only show the side panel toggle

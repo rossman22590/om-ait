@@ -4,7 +4,7 @@ import { getThread, getProject } from '@/lib/api-server';
 export async function generateMetadata({ params }): Promise<Metadata> {
   const { threadId } = await params;
   const fallbackMetaData = {
-    title: 'Shared Conversation | Kortix Suna',
+    title: 'Shared Conversation | Machine',
     description: 'Replay this Agent conversation on Machine',
     alternates: {
       canonical: `${process.env.NEXT_PUBLIC_URL}/share/${threadId}`,

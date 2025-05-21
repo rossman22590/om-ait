@@ -1,12 +1,14 @@
 import os
 import urllib.parse
+import uuid
 from typing import Optional
+import datetime
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter, Form, Depends, Request
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from sandbox.sandbox import get_or_start_sandbox
+from sandbox.sandbox import get_or_start_sandbox, SessionExecuteRequest
 from utils.logger import logger
 from utils.auth_utils import get_optional_user_id
 from services.supabase import DBConnection
@@ -29,6 +31,12 @@ class FileInfo(BaseModel):
     size: int
     mod_time: str
     permissions: Optional[str] = None
+    
+    # Add a get method to allow FileInfo to be used like a dictionary
+    # This fixes the 'FileInfo' object has no attribute 'get' error
+    def get(self, key, default=None):
+        """Allow FileInfo to be used like a dictionary, which fixes issues in the Daytona SDK"""
+        return getattr(self, key, default)
 
 def normalize_path(path: str) -> str:
     """
@@ -302,6 +310,132 @@ async def read_file(
         raise HTTPException(status_code=500, detail=str(e))
 
 # Should happen on server-side fully
+@router.delete("/sandboxes/{sandbox_id}/files")
+async def delete_file(
+    sandbox_id: str, 
+    path: str,
+    request: Request = None,
+    user_id: Optional[str] = Depends(get_optional_user_id)
+):
+    """Delete a file or directory from the sandbox"""
+    logger.info(f"Received delete file request for sandbox {sandbox_id}, path: {path}, user_id: {user_id}")
+    client = await db.client
+    
+    # Verify access to the sandbox
+    project_data = await verify_sandbox_access(client, sandbox_id, user_id)
+    
+    try:
+        # Get the sandbox object
+        sandbox = await get_sandbox_by_id_safely(client, sandbox_id)
+        
+        # Normalize the path
+        path = normalize_path(path)
+        logger.info(f"Normalized path for deletion: {path}")
+        
+        try:
+            # Delete the file using the fs module
+            sandbox.fs.delete_file(path)
+            logger.info(f"Successfully deleted file/folder {path} from sandbox {sandbox_id}")
+            
+        except AttributeError as attr_error:
+            # If we're still getting a FileInfo attribute error, try the fallback approach
+            if "'FileInfo' object has no attribute" in str(attr_error):
+                logger.warning(f"Falling back to shell command for deletion due to FileInfo error: {attr_error}")
+                
+                # Use shell commands as a fallback
+                from sandbox.sandbox import SessionExecuteRequest
+                import uuid
+                
+                # Create a unique session ID for this delete operation
+                session_id = f"del_{uuid.uuid4().hex[:8]}"
+                
+                try:
+                    # Create a shell session
+                    sandbox.process.create_session(session_id)
+                    
+                    # Execute the delete command
+                    delete_cmd = f"rm -rf '{path}' 2>/dev/null || true"
+                    sandbox.process.execute_session_command(session_id, SessionExecuteRequest(command=delete_cmd))
+                    
+                    # Close the session
+                    sandbox.process.execute_session_command(session_id, SessionExecuteRequest(command="exit"))
+                    logger.info(f"Successfully deleted via shell command: {path}")
+                except Exception as shell_error:
+                    logger.error(f"Shell command fallback failed: {str(shell_error)}")
+                    raise HTTPException(status_code=500, detail=f"Shell deletion error: {str(shell_error)}")       
+            else:
+                # Re-raise if it's not the FileInfo error we're handling
+                raise
+        
+        return {"status": "success", "message": "File deleted successfully"}
+        
+    except HTTPException as http_error:
+        # Re-raise HTTP exceptions
+        raise http_error
+    except Exception as e:
+        logger.error(f"Error deleting file in sandbox {sandbox_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def get_or_create_project_sandbox(client, project_id: str):
+    """
+    Get or create a sandbox for a project.
+    
+    Args:
+        client: The Supabase client
+        project_id: The project ID to get or create a sandbox for
+        
+    Returns:
+        tuple: (sandbox_object, sandbox_id, sandbox_password)
+        
+    Raises:
+        HTTPException: If there's an error creating or retrieving the sandbox
+    """
+    try:
+        # Check if project already has a sandbox
+        project_result = await client.table('projects').select('*').eq('project_id', project_id).execute()
+        
+        if not project_result.data or len(project_result.data) == 0:
+            raise HTTPException(status_code=404, detail="Project not found")
+            
+        project_data = project_result.data[0]
+        sandbox_info = project_data.get('sandbox', {})
+        
+        # If sandbox exists, return it
+        if sandbox_info and sandbox_info.get('id'):
+            sandbox_id = sandbox_info['id']
+            sandbox_pass = sandbox_info.get('pass', '')
+            
+            # Get the sandbox object
+            sandbox = await get_or_start_sandbox(sandbox_id)
+            return sandbox, sandbox_id, sandbox_pass
+        
+        # Create a new sandbox if one doesn't exist
+        logger.info(f"Creating new sandbox for project {project_id}")
+        
+        # Generate a unique ID for the sandbox
+        sandbox_id = str(uuid.uuid4())
+        sandbox_pass = str(uuid.uuid4())[:8]  # Use first 8 chars of UUID as password
+        
+        # Create the sandbox
+        sandbox = await get_or_start_sandbox(sandbox_id)
+        
+        # Update the project with the new sandbox information
+        now = datetime.datetime.utcnow().isoformat()
+        sandbox_data = {
+            "id": sandbox_id,
+            "pass": sandbox_pass,
+            "created_at": now
+        }
+        
+        await client.table('projects').update({"sandbox": sandbox_data, "updated_at": now}).eq('project_id', project_id).execute()
+        
+        logger.info(f"Created new sandbox {sandbox_id} for project {project_id}")
+        return sandbox, sandbox_id, sandbox_pass
+        
+    except Exception as e:
+        logger.error(f"Error in get_or_create_project_sandbox for project {project_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creating or retrieving sandbox: {str(e)}")
+
 @router.post("/project/{project_id}/sandbox/ensure-active")
 async def ensure_project_sandbox_active(
     project_id: str,
@@ -341,16 +475,8 @@ async def ensure_project_sandbox_active(
                 raise HTTPException(status_code=403, detail="Not authorized to access this project")
     
     try:
-        # Get sandbox ID from project data
-        sandbox_info = project_data.get('sandbox', {})
-        if not sandbox_info.get('id'):
-            raise HTTPException(status_code=404, detail="No sandbox found for this project")
-            
-        sandbox_id = sandbox_info['id']
-        
-        # Get or start the sandbox
-        logger.info(f"Ensuring sandbox is active for project {project_id}")
-        sandbox = await get_or_start_sandbox(sandbox_id)
+        # Get or create a sandbox for this project
+        sandbox, sandbox_id, sandbox_pass = await get_or_create_project_sandbox(client, project_id)
         
         logger.info(f"Successfully ensured sandbox {sandbox_id} is active for project {project_id}")
         

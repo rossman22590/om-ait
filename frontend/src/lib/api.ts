@@ -1148,6 +1148,56 @@ function normalizePathWithUnicode(path: string): string {
   }
 }
 
+export const deleteSandboxFile = async (
+  sandboxId: string,
+  path: string,
+): Promise<boolean> => {
+  try {
+    // Use the direct API endpoint for file operations
+    console.log(`[API] Attempting to delete file: ${path}`);
+    
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error('No access token available');
+    }
+    
+    // The backend has a DELETE endpoint at /sandboxes/{sandbox_id}/files
+    // with a query parameter 'path'
+    const url = new URL(`${API_URL}/sandboxes/${sandboxId}/files`);
+    
+    // Ensure path is properly encoded - the backend will normalize it
+    // We don't need to use normalizePathWithUnicode here as the backend does that
+    url.searchParams.append('path', path);
+    
+    console.log(`[API] Sending DELETE request to: ${url.toString()}`);
+    
+    const response = await fetch(url.toString(), {
+      method: 'DELETE',  // Backend expects DELETE method
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`
+      }
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[API] Delete failed: ${response.status} ${response.statusText}`, errorText);
+      throw new Error(`Failed to delete file: ${errorText || response.statusText}`);
+    }
+    
+    console.log(`[API] File deleted successfully`);
+    return true;
+  } catch (error) {
+    console.error('Error deleting sandbox file:', error);
+    return false;
+  }
+};
+
+
+
 export const listSandboxFiles = async (
   sandboxId: string,
   path: string,
