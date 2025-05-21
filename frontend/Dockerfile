@@ -26,7 +26,7 @@ COPY . .
 
 RUN npm run build
 
-EXPOSE 3001
+EXPOSE 3000
 
 # Default command is dev, but can be overridden in docker-compose
 CMD ["npm", "start"]
