@@ -108,13 +108,12 @@ class Configuration:
             return self.STRIPE_TIER_200_1000_ID_STAGING
         return self.STRIPE_TIER_200_1000_ID_PROD
     
-    # API keys
+    # LLM API keys
+    ANTHROPIC_API_KEY: str = None
     OPENAI_API_KEY: Optional[str] = None
-    ANTHROPIC_API_KEY: Optional[str] = None
     GROQ_API_KEY: Optional[str] = None
     OPENROUTER_API_KEY: Optional[str] = None
-    OPENROUTER_API_BASE: str = "https://openrouter.ai/api/v1"
-    GEMINI_API_KEY: Optional[str] = None
+    OPENROUTER_API_BASE: Optional[str] = "https://openrouter.ai/api/v1"
     OR_SITE_URL: Optional[str] = "https://kortix.ai"
     OR_APP_NAME: Optional[str] = "Kortix AI"    
     
