@@ -43,7 +43,7 @@ export const metadata: Metadata = {
     'research',
     'data analysis',
   ],
-  authors: [{ name: 'Machine Team', url: 'https://beta-machinev5.vercel.app/' }],
+  authors: [{ name: 'Machine Team', url: 'https://beta-machinev5.vercel.app' }],
   creator:
     'Machine Team - AI Tutor Team',
   publisher:
