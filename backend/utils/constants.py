@@ -20,6 +20,7 @@ MODEL_ACCESS_TIERS = {
     ],
     "tier_6_50": [
         "openrouter/deepseek/deepseek-chat",
+        "openrouter/google/gemini-2.5-pro-preview",
         # "xai/grok-3-mini-fast-beta",
         "openai/gpt-4o",
         # "openai/gpt-4-turbo",
@@ -62,6 +63,7 @@ MODEL_ACCESS_TIERS = {
     ],
     "tier_50_400": [
         "openrouter/deepseek/deepseek-chat",
+        "openrouter/google/gemini-2.5-pro-preview",
         # "xai/grok-3-mini-fast-beta",
         "openai/gpt-4o",
         # "openai/gpt-4-turbo",
@@ -82,6 +84,8 @@ MODEL_ACCESS_TIERS = {
         # "xai/grok-3-fast-latest",
         "openrouter/google/gemini-2.5-flash-preview-05-20",  # Added
         # "openai/gpt-4",
+        "openrouter/google/gemini-2.5-pro-preview",
+        "openrouter/google/gemini-2.5-flash-preview-05-20:thinking"
         "anthropic/claude-3-7-sonnet-latest",
         "anthropic/claude-sonnet-4-20250514",
         # "openai/gpt-4.1-2025-04-14",

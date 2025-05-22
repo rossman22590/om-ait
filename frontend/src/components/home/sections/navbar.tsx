@@ -100,10 +100,10 @@ export function Navbar() {
   const handleOverlayClick = () => setIsDrawerOpen(false);
 
   const logoSrc = !mounted
-    ? '/kortix-logo.svg'
+    ? '/logo.png'
     : resolvedTheme === 'dark'
       ? '/kortix-logo-white.svg'
-      : '/kortix-logo.svg';
+      : '/logo.png';
 
   return (
     <header
@@ -214,7 +214,7 @@ export function Navbar() {
                       priority
                     />
                     <span className="font-medium text-primary text-sm">
-                      / Suna
+                      / Machine
                     </span>
                   </Link>
                   <button

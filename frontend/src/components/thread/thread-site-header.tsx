@@ -18,6 +18,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/components/ui/sidebar"
 import { ShareModal } from "@/components/sidebar/share-modal"
+import { ThreadTimer } from "@/components/thread/thread-timer"
 
 interface ThreadSiteHeaderProps {
   threadId: string;
@@ -170,7 +171,10 @@ export function SiteHeader({
           )}
         </div>
 
-        <div className="flex items-center gap-1 pr-4">
+        <div className="flex items-center gap-2 pr-4">
+          {/* Thread Timer */}
+          <ThreadTimer threadId={threadId} />
+          
           {/* Debug mode indicator */}
           {debugMode && (
             <div className="bg-amber-500 text-black text-xs px-2 py-0.5 rounded-md mr-2">
