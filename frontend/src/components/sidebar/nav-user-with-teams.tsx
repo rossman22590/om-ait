@@ -303,6 +303,10 @@ export function NavUserWithTeams({
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-muted-foreground cursor-default">
+                <span className="text-xs">Version 6</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem className='text-destructive focus:text-destructive focus:bg-destructive/10' onClick={handleLogout}>
                 <LogOut className="h-4 w-4 text-destructive" />
                 Log out
