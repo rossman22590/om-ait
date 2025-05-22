@@ -1083,6 +1083,55 @@ export const createSandboxFile = async (
   }
 };
 
+// Delete a file or directory in the sandbox
+export const deleteSandboxFile = async (
+  sandboxId: string,
+  filePath: string,
+): Promise<boolean> => {
+  try {
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error('No access token available');
+    }
+
+    // Encode the path parameter to handle special characters
+    const encodedPath = encodeURIComponent(filePath);
+    
+    const response = await fetch(
+      `${API_URL}/sandboxes/${sandboxId}/files?path=${encodedPath}`,
+      {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response
+        .text()
+        .catch(() => 'No error details available');
+      console.error(
+        `Error deleting sandbox file: ${response.status} ${response.statusText}`,
+        errorText,
+      );
+      throw new Error(
+        `Error deleting sandbox file: ${response.statusText} (${response.status})`,
+      );
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Failed to delete sandbox file:', error);
+    return false;
+  }
+};
+
 // Fallback method for legacy support using JSON
 export const createSandboxFileJson = async (
   sandboxId: string,
