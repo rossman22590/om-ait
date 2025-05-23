@@ -238,7 +238,7 @@ class SandboxDeployTool(SandboxToolsBase):
         NOTE: If the same name is used, it will redeploy to the same project as before
                 -->
 
-        <deploy name="my-site" directory_path="website" setup_custom_domain="true">
+        <deploy name="my-site" directory_path="website" setup_custom_domain="True">
         </deploy>
         '''
     )
