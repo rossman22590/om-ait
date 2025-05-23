@@ -215,7 +215,7 @@ class SandboxDeployTool(SandboxToolsBase):
                     "setup_custom_domain": {
                         "type": "boolean",
                         "description": "Whether to set up a custom domain (requires Cloudflare credentials)",
-                        "default": true
+                        "default": True
                     }
                 },
                 "required": ["name", "directory_path"]
