@@ -5,6 +5,7 @@ import json
 import requests
 import time
 import random
+import functools
 from dotenv import load_dotenv
 from agentpress.tool import ToolResult, openapi_schema, xml_schema
 from sandbox.tool_base import SandboxToolsBase
@@ -196,81 +197,31 @@ class SandboxDeployTool(SandboxToolsBase):
             logger.error(f"Exception when assigning domain to {project_name}: {str(e)}")
             return False
 
-    @openapi_schema({
-        "type": "function",
-        "function": {
-            "name": "deploy",
-            "description": "Deploy a static website (HTML+CSS+JS) from a directory in the sandbox to Cloudflare Pages with optional custom domain setup. Only use this tool when permanent deployment to a production environment is needed. The directory path must be relative to /workspace.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {
-                        "type": "string",
-                        "description": "Name for the deployment, will be used in the URL as {name}.pages.dev or with a custom domain if available"
-                    },
-                    "directory_path": {
-                        "type": "string",
-                        "description": "Path to the directory containing the static website files to deploy, relative to /workspace (e.g., 'build')"
-                    },
-                    "setup_custom_domain": {
-                        "type": "boolean",
-                        "description": "Whether to set up a custom domain (requires Cloudflare credentials)",
-                        "default": True
-                    }
-                },
-                "required": ["name", "directory_path"]
-            }
-        }
-    })
-    @xml_schema(
-        tag_name="deploy",
-        mappings=[
-            {"param_name": "name", "node_type": "attribute", "path": "name"},
-            {"param_name": "directory_path", "node_type": "attribute", "path": "directory_path"},
-            {"param_name": "setup_custom_domain", "node_type": "attribute", "path": "setup_custom_domain"}
-        ],
-        example='''
-        <!-- 
-        IMPORTANT: Only use this tool when:
-        1. The user explicitly requests permanent deployment to production
-        2. You have a complete, ready-to-deploy directory 
-        
-        NOTE: If the same name is used, it will redeploy to the same project as before
-                -->
-
-        <deploy name="my-site" directory_path="website" setup_custom_domain="True">
-        </deploy>
-        '''
-    )
-    def deploy(self, name: str, directory_path: str, setup_custom_domain: bool = True) -> ToolResult:
-        """
-        Deploy a static website (HTML+CSS+JS) from the sandbox to Cloudflare Pages.
-        Only use this tool when permanent deployment to a production environment is needed.
-        
-        Args:
-            name: Name for the deployment, will be used in the URL as {name}.pages.dev or custom domain
-            directory_path: Path to the directory to deploy, relative to /workspace
-            setup_custom_domain: Whether to set up a custom domain (requires Cloudflare credentials)
+    def sync_ensure_sandbox(self):
+        """Synchronous wrapper for _ensure_sandbox"""
+        try:
+            # Create a new event loop
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             
-        Returns:
-            ToolResult containing:
-            - Success: Deployment information including URL
-            - Failure: Error message if deployment fails
-        """
-        logger.info(f"Starting deployment with name: {name}, directory: {directory_path}")
+            # Run the async method in the loop
+            return loop.run_until_complete(self._ensure_sandbox())
+        except Exception as e:
+            logger.error(f"Error in sync_ensure_sandbox: {str(e)}", exc_info=True)
+            raise
+        finally:
+            # Clean up the loop
+            if loop:
+                loop.close()
+    
+    async def async_deploy(self, name: str, directory_path: str, setup_custom_domain: bool = True) -> ToolResult:
+        """Async implementation of the deploy method"""
+        logger.info(f"Starting async deployment with name: {name}, directory: {directory_path}")
         try:
             # Ensure sandbox is initialized
             logger.info("Initializing sandbox connection...")
-            try:
-                # Use synchronous version for sandbox initialization
-                import asyncio
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(self._ensure_sandbox())
-                logger.info(f"Sandbox initialized successfully: {self.sandbox_id}")
-            except Exception as sandbox_error:
-                logger.error(f"Sandbox initialization failed: {str(sandbox_error)}", exc_info=True)
-                return self.fail_response(f"Failed to initialize sandbox: {str(sandbox_error)}")
+            await self._ensure_sandbox()
+            logger.info(f"Sandbox initialized successfully: {self.sandbox_id}")
             
             directory_path = self.clean_path(directory_path)
             full_path = f"{self.workspace_path}/{directory_path}"
@@ -409,6 +360,91 @@ class SandboxDeployTool(SandboxToolsBase):
         except Exception as e:
             logger.error(f"Error deploying website: {str(e)}", exc_info=True)
             return self.fail_response(f"Error deploying website: {str(e)}")
+    
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "deploy",
+            "description": "Deploy a static website (HTML+CSS+JS) from a directory in the sandbox to Cloudflare Pages with optional custom domain setup. Only use this tool when permanent deployment to a production environment is needed. The directory path must be relative to /workspace.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Name for the deployment, will be used in the URL as {name}.pages.dev or with a custom domain if available"
+                    },
+                    "directory_path": {
+                        "type": "string",
+                        "description": "Path to the directory containing the static website files to deploy, relative to /workspace (e.g., 'build')"
+                    },
+                    "setup_custom_domain": {
+                        "type": "boolean",
+                        "description": "Whether to set up a custom domain (requires Cloudflare credentials)",
+                        "default": True
+                    }
+                },
+                "required": ["name", "directory_path"]
+            }
+        }
+    })
+    @xml_schema(
+        tag_name="deploy",
+        mappings=[
+            {"param_name": "name", "node_type": "attribute", "path": "name"},
+            {"param_name": "directory_path", "node_type": "attribute", "path": "directory_path"},
+            {"param_name": "setup_custom_domain", "node_type": "attribute", "path": "setup_custom_domain"}
+        ],
+        example='''
+        <!-- 
+        IMPORTANT: Only use this tool when:
+        1. The user explicitly requests permanent deployment to production
+        2. You have a complete, ready-to-deploy directory 
+        
+        NOTE: If the same name is used, it will redeploy to the same project as before
+                -->
+
+        <deploy name="my-site" directory_path="website" setup_custom_domain="True">
+        </deploy>
+        '''
+    )
+    def deploy(self, name: str, directory_path: str, setup_custom_domain: bool = True) -> ToolResult:
+        """
+        Deploy a static website (HTML+CSS+JS) from the sandbox to Cloudflare Pages.
+        Only use this tool when permanent deployment to a production environment is needed.
+        
+        Args:
+            name: Name for the deployment, will be used in the URL as {name}.pages.dev or custom domain
+            directory_path: Path to the directory to deploy, relative to /workspace
+            setup_custom_domain: Whether to set up a custom domain (requires Cloudflare credentials)
+            
+        Returns:
+            ToolResult containing:
+            - Success: Deployment information including URL
+            - Failure: Error message if deployment fails
+        """
+        logger.info(f"Starting synchronous deployment wrapper with name: {name}, directory: {directory_path}")
+        
+        try:
+            # Initialize the sandbox synchronously first
+            self.sync_ensure_sandbox()
+            
+            # Create a new event loop for the async deployment
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            try:
+                # Run the async deployment method
+                result = loop.run_until_complete(self.async_deploy(name, directory_path, setup_custom_domain))
+                return result
+            except Exception as e:
+                logger.error(f"Error in async deployment: {str(e)}", exc_info=True)
+                return self.fail_response(f"Deployment failed: {str(e)}")
+            finally:
+                # Clean up the loop
+                loop.close()
+        except Exception as e:
+            logger.error(f"Error in synchronous deployment wrapper: {str(e)}", exc_info=True)
+            return self.fail_response(f"Deployment failed: {str(e)}")
 
 if __name__ == "__main__":
     import sys
