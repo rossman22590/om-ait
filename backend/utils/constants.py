@@ -85,7 +85,7 @@ MODEL_ACCESS_TIERS = {
         "openrouter/google/gemini-2.5-flash-preview-05-20",  # Added
         # "openai/gpt-4",
         "openrouter/google/gemini-2.5-pro-preview",
-        "openrouter/google/gemini-2.5-flash-preview-05-20:thinking"
+        "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
         "anthropic/claude-3-7-sonnet-latest",
         "anthropic/claude-sonnet-4-20250514",
         # "openai/gpt-4.1-2025-04-14",
