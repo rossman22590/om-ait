@@ -60,7 +60,7 @@ class SandboxDeployTool(SandboxToolsBase):
         </deploy>
         '''
     )
-    def deploy(self, name: str, directory_path: str) -> ToolResult:
+    async def deploy(self, name: str, directory_path: str) -> ToolResult:
         """
         Deploy a static website (HTML+CSS+JS) from the sandbox to Cloudflare Pages.
         Only use this tool when permanent deployment to a production environment is needed.
@@ -74,57 +74,46 @@ class SandboxDeployTool(SandboxToolsBase):
             - Success: Deployment information including URL
             - Failure: Error message if deployment fails
         """
-        import asyncio
-        
         try:
-            # Create a new event loop and run the async sandbox initialization
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            # Ensure sandbox is initialized
+            await self._ensure_sandbox()
             
+            directory_path = self.clean_path(directory_path)
+            full_path = f"{self.workspace_path}/{directory_path}"
+            
+            # Verify the directory exists
             try:
-                # Ensure sandbox is initialized
-                loop.run_until_complete(self._ensure_sandbox())
-                
-                directory_path = self.clean_path(directory_path)
-                full_path = f"{self.workspace_path}/{directory_path}"
-                
-                # Verify the directory exists
-                try:
-                    dir_info = self.sandbox.fs.get_file_info(full_path)
-                    if not dir_info.is_dir:
-                        return self.fail_response(f"'{directory_path}' is not a directory")
-                except Exception as e:
-                    return self.fail_response(f"Directory '{directory_path}' does not exist: {str(e)}")
-                
-                # Deploy to Cloudflare Pages directly from the container
-                try:
-                    # Get Cloudflare API token from environment
-                    if not self.cloudflare_api_token:
-                        return self.fail_response("CLOUDFLARE_API_TOKEN environment variable not set")
-                        
-                    # Single command that creates the project if it doesn't exist and then deploys
-                    project_name = f"{self.sandbox_id}-{name}"
-                    deploy_cmd = f'''cd {self.workspace_path} && export CLOUDFLARE_API_TOKEN={self.cloudflare_api_token} && 
-                        (npx wrangler pages deploy {full_path} --project-name {project_name} || 
-                        (npx wrangler pages project create {project_name} --production-branch production && 
-                        npx wrangler pages deploy {full_path} --project-name {project_name}))'''
-
-                    # Execute the command directly using the sandbox's process.exec method
-                    response = self.sandbox.process.exec(deploy_cmd, timeout=300)
-                    
-                    if response.exit_code == 0:
-                        return self.success_response({
-                            "message": f"Website deployed successfully",
-                            "output": response.result
-                        })
-                    else:
-                        return self.fail_response(f"Deployment failed with exit code {response.exit_code}: {response.result}")
-                except Exception as e:
-                    return self.fail_response(f"Error during deployment: {str(e)}")
+                dir_info = self.sandbox.fs.get_file_info(full_path)
+                if not dir_info.is_dir:
+                    return self.fail_response(f"'{directory_path}' is not a directory")
             except Exception as e:
-                return self.fail_response(f"Error deploying website: {str(e)}")
-            finally:
-                loop.close()
+                return self.fail_response(f"Directory '{directory_path}' does not exist: {str(e)}")
+            
+            # Deploy to Cloudflare Pages directly from the container
+            try:
+                # Get Cloudflare API token from environment
+                if not self.cloudflare_api_token:
+                    return self.fail_response("CLOUDFLARE_API_TOKEN environment variable not set")
+                    
+                # Single command that creates the project if it doesn't exist and then deploys
+                project_name = f"{self.sandbox_id}-{name}"
+                deploy_cmd = f'''cd {self.workspace_path} && export CLOUDFLARE_API_TOKEN={self.cloudflare_api_token} && 
+                    (npx wrangler pages deploy {full_path} --project-name {project_name} || 
+                    (npx wrangler pages project create {project_name} --production-branch production && 
+                    npx wrangler pages deploy {full_path} --project-name {project_name}))'''
+
+                # Execute the command directly using the sandbox's process.exec method
+                response = self.sandbox.process.exec(deploy_cmd, timeout=300)
+                
+                if response.exit_code == 0:
+                    return self.success_response({
+                        "message": f"Website deployed successfully",
+                        "output": response.result
+                    })
+                else:
+                    return self.fail_response(f"Deployment failed with exit code {response.exit_code}: {response.result}")
+            except Exception as e:
+                return self.fail_response(f"Error during deployment: {str(e)}")
         except Exception as e:
             import traceback
             print(f"Error in deploy: {str(e)}")
@@ -136,7 +125,7 @@ if __name__ == "__main__":
     import asyncio
     import sys
     
-    def test_deploy():
+    async def test_deploy():
         # Replace these with actual values for testing
         sandbox_id = "sandbox-ccb30b35"
         from agentpress.thread_manager import ThreadManager
@@ -146,10 +135,10 @@ if __name__ == "__main__":
         deploy_tool = SandboxDeployTool(sandbox_id, thread_manager)
         
         # Test deployment - replace with actual directory path and site name
-        result = deploy_tool.deploy(
+        result = await deploy_tool.deploy(
             name="test-site-1x",
             directory_path="website"  # Directory containing static site files
         )
         print(f"Deployment result: {result}")
             
-    test_deploy()
+    asyncio.run(test_deploy())
