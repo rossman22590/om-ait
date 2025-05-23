@@ -490,10 +490,8 @@ function PricingTier({
   } else {
     // Non-authenticated state styling
     buttonVariant = tier.buttonColor as ButtonVariant;
-    buttonClassName =
-      tier.buttonColor === 'default'
-        ? 'bg-primary hover:bg-primary/90 text-white'
-        : 'bg-secondary hover:bg-secondary/90 text-white';
+    // Use the buttonColor directly from the tier configuration
+    buttonClassName = tier.buttonColor;
   }
 
   return (
@@ -510,7 +508,7 @@ function PricingTier({
         <p className="text-sm flex items-center gap-2">
           {tier.name}
           {tier.isPopular && (
-            <span className="bg-gradient-to-b from-secondary/50 from-[1.92%] to-secondary to-[100%] text-white h-6 inline-flex w-fit items-center justify-center px-2 rounded-full text-sm shadow-[0px_6px_6px_-3px_rgba(0,0,0,0.08),0px_3px_3px_-1.5px_rgba(0,0,0,0.08),0px_1px_1px_-0.5px_rgba(0,0,0,0.08),0px_0px_0px_1px_rgba(255,255,255,0.12)_inset,0px_1px_0px_0px_rgba(255,255,255,0.12)_inset]">
+            <span className="bg-gradient-to-b from-purple-500/80 from-[1.92%] to-purple-600 to-[100%] text-white h-6 inline-flex w-fit items-center justify-center px-2 rounded-full text-sm shadow-[0px_6px_6px_-3px_rgba(0,0,0,0.08),0px_3px_3px_-1.5px_rgba(0,0,0,0.08),0px_1px_1px_-0.5px_rgba(0,0,0,0.08),0px_0px_0px_1px_rgba(255,255,255,0.12)_inset,0px_1px_0px_0px_rgba(255,255,255,0.12)_inset]">
               Popular
             </span>
           )}
@@ -583,11 +581,11 @@ function PricingTier({
         <Button
           onClick={() => handleSubscribe(tierPriceId)}
           disabled={buttonDisabled}
-          variant={buttonVariant || 'default'}
+          variant="default"
           className={cn(
-            'w-full font-medium transition-all duration-200',
+            'w-full font-medium transition-all duration-200 bg-purple-600 hover:bg-purple-700 text-white',
             isCompact ? 'h-7 rounded-md text-xs' : 'h-10 rounded-full text-sm',
-            buttonClassName,
+            buttonDisabled ? 'opacity-50 cursor-not-allowed' : '',
             isPlanLoading && 'animate-pulse',
           )}
         >

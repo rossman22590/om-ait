@@ -62,6 +62,7 @@ export function NavUserWithTeams({
   const { isMobile } = useSidebar();
   const { data: accounts } = useAccounts();
   const [showNewTeamDialog, setShowNewTeamDialog] = React.useState(false);
+  const [showUpdatesModal, setShowUpdatesModal] = React.useState(false);
   const { theme, setTheme } = useTheme();
 
   // Prepare personal account and team accounts
@@ -159,7 +160,8 @@ export function NavUserWithTeams({
   }
 
   return (
-    <Dialog open={showNewTeamDialog} onOpenChange={setShowNewTeamDialog}>
+    <>
+      {/* Main sidebar menu with dropdown */}
       <SidebarMenu>
         <SidebarMenuItem>
           <DropdownMenu>
@@ -303,7 +305,17 @@ export function NavUserWithTeams({
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-muted-foreground cursor-default">
+              <DropdownMenuItem 
+                onClick={() => {
+                  // Close the dropdown menu first
+                  document.body.click();
+                  // Then open the modal after a short delay
+                  setTimeout(() => {
+                    setShowUpdatesModal(true);
+                  }, 100);
+                }}
+                className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
+              >
                 <span className="text-xs">Version 6</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -316,17 +328,78 @@ export function NavUserWithTeams({
         </SidebarMenuItem>
       </SidebarMenu>
 
-      <DialogContent className="sm:max-w-[425px] border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-2xl shadow-custom">
-        <DialogHeader>
-          <DialogTitle className="text-foreground">
-            Create a new team
-          </DialogTitle>
-          <DialogDescription className="text-foreground/70">
-            Create a team to collaborate with others.
-          </DialogDescription>
-        </DialogHeader>
-        <NewTeamForm />
-      </DialogContent>
-    </Dialog>
+      {/* New Team Dialog */}
+      <Dialog open={showNewTeamDialog} onOpenChange={setShowNewTeamDialog}>
+        <DialogContent className="sm:max-w-[425px] border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-2xl shadow-custom">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">
+              Create a new team
+            </DialogTitle>
+            <DialogDescription className="text-foreground/70">
+              Create a team to collaborate with others.
+            </DialogDescription>
+          </DialogHeader>
+          <NewTeamForm />
+        </DialogContent>
+      </Dialog>
+
+      {/* Updates Modal - Separate dialog component */}
+      <Dialog open={showUpdatesModal} onOpenChange={setShowUpdatesModal}>
+        <DialogContent className="sm:max-w-[550px] bg-white dark:bg-white border border-gray-200 rounded-2xl shadow-lg">
+          <DialogHeader>
+            <DialogTitle className="text-foreground flex items-center gap-2">
+              <BadgeCheck className="h-5 w-5 text-purple-500" /> 
+              Machine AI v6.0 Updates
+            </DialogTitle>
+            <DialogDescription className="text-foreground/70">
+              Latest features and improvements in this version
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-400">New Features</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Enhanced file management with download all functionality</li>
+                <li>All new model selection</li>
+                <li>Improved search capabilities in file viewer</li>
+                <li>Purple-themed billing buttons for better visibility</li>
+                <li>Optimized PDF rendering and export options</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-400">Performance Improvements</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Faster file loading and caching mechanisms</li>
+                <li>Reduced latency in sandbox operations</li>
+                <li>Optimized memory usage for large workspaces</li>
+                <li>Improved error handling and recovery</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-400">UI Enhancements</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Consistent purple color scheme across upgrade buttons</li>
+                <li>Better loading indicators and progress feedback</li>
+                <li>Enhanced dark mode compatibility</li>
+                <li>More intuitive file navigation interface</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-400">Bug Fixes</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Fixed issues with file download in certain browsers</li>
+                <li>Resolved authentication token refresh problems</li>
+                <li>Fixed PDF export in landscape orientation</li>
+                <li>Corrected file path handling for special characters</li>
+              </ul>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
