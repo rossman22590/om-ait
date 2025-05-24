@@ -9,6 +9,7 @@ MODEL_ACCESS_TIERS = {
         # "xai/grok-3-mini-fast-beta",
         "openai/gpt-4o",
         # "openai/gpt-4-turbo",
+       "openrouter/google/gemini-2.5-pro-preview",
         # "xai/grok-3-fast-latest",
         "openrouter/google/gemini-2.5-flash-preview-05-20",  # Added
         # "openai/gpt-4",
