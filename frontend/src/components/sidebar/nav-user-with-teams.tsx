@@ -349,7 +349,7 @@ export function NavUserWithTeams({
           <DialogHeader>
             <DialogTitle className="text-foreground flex items-center gap-2">
               <BadgeCheck className="h-5 w-5 text-purple-500" /> 
-              Machine AI v6.0 Updates
+              Machine AI v7.0 Updates
             </DialogTitle>
             <DialogDescription className="text-foreground/70">
               Latest features and improvements in this version
