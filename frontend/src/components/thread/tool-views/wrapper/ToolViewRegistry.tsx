@@ -4,6 +4,7 @@ import { GenericToolView } from '../GenericToolView';
 import { BrowserToolView } from '../BrowserToolView';
 import { CommandToolView } from '../CommandToolView';
 import { DataProviderToolView } from '../DataProviderToolView';
+import { DeployToolView } from '../DeployToolView';
 import { ExposePortToolView } from '../ExposePortToolView';
 import { FileOperationToolView } from '../FileOperationToolView';
 import { StrReplaceToolView } from '../StrReplaceToolView';
@@ -53,6 +54,8 @@ const defaultRegistry: ToolViewRegistryType = {
   'expose-port': ExposePortToolView,
 
   'see-image': SeeImageToolView,
+  
+  'deploy': DeployToolView,
 
   'default': GenericToolView,
 };

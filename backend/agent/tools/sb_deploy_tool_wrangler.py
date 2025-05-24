@@ -1,5 +1,4 @@
 import os
-import os
 import re
 import json
 import requests
@@ -20,6 +19,8 @@ class SandboxDeployTool(SandboxToolsBase):
         super().__init__(project_id, thread_manager)
         self.workspace_path = "/workspace"  # Ensure we're always operating in /workspace
         self.cloudflare_api_token = os.getenv("CLOUDFLARE_API_TOKEN")
+        
+        # Additional Cloudflare credentials for custom domain
         self.cloudflare_account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID")
         self.cloudflare_zone_id = os.getenv("CLOUDFLARE_ZONE_ID")
         self.custom_domain = os.getenv("CUSTOM_DOMAIN", "mymachine.space")
@@ -36,7 +37,7 @@ class SandboxDeployTool(SandboxToolsBase):
 
     def clean_path(self, path: str) -> str:
         """Clean and normalize a path to be relative to /workspace"""
-        return clean_path(path, "/workspace")
+        return clean_path(path, self.workspace_path)
         
     def _file_exists(self, path: str) -> bool:
         """Check if a file exists in the sandbox"""
@@ -148,10 +149,15 @@ class SandboxDeployTool(SandboxToolsBase):
         
     def format_subdomain(self, project_name):
         """Format a readable subdomain from a project name"""
-        # Keep subdomain short and clean
-        # For project names like m12345-myproject
-        return project_name
-
+        # For names like machine-51210-epic-tech-ai-platform
+        # Extract the meaningful parts after the random number
+        prefixed_pattern = re.compile(r'^[a-z]+-[0-9]+-(.+)$')
+        match_prefixed = prefixed_pattern.match(project_name)
+        
+        if match_prefixed:
+            # Return everything after the prefix-number pattern
+            return match_prefixed.group(1).lower()
+        
         # If name has hyphens but doesn't match patterns above, take everything after first hyphen
         parts = project_name.split('-')
         if len(parts) > 1:
@@ -278,111 +284,6 @@ class SandboxDeployTool(SandboxToolsBase):
         # Return the result directly as a dictionary to avoid JSON serialization issues
         return ToolResult(success=True, output=result)
 
-    def prepare_deployment_directory(self, source_path: str) -> tuple:
-        """Prepare a directory for deployment by ensuring an index.html file exists
-        
-        Args:
-            source_path (str): Path to the source directory
-            
-        Returns:
-            tuple: (prepared_directory_path, file_count, status_message)
-        """
-        try:
-            import os
-            import shutil
-            import glob
-            import tempfile
-            
-            # Create a temporary directory for deployment
-            temp_dir = tempfile.mkdtemp(prefix="deploy_", dir=source_path)
-            print(f"Created temporary deployment directory: {temp_dir}")
-            
-            # Copy all files from source to temp directory
-            file_count = 0
-            has_index_html = False
-            html_files = []
-            
-            # Find all files in the source directory
-            for root, dirs, files in os.walk(source_path):
-                # Skip the temp directory itself
-                if os.path.abspath(root) == os.path.abspath(temp_dir):
-                    continue
-                    
-                for file in files:
-                    source_file = os.path.join(root, file)
-                    # Get relative path from source_path
-                    rel_path = os.path.relpath(source_file, source_path)
-                    dest_file = os.path.join(temp_dir, rel_path)
-                    
-                    # Create directories if they don't exist
-                    os.makedirs(os.path.dirname(dest_file), exist_ok=True)
-                    
-                    # Copy the file
-                    shutil.copy2(source_file, dest_file)
-                    file_count += 1
-                    
-                    # Track HTML files and check for index.html
-                    if file.lower().endswith('.html'):
-                        html_files.append(rel_path)
-                        if file.lower() == 'index.html':
-                            has_index_html = True
-            
-            # If no index.html found but other HTML files exist, rename the first one
-            if not has_index_html and html_files:
-                first_html = html_files[0]
-                first_html_path = os.path.join(temp_dir, first_html)
-                index_html_path = os.path.join(os.path.dirname(first_html_path), 'index.html')
-                
-                # Only rename if it's not already in a subdirectory
-                if os.path.dirname(first_html) == '':
-                    shutil.copy2(first_html_path, index_html_path)
-                    print(f"Renamed {first_html} to index.html")
-                else:
-                    # If HTML file is in a subdirectory, create a redirect in root index.html
-                    with open(os.path.join(temp_dir, 'index.html'), 'w') as f:
-                        f.write(f"<meta http-equiv=\"refresh\" content=\"0; url={first_html}\" />")
-                    print(f"Created redirect index.html pointing to {first_html}")
-            elif not has_index_html and not html_files:
-                # Create a simple index.html if no HTML files found
-                with open(os.path.join(temp_dir, 'index.html'), 'w') as f:
-                    f.write("<html><body><h1>Deployed Files</h1><p>The deployed files don't include an HTML file. This is a placeholder.</p></body></html>")
-                print("Created placeholder index.html")
-                
-            return temp_dir, file_count, f"Prepared {file_count} files for deployment"
-        except Exception as e:
-            print(f"Error preparing deployment directory: {str(e)}")
-            return source_path, 0, f"Failed to prepare deployment directory: {str(e)}"
-
-    def _clear_wrangler_cache(self, directory_path):
-        """Clear Wrangler cache to avoid conflicts with existing projects
-        
-        Args:
-            directory_path (str): Path to the directory where node_modules is located
-        """
-        try:
-            # Find node_modules directory
-            node_modules = os.path.join(directory_path, "node_modules")
-            if os.path.exists(node_modules):
-                cache_dir = os.path.join(node_modules, ".cache", "wrangler")
-                if os.path.exists(cache_dir):
-                    pages_json = os.path.join(cache_dir, "pages.json")
-                    if os.path.exists(pages_json):
-                        print(f"Removing Wrangler cache file: {pages_json}")
-                        os.remove(pages_json)
-                        print(f"Wrangler cache cleared successfully")
-            
-            # Also create a wrangler.toml file in the deployment directory
-            wrangler_toml = os.path.join(directory_path, "wrangler.toml")
-            if not os.path.exists(wrangler_toml):
-                try:
-                    with open(wrangler_toml, "w") as f:
-                        f.write(f"[site]\nname = \"{os.path.basename(directory_path)}\"\n")
-                    print("Created wrangler.toml file")
-                except Exception as e:
-                    print(f"Warning: Failed to create wrangler.toml: {str(e)}")
-        except Exception as e:
-            print(f"Error clearing Wrangler cache: {str(e)}")
-
     @openapi_schema({
         "type": "function",
         "function": {
@@ -447,36 +348,16 @@ class SandboxDeployTool(SandboxToolsBase):
             # Ensure sandbox is initialized
             await self._ensure_sandbox()
             
-            # Normalize the directory path for sandbox
-            if directory_path == ".":
-                # Special case for current directory
-                full_path = "/workspace"
-            else:
-                # For other paths, normalize them
-                directory_path = self.clean_path(directory_path)
-                full_path = os.path.join("/workspace", directory_path.lstrip("/")) if not directory_path.startswith("/workspace") else directory_path
+            directory_path = self.clean_path(directory_path)
+            full_path = f"{self.workspace_path}/{directory_path}"
             
-            print(f"Source directory: {full_path}")
-            
-            # Check if directory exists using sandbox file system API
+            # Verify the directory exists
             try:
                 dir_info = self.sandbox.fs.get_file_info(full_path)
                 if not dir_info.is_dir:
                     return self.fail_response(f"'{directory_path}' is not a directory")
             except Exception as e:
                 return self.fail_response(f"Directory '{directory_path}' does not exist: {str(e)}")
-            
-            # Prepare the deployment directory
-            print("Preparing deployment directory...")
-            deploy_dir, files_count, prep_message = self.prepare_deployment_directory(full_path)
-            print(prep_message)
-            
-            # Use the prepared directory for deployment
-            full_path = deploy_dir
-            print(f"Deploying from prepared directory: {full_path}")
-            
-            # Clear Wrangler cache to avoid conflicts with existing projects
-            self._clear_wrangler_cache(full_path)
             
             # Deploy to Cloudflare Pages directly using API instead of Wrangler
             try:
@@ -491,33 +372,21 @@ class SandboxDeployTool(SandboxToolsBase):
                         "or numbers with optional dashes, and cannot start or end with a dash."
                     )
                 
-                # Determine project name based on parameters
-                final_project_name = None
+                # Generate a 5-digit random number for the project name
+                import random
+                random_digits = str(random.randint(10000, 99999))
                 
-                # If specific project name is provided, use it
-                if name:
-                    final_project_name = name
-                    print(f"Using specified project name: {final_project_name}")
-                # Check if we should use existing project
-                elif name in self.project_mappings:
-                    final_project_name = self.project_mappings[name]
-                    print(f"Using existing project mapping: {final_project_name}")
-                # Generate a new project name
-                else:
-                    import random
-                    random_digits = str(random.randint(10000, 99999))
-                    import datetime
-                    timestamp = datetime.datetime.now().strftime("%y%m%d%H%M%S")
-                    # Keep project name short: 5-digit number and name only
-                    final_project_name = f"m{random_digits}-{name}"
-                    print(f"Creating new project: {final_project_name}")
-                    
-                # Store the project name for future reference
-                self.project_mappings[name] = final_project_name
+                # Generate a timestamp to ensure uniqueness of project names
+                import datetime
+                timestamp = datetime.datetime.now().strftime("%y%m%d%H%M%S")
+                
+                # Always create a new unique project name to avoid conflicts
+                project_name = f"machine-{random_digits}-{name}-{timestamp}"
+                print(f"Creating new project: {project_name}")
+                
+                # Store the new project name for reference
+                self.project_mappings[name] = project_name
                 self._save_project_mappings()
-                
-                # Use consistent variable name throughout
-                project_name = final_project_name
                 
                 # Deploy using Wrangler CLI
                 print(f"Using Wrangler CLI for deployment...")
@@ -551,7 +420,7 @@ class SandboxDeployTool(SandboxToolsBase):
                     if install_result.exit_code != 0:
                         return self.fail_response(f"Failed to install wrangler: {install_result.result}")
                     
-                    # First create the project, then deploy to it
+                        # First create the project, then deploy to it
                     print("Creating new Cloudflare Pages project...")
                     create_cmd = f"./node_modules/.bin/wrangler pages project create {project_name} --production-branch production"
                     create_result = self.sandbox.process.exec(create_cmd, cwd=full_path, env=env_vars, timeout=60)
@@ -600,7 +469,7 @@ class SandboxDeployTool(SandboxToolsBase):
                     "urls": {
                         "cloudflare": default_url
                     },
-                    "output": f"Successfully deployed {files_count} files to {final_project_name}"
+                    "output": f"Successfully deployed to {project_name}"
                 }
                 
                 # Setup custom domain if requested

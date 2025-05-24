@@ -92,7 +92,7 @@ def create_sandbox(password: str, project_id: str = None):
         labels = {'id': project_id}
         
     params = CreateSandboxParams(
-        image=Configuration.SANDBOX_IMAGE_NAME,
+        image=config.SANDBOX_IMAGE_NAME,
         public=True,
         labels=labels,
         env_vars={
@@ -124,4 +124,3 @@ def create_sandbox(password: str, project_id: str = None):
     
     logger.debug(f"Sandbox environment successfully initialized")
     return sandbox
-
