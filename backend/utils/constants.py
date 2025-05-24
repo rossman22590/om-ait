@@ -96,6 +96,7 @@ MODEL_ACCESS_TIERS = {
     ],
     "tier_200_1000": [
         "openrouter/deepseek/deepseek-chat",
+        "openrouter/google/gemini-2.5-pro-preview",
         # "xai/grok-3-mini-fast-beta",
         "openai/gpt-4o",
         # "openai/gpt-4-turbo",
