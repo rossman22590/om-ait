@@ -414,7 +414,7 @@ class SandboxDeployTool(SandboxToolsBase):
         mappings=[
             {"param_name": "name", "node_type": "attribute", "path": "name"},
             {"param_name": "directory_path", "node_type": "attribute", "path": "directory_path"},
-            {"param_name": "setup_custom_domain", "node_type": "attribute", "path": "setup_custom_domain"}
+            {"param_name": "setup_custom_domain", "node_type": "attribute", "path": "setup_custom_domain", "required": False}
         ],
         example='''
         <!-- 
