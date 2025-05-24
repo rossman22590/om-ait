@@ -316,7 +316,7 @@ export function NavUserWithTeams({
                 }}
                 className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
               >
-                <span className="text-xs">Version 6</span>
+                <span className="text-xs">Version 7</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem className='text-destructive focus:text-destructive focus:bg-destructive/10' onClick={handleLogout}>
@@ -360,7 +360,7 @@ export function NavUserWithTeams({
             <div className="space-y-2">
               <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-400">New Features</h3>
               <ul className="list-disc pl-5 space-y-1 text-sm">
-                <li>Enhanced file management with download all functionality</li>
+                <li>Enhanced file management and Deploy Feature</li>
                 <li>All new model selection</li>
                 <li>Improved search capabilities in file viewer</li>
                 <li>Purple-themed billing buttons for better visibility</li>

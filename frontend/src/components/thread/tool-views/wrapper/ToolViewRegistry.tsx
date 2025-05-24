@@ -12,6 +12,7 @@ import { WebCrawlToolView } from '../WebCrawlToolView';
 import { WebScrapeToolView } from '../WebScrapeToolView';
 import { WebSearchToolView } from '../WebSearchToolView';
 import { SeeImageToolView } from '../SeeImageToolView';
+import { ImageGenToolView } from '../ImageGenToolView';
 
 export type ToolViewComponent = React.ComponentType<ToolViewProps>;
 
@@ -56,6 +57,8 @@ const defaultRegistry: ToolViewRegistryType = {
   'see-image': SeeImageToolView,
   
   'deploy': DeployToolView,
+  
+  'generate-image': ImageGenToolView,
 
   'default': GenericToolView,
 };
