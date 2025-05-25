@@ -68,7 +68,7 @@ export function CommandToolView({
   }, [assistantContent]);
 
   const command = rawCommand
-    ?.replace(/^suna@computer:~\$\s*/g, '')
+    ?.replace(/^machine@ai:~\$\s*/g, '')
     ?.replace(/\\n/g, '')
     ?.replace(/\n/g, '')
     ?.trim();

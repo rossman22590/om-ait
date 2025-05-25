@@ -15,18 +15,55 @@ from dramatiq.brokers.rabbitmq import RabbitmqBroker
 import os
 from services.langfuse import langfuse
 
-rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
-rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
-rabbitmq_broker = RabbitmqBroker(host=rabbitmq_host, port=rabbitmq_port, middleware=[dramatiq.middleware.AsyncIO()])
+# Set up RabbitMQ connection
+try:
+    rabbitmq_url = os.getenv('RABBITMQ_URL')
+    if rabbitmq_url:
+        # Use URL-based connection when RABBITMQ_URL is provided (Railway)
+        logger.info(f"Connecting to RabbitMQ using URL (first 10 chars): {rabbitmq_url[:10]}...")
+        
+        # Parse URL components manually to handle special characters
+        import urllib.parse
+        
+        # Extract username and password from the URL
+        # Format: amqp://username:password@hostname:port
+        if '@' in rabbitmq_url:
+            credentials, server = rabbitmq_url.split('@', 1)
+            protocol, credentials = credentials.split('://', 1)
+            if ':' in credentials:
+                username, password = credentials.split(':', 1)
+                # URL decode the password in case it contains special characters
+                password = urllib.parse.unquote(password)
+                
+                # Reconstruct the URL with properly encoded components
+                hostname, port = server.split(':', 1) if ':' in server else (server, '5672')
+                rabbitmq_url = f"{protocol}://{username}:{urllib.parse.quote(password, safe='')}@{hostname}:{port}"
+                logger.info(f"Reconstructed RabbitMQ URL with proper encoding")
+        
+        rabbitmq_broker = RabbitmqBroker(url=rabbitmq_url, middleware=[dramatiq.middleware.AsyncIO()])
+        logger.info("Successfully created RabbitMQ broker with URL")
+    else:
+        # Fall back to host/port configuration (local development)
+        rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
+        rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
+        logger.info(f"Connecting to RabbitMQ using host/port: {rabbitmq_host}:{rabbitmq_port}")
+        rabbitmq_broker = RabbitmqBroker(host=rabbitmq_host, port=rabbitmq_port, middleware=[dramatiq.middleware.AsyncIO()])
+        logger.info("Successfully created RabbitMQ broker with host/port")
+except Exception as e:
+    logger.error(f"Error setting up RabbitMQ connection: {e}")
+    # Fallback to a local RabbitMQ instance as a last resort
+    logger.info("Falling back to local RabbitMQ instance")
+    rabbitmq_broker = RabbitmqBroker(host='localhost', port=5672, middleware=[dramatiq.middleware.AsyncIO()])
 dramatiq.set_broker(rabbitmq_broker)
 
 _initialized = False
 db = DBConnection()
+thread_manager = None
 instance_id = "single"
 
 async def initialize():
     """Initialize the agent API with resources from the main API."""
-    global db, instance_id, _initialized
+    global thread_manager, db, instance_id, _initialized
     if _initialized:
         return
 
@@ -36,6 +73,7 @@ async def initialize():
         instance_id = str(uuid.uuid4())[:8]
     await redis.initialize_async()
     await db.initialize()
+    thread_manager = ThreadManager()
 
     _initialized = True
     logger.info(f"Initialized agent API with instance ID: {instance_id}")
@@ -112,7 +150,7 @@ async def run_agent_background(
         # Initialize agent generator
         agent_gen = run_agent(
             thread_id=thread_id, project_id=project_id, stream=stream,
-            model_name=model_name,
+            thread_manager=thread_manager, model_name=model_name,
             enable_thinking=enable_thinking, reasoning_effort=reasoning_effort,
             enable_context_manager=enable_context_manager,
             trace=trace

@@ -194,3 +194,6 @@ supabase/.temp/storage-version
 
 redis_data
 rabbitmq_data
+backend/agent/tools/sb_deploy_tool -final.py
+/backend/worker-1-logs
+/backend/worker-2-logs
