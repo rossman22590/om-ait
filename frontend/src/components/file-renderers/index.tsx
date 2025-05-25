@@ -28,11 +28,13 @@ interface FileRendererProps {
       sandbox_url?: string;
       vnc_preview?: string;
       pass?: string;
+      id?: string;
     };
   };
   markdownRef?: React.RefObject<HTMLDivElement>;
   onDownload?: () => void;
   isDownloading?: boolean;
+  sandboxId?: string; // Direct sandboxId prop
 }
 
 // Helper function to determine file type from extension
@@ -149,10 +151,17 @@ export function FileRenderer({
   markdownRef,
   onDownload,
   isDownloading,
+  sandboxId: directSandboxId, // Accept direct sandboxId prop
 }: FileRendererProps) {
   const fileType = getFileTypeFromExtension(fileName);
   const language = getLanguageFromExtension(fileName);
   const isHtmlFile = fileName.toLowerCase().endsWith('.html');
+
+  // Get sandbox ID for editing files - prioritize direct prop over project extraction
+  console.log('Project object in FileRenderer:', project);
+  console.log('Direct sandboxId prop:', directSandboxId);
+  const sandboxId = directSandboxId || project?.sandbox?.id;
+  console.log('Final sandboxId to use:', sandboxId);
 
   // Create blob URL for HTML content if needed
   const blobHtmlUrl = React.useMemo(() => {
@@ -193,12 +202,16 @@ export function FileRenderer({
           content={content || ''}
           previewUrl={htmlPreviewUrl || ''}
           className="w-full h-full"
+          fileName={fileName}
+          sandboxId={sandboxId}
         />
       ) : fileType === 'code' || fileType === 'text' ? (
         <CodeRenderer
           content={content || ''}
           language={language}
           className="w-full h-full"
+          fileName={fileName}
+          sandboxId={sandboxId}
         />
       ) : (
         <div className="w-full h-full p-4">

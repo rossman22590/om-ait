@@ -10,12 +10,16 @@ interface HtmlRendererProps {
   content: string;
   previewUrl: string;
   className?: string;
+  fileName?: string;
+  sandboxId?: string;
 }
 
 export function HtmlRenderer({
   content,
   previewUrl,
   className,
+  fileName,
+  sandboxId,
 }: HtmlRendererProps) {
   // Always default to 'preview' mode
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
@@ -76,6 +80,8 @@ export function HtmlRenderer({
               content={content}
               language="html"
               className="w-full h-full"
+              fileName={fileName}
+              sandboxId={sandboxId}
             />
           </div>
         )}

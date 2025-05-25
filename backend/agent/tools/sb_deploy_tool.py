@@ -494,29 +494,20 @@ class SandboxDeployTool(SandboxToolsBase):
                 # Determine project name based on parameters
                 final_project_name = None
                 
-                # If specific project name is provided, use it
+                # If specific project name is provided, add 5-digit number
                 if name:
-                    final_project_name = name
-                    print(f"Using specified project name: {final_project_name}")
-                # Check if we should use existing project
-                elif name in self.project_mappings:
-                    final_project_name = self.project_mappings[name]
-                    print(f"Using existing project mapping: {final_project_name}")
-                # Generate a new project name
-                else:
+                    # Generate a random 5-digit number
                     import random
                     random_digits = str(random.randint(10000, 99999))
-                    import datetime
-                    timestamp = datetime.datetime.now().strftime("%y%m%d%H%M%S")
-                    # Keep project name short: 5-digit number and name only
-                    final_project_name = f"m{random_digits}-{name}"
-                    print(f"Creating new project: {final_project_name}")
-                    
-                # Store the project name for future reference
-                self.project_mappings[name] = final_project_name
-                self._save_project_mappings()
+                    # Format as 5-digit number followed by name
+                    final_project_name = f"{random_digits}-{name}"
+                    print(f"Using project name with number prefix: {final_project_name}")
                 
-                # Use consistent variable name throughout
+                # Install wrangler locally
+                print("Installing wrangler locally...")
+                install_cmd = "npm install wrangler --no-save"
+                install_result = self.sandbox.process.exec(install_cmd, cwd=full_path, timeout=120)
+                print(f"Install result: Exit code {install_result.exit_code}")
                 project_name = final_project_name
                 
                 # Deploy using Wrangler CLI

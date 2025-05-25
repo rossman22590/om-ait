@@ -1568,7 +1568,11 @@ export function FileViewerModal({
                     </div>
                   </div>
                 ) : (
-                  <div className="h-full w-full relative">
+                  <div 
+                    className="h-full w-full relative file-renderer-container"
+                    data-file-path={selectedFilePath}
+                    data-sandbox-id={sandboxId}
+                  >
                     <FileRenderer
                       key={selectedFilePath}
                       content={textContentForRenderer}
@@ -1576,6 +1580,7 @@ export function FileViewerModal({
                       fileName={selectedFilePath}
                       className="h-full w-full"
                       project={projectWithSandbox}
+                      sandboxId={sandboxId} /* Pass sandboxId directly */
                       markdownRef={
                         isMarkdownFile(selectedFilePath) ? markdownRef : undefined
                       }

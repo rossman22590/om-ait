@@ -316,7 +316,7 @@ export function NavUserWithTeams({
                 }}
                 className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
               >
-                <span className="text-xs">Version 7</span>
+                <span className="text-xs">Version 7.1</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem className='text-destructive focus:text-destructive focus:bg-destructive/10' onClick={handleLogout}>
@@ -349,7 +349,7 @@ export function NavUserWithTeams({
           <DialogHeader>
             <DialogTitle className="text-foreground flex items-center gap-2">
               <BadgeCheck className="h-5 w-5 text-purple-500" /> 
-              Machine AI v7.0 Updates
+              Machine AI v7.1 Updates
             </DialogTitle>
             <DialogDescription className="text-foreground/70">
               Latest features and improvements in this version
@@ -361,7 +361,7 @@ export function NavUserWithTeams({
               <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-400">New Features</h3>
               <ul className="list-disc pl-5 space-y-1 text-sm">
                 <li>Enhanced file management and Deploy Feature</li>
-                <li>All new model selection</li>
+                <li>New Features: Rename, Edit Code and Copy</li>
                 <li>Improved search capabilities in file viewer</li>
                 <li>Purple-themed billing buttons for better visibility</li>
                 <li>Optimized PDF rendering and export options</li>

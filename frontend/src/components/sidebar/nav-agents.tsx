@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo, FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpRight,
@@ -12,7 +12,9 @@ import {
   Loader2,
   Share2,
   X,
-  Check
+  Check,
+  Search,
+  Pencil
 } from "lucide-react"
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
@@ -38,15 +40,26 @@ import {
   TooltipContent,
   TooltipTrigger
 } from "@/components/ui/tooltip"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { ShareModal } from "./share-modal"
 import { DeleteConfirmationDialog } from "@/components/thread/DeleteConfirmationDialog"
 import { useDeleteOperation } from '@/contexts/DeleteOperationContext'
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ThreadWithProject } from '@/hooks/react-query/sidebar/use-sidebar';
 import { processThreadsWithProjects, useDeleteMultipleThreads, useDeleteThread, useProjects, useThreads } from '@/hooks/react-query/sidebar/use-sidebar';
 import { projectKeys, threadKeys } from '@/hooks/react-query/sidebar/keys';
+import { renameProject } from '@/lib/api';
 
 export function NavAgents() {
   const { isMobile, state } = useSidebar()
@@ -57,6 +70,10 @@ export function NavAgents() {
   const router = useRouter()
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [threadToDelete, setThreadToDelete] = useState<{ id: string; name: string } | null>(null)
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
+  const [projectToRename, setProjectToRename] = useState<{ id: string; name: string } | null>(null)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [isRenaming, setIsRenaming] = useState(false)
   const isNavigatingRef = useRef(false)
   const { performDelete } = useDeleteOperation();
   const isPerformingActionRef = useRef(false);
@@ -65,6 +82,7 @@ export function NavAgents() {
   const [selectedThreads, setSelectedThreads] = useState<Set<string>>(new Set());
   const [deleteProgress, setDeleteProgress] = useState(0);
   const [totalToDelete, setTotalToDelete] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { 
     data: projects = [], 
@@ -87,6 +105,17 @@ export function NavAgents() {
   const combinedThreads: ThreadWithProject[] = 
     !isProjectsLoading && !isThreadsLoading ? 
     processThreadsWithProjects(threads, projects) : [];
+    
+  // Filter threads based on search query
+  const filteredThreads = useMemo(() => {
+    if (!searchQuery.trim()) return combinedThreads;
+    
+    const query = searchQuery.toLowerCase().trim();
+    return combinedThreads.filter(thread => 
+      thread.projectName?.toLowerCase().includes(query) ||
+      thread.threadId.toLowerCase().includes(query)
+    );
+  }, [combinedThreads, searchQuery]);
 
   const handleDeletionProgress = (completed: number, total: number) => {
     const percentage = (completed / total) * 100;
@@ -189,6 +218,60 @@ export function NavAgents() {
   const handleDeleteThread = async (threadId: string, threadName: string) => {
     setThreadToDelete({ id: threadId, name: threadName });
     setIsDeleteDialogOpen(true);
+  };
+  
+  // Function to handle project rename
+  const handleRenameProject = (projectId: string, projectName: string) => {
+    setProjectToRename({ id: projectId, name: projectName });
+    setNewProjectName(projectName);
+    setIsRenameDialogOpen(true);
+  };
+  
+  // Function to submit rename
+  const submitRename = async (e: FormEvent) => {
+    e.preventDefault();
+    
+    if (!projectToRename || !newProjectName.trim() || isRenaming) return;
+    
+    try {
+      setIsRenaming(true);
+      await renameProject(projectToRename.id, newProjectName.trim());
+      
+      // Close dialog and reset state first before invalidating queries
+      // This prevents UI freezing during re-renders
+      setIsRenameDialogOpen(false);
+      
+      // Success message
+      toast.success('Project renamed successfully');
+      
+      // Use setTimeout to delay the query invalidation
+      // This prevents React re-render cascades that can freeze the UI
+      setTimeout(() => {
+        // Store the project ID we're renaming to avoid closure issues
+        const renamedProjectId = projectToRename.id;
+        
+        // Invalidate only specific queries to minimize re-renders
+        queryClient.invalidateQueries({ queryKey: projectKeys.detail(renamedProjectId) });
+        
+        // Dispatch event after a small delay
+        const updateEvent = new CustomEvent('project-updated', {
+          detail: {
+            projectId: renamedProjectId,
+            updatedData: { name: newProjectName.trim() }
+          }
+        });
+        window.dispatchEvent(updateEvent);
+        
+        // Reset state after everything else is done
+        setProjectToRename(null);
+        setNewProjectName('');
+      }, 100); // Small delay to let React finish current render cycle
+      
+    } catch (error) {
+      console.error('Error renaming project:', error);
+      toast.error('Failed to rename project');
+      setIsRenaming(false);
+    }
   };
 
   // Function to handle multi-delete
@@ -340,59 +423,116 @@ export function NavAgents() {
     console.error('Error loading data:', { projectsError, threadsError });
   }
 
+  // Add a function to handle stopping all agents
+  const [isStoppingAllAgents, setIsStoppingAllAgents] = useState(false);
+
+  const handleStopAllAgents = async () => {
+    if (isStoppingAllAgents) return;
+    
+    try {
+      setIsStoppingAllAgents(true);
+      const { stopAllAgents } = await import('@/lib/api');
+      const result = await stopAllAgents();
+      
+      if (result.stopped > 0) {
+        toast.success(`Stopped ${result.stopped} agent${result.stopped !== 1 ? 's' : ''}`);
+        // Refresh the threads data
+        queryClient.invalidateQueries({ queryKey: threadKeys.all });
+      } else {
+        toast.info('No running agents found');
+      }
+      
+      if (result.errors > 0) {
+        toast.error(`Failed to stop ${result.errors} agent${result.errors !== 1 ? 's' : ''}`);
+      }
+    } catch (error) {
+      toast.error('Failed to stop agents');
+      console.error('Error stopping all agents:', error);
+    } finally {
+      setIsStoppingAllAgents(false);
+    }
+  };
+
   return (
     <SidebarGroup>
-      <div className="flex justify-between items-center">
-        <SidebarGroupLabel>Tasks</SidebarGroupLabel>
-        {state !== 'collapsed' ? (
-          <div className="flex items-center space-x-1">
+      <SidebarGroupLabel>
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center">
+            <MessagesSquare className="mr-2 h-4 w-4" />
+            Agents
+          </div>
+
+          <div className="flex items-center gap-1">
+            {/* Show multi-select controls when any threads are selected */}
             {selectedThreads.size > 0 ? (
-              <>
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={deselectAllThreads}
-                  className="h-7 w-7"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={selectAllThreads}
-                  disabled={selectedThreads.size === combinedThreads.length}
-                  className="h-7 w-7"
-                >
-                  <Check className="h-4 w-4" />
-                </Button>
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  onClick={handleMultiDelete}
-                  className="h-7 w-7 text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </>
-            ) : (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div>
-                    <Link
-                      href="/dashboard"
-                      className="text-muted-foreground hover:text-foreground h-7 w-7 flex items-center justify-center rounded-md"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span className="sr-only">New Agent</span>
-                    </Link>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>New Agent</TooltipContent>
-              </Tooltip>
+            <>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={deselectAllThreads}
+                className="h-7 w-7"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={selectAllThreads}
+                disabled={selectedThreads.size === combinedThreads.length}
+                className="h-7 w-7"
+              >
+                <Check className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={handleMultiDelete}
+                className="h-7 w-7 text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <Link
+                    href="/dashboard"
+                    className="text-muted-foreground hover:text-foreground h-7 w-7 flex items-center justify-center rounded-md"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span className="sr-only">New Agent</span>
+                  </Link>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>New Agent</TooltipContent>
+            </Tooltip>
+          )}
+            </div>
+          </div>
+        </SidebarGroupLabel>
+
+      {state !== 'collapsed' && (
+        <div className="px-2 mb-2">
+          <div className="relative">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Filter agents..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 h-8 text-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             )}
           </div>
-        ) : null}
-      </div>
+        </div>
+      )}
 
       <SidebarMenu className="overflow-y-auto max-h-[calc(100vh-200px)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
         {state === 'collapsed' && (
@@ -423,10 +563,10 @@ export function NavAgents() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))
-        ) : combinedThreads.length > 0 ? (
-          // Show all threads with project info
+        ) : filteredThreads.length > 0 ? (
+          // Show filtered threads with project info
           <>
-            {combinedThreads.map((thread) => {
+            {filteredThreads.map((thread) => {
               // Check if this thread is currently active
               const isActive = pathname?.includes(thread.threadId) || false;
               const isThreadLoading = loadingThreadId === thread.threadId;
@@ -554,6 +694,12 @@ export function NavAgents() {
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
+                          onClick={() => handleRenameProject(thread.projectId, thread.projectName)}
+                        >
+                          <Pencil className="text-muted-foreground" />
+                          <span>Rename</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           onClick={() =>
                             handleDeleteThread(
                               thread.threadId,
@@ -611,6 +757,52 @@ export function NavAgents() {
           isDeleting={isDeletingSingle || isDeletingMultiple}
         />
       )}
+      
+      {/* Rename Dialog */}
+      <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename Project</DialogTitle>
+            <DialogDescription>
+              Enter a new name for the project
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitRename}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="projectName">Project name</Label>
+                <Input
+                  id="projectName"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder="Enter new project name"
+                  className="w-full"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsRenameDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isRenaming || !newProjectName.trim()}>
+                {isRenaming ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Renaming...
+                  </>
+                ) : (
+                  'Rename'
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </SidebarGroup>
   );
 }
