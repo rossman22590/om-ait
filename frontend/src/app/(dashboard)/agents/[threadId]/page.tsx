@@ -991,7 +991,7 @@ export default function ThreadPage({
   useEffect(() => {
     if (projectName) {
       // Update document title when project name changes
-      document.title = `${projectName} | Kortix Suna`;
+      document.title = `${projectName} | Machine`;
 
       // Update meta tags for SEO
       const metaDescription = document.querySelector(
@@ -1000,14 +1000,14 @@ export default function ThreadPage({
       if (metaDescription) {
         metaDescription.setAttribute(
           'content',
-          `${projectName} - Interactive agent conversation powered by Kortix Suna`,
+          `${projectName} - Interactive agent conversation powered by Machine`,
         );
       }
 
       // Update OpenGraph tags if they exist
       const ogTitle = document.querySelector('meta[property="og:title"]');
       if (ogTitle) {
-        ogTitle.setAttribute('content', `${projectName} | Kortix Suna`);
+        ogTitle.setAttribute('content', `${projectName} | Machine`);
       }
 
       const ogDescription = document.querySelector(
@@ -1318,7 +1318,7 @@ export default function ThreadPage({
                 Unlock the Full Suna Experience
               </DialogTitle>
               <DialogDescription>
-                You're currently using Suna's free tier with limited capabilities.
+                You're currently using Machine's free tier with limited capabilities.
                 Upgrade now to access our most powerful AI model.
               </DialogDescription>
             </DialogHeader>

@@ -15,18 +15,59 @@ from dramatiq.brokers.rabbitmq import RabbitmqBroker
 import os
 from services.langfuse import langfuse
 
-rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
-rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
-rabbitmq_broker = RabbitmqBroker(host=rabbitmq_host, port=rabbitmq_port, middleware=[dramatiq.middleware.AsyncIO()])
+# RabbitMQ connection setup
+# Prioritize Railway RabbitMQ URL if available
+rabbitmq_url = os.getenv('RABBITMQ_URL')
+if rabbitmq_url:
+    # Parse RabbitMQ URL for credentials and connection details
+    try:
+        parsed_url = urllib.parse.urlparse(rabbitmq_url)
+        rabbitmq_user = urllib.parse.unquote(parsed_url.username) if parsed_url.username else None
+        rabbitmq_password = urllib.parse.unquote(parsed_url.password) if parsed_url.password else None
+        rabbitmq_host = parsed_url.hostname
+        rabbitmq_port = parsed_url.port or 5672
+        rabbitmq_vhost = parsed_url.path.lstrip('/') if parsed_url.path else '/'
+        
+        logger.info(f"Using RabbitMQ URL from Railway: {rabbitmq_host}:{rabbitmq_port}/{rabbitmq_vhost}")
+        rabbitmq_broker = RabbitmqBroker(
+            host=rabbitmq_host,
+            port=rabbitmq_port,
+            username=rabbitmq_user,
+            password=rabbitmq_password,
+            virtual_host=rabbitmq_vhost,
+            middleware=[dramatiq.middleware.AsyncIO()]
+        )
+    except Exception as e:
+        logger.error(f"Failed to parse RabbitMQ URL: {str(e)}. Falling back to host/port config.")
+        # Fall back to host/port configuration
+        rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
+        rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
+        rabbitmq_broker = RabbitmqBroker(
+            host=rabbitmq_host, 
+            port=rabbitmq_port, 
+            middleware=[dramatiq.middleware.AsyncIO()]
+        )
+else:
+    # Use host/port configuration if URL not available
+    rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
+    rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
+    logger.info(f"Using RabbitMQ host/port configuration: {rabbitmq_host}:{rabbitmq_port}")
+    rabbitmq_broker = RabbitmqBroker(
+        host=rabbitmq_host, 
+        port=rabbitmq_port, 
+        middleware=[dramatiq.middleware.AsyncIO()]
+    )
+
 dramatiq.set_broker(rabbitmq_broker)
 
 _initialized = False
 db = DBConnection()
+thread_manager = None
 instance_id = "single"
 
 async def initialize():
     """Initialize the agent API with resources from the main API."""
-    global db, instance_id, _initialized
+    global db, instance_id, _initialized, thread_manager
     if _initialized:
         return
 
@@ -36,6 +77,10 @@ async def initialize():
         instance_id = str(uuid.uuid4())[:8]
     await redis.initialize_async()
     await db.initialize()
+    
+    # Initialize thread manager
+    thread_manager = ThreadManager()
+    await thread_manager.initialize()
 
     _initialized = True
     logger.info(f"Initialized agent API with instance ID: {instance_id}")
@@ -115,6 +160,7 @@ async def run_agent_background(
             model_name=model_name,
             enable_thinking=enable_thinking, reasoning_effort=reasoning_effort,
             enable_context_manager=enable_context_manager,
+            thread_manager=thread_manager,
             trace=trace
         )
 
