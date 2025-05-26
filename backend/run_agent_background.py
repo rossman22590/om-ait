@@ -80,7 +80,7 @@ async def initialize():
     
     # Initialize thread manager
     thread_manager = ThreadManager()
-    await thread_manager.initialize()
+    # Note: ThreadManager doesn't have an initialize method
 
     _initialized = True
     logger.info(f"Initialized agent API with instance ID: {instance_id}")

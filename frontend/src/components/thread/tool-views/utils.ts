@@ -52,6 +52,9 @@ export function getToolTitle(toolName: string): string {
     'execute-data-provider-call': 'Data Provider Call',
     'get-data-provider-endpoints': 'Data Endpoints',
 
+    'generate-image': 'Generate Image',
+    'edit-image': 'Edit Image',
+    'deploy': 'Deploy Website',
 
     'generic-tool': 'Tool',
     'default': 'Tool',
@@ -806,11 +809,7 @@ export function extractWebpageContent(
               // Handle direct object format
               return {
                 title: outputJson.Title || outputJson.title || '',
-                text:
-                  outputJson.Text ||
-                  outputJson.text ||
-                  outputJson.content ||
-                  '',
+                text: outputJson.Text || outputJson.text || outputJson.content || '',
               };
             } catch (e) {
               // If parsing fails, use the raw output
@@ -872,8 +871,7 @@ export function extractWebpageContent(
           // Handle direct object format
           return {
             title: outputJson.Title || outputJson.title || '',
-            text:
-              outputJson.Text || outputJson.text || outputJson.content || '',
+            text: outputJson.Text || outputJson.text || outputJson.content || '',
           };
         } catch (e) {
           // If parsing fails, use the raw output
@@ -1122,6 +1120,15 @@ export function getToolComponent(toolName: string): string {
     case 'execute-data-provider-call':
     case 'get-data-provider-endpoints':
       return 'DataProviderToolView';
+    
+    // Image generation and editing
+    case 'generate-image':
+    case 'edit-image':
+      return 'ImageGenToolView';
+    
+    // Website deployment
+    case 'deploy':
+      return 'DeployToolView';
 
     // Default
     default:

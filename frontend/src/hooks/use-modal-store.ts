@@ -1,5 +1,5 @@
 import { create } from "zustand";
-export type ModalType = "paymentRequiredDialog"
+export type ModalType = "paymentRequiredDialog" | "capabilitiesDialog"
 
 interface ModalStore {
     type: ModalType | null;
