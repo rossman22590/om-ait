@@ -1,7 +1,7 @@
 <div align="center">  
 
 # Suna - Open Source Generalist AI Agent
-
+ 
 (that acts on your behalf)
 
 ![Suna Screenshot](frontend/public/banner.png)
