@@ -10,8 +10,13 @@ import { useMediaQuery } from '@/hooks/use-media-query';
 import Image from 'next/image';
 import Cal, { getCalApi } from '@calcom/embed-react';
 import { useTheme } from 'next-themes';
+import { useSidebar } from '@/components/ui/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Info } from 'lucide-react';
 
 export function KortixProcessModal() {
+  const { state } = useSidebar();
+  const isCollapsed = state === 'collapsed';
   const [open, setOpen] = useState(false);
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const { resolvedTheme } = useTheme();
@@ -27,9 +32,20 @@ export function KortixProcessModal() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="default" size="sm" className="w-full text-xs">
-          Learn More
-        </Button>
+        {isCollapsed ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="default" size="sm" className="w-full h-7 p-0 flex items-center justify-center">
+                <Info className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Learn More</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button variant="default" size="sm" className="w-full text-xs">
+            Learn More
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="p-0 gap-0 border-none max-w-[70vw] rounded-xl overflow-hidden">
         <DialogTitle className="sr-only">
