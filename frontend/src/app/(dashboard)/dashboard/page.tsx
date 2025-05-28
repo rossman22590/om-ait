@@ -31,10 +31,35 @@ import { Examples } from './_components/suggestions/examples';
 
 const PENDING_PROMPT_KEY = 'pendingAgentPrompt';
 
+// Array of 20 different greetings
+const GREETINGS = [
+  "Hey",
+  "Hello",
+  "Hi there",
+  "Greetings",
+  "Welcome back",
+  "Good to see you",
+  "Howdy",
+  "Nice to see you",
+  "Hello there",
+  "What's up",
+  "Ready to create",
+  "Let's build something",
+  "Let's get started",
+  "At your service",
+  "How can I help",
+  "Ready when you are",
+  "Hello, friend",
+  "Let's do this",
+  "Time to create",
+  "Let's make something great",
+];
+
 function DashboardContent() {
   const [inputValue, setInputValue] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [autoSubmit, setAutoSubmit] = useState(false);
+  const [greeting, setGreeting] = useState<string>('Hey');
   const { billingError, handleBillingError, clearBillingError } =
     useBillingError();
   const router = useRouter();
@@ -119,6 +144,12 @@ function DashboardContent() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Set a random greeting when the component mounts
+  useEffect(() => {
+    const randomIndex = Math.floor(Math.random() * GREETINGS.length);
+    setGreeting(GREETINGS[randomIndex]);
+  }, []);
+
   useEffect(() => {
     if (autoSubmit && inputValue && !isSubmitting) {
       const timer = setTimeout(() => {
@@ -168,7 +199,7 @@ function DashboardContent() {
               'text-3xl',
               'sm:text-4xl'
             )}>
-              Hey
+              {greeting}
             </h1>
             <p className={cn(
               "tracking-tight font-normal text-muted-foreground/80 mt-2 flex items-center gap-2",
