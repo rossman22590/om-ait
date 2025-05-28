@@ -2,6 +2,23 @@ import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from 'next';
 
 let nextConfig: NextConfig = {
+  images: {
+    domains: ['pixiomedia.nyc3.digitaloceanspaces.com', 'uplaodpixio-production.up.railway.app'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'pixiomedia.nyc3.digitaloceanspaces.com',
+        port: '',
+        pathname: '/uploads/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'uplaodpixio-production.up.railway.app',
+        port: '',
+        pathname: '/**',
+      }
+    ],
+  },
   webpack: (config) => {
     // This rule prevents issues with pdf.js and canvas
     config.externals = [...(config.externals || []), { canvas: 'canvas' }];

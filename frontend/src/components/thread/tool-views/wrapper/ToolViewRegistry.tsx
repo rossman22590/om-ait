@@ -15,6 +15,8 @@ import { AskToolView } from '../AskToolView';
 import { CompleteToolView } from '../CompleteToolView';
 import { DataProviderEndpointsToolView } from '../DataProviderEndpointToolView';
 import { ExecuteDataProviderCallToolView } from '../DataProviderToolView';
+import { ImageGenToolView } from '../ImageGenToolView';
+import { DeployToolView } from '../DeployToolView';
 
 export type ToolViewComponent = React.ComponentType<ToolViewProps>;
 
@@ -62,6 +64,10 @@ const defaultRegistry: ToolViewRegistryType = {
 
   'ask': AskToolView,
   'complete': CompleteToolView,
+
+  'generate-image': ImageGenToolView,
+  'edit-image': ImageGenToolView,
+  'deploy': DeployToolView,
 
   'default': GenericToolView,
 };
