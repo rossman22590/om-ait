@@ -472,7 +472,7 @@ export function SiteHeader({
             // Desktop view - show all buttons with tooltips
             <TooltipProvider>
               <Tooltip>
-                <TooltipTrigger asChild>
+                {/* <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -486,7 +486,7 @@ export function SiteHeader({
                   >
                     <Plus className="h-4 w-4" />
                   </Button>
-                </TooltipTrigger>
+                </TooltipTrigger> */}
                 <TooltipContent>
                   <p>New Chat</p>
                 </TooltipContent>

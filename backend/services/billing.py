@@ -546,15 +546,18 @@ async def create_checkout_session(
             session = stripe.checkout.Session.create(
                 customer=customer_id,
                 payment_method_types=['card'],
-                    line_items=[{'price': request.price_id, 'quantity': 1}],
+                line_items=[{'price': request.price_id, 'quantity': 1}],
                 mode='subscription',
                 success_url=request.success_url,
                 cancel_url=request.cancel_url,
                 metadata={
-                        'user_id': current_user_id,
-                        'product_id': product_id
+                    'user_id': current_user_id,
+                    'product_id': product_id
                 },
-                allow_promotion_codes=True
+                allow_promotion_codes=True,
+                subscription_data={
+                    'trial_period_days': 7
+                }
             )
             
             # Update customer status to potentially active (will be confirmed by webhook)

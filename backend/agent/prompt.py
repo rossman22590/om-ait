@@ -667,8 +667,15 @@ For casual conversation and social interactions:
   """
 
 
-def get_system_prompt():
+def get_system_prompt(custom_prompt=None):
     '''
-    Returns the system prompt
+    Returns the system prompt with optional custom user prompt injected at the beginning
+    
+    Args:
+        custom_prompt (str, optional): Custom prompt text to inject at the beginning of the system prompt
     '''
-    return SYSTEM_PROMPT 
+    if custom_prompt:
+        # Inject the custom prompt at the beginning, with a separator
+        return f"{custom_prompt}\n\n# SYSTEM PROMPT STARTS HERE\n\n{SYSTEM_PROMPT}"
+    
+    return SYSTEM_PROMPT

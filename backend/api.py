@@ -105,7 +105,7 @@ async def log_requests_middleware(request: Request, call_next):
         raise
 
 # Define allowed origins based on environment
-allowed_origins = ["https://www.suna.so", "https://suna.so", "http://localhost:3001"]
+allowed_origins = ["https://beta.machine.myapps.ai", "https://machine.myapps.ai", "https://beta-machinev5.vercel.app", "http://localhost:3001"]
 allow_origin_regex = None
 
 # Add staging-specific origins

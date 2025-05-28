@@ -88,23 +88,105 @@ async def run_agent(
 
     if "gemini-2.5-flash" in model_name.lower():
         system_message = { "role": "system", "content": get_gemini_system_prompt() } # example included
-    elif "anthropic" not in model_name.lower():
+    # Multi-stage custom prompt retrieval strategy
+    custom_prompt = None
+    logger.info(f"🔍 Checking for custom prompt in thread: {thread_id}")
+    
+    # STAGE 1: Check the latest user message first
+    latest_user_message = await client.table('messages').select('*').eq('thread_id', thread_id).eq('type', 'user').order('created_at', desc=True).limit(1).execute()
+    
+    if latest_user_message.data and len(latest_user_message.data) > 0:
+        message_id = latest_user_message.data[0].get('message_id', 'unknown')
+        logger.info(f"✅ Found latest user message: {message_id}")
+        try:
+            content_str = latest_user_message.data[0]['content']
+            logger.info(f"📄 Raw message content (first 100 chars): {content_str[:100]}" + ("..." if len(content_str) > 100 else ""))
+            
+            data = json.loads(content_str)
+            logger.info(f"🔑 Message data keys: {list(data.keys())}")
+            trace.update(input=data['content'])
+            
+            # Check if custom_prompt exists in the data
+            if 'custom_prompt' in data and data['custom_prompt'] and data['custom_prompt'].strip():
+                custom_prompt = data['custom_prompt']
+                logger.info(f"📝 SUCCESS (Stage 1): Using custom prompt from latest message: {custom_prompt[:50]}..." if len(custom_prompt) > 50 else f"📝 SUCCESS (Stage 1): Using custom prompt from latest message: {custom_prompt}")
+            else:
+                logger.info("ℹ️ No custom_prompt in latest message, checking earlier messages...")
+        except Exception as e:
+            logger.error(f"🚨 Error parsing latest message content: {str(e)}")
+    
+    # STAGE 2: If not found in latest message, check for initialization messages
+    if not custom_prompt:
+        # Use a different approach since filter() needs specific arguments
+        # First get all user messages for this thread
+        initialization_messages = await client.table('messages').select('*').eq('thread_id', thread_id).eq('type', 'user').execute()
+        
+        # Then filter locally for the custom prompt pattern
+        if initialization_messages.data:
+            initialization_messages.data = [msg for msg in initialization_messages.data if isinstance(msg.get('content'), str) and 'System: Custom prompt initialization' in msg.get('content')][:5]
+        
+        if initialization_messages.data and len(initialization_messages.data) > 0:
+            logger.info(f"🔎 Found {len(initialization_messages.data)} initialization messages, checking for custom prompt...")
+            
+            for init_msg in initialization_messages.data:
+                try:
+                    init_content = json.loads(init_msg['content'])
+                    if 'custom_prompt' in init_content and init_content['custom_prompt'] and init_content['custom_prompt'].strip():
+                        custom_prompt = init_content['custom_prompt']
+                        logger.info(f"📝 SUCCESS (Stage 2): Using custom prompt from initialization message: {custom_prompt[:50]}..." if len(custom_prompt) > 50 else f"📝 SUCCESS (Stage 2): Using custom prompt from initialization message: {custom_prompt}")
+                        break
+                except Exception as e:
+                    logger.error(f"🚨 Error parsing initialization message: {str(e)}")
+    
+    # STAGE 3: If still not found, check all recent messages as a last resort
+    if not custom_prompt:
+        logger.info("🔎 Custom prompt not found in expected places, checking all recent messages...")
+        recent_messages = await client.table('messages').select('*').eq('thread_id', thread_id).eq('type', 'user').order('created_at', desc=True).limit(10).execute()
+        
+        if recent_messages.data and len(recent_messages.data) > 0:
+            for msg in recent_messages.data:
+                try:
+                    msg_content = json.loads(msg['content'])
+                    if 'custom_prompt' in msg_content and msg_content['custom_prompt'] and msg_content['custom_prompt'].strip():
+                        custom_prompt = msg_content['custom_prompt']
+                        logger.info(f"📝 SUCCESS (Stage 3): Found custom prompt in message history: {custom_prompt[:50]}..." if len(custom_prompt) > 50 else f"📝 SUCCESS (Stage 3): Found custom prompt in message history: {custom_prompt}")
+                        break
+                except Exception as e:
+                    continue  # Silently continue if we can't parse a message
+    
+    # Final status report
+    if not custom_prompt:
+        logger.info("❌ No valid custom prompt found after exhaustive search")
+    else:
+        logger.info(f"🎉 Successfully retrieved custom prompt after search")
+    
+    # Create the system message with the custom prompt (which may be None)
+    # Log whether we're using a custom prompt
+    if custom_prompt:
+        logger.info(f"🚨 INJECTING CUSTOM PROMPT INTO SYSTEM PROMPT: {custom_prompt[:30]}..." if len(custom_prompt) > 30 else f"🚨 INJECTING CUSTOM PROMPT INTO SYSTEM PROMPT: {custom_prompt}")
+    else:
+        logger.info("🚨 NO CUSTOM PROMPT TO INJECT - USING DEFAULT SYSTEM PROMPT")
+        
+    # Get the system prompt with the custom prompt injected if available
+    system_prompt_content = get_system_prompt(custom_prompt)
+    
+    # Log the first 100 characters of the system prompt for debugging
+    logger.info(f"📝 FINAL SYSTEM PROMPT (first 100 chars): {system_prompt_content[:100]}...")
+    
+    if "anthropic" not in model_name.lower():
         # Only include sample response if the model name does not contain "anthropic"
         sample_response_path = os.path.join(os.path.dirname(__file__), 'sample_responses/1.txt')
         with open(sample_response_path, 'r') as file:
             sample_response = file.read()
         
-        system_message = { "role": "system", "content": get_system_prompt() + "\n\n <sample_assistant_response>" + sample_response + "</sample_assistant_response>" }
+        system_message = { "role": "system", "content": system_prompt_content + "\n\n <sample_assistant_response>" + sample_response + "</sample_assistant_response>" }
     else:
-        system_message = { "role": "system", "content": get_system_prompt() }
+        system_message = { "role": "system", "content": system_prompt_content }
 
     iteration_count = 0
     continue_execution = True
 
-    latest_user_message = await client.table('messages').select('*').eq('thread_id', thread_id).eq('type', 'user').order('created_at', desc=True).limit(1).execute()
-    if latest_user_message.data and len(latest_user_message.data) > 0:
-        data = json.loads(latest_user_message.data[0]['content'])
-        trace.update(input=data['content'])
+    # We've already retrieved the latest user message above
 
     while continue_execution and iteration_count < max_iterations:
         iteration_count += 1

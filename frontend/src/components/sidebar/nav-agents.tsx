@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpRight,
@@ -12,7 +12,8 @@ import {
   Loader2,
   Share2,
   X,
-  Check
+  Check,
+  Search
 } from "lucide-react"
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
@@ -47,6 +48,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ThreadWithProject } from '@/hooks/react-query/sidebar/use-sidebar';
 import { processThreadsWithProjects, useDeleteMultipleThreads, useDeleteThread, useProjects, useThreads } from '@/hooks/react-query/sidebar/use-sidebar';
 import { projectKeys, threadKeys } from '@/hooks/react-query/sidebar/keys';
+import { Input } from "@/components/ui/input";
 
 export function NavAgents() {
   const { isMobile, state } = useSidebar()
@@ -65,6 +67,7 @@ export function NavAgents() {
   const [selectedThreads, setSelectedThreads] = useState<Set<string>>(new Set());
   const [deleteProgress, setDeleteProgress] = useState(0);
   const [totalToDelete, setTotalToDelete] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const {
     data: projects = [],
@@ -87,6 +90,17 @@ export function NavAgents() {
   const combinedThreads: ThreadWithProject[] =
     !isProjectsLoading && !isThreadsLoading ?
       processThreadsWithProjects(threads, projects) : [];
+
+  // Filter threads based on search query
+  const filteredThreads = useMemo(() => {
+    if (!searchQuery.trim()) return combinedThreads;
+
+    const query = searchQuery.toLowerCase().trim();
+    return combinedThreads.filter(thread =>
+      thread.projectName?.toLowerCase().includes(query) ||
+      thread.threadId.toLowerCase().includes(query)
+    );
+  }, [combinedThreads, searchQuery]);
 
   const handleDeletionProgress = (completed: number, total: number) => {
     const percentage = (completed / total) * 100;
@@ -338,7 +352,14 @@ export function NavAgents() {
   return (
     <SidebarGroup>
       <div className="flex justify-between items-center">
-        <SidebarGroupLabel>Tasks</SidebarGroupLabel>
+        <SidebarGroupLabel>
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center">
+              <MessagesSquare className="mr-2 h-4 w-4" />
+              Agents
+            </div>
+          </div>
+        </SidebarGroupLabel>
         {state !== 'collapsed' ? (
           <div className="flex items-center space-x-1">
             {selectedThreads.size > 0 ? (
@@ -389,6 +410,28 @@ export function NavAgents() {
         ) : null}
       </div>
 
+      {state !== 'collapsed' && (
+        <div className="px-2 mb-2">
+          <div className="relative">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Filter agents..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 h-8 text-sm"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <SidebarMenu className="overflow-y-auto max-h-[calc(100vh-200px)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
         {state === 'collapsed' && (
           <SidebarMenuItem>
@@ -418,10 +461,10 @@ export function NavAgents() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))
-        ) : combinedThreads.length > 0 ? (
+        ) : filteredThreads.length > 0 ? (
           // Show all threads with project info
           <>
-            {combinedThreads.map((thread) => {
+            {filteredThreads.map((thread) => {
               // Check if this thread is currently active
               const isActive = pathname?.includes(thread.threadId) || false;
               const isThreadLoading = loadingThreadId === thread.threadId;

@@ -71,7 +71,7 @@ class SandboxImageEditTool(SandboxToolsBase):
     </edit-image>
     '''
     )
-    async def edit_image(self, prompt=None, model="gpt-image-1", size="1024x1024", quality="auto", background="auto", mask=None, images=None, _xml_chunk=None) -> ToolResult:
+    async def edit_image(self, prompt=None, model="gpt-image-1", size="1024x1024", quality="high", background="auto", mask=None, images=None, _xml_chunk=None) -> ToolResult:
         logging.info(f"SandboxImageEditTool.edit_image called")
         logging.info(f"Raw parameters: prompt={prompt}, model={model}, size={size}, images={images}")
         logging.info(f"XML chunk: {_xml_chunk}")
@@ -237,9 +237,8 @@ class SandboxImageEditTool(SandboxToolsBase):
                 # Format the files parameter to include all images
                 files = []
                 for i, img_bytes in enumerate(image_bytes_list):
-                    # Each image needs to be a separate file in the multipart request
-                    # Use 'image' as the parameter name for each file
-                    files.append(("image", (f"image{i}.png", img_bytes, "image/png")))
+                    # Use array notation for multiple images: 'image[]' instead of 'image'
+                    files.append(("image[]", (f"image{i}.png", img_bytes, "image/png")))
                 
                 # Add mask file if provided
                 if mask_bytes:

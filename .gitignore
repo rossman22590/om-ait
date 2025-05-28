@@ -196,3 +196,4 @@ redis_data
 rabbitmq_data
 /backend/worker-1-logs
 /backend/worker-2-logs
+backend/agent/tools/sb_deploy_tool -final.py

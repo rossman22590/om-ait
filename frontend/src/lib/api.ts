@@ -461,19 +461,59 @@ export const addUserMessage = async (
 ): Promise<void> => {
   const supabase = createClient();
 
+  // Enhanced custom prompt handling
+  let customPrompt = null;
+  try {
+    if (typeof window !== 'undefined') {
+      // Get from localStorage
+      customPrompt = localStorage.getItem('user_custom_prompt');
+      
+      if (customPrompt) {
+        // Validate it's not empty/whitespace
+        if (customPrompt.trim().length === 0) {
+          console.log('%c⚠️ Custom prompt is empty or whitespace - not using it', 'color: orange;');
+          customPrompt = null;
+        } else {
+          console.log('%c📝 Found valid custom prompt in localStorage:', 'color: green; font-weight: bold;', 
+            customPrompt.slice(0, 50) + (customPrompt.length > 50 ? '...' : ''));
+        }
+      } else {
+        console.log('%cℹ️ No custom prompt found in localStorage', 'color: gray;');
+      }
+    }
+  } catch (error) {
+    console.error('%c🚨 Error retrieving custom prompt:', 'color: red;', error);
+    // Continue without custom prompt if there's an error
+  }
+
   // Format the message in the format the LLM expects - keep it simple with only required fields
   const message = {
     role: 'user',
     content: content,
   };
 
+  // Only add custom_prompt field if it actually has a value
+  if (customPrompt) {
+    message['custom_prompt'] = customPrompt;
+    console.log('%c✅ Added custom prompt to message data', 'color: green; font-weight: bold;');
+  }
+
+  const messageStr = JSON.stringify(message, null, 2);
+  console.log('%c📤 Sending message with structure:', 'color: blue; font-weight: bold;', messageStr);
+
   // Insert the message into the messages table
   const { error } = await supabase.from('messages').insert({
     thread_id: threadId,
     type: 'user',
     is_llm_message: true,
-    content: JSON.stringify(message),
+    content: messageStr,
   });
+  
+  if (error) {
+    console.error('%c🚨 Error inserting message:', 'color: red; font-weight: bold;', error);
+  } else {
+    console.log('%c✅ Message successfully inserted into database', 'color: green;', 'thread_id:', threadId);  
+  }
 
   if (error) {
     console.error('Error adding user message:', error);
@@ -510,6 +550,7 @@ export const startAgent = async (
     enable_thinking?: boolean;
     reasoning_effort?: string;
     stream?: boolean;
+    custom_prompt?: string;
   },
 ): Promise<{ agent_run_id: string }> => {
   try {
@@ -533,6 +574,60 @@ export const startAgent = async (
       `[API] Starting agent for thread ${threadId} using ${API_URL}/thread/${threadId}/agent/start`,
     );
 
+    // Enhanced and reliable custom prompt initialization
+    let customPrompt = null;
+    try {
+      if (typeof window !== 'undefined') {
+        customPrompt = localStorage.getItem('user_custom_prompt');
+        
+        // Only use non-empty custom prompts
+        if (customPrompt && customPrompt.trim().length === 0) {
+          console.log('%c⚠️ Custom prompt is empty - not using it', 'color: orange;');
+          customPrompt = null;
+        }
+      }
+    } catch (e) {
+      console.error('%c🚨 Error getting custom prompt from localStorage:', 'color: red;', e);
+    }
+    
+    // Always insert an initialization message for new threads
+    // This ensures a consistent pattern for the backend to find custom prompts
+    try {
+      // Create the initialization message
+      const initMessage = {
+        role: 'user',
+        content: '[System: Thread initialization]',
+      };
+      
+      // Add custom prompt if available
+      if (customPrompt && customPrompt.trim().length > 0) {
+        console.log('%c📝 Using custom prompt for new thread:', 'color: green; font-weight: bold;', 
+          customPrompt.slice(0, 50) + (customPrompt.length > 50 ? '...' : ''));
+        initMessage['custom_prompt'] = customPrompt;
+      }
+      
+      // Insert the initialization message
+      const { error } = await supabase.from('messages').insert({
+        thread_id: threadId,
+        type: 'user',
+        is_llm_message: true,
+        content: JSON.stringify(initMessage),
+      });
+      
+      if (error) {
+        console.error('%c🚨 Failed to add initialization message:', 'color: red;', error);
+      } else {
+        console.log('%c✅ Successfully added thread initialization message', 'color: green;');
+      }
+      
+      // Add a small delay to ensure the message is processed before starting the agent
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+    } catch (e) {
+      console.error('%c🚨 Error during thread initialization:', 'color: red;', e);
+      // Continue anyway to avoid blocking the user
+    }
+
     const response = await fetch(`${API_URL}/thread/${threadId}/agent/start`, {
       method: 'POST',
       headers: {
@@ -541,7 +636,7 @@ export const startAgent = async (
       },
       // Add cache: 'no-store' to prevent caching
       cache: 'no-store',
-      // Add the body, stringifying the options or an empty object
+      // Add the body with potentially enhanced options
       body: JSON.stringify(options || {}),
     });
 
@@ -609,19 +704,52 @@ export const startAgent = async (
 };
 
 export const stopAgent = async (agentRunId: string): Promise<void> => {
-  // Add to non-running set immediately to prevent reconnection attempts
-  nonRunningAgentRuns.add(agentRunId);
+  try {
+    console.log('[API] Stopping agent run:', agentRunId);
 
-  // Close any existing stream
-  const existingStream = activeStreams.get(agentRunId);
-  if (existingStream) {
-    console.log(
-      `[API] Closing existing stream for ${agentRunId} before stopping agent`,
-    );
-    existingStream.close();
-    activeStreams.delete(agentRunId);
+    // Add to set of known non-running agents
+    nonRunningAgentRuns.add(agentRunId);
+
+    // Close any existing streams
+    const existingStream = activeStreams.get(agentRunId);
+    if (existingStream) {
+      console.log('[API] Closing existing stream for', agentRunId);
+      existingStream.close();
+      activeStreams.delete(agentRunId);
+    }
+
+    // Get Supabase client
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error('No access token available');
+    }
+
+    // Request to stop the agent run
+    const response = await fetch(`${API_URL}/agent-run/${agentRunId}/stop`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Error stopping agent run: ${response.statusText}`);
+    }
+  } catch (error) {
+    console.error('Failed to stop agent run:', error);
+    throw error;
   }
+};
 
+// Stop all running agents for the current user - instant stop
+export const stopAllAgents = async (): Promise<{ stopped: number, errors: number }> => {
+  console.log('[API] Stopping all agents for current user - INSTANT STOP');
+  
   const supabase = createClient();
   const {
     data: { session },
@@ -631,24 +759,105 @@ export const stopAgent = async (agentRunId: string): Promise<void> => {
     throw new Error('No access token available');
   }
 
-  const response = await fetch(`${API_URL}/agent-run/${agentRunId}/stop`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    // Add cache: 'no-store' to prevent caching
-    cache: 'no-store',
-  });
-
-  if (!response.ok) {
-    throw new Error(`Error stopping agent: ${response.statusText}`);
+  // Track results
+  let stoppedCount = 0;
+  let errorCount = 0;
+  
+  try {
+    // Direct query to get all running agents for this user
+    const { data: runningAgents, error } = await supabase
+      .from('agent_runs')
+      .select('id, thread_id')
+      .eq('status', 'running')
+      .order('created_at', { ascending: false });
+      
+    if (error) {
+      throw new Error(`Error fetching running agents: ${error.message}`);
+    }
+    
+    console.log(`[API] Found ${runningAgents?.length || 0} running agents to stop immediately`);
+    
+    if (!runningAgents || runningAgents.length === 0) {
+      return { stopped: 0, errors: 0 };
+    }
+    
+    // Immediately mark all as non-running to prevent reconnection attempts
+    for (const agent of runningAgents) {
+      nonRunningAgentRuns.add(agent.id);
+      
+      // Close any existing streams
+      const existingStream = activeStreams.get(agent.id);
+      if (existingStream) {
+        console.log(`[API] Closing existing stream for ${agent.id}`);
+        existingStream.close();
+        activeStreams.delete(agent.id);
+      }
+    }
+    
+    // Prepare all stop requests
+    const stopPromises = runningAgents.map(agent => {
+      return fetch(`${API_URL}/agent-run/${agent.id}/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        cache: 'no-store',
+      })
+      .then(response => {
+        if (response.ok) {
+          stoppedCount++;
+          console.log(`[API] Successfully stopped agent run ${agent.id}`);
+          return true;
+        } else {
+          errorCount++;
+          console.error(`[API] Error stopping agent run ${agent.id}: ${response.statusText}`);
+          return false;
+        }
+      })
+      .catch(error => {
+        errorCount++;
+        console.error(`[API] Error stopping agent run ${agent.id}:`, error);
+        return false;
+      });
+    });
+    
+    // Execute all stop requests in parallel for maximum speed
+    await Promise.all(stopPromises);
+    
+    // Also update the Supabase status to ensure DB consistency
+    if (stoppedCount > 0) {
+      try {
+        const stopTime = new Date().toISOString();
+        const ids = runningAgents.map(a => a.id);
+        
+        const { error: updateError } = await supabase
+          .from('agent_runs')
+          .update({ 
+            status: 'stopped',
+            completed_at: stopTime
+          })
+          .in('id', ids);
+          
+        if (updateError) {
+          console.warn(`[API] Error updating agent status in DB: ${updateError.message}`);
+        }
+      } catch (dbError) {
+        console.warn('[API] Error updating agent status in DB:', dbError);
+      }
+    }
+  } catch (error) {
+    console.error('[API] Error in stopAllAgents:', error);
+    throw error;
   }
+  
+  return { stopped: stoppedCount, errors: errorCount };
 };
 
 export const getAgentStatus = async (agentRunId: string): Promise<AgentRun> => {
   console.log(`[API] Requesting agent status for ${agentRunId}`);
 
+// ... (rest of the code remains the same)
   // If we already know this agent is not running, throw an error
   if (nonRunningAgentRuns.has(agentRunId)) {
     console.log(

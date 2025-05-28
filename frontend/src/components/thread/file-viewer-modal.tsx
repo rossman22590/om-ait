@@ -47,8 +47,10 @@ import {
   useDirectoryQuery,
   useFileContentQuery,
   useFileUpload,
-  FileCache
+  FileCache,
+  getCachedFile
 } from '@/hooks/react-query/files';
+import JSZip from 'jszip';
 
 // Define API_URL
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
@@ -122,6 +124,7 @@ export function FileViewerModal({
   // Utility state
   const [isUploading, setIsUploading] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloadingAll, setIsDownloadingAll] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // State to track if initial path has been processed
@@ -498,12 +501,12 @@ export function FileViewerModal({
   // Modify the cleanup effect to respect active downloads
   useEffect(() => {
     return () => {
-      if (blobUrlForRenderer && !isDownloading && !activeDownloadUrls.current.has(blobUrlForRenderer)) {
+      if (blobUrlForRenderer && !isDownloading && !isDownloadingAll && !activeDownloadUrls.current.has(blobUrlForRenderer)) {
         console.log(`[FILE VIEWER] Revoking blob URL on cleanup: ${blobUrlForRenderer}`);
         URL.revokeObjectURL(blobUrlForRenderer);
       }
     };
-  }, [blobUrlForRenderer, isDownloading]);
+  }, [blobUrlForRenderer, isDownloading, isDownloadingAll]);
 
   // Handle modal close
   const handleOpenChange = useCallback(
@@ -512,7 +515,7 @@ export function FileViewerModal({
         console.log('[FILE VIEWER] handleOpenChange: Modal closing, resetting state.');
 
         // Only revoke if not downloading and not an active download URL
-        if (blobUrlForRenderer && !isDownloading && !activeDownloadUrls.current.has(blobUrlForRenderer)) {
+        if (blobUrlForRenderer && !isDownloading && !isDownloadingAll && !activeDownloadUrls.current.has(blobUrlForRenderer)) {
           console.log(`[FILE VIEWER] Manually revoking blob URL on modal close: ${blobUrlForRenderer}`);
           URL.revokeObjectURL(blobUrlForRenderer);
         }
@@ -525,7 +528,7 @@ export function FileViewerModal({
       }
       onOpenChange(open);
     },
-    [onOpenChange, clearSelectedFile, setIsInitialLoad, blobUrlForRenderer, isDownloading],
+    [onOpenChange, clearSelectedFile, setIsInitialLoad, blobUrlForRenderer, isDownloading, isDownloadingAll],
   );
 
   // Helper to check if file is markdown
@@ -654,41 +657,109 @@ export function FileViewerModal({
             .hljs-keyword, .hljs-selector-tag { color: #569cd6; }
             .hljs-literal, .hljs-number { color: #b5cea8; }
             .hljs-string { color: #ce9178; }
-            .hljs-comment { color: #6a9955; }
-            .hljs-attribute, .hljs-attr { color: #9cdcfe; }
-            .hljs-function, .hljs-name { color: #dcdcaa; }
-            .hljs-title.class_ { color: #4ec9b0; }
-            .markdown-content pre { background-color: #f8f8f8; }
-          </style>
-        </head>
-        <body>
-          <div class="markdown-content">
-            ${markdownContent}
-          </div>
-          <script>
-            // Remove any complex CSS variables or functions that might cause issues
-            document.querySelectorAll('[style]').forEach(el => {
-              const style = el.getAttribute('style');
-              if (style && (style.includes('oklch') || style.includes('var(--') || style.includes('hsl('))) {
-                // Replace complex color values with simple ones or remove them
-                el.setAttribute('style', style
-                  .replace(/color:.*?(;|$)/g, 'color: #333;')
-                  .replace(/background-color:.*?(;|$)/g, 'background-color: transparent;')
-                );
-              }
-            });
-            
-            // Print automatically when loaded
-            window.onload = () => {
-              setTimeout(() => {
-                window.print();
-                setTimeout(() => window.close(), 500);
-              }, 300);
-            };
-          </script>
-        </body>
-        </html>
-      `;
+          }
+          body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 12pt;
+            color: #333;
+            line-height: 1.5;
+            padding: 20px;
+            max-width: 100%;
+            margin: 0 auto;
+            background: white;
+          }
+          h1 { font-size: 24pt; margin-top: 20pt; margin-bottom: 12pt; }
+          h2 { font-size: 20pt; margin-top: 18pt; margin-bottom: 10pt; }
+          h3 { font-size: 16pt; margin-top: 16pt; margin-bottom: 8pt; }
+          h4, h5, h6 { font-weight: bold; margin-top: 12pt; margin-bottom: 6pt; }
+          p { margin: 8pt 0; }
+          pre, code {
+            font-family: 'Courier New', monospace;
+            background-color: #f5f5f5;
+            border-radius: 3pt;
+            padding: 2pt 4pt;
+            font-size: 10pt;
+          }
+          pre {
+            padding: 8pt;
+            margin: 8pt 0;
+            overflow-x: auto;
+            white-space: pre-wrap;
+          }
+          code {
+            white-space: pre-wrap;
+          }
+          img {
+            max-width: 100%;
+            height: auto;
+          }
+          a {
+            color: #0066cc;
+            text-decoration: underline;
+          }
+          ul, ol {
+            padding-left: 20pt;
+            margin: 8pt 0;
+          }
+          blockquote {
+            margin: 8pt 0;
+            padding-left: 12pt;
+            border-left: 4pt solid #ddd;
+            color: #666;
+          }
+          table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 12pt 0;
+          }
+          th, td {
+            border: 1pt solid #ddd;
+            padding: 6pt;
+            text-align: left;
+          }
+          th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+          }
+          /* Syntax highlighting basic styles */
+          .hljs-keyword, .hljs-selector-tag { color: #569cd6; }
+          .hljs-literal, .hljs-number { color: #b5cea8; }
+          .hljs-string { color: #ce9178; }
+          .hljs-comment { color: #6a9955; }
+          .hljs-attribute, .hljs-attr { color: #9cdcfe; }
+          .hljs-function, .hljs-name { color: #dcdcaa; }
+          .hljs-title.class_ { color: #4ec9b0; }
+          .markdown-content pre { background-color: #f8f8f8; }
+        </style>
+      </head>
+      <body>
+        <div class="markdown-content">
+          ${markdownContent}
+        </div>
+        <script>
+          // Remove any complex CSS variables or functions that might cause issues
+          document.querySelectorAll('[style]').forEach(el => {
+            const style = el.getAttribute('style');
+            if (style && (style.includes('oklch') || style.includes('var(--') || style.includes('hsl('))) {
+              // Replace complex color values with simple ones or remove them
+              el.setAttribute('style', style
+                .replace(/color:.*?(;|$)/g, 'color: #333;')
+                .replace(/background-color:.*?(;|$)/g, 'background-color: transparent;')
+              );
+            }
+          });
+          
+          // Print automatically when loaded
+          window.onload = () => {
+            setTimeout(() => {
+              window.print();
+              setTimeout(() => window.close(), 500);
+            }, 300);
+          };
+        </script>
+      </body>
+      </html>
+    `;
 
         // Write the HTML content to the new window
         printWindow.document.open();
@@ -708,66 +779,200 @@ export function FileViewerModal({
     [selectedFilePath, isExportingPdf, isMarkdownFile],
   );
 
-  // Handle file download - streamlined for performance
+  // Handle file upload
+  const handleUpload = useCallback(() => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  }, []);
+
+  // Process file upload
+  const processUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        console.log(`[FILE VIEWER] Uploading file: ${file.name}`);
+        
+        // Create FormData for upload
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('path', `${currentPath}/${file.name}`);
+
+        // Upload the file
+        const response = await fetch(`${API_URL}/api/sandbox/${sandboxId}/upload`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session?.access_token}`,
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to upload ${file.name}`);
+        }
+
+        console.log(`[FILE VIEWER] Successfully uploaded: ${file.name}`);
+      }
+
+      toast.success(`Successfully uploaded ${files.length} file(s)`);
+      
+      // Refresh the file list
+      refetchFiles();
+      
+      // Clear the input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('Upload failed:', error);
+      toast.error(`Upload failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsUploading(false);
+    }
+  }, [currentPath, sandboxId, session?.access_token, refetchFiles]);
+
+  // Handle file download - Define after helpers
   const handleDownload = async () => {
     if (!selectedFilePath || isDownloading) return;
 
     try {
       setIsDownloading(true);
+      console.log(`[FILE VIEWER] Starting download for: ${selectedFilePath}`);
 
-      // Get file metadata
-      const fileName = selectedFilePath.split('/').pop() || 'file';
-      const mimeType = FileCache.getMimeTypeFromPath?.(selectedFilePath) || 'application/octet-stream';
+      // Get the file content from cache
+      const cacheKey = `${sandboxId}:${selectedFilePath}`;
+      const cachedContent = FileCache.get(cacheKey);
 
-      // Use rawContent if available
-      if (rawContent) {
-        let blob: Blob;
-
-        if (typeof rawContent === 'string') {
-          if (rawContent.startsWith('blob:')) {
-            // If it's a blob URL, get directly from server to avoid CORS issues
-            const response = await fetch(
-              `${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(selectedFilePath)}`,
-              { headers: { 'Authorization': `Bearer ${session?.access_token}` } }
-            );
-
-            if (!response.ok) throw new Error(`Server error: ${response.status}`);
-            blob = await response.blob();
-          } else {
-            // Text content
-            blob = new Blob([rawContent], { type: mimeType });
+      if (!cachedContent) {
+        console.log(`[FILE VIEWER] Cache miss for download, fetching fresh content`);
+        // If not in cache, fetch it fresh
+        const content = await getCachedFile(
+          sandboxId,
+          selectedFilePath,
+          {
+            contentType: FileCache.getContentTypeFromPath(selectedFilePath),
+            force: true,
+            token: session?.access_token,
           }
-        } else if (rawContent instanceof Blob) {
-          // Already a blob
-          blob = rawContent;
-        } else {
-          // Unknown format, stringify
-          blob = new Blob([JSON.stringify(rawContent)], { type: 'application/json' });
+        );
+
+        if (!content) {
+          throw new Error('Failed to fetch file content');
         }
 
-        // Ensure correct MIME type
-        if (blob.type !== mimeType) {
-          blob = new Blob([blob], { type: mimeType });
+        // Create a new blob URL for download
+        let downloadUrl;
+        try {
+          // Check if content is a valid blob or URL
+          if (content instanceof Blob) {
+            downloadUrl = URL.createObjectURL(content);
+          } else if (typeof content === 'string' && content.startsWith('blob:')) {
+            // It's already a blob URL
+            downloadUrl = content;
+          } else {
+            console.warn(`[FILE VIEWER] Content is not a Blob or blob URL, attempting conversion`);
+            // Try to convert to a Blob if possible
+            let blob;
+            
+            if (content instanceof ArrayBuffer) {
+              blob = new Blob([content]);
+            } else if (typeof content === 'string') {
+              blob = new Blob([content], { type: 'text/plain' });
+            } else {
+              throw new Error(`Cannot convert content of type ${typeof content} to blob`);
+            }
+            
+            downloadUrl = URL.createObjectURL(blob);
+          }
+          console.log(`[FILE VIEWER] Created download URL: ${downloadUrl}`);  
+        } catch (error) {
+          console.error(`[FILE VIEWER] Error creating object URL:`, error);
+          throw new Error(`Failed to create download URL: ${error instanceof Error ? error.message : String(error)}`);
         }
 
-        downloadBlob(blob, fileName);
-        return;
+        // Track the URL to prevent premature revocation
+        activeDownloadUrls.current.add(downloadUrl);
+
+        // Create and trigger download
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = selectedFilePath.split('/').pop() || 'file';
+        document.body.appendChild(a);
+        a.click();
+
+        // Clean up
+        document.body.removeChild(a);
+        
+        // Use setTimeout to delay URL revocation to ensure download completes
+        setTimeout(() => {
+          URL.revokeObjectURL(downloadUrl);
+          activeDownloadUrls.current.delete(downloadUrl);
+          console.log(`[FILE VIEWER] Revoked download URL after delay: ${downloadUrl}`);
+        }, 5000); // 5 second delay to ensure download completes
+      } else {
+        console.log(`[FILE VIEWER] Using cached content for download, type: ${typeof cachedContent}, isBlob: ${cachedContent instanceof Blob}`);
+        // If we have cached content, use it directly
+        let downloadUrl;
+        
+        try {
+          // Check if the cached content is a Blob or can be converted to one
+          if (cachedContent instanceof Blob) {
+            // It's already a Blob, use it directly
+            downloadUrl = URL.createObjectURL(cachedContent);
+          } else if (typeof cachedContent === 'string' && cachedContent.startsWith('blob:')) {
+            // It's already a blob URL, use it directly
+            downloadUrl = cachedContent;
+          } else {
+            // Try to convert to a Blob if it's another format (like ArrayBuffer)
+            console.log(`[FILE VIEWER] Attempting to convert cached content to Blob`);
+            let blob;
+            
+            if (cachedContent instanceof ArrayBuffer) {
+              blob = new Blob([cachedContent]);
+            } else if (typeof cachedContent === 'string') {
+              blob = new Blob([cachedContent], { type: 'text/plain' });
+            } else if (cachedContent?.content instanceof Blob) {
+              // Handle case where cache stores {content: Blob, timestamp: number, type: string}
+              blob = cachedContent.content;
+            } else {
+              throw new Error(`Cannot convert cached content type ${typeof cachedContent} to blob`);
+            }
+            
+            downloadUrl = URL.createObjectURL(blob);
+          }
+          console.log(`[FILE VIEWER] Created download URL from cache: ${downloadUrl}`);      
+        } catch (error) {
+          console.error(`[FILE VIEWER] Error creating object URL from cached content:`, error);
+          throw new Error(`Failed to create download URL: ${error instanceof Error ? error.message : String(error)}`);
+        }
+
+        // Track the URL to prevent premature revocation
+        activeDownloadUrls.current.add(downloadUrl);
+
+        // Create and trigger download
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = selectedFilePath.split('/').pop() || 'file';
+        document.body.appendChild(a);
+        a.click();
+
+        // Clean up
+        document.body.removeChild(a);
+        
+        // Use setTimeout to delay URL revocation to ensure download completes
+        setTimeout(() => {
+          URL.revokeObjectURL(downloadUrl);
+          activeDownloadUrls.current.delete(downloadUrl);
+          console.log(`[FILE VIEWER] Revoked download URL after delay: ${downloadUrl}`);
+        }, 5000); // 5 second delay to ensure download completes
       }
 
-      // Get from server if no raw content
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(selectedFilePath)}`,
-        { headers: { 'Authorization': `Bearer ${session?.access_token}` } }
-      );
-
-      if (!response.ok) throw new Error(`Server error: ${response.status}`);
-
-      const blob = await response.blob();
-      const finalBlob = new Blob([blob], { type: mimeType });
-      downloadBlob(finalBlob, fileName);
-
+      toast.success('Download started');
     } catch (error) {
-      console.error('[FILE VIEWER] Download error:', error);
+      console.error('Download failed:', error);
       toast.error(`Failed to download file: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsDownloading(false);
@@ -794,67 +999,120 @@ export function FileViewerModal({
     toast.success('Download started');
   };
 
-  // Handle file upload - Define after helpers
-  const handleUpload = useCallback(() => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  }, []);
-
-  // Process uploaded file - Define after helpers
-  const processUpload = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      if (!event.target.files || event.target.files.length === 0) return;
-
-      const file = event.target.files[0];
-      setIsUploading(true);
-
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('path', `${currentPath}/${file.name}`);
-
-        const supabase = createClient();
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        if (!session?.access_token) {
-          throw new Error('No access token available');
+  // Function to recursively gather files from a directory
+  const gatherFilesRecursively = useCallback(async (
+    path: string, 
+    zip: JSZip, 
+    folderPath: string = ''
+  ): Promise<void> => {
+    try {
+      // List all files and directories in the current path
+      const allFiles = await listSandboxFiles(sandboxId, path);
+      
+      // Process each file/directory
+      for (const file of allFiles) {
+        const relativePath = folderPath ? `${folderPath}/${file.name}` : file.name;
+        
+        // Skip node_modules, package-lock.json, and folders starting with a dot
+        if ((file.is_dir && (file.name === 'node_modules' || file.name.startsWith('.'))) || 
+            (!file.is_dir && file.name === 'package-lock.json')) {
+          console.log(`[ZIP] Skipping excluded item: ${file.path}`);
+          continue;
         }
-
-        const response = await fetch(
-          `${API_URL}/sandboxes/${sandboxId}/files`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-            },
-            body: formData,
-          },
-        );
-
-        if (!response.ok) {
-          const error = await response.text();
-          throw new Error(error || 'Upload failed');
+        
+        if (file.is_dir) {
+          // For directories, create a folder in the zip and recurse
+          console.log(`[ZIP] Processing directory: ${file.path}`);
+          await gatherFilesRecursively(file.path, zip, relativePath);
+        } else {
+          // For files, add to the zip
+          console.log(`[ZIP] Adding file: ${file.path}`);
+          try {
+            // Get file content using React Query utilities
+            const content = await getCachedFile(
+              sandboxId,
+              file.path,
+              {
+                contentType: 'blob', // Always get as blob for universal compatibility
+                force: false, // Use cache if available
+                token: session?.access_token,
+              }
+            );
+            
+            if (content) {
+              // Add file to the zip with proper relative path
+              if (content instanceof Blob) {
+                zip.file(relativePath, content);
+              } else if (typeof content === 'string' && !content.startsWith('blob:')) {
+                // Plain text content
+                zip.file(relativePath, content);
+              } else if (typeof content === 'string' && content.startsWith('blob:')) {
+                // Handle blob URLs by fetching the content
+                const response = await fetch(content);
+                const blob = await response.blob();
+                zip.file(relativePath, blob);
+              } else {
+                console.warn(`[ZIP] Unexpected content type for ${file.path}: ${typeof content}`);
+              }
+            }
+          } catch (error) {
+            console.error(`[ZIP] Error adding file ${file.path}:`, error);
+            // Continue with other files even if one fails
+          }
         }
-
-        // Reload the file list using React Query
-        await refetchFiles();
-
-        toast.success(`Uploaded: ${file.name}`);
-      } catch (error) {
-        console.error('Upload failed:', error);
-        toast.error(
-          `Upload failed: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      } finally {
-        setIsUploading(false);
-        if (event.target) event.target.value = '';
       }
-    },
-    [currentPath, sandboxId, refetchFiles],
-  );
+    } catch (error) {
+      console.error(`[ZIP] Error gathering files from ${path}:`, error);
+      throw error;
+    }
+  }, [sandboxId, session?.access_token]);
+
+  // Handle download all files as a zip
+  const handleDownloadAll = useCallback(async () => {
+    if (isDownloadingAll) return;
+    
+    try {
+      setIsDownloadingAll(true);
+      toast.info('Preparing workspace download...');
+      console.log('[ZIP] Starting download all process');
+      
+      // Create a new JSZip instance
+      const zip = new JSZip();
+      
+      // Start gathering files from the workspace root
+      await gatherFilesRecursively('/workspace', zip);
+      
+      // Generate the zip file
+      console.log('[ZIP] Generating zip file...');
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      
+      // Create download link
+      const downloadUrl = URL.createObjectURL(zipBlob);
+      activeDownloadUrls.current.add(downloadUrl);
+      
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = 'workspace.zip';
+      document.body.appendChild(a);
+      a.click();
+      
+      // Clean up
+      document.body.removeChild(a);
+      
+      // Delay URL revocation to ensure download completes
+      setTimeout(() => {
+        URL.revokeObjectURL(downloadUrl);
+        activeDownloadUrls.current.delete(downloadUrl);
+      }, 10000);
+      
+      toast.success('Workspace download started');
+    } catch (error) {
+      console.error('[ZIP] Download all failed:', error);
+      toast.error(`Failed to download workspace: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsDownloadingAll(false);
+    }
+  }, [sandboxId, isDownloadingAll, gatherFilesRecursively]);
 
   // --- Render --- //
   return (
@@ -995,12 +1253,28 @@ export function FileViewerModal({
               </Button>
             )}
 
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDownloadAll}
+              disabled={isDownloadingAll}
+              className="h-8 gap-1"
+            >
+              {isDownloadingAll ? (
+                <Loader className="h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4" />
+              )}
+              <span className="hidden sm:inline">Download All</span>
+            </Button>
+
             <input
               type="file"
               ref={fileInputRef}
               className="hidden"
               onChange={processUpload}
               disabled={isUploading}
+              multiple
             />
           </div>
         </div>

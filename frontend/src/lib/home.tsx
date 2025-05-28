@@ -65,7 +65,7 @@ export const siteConfig = {
     links: [
       { id: 1, name: 'Home', href: '#hero' },
       { id: 2, name: 'Use Cases', href: '#use-cases' },
-      { id: 3, name: 'Open Source', href: '#open-source' },
+      // { id: 3, name: 'Open Source', href: '#open-source' },
       { id: 4, name: 'Pricing', href: '#pricing' },
     ],
   },
@@ -100,7 +100,7 @@ export const siteConfig = {
     githubUrl: 'https://github.com/kortix-ai/suna',
     title: 'Suna, the AI Employee.',
     description:
-      'Suna by Kortix – is a generalist AI Agent that acts on your behalf.',
+      'Machine – is a generalist AI Agent that acts on your behalf.',
     inputPlaceholder: 'Ask Machine to...',
   },
   cloudPricingItems: [
@@ -128,6 +128,8 @@ export const siteConfig = {
         '2 hours',
         'Private projects',
         'Access to intelligent Model (Full Suna)',
+        '7-day free trial',
+        'Promo codes accepted',
       ],
       stripePriceId: config.SUBSCRIPTION_TIERS.TIER_2_20.priceId,
       upgradePlans: [],
@@ -140,7 +142,11 @@ export const siteConfig = {
       buttonColor: 'bg-secondary text-white',
       isPopular: false,
       hours: '6 hours',
-      features: ['Suited to you needs'],
+      features: [
+        'Suited to your needs',
+        '7-day free trial',
+        'Promo codes accepted'
+      ],
       upgradePlans: [
         {
           hours: '6 hours',
