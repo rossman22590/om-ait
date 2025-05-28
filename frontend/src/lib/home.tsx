@@ -139,11 +139,11 @@ export const siteConfig = {
       buttonText: 'Try Free',
       buttonColor: 'bg-secondary text-white',
       isPopular: false,
-      hours: '6 hours',
+      hours: '9 hours',
       features: ['Suited to you needs'],
       upgradePlans: [
         {
-          hours: '6 hours',
+          hours: '9 hours',
           price: '$50',
           stripePriceId: config.SUBSCRIPTION_TIERS.TIER_6_50.priceId,
         },
