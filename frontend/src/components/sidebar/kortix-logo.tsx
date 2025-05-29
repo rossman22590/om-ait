@@ -20,7 +20,7 @@ export function KortixLogo() {
         alt="Machine"
         width={24}
         height={24}
-        className={`${mounted && theme === 'dark' ? 'invert' : ''}`}
+        className=""
       />
     </div>
   );

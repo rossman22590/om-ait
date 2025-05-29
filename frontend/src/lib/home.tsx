@@ -808,7 +808,7 @@ export const siteConfig = {
           'Community support',
         ],
         description: 'Perfect for individual users and developers',
-        buttonText: 'Hire Suna',
+        buttonText: 'Hire Machine',
         buttonColor: 'bg-accent text-primary',
         isPopular: false,
       },
@@ -1088,7 +1088,7 @@ export const siteConfig = {
         id: 5,
         question: 'How can I contribute to Machine?',
         answer:
-          'You can contribute to Machine by submitting pull requests on GitHub, reporting bugs, suggesting new features, or helping with documentation. Join our Discord community to connect with other contributors and Hire Suna.',
+          'You can contribute to Machine by submitting pull requests on GitHub, reporting bugs, suggesting new features, or helping with documentation. Join our Discord community to connect with other contributors and Hire Machine.',
       },
       {
         id: 6,

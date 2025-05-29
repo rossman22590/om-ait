@@ -62,6 +62,7 @@ export function NavUserWithTeams({
   const { isMobile } = useSidebar();
   const { data: accounts } = useAccounts();
   const [showNewTeamDialog, setShowNewTeamDialog] = React.useState(false);
+  const [showUpdatesModal, setShowUpdatesModal] = React.useState(false);
   const { theme, setTheme } = useTheme();
 
   // Prepare personal account and team accounts
@@ -159,6 +160,7 @@ export function NavUserWithTeams({
   }
 
   return (
+    <>
     <Dialog open={showNewTeamDialog} onOpenChange={setShowNewTeamDialog}>
       <SidebarMenu>
         <SidebarMenuItem>
@@ -303,6 +305,20 @@ export function NavUserWithTeams({
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => {
+                  // Close the dropdown menu first
+                  document.body.click();
+                  // Then open the modal after a short delay
+                  setTimeout(() => {
+                    setShowUpdatesModal(true);
+                  }, 100);
+                }}
+                className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
+              >
+                <span className="text-xs">Version 8.0</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem className='text-destructive focus:text-destructive focus:bg-destructive/10' onClick={handleLogout}>
                 <LogOut className="h-4 w-4 text-destructive" />
                 Log out
@@ -324,5 +340,66 @@ export function NavUserWithTeams({
         <NewTeamForm />
       </DialogContent>
     </Dialog>
+
+    {/* Updates Modal - Separate dialog component */}
+    <Dialog open={showUpdatesModal} onOpenChange={setShowUpdatesModal}>
+        <DialogContent className="sm:max-w-[550px] bg-white dark:bg-white border border-gray-200 rounded-2xl shadow-lg text-black dark:text-black">
+          <DialogHeader>
+            <DialogTitle className="text-black dark:text-black flex items-center gap-2">
+              <BadgeCheck className="h-5 w-5 text-purple-500" /> 
+              Machine AI v8.0 Updates
+            </DialogTitle>
+            <DialogDescription className="text-black/70 dark:text-black/70">
+              Latest features and improvements in this version
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 text-black dark:text-black">
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-500">New Features</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Added "Stop All Agents" feature for easier workspace management</li>
+                <li>Implemented 7-day free trial for all subscription plans</li>
+                <li>Added support for promo codes during checkout</li>
+                <li>Enhanced image generation with high-quality settings</li>
+                <li>Improved image editing tools with professional-grade outputs</li>
+                <li>Faster website deployments and hosting options</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-500">Performance Improvements</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Faster response times from AI agents</li>
+                <li>Smoother checkout experience</li>
+                <li>More accurate usage tracking and billing</li>
+                <li>Faster image generation with less waiting time</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-500">UI Enhancements</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Redesigned navigation with improved user experience</li>
+                <li>Updated pricing display with clearer subscription benefits</li>
+                <li>New version indicator to track platform updates</li>
+                <li>Enhanced dark mode compatibility throughout the application</li>
+                <li>Improved mobile responsiveness for on-the-go usage</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-500">Bug Fixes</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Fixed issues with subscription recognition</li>
+                <li>Improved payment processing reliability</li>
+                <li>More reliable file operations in sandboxes</li>
+                <li>Fixed minor visual glitches in the interface</li>
+              </ul>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
