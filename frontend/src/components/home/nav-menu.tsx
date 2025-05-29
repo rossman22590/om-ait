@@ -2,27 +2,54 @@
 
 import { siteConfig } from '@/lib/home';
 import { motion } from 'motion/react';
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 
 interface NavItem {
   name: string;
   href: string;
 }
 
-const navs: NavItem[] = siteConfig.nav.links;
+// Use the site config but adjust links based on current page
+const getNavItems = (pathname: string) => {
+  // If we're not on the home page, we need to adjust links with anchor references
+  return siteConfig.nav.links.map(link => {
+    // If we're not on the home page
+    if (pathname !== '/') {
+      if (link.name === 'Home') {
+        // Home link should go to root
+        return { ...link, href: '/' };
+      } else if (link.href.startsWith('#')) {
+        // Links to sections on home page should go to home page + that section
+        return { ...link, href: `/${link.href}` };
+      }
+    }
+    return link;
+  });
+};
 
 export function NavMenu() {
+  const pathname = usePathname();
   const ref = useRef<HTMLUListElement>(null);
   const [left, setLeft] = useState(0);
   const [width, setWidth] = useState(0);
   const [isReady, setIsReady] = useState(false);
   const [activeSection, setActiveSection] = useState('hero');
   const [isManualScroll, setIsManualScroll] = useState(false);
+  const [navs, setNavs] = useState<NavItem[]>([]);
 
   React.useEffect(() => {
+    // Set nav items based on current path
+    setNavs(getNavItems(pathname));
+  }, [pathname]);
+
+  React.useEffect(() => {
+    // Only proceed if we have nav items
+    if (navs.length === 0) return;
+    
     // Initialize with first nav item
     const firstItem = ref.current?.querySelector(
-      `[href="#${navs[0].href.substring(1)}"]`,
+      `[href^="${navs[0].href}"]`,
     )?.parentElement;
     if (firstItem) {
       const rect = firstItem.getBoundingClientRect();
@@ -30,14 +57,20 @@ export function NavMenu() {
       setWidth(rect.width);
       setIsReady(true);
     }
-  }, []);
+  }, [navs]);
 
   React.useEffect(() => {
+    // Only apply scroll handling on the home page
+    if (pathname !== '/') return;
+    
     const handleScroll = () => {
       // Skip scroll handling during manual click scrolling
       if (isManualScroll) return;
 
-      const sections = navs.map((item) => item.href.substring(1));
+      // Only process links that start with #
+      const sections = navs
+        .filter(item => item.href.startsWith('#'))
+        .map((item) => item.href.substring(1));
 
       // Find the section closest to viewport top
       let closestSection = sections[0];
@@ -70,45 +103,58 @@ export function NavMenu() {
     window.addEventListener('scroll', handleScroll);
     handleScroll(); // Initial check
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [isManualScroll]);
+  }, [isManualScroll, navs, pathname]);
 
   const handleClick = (
     e: React.MouseEvent<HTMLAnchorElement>,
     item: NavItem,
   ) => {
-    e.preventDefault();
+    // Handle different types of links
+    if (pathname === '/') {
+      // On home page, handle anchor links
+      if (item.href.startsWith('#')) {
+        e.preventDefault();
+        const targetId = item.href.substring(1);
+        const element = document.getElementById(targetId);
 
-    const targetId = item.href.substring(1);
-    const element = document.getElementById(targetId);
+        if (element) {
+          // Set manual scroll flag
+          setIsManualScroll(true);
 
-    if (element) {
-      // Set manual scroll flag
-      setIsManualScroll(true);
+          // Immediately update nav state
+          setActiveSection(targetId);
+          const navItem = e.currentTarget.parentElement;
+          if (navItem) {
+            const rect = navItem.getBoundingClientRect();
+            setLeft(navItem.offsetLeft);
+            setWidth(rect.width);
+          }
 
-      // Immediately update nav state
-      setActiveSection(targetId);
-      const navItem = e.currentTarget.parentElement;
-      if (navItem) {
-        const rect = navItem.getBoundingClientRect();
-        setLeft(navItem.offsetLeft);
-        setWidth(rect.width);
+          // Calculate exact scroll position
+          const elementPosition = element.getBoundingClientRect().top;
+          const offsetPosition = elementPosition + window.pageYOffset - 100; // 100px offset
+
+          // Smooth scroll to exact position
+          window.scrollTo({
+            top: offsetPosition,
+            behavior: 'smooth',
+          });
+
+          // Reset manual scroll flag after animation completes
+          setTimeout(() => {
+            setIsManualScroll(false);
+          }, 500); // Adjust timing to match scroll animation duration
+        }
       }
-
-      // Calculate exact scroll position
-      const elementPosition = element.getBoundingClientRect().top;
-      const offsetPosition = elementPosition + window.pageYOffset - 100; // 100px offset
-
-      // Smooth scroll to exact position
-      window.scrollTo({
-        top: offsetPosition,
-        behavior: 'smooth',
-      });
-
-      // Reset manual scroll flag after animation completes
-      setTimeout(() => {
-        setIsManualScroll(false);
-      }, 500); // Adjust timing to match scroll animation duration
+    } else {
+      // On other pages, handle links that contain anchors (like /#use-cases)
+      if (item.href.includes('#') && item.href.startsWith('/')) {
+        // Let the default navigation happen - Next.js will handle this correctly
+        // No need to preventDefault
+      }
     }
+    // For all other links, allow default navigation behavior
+    // This ensures links to /about, /pricing, etc. work correctly
   };
 
   return (
@@ -121,9 +167,14 @@ export function NavMenu() {
           <li
             key={item.name}
             className={`z-10 cursor-pointer h-full flex items-center justify-center px-4 py-2 text-sm font-medium transition-colors duration-200 ${
-              activeSection === item.href.substring(1)
+              // Only check activeSection for anchor links on home page
+              (pathname === '/' && item.href.startsWith('#') && activeSection === item.href.substring(1))
                 ? 'text-primary'
-                : 'text-primary/60 hover:text-primary'
+                : (pathname !== '/' && item.name === 'Home')
+                  ? 'text-primary/60 hover:text-primary' // Home link on other pages
+                  : (pathname === item.href || (pathname.startsWith(item.href) && !item.href.startsWith('#')))
+                    ? 'text-primary' // Current page
+                    : 'text-primary/60 hover:text-primary'
             } tracking-tight`}
           >
             <a href={item.href} onClick={(e) => handleClick(e, item)}>
