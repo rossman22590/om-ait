@@ -2,25 +2,57 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ToolViewProps } from './types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ExternalLink, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import { ExternalLink, AlertTriangle, Image as ImageIcon, Car } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 
 export function ImageGenToolView({ toolContent, isSuccess: propIsSuccess }: ToolViewProps) {
   console.log('Raw image generation content:', toolContent); // Log raw content for debugging
   
-  // Parse the JSON content
-  let parsedContent;
-  try {
-    parsedContent = typeof toolContent === 'string' ? JSON.parse(toolContent) : toolContent;
-    console.log('Parsed content:', parsedContent); // Log parsed content for debugging
-  } catch (e) {
-    console.error('Error parsing tool content:', e);
+  // Define interface for our parsed content to ensure type safety
+  interface ParsedImageContent {
+    success?: boolean;
+    message?: string;
+    output?: string;
+    error?: string;
+  }
+
+  // Parse content safely without breaking on any format
+  let parsedContent: ParsedImageContent = {};
+  
+  // First check if we have a string
+  if (typeof toolContent === 'string') {
+    // Extract success status
+    const hasSuccess = toolContent.includes('success=True');
+    
+    try {
+      // Attempt JSON parse as a safe fallback
+      const jsonParsed = JSON.parse(toolContent);
+      parsedContent = jsonParsed;
+      console.log('Successfully parsed JSON content');
+    } catch (e) {
+      // If JSON parsing fails, create a simple object with the content
+      console.log('Using raw content instead of JSON parsing');
+      parsedContent = {
+        success: hasSuccess, // Extracted from content
+        message: 'Image processing complete',
+        output: toolContent
+      };
+    }
+  } else if (toolContent && typeof toolContent === 'object') {
+    // Already an object, use as is
+    parsedContent = toolContent as ParsedImageContent;
+    console.log('Tool content is already an object');
+  } else {
+    // Fallback for anything else
+    console.log('Using default object for unexpected content type');
     parsedContent = { 
-      message: typeof toolContent === 'string' ? toolContent : 'Error parsing image generation result',
-      error: `Parsing error: ${e.message}`
+      message: 'Received non-standard response',
+      output: String(toolContent)
     };
   }
+  
+  console.log('Final processed content:', parsedContent);
 
   // State to persist the image URL between renders
   const [persistedImageUrl, setPersistedImageUrl] = useState('');
@@ -54,6 +86,10 @@ export function ImageGenToolView({ toolContent, isSuccess: propIsSuccess }: Tool
   // Check if image generation was successful
   // Use the prop value if available, otherwise check the parsed content
   const isSuccess = propIsSuccess !== undefined ? propIsSuccess : parsedContent?.success !== false;
+  
+  // Simple check for car-related content without affecting core functionality
+  const isCarImage = typeof toolContent === 'string' && 
+    (toolContent.toLowerCase().includes('car') || toolContent.toLowerCase().includes('vehicle'));
 
   // Get message text
   const messageText = parsedContent?.message || (isSuccess ? 'Image generated successfully' : 'Failed to generate image');

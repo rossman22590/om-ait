@@ -100,28 +100,28 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   // Then add custom models from the current customModels state (not from props)
   // This ensures we're using the most up-to-date list of custom models
-  if (isLocalMode()) {
-    // Get current custom models from state (not from storage)
-    customModels.forEach(model => {
-      // Only add if it doesn't exist or mark it as a custom model if it does
-      if (!modelMap.has(model.id)) {
-        modelMap.set(model.id, {
-          id: model.id,
-          label: model.label || formatModelName(model.id),
-          requiresSubscription: false,
-          top: false,
-          isCustom: true
-        });
-      } else {
-        // If it already exists (rare case), mark it as a custom model
-        const existingModel = modelMap.get(model.id);
-        modelMap.set(model.id, {
-          ...existingModel,
-          isCustom: true
-        });
-      }
-    });
-  }
+  // if (isLocalMode()) {
+  //   // Get current custom models from state (not from storage)
+  //   customModels.forEach(model => {
+  //     // Only add if it doesn't exist or mark it as a custom model if it does
+  //     if (!modelMap.has(model.id)) {
+  //       modelMap.set(model.id, {
+  //         id: model.id,
+  //         label: model.label || formatModelName(model.id),
+  //         requiresSubscription: false,
+  //         top: false,
+  //         isCustom: true
+  //       });
+  //     } else {
+  //       // If it already exists (rare case), mark it as a custom model
+  //       const existingModel = modelMap.get(model.id);
+  //       modelMap.set(model.id, {
+  //         ...existingModel,
+  //         isCustom: true
+  //       });
+  //     }
+  //   });
+  // }
 
   // Convert map back to array
   const enhancedModelOptions = Array.from(modelMap.values());
