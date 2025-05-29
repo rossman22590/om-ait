@@ -258,6 +258,13 @@ export function FileViewerModal({
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const relativePath = file.path.replace(/^\/workspace\//, ''); // Remove /workspace/ prefix
+        
+        // Skip node_modules, package-lock.json, and folders starting with a dot
+        if ((file.is_dir && (file.name === 'node_modules' || file.name.startsWith('.'))) || 
+            (!file.is_dir && (file.name === 'package-lock.json' || file.name.startsWith('.')))) {
+          console.log(`[ZIP] Skipping excluded item: ${file.path}`);
+          continue;
+        }
 
         setDownloadProgress({
           current: i + 1,
