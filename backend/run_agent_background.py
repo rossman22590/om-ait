@@ -16,8 +16,31 @@ from dramatiq.brokers.rabbitmq import RabbitmqBroker
 import os
 from services.langfuse import langfuse
 
-# Set up RabbitMQ connection using Railway URL
+# Set up RabbitMQ connection using Railway URL with proper encoding
 rabbitmq_url = os.getenv('RABBITMQ_URL')
+
+if rabbitmq_url and '@' in rabbitmq_url:
+    # Parse URL components manually to handle special characters
+    import urllib.parse
+    
+    try:
+        # Extract username and password from the URL
+        # Format: amqp://username:password@hostname:port
+        credentials, server = rabbitmq_url.split('@', 1)
+        protocol, credentials = credentials.split('://', 1)
+        
+        if ':' in credentials:
+            username, password = credentials.split(':', 1)
+            # URL decode the password in case it contains special characters
+            password = urllib.parse.unquote(password)
+            
+            # Reconstruct the URL with properly encoded components
+            hostname, port = server.split(':', 1) if ':' in server else (server, '5672')
+            rabbitmq_url = f"{protocol}://{username}:{urllib.parse.quote(password, safe='')}@{hostname}:{port}"
+            logger.info(f"Reconstructed RabbitMQ URL with proper encoding for special characters")
+    except Exception as e:
+        logger.warning(f"Error parsing RabbitMQ URL: {e}, using original URL")
+
 logger.info(f"Connecting to RabbitMQ using URL (first 10 chars): {rabbitmq_url[:10] if rabbitmq_url else 'None'}...")
 rabbitmq_broker = RabbitmqBroker(url=rabbitmq_url, middleware=[dramatiq.middleware.AsyncIO()])
 dramatiq.set_broker(rabbitmq_broker)
