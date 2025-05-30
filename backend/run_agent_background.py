@@ -14,41 +14,12 @@ from services.supabase import DBConnection
 from services import redis
 from dramatiq.brokers.rabbitmq import RabbitmqBroker
 import os
-import urllib.parse
 from services.langfuse import langfuse
 
-# Set up RabbitMQ connection
-try:
-    rabbitmq_url = os.getenv('RABBITMQ_URL')
-    if not rabbitmq_url:
-        logger.error("RABBITMQ_URL environment variable is required but not set")
-        raise ValueError("RABBITMQ_URL environment variable is required")
-        
-    # Use URL-based connection with Railway
-    logger.info(f"Connecting to RabbitMQ using URL (first 10 chars): {rabbitmq_url[:10]}...")
-    
-    # Parse URL components manually to handle special characters
-    # Extract username and password from the URL
-    # Format: amqp://username:password@hostname:port
-    if '@' in rabbitmq_url:
-        credentials, server = rabbitmq_url.split('@', 1)
-        protocol, credentials = credentials.split('://', 1)
-        if ':' in credentials:
-            username, password = credentials.split(':', 1)
-            # URL decode the password in case it contains special characters
-            password = urllib.parse.unquote(password)
-            
-            # Reconstruct the URL with properly encoded components
-            hostname, port = server.split(':', 1) if ':' in server else (server, '5672')
-            rabbitmq_url = f"{protocol}://{username}:{urllib.parse.quote(password, safe='')}@{hostname}:{port}"
-            logger.info(f"Reconstructed RabbitMQ URL with proper encoding")
-    
-    rabbitmq_broker = RabbitmqBroker(url=rabbitmq_url, middleware=[dramatiq.middleware.AsyncIO()])
-    logger.info("Successfully created RabbitMQ broker with Railway URL")
-except Exception as e:
-    logger.error(f"Error setting up Railway RabbitMQ connection: {e}")
-    raise
-
+# Set up RabbitMQ connection using Railway URL
+rabbitmq_url = os.getenv('RABBITMQ_URL')
+logger.info(f"Connecting to RabbitMQ using URL (first 10 chars): {rabbitmq_url[:10] if rabbitmq_url else 'None'}...")
+rabbitmq_broker = RabbitmqBroker(url=rabbitmq_url, middleware=[dramatiq.middleware.AsyncIO()])
 dramatiq.set_broker(rabbitmq_broker)
 
 _initialized = False
