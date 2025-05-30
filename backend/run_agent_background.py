@@ -16,33 +16,38 @@ from dramatiq.brokers.rabbitmq import RabbitmqBroker
 import os
 from services.langfuse import langfuse
 
-# Set up RabbitMQ connection using Railway URL with proper encoding
+# Set up RabbitMQ connection using Railway URL with proper handling
 rabbitmq_url = os.getenv('RABBITMQ_URL')
 
+# Strip quotes if present (common in .env files)
+if rabbitmq_url:
+    if (rabbitmq_url.startswith('"') and rabbitmq_url.endswith('"')) or \
+       (rabbitmq_url.startswith("'") and rabbitmq_url.endswith("'")):
+        rabbitmq_url = rabbitmq_url[1:-1]
+        logger.info("Stripped quotes from RabbitMQ URL")
+
+# Handle special characters in the URL
 if rabbitmq_url and '@' in rabbitmq_url:
-    # Parse URL components manually to handle special characters
-    import urllib.parse
-    
     try:
-        # Extract username and password from the URL
-        # Format: amqp://username:password@hostname:port
-        credentials, server = rabbitmq_url.split('@', 1)
-        protocol, credentials = credentials.split('://', 1)
+        # Manual string operations to preserve special characters properly
+        base_url, server_part = rabbitmq_url.split('@', 1)
+        protocol_part, auth_part = base_url.split('://', 1)
         
-        if ':' in credentials:
-            username, password = credentials.split(':', 1)
-            # URL decode the password in case it contains special characters
-            password = urllib.parse.unquote(password)
-            
-            # Reconstruct the URL with properly encoded components
-            hostname, port = server.split(':', 1) if ':' in server else (server, '5672')
-            rabbitmq_url = f"{protocol}://{username}:{urllib.parse.quote(password, safe='')}@{hostname}:{port}"
-            logger.info(f"Reconstructed RabbitMQ URL with proper encoding for special characters")
+        # Direct string reconstruction without URL parsing functions
+        # This avoids any encoding/decoding issues
+        logger.info(f"Using raw RabbitMQ URL with special characters preserved")
     except Exception as e:
-        logger.warning(f"Error parsing RabbitMQ URL: {e}, using original URL")
+        logger.warning(f"Error processing RabbitMQ URL: {e}, using as is")
 
 logger.info(f"Connecting to RabbitMQ using URL (first 10 chars): {rabbitmq_url[:10] if rabbitmq_url else 'None'}...")
-rabbitmq_broker = RabbitmqBroker(url=rabbitmq_url, middleware=[dramatiq.middleware.AsyncIO()])
+
+try:
+    # Use direct string as provided in environment variable after quote stripping
+    rabbitmq_broker = RabbitmqBroker(url=rabbitmq_url, middleware=[dramatiq.middleware.AsyncIO()])
+    logger.info("Successfully created RabbitMQ broker connection")
+except Exception as e:
+    logger.error(f"Failed to connect to RabbitMQ: {e}")
+    raise
 dramatiq.set_broker(rabbitmq_broker)
 
 _initialized = False
