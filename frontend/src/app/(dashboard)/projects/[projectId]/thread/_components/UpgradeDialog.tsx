@@ -35,7 +35,7 @@ export function UpgradeDialog({ open, onOpenChange, onDismiss }: UpgradeDialogPr
             Unlock the Full Machine Experience
           </DialogTitle>
           <DialogDescription>
-            You're currently using Suna's free tier with limited capabilities.
+            You're currently using Machine's free tier with limited capabilities.
             Upgrade now to access our most powerful AI model.
           </DialogDescription>
         </DialogHeader>
