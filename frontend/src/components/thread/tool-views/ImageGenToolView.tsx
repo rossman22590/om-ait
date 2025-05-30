@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ToolViewProps } from './types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ExternalLink, AlertTriangle, Image as ImageIcon, Car } from 'lucide-react';
+import { ExternalLink, AlertTriangle, Image as ImageIcon } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -87,10 +87,6 @@ export function ImageGenToolView({ toolContent, isSuccess: propIsSuccess }: Tool
   // Use the prop value if available, otherwise check the parsed content
   const isSuccess = propIsSuccess !== undefined ? propIsSuccess : parsedContent?.success !== false;
   
-  // Simple check for car-related content without affecting core functionality
-  const isCarImage = typeof toolContent === 'string' && 
-    (toolContent.toLowerCase().includes('car') || toolContent.toLowerCase().includes('vehicle'));
-
   // Get message text
   const messageText = parsedContent?.message || (isSuccess ? 'Image generated successfully' : 'Failed to generate image');
   
