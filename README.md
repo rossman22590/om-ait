@@ -1,6 +1,6 @@
 <div align="center">
 
-# Machine - Generalist AI Agent
+# Machine - Generalist AI Agent 
 
 (that acts on your behalf)
 
