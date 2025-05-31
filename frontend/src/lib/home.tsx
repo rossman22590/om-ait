@@ -98,10 +98,10 @@ export const siteConfig = {
     ),
     badge: '100% OPEN SOURCE',
     githubUrl: 'https://github.com/kortix-ai/suna',
-    title: 'Suna, the AI Employee.',
+    title: 'Machine, the AI Employee.',
     description:
-      'Suna by Kortix – is a generalist AI Agent that acts on your behalf.',
-    inputPlaceholder: 'Ask Suna to...',
+      'Machine by Kortix – is a generalist AI Agent that acts on your behalf.',
+    inputPlaceholder: 'Ask Machine to...',
   },
   cloudPricingItems: [
     {

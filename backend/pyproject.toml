@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "suna"
 version = "1.0"
-description = "open source generalist AI Agent"
+description = "Generalist AI Agent"
 authors = ["marko-kraemer <mail@markokraemer.com>"]
 readme = "README.md"
 license = "MIT"
