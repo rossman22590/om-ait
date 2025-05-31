@@ -190,7 +190,7 @@ export const CreateAgentDialog = ({ isOpen, onOpenChange, onAgentCreated }: Crea
                     value="tools" 
                   >
                     <Settings2 className="h-4 w-4" />
-                    AgentPress Tools
+                    Machine Tools
                   </TabsTrigger>
                   {/* <TabsTrigger 
                     value="mcp" 

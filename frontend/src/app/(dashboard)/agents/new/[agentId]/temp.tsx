@@ -167,7 +167,7 @@ export default function AgentConfigurationPage() {
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="tools" className="flex items-center gap-2">
                   <Settings2 className="h-4 w-4" />
-                  AgentPress Tools
+                  Machine Tools
                 </TabsTrigger>
                 <TabsTrigger value="mcp" className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4" />
