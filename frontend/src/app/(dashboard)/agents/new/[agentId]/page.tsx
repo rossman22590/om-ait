@@ -374,7 +374,7 @@ export default function AgentConfigurationPage() {
             </AccordionContent>
           </AccordionItem>
 
-          <AccordionItem value="mcp" className="border-b">
+          {/* <AccordionItem value="mcp" className="border-b">
             <AccordionTrigger className="hover:no-underline text-sm md:text-base">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4" />
@@ -388,7 +388,7 @@ export default function AgentConfigurationPage() {
                 onMCPsChange={(mcps) => handleFieldChange('configured_mcps', mcps)}
               />
             </AccordionContent>
-          </AccordionItem>
+          </AccordionItem> */}
         </Accordion>
       </div>
     </div>

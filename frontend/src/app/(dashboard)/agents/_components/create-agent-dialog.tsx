@@ -192,12 +192,12 @@ export const CreateAgentDialog = ({ isOpen, onOpenChange, onAgentCreated }: Crea
                     <Settings2 className="h-4 w-4" />
                     AgentPress Tools
                   </TabsTrigger>
-                  <TabsTrigger 
+                  {/* <TabsTrigger 
                     value="mcp" 
                   >
                     <Sparkles className="h-4 w-4" />
                     MCP Servers
-                  </TabsTrigger>
+                  </TabsTrigger> */}
                 </TabsList>
 
                 <TabsContent value="tools" className="flex-1 flex flex-col m-0 min-h-0">

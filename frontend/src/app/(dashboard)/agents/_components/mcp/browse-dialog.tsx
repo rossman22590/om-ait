@@ -35,12 +35,12 @@ export const BrowseDialog: React.FC<BrowseDialogProps> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-6xl max-h-[85vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+        {/* <DialogHeader>
           <DialogTitle>Browse MCP Servers</DialogTitle>
           <DialogDescription>
             Discover and add Model Context Protocol servers from Smithery
           </DialogDescription>
-        </DialogHeader>
+        </DialogHeader> */}
 
         {/* Search */}
         <div className="relative">
