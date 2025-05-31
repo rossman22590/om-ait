@@ -123,146 +123,11 @@ export default function AboutPage() {
                 </div>
               </div>
               
-              <Link href="/#pricing" className="inline-flex items-center text-pink-500 hover:text-pink-600 dark:text-pink-400 dark:hover:text-pink-300 font-medium">
+              <Link href="/pricing" className="inline-flex items-center text-pink-500 hover:text-pink-600 dark:text-pink-400 dark:hover:text-pink-300 font-medium">
                 Explore our plans
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Plan comparison section */}
-      <section className="w-full py-16 bg-gray-50 dark:bg-gray-800 border-t border-b border-gray-200 dark:border-gray-700">
-        <div className="container px-4 md:px-6 mx-auto">
-          <div className="max-w-3xl mx-auto text-center mb-12">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Our Plans & Features</h2>
-            <p className="text-lg text-gray-600 dark:text-gray-300">
-              We offer flexible plans to meet your needs, whether you're just getting started or looking for enterprise-level solutions.
-            </p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {/* Free Plan */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Free</h3>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Perfect for getting started</p>
-                <div className="mt-4">
-                  <span className="text-3xl font-bold text-gray-900 dark:text-white">$0</span>
-                  <span className="text-gray-500 dark:text-gray-400 ml-1">/month</span>
-                </div>
-              </div>
-              <div className="p-6">
-                <ul className="space-y-3">
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-                    <span className="text-gray-700 dark:text-gray-300">25 minutes/month of agent usage</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-                    <span className="text-gray-700 dark:text-gray-300">Basic AI tools</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-                    <span className="text-gray-700 dark:text-gray-300">Community support</span>
-                  </li>
-                  <li className="flex items-start text-gray-400 dark:text-gray-500">
-                    <span className="h-5 w-5 mr-2 mt-0.5">✕</span>
-                    <span>Priority processing</span>
-                  </li>
-                  <li className="flex items-start text-gray-400 dark:text-gray-500">
-                    <span className="h-5 w-5 mr-2 mt-0.5">✕</span>
-                    <span>Advanced tools</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-            
-            {/* Pro Plan */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg border-2 border-pink-500 dark:border-pink-400 overflow-hidden relative">
-              <div className="absolute top-0 right-0">
-                <div className="bg-pink-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">
-                  POPULAR
-                </div>
-              </div>
-              <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Pro</h3>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">For professionals & teams</p>
-                <div className="mt-4">
-                  <span className="text-3xl font-bold text-gray-900 dark:text-white">$35</span>
-                  <span className="text-gray-500 dark:text-gray-400 ml-1">/month</span>
-                </div>
-              </div>
-              <div className="p-6">
-                <ul className="space-y-3">
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-                    <span className="text-gray-700 dark:text-gray-300"><strong>500 minutes/month</strong> of agent usage</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-                    <span className="text-gray-700 dark:text-gray-300">All basic tools + advanced AI capabilities</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-                    <span className="text-gray-700 dark:text-gray-300">Priority processing</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-                    <span className="text-gray-700 dark:text-gray-300">Email support</span>
-                  </li>
-                  <li className="flex items-start text-gray-400 dark:text-gray-500">
-                    <span className="h-5 w-5 mr-2 mt-0.5">✕</span>
-                    <span>Custom integrations</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-            
-            {/* Enterprise Plan */}
-            <div className="bg-white dark:bg-gray-900 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-              <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Enterprise</h3>
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">For organizations & businesses</p>
-                <div className="mt-4">
-                  <span className="text-3xl font-bold text-gray-900 dark:text-white">$200</span>
-                  <span className="text-gray-500 dark:text-gray-400 ml-1">/month</span>
-                </div>
-              </div>
-              <div className="p-6">
-                <ul className="space-y-3">
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-                    <span className="text-gray-700 dark:text-gray-300"><strong>3000 minutes/month</strong> of agent usage</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-                    <span className="text-gray-700 dark:text-gray-300">All Pro features + enterprise tools</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-                    <span className="text-gray-700 dark:text-gray-300">Dedicated support</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-                    <span className="text-gray-700 dark:text-gray-300">Custom integrations</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 mt-0.5" />
-                    <span className="text-gray-700 dark:text-gray-300">Most Powerful Agents</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-          
-          <div className="text-center mt-10">
-            <Button asChild size="lg" className="gap-2 bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 text-white font-medium">
-              <Link href="/#pricing">
-                Compare Plans in Detail
-              </Link>
-            </Button>
           </div>
         </div>
       </section>
@@ -413,10 +278,10 @@ export default function AboutPage() {
               <Link href="/faq" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
                 FAQ
               </Link>
-              <Link href="/legal" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
+              <Link href="/#" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
                 Legal
               </Link>
-              <Link href="/#pricing" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
+              <Link href="/pricing" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100">
                 Pricing
               </Link>
             </div>
