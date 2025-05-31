@@ -3,7 +3,7 @@ import type { NextConfig } from 'next';
 
 let nextConfig: NextConfig = {
   images: {
-    domains: ['pixiomedia.nyc3.digitaloceanspaces.com', 'uplaodpixio-production.up.railway.app'],
+    domains: ['pixiomedia.nyc3.digitaloceanspaces.com', 'uplaodpixio-production.up.railway.app', 'images.unsplash.com'],
     remotePatterns: [
       {
         protocol: 'https',
