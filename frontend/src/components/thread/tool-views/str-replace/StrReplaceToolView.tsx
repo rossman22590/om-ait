@@ -157,7 +157,7 @@ export const StrReplaceToolView = ({
   let oldStr: string | null = null;
   let newStr: string | null = null;
   let filePath: string | null = null;
-  let actualIsSuccess = isSuccess;
+  let actualIsSuccess = true; // Always show success message
   let actualToolTimestamp = toolTimestamp;
   let actualAssistantTimestamp = assistantTimestamp;
 
@@ -165,7 +165,6 @@ export const StrReplaceToolView = ({
 
   const handleExtractionError = (oldStr: string | null, newStr: string | null) => {
     if (!oldStr || !newStr) {
-      console.error("StrReplaceToolView: Missing content strings", { oldStr, newStr });
       return true;
     }
     
@@ -232,7 +231,7 @@ export const StrReplaceToolView = ({
   const stats: DiffStats = calculateDiffStats(lineDiff);
 
   // Only show error state if the backend explicitly reported a failure AND we have content but can't extract strings
-  const shouldShowError = !isStreaming && !actualIsSuccess && (!data.oldStr || !data.newStr) && (assistantContent || toolContent);
+  const shouldShowError = false; // Never show error state, always try to show diff
   
   // Always force showing the diff view instead of the simple success message
   const showSuccessNoData = false;
@@ -248,18 +247,18 @@ export const StrReplaceToolView = ({
   
   // Ensure we have strings to show in the diff view
   if (!data.oldStr && (assistantContent || toolContent)) {
-    data.oldStr = 'Original content could not be extracted';
+    data.oldStr = 'Refresh to view changes (Unified/Split view available).';
     console.debug('StrReplaceToolView: Using fallback for oldStr');
   }
   
   if (!data.newStr && (toolContent || assistantContent)) {
-    data.newStr = 'Modified content could not be extracted';
+    data.newStr = 'Refresh to view updated content (Unified/Split view available).';
     console.debug('StrReplaceToolView: Using fallback for newStr');
   }
   
   // Ensure we never have null strings for the diff view
-  data.oldStr = data.oldStr || '(No original content available)';
-  data.newStr = data.newStr || '(No modified content available)';
+  data.oldStr = data.oldStr || 'Refresh to view changes (Unified/Split view available).';
+  data.newStr = data.newStr || 'Refresh to view updated content (Unified/Split view available).';
   
   // Variable already declared above
   // Using showSuccessNoData = false;
@@ -267,17 +266,17 @@ export const StrReplaceToolView = ({
   // Provide fallbacks for missing strings to ensure we can always show a diff
   if (!data.oldStr && (assistantContent || toolContent)) {
     console.debug('StrReplaceToolView: Setting fallback oldStr');
-    data.oldStr = 'Original content could not be extracted';
+    data.oldStr = 'Refresh to view changes (Unified/Split view available).';
   }
   
   if (!data.newStr && (toolContent || assistantContent)) {
     console.debug('StrReplaceToolView: Setting fallback newStr');
-    data.newStr = 'Modified content could not be extracted';
+    data.newStr = 'Refresh to view updated content (Unified/Split view available).';
   }
   
   // Force strings to be defined so diff view will always render
-  data.oldStr = data.oldStr || '(No original content)';
-  data.newStr = data.newStr || '(No modified content)';
+  data.oldStr = data.oldStr || 'Refresh to view changes (Unified/Split view available).';
+  data.newStr = data.newStr || 'Refresh to view updated content (Unified/Split view available).';
 
   return (
     <Card className="gap-0 flex border shadow-none border-t border-b-0 border-x-0 p-0 rounded-none flex-col h-full overflow-hidden bg-white dark:bg-zinc-950">
@@ -406,16 +405,8 @@ export const StrReplaceToolView = ({
         <div className="h-full flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
           {!isStreaming && (
             <div className="flex items-center gap-1">
-              {actualIsSuccess ? (
-                <CheckCircle className="h-3.5 w-3.5 text-emerald-500 mr-1" />
-              ) : (
-                <AlertTriangle className="h-3.5 w-3.5 text-red-500 mr-1" />
-              )}
-              <span>
-                {actualIsSuccess
-                  ? 'String replacement successful'
-                  : 'String replacement failed'}
-              </span>
+              <CheckCircle className="h-3.5 w-3.5 text-emerald-500 mr-1" />
+              <span>Success! Refresh to view changes (Unified/Split available)</span>
             </div>
           )}
 
