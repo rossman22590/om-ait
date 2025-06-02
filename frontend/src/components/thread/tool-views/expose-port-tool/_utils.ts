@@ -74,10 +74,61 @@ const extractPortFromAssistantContent = (content: string | object | undefined | 
   if (!contentStr) return null;
   
   try {
-    const match = contentStr.match(/<expose-port>\s*(\d+)\s*<\/expose-port>/);
+    // Try standard <expose-port> tag format
+    let match = contentStr.match(/<expose-port>\s*(\d+)\s*<\/expose-port>/);
+    
+    // If not found, try looking for port number in other common patterns
+    if (!match) {
+      // Look for "port 8000" pattern (case insensitive)
+      match = contentStr.match(/port\s+(\d+)/i);
+    }
+    
+    // If still not found, look for "port: 8000" pattern
+    if (!match) {
+      match = contentStr.match(/port:\s*(\d+)/i);
+    }
+    
+    // If still not found, look for "exposed port 8000" pattern
+    if (!match) {
+      match = contentStr.match(/exposed\s+port\s+(\d+)/i);
+    }
+    
     return match ? parseInt(match[1], 10) : null;
   } catch (e) {
     console.error('Failed to extract port number:', e);
+    return null;
+  }
+};
+
+const extractUrlFromContent = (content: string | object | undefined | null): string | null => {
+  const contentStr = normalizeContentToString(content);
+  if (!contentStr) return null;
+  
+  try {
+    // Look for URL patterns starting with http/https
+    let match = contentStr.match(/https?:\/\/\S+/);
+    
+    // If not found, look for "Live URL:" pattern
+    if (!match) {
+      match = contentStr.match(/Live URL:\s*(https?:\/\/\S+)/i);
+    }
+    
+    // If found, clean up any trailing punctuation or whitespace
+    if (match) {
+      // Remove trailing punctuation or formatting characters
+      let url = match[0];
+      if (match[1]) url = match[1]; // Use the capture group if available
+      
+      // Remove trailing punctuation, quotes, escape sequences and other unwanted characters
+      url = url.replace(/["',\\].*$/, ''); // Remove anything after a quote, comma, or backslash
+      url = url.replace(/[.,;:)'">\s]+$/, ''); // Remove any remaining trailing punctuation
+      
+      return url;
+    }
+    
+    return null;
+  } catch (e) {
+    console.error('Failed to extract URL:', e);
     return null;
   }
 };
@@ -89,74 +140,18 @@ const extractFromLegacyFormat = (content: any): {
 } => {
   const toolData = extractToolData(content);
   
-  if (toolData.toolResult && toolData.arguments) {
-    console.log('ExposePortToolView: Extracted from legacy format (extractToolData):', {
-      port: toolData.arguments.port
-    });
-    
-    return {
-      port: toolData.arguments.port ? parseInt(toolData.arguments.port, 10) : null,
-      url: null,
-      message: null
-    };
-  }
-
-  const contentStr = normalizeContentToString(content);
-  if (!contentStr) {
-    return { port: null, url: null, message: null };
-  }
-  try {
-    const parsed = JSON.parse(contentStr);
-    if (parsed.url && parsed.port) {
-      return {
-        port: parseInt(parsed.port, 10),
-        url: parsed.url,
-        message: parsed.message || null
-      };
-    }
-  } catch (e) {
-  }
+  // Extract port using our enhanced function
+  const port = extractPortFromAssistantContent(content);
   
-  try {
-    const toolResultMatch = contentStr.match(/ToolResult\(success=(?:True|true),\s*output='((?:[^'\\]|\\.)*)'\)/);
-    if (toolResultMatch) {
-      let jsonStr = toolResultMatch[1];
-      
-      jsonStr = jsonStr
-        .replace(/\\\\n/g, '\n')
-        .replace(/\\\\"/g, '"')
-        .replace(/\\n/g, '\n')
-        .replace(/\\"/g, '"')
-        .replace(/\\'/g, "'")
-        .replace(/\\\\/g, '\\');
-      
-      const result = JSON.parse(jsonStr);
-      return {
-        port: result.port ? parseInt(result.port, 10) : null,
-        url: result.url || null,
-        message: result.message || null
-      };
-    }
-    
-    const simpleMatch = contentStr.match(/output='([^']+)'/);
-    if (simpleMatch) {
-      const jsonStr = simpleMatch[1]
-        .replace(/\\n/g, '\n')
-        .replace(/\\"/g, '"');
-      const result = JSON.parse(jsonStr);
-      return {
-        port: result.port ? parseInt(result.port, 10) : null,
-        url: result.url || null,
-        message: result.message || null
-      };
-    }
-    
-    return { port: null, url: null, message: null };
-  } catch (e) {
-    console.error('Failed to parse tool content:', e);
-    console.error('Tool content was:', contentStr);
-    return { port: null, url: null, message: null };
-  }
+  // Extract URL using our new function
+  const url = extractUrlFromContent(content);
+  
+  // Use tool data if available, otherwise use our extracted values
+  return {
+    port: toolData?.arguments?.port || port,
+    url: (toolData?.toolResult as any)?.url || url,
+    message: (toolData?.toolResult as any)?.message ?? null
+  };
 };
 
 export function extractExposePortData(

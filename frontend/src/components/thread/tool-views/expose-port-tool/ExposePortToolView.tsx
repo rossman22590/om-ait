@@ -99,7 +99,7 @@ export function ExposePortToolView({
         ) : (
           <ScrollArea className="h-full w-full">
             <div className="p-4 py-0 my-4 space-y-6">
-              {url && (
+              {(url || port) && (
                 <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg shadow-sm overflow-hidden">
                   <div className="p-4">
                     <div className="flex items-start gap-3 mb-3">
@@ -107,15 +107,21 @@ export function ExposePortToolView({
                         <h3 className="text-sm font-medium text-zinc-800 dark:text-zinc-200 mb-2">
                           Exposed URL
                         </h3>
-                        <a
-                          href={url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-md font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-2 mb-3"
-                        >
-                          {url}
-                          <ExternalLink className="flex-shrink-0 h-3.5 w-3.5" />
-                        </a>
+                        {url ? (
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-md font-medium text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-2 mb-3"
+                          >
+                            {url}
+                            <ExternalLink className="flex-shrink-0 h-3.5 w-3.5" />
+                          </a>
+                        ) : (
+                          <div className="text-md font-medium text-zinc-600 dark:text-zinc-400 mb-3">
+                            Port {port} is exposed
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -139,15 +145,14 @@ export function ExposePortToolView({
 
                       <div className="text-xs bg-amber-50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/50 rounded-md p-3 text-amber-600 dark:text-amber-400 flex items-start gap-2">
                         <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                        <span>This URL might only be temporarily available and could expire after some time.</span>
+                        <span>This URL might only be temporarily available during your current session.</span>
                       </div>
                     </div>
                   </div>
                 </div>
               )}
-
-              {/* Empty State */}
-              {!port && !url && !isStreaming && (
+              
+              {!url && !port && (
                 <div className="flex flex-col items-center justify-center py-12 px-6">
                   <div className="w-20 h-20 rounded-full flex items-center justify-center mb-6 bg-gradient-to-b from-zinc-100 to-zinc-50 shadow-inner dark:from-zinc-800/40 dark:to-zinc-900/60">
                     <Computer className="h-10 w-10 text-zinc-400 dark:text-zinc-600" />
