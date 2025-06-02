@@ -18,14 +18,36 @@ function extractJsonFromToolContent(content: string): any | null {
         return JSON.parse(match[0]);
       } catch (e) {
         // If standard JSON parsing fails, try handling Python-style dictionary
-        const pythonToJson = match[0]
+        let pythonToJson = match[0]
           .replace(/'/g, '"') // Replace single quotes with double quotes
           .replace(/(\w+):/g, '"$1":') // Add quotes around keys
           .replace(/None/g, 'null') // Replace Python None with null
           .replace(/True/g, 'true') // Replace Python True with true
           .replace(/False/g, 'false'); // Replace Python False with false
         
-        return JSON.parse(pythonToJson);
+        // Additional fixes for Python syntax:
+        pythonToJson = pythonToJson
+          .replace(/,\s*}/g, '}') // Remove trailing commas in objects
+          .replace(/,\s*\]/g, ']') // Remove trailing commas in arrays
+          .replace(/NaN/g, 'null') // Replace NaN with null
+          .replace(/Infinity/g, 'null') // Replace Infinity with null
+          .replace(/\(/g, '[').replace(/\)/g, ']'); // Convert tuples to arrays
+        
+        try {
+          return JSON.parse(pythonToJson);
+        } catch (innerError) {
+          console.error('Failed to parse Python dict:', innerError);
+          // If still failing, try a more aggressive approach
+          pythonToJson = pythonToJson
+            // Handle keys with hyphens or other special characters
+            .replace(/"([^"]+)":\s*"([^"]*)"/g, '"$1":"$2"') 
+            // Fix any unquoted string values
+            .replace(/:\s*([a-zA-Z][a-zA-Z0-9_]*)/g, ':"$1"')
+            // Fix keys with spaces
+            .replace(/"([^"]+)\s+([^"]+)":/g, '"$1_$2":');
+          
+          return JSON.parse(pythonToJson);
+        }
       }
     }
   } catch (e) {

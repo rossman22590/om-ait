@@ -161,108 +161,123 @@ export const StrReplaceToolView = ({
   let actualToolTimestamp = toolTimestamp;
   let actualAssistantTimestamp = assistantTimestamp;
 
-  const assistantNewFormat = extractFromNewFormat(assistantContent);
-  const toolNewFormat = extractFromNewFormat(toolContent);
+  const forceUseDiffView = true; // Always use diff view instead of trying to be clever about it
 
-  if (assistantNewFormat.filePath || assistantNewFormat.oldStr || assistantNewFormat.newStr) {
-    filePath = assistantNewFormat.filePath;
-    oldStr = assistantNewFormat.oldStr;
-    newStr = assistantNewFormat.newStr;
-    if (assistantNewFormat.success !== undefined) {
-      actualIsSuccess = assistantNewFormat.success;
+  const handleExtractionError = (oldStr: string | null, newStr: string | null) => {
+    if (!oldStr || !newStr) {
+      console.error("StrReplaceToolView: Missing content strings", { oldStr, newStr });
+      return true;
     }
-    if (assistantNewFormat.timestamp) {
-      actualAssistantTimestamp = assistantNewFormat.timestamp;
-    }
-  } else if (toolNewFormat.filePath || toolNewFormat.oldStr || toolNewFormat.newStr) {
-    filePath = toolNewFormat.filePath;
-    oldStr = toolNewFormat.oldStr;
-    newStr = toolNewFormat.newStr;
-    if (toolNewFormat.success !== undefined) {
-      actualIsSuccess = toolNewFormat.success;
-    }
-    if (toolNewFormat.timestamp) {
-      actualToolTimestamp = toolNewFormat.timestamp;
-    }
-  } else {
-    // Fall back to legacy format extraction
-    const assistantLegacy = extractFromLegacyFormat(assistantContent, extractToolData, extractFilePath, extractStrReplaceContent);
-    const toolLegacy = extractFromLegacyFormat(toolContent, extractToolData, extractFilePath, extractStrReplaceContent);
+    
+    // Check if the strings look like they contain HTML or code
+    const potentiallyCodeContent = 
+      oldStr.includes('<') && oldStr.includes('>') || 
+      newStr.includes('<') && newStr.includes('>') ||
+      oldStr.includes('{') && oldStr.includes('}') ||
+      newStr.includes('{') && newStr.includes('}');
+    
+    return potentiallyCodeContent ? false : (!oldStr || !newStr); // Return false for code/HTML to force diff view
+  };
 
-    // Use assistant content first, then tool content as fallback
-    filePath = assistantLegacy.filePath || toolLegacy.filePath;
-    oldStr = assistantLegacy.oldStr || toolLegacy.oldStr;
-    newStr = assistantLegacy.newStr || toolLegacy.newStr;
-  }
-
-  // Additional legacy extraction for edge cases
-  if (!filePath) {
-    filePath = extractFilePath(assistantContent) || extractFilePath(toolContent);
-  }
-
-  if (!oldStr || !newStr) {
-    const assistantStrReplace = extractStrReplaceContent(assistantContent);
-    const toolStrReplace = extractStrReplaceContent(toolContent);
-    oldStr = oldStr || assistantStrReplace.oldStr || toolStrReplace.oldStr;
-    newStr = newStr || assistantStrReplace.newStr || toolStrReplace.newStr;
-  }
+  const [data, setData] = useState<{
+    filePath: string | null;
+    oldStr: string | null;
+    newStr: string | null;
+    showDiff: boolean;
+  }>(() => {
+    let extracted;
+    
+    if (assistantContent && toolContent) {
+      const newFormatData = extractFromNewFormat(toolContent);
+      if (newFormatData.extracted) {
+        extracted = newFormatData;
+      } else {
+        extracted = extractFromLegacyFormat(
+          assistantContent,
+          extractToolData,
+          extractFilePath,
+          extractStrReplaceContent
+        );
+      }
+    } else if (assistantContent) {
+      extracted = extractFromLegacyFormat(
+        assistantContent,
+        extractToolData,
+        extractFilePath,
+        extractStrReplaceContent
+      );
+    } else if (toolContent) {
+      extracted = extractFromNewFormat(toolContent);
+    } else {
+      extracted = { filePath: null, oldStr: null, newStr: null };
+    }
+    
+    // Always force diff view for HTML/code or use it if both strings are available
+    const hasExtractionError = handleExtractionError(extracted.oldStr, extracted.newStr);
+    const showDiff = forceUseDiffView || !hasExtractionError;
+    
+    return {
+      ...extracted,
+      showDiff
+    };
+  });
 
   const toolTitle = getToolTitle(name);
 
   // Generate diff data (only if we have both strings)
-  const lineDiff = oldStr && newStr ? generateLineDiff(oldStr, newStr) : [];
-  const charDiff = oldStr && newStr ? generateCharDiff(oldStr, newStr) : [];
+  const lineDiff = data.oldStr && data.newStr ? generateLineDiff(data.oldStr, data.newStr) : [];
+  const charDiff = data.oldStr && data.newStr ? generateCharDiff(data.oldStr, data.newStr) : [];
 
   // Calculate stats on changes
   const stats: DiffStats = calculateDiffStats(lineDiff);
 
   // Only show error state if the backend explicitly reported a failure AND we have content but can't extract strings
-  const shouldShowError = !isStreaming && !actualIsSuccess && (!oldStr || !newStr) && (assistantContent || toolContent);
+  const shouldShowError = !isStreaming && !actualIsSuccess && (!data.oldStr || !data.newStr) && (assistantContent || toolContent);
   
   // Always force showing the diff view instead of the simple success message
   const showSuccessNoData = false;
   
   // Add debug logging to help diagnose issues
   console.debug('StrReplaceToolView content values:', {
-    hasOldStr: !!oldStr,
-    hasNewStr: !!newStr,
-    filePathFound: !!filePath,
+    hasOldStr: !!data.oldStr,
+    hasNewStr: !!data.newStr,
+    filePathFound: !!data.filePath,
     isSuccess: actualIsSuccess,
     isStreaming
   });
   
   // Ensure we have strings to show in the diff view
-  if (!oldStr && (assistantContent || toolContent)) {
-    oldStr = 'Original content could not be extracted';
+  if (!data.oldStr && (assistantContent || toolContent)) {
+    data.oldStr = 'Original content could not be extracted';
     console.debug('StrReplaceToolView: Using fallback for oldStr');
   }
   
-  if (!newStr && (toolContent || assistantContent)) {
-    newStr = 'Modified content could not be extracted';
+  if (!data.newStr && (toolContent || assistantContent)) {
+    data.newStr = 'Modified content could not be extracted';
     console.debug('StrReplaceToolView: Using fallback for newStr');
   }
   
   // Ensure we never have null strings for the diff view
-  oldStr = oldStr || '(No original content available)';
-  newStr = newStr || '(No modified content available)';
+  data.oldStr = data.oldStr || '(No original content available)';
+  data.newStr = data.newStr || '(No modified content available)';
   
   // Variable already declared above
   // Using showSuccessNoData = false;
   
   // Provide fallbacks for missing strings to ensure we can always show a diff
-  if (!oldStr && (assistantContent || toolContent)) {
+  if (!data.oldStr && (assistantContent || toolContent)) {
     console.debug('StrReplaceToolView: Setting fallback oldStr');
-    oldStr = 'Original content could not be extracted';
+    data.oldStr = 'Original content could not be extracted';
   }
   
-  if (!newStr && (toolContent || assistantContent)) {
+  if (!data.newStr && (toolContent || assistantContent)) {
     console.debug('StrReplaceToolView: Setting fallback newStr');
-    newStr = 'Modified content could not be extracted';
+    data.newStr = 'Modified content could not be extracted';
   }
   
   // Force strings to be defined so diff view will always render
-  oldStr = oldStr || '(No original content)';
-  newStr = newStr || '(No modified content)';
+  data.oldStr = data.oldStr || '(No original content)';
+  data.newStr = data.newStr || '(No modified content)';
 
   return (
     <Card className="gap-0 flex border shadow-none border-t border-b-0 border-x-0 p-0 rounded-none flex-col h-full overflow-hidden bg-white dark:bg-zinc-950">
@@ -311,71 +326,12 @@ export const StrReplaceToolView = ({
             iconColor="text-purple-500 dark:text-purple-400"
             bgColor="bg-gradient-to-b from-purple-100 to-purple-50 shadow-inner dark:from-purple-800/40 dark:to-purple-900/60 dark:shadow-purple-950/20"
             title="Processing String Replacement"
-            filePath={filePath || 'Processing file...'}
+            filePath={data.filePath || 'Processing file...'}
             progressText="Analyzing text patterns"
             subtitle="Please wait while the replacement is being processed"
           />
         ) : shouldShowError ? (
           <ErrorState />
-        ) : false ? (
-          // This condition should never be hit with our changes, but we'll duplicate the diff view here too
-          // as an additional fallback
-          <ScrollArea className="h-full max-h-[400px]">
-            <div className="p-4">
-              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden mb-4">
-                <div className="flex items-center justify-between p-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
-                  <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{filePath || 'File content changes'}</div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center text-xs text-zinc-500 dark:text-zinc-400 gap-3">
-                      <div className="flex items-center">
-                        <Plus className="h-3.5 w-3.5 text-emerald-500 mr-1" />
-                        <span>{stats.additions}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <Minus className="h-3.5 w-3.5 text-red-500 mr-1" />
-                        <span>{stats.deletions}</span>
-                      </div>
-                    </div>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0"
-                            onClick={() => setExpanded(!expanded)}
-                          >
-                            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>{expanded ? 'Collapse' : 'Expand'}</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                </div>
-                {expanded && (
-                  <div>
-                    <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'unified' | 'split')} className="w-auto">
-                      <div className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-2 flex justify-end">
-                        <TabsList className="h-7 p-0.5">
-                          <TabsTrigger value="unified" className="text-xs h-6 px-2">Unified</TabsTrigger>
-                          <TabsTrigger value="split" className="text-xs h-6 px-2">Split</TabsTrigger>
-                        </TabsList>
-                      </div>
-                      <TabsContent value="unified" className="m-0 pb-4">
-                        <UnifiedDiffView lineDiff={lineDiff} />
-                      </TabsContent>
-                      <TabsContent value="split" className="m-0">
-                        <SplitDiffView lineDiff={lineDiff} />
-                      </TabsContent>
-                    </Tabs>
-                  </div>
-                )}
-              </div>
-            </div>
-          </ScrollArea>
         ) : (
           <ScrollArea className="h-full max-h-[400px]">
             <div className="p-4">
@@ -384,7 +340,7 @@ export const StrReplaceToolView = ({
                   <div className="flex items-center">
                     <File className="h-4 w-4 mr-2 text-zinc-500 dark:text-zinc-400" />
                     <code className="text-xs font-mono text-zinc-700 dark:text-zinc-300">
-                      {filePath || 'Unknown file'}
+                      {data.filePath || 'Unknown file'}
                     </code>
                   </div>
 
