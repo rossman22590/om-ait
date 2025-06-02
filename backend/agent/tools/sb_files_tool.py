@@ -407,6 +407,7 @@ class SandboxFilesTool(SandboxToolsBase):
 
     #     <!-- Example 4: Read last 10 lines -->
     #     <read-file file_path="logs/app.log" start_line="-10">
+    #     Last 10 lines of the log file will be read.
     #     </read-file>
     #     '''
     # )
@@ -459,4 +460,3 @@ class SandboxFilesTool(SandboxToolsBase):
     #         return self.fail_response(f"File '{file_path}' appears to be binary and cannot be read as text")
     #     except Exception as e:
     #         return self.fail_response(f"Error reading file: {str(e)}")
-

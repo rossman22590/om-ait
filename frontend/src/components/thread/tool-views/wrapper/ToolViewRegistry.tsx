@@ -15,7 +15,11 @@ import { AskToolView } from '../ask-tool/AskToolView';
 import { CompleteToolView } from '../CompleteToolView';
 import { ExecuteDataProviderCallToolView } from '../data-provider-tool/ExecuteDataProviderCallToolView';
 import { DataProviderEndpointsToolView } from '../data-provider-tool/DataProviderEndpointsToolView';
+import { ImageGenToolView } from '../ImageGenToolView';
+import { DeployToolView } from '../DeployToolView';
+// These are provided by the existing imports
 
+// All custom tool views are now properly imported
 
 export type ToolViewComponent = React.ComponentType<ToolViewProps>;
 
@@ -49,6 +53,9 @@ const defaultRegistry: ToolViewRegistryType = {
   'read-file': FileOperationToolView,
 
   'str-replace': StrReplaceToolView,
+  'str_replace': StrReplaceToolView,
+  'str_replace_tool': StrReplaceToolView,
+  'SandboxFilesTool.str_replace': StrReplaceToolView,
 
   'web-search': WebSearchToolView,
   'crawl-webpage': WebCrawlToolView,
@@ -65,6 +72,33 @@ const defaultRegistry: ToolViewRegistryType = {
 
   'ask': AskToolView,
   'complete': CompleteToolView,
+
+  // Add custom tool views with proper components
+  'generate-image': ImageGenToolView,
+  'edit-image': ImageGenToolView, // Using the same view as generate-image
+  'deploy': DeployToolView,
+  
+  // Map 'unknown' tool type to appropriate handler based on content
+  // For image generation, use ImageGenToolView
+  // For other cases, fall back to GenericToolView
+  'unknown': (props: ToolViewProps) => {
+    // Check if content appears to be image generation-related
+    const content = typeof props.toolContent === 'string' 
+      ? props.toolContent 
+      : JSON.stringify(props.toolContent);
+    
+    if (content.includes('pixiomedia.nyc3.digitaloceanspaces.com') || 
+        content.includes('saved to workspace at') ||
+        content.includes('success=True') ||
+        content.includes('generating image') ||
+        (typeof window !== 'undefined' && window.location.href.includes('image'))) {
+      console.log('Using ImageGenToolView for unknown tool type (image detected)');
+      return <ImageGenToolView {...props} />;
+    }
+    
+    // Fall back to generic view for non-image content
+    return <GenericToolView {...props} />;
+  },
 
   'default': GenericToolView,
 };

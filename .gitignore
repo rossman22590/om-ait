@@ -198,3 +198,5 @@ rabbitmq_data
 .setup_progress
 
 .setup_env.json
+/backend/worker-1-logs
+/backend/worker-2-logs

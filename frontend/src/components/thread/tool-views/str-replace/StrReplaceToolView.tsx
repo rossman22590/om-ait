@@ -215,8 +215,12 @@ export function StrReplaceToolView({
   // Calculate stats on changes
   const stats: DiffStats = calculateDiffStats(lineDiff);
 
-  // Check if we should show error state (only when not streaming and we have content but can't extract strings)
-  const shouldShowError = !isStreaming && (!oldStr || !newStr) && (assistantContent || toolContent);
+  // Only show error state if the backend explicitly reported a failure AND we have content but can't extract strings
+  // If actualIsSuccess is true, we'll always show a success message, even if we couldn't extract the strings
+  const shouldShowError = !isStreaming && !actualIsSuccess && (!oldStr || !newStr) && (assistantContent || toolContent);
+  
+  // Determine if we have valid data to show but the operation was successful
+  const showSuccessNoData = !isStreaming && actualIsSuccess && (!oldStr || !newStr) && (assistantContent || toolContent);
 
   return (
     <Card className="gap-0 flex border shadow-none border-t border-b-0 border-x-0 p-0 rounded-none flex-col h-full overflow-hidden bg-white dark:bg-zinc-950">
@@ -271,8 +275,20 @@ export function StrReplaceToolView({
           />
         ) : shouldShowError ? (
           <ErrorState />
+        ) : showSuccessNoData ? (
+          <div className="flex flex-col items-center justify-center h-full py-12 px-6 bg-gradient-to-b from-white to-zinc-50 dark:from-zinc-950 dark:to-zinc-900">
+            <div className="text-center w-full max-w-xs">
+              <CheckCircle className="h-16 w-16 mx-auto mb-6 text-emerald-500" />
+              <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-2">
+                Replacement Successful
+              </h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                The string replacement was completed successfully in {filePath || 'the file'}.
+              </p>
+            </div>
+          </div>
         ) : (
-          <ScrollArea className="h-full w-full">
+          <ScrollArea className="h-full max-h-[400px]">
             <div className="p-4">
               <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden mb-4">
                 <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 flex items-center justify-between">

@@ -428,16 +428,196 @@ export function extractStrReplaceContent(content: string | object | undefined | 
   oldStr: string | null;
   newStr: string | null;
 } {
+  // Debug the input content
+  if (content) {
+    if (typeof content === 'object') {
+      console.debug('StrReplaceToolView: Object content keys:', Object.keys(content));
+    } else if (typeof content === 'string' && content.length > 0) {
+      console.debug('StrReplaceToolView: String content preview:', content.substring(0, 100));
+    }
+  }
+
+  // First check if we have an object with tool_execution format
+  if (content && typeof content === 'object') {
+    try {
+      // Check for parsed tool call format with function_name, xml_tag_name and arguments
+      if ('function_name' in content && 
+          (content.function_name === 'str_replace' || content.function_name === 'str-replace') &&
+          'arguments' in content && 
+          typeof content.arguments === 'object') {
+        
+        const args = content.arguments as Record<string, any>;
+        if (args.old_str !== undefined && args.new_str !== undefined) {
+          console.debug('StrReplaceToolView: Extracted str-replace from parsed tool call format');
+          return {
+            oldStr: args.old_str as string,
+            newStr: args.new_str as string
+          };
+        }
+      }
+
+      // Check for content inside a parts array (common in newer formats)
+      if (Array.isArray(content) || ('parts' in content && Array.isArray((content as any).parts))) {
+        const partsArray = Array.isArray(content) ? content : (content as any).parts;
+        
+        for (const part of partsArray) {
+          if (part && typeof part === 'object') {
+            // Try to extract from this part
+            const result = extractStrReplaceContent(part);
+            if (result.oldStr && result.newStr) {
+              console.debug('StrReplaceToolView: Extracted from array part');
+              return result;
+            }
+          }
+        }
+      }
+
+      // Check for tool_execution format in parsed JSON
+      if ('tool_execution' in content && 
+          typeof content.tool_execution === 'object' && 
+          (content.tool_execution as any).tool_result) {
+        
+        const toolResult = (content.tool_execution as any).tool_result;
+        console.debug('StrReplaceToolView: Found tool_result:', toolResult);
+        
+        // Try to extract from tool_result if it's an object
+        if (typeof toolResult === 'object') {
+          const result = extractStrReplaceContent(toolResult);
+          if (result.oldStr && result.newStr) {
+            return result;
+          }
+        } else if (typeof toolResult === 'string') {
+          // Try to parse tool_result as JSON if it's a string
+          try {
+            const parsed = JSON.parse(toolResult);
+            const result = extractStrReplaceContent(parsed);
+            if (result.oldStr && result.newStr) {
+              return result;
+            }
+          } catch (e) {
+            // Not JSON, continue with other methods
+          }
+        }
+      }
+      
+      // Check for new tool execution format
+      if ('tool_execution' in content && typeof content.tool_execution === 'object') {
+        const toolExecution = content.tool_execution as Record<string, any>;
+        const args = toolExecution.arguments as Record<string, any> || {};
+        
+        if (args.old_str !== undefined && args.new_str !== undefined) {
+          console.debug('StrReplaceToolView: Extracted str-replace from tool_execution format');
+          return {
+            oldStr: args.old_str as string,
+            newStr: args.new_str as string
+          };
+        }
+      }
+      
+      // Try to extract from the arguments property directly
+      if ('arguments' in content && typeof content.arguments === 'object') {
+        const args = content.arguments as Record<string, any>;
+        if (args.old_str !== undefined && args.new_str !== undefined) {
+          console.debug('StrReplaceToolView: Extracted str-replace from arguments property');
+          return {
+            oldStr: args.old_str as string,
+            newStr: args.new_str as string
+          };
+        }
+      }
+
+      // Try various field names that might be used (camelCase, snake_case)
+      const fieldPairs = [
+        { old: 'old_str', new: 'new_str' },
+        { old: 'oldStr', new: 'newStr' },
+        { old: 'old_string', new: 'new_string' },
+        { old: 'oldString', new: 'newString' },
+        { old: 'from', new: 'to' }
+      ];
+
+      for (const pair of fieldPairs) {
+        if ((content as any)[pair.old] !== undefined && (content as any)[pair.new] !== undefined) {
+          console.debug(`StrReplaceToolView: Extracted using direct fields ${pair.old}/${pair.new}`);
+          return {
+            oldStr: (content as any)[pair.old] as string,
+            newStr: (content as any)[pair.new] as string
+          };
+        }
+      }
+    } catch (error) {
+      console.error('StrReplaceToolView: Error parsing object content:', error);
+    }
+  }
+  
+  // If not found in object format, try string format
   const contentStr = normalizeContentToString(content);
   if (!contentStr) return { oldStr: null, newStr: null };
+  
+  // Try to parse JSON string
+  if (contentStr.trim().startsWith('{') || contentStr.trim().startsWith('[')) {
+    try {
+      const parsed = JSON.parse(contentStr) as Record<string, any>;
+      console.debug('StrReplaceToolView: Successfully parsed content as JSON');
+      
+      // Recursively check the parsed object
+      const result = extractStrReplaceContent(parsed);
+      if (result.oldStr && result.newStr) {
+        return result;
+      }
+      
+      // Check tool_execution format in parsed JSON
+      if (parsed.tool_execution && parsed.tool_execution.arguments) {
+        const args = parsed.tool_execution.arguments as Record<string, any>;
+        if (args.old_str !== undefined && args.new_str !== undefined) {
+          console.debug('StrReplaceToolView: Extracted str-replace from parsed JSON tool_execution');
+          return {
+            oldStr: args.old_str as string,
+            newStr: args.new_str as string
+          };
+        }
+      }
+      
+      // Check arguments property in parsed JSON
+      if (parsed.arguments) {
+        const args = parsed.arguments as Record<string, any>;
+        if (args.old_str !== undefined && args.new_str !== undefined) {
+          console.debug('StrReplaceToolView: Extracted str-replace from parsed JSON arguments');
+          return {
+            oldStr: args.old_str as string,
+            newStr: args.new_str as string
+          };
+        }
+      }
+    } catch (error) {
+      console.debug('StrReplaceToolView: Error parsing JSON string:', error);
+    }
+  }
 
-  // First try to extract from a str-replace tag with attributes
+  // Try to extract from code block format
+  const codeBlockRegex = /```(?:diff)?\s*([\s\S]*?)```/g;
+  let codeBlockMatch;
+  while ((codeBlockMatch = codeBlockRegex.exec(contentStr)) !== null) {
+    const codeContent = codeBlockMatch[1];
+    // Look for diff-like content with - and + at line starts
+    const minusLines = codeContent.match(/^-.*$/gm);
+    const plusLines = codeContent.match(/^\+.*$/gm);
+    
+    if (minusLines && plusLines) {
+      const oldContent = minusLines.map(line => line.substring(1)).join('\n');
+      const newContent = plusLines.map(line => line.substring(1)).join('\n');
+      console.debug('StrReplaceToolView: Extracted from diff code block');
+      return { oldStr: oldContent, newStr: newContent };
+    }
+  }
+
+  // Try XML format - First try to extract from a str-replace tag with attributes
   const strReplaceMatch = contentStr.match(/<str-replace[^>]*>([\s\S]*?)<\/str-replace>/);
   if (strReplaceMatch) {
     const innerContent = strReplaceMatch[1];
     const oldMatch = innerContent.match(/<old_str>([\s\S]*?)<\/old_str>/);
     const newMatch = innerContent.match(/<new_str>([\s\S]*?)<\/new_str>/);
     
+    console.debug('StrReplaceToolView: Extracted str-replace from XML format');
     return {
       oldStr: oldMatch ? oldMatch[1] : null,
       newStr: newMatch ? newMatch[1] : null,
@@ -448,9 +628,34 @@ export function extractStrReplaceContent(content: string | object | undefined | 
   const oldMatch = contentStr.match(/<old_str>([\s\S]*?)<\/old_str>/);
   const newMatch = contentStr.match(/<new_str>([\s\S]*?)<\/new_str>/);
 
+  if (oldMatch && newMatch) {
+    console.debug('StrReplaceToolView: Extracted str-replace from direct XML tags');
+    return {
+      oldStr: oldMatch[1],
+      newStr: newMatch[1]
+    };
+  }
+
+  // Try to find key-value pairs in text format
+  const oldStrPattern = /old[\s_-]?str(?:ing)?[\s:=]+([^\n]+)/i;
+  const newStrPattern = /new[\s_-]?str(?:ing)?[\s:=]+([^\n]+)/i;
+  const oldStrTextMatch = contentStr.match(oldStrPattern);
+  const newStrTextMatch = contentStr.match(newStrPattern);
+
+  if (oldStrTextMatch && newStrTextMatch) {
+    console.debug('StrReplaceToolView: Extracted from text key-value format');
+    return {
+      oldStr: oldStrTextMatch[1].trim(),
+      newStr: newStrTextMatch[1].trim()
+    };
+  }
+
+  console.debug('StrReplaceToolView: Failed to extract str-replace content, content preview:', 
+    contentStr.substring(0, 500));
+  
   return {
-    oldStr: oldMatch ? oldMatch[1] : null,
-    newStr: newMatch ? newMatch[1] : null,
+    oldStr: null,
+    newStr: null,
   };
 }
 
@@ -595,7 +800,7 @@ export function extractSearchQuery(content: string | object | undefined | null):
   try {
     const parsedContent = JSON.parse(contentStr);
     
-    // Check if it's the new Tavily response format
+    // Check if this is the new Tavily response format
     if (parsedContent.query && typeof parsedContent.query === 'string') {
       return parsedContent.query;
     }
@@ -886,10 +1091,7 @@ export function extractWebpageContent(
               return {
                 title: outputJson.Title || outputJson.title || '',
                 text:
-                  outputJson.Text ||
-                  outputJson.text ||
-                  outputJson.content ||
-                  '',
+                  outputJson.Text || outputJson.text || outputJson.content || '',
               };
             } catch (e) {
               // If parsing fails, use the raw output

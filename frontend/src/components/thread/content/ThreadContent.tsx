@@ -278,7 +278,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
     project,
     debugMode = false,
     isPreviewMode = false,
-    agentName = 'Suna',
+    agentName = 'Machine',
     agentAvatar = <KortixLogo size={16} />,
     emptyStateComponent,
 }) => {
