@@ -125,7 +125,7 @@ export const SearchAndFilters = ({
               }
             >
               <Settings className="h-4 w-4" />
-              Has AgentPress tools
+              Has Machine Tools
             </DropdownMenuCheckboxItem>
             {activeFiltersCount > 0 && (
               <>
