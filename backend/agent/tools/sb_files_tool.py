@@ -229,11 +229,14 @@ class SandboxFilesTool(SandboxToolsBase):
             
             # Get preview URL if it's an HTML file
             # preview_url = self._get_preview_url(file_path)
-            message = f"Replacement successful."
-            # if preview_url:
-            #     message += f"\n\nYou can preview this HTML file at: {preview_url}"
-            
-            return self.success_response(message)
+        
+            # Return comprehensive response with all data needed for diff display
+            return self.success_response({
+                "message": "Replacement successful.",
+                "old_str": old_str,
+                "new_str": new_str,
+                "file_path": file_path
+            })
             
         except Exception as e:
             return self.fail_response(f"Error replacing string: {str(e)}")

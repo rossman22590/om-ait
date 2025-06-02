@@ -141,7 +141,7 @@ const ErrorState: React.FC = () => (
   </div>
 );
 
-export function StrReplaceToolView({
+export const StrReplaceToolView = ({
   name = 'str-replace',
   assistantContent,
   toolContent,
@@ -149,13 +149,14 @@ export function StrReplaceToolView({
   toolTimestamp,
   isSuccess = true,
   isStreaming = false,
-}: ToolViewProps): JSX.Element {
+}: ToolViewProps): JSX.Element => {
+  // Always start with expanded diff view by default
   const [expanded, setExpanded] = useState<boolean>(true);
   const [viewMode, setViewMode] = useState<'unified' | 'split'>('unified');
 
-  let filePath: string | null = null;
   let oldStr: string | null = null;
   let newStr: string | null = null;
+  let filePath: string | null = null;
   let actualIsSuccess = isSuccess;
   let actualToolTimestamp = toolTimestamp;
   let actualAssistantTimestamp = assistantTimestamp;
@@ -216,11 +217,52 @@ export function StrReplaceToolView({
   const stats: DiffStats = calculateDiffStats(lineDiff);
 
   // Only show error state if the backend explicitly reported a failure AND we have content but can't extract strings
-  // If actualIsSuccess is true, we'll always show a success message, even if we couldn't extract the strings
   const shouldShowError = !isStreaming && !actualIsSuccess && (!oldStr || !newStr) && (assistantContent || toolContent);
   
-  // Determine if we have valid data to show but the operation was successful
-  const showSuccessNoData = !isStreaming && actualIsSuccess && (!oldStr || !newStr) && (assistantContent || toolContent);
+  // Always force showing the diff view instead of the simple success message
+  const showSuccessNoData = false;
+  
+  // Add debug logging to help diagnose issues
+  console.debug('StrReplaceToolView content values:', {
+    hasOldStr: !!oldStr,
+    hasNewStr: !!newStr,
+    filePathFound: !!filePath,
+    isSuccess: actualIsSuccess,
+    isStreaming
+  });
+  
+  // Ensure we have strings to show in the diff view
+  if (!oldStr && (assistantContent || toolContent)) {
+    oldStr = 'Original content could not be extracted';
+    console.debug('StrReplaceToolView: Using fallback for oldStr');
+  }
+  
+  if (!newStr && (toolContent || assistantContent)) {
+    newStr = 'Modified content could not be extracted';
+    console.debug('StrReplaceToolView: Using fallback for newStr');
+  }
+  
+  // Ensure we never have null strings for the diff view
+  oldStr = oldStr || '(No original content available)';
+  newStr = newStr || '(No modified content available)';
+  
+  // Variable already declared above
+  // Using showSuccessNoData = false;
+  
+  // Provide fallbacks for missing strings to ensure we can always show a diff
+  if (!oldStr && (assistantContent || toolContent)) {
+    console.debug('StrReplaceToolView: Setting fallback oldStr');
+    oldStr = 'Original content could not be extracted';
+  }
+  
+  if (!newStr && (toolContent || assistantContent)) {
+    console.debug('StrReplaceToolView: Setting fallback newStr');
+    newStr = 'Modified content could not be extracted';
+  }
+  
+  // Force strings to be defined so diff view will always render
+  oldStr = oldStr || '(No original content)';
+  newStr = newStr || '(No modified content)';
 
   return (
     <Card className="gap-0 flex border shadow-none border-t border-b-0 border-x-0 p-0 rounded-none flex-col h-full overflow-hidden bg-white dark:bg-zinc-950">
@@ -275,18 +317,65 @@ export function StrReplaceToolView({
           />
         ) : shouldShowError ? (
           <ErrorState />
-        ) : showSuccessNoData ? (
-          <div className="flex flex-col items-center justify-center h-full py-12 px-6 bg-gradient-to-b from-white to-zinc-50 dark:from-zinc-950 dark:to-zinc-900">
-            <div className="text-center w-full max-w-xs">
-              <CheckCircle className="h-16 w-16 mx-auto mb-6 text-emerald-500" />
-              <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-2">
-                Replacement Successful
-              </h3>
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                The string replacement was completed successfully in {filePath || 'the file'}.
-              </p>
+        ) : false ? (
+          // This condition should never be hit with our changes, but we'll duplicate the diff view here too
+          // as an additional fallback
+          <ScrollArea className="h-full max-h-[400px]">
+            <div className="p-4">
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden mb-4">
+                <div className="flex items-center justify-between p-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900">
+                  <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{filePath || 'File content changes'}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center text-xs text-zinc-500 dark:text-zinc-400 gap-3">
+                      <div className="flex items-center">
+                        <Plus className="h-3.5 w-3.5 text-emerald-500 mr-1" />
+                        <span>{stats.additions}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <Minus className="h-3.5 w-3.5 text-red-500 mr-1" />
+                        <span>{stats.deletions}</span>
+                      </div>
+                    </div>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => setExpanded(!expanded)}
+                          >
+                            {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{expanded ? 'Collapse' : 'Expand'}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                </div>
+                {expanded && (
+                  <div>
+                    <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as 'unified' | 'split')} className="w-auto">
+                      <div className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-2 flex justify-end">
+                        <TabsList className="h-7 p-0.5">
+                          <TabsTrigger value="unified" className="text-xs h-6 px-2">Unified</TabsTrigger>
+                          <TabsTrigger value="split" className="text-xs h-6 px-2">Split</TabsTrigger>
+                        </TabsList>
+                      </div>
+                      <TabsContent value="unified" className="m-0 pb-4">
+                        <UnifiedDiffView lineDiff={lineDiff} />
+                      </TabsContent>
+                      <TabsContent value="split" className="m-0">
+                        <SplitDiffView lineDiff={lineDiff} />
+                      </TabsContent>
+                    </Tabs>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          </ScrollArea>
         ) : (
           <ScrollArea className="h-full max-h-[400px]">
             <div className="p-4">

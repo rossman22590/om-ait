@@ -1413,6 +1413,11 @@ class ResponseProcessor:
                 self.trace.event(name="adding_parsing_details_to_tool_result_metadata", level="DEFAULT", status_message=(f"Adding parsing_details to tool result metadata"), metadata={"parsing_details": parsing_details})
             # ---
             
+            tool_metadata = None
+            # Extract tool_metadata from result if available
+            if hasattr(result, 'output') and isinstance(result.output, dict) and 'metadata' in result.output:
+                tool_metadata = result.output.get('metadata', {})  
+            
             # Check if this is a native function call (has id field)
             if "id" in tool_call:
                 # Format as a proper tool message according to OpenAI spec
@@ -1461,10 +1466,41 @@ class ResponseProcessor:
             # Check if this is an MCP tool (function_name starts with "call_mcp_tool")
             function_name = tool_call.get("function_name", "")
             
+            # Initialize tool_metadata if not already defined
+            if 'tool_metadata' not in locals():
+                tool_metadata = None
+                # Try to extract tool_metadata from result if available
+                if hasattr(result, 'output') and isinstance(result.output, dict) and 'metadata' in result.output:
+                    tool_metadata = result.output.get('metadata', {})
+            
             # If we have tool metadata with server info, use it for better naming
             if tool_metadata and tool_metadata.get('server'):
                 function_name = f"mcp_{tool_metadata.get('server')}"
                 logger.info(f"Using MCP server as tool name: {function_name}")
+                
+            # Initialize xml_tag_name and tool_call_id
+            xml_tag_name = tool_call.get("xml_tag_name", function_name) 
+            tool_call_id = tool_call.get("id", str(uuid.uuid4()))
+            
+            # Extract arguments if available
+            arguments = tool_call.get("arguments", {})
+            
+            # Process the output for structured display
+            if isinstance(result, str):
+                output = result
+            elif hasattr(result, 'output'):
+                output = result.output
+            else:
+                output = str(result)
+                
+            # Determine message role based on strategy
+            result_role = "user" if strategy == "user_message" else "assistant"
+            
+            # Format content for MCP tools
+            if isinstance(output, (dict, list)):
+                mcp_content = json.dumps(output)
+            else:
+                mcp_content = str(output)
             
             # Create the structured result
             structured_result_v1 = {
