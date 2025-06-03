@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/tooltip"
 import { useState, useRef, KeyboardEvent } from "react"
 import { Input } from "@/components/ui/input"
-import { useUpdateProject } from "@/hooks/react-query"
+import { useUpdateProject } from "@/hooks/react-query/sidebar/use-project-mutations";
 import { Skeleton } from "@/components/ui/skeleton"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
