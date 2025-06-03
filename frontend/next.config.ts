@@ -4,7 +4,7 @@ import type { NextConfig } from 'next';
 let nextConfig: NextConfig = {
   // Configure allowed image domains for next/image
   images: {
-    domains: ['pixiomedia.nyc3.digitaloceanspaces.com'],
+    domains: ['pixiomedia.nyc3.digitaloceanspaces.com', 'images.unsplash.com'],
   },
   webpack: (config) => {
     // This rule prevents issues with pdf.js and canvas

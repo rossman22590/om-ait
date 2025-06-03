@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2, Server, RefreshCw, AlertCircle } from 'lucide-react';
-import { useApiHealth } from '@/hooks/react-query';
+import { useApiHealth } from '@/hooks/react-query/usage/use-health';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';

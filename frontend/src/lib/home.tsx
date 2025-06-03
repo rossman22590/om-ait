@@ -64,9 +64,9 @@ export const siteConfig = {
   nav: {
     links: [
       { id: 1, name: 'Home', href: '#hero' },
-      { id: 2, name: 'Use Cases', href: '#use-cases' },
-      { id: 3, name: 'Open Source', href: '#open-source' },
-      { id: 4, name: 'Pricing', href: '#pricing' },
+      { id: 2, name: 'Use Cases', href: '/use-cases' },
+      { id: 3, name: 'About', href: '/about' },
+      { id: 4, name: 'Pricing', href: '/pricing' },
     ],
   },
   hero: {

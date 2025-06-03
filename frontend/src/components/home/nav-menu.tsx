@@ -76,7 +76,8 @@ export function NavMenu() {
     e: React.MouseEvent<HTMLAnchorElement>,
     item: NavItem,
   ) => {
-    e.preventDefault();
+    if (item.href.startsWith('#')) { // Check if it's an in-page link
+    e.preventDefault(); // Only prevent default for in-page links
 
     const targetId = item.href.substring(1);
     const element = document.getElementById(targetId);
@@ -109,6 +110,8 @@ export function NavMenu() {
         setIsManualScroll(false);
       }, 500); // Adjust timing to match scroll animation duration
     }
+  }
+  // For external links, do nothing and let the browser handle navigation
   };
 
   return (
