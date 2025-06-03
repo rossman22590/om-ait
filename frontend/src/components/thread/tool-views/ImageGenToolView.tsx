@@ -15,7 +15,7 @@ interface ImageState {
   timestamp: number; // Add timestamp for expiration
 }
 
-export function ImageGenToolView({ toolContent, isSuccess: propIsSuccess }: ToolViewProps) {
+export function ImageGenToolView({ toolContent, isSuccess: propIsSuccess, isStreaming }: ToolViewProps) {
   // State for UI display
   const [imageUrl, setImageUrl] = useState<string>('');
   const [localPath, setLocalPath] = useState<string>('');
@@ -174,26 +174,24 @@ export function ImageGenToolView({ toolContent, isSuccess: propIsSuccess }: Tool
   // Handle click to re-parse the content on demand
   const handleReparseClick = () => {
     console.log('Manually re-parsing tool content...');
-    // Clear any cached results
-    localStorage.removeItem(storageKey);
-    // Reset component state
-    setParsed(false);
-    setImageUrl('');
-    setLocalPath('');
-    setIsSuccess(false); // Reset success state explicitly
-    // Force a fresh parse
-    parseToolContent(true);
+    // Don't clear cached results or reset success state
+    // Just do nothing - no need to reparse on click
+    // This prevents the success badge from changing when clicked
+    return;
   };
 
   return (
     <Card 
-      className="w-full overflow-hidden cursor-pointer hover:shadow-md transition-shadow" 
-      onClick={handleReparseClick}
+      className="w-full overflow-hidden" 
     >
       <CardContent className="p-4">
         {/* Status Badge */}
         <div className="flex items-center space-x-2 mb-3">
-          {isSuccess ? (
+          {isStreaming ? (
+            <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+              <ImageIcon className="w-3 h-3 mr-1" /> Generating Image...
+            </Badge>
+          ) : isSuccess ? (
             <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
               <ImageIcon className="w-3 h-3 mr-1" /> Image Generated
             </Badge>
