@@ -12,6 +12,7 @@ interface ImageState {
   localPath: string;
   rawOutput: string;
   isSuccess: boolean;
+  timestamp: number; // Add timestamp for expiration
 }
 
 export function ImageGenToolView({ toolContent, isSuccess: propIsSuccess }: ToolViewProps) {
@@ -21,7 +22,7 @@ export function ImageGenToolView({ toolContent, isSuccess: propIsSuccess }: Tool
   const [isSuccess, setIsSuccess] = useState<boolean>(propIsSuccess || false);
   const [rawOutput, setRawOutput] = useState<string>('');
   const [parsed, setParsed] = useState<boolean>(false);
-  
+
   // Create a purely content-based key that will be consistent across renders
   const getContentHash = (content: any): string => {
     const contentStr = typeof content === 'string' 
@@ -48,10 +49,23 @@ export function ImageGenToolView({ toolContent, isSuccess: propIsSuccess }: Tool
         const saved = localStorage.getItem(storageKey);
         if (saved) {
           const state = JSON.parse(saved) as ImageState;
+          
+          // Check if state has expired (1 hour expiration)
+          const MAX_AGE_MS = 3600 * 1000;
+          if (state.timestamp && Date.now() - state.timestamp > MAX_AGE_MS) {
+            console.log(`Expired state for key: ${storageKey}, removing`);
+            localStorage.removeItem(storageKey);
+            return false;
+          }
+          
           console.log(`Loaded saved state for key: ${storageKey}`);
           setImageUrl(state.imageUrl);
           setLocalPath(state.localPath);
-          setIsSuccess(state.isSuccess);
+          
+          // Always use the image presence as the primary success indicator
+          const hasImage = state.imageUrl && state.imageUrl.length > 0;
+          setIsSuccess(hasImage || state.isSuccess);
+          
           setRawOutput(state.rawOutput);
           setParsed(true);
           return true;
@@ -105,7 +119,8 @@ export function ImageGenToolView({ toolContent, isSuccess: propIsSuccess }: Tool
     // Convert to string if it's not already
     const contentStr = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
     
-    // Extract success status
+    // Extract success status - prioritize image URL presence over text markers
+    // This ensures that if we have an image, we consider it a success regardless of text
     const hasSuccess = contentStr.includes('success=True');
     setIsSuccess(hasSuccess);
     
@@ -143,7 +158,8 @@ export function ImageGenToolView({ toolContent, isSuccess: propIsSuccess }: Tool
             imageUrl: extractedUrl,
             localPath: extractedPath,
             rawOutput: contentStr,
-            isSuccess: hasSuccess
+            isSuccess: hasSuccess,
+            timestamp: Date.now() // Add timestamp for expiration
           };
           localStorage.setItem(storageKey, JSON.stringify(state));
           console.log(`Saved image state to localStorage with key: ${storageKey}`);
@@ -164,6 +180,7 @@ export function ImageGenToolView({ toolContent, isSuccess: propIsSuccess }: Tool
     setParsed(false);
     setImageUrl('');
     setLocalPath('');
+    setIsSuccess(false); // Reset success state explicitly
     // Force a fresh parse
     parseToolContent(true);
   };
