@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/suna-ai/suna-backend:latest
+    # Removed image reference to always build from Dockerfile
     build:
       context: .
       dockerfile: Dockerfile
