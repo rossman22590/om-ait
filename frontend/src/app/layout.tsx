@@ -9,6 +9,7 @@ import { Analytics } from '@vercel/analytics/react';
 import { GoogleAnalytics } from '@next/third-parties/google';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import Script from 'next/script';
+import ChatbotWidget from '@/components/common/ChatbotWidget';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -153,6 +154,7 @@ export default function RootLayout({
           <Analytics />
           <GoogleAnalytics gaId="G-6ETJFB3PT3" />
           <SpeedInsights />
+          <ChatbotWidget />
         </ThemeProvider>
       </body>
     </html>

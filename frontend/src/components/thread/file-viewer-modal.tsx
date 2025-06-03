@@ -207,15 +207,34 @@ export function FileViewerModal({
       if (visited.has(dirPath)) return;
       visited.add(dirPath);
 
+      // Skip node_modules directory and directories starting with dot
+      const dirName = dirPath.split('/').pop();
+      if (dirName === 'node_modules' || dirName?.startsWith('.')) {
+        console.log(`[DOWNLOAD ALL] Skipping excluded directory: ${dirPath}`);
+        return;
+      }
+
       try {
         console.log(`[DOWNLOAD ALL] Exploring directory: ${dirPath}`);
         const files = await listSandboxFiles(sandboxId, dirPath);
 
         for (const file of files) {
           if (file.is_dir) {
-            // Recursively explore subdirectories
-            await exploreDirectory(file.path);
+            // Recursively explore subdirectories (except excluded ones)
+            const folderName = file.path.split('/').pop();
+            if (folderName !== 'node_modules' && !folderName?.startsWith('.')) {
+              await exploreDirectory(file.path);
+            } else {
+              console.log(`[DOWNLOAD ALL] Skipping excluded directory: ${file.path}`);
+            }
           } else {
+            // Skip package-lock.json and files starting with dot
+            const fileName = file.path.split('/').pop();
+            if (fileName === 'package-lock.json' || fileName?.startsWith('.')) {
+              console.log(`[DOWNLOAD ALL] Skipping excluded file: ${file.path}`);
+              continue;
+            }
+            
             // Add file to collection
             allFiles.push(file);
             totalSize += file.size || 0;
