@@ -198,17 +198,17 @@ export default function AboutPage() {
               
             ].map((member, i) => (
               <div key={i} className="text-center group">
-                <div className="relative mb-4 overflow-hidden rounded-lg">
+                <div className="relative mb-4 overflow-hidden rounded-lg w-64 h-64 mx-auto">
                   {member.image ? (
                     <Image 
                       src={member.image}
                       alt={member.name}
                       width={300}
                       height={300}
-                      className="w-full h-64 object-cover"
+                      className="w-full h-full object-contain"
                     />
                   ) : (
-                    <div className="bg-gray-200 dark:bg-gray-700 h-64 w-full animate-pulse"></div>
+                    <div className="bg-gray-200 dark:bg-gray-700 h-full w-full animate-pulse"></div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
                     <div className="p-4 w-full text-center">
