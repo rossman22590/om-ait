@@ -15,6 +15,7 @@ from services import redis
 from dramatiq.brokers.rabbitmq import RabbitmqBroker
 import os
 from services.langfuse import langfuse
+import sentry
 
 # Set up RabbitMQ connection
 try:
@@ -53,7 +54,7 @@ try:
 except Exception as e:
     logger.error(f"Error setting up RabbitMQ connection: {e}")
     # Fallback to a local RabbitMQ instance as a last resort
-    logger.info("Falling back to localhost RabbitMQ connection")
+    logger.info("Falling back to local RabbitMQ instance")
     rabbitmq_broker = RabbitmqBroker(host='localhost', port=5672, middleware=[dramatiq.middleware.AsyncIO()])
 dramatiq.set_broker(rabbitmq_broker)
 
