@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
 import { useState, useEffect, Suspense } from 'react';
-import { AlertCircle, ArrowLeft, CheckCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CheckCircle, Eye, EyeOff } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';
 import { SubmitButton } from '@/components/ui/submit-button';
@@ -17,6 +17,8 @@ function ResetPasswordContent() {
 
   const [resetSuccess, setResetSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Check if code is present in URL
   useEffect(() => {
@@ -128,26 +130,58 @@ function ResetPasswordContent() {
 
               {!errorMessage && (
                 <form className="space-y-4">
-                  <div>
-                    <Input
-                      id="password"
-                      name="password"
-                      type="password"
-                      placeholder="New password"
-                      className="h-12 rounded-full bg-background border-border"
-                      required
-                    />
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="password"
+                      className="block text-sm font-medium text-muted-foreground"
+                    >
+                      New Password
+                    </label>
+                    <div className="relative flex items-center">
+                      <Input
+                        id="password"
+                        name="password"
+                        type={showPassword ? 'text' : 'password'}
+                        placeholder="New password"
+                        className="h-12 rounded-full bg-background border-border w-full pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
+                    </div>
                   </div>
 
-                  <div>
-                    <Input
-                      id="confirmPassword"
-                      name="confirmPassword"
-                      type="password"
-                      placeholder="Confirm new password"
-                      className="h-12 rounded-full bg-background border-border"
-                      required
-                    />
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="confirmPassword"
+                      className="block text-sm font-medium text-muted-foreground"
+                    >
+                      Confirm New Password
+                    </label>
+                    <div className="relative flex items-center">
+                      <Input
+                        id="confirmPassword"
+                        name="confirmPassword"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="Confirm new password"
+                        className="h-12 rounded-full bg-background border-border w-full pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                        aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="space-y-4 pt-4">
