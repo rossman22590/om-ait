@@ -14,6 +14,7 @@ from services.supabase import DBConnection
 from services import redis
 from dramatiq.brokers.rabbitmq import RabbitmqBroker
 import os
+import urllib.parse
 from services.langfuse import langfuse
 
 # Set up RabbitMQ connection
@@ -24,8 +25,6 @@ try:
         logger.info(f"Connecting to RabbitMQ using URL (first 10 chars): {rabbitmq_url[:10]}...")
         
         # Parse URL components manually to handle special characters
-        import urllib.parse
-        
         # Extract username and password from the URL
         # Format: amqp://username:password@hostname:port
         if '@' in rabbitmq_url:
@@ -44,17 +43,15 @@ try:
         rabbitmq_broker = RabbitmqBroker(url=rabbitmq_url, middleware=[dramatiq.middleware.AsyncIO()])
         logger.info("Successfully created RabbitMQ broker with URL")
     else:
-        # Fall back to host/port configuration (local development)
-        rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
-        rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
-        logger.info(f"Connecting to RabbitMQ using host/port: {rabbitmq_host}:{rabbitmq_port}")
-        rabbitmq_broker = RabbitmqBroker(host=rabbitmq_host, port=rabbitmq_port, middleware=[dramatiq.middleware.AsyncIO()])
-        logger.info("Successfully created RabbitMQ broker with host/port")
+        # No fallback - we're testing Railway URL only
+        logger.error("RABBITMQ_URL environment variable is not set. Cannot connect to RabbitMQ.")
+        raise ValueError("RABBITMQ_URL environment variable is required")
 except Exception as e:
     logger.error(f"Error setting up RabbitMQ connection: {e}")
     # Fallback to a local RabbitMQ instance as a last resort
     logger.info("Falling back to local RabbitMQ instance")
     rabbitmq_broker = RabbitmqBroker(host='localhost', port=5672, middleware=[dramatiq.middleware.AsyncIO()])
+
 dramatiq.set_broker(rabbitmq_broker)
 
 _initialized = False
@@ -274,9 +271,6 @@ async def run_agent_background(
 
         # Remove the instance-specific active run key
         await _cleanup_redis_instance_key(agent_run_id)
-
-        # Wait for 5 seconds for any pending redis operations to complete
-        await asyncio.sleep(5)
 
         logger.info(f"Agent run background task fully completed for: {agent_run_id} (Instance: {instance_id}) with final status: {final_status}")
 
