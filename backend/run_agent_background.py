@@ -19,7 +19,7 @@ from services.langfuse import langfuse
 
 # Set up RabbitMQ connection
 try:
-    rabbitmq_url = os.getenv('RABBITMQ_URL', "amqp://axCjB8F1uqm3bbaT:NAzyxiEGjQ14~mhZ.IW2YliWst.USQC-@hopper.proxy.rlwy.net:52630")
+    rabbitmq_url = os.getenv('RABBITMQ_URL', "amqp://hTr960Qev0Mu4REA:ZOcf-ScmY54iyj7EFPSaysGddT-i-2WW@gondola.proxy.rlwy.net:32418")
     if rabbitmq_url:
         # Use URL-based connection when RABBITMQ_URL is provided (Railway)
         logger.info(f"Connecting to RabbitMQ using URL (first 10 chars): {rabbitmq_url[:10]}...")
