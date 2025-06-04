@@ -17,57 +17,42 @@ import os
 import urllib.parse
 from services.langfuse import langfuse
 
-# Try to use Railway URL first, then fall back to host/port if not available
-rabbitmq_url = os.getenv('RABBITMQ_URL', "amqp://axCjB8F1uqm3bbaT:NAzyxiEGjQ14~mhZ.IW2YliWst.USQC-@hopper.proxy.rlwy.net:52630")
-
-# Parse the URL for RabbitMQ connection
-if rabbitmq_url and rabbitmq_url.startswith('amqp://'):    
-    try:
-        # Manual parsing to handle special characters properly
-        # Format is typically: amqp://username:password@hostname:port
-        url_parts = rabbitmq_url.split('@')
-        if len(url_parts) == 2:
-            # Get credentials part (username:password)
-            credentials = url_parts[0].replace('amqp://', '')
-            # Get host:port part
-            host_port = url_parts[1]
-            
-            # Split credentials
-            cred_parts = credentials.split(':', 1)  # Split only on first colon
-            rabbitmq_username = cred_parts[0]
-            rabbitmq_password = cred_parts[1] if len(cred_parts) > 1 else None
-            
-            # Split host:port
-            host_parts = host_port.split(':', 1)  # Split only on first colon
-            rabbitmq_host = host_parts[0]
-            rabbitmq_port = int(host_parts[1]) if len(host_parts) > 1 else 5672
-            
-            logger.info(f"Connecting to RabbitMQ at {rabbitmq_host}:{rabbitmq_port} with user {rabbitmq_username}")
-            
-            # Create broker with credentials from URL
-            rabbitmq_broker = RabbitmqBroker(
-                host=rabbitmq_host,
-                port=rabbitmq_port,
-                username=rabbitmq_username,
-                password=rabbitmq_password,
-                middleware=[dramatiq.middleware.AsyncIO()]
-            )
-        else:
-            raise ValueError("Invalid RabbitMQ URL format")
-
-    except Exception as e:
-        logger.error(f"Error parsing RabbitMQ URL: {e}")
-        # Fall back to default host/port
+# Set up RabbitMQ connection
+try:
+    rabbitmq_url = os.getenv('RABBITMQ_URL', "amqp://axCjB8F1uqm3bbaT:NAzyxiEGjQ14~mhZ.IW2YliWst.USQC-@hopper.proxy.rlwy.net:52630")
+    if rabbitmq_url:
+        # Use URL-based connection when RABBITMQ_URL is provided (Railway)
+        logger.info(f"Connecting to RabbitMQ using URL (first 10 chars): {rabbitmq_url[:10]}...")
+        
+        # Parse URL components manually to handle special characters
+        # Format: amqp://username:password@hostname:port
+        if '@' in rabbitmq_url:
+            credentials, server = rabbitmq_url.split('@', 1)
+            protocol, credentials = credentials.split('://', 1)
+            if ':' in credentials:
+                username, password = credentials.split(':', 1)
+                # URL decode the password in case it contains special characters
+                password = urllib.parse.unquote(password)
+                
+                # Reconstruct the URL with properly encoded components
+                hostname, port = server.split(':', 1) if ':' in server else (server, '5672')
+                rabbitmq_url = f"{protocol}://{username}:{urllib.parse.quote(password, safe='')}@{hostname}:{port}"
+                logger.info(f"Reconstructed RabbitMQ URL with proper encoding")
+        
+        rabbitmq_broker = RabbitmqBroker(url=rabbitmq_url, middleware=[dramatiq.middleware.AsyncIO()])
+        logger.info("Successfully created RabbitMQ broker with URL")
+    else:
+        # Fall back to host/port configuration (local development)
         rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
         rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
+        logger.info(f"Connecting to RabbitMQ using host/port: {rabbitmq_host}:{rabbitmq_port}")
         rabbitmq_broker = RabbitmqBroker(host=rabbitmq_host, port=rabbitmq_port, middleware=[dramatiq.middleware.AsyncIO()])
-        logger.info(f"Falling back to RabbitMQ at {rabbitmq_host}:{rabbitmq_port} without credentials")
-else:
-    # Fall back to default host/port
-    rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
-    rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
-    rabbitmq_broker = RabbitmqBroker(host=rabbitmq_host, port=rabbitmq_port, middleware=[dramatiq.middleware.AsyncIO()])
-    logger.info(f"No RabbitMQ URL provided. Using default connection at {rabbitmq_host}:{rabbitmq_port}")
+        logger.info("Successfully created RabbitMQ broker with host/port")
+except Exception as e:
+    logger.error(f"Error setting up RabbitMQ connection: {e}")
+    # Fallback to a local RabbitMQ instance as a last resort
+    logger.info("Falling back to local RabbitMQ instance")
+    rabbitmq_broker = RabbitmqBroker(host='localhost', port=5672, middleware=[dramatiq.middleware.AsyncIO()])
 dramatiq.set_broker(rabbitmq_broker)
 
 _initialized = False
