@@ -316,7 +316,7 @@ export function NavUserWithTeams({
                   }}
                   className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
                 >
-                  <span className="text-xs">Version 8.0</span>
+                  <span className="text-xs">Version 9.0</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className='text-destructive focus:text-destructive focus:bg-destructive/10' onClick={handleLogout}>
@@ -347,7 +347,7 @@ export function NavUserWithTeams({
           <DialogHeader>
             <DialogTitle className="text-black dark:text-black flex items-center gap-2">
               <BadgeCheck className="h-5 w-5 text-purple-500" /> 
-              Machine AI v8.0 Updates
+              Machine AI v9.0 Updates
             </DialogTitle>
             <DialogDescription className="text-black/70 dark:text-black/70">
               Latest features and improvements in this version
@@ -359,6 +359,9 @@ export function NavUserWithTeams({
               <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-500">New Features</h3>
               <ul className="list-disc pl-5 space-y-1 text-sm">
                 <li>Added "Stop All Agents" feature for easier workspace management</li>
+                <li>Integration with multiple cloud providers (MCPs) for enhanced flexibility</li>
+                <li>Ability to create and use custom prompts for tailored AI interactions</li>
+                <li>Introduced a marketplace for discovering and sharing AI agents</li>
                 <li>Implemented 7-day free trial for all subscription plans</li>
                 <li>Added support for promo codes during checkout</li>
                 <li>Enhanced image generation with high-quality settings</li>
