@@ -14,48 +14,43 @@ from services.supabase import DBConnection
 from services import redis
 from dramatiq.brokers.rabbitmq import RabbitmqBroker
 import os
+import urllib.parse
 from services.langfuse import langfuse
-import sentry
 
-# Set up RabbitMQ connection
-try:
-    rabbitmq_url = os.getenv('RABBITMQ_URL')
-    if rabbitmq_url:
-        # Use URL-based connection when RABBITMQ_URL is provided (Railway)
-        logger.info(f"Connecting to RabbitMQ using URL (first 10 chars): {rabbitmq_url[:10]}...")
+# Try to use Railway URL first, then fall back to host/port if not available
+rabbitmq_url = os.getenv('RABBITMQ_URL', "amqp://axCjB8F1uqm3bbaT:NAzyxiEGjQ14~mhZ.IW2YliWst.USQC-@hopper.proxy.rlwy.net:52630")
+
+# Parse the URL for RabbitMQ connection
+if rabbitmq_url and rabbitmq_url.startswith('amqp://'):    
+    try:
+        # Parse URL components
+        parsed_url = urllib.parse.urlparse(rabbitmq_url)
         
-        # Parse URL components manually to handle special characters
-        import urllib.parse
+        # Extract components
+        rabbitmq_host = parsed_url.hostname
+        rabbitmq_port = parsed_url.port
+        rabbitmq_username = parsed_url.username
+        rabbitmq_password = urllib.parse.unquote(parsed_url.password) if parsed_url.password else None
         
-        # Extract username and password from the URL
-        # Format: amqp://username:password@hostname:port
-        if '@' in rabbitmq_url:
-            credentials, server = rabbitmq_url.split('@', 1)
-            protocol, credentials = credentials.split('://', 1)
-            if ':' in credentials:
-                username, password = credentials.split(':', 1)
-                # URL decode the password in case it contains special characters
-                password = urllib.parse.unquote(password)
-                
-                # Reconstruct the URL with properly encoded components
-                hostname, port = server.split(':', 1) if ':' in server else (server, '5672')
-                rabbitmq_url = f"{protocol}://{username}:{urllib.parse.quote(password, safe='')}@{hostname}:{port}"
-                logger.info(f"Reconstructed RabbitMQ URL with proper encoding")
-        
-        rabbitmq_broker = RabbitmqBroker(url=rabbitmq_url, middleware=[dramatiq.middleware.AsyncIO()])
-        logger.info("Successfully created RabbitMQ broker with URL")
-    else:
-        # Fall back to host/port configuration (local development)
+        # Create broker with credentials from URL
+        rabbitmq_broker = RabbitmqBroker(
+            host=rabbitmq_host,
+            port=rabbitmq_port,
+            username=rabbitmq_username,
+            password=rabbitmq_password,
+            middleware=[dramatiq.middleware.AsyncIO()]
+        )
+    except Exception as e:
+        print(f"Error parsing RabbitMQ URL: {e}")
+        # Fall back to default host/port
         rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
         rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
-        logger.info(f"Connecting to RabbitMQ using host/port: {rabbitmq_host}:{rabbitmq_port}")
         rabbitmq_broker = RabbitmqBroker(host=rabbitmq_host, port=rabbitmq_port, middleware=[dramatiq.middleware.AsyncIO()])
-        logger.info("Successfully created RabbitMQ broker with host/port")
-except Exception as e:
-    logger.error(f"Error setting up RabbitMQ connection: {e}")
-    # Fallback to a local RabbitMQ instance as a last resort
-    logger.info("Falling back to local RabbitMQ instance")
-    rabbitmq_broker = RabbitmqBroker(host='localhost', port=5672, middleware=[dramatiq.middleware.AsyncIO()])
+else:
+    # Fall back to default host/port
+    rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
+    rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
+    rabbitmq_broker = RabbitmqBroker(host=rabbitmq_host, port=rabbitmq_port, middleware=[dramatiq.middleware.AsyncIO()])
 dramatiq.set_broker(rabbitmq_broker)
 
 _initialized = False
