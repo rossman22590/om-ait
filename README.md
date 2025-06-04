@@ -1,4 +1,4 @@
-<div align="center">
+<div align="center"> 
 
 # Suna - A Generalist AI Agent
 
