@@ -117,6 +117,10 @@ class Configuration:
     OR_SITE_URL: Optional[str] = "https://machine.myapps.ai"
     OR_APP_NAME: Optional[str] = "Machine"    
     
+    # Media generation API keys
+    # ARGIL_API_KEY: Optional[str] = None
+    # LUMA_API_KEY: Optional[str] = None
+    
     # AWS Bedrock credentials
     AWS_ACCESS_KEY_ID: Optional[str] = None
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
@@ -147,6 +151,7 @@ class Configuration:
     CLOUDFLARE_API_TOKEN: Optional[str] = None
     FIRECRAWL_API_KEY: str
     FIRECRAWL_URL: Optional[str] = "https://api.firecrawl.dev"
+    # ARGIL_API_KEY: Optional[str] = None
     
     # Stripe configuration
     STRIPE_SECRET_KEY: Optional[str] = None
@@ -166,6 +171,9 @@ class Configuration:
     LANGFUSE_PUBLIC_KEY: Optional[str] = None
     LANGFUSE_SECRET_KEY: Optional[str] = None
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+    
+    # RabbitMQ configuration
+    RABBITMQ_URL: Optional[str] = None
 
     @property
     def STRIPE_PRODUCT_ID(self) -> str:
