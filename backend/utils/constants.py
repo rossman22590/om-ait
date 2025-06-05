@@ -2,12 +2,14 @@ MODEL_ACCESS_TIERS = {
     "free": [
         "openrouter/deepseek/deepseek-chat",
         "openrouter/qwen/qwen3-235b-a22b",
+        "openai/gpt-4o",
         "openrouter/google/gemini-2.5-flash-preview-05-20",
     ],
     "tier_2_20": [
         "openrouter/deepseek/deepseek-chat",
         # "xai/grok-3-mini-fast-beta",
         "openai/gpt-4o",
+        "openai/gpt-4.1",
         # "openai/gpt-4-turbo",
         # "xai/grok-3-fast-latest",
         "openrouter/google/gemini-2.5-flash-preview-05-20",  # Added
@@ -23,6 +25,8 @@ MODEL_ACCESS_TIERS = {
         "openrouter/deepseek/deepseek-chat",
         # "xai/grok-3-mini-fast-beta",
         "openai/gpt-4o",
+        "openai/gpt-4.1",
+        "openrouter/google/gemini-2.5-pro-preview",
         # "openai/gpt-4-turbo",
         # "xai/grok-3-fast-latest",
         "openrouter/google/gemini-2.5-flash-preview-05-20",  # Added
@@ -38,7 +42,9 @@ MODEL_ACCESS_TIERS = {
         "openrouter/deepseek/deepseek-chat",
         # "xai/grok-3-mini-fast-beta",
         "openai/gpt-4o",
+        "openai/gpt-4.1", 
         # "openai/gpt-4-turbo",
+        "openrouter/google/gemini-2.5-pro-preview",
         # "xai/grok-3-fast-latest",
         "openrouter/google/gemini-2.5-flash-preview-05-20",  # Added
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",  # Added
@@ -53,8 +59,10 @@ MODEL_ACCESS_TIERS = {
         "openrouter/deepseek/deepseek-chat",
         # "xai/grok-3-mini-fast-beta",
         "openai/gpt-4o",
+        "openai/gpt-4.1",
         # "openai/gpt-4-turbo",
         # "xai/grok-3-fast-latest",
+        "openrouter/google/gemini-2.5-pro-preview",
         "openrouter/google/gemini-2.5-flash-preview-05-20",  # Added
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",  # Added
         # "openai/gpt-4",
@@ -70,9 +78,11 @@ MODEL_ACCESS_TIERS = {
         "openai/gpt-4o",
         # "openai/gpt-4-turbo",
         # "xai/grok-3-fast-latest",
+        "openrouter/google/gemini-2.5-pro-preview",
         "openrouter/google/gemini-2.5-flash-preview-05-20",  # Added
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",  # Added
         # "openai/gpt-4",
+        "openai/gpt-4.1",
         "anthropic/claude-3-7-sonnet-latest",
         "anthropic/claude-sonnet-4-20250514",
         "openai/gpt-4.1-2025-04-14",
@@ -85,9 +95,11 @@ MODEL_ACCESS_TIERS = {
         "openai/gpt-4o",
         # "openai/gpt-4-turbo",
         # "xai/grok-3-fast-latest",
-        "openrouter/google/gemini-2.5-flash-preview-05-20",  # Added
+        "openrouter/google/gemini-2.5-pro-preview",
+        "openrouter/google/gemini-2.5-flash-preview-05-20",   # Added
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",  # Added
         # "openai/gpt-4",
+        "openai/gpt-4.1",
         "anthropic/claude-3-7-sonnet-latest",
         "anthropic/claude-sonnet-4-20250514",
         "openai/gpt-4.1-2025-04-14",
@@ -118,7 +130,7 @@ MODEL_NAME_ALIASES = {
     "sonnet-3.5": "anthropic/claude-3-5-sonnet-latest",
     "haiku-3.5": "anthropic/claude-3-5-haiku-latest",
     "claude-sonnet-4": "anthropic/claude-sonnet-4-20250514",
-    # "gpt-4.1": "openai/gpt-4.1-2025-04-14",  # Commented out in constants.py
+    "gpt-4.1": "openai/gpt-4.1-2025-04-14",  # Commented out in constants.py
     "gpt-4o": "openai/gpt-4o",
     "gpt-4.1": "openai/gpt-4.1",
     "gpt-4.1-mini": "gpt-4.1-mini",
