@@ -21,7 +21,9 @@ RUN useradd -m -u 1000 appuser && \
 
 # Install Python dependencies
 COPY --chown=appuser:appuser requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
+RUN pip install --no-cache-dir -v -r requirements.txt gunicorn
+# Explicit install of langfuse
+RUN pip install --no-cache-dir langfuse==2.60.5
 
 # Switch to non-root user
 USER appuser
