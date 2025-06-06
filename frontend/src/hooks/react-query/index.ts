@@ -19,4 +19,7 @@ export * from './subscriptions/use-billing';
 
 export * from './dashboard/use-initiate-agent';
 
+export * from './scheduled-tasks/use-scheduled-tasks';
+export { scheduledTaskKeys } from './scheduled-tasks/keys';
+
 export { useApiHealth } from './usage/use-health'; 

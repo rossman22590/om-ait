@@ -21,6 +21,7 @@ from sandbox import api as sandbox_api
 from services import billing as billing_api
 from services import transcription as transcription_api
 from services.mcp_custom import discover_custom_tools
+from agentpress import scheduled_tasks 
 import sys
 
 load_dotenv()
@@ -135,6 +136,8 @@ from mcp_local import api as mcp_api
 app.include_router(mcp_api.router, prefix="/api")
 
 app.include_router(transcription_api.router, prefix="/api")
+
+app.include_router(scheduled_tasks.router, prefix="/api")
 
 @app.get("/api/health")
 async def health_check():

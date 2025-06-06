@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { MoreHorizontal, Menu, Bot, Store, Search, X, StopCircle } from 'lucide-react';
+import { MoreHorizontal, Menu, Bot, Store, Search, X, StopCircle, Clock } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
@@ -246,6 +246,19 @@ export function SidebarLeft({
             </span>
           </SidebarMenuButton>
         </Link>
+          <Link href="/scheduled-tasks">
+            <SidebarMenuButton className={cn({
+              'bg-primary/10 font-medium': pathname === '/scheduled-tasks',
+            })}>
+              <Clock className="h-4 w-4 mr-2" /> {/* Changed icon */}
+              <span className="flex items-center justify-between w-full">
+                Scheduled Tasks
+                <Badge variant="beta"> {/* Added New Badge */}
+                  Beta
+                </Badge>
+              </span>
+            </SidebarMenuButton>
+          </Link>
       </SidebarGroup>
         <NavAgents />
       </SidebarContent>
