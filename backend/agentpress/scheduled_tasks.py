@@ -16,7 +16,8 @@ import calendar
 from periodiq import cron
 import dramatiq
 
-router = APIRouter(prefix="/scheduled-tasks", tags=["scheduled-tasks"])
+# FIXED: Removed the prefix from the router. The full path will be defined in each route decorator.
+router = APIRouter(tags=["scheduled-tasks"])
 db = DBConnection()
 
 class ScheduledTaskCreate(BaseModel):
@@ -116,7 +117,7 @@ def _parse_time_of_day(time_str: Optional[str]) -> time:
     if not time_str:
         return time(0, 0, tzinfo=timezone.utc)
     try:
-        # *** FIXED LOGIC: Handle "HH:MM:SS" format from the database ***
+        # FIXED: Handle "HH:MM:SS" format from the database in addition to "HH:MM"
         parts = list(map(int, time_str.split(':')))
         h, m = parts[0], parts[1]
         return time(h, m, tzinfo=timezone.utc)
@@ -146,7 +147,6 @@ def get_next_run_at(
 
     parsed_time = _parse_time_of_day(time_of_day_str)
     
-    # *** FIXED LOGIC: Construct datetime from parts instead of using now.replace() ***
     def get_candidate(date_part: datetime.date) -> datetime:
         return datetime.combine(date_part, parsed_time).replace(tzinfo=timezone.utc)
 
@@ -158,16 +158,10 @@ def get_next_run_at(
     elif schedule_type == "weekly":
         if not days_of_week: raise ValueError("days_of_week is required for weekly schedule")
         
-        # Start checking from today
         next_run_candidate = get_candidate(now.date())
-        
-        # If the time for today has already passed, start checking from tomorrow
         if next_run_candidate <= now:
             next_run_candidate = get_candidate((now + timedelta(days=1)).date())
         
-        # Iterate until we find a valid day of the week
-        # Python's isoweekday(): Mon=1..Sun=7. User input: Sun=0..Sat=6
-        # To match user input, we use (isoweekday() % 7) which gives Sun=0..Sat=6
         while (next_run_candidate.isoweekday() % 7) not in days_of_week:
             next_run_candidate += timedelta(days=1)
 
@@ -176,16 +170,14 @@ def get_next_run_at(
         
         current_year, current_month = now.year, now.month
         
-        # Try current month
         try:
             candidate_date = datetime(current_year, current_month, day_of_month, tzinfo=timezone.utc).date()
             next_run_candidate = get_candidate(candidate_date)
             if next_run_candidate > now:
                 return next_run_candidate
-        except ValueError: # Day is invalid for current month (e.g., 31st in Feb)
+        except ValueError:
             pass
 
-        # If current month's date has passed or was invalid, try next month
         next_month_year = current_year
         next_month = current_month + 1
         if next_month > 12:
@@ -204,13 +196,14 @@ def get_next_run_at(
     logger.info(f"Final calculated next_run_at: {next_run_candidate.isoformat()} for schedule input.")
     return next_run_candidate
 
-@router.get("/", response_model=List[ScheduledTaskOut])
+# --- API Endpoints ---
+@router.get("/scheduled-tasks", response_model=List[ScheduledTaskOut])
 async def list_scheduled_tasks(user_id: str = Depends(get_current_user_id_from_jwt)):
     client = await db.client
     tasks_query = await client.table("scheduled_tasks").select("*").eq("account_id", user_id).order("created_at", desc=True).execute()
     return tasks_query.data
 
-@router.post("/", response_model=ScheduledTaskOut)
+@router.post("/scheduled-tasks", response_model=ScheduledTaskOut)
 async def create_scheduled_task(
     data: ScheduledTaskCreate, user_id: str = Depends(get_current_user_id_from_jwt)
 ):
@@ -255,7 +248,7 @@ async def create_scheduled_task(
         raise HTTPException(status_code=500, detail="Failed to create scheduled task")
     return result.data[0]
 
-@router.put("/{task_id}", response_model=ScheduledTaskOut)
+@router.put("/scheduled-tasks/{task_id}", response_model=ScheduledTaskOut)
 async def update_scheduled_task(
     task_id: str, data: ScheduledTaskUpdate, user_id: str = Depends(get_current_user_id_from_jwt)
 ):
@@ -302,7 +295,7 @@ async def update_scheduled_task(
         raise HTTPException(status_code=500, detail="Failed to update scheduled task")
     return result.data[0]
 
-@router.delete("/{task_id}")
+@router.delete("/scheduled-tasks/{task_id}")
 async def delete_scheduled_task(task_id: str, user_id: str = Depends(get_current_user_id_from_jwt)):
     client = await db.client
     task_check = await client.table("scheduled_tasks").select("id").eq("id", task_id).eq("account_id", user_id).maybe_single().execute()
@@ -311,7 +304,7 @@ async def delete_scheduled_task(task_id: str, user_id: str = Depends(get_current
     await client.table("scheduled_tasks").delete().eq("id", task_id).execute()
     return {"deleted": True}
 
-@router.get("/{task_id}/runs", response_model=List[ScheduledTaskRunOut])
+@router.get("/scheduled-tasks/{task_id}/runs", response_model=List[ScheduledTaskRunOut])
 async def list_task_runs(task_id: str, user_id: str = Depends(get_current_user_id_from_jwt)):
     client = await db.client
     task_check = await client.table("scheduled_tasks").select("id").eq("id", task_id).eq("account_id", user_id).maybe_single().execute()
@@ -320,6 +313,7 @@ async def list_task_runs(task_id: str, user_id: str = Depends(get_current_user_i
     runs_query = await client.table("scheduled_task_runs").select("*").eq("scheduled_task_id", task_id).order("created_at", desc=True).execute()
     return runs_query.data
 
+# --- Periodic Scheduler (No changes needed here) ---
 @dramatiq.actor(periodic=cron('*/1 * * * *'))
 async def scheduled_task_runner():
     logger.debug("scheduled_task_runner actor started")
