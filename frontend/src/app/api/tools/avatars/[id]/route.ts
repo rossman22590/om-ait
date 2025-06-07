@@ -5,14 +5,16 @@ export const dynamic = 'force-dynamic';
 export const dynamicParams = true;
 export const revalidate = 0;
 
+// Using correct Next.js API route pattern for App Router
 export async function GET(
   request: NextRequest,
-  context: { params: { id: string } }
 ) {
-  // Await params to fix the sync-dynamic-apis issue
-  const { id } = await Promise.resolve(context.params);
-  
   try {
+    // Extract id from the URL path
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const id = pathParts[pathParts.length - 1];
+    
     // Get API key from environment variable
     const ARGIL_API_KEY = process.env.ARGIL_API_KEY;
     
@@ -45,9 +47,9 @@ export async function GET(
     // Return the avatar data as-is
     return NextResponse.json(data);
   } catch (error) {
-    console.error(`Error fetching avatar ${id}:`, error);
+    console.error(`Error in avatar API:`, error);
     return NextResponse.json(
-      { error: `Failed to fetch avatar ${id}` }, 
+      { error: `Failed to process request` }, 
       { status: 500 }
     );
   }
