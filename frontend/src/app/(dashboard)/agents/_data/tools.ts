@@ -9,6 +9,7 @@ export const DEFAULT_AGENTPRESS_TOOLS: Record<string, { enabled: boolean; descri
     'sb_imagegen_tool': { enabled: false, description: 'Generate images from text descriptions using Pixio\'s image generation API', icon: '🖼️', color: 'bg-purple-100 dark:bg-purple-800/50' },
     'sb_image_edit_tool': { enabled: false, description: 'Edit and manipulate images using Pixio\'s image editing API', icon: '✏️', color: 'bg-rose-100 dark:bg-rose-800/50' },
     'data_providers_tool': { enabled: false, description: 'Access to data providers and external APIs (requires RapidAPI key)', icon: '🔗', color: 'bg-cyan-100 dark:bg-cyan-800/50' },
+    'sb_avatar_tool': { enabled: false, description: 'Generate AI videos with realistic avatars and synchronized voice narration (305 character limit)', icon: '🎬', color: 'bg-purple-100 dark:bg-purple-800/50' },
 };
 
 export const getToolDisplayName = (toolName: string): string => {
@@ -23,6 +24,7 @@ export const getToolDisplayName = (toolName: string): string => {
       'sb_imagegen_tool': 'Image Generation',
       'sb_image_edit_tool': 'Image Editor',
       'data_providers_tool': 'Data Providers',
+      'sb_avatar_tool': 'Video Avatars',
     };
     
     return displayNames[toolName] || toolName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());

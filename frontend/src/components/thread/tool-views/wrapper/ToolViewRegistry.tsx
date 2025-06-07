@@ -17,6 +17,8 @@ import { ExecuteDataProviderCallToolView } from '../data-provider-tool/ExecuteDa
 import { DataProviderEndpointsToolView } from '../data-provider-tool/DataProviderEndpointsToolView';
 import { ImageGenToolView } from '../ImageGenToolView';
 import { DeployToolView } from '../DeployToolView';
+import AvatarToolView from '../AvatarToolView';
+
 // These are provided by the existing imports
 
 // All custom tool views are now properly imported
@@ -77,6 +79,13 @@ const defaultRegistry: ToolViewRegistryType = {
   'generate-image': ImageGenToolView,
   'edit-image': ImageGenToolView, // Using the same view as generate-image
   'deploy': DeployToolView,
+  'list-argil-avatars': AvatarToolView,
+  'list-argil-voices': AvatarToolView,
+  'generate-argil-video': AvatarToolView,
+  'check-argil-video-status': AvatarToolView,
+  
+
+
   
   // Map 'unknown' tool type to appropriate handler based on content
   // For image generation, use ImageGenToolView

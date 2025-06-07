@@ -770,6 +770,7 @@ export function FileViewerModal({
       const isImageFile = FileCache.isImageFile(selectedFilePath);
       const isPdfFile = FileCache.isPdfFile(selectedFilePath);
       const extension = selectedFilePath.split('.').pop()?.toLowerCase();
+      const isJsonFile = extension === 'json';
       const isOfficeFile = ['xlsx', 'xls', 'docx', 'doc', 'pptx', 'ppt'].includes(extension || '');
       const isBinaryFile = isImageFile || isPdfFile || isOfficeFile;
 
@@ -783,6 +784,21 @@ export function FileViewerModal({
           console.log(`[FILE VIEWER] Setting blob URL from cached content: ${cachedFileContent}`);
           setTextContentForRenderer(null);
           setBlobUrlForRenderer(cachedFileContent);
+        } else if (isJsonFile) {
+          // Handle JSON files explicitly - ensure they're treated as text
+          console.log(`[FILE VIEWER] Processing JSON file: ${selectedFilePath}`);
+          try {
+            // Try to parse and prettify JSON
+            const parsedJson = JSON.parse(cachedFileContent);
+            const prettyJson = JSON.stringify(parsedJson, null, 2);
+            setTextContentForRenderer(prettyJson);
+            setBlobUrlForRenderer(null);
+          } catch (err) {
+            // If parsing fails, show raw content
+            console.warn(`[FILE VIEWER] JSON parsing failed, showing raw content: ${err}`);
+            setTextContentForRenderer(cachedFileContent);
+            setBlobUrlForRenderer(null);
+          }
         } else if (isBinaryFile) {
           // Binary files should not be displayed as text, even if they come as strings
           console.warn(`[FILE VIEWER] Binary file received as string content, this should not happen: ${selectedFilePath}`);
@@ -801,6 +817,19 @@ export function FileViewerModal({
         console.log(`[FILE VIEWER] Created blob URL: ${url} for ${selectedFilePath}`);
         setBlobUrlForRenderer(url);
         setTextContentForRenderer(null);
+      } else if (typeof cachedFileContent === 'object' && cachedFileContent !== null) {
+        // Handle object-type content (likely JSON)
+        console.log(`[FILE VIEWER] Received object content for: ${selectedFilePath}, converting to string`);
+        try {
+          // Try to convert object to pretty-printed JSON string
+          const jsonString = JSON.stringify(cachedFileContent, null, 2);
+          setTextContentForRenderer(jsonString);
+          setBlobUrlForRenderer(null);
+        } catch (err) {
+          console.error(`[FILE VIEWER] Failed to stringify object content: ${err}`);
+          setTextContentForRenderer(String(cachedFileContent));
+          setBlobUrlForRenderer(null);
+        }
       } else {
         // Unknown content type
         console.warn(`[FILE VIEWER] Unknown content type for: ${selectedFilePath}`, typeof cachedFileContent);

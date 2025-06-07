@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { MoreHorizontal, Menu, Bot, Store, Search, X, StopCircle, Clock } from 'lucide-react';
+import { MoreHorizontal, Menu, Bot, Store, Search, X, StopCircle, UserCircle2, Clock } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
@@ -219,30 +219,42 @@ export function SidebarLeft({
         {/* Search feature */}
         <SidebarSearch />
         <SidebarGroup>
-        <Link href="/agents">
-          <SidebarMenuButton className={cn({
-            'bg-primary/10 font-medium': pathname === '/agents',
-          })}>
-            <Bot className="h-4 w-4 mr-2" />
-            <span className="flex items-center justify-between w-full">
-              Agent Playground
-              <Badge variant="new">
-                New
-              </Badge>
-            </span>
-          </SidebarMenuButton>
-        </Link>
-        
-        <Link href="/marketplace">
-          <SidebarMenuButton className={cn({
-            'bg-primary/10 font-medium': pathname === '/marketplace',
-          })}>
-            <Store className="h-4 w-4 mr-2" />
-            <span className="flex items-center justify-between w-full">
-              Marketplace
-              <Badge variant="new">
-                New
-              </Badge>
+          <Link href="/agents">
+            <SidebarMenuButton className={cn({
+              'bg-primary/10 font-medium': pathname === '/agents',
+            })}>
+              <Bot className="h-4 w-4 mr-2" />
+              <span className="flex items-center justify-between w-full">
+                Agent Playground
+                <Badge variant="new">
+                  New
+                </Badge>
+              </span>
+            </SidebarMenuButton>
+          </Link>
+          <Link href="/avatars">
+            <SidebarMenuButton className={cn({
+              'bg-primary/10 font-medium': pathname === '/avatars',
+            })}>
+              <UserCircle2 className="h-4 w-4 mr-2" />
+              <span className="flex items-center justify-between w-full">
+                Avatars
+                <Badge variant="beta">
+                  Beta
+                </Badge>
+              </span>
+            </SidebarMenuButton>
+          </Link>
+          <Link href="/marketplace">
+            <SidebarMenuButton className={cn({
+              'bg-primary/10 font-medium': pathname === '/marketplace',
+            })}>
+              <Store className="h-4 w-4 mr-2" />
+              <span className="flex items-center justify-between w-full">
+                Marketplace
+                <Badge variant="new">
+                  New
+                </Badge>
             </span>
           </SidebarMenuButton>
         </Link>
@@ -256,10 +268,10 @@ export function SidebarLeft({
                 <Badge variant="beta"> {/* Added New Badge */}
                   Beta
                 </Badge>
-              </span>
-            </SidebarMenuButton>
-          </Link>
-      </SidebarGroup>
+                </span>
+              </SidebarMenuButton>
+            </Link>
+        </SidebarGroup>
         <NavAgents />
       </SidebarContent>
       {state !== 'collapsed' && (

@@ -713,17 +713,22 @@ export function extractFileContent(
 }
 
 // Helper to process and clean file content
-function processFileContent(content: string): string {
-  if (!content) return content;
+export function processFileContent(content: string | null | undefined): string {
+  if (!content || typeof content !== 'string') return '';
 
-  // Handle escaped characters
-  return content
-    .replace(/\\n/g, '\n') // Replace \n with actual newlines
-    .replace(/\\t/g, '\t') // Replace \t with actual tabs
-    .replace(/\\r/g, '') // Remove \r
-    .replace(/\\\\/g, '\\') // Replace \\ with \
-    .replace(/\\"/g, '"') // Replace \" with "
-    .replace(/\\'/g, "'"); // Replace \' with '
+  try {
+    // Handle escaped characters
+    return content
+      .replace(/\\n/g, '\n') // Replace \n with actual newlines
+      .replace(/\\t/g, '\t') // Replace \t with actual tabs
+      .replace(/\\r/g, '') // Remove \r
+      .replace(/\\\\/g, '\\') // Replace \\ with \
+      .replace(/\\"/g, '"') // Replace \" with "
+      .replace(/\\'/g, "'"); // Replace \' with '
+  } catch (err) {
+    console.error('Error processing file content:', err);
+    return String(content); // Safely convert to string as fallback
+  }
 }
 
 // Helper to determine file type (for syntax highlighting)

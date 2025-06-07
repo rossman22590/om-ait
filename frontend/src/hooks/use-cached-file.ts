@@ -578,11 +578,21 @@ export const FileCache = {
               type = 'url';
               console.log(`[FILE CACHE] Successfully preloaded blob URL: ${normalizedPath} (${blob.size} bytes)`);
             }
-          } 
-          // Json files
+          }
+          // JSON files need special handling to be properly formatted
           else if (extension === 'json') {
-            content = await response.json();
-            console.log(`[FILE CACHE] Successfully preloaded JSON: ${normalizedPath}`);
+            const text = await response.text();
+            try {
+              // Parse and then stringify with formatting for better display
+              const parsed = JSON.parse(text);
+              content = JSON.stringify(parsed, null, 2);
+              console.log(`[FILE CACHE] Successfully preloaded and formatted JSON: ${normalizedPath}`);
+            } catch (e) {
+              // If parsing fails, use the raw text
+              console.warn(`[FILE CACHE] Error parsing JSON in preload: ${normalizedPath}`, e);
+              content = text;
+              console.log(`[FILE CACHE] Preloaded JSON as raw text due to parsing error: ${normalizedPath}`);
+            }
           } 
           // Default to text
           else {
@@ -692,7 +702,15 @@ export async function getCachedFile(
     let content;
     
     if (effectiveType === 'json') {
-      content = await response.json();
+      // For JSON files, fetch as text and format it for display
+      const text = await response.text();
+      try {
+        const parsed = JSON.parse(text);
+        content = JSON.stringify(parsed, null, 2);
+      } catch (e) {
+        console.warn(`[FILE CACHE] Error parsing JSON in getCachedFile: ${filePath}`, e);
+        content = text;
+      }
     } else if (effectiveType === 'blob') {
       const blob = await response.blob();
       
@@ -781,10 +799,20 @@ export async function fetchFileContent(
             return new Blob([blob], { type: mimeType });
           }
         }
-        
+
         return blob;
       } else if (contentType === 'json') {
-        return await response.json();
+        // For JSON files, fetch as text first so we can store the formatted string
+        const text = await response.text();
+        try {
+          // Parse and then stringify with formatting to ensure it's well-formatted
+          const parsed = JSON.parse(text);
+          return JSON.stringify(parsed, null, 2);
+        } catch (e) {
+          console.warn(`[FILE CACHE] Error parsing JSON file ${filePath}:`, e);
+          // Return the raw text if parsing fails
+          return text;
+        }
       } else {
         return await response.text();
       }
