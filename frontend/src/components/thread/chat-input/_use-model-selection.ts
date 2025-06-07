@@ -30,6 +30,8 @@ export interface CustomModel {
 // SINGLE SOURCE OF TRUTH for all model data
 export const MODELS = {
   // Premium high-priority models
+
+  // Claude
   'claude-sonnet-4': { 
     tier: 'premium',
     priority: 100, 
@@ -40,17 +42,19 @@ export const MODELS = {
   'claude-sonnet-3.7': { 
     tier: 'premium', 
     priority: 95, 
-    recommended: true,
+    recommended: false,
     lowQuality: false,
     description: 'Claude 3.7 - Anthropic\'s most powerful AI assistant'
   },
-  'claude-sonnet-3.7-reasoning': { 
-    tier: 'premium', 
-    priority: 95, 
-    recommended: true,
-    lowQuality: false,
-    description: 'Claude 3.7 with enhanced reasoning capabilities'
-  },
+  // 'claude-sonnet-3.7-reasoning': { 
+  //   tier: 'premium', 
+  //   priority: 95, 
+  //   recommended: true,
+  //   lowQuality: false,
+  //   description: 'Claude 3.7 with enhanced reasoning capabilities'
+  // },
+
+  // Open AI
   'gpt-4.1': { 
     tier: 'premium', 
     priority: 95,
@@ -58,6 +62,24 @@ export const MODELS = {
     lowQuality: false,
     description: 'GPT-4.1 - OpenAI\'s most advanced model with enhanced reasoning'
   },
+  'gpt-4.1-mini': { 
+    tier: 'premium', 
+    priority: 95,
+    recommended: true,
+    lowQuality: false,
+    description: 'GPT-4.1 - OpenAI\'s most advanced model with enhanced reasoning'
+  },
+  'gpt-4.1-nano': { 
+    tier: 'free', 
+    priority: 95,
+    recommended: false,
+    lowQuality: false,
+    description: 'GPT-4.1 - OpenAI\'s most advanced model with enhanced reasoning'
+  },
+
+  
+  
+  // Gemini
   'gemini-2.5-pro-preview': { 
     tier: 'premium', 
     priority: 95,
@@ -65,71 +87,66 @@ export const MODELS = {
     lowQuality: false,
     description: 'Gemini Pro 2.5 - Google\'s latest powerful model with strong reasoning'
   },
-  'gemini-2.5-pro': { 
-    tier: 'premium', 
-    priority: 95,
-    recommended: true,
-    lowQuality: false,
-    description: 'Gemini Pro 2.5 - Google\'s latest advanced model'
-  },
-  'claude-3.5': { 
-    tier: 'premium', 
-    priority: 90,
-    recommended: true,
-    lowQuality: false,
-    description: 'Claude 3.5 - Anthropic\'s balanced model with solid capabilities'
-  },
-  'gemini-2.5': { 
-    tier: 'premium', 
-    priority: 90,
-    recommended: true,
-    lowQuality: false,
-    description: 'Gemini 2.5 - Google\'s powerful versatile model'
-  },
-  'gemini-flash-2.5:thinking': { 
+  'gemini-2.5-flash:thinking': { 
     tier: 'premium', 
     priority: 90,
     recommended: true,
     lowQuality: false,
     description: 'Gemini Flash 2.5 - Google\'s fast, responsive AI model'
   },
-  'gpt-4o': { 
+  'gemini-flash-2.5': { 
     tier: 'premium', 
-    priority: 85,
+    priority: 90,
     recommended: false,
     lowQuality: false,
-    description: 'GPT-4o - Optimized for speed, reliability, and cost-effectiveness'
+    description: 'Gemini Flash 2.5 - Google\'s fast, responsive AI model'
   },
-  'gpt-4-turbo': { 
+'gemini-2.0-flash-lite-001': { 
     tier: 'premium', 
-    priority: 85,
+    priority: 90,
     recommended: false,
     lowQuality: false,
-    description: 'GPT-4 Turbo - OpenAI\'s powerful model with a great balance of performance and cost'
+    description: 'Gemini Flash 2.0 - Google\'s fast, responsive AI model'
   },
-  'gpt-4': { 
+
+  //Llama
+'llama-4-maverick': { 
     tier: 'premium', 
-    priority: 80,
+    priority: 90,
     recommended: false,
     lowQuality: false,
-    description: 'GPT-4 - OpenAI\'s highly capable model with advanced reasoning'
+    description: 'Latest Llama model from Meta'
   },
+'llama-4-scout': { 
+    tier: 'premium', 
+    priority: 90,
+    recommended: false,
+    lowQuality: false,
+    description: 'Latest Llama model from Meta'
+  },
+  // Misc
   'deepseek-chat-v3-0324': { 
     tier: 'premium', 
-    priority: 75,
-    recommended: true,
-    lowQuality: false,
+    priority: 40,
+    recommended: false,
+    lowQuality: true,
     description: 'DeepSeek Chat - Advanced AI assistant with strong reasoning'
   },
-  
-  // Free tier models
-  'deepseek-r1': { 
-    tier: 'free', 
-    priority: 60,
+  'qwen-turbo': { 
+    tier: 'premium', 
+    priority: 40,
     recommended: false,
-    lowQuality: false,
-    description: 'DeepSeek R1 - Advanced model with enhanced reasoning and coding capabilities'
+    lowQuality: true,
+    description: 'Qwen Turbo - Alibaba\'s powerful multilingual language model'
   },
+  // Free tier models
+  // 'deepseek-r1': { 
+  //   tier: 'free', 
+  //   priority: 60,
+  //   recommended: false,
+  //   lowQuality: false,
+  //   description: 'DeepSeek R1 - Advanced model with enhanced reasoning and coding capabilities'
+  // },
   'deepseek': { 
     tier: 'free', 
     priority: 50,
@@ -137,20 +154,20 @@ export const MODELS = {
     lowQuality: true,
     description: 'DeepSeek - Free tier model with good general capabilities'
   },
-  'gemini-flash-2.5': { 
-    tier: 'free', 
-    priority: 50,
-    recommended: false,
-    lowQuality: true,
-    description: 'Gemini Flash - Google\'s faster, more efficient model'
-  },
-  'grok-3-mini': { 
-    tier: 'free', 
-    priority: 45,
-    recommended: false,
-    lowQuality: true,
-    description: 'Grok-3 Mini - Smaller, faster version of Grok-3 for simpler tasks'
-  },
+  // 'gemini-flash-2.5': { 
+  //   tier: 'free', 
+  //   priority: 50,
+  //   recommended: false,
+  //   lowQuality: true,
+  //   description: 'Gemini Flash - Google\'s faster, more efficient model'
+  // },
+  // 'grok-3-mini': { 
+  //   tier: 'free', 
+  //   priority: 45,
+  //   recommended: false,
+  //   lowQuality: true,
+  //   description: 'Grok-3 Mini - Smaller, faster version of Grok-3 for simpler tasks'
+  // },
   'qwen3': { 
     tier: 'free', 
     priority: 40,

@@ -29,7 +29,7 @@ export const McpServerCard: React.FC<McpServerCardProps> = ({ server, onClick })
               <Shield className="h-3 w-3 text-green-500" />
             )}
             {server.isDeployed && (
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="secondary" className="text-xs text-white">
                 Deployed
               </Badge>
             )}

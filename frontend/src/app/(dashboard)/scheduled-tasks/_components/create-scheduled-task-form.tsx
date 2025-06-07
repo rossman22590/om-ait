@@ -344,7 +344,7 @@ export const CreateScheduledTaskForm: React.FC<CreateScheduledTaskFormProps> = (
 
           {/* Prompt */}
           <div>
-            <Label htmlFor="prompt">Prompt (Optional)</Label>
+            <Label htmlFor="prompt">Prompt (Task to be done repeatedly)</Label>
             <Textarea id="prompt" {...register('prompt')} placeholder="Enter prompt to run... (e.g., 'Summarize today's news')" />
              {errors.prompt && <p className="text-xs text-red-500 mt-1">{errors.prompt.message}</p>}
           </div>
