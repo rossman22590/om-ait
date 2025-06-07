@@ -5,9 +5,12 @@ export const dynamic = 'force-dynamic';
 export const dynamicParams = true;
 export const revalidate = 0;
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  request: NextRequest,
+  context: { params: { id: string } }
+) {
   // Await params to fix the sync-dynamic-apis issue
-  const { id } = await Promise.resolve(params);
+  const { id } = await Promise.resolve(context.params);
   
   try {
     // Get API key from environment variable
