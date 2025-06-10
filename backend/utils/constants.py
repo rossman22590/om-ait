@@ -3,7 +3,7 @@ MODEL_ACCESS_TIERS = {
         "openrouter/deepseek/deepseek-chat",
         "openrouter/qwen/qwen3-235b-a22b",
         "openai/gpt-4o",
-        "openrouter/google/gemini-2.5-flash-preview-05-20",
+        # "openrouter/google/gemini-2.5-flash-preview-05-20",
     ],
     "tier_2_20": [
         "openrouter/deepseek/deepseek-chat",

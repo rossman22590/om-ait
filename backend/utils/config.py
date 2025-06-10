@@ -127,7 +127,7 @@ class Configuration:
     AWS_REGION_NAME: Optional[str] = None
     
     # Model configuration
-    MODEL_TO_USE: Optional[str] = "anthropic/claude-3-7-sonnet-latest"
+    MODEL_TO_USE: Optional[str] = "openrouter/google/gemini-2.5-flash-preview-05-20:thinking"
     
     # Supabase configuration
     SUPABASE_URL: str

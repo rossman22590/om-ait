@@ -8,7 +8,7 @@ import { useAvailableModels } from '@/hooks/react-query/subscriptions/use-model'
 export const STORAGE_KEY_MODEL = 'suna-preferred-model';
 export const STORAGE_KEY_CUSTOM_MODELS = 'customModels';
 export const DEFAULT_FREE_MODEL_ID = 'deepseek';
-export const DEFAULT_PREMIUM_MODEL_ID = 'claude-sonnet-4';
+export const DEFAULT_PREMIUM_MODEL_ID = 'gemini-2.5-flash:thinking';
 
 export type SubscriptionStatus = 'no_subscription' | 'active';
 
@@ -32,22 +32,22 @@ export const MODELS = {
   // Premium high-priority models
   'claude-sonnet-4': { 
     tier: 'premium',
-    priority: 100, 
-    recommended: true,
+    priority: 90, 
+    recommended: false,
     lowQuality: false,
     description: 'Claude Sonnet 4 - Anthropic\'s latest and most advanced AI assistant'
   },
   'claude-sonnet-3.7': { 
     tier: 'premium', 
-    priority: 95, 
-    recommended: true,
+    priority: 85, 
+    recommended: false,
     lowQuality: false,
     description: 'Claude 3.7 - Anthropic\'s most powerful AI assistant'
   },
   'claude-sonnet-3.7-reasoning': { 
     tier: 'premium', 
-    priority: 95, 
-    recommended: true,
+    priority: 85, 
+    recommended: false,
     lowQuality: false,
     description: 'Claude 3.7 with enhanced reasoning capabilities'
   },
@@ -61,34 +61,34 @@ export const MODELS = {
   'gemini-2.5-pro-preview': { 
     tier: 'premium', 
     priority: 95,
-    recommended: true,
+    recommended: false,
     lowQuality: false,
     description: 'Gemini Pro 2.5 - Google\'s latest powerful model with strong reasoning'
   },
   'gemini-2.5-pro': { 
     tier: 'premium', 
     priority: 95,
-    recommended: true,
+    recommended: false,
     lowQuality: false,
     description: 'Gemini Pro 2.5 - Google\'s latest advanced model'
   },
   'claude-3.5': { 
     tier: 'premium', 
-    priority: 90,
-    recommended: true,
+    priority: 80,
+    recommended: false,
     lowQuality: false,
     description: 'Claude 3.5 - Anthropic\'s balanced model with solid capabilities'
   },
   'gemini-2.5': { 
     tier: 'premium', 
     priority: 90,
-    recommended: true,
+    recommended: false,
     lowQuality: false,
     description: 'Gemini 2.5 - Google\'s powerful versatile model'
   },
-  'gemini-flash-2.5:thinking': { 
+  'gemini-2.5-flash:thinking': { 
     tier: 'premium', 
-    priority: 90,
+    priority: 100,
     recommended: true,
     lowQuality: false,
     description: 'Gemini Flash 2.5 - Google\'s fast, responsive AI model'
