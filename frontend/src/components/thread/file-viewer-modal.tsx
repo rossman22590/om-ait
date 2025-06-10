@@ -207,9 +207,9 @@ export function FileViewerModal({
       if (visited.has(dirPath)) return;
       visited.add(dirPath);
 
-      // Skip node_modules directory and directories starting with dot
+      // Skip node_modules, venv directories and directories starting with dot
       const dirName = dirPath.split('/').pop();
-      if (dirName === 'node_modules' || dirName?.startsWith('.')) {
+      if (dirName === 'node_modules' || dirName === 'venv' || dirName?.startsWith('.')) {
         console.log(`[DOWNLOAD ALL] Skipping excluded directory: ${dirPath}`);
         return;
       }
@@ -222,7 +222,7 @@ export function FileViewerModal({
           if (file.is_dir) {
             // Recursively explore subdirectories (except excluded ones)
             const folderName = file.path.split('/').pop();
-            if (folderName !== 'node_modules' && !folderName?.startsWith('.')) {
+            if (folderName !== 'node_modules' && folderName !== 'venv' && !folderName?.startsWith('.')) {
               await exploreDirectory(file.path);
             } else {
               console.log(`[DOWNLOAD ALL] Skipping excluded directory: ${file.path}`);
