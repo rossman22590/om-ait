@@ -38,6 +38,10 @@ class FeatureFlagManager:
     async def is_enabled(self, key: str) -> bool:
         """Check if a feature flag is enabled"""
         try:
+            # Check for master override to enable all features
+            if os.environ.get('ENABLE_ALL_FEATURES', '').lower() == 'true':
+                return True
+                
             flag_key = f"{self.flag_prefix}{key}"
             redis_client = await redis.get_client()
             enabled = await redis_client.hget(flag_key, 'enabled')
