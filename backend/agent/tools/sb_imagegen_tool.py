@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from utils.config import config
 import re
 import datetime
+from daytona_sdk import FileUpload
 
 class SandboxImageGenTool(SandboxToolsBase):
     """Tool for generating images from text descriptions using OpenAI's image generation API."""
@@ -171,7 +172,13 @@ class SandboxImageGenTool(SandboxToolsBase):
                     
                     # Save the image to the sandbox
                     image_path = f"{images_dir}/{filename}"
-                    self.sandbox.fs.upload_file(image_path, image_bytes)
+                    # Use upload_files with FileUpload for binary data
+                    self.sandbox.fs.upload_files([
+                        FileUpload(
+                            source=image_bytes,
+                            destination=image_path
+                        )
+                    ])
                     
                     # Simple logging of the save path
                     logging.info(f"Image saved to: {image_path}")
