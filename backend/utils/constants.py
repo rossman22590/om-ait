@@ -14,7 +14,7 @@ MODEL_ACCESS_TIERS = {
         # Gemini
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
         "openrouter/google/gemini-2.5-flash-preview-05-20",
-        "openrouter/google/gemini-2.5-pro-preview",
+        "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
         # Open AI
@@ -41,7 +41,7 @@ MODEL_ACCESS_TIERS = {
         # Gemini
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
         "openrouter/google/gemini-2.5-flash-preview-05-20",
-        "openrouter/google/gemini-2.5-pro-preview",
+        "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
         # Open AI
@@ -68,7 +68,7 @@ MODEL_ACCESS_TIERS = {
         # Gemini
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
         "openrouter/google/gemini-2.5-flash-preview-05-20",
-        "openrouter/google/gemini-2.5-pro-preview",
+        "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
         # Open AI
@@ -95,7 +95,7 @@ MODEL_ACCESS_TIERS = {
         # Gemini
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
         "openrouter/google/gemini-2.5-flash-preview-05-20",
-        "openrouter/google/gemini-2.5-pro-preview",
+        "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
         # Open AI
@@ -122,7 +122,7 @@ MODEL_ACCESS_TIERS = {
         # Gemini
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
         "openrouter/google/gemini-2.5-flash-preview-05-20",
-        "openrouter/google/gemini-2.5-pro-preview",
+        "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
         # Open AI
@@ -149,7 +149,7 @@ MODEL_ACCESS_TIERS = {
         # Gemini
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
         "openrouter/google/gemini-2.5-flash-preview-05-20",
-        "openrouter/google/gemini-2.5-pro-preview",
+        "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
         # Open AI
@@ -177,7 +177,7 @@ MODEL_ACCESS_TIERS = {
         # Gemini
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
         "openrouter/google/gemini-2.5-flash-preview-05-20",
-        "openrouter/google/gemini-2.5-pro-preview",
+        "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
         # Open AI
@@ -224,7 +224,7 @@ MODEL_NAME_ALIASES = {
     
     # "google/gemini-2.5-flash-preview":"openrouter/google/gemini-2.5-flash-preview",
     # "google/gemini-2.5-flash-preview:thinking":"openrouter/google/gemini-2.5-flash-preview:thinking",
-    "gemini-2.5-pro-preview":"openrouter/google/gemini-2.5-pro-preview",
+    "gemini-2.5-pro":"gemini/gemini-2.5-pro",
     "deepseek-chat-v3-0324":"openrouter/deepseek/deepseek-chat-v3-0324",
 
     "llama-4-maverick":"openrouter/meta-llama/llama-4-maverick",

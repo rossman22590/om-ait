@@ -80,7 +80,7 @@ export const MODELS = {
   
   
   // Gemini
-  'gemini-2.5-pro-preview': { 
+  'gemini-2.5-pro': { 
     tier: 'premium', 
     priority: 95,
     recommended: true,
