@@ -105,6 +105,62 @@ export interface FileInfo {
   permissions?: string;
 }
 
+export interface ScheduledTaskCreatePayload {
+  agent_id?: string;
+  thread_id?: string;
+  prompt?: string;
+  schedule_type: 'hourly' | 'daily' | 'weekly' | 'monthly';
+  days_of_week?: number[]; // 0=Sunday, 6=Saturday
+  time_of_day?: string; // "HH:MM" (UTC) - for daily, weekly, monthly
+  minute_of_hour?: number; // 0-59 - for hourly
+  day_of_month?: number; // 1-31 - for monthly
+  model_name?: string;
+}
+
+export interface ScheduledTaskUpdatePayload {
+  is_active?: boolean;
+  schedule_type?: 'hourly' | 'daily' | 'weekly' | 'monthly';
+  days_of_week?: number[];
+  time_of_day?: string;
+  prompt?: string;
+  minute_of_hour?: number; // Added
+  day_of_month?: number; // Added
+  model_name?: string;
+}
+
+export interface ScheduledTask {
+  id: string;
+  account_id: string;
+  agent_id?: string;
+  thread_id?: string;
+  project_id?: string;
+  created_by: string;
+  prompt?: string;
+  schedule_type: 'hourly' | 'daily' | 'weekly' | 'monthly';
+  days_of_week?: number[];
+  time_of_day?: string;
+  minute_of_hour?: number; // Added
+  day_of_month?: number; // Added
+  model_name?: string;
+  next_run_at: string; // ISO datetime string
+  last_run_at?: string; // ISO datetime string
+  is_active: boolean;
+  created_at: string; // ISO datetime string
+  updated_at: string; // ISO datetime string
+}
+
+export interface ScheduledTaskRun {
+  id: string;
+  scheduled_task_id: string;
+  agent_run_id?: string;
+  thread_id?: string;
+  task_run_time: string; // ISO datetime string
+  status: 'scheduled' | 'running' | 'completed' | 'failed';
+  error?: string;
+  created_at: string; // ISO datetime string
+  updated_at: string; // ISO datetime string
+}
+
 // Project APIs
 export const getProjects = async (): Promise<Project[]> => {
   try {
@@ -1897,4 +1953,237 @@ export const getAgentBuilderChatHistory = async (agentId: string): Promise<{mess
   console.log('[API] Agent builder chat history fetched:', data);
 
   return data;
+};
+
+// Stop all running agents for the current user - instant stop
+export const stopAllAgents = async (): Promise<{ stopped: number, errors: number }> => {
+  console.log('[API] Stopping all agents for current user - INSTANT STOP');
+  
+  const supabase = createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error('No access token available');
+  }
+
+  // Track results
+  let stoppedCount = 0;
+  let errorCount = 0;
+  
+  try {
+    // Direct query to get all running agents for this user
+    const { data: runningAgents, error } = await supabase
+      .from('agent_runs')
+      .select('id, thread_id')
+      .eq('status', 'running')
+      .order('created_at', { ascending: false });
+      
+    if (error) {
+      throw new Error(`Error fetching running agents: ${error.message}`);
+    }
+    
+    console.log(`[API] Found ${runningAgents?.length || 0} running agents to stop immediately`);
+    
+    if (!runningAgents || runningAgents.length === 0) {
+      return { stopped: 0, errors: 0 };
+    }
+    
+    // Immediately mark all as non-running to prevent reconnection attempts
+    for (const agent of runningAgents) {
+      nonRunningAgentRuns.add(agent.id);
+      
+      // Close any existing streams
+      const existingStream = activeStreams.get(agent.id);
+      if (existingStream) {
+        console.log(`[API] Closing existing stream for ${agent.id}`);
+        existingStream.close();
+        activeStreams.delete(agent.id);
+      }
+    }
+    
+    // Prepare all stop requests
+    const stopPromises = runningAgents.map(agent => {
+      return fetch(`${API_URL}/agent-run/${agent.id}/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        cache: 'no-store',
+      })
+      .then(response => {
+        if (response.ok) {
+          stoppedCount++;
+          console.log(`[API] Successfully stopped agent run ${agent.id}`);
+          return true;
+        } else {
+          errorCount++;
+          console.error(`[API] Error stopping agent run ${agent.id}: ${response.statusText}`);
+          return false;
+        }
+      })
+      .catch(error => {
+        errorCount++;
+        console.error(`[API] Error stopping agent run ${agent.id}:`, error);
+        return false;
+      });
+    });
+    
+    // Execute all stop requests in parallel for maximum speed
+    await Promise.all(stopPromises);
+    
+    // Also update the Supabase status to ensure DB consistency
+    if (stoppedCount > 0) {
+      try {
+        const stopTime = new Date().toISOString();
+        const ids = runningAgents.map(a => a.id);
+        
+        const { error: updateError } = await supabase
+          .from('agent_runs')
+          .update({ 
+            status: 'stopped',
+            completed_at: stopTime
+          })
+          .in('id', ids);
+          
+        if (updateError) {
+          console.warn(`[API] Error updating agent status in DB: ${updateError.message}`);
+        }
+      } catch (dbError) {
+        console.warn('[API] Error updating agent status in DB:', dbError);
+      }
+    }
+  } catch (error) {
+    console.error('[API] Error in stopAllAgents:', error);
+    throw error;
+  }
+  
+  return { stopped: stoppedCount, errors: errorCount };
+};
+
+export const getScheduledTasks = async (): Promise<ScheduledTask[]> => {
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('No access token available');
+
+    const response = await fetch(`${API_URL}/scheduled-tasks`, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}: ${response.statusText}` }));
+      throw new Error(errorData.message);
+    }
+    return response.json();
+  } catch (error) {
+    console.error('Error fetching scheduled tasks:', error);
+    handleApiError(error, { operation: 'load scheduled tasks', resource: 'scheduled tasks' });
+    throw error;
+  }
+};
+
+export const createScheduledTask = async (payload: ScheduledTaskCreatePayload): Promise<ScheduledTask> => {
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('No access token available');
+
+    const response = await fetch(`${API_URL}/scheduled-tasks`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}: ${response.statusText}` }));
+      throw new Error(errorData.message);
+    }
+    return response.json();
+  } catch (error) {
+    console.error('Error creating scheduled task:', error);
+    handleApiError(error, { operation: 'create scheduled task', resource: 'scheduled task' });
+    throw error;
+  }
+};
+
+export const updateScheduledTask = async (taskId: string, payload: ScheduledTaskUpdatePayload): Promise<ScheduledTask> => {
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('No access token available');
+
+    const response = await fetch(`${API_URL}/scheduled-tasks/${taskId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}: ${response.statusText}` }));
+      throw new Error(errorData.message);
+    }
+    return response.json();
+  } catch (error) {
+    console.error('Error updating scheduled task:', error);
+    handleApiError(error, { operation: 'update scheduled task', resource: `scheduled task ${taskId}` });
+    throw error;
+  }
+};
+
+export const deleteScheduledTask = async (taskId: string): Promise<{ deleted: boolean }> => {
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('No access token available');
+
+    const response = await fetch(`${API_URL}/scheduled-tasks/${taskId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}: ${response.statusText}` }));
+      throw new Error(errorData.message);
+    }
+    return response.json();
+  } catch (error) {
+    console.error('Error deleting scheduled task:', error);
+    handleApiError(error, { operation: 'delete scheduled task', resource: `scheduled task ${taskId}` });
+    throw error;
+  }
+};
+
+export const getScheduledTaskRuns = async (taskId: string): Promise<ScheduledTaskRun[]> => {
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('No access token available');
+
+    const response = await fetch(`${API_URL}/scheduled-tasks/${taskId}/runs`, {
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `HTTP ${response.status}: ${response.statusText}` }));
+      throw new Error(errorData.message);
+    }
+    return response.json();
+  } catch (error) {
+    console.error('Error fetching scheduled task runs:', error);
+    handleApiError(error, { operation: 'load scheduled task runs', resource: `runs for task ${taskId}` });
+    throw error;
+  }
 };

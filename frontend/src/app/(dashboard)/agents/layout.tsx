@@ -4,11 +4,11 @@ import { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 
 export const metadata: Metadata = {
-  title: 'Agent Conversation | Kortix Suna',
-  description: 'Interactive agent conversation powered by Kortix Suna',
+  title: 'Agent Conversation | Machine',
+  description: 'Interactive agent conversation powered by Machine',
   openGraph: {
-    title: 'Agent Conversation | Kortix Suna',
-    description: 'Interactive agent conversation powered by Kortix Suna',
+    title: 'Agent Conversation | Machine',
+    description: 'Interactive agent conversation powered by Machine',
     type: 'website',
   },
 };

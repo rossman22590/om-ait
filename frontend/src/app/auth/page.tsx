@@ -11,12 +11,19 @@ import { useScroll } from 'motion/react';
 import { signIn, signUp, forgotPassword } from './actions';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
+  AlertCircle,
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Mail,
+  User as UserIcon,
+  KeyRound,
+  Eye,
+  EyeOff,
+  MailCheck,
   X,
   CheckCircle,
-  AlertCircle,
-  MailCheck,
-  Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 
@@ -41,6 +48,8 @@ function LoginContent() {
   const tablet = useMediaQuery('(max-width: 1024px)');
   const [mounted, setMounted] = useState(false);
   const [isScrolling, setIsScrolling] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
   const { scrollY } = useScroll();
 
@@ -366,7 +375,7 @@ function LoginContent() {
               </Link>
 
               <h1 className="text-3xl md:text-4xl lg:text-5xl font-medium tracking-tighter text-center text-balance text-primary">
-                {isSignUp ? 'Join Suna' : 'Welcome back'}
+                {isSignUp ? 'Join Machine' : 'Welcome back'}
               </h1>
               <p className="text-base md:text-lg text-center text-muted-foreground font-medium text-balance leading-relaxed tracking-tight mt-2 mb-6">
                 {isSignUp
@@ -417,27 +426,44 @@ function LoginContent() {
                   />
                 </div>
 
-                <div>
+                <div className="relative flex items-center">
                   <Input
+                    className="h-12 rounded-lg border-border bg-background/30 px-4 py-2 text-base placeholder:text-muted-foreground/80 focus:outline-none focus:ring-2 focus:ring-ring/50 w-full pr-10"
                     id="password"
                     name="password"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     placeholder="Password"
-                    className="h-12 rounded-full bg-background border-border"
                     required
+                    disabled={false}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
 
                 {isSignUp && (
-                  <div>
+                  <div className="relative flex items-center">
                     <Input
+                      className="h-12 rounded-lg border-border bg-background/30 px-4 py-2 text-base placeholder:text-muted-foreground/80 focus:outline-none focus:ring-2 focus:ring-ring/50 w-full pr-10"
                       id="confirmPassword"
                       name="confirmPassword"
-                      type="password"
+                      type={showConfirmPassword ? 'text' : 'password'}
                       placeholder="Confirm password"
-                      className="h-12 rounded-full bg-background border-border"
                       required
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground"
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
                   </div>
                 )}
 

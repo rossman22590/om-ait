@@ -543,7 +543,7 @@ class ResponseProcessor:
                          if parsed_result:
                              tool_call, parsing_details = parsed_result
                              # Avoid adding if already processed during streaming
-                             if not any(exec['tool_call'] == tool_call for exec in pending_tool_executions):
+                             if not any(execution['tool_call'] == tool_call for execution in pending_tool_executions):
                                  final_tool_calls_to_process.append(tool_call)
                                  parsed_xml_data.append({'tool_call': tool_call, 'parsing_details': parsing_details})
 
@@ -1529,6 +1529,11 @@ class ResponseProcessor:
                 self.trace.event(name="adding_parsing_details_to_tool_result_metadata", level="DEFAULT", status_message=(f"Adding parsing_details to tool result metadata"), metadata={"parsing_details": parsing_details})
             # ---
             
+            tool_metadata = None
+            # Extract tool_metadata from result if available
+            if hasattr(result, 'output') and isinstance(result.output, dict) and 'metadata' in result.output:
+                tool_metadata = result.output.get('metadata', {})  
+            
             # Check if this is a native function call (has id field)
             if "id" in tool_call:
                 # Format as a proper tool message according to OpenAI spec
@@ -1577,60 +1582,91 @@ class ResponseProcessor:
             # Check if this is an MCP tool (function_name starts with "call_mcp_tool")
             function_name = tool_call.get("function_name", "")
             
-            # Check if this is an MCP tool - either the old call_mcp_tool or a dynamically registered MCP tool
-            is_mcp_tool = False
-            if function_name == "call_mcp_tool":
-                is_mcp_tool = True
-            else:
-                # Check if the result indicates it's an MCP tool by looking for MCP metadata
-                if hasattr(result, 'output') and isinstance(result.output, str):
-                    # Check for MCP metadata pattern in the output
-                    if "MCP Tool Result from" in result.output and "Tool Metadata:" in result.output:
-                        is_mcp_tool = True
-                    # Also check for MCP metadata in JSON format
-                    elif "mcp_metadata" in result.output:
-                        is_mcp_tool = True
+            # Initialize tool_metadata if not already defined
+            if 'tool_metadata' not in locals():
+                tool_metadata = None
+                # Try to extract tool_metadata from result if available
+                if hasattr(result, 'output') and isinstance(result.output, dict) and 'metadata' in result.output:
+                    tool_metadata = result.output.get('metadata', {})
             
-            if is_mcp_tool:
-                # Special handling for MCP tools - make content prominent and LLM-friendly
-                result_role = "user" if strategy == "user_message" else "assistant"
+            # If we have tool metadata with server info, use it for better naming
+            if tool_metadata and tool_metadata.get('server'):
+                function_name = f"mcp_{tool_metadata.get('server')}"
+                logger.info(f"Using MCP server as tool name: {function_name}")
                 
-                # Extract the actual content from the ToolResult
-                if hasattr(result, 'output'):
-                    mcp_content = str(result.output)
-                else:
-                    mcp_content = str(result)
+            # Initialize xml_tag_name and tool_call_id
+            xml_tag_name = tool_call.get("xml_tag_name", function_name) 
+            tool_call_id = tool_call.get("id", str(uuid.uuid4()))
+            
+            # Extract arguments if available
+            arguments = tool_call.get("arguments", {})
+            
+            # Process the output for structured display
+            if isinstance(result, str):
+                output = result
+            elif hasattr(result, 'output'):
+                output = result.output
+            else:
+                output = str(result)
                 
-                # Create a simple, LLM-friendly message format that puts content first
-                simple_message = {
-                    "role": result_role,
-                    "content": mcp_content  # Direct content, no complex nesting
+            # Determine message role based on strategy
+            result_role = "user" if strategy == "user_message" else "assistant"
+            
+            # Format content for MCP tools
+            if isinstance(output, (dict, list)):
+                mcp_content = json.dumps(output)
+            else:
+                mcp_content = str(output)
+            
+            # Create the structured result
+            structured_result_v1 = {
+                "tool_execution": {
+                    "function_name": function_name,
+                    "xml_tag_name": xml_tag_name,
+                    "tool_call_id": tool_call_id,
+                    "arguments": arguments,
+                    "result": {
+                        "success": result.success if hasattr(result, 'success') else True,
+                        "output": output,  # Now properly structured for frontend
+                        "error": getattr(result, 'error', None) if hasattr(result, 'error') else None
+                    },
+                    "execution_details": {
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "parsing_details": parsing_details,
+                        "mcp_metadata": tool_metadata  # Include MCP metadata if available
+                    }
                 }
-                
-                logger.info(f"Adding MCP tool result with simplified format for LLM visibility")
-                self.trace.event(name="adding_mcp_tool_result_simplified", level="DEFAULT", status_message="Adding MCP tool result with simplified format for LLM visibility")
-                
-                message_obj = await self.add_message(
-                    thread_id=thread_id, 
-                    type="tool",
-                    content=simple_message,
-                    is_llm_message=True,
-                    metadata=metadata
-                )
-                return message_obj
+            }
+            
+            # Create a simple, LLM-friendly message format that puts content first
+            simple_message = {
+                "role": result_role,
+                "content": mcp_content  # Direct content, no complex nesting
+            }
+            
+            logger.info(f"Adding MCP tool result with simplified format for LLM visibility")
+            self.trace.event(name="adding_mcp_tool_result_simplified", level="DEFAULT", status_message="Adding MCP tool result with simplified format for LLM visibility")
+            
+            message_obj = await self.add_message(
+                thread_id=thread_id, 
+                type="tool",
+                content=simple_message,
+                is_llm_message=True,
+                metadata=metadata
+            )
             
             # For XML and other non-native tools, use the new structured format
             # Determine message role based on strategy
             result_role = "user" if strategy == "user_message" else "assistant"
             
             # Create the new structured tool result format
-            structured_result = self._create_structured_tool_result(tool_call, result, parsing_details)
+            structured_result_v1 = self._create_structured_tool_result(tool_call, result, parsing_details)
             
             # Add the message with the appropriate role to the conversation history
             # This allows the LLM to see the tool result in subsequent interactions
             result_message = {
                 "role": result_role,
-                "content":  json.dumps(structured_result)
+                "content":  json.dumps(structured_result_v1)
             }
             message_obj = await self.add_message(
                 thread_id=thread_id, 
@@ -1693,6 +1729,38 @@ class ResponseProcessor:
             except Exception:
                 # If parsing fails, keep the original string
                 pass
+        
+        # Check for MCP tool metadata in the result
+        tool_metadata = None
+        if hasattr(result, 'tool_metadata'):
+            tool_metadata = result.tool_metadata
+            logger.info(f"Found MCP tool metadata as attribute: {tool_metadata}")
+        elif isinstance(output, dict) and output.get('tool_metadata'):
+            tool_metadata = output.get('tool_metadata')
+            logger.info(f"Found MCP tool metadata in output: {tool_metadata}")
+            
+        # If we have MCP tool metadata, use it to enhance the function name
+        if tool_metadata:
+            # Use the original tool name from metadata if available
+            if tool_metadata.get('full_tool_name'):
+                function_name = tool_metadata.get('full_tool_name')
+                logger.info(f"Using full MCP tool name: {function_name}")
+            elif tool_metadata.get('tool'):
+                # Fallback to just the tool name
+                original_tool = tool_metadata.get('tool')
+                # Avoid using HTML element names as tool names
+                if original_tool not in ['span', 'div', 'p', 'unknown']:
+                    function_name = original_tool
+                    logger.info(f"Using MCP tool name: {function_name}")
+                else:
+                    # If the tool name is an HTML element, try to use the server name
+                    if tool_metadata.get('server'):
+                        function_name = f"mcp_{tool_metadata.get('server')}"
+                        logger.info(f"Using MCP server as tool name: {function_name}")
+            
+        # Remove tool_metadata from output to avoid duplication
+        if isinstance(output, dict) and 'tool_metadata' in output:
+            output.pop('tool_metadata', None)
         
         # Create the structured result
         structured_result_v1 = {

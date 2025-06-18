@@ -33,6 +33,17 @@ function extractFromNewFormat(toolContent: string | object): MCPResult | null {
     } else {
       parsed = toolContent;
     }
+    
+    // Handle direct tool/output/success format
+    if (parsed && typeof parsed === 'object' && 
+        'tool' in parsed && 'output' in parsed && 'success' in parsed) {
+      return {
+        success: parsed.success === true,
+        data: parsed.output,
+        isError: parsed.success !== true,
+        content: parsed.output
+      };
+    }
 
     if (parsed && typeof parsed === 'object' && 'tool_execution' in parsed) {
       const toolExecution = parsed.tool_execution;
@@ -182,12 +193,24 @@ export function parseMCPResult(toolContent: string | object | undefined): MCPRes
 
   const newFormatResult = extractFromNewFormat(toolContent);
   if (newFormatResult) {
+    // Assume success if there's meaningful data but no explicit success flag
+    if (newFormatResult.data && typeof newFormatResult.data !== 'undefined' && 
+        newFormatResult.success !== false) {
+      newFormatResult.success = true;
+      newFormatResult.isError = false;
+    }
     return newFormatResult;
   }
 
   if (typeof toolContent === 'string') {
     const legacyResult = extractFromLegacyFormat(toolContent);
     if (legacyResult) {
+      // Assume success if there's meaningful data but no explicit success flag
+      if (legacyResult.data && typeof legacyResult.data !== 'undefined' && 
+          legacyResult.success !== false) {
+        legacyResult.success = true;
+        legacyResult.isError = false;
+      }
       return legacyResult;
     }
   }

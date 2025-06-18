@@ -433,7 +433,7 @@ export function ToolCallSidePanel({
                 <div className="ml-2 flex items-center gap-2">
                   <Computer className="h-4 w-4" />
                   <h2 className="text-md font-medium text-zinc-900 dark:text-zinc-100">
-                    {agentName ? `${agentName}'s Computer` : 'Suna\'s Computer'}
+                    {agentName ? `${agentName}'s Computer` : 'Machine\'s Computer'}
                   </h2>
                 </div>
                 <Button
@@ -469,7 +469,7 @@ export function ToolCallSidePanel({
               <div className="ml-2 flex items-center gap-2">
                 <Computer className="h-4 w-4" />
                 <h2 className="text-md font-medium text-zinc-900 dark:text-zinc-100">
-                  {agentName ? `${agentName}'s Computer` : 'Suna\'s Computer'}
+                  {agentName ? `${agentName}'s Computer` : 'Machine\'s Computer'}
                 </h2>
               </div>
               <Button
@@ -516,7 +516,7 @@ export function ToolCallSidePanel({
                 <div className="ml-2 flex items-center gap-2">
                   <Computer className="h-4 w-4" />
                   <h2 className="text-md font-medium text-zinc-900 dark:text-zinc-100">
-                    {agentName ? `${agentName}'s Computer` : 'Suna\'s Computer'}
+                    {agentName ? `${agentName}'s Computer` : 'Machine\'s Computer'}
                   </h2>
                 </div>
                 <div className="flex items-center gap-2">
@@ -563,7 +563,7 @@ export function ToolCallSidePanel({
               <div className="ml-2 flex items-center gap-2">
                 <Computer className="h-4 w-4" />
                 <h2 className="text-md font-medium text-zinc-900 dark:text-zinc-100">
-                  {agentName ? `${agentName}'s Computer` : 'Suna\'s Computer'}
+                  {agentName ? `${agentName}'s Computer` : 'Machine\'s Computer'}
                 </h2>
               </div>
               <Button
@@ -585,6 +585,20 @@ export function ToolCallSidePanel({
         </div>
       );
     }
+
+    // Log what's being passed to the ToolView for debugging
+    console.debug('ToolCallSidePanel: Rendering tool view with:', {
+      name: displayToolCall.assistantCall.name,
+      contentType: displayToolCall.toolResult?.content ? typeof displayToolCall.toolResult.content : 'undefined',
+      contentPreview: typeof displayToolCall.toolResult?.content === 'string' 
+        ? displayToolCall.toolResult.content.substring(0, 100) 
+        : displayToolCall.toolResult?.content ? '[non-string content]' : undefined,
+      isSuccess: displayToolCall.toolResult?.isSuccess,
+      isStreaming
+    });
+
+    // Define isSuccess from the tool result if available
+    const isSuccess = displayToolCall.toolResult?.isSuccess !== false;
 
     const toolView = (
       <ToolView
@@ -611,7 +625,7 @@ export function ToolCallSidePanel({
             <div className="ml-2 flex items-center gap-2">
               <Computer className="h-4 w-4" />
               <h2 className="text-md font-medium text-zinc-900 dark:text-zinc-100">
-                {agentName ? `${agentName}'s Computer` : 'Suna\'s Computer'}
+                {agentName ? `${agentName}'s Computer` : 'Machine\'s Computer'}
               </h2>
             </div>
 

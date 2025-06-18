@@ -200,3 +200,7 @@ rabbitmq_data
 .setup_env.json
 
 backend/.test_token_compression.py
+/backend/worker-1-logs
+/backend/worker-2-logs
+/backend/worker-logs
+frontend/src/components/thread/tool-views/str-replace/StrReplaceToolView-copy.tsx
