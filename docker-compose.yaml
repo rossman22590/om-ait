@@ -75,20 +75,20 @@ services:
       rabbitmq:
         condition: service_healthy
 
-  frontend:
-    init: true
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend/.env.local:/app/.env.local:ro
-    environment:
-      - NODE_ENV=production
-    command: ["npm", "run", "start"]
-    depends_on:
-      - backend
+  # frontend:
+  #   init: true
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./frontend/.env.local:/app/.env.local:ro
+  #   environment:
+  #     - NODE_ENV=production
+  #   command: ["npm", "run", "start"]
+  #   depends_on:
+  #     - backend
 
 volumes:
   redis_data:

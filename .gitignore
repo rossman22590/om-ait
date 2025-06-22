@@ -200,3 +200,9 @@ rabbitmq_data
 
 backend/.test_token_compression.py
 backend/test_token_compression_data.py
+/backend/worker-logs
+/backend/worker-1-logs
+backend/agent/tools/sb_avatar_tool copy.py
+frontend/src/components/thread/tool-views/str-replace/StrReplaceToolView-copy.tsx
+frontend/src/components/thread/tool-views/AvatarToolView copy.tsx
+/backend/worker-2-logs

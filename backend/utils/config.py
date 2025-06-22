@@ -40,24 +40,24 @@ class Configuration:
     ENV_MODE: EnvMode = EnvMode.LOCAL
     
     # Subscription tier IDs - Production
-    STRIPE_FREE_TIER_ID_PROD: str = 'price_1RILb4G6l1KZGqIrK4QLrx9i'
-    STRIPE_TIER_2_20_ID_PROD: str = 'price_1RILb4G6l1KZGqIrhomjgDnO'
-    STRIPE_TIER_6_50_ID_PROD: str = 'price_1RILb4G6l1KZGqIr5q0sybWn'
-    STRIPE_TIER_12_100_ID_PROD: str = 'price_1RILb4G6l1KZGqIr5Y20ZLHm'
-    STRIPE_TIER_25_200_ID_PROD: str = 'price_1RILb4G6l1KZGqIrGAD8rNjb'
-    STRIPE_TIER_50_400_ID_PROD: str = 'price_1RILb4G6l1KZGqIruNBUMTF1'
-    STRIPE_TIER_125_800_ID_PROD: str = 'price_1RILb3G6l1KZGqIrbJA766tN'
-    STRIPE_TIER_200_1000_ID_PROD: str = 'price_1RILb3G6l1KZGqIrmauYPOiN'
+    STRIPE_FREE_TIER_ID_PROD: str = 'price_1RLwBMG23sSyONuFrhkNh9fe'
+    STRIPE_TIER_2_20_ID_PROD: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'
+    STRIPE_TIER_6_50_ID_PROD: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'
+    STRIPE_TIER_12_100_ID_PROD: str = 'price_1RLyE5G23sSyONuFHJiqvoLo'
+    STRIPE_TIER_25_200_ID_PROD: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
+    STRIPE_TIER_50_400_ID_PROD: str = 'price_1RLyEhG23sSyONuFioU064nT'
+    STRIPE_TIER_125_800_ID_PROD: str = 'price_1RLyEnG23sSyONuFE9wBSfvN'
+    STRIPE_TIER_200_1000_ID_PROD: str = 'price_1RLyErG23sSyONuFjGphWKjB'
     
     # Subscription tier IDs - Staging
-    STRIPE_FREE_TIER_ID_STAGING: str = 'price_1RIGvuG6l1KZGqIrw14abxeL'
-    STRIPE_TIER_2_20_ID_STAGING: str = 'price_1RIGvuG6l1KZGqIrCRu0E4Gi'
-    STRIPE_TIER_6_50_ID_STAGING: str = 'price_1RIGvuG6l1KZGqIrvjlz5p5V'
-    STRIPE_TIER_12_100_ID_STAGING: str = 'price_1RIGvuG6l1KZGqIrT6UfgblC'
-    STRIPE_TIER_25_200_ID_STAGING: str = 'price_1RIGvuG6l1KZGqIrOVLKlOMj'
-    STRIPE_TIER_50_400_ID_STAGING: str = 'price_1RIKNgG6l1KZGqIrvsat5PW7'
-    STRIPE_TIER_125_800_ID_STAGING: str = 'price_1RIKNrG6l1KZGqIrjKT0yGvI'
-    STRIPE_TIER_200_1000_ID_STAGING: str = 'price_1RIKQ2G6l1KZGqIrum9n8SI7'
+    STRIPE_FREE_TIER_ID_STAGING: str = 'price_1RLwBMG23sSyONuFrhkNh9fe'
+    STRIPE_TIER_2_20_ID_STAGING: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'
+    STRIPE_TIER_6_50_ID_STAGING: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'
+    STRIPE_TIER_12_100_ID_STAGING: str = 'price_1RLyE5G23sSyONuFHJiqvoLo'
+    STRIPE_TIER_25_200_ID_STAGING: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
+    STRIPE_TIER_50_400_ID_STAGING: str = 'price_1RLyEhG23sSyONuFioU064nT'
+    STRIPE_TIER_125_800_ID_STAGING: str = 'price_1RLyEnG23sSyONuFE9wBSfvN'
+    STRIPE_TIER_200_1000_ID_STAGING: str = 'price_1RLyErG23sSyONuFjGphWKjB'
     
     # Computed subscription tier IDs based on environment
     @property
@@ -114,8 +114,8 @@ class Configuration:
     GROQ_API_KEY: Optional[str] = None
     OPENROUTER_API_KEY: Optional[str] = None
     OPENROUTER_API_BASE: Optional[str] = "https://openrouter.ai/api/v1"
-    OR_SITE_URL: Optional[str] = "https://kortix.ai"
-    OR_APP_NAME: Optional[str] = "Kortix AI"    
+    OR_SITE_URL: Optional[str] = "https://machine.myapps.ai"
+    OR_APP_NAME: Optional[str] = "Machine"    
     
     # AWS Bedrock credentials
     AWS_ACCESS_KEY_ID: Optional[str] = None
@@ -147,6 +147,7 @@ class Configuration:
     CLOUDFLARE_API_TOKEN: Optional[str] = None
     FIRECRAWL_API_KEY: str
     FIRECRAWL_URL: Optional[str] = "https://api.firecrawl.dev"
+    ARGIL_API_KEY: Optional[str] = None
     
     # Stripe configuration
     STRIPE_SECRET_KEY: Optional[str] = None
@@ -155,8 +156,8 @@ class Configuration:
     STRIPE_DEFAULT_TRIAL_DAYS: int = 14
     
     # Stripe Product IDs
-    STRIPE_PRODUCT_ID_PROD: str = 'prod_SCl7AQ2C8kK1CD'
-    STRIPE_PRODUCT_ID_STAGING: str = 'prod_SCgIj3G7yPOAWY'
+    STRIPE_PRODUCT_ID_PROD: str = 'prod_SGT7srmz5hB2qo'  
+    STRIPE_PRODUCT_ID_STAGING: str = 'prod_SGT7srmz5hB2qo'  
     
     # Sandbox configuration
     SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3"
