@@ -1,3 +1,4 @@
+import urllib
 import sentry
 import asyncio
 import json
@@ -15,12 +16,22 @@ from services import redis
 from dramatiq.brokers.rabbitmq import RabbitmqBroker
 import os
 from services.langfuse import langfuse
+from periodiq import PeriodiqMiddleware
 from utils.retry import retry
 
 rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
 rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
-rabbitmq_broker = RabbitmqBroker(host=rabbitmq_host, port=rabbitmq_port, middleware=[dramatiq.middleware.AsyncIO()])
+rabbitmq_broker = RabbitmqBroker(
+    host=rabbitmq_host,
+    port=rabbitmq_port,
+    middleware=[
+        dramatiq.middleware.AsyncIO(),
+        PeriodiqMiddleware(skip_delay=30),  # <-- ADD THIS LINE
+    ]
+)
+
 dramatiq.set_broker(rabbitmq_broker)
+
 
 _initialized = False
 db = DBConnection()

@@ -1,6 +1,6 @@
-<div align="center">
+<div align="center"> 
 
-# Suna - Open Source Generalist AI Agent
+# Suna - A Generalist AI Agent
 
 (that acts on your behalf)
 
@@ -142,4 +142,4 @@ We welcome contributions from the community! Please see our [Contributing Guide]
 
 ## License
 
-Kortix Suna is licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for the full license text.
+Machine is licensed under the Apache License, Version 2.0. See [LICENSE](./LICENSE) for the full license text.

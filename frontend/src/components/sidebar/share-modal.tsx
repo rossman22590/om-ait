@@ -8,7 +8,12 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Copy, Share2, Link, Link2Off, Check, Globe, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-import { useThreadQuery, useUpdateThreadMutation, useUpdateProject } from "@/hooks/react-query"
+// import { useThreadQuery, useUpdateThreadMutation, useUpdateProject } from "@/hooks/react-query"
+// import { useThreadQuery, useUpdateThreadMutation, useUpdateProject } from "@/hooks/react-query"; // Original commented out
+import { useThreadQuery } from "@/hooks/react-query/threads/use-threads"; // Direct import
+import { useUpdateProject } from "@/hooks/react-query/sidebar/use-project-mutations"; // Direct import
+import { useUpdateThreadMutation } from "@/hooks/react-query/threads/use-threads"; // This one was already direct
+
 import type { JSX } from "react"
 import { Skeleton } from "../ui/skeleton"
 

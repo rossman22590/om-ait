@@ -58,6 +58,101 @@ export function McpToolView({
   const ServerIcon = getMCPServerIcon(serverName);
   const serverColor = getMCPServerColor(serverName);
 
+  // Enhanced success detection with logging for debugging
+  const isToolCallSuccess = () => {
+    console.log('Checking tool success with:', { 
+      toolContent, 
+      result, 
+      isSuccess,
+      hasResult: !!result,
+      resultSuccess: result?.success,
+      resultIsError: result?.isError
+    });
+
+    // If we have toolContent as a string, check it directly first
+    if (toolContent && typeof toolContent === 'string') {
+      // Clean the content to handle potential formatting issues
+      const cleanContent = toolContent.trim();
+      
+      // Direct string checks for success indicators
+      if (cleanContent.includes('"success": true') || 
+          cleanContent.includes('"success":true') ||
+          cleanContent.includes("'success': true") ||
+          cleanContent.includes("'success':true")) {
+        console.log('Found success: true in string content');
+        return true;
+      }
+      
+      if (cleanContent.includes('"success": false') || 
+          cleanContent.includes('"success":false') ||
+          cleanContent.includes("'success': false") ||
+          cleanContent.includes("'success':false")) {
+        console.log('Found success: false in string content');
+        return false;
+      }
+
+      // Try to find and parse JSON content
+      try {
+        // Look for JSON-like content in the string
+        const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const jsonStr = jsonMatch[0];
+          const parsed = JSON.parse(jsonStr);
+          
+          // Specifically check for the function_calls pattern
+          if (parsed.tool === 'function_calls' && parsed.success === true) {
+            console.log('Found function_calls tool with success: true');
+            return true;
+          }
+          
+          if (parsed.success !== undefined) {
+            console.log('Parsed success from JSON:', parsed.success);
+            return parsed.success === true;
+          }
+          
+          // Check nested success values
+          if (parsed.output && typeof parsed.output === 'object' && parsed.output.success !== undefined) {
+            console.log('Found nested success:', parsed.output.success);
+            return parsed.output.success === true;
+          }
+        }
+      } catch (e) {
+        console.log('JSON parsing failed:', e);
+      }
+    }
+    
+    // Check the parsed result if available
+    if (result) {
+      if (result.success !== undefined) {
+        console.log('Using result.success:', result.success);
+        return result.success === true && !result.isError;
+      }
+      
+      if (result.isError) {
+        console.log('Result has isError flag');
+        return false;
+      }
+    }
+    
+    // If no clear indicators, check for error patterns
+    if (toolContent && typeof toolContent === 'string') {
+      const lowerContent = toolContent.toLowerCase();
+      if (lowerContent.includes('error') || 
+          lowerContent.includes('failed') ||
+          lowerContent.includes('exception') ||
+          lowerContent.includes('failure')) {
+        console.log('Found error indicators in content');
+        return false;
+      }
+    }
+    
+    // Default to the isSuccess prop
+    console.log('Defaulting to isSuccess prop:', isSuccess);
+    return isSuccess;
+  };
+
+  const toolCallSuccessful = isToolCallSuccess();
+
   useEffect(() => {
     if (isStreaming) {
       const timer = setInterval(() => {
@@ -76,6 +171,16 @@ export function McpToolView({
   }, [isStreaming]);
 
   const hasArguments = Object.keys(parsedTool.arguments).length > 0;
+
+  // Debug information (remove in production)
+  useEffect(() => {
+    console.log('McpToolView Debug:', {
+      toolCallSuccessful,
+      toolContent: toolContent?.substring(0, 200) + '...',
+      parsedResult: result,
+      isSuccess: isSuccess
+    });
+  }, [toolCallSuccessful, toolContent, result, isSuccess]);
 
   return (
     <Card className="gap-0 flex border shadow-none border-t border-b-0 border-x-0 p-0 rounded-none flex-col h-full overflow-hidden bg-white dark:bg-zinc-950">
@@ -105,17 +210,17 @@ export function McpToolView({
             <Badge 
               variant="secondary" 
               className={
-                isSuccess && result && !result.isError
+                toolCallSuccessful
                   ? "bg-gradient-to-b from-emerald-200 to-emerald-100 text-emerald-700 dark:from-emerald-800/50 dark:to-emerald-900/60 dark:text-emerald-300" 
                   : "bg-gradient-to-b from-rose-200 to-rose-100 text-rose-700 dark:from-rose-800/50 dark:to-rose-900/60 dark:text-rose-300"
               }
             >
-              {isSuccess && result && !result.isError ? (
+              {toolCallSuccessful ? (
                 <CheckCircle className="h-3.5 w-3.5" />
               ) : (
                 <AlertTriangle className="h-3.5 w-3.5" />
               )}
-              {isSuccess && result && !result.isError ? 'Completed successfully' : 'Execution failed'}
+              {toolCallSuccessful ? 'Completed successfully' : 'Execution failed'}
             </Badge>
           )}
         </div>
@@ -178,11 +283,11 @@ export function McpToolView({
                     <span className="text-zinc-500 dark:text-zinc-400">Status:</span>
                     <span className={cn(
                       "ml-2 font-medium",
-                      isSuccess && result && !result.isError
+                      toolCallSuccessful
                         ? "text-emerald-600 dark:text-emerald-400"
                         : "text-red-600 dark:text-red-400"
                     )}>
-                      {isSuccess && result && !result.isError ? 'Success' : 'Failed'}
+                      {toolCallSuccessful ? 'Success' : 'Failed'}
                     </span>
                   </div>
                 </div>
@@ -199,11 +304,12 @@ export function McpToolView({
                   </div>
                 )}
               </div>
+              
               {/* Result Section */}
-              {result && (
+              {(result || toolContent) && (
                 <Card className={cn(
                   "border",
-                  result.success && !result.isError
+                  toolCallSuccessful
                     ? "border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/10"
                     : "border-red-200 dark:border-red-800 bg-red-50/30 dark:bg-red-900/10"
                 )}>
@@ -213,7 +319,7 @@ export function McpToolView({
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        {result.success && !result.isError ? (
+                        {toolCallSuccessful ? (
                           <>
                             <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                             <h3 className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
@@ -240,8 +346,8 @@ export function McpToolView({
                   {expandedResult && (
                     <div className="border-t border-zinc-200 dark:border-zinc-800">
                       <MCPContentRenderer 
-                        detectionResult={detectMCPFormat(result.data || '')}
-                        rawContent={result.data || ''}
+                        detectionResult={detectMCPFormat(result?.data || toolContent || '')}
+                        rawContent={result?.data || toolContent || ''}
                       />
                     </div>
                   )}
@@ -284,4 +390,4 @@ export function McpToolView({
       </CardContent>
     </Card>
   );
-} 
+}

@@ -39,7 +39,7 @@ class Configuration:
     # Environment mode
     ENV_MODE: EnvMode = EnvMode.LOCAL
     
-    # Subscription tier IDs - Production
+# Subscription tier IDs - Production
     STRIPE_FREE_TIER_ID_PROD: str = 'price_1RLwBMG23sSyONuFrhkNh9fe'
     STRIPE_TIER_2_20_ID_PROD: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'
     STRIPE_TIER_6_50_ID_PROD: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'
@@ -117,13 +117,17 @@ class Configuration:
     OR_SITE_URL: Optional[str] = "https://machine.myapps.ai"
     OR_APP_NAME: Optional[str] = "Machine"    
     
+    # Media generation API keys
+    ARGIL_API_KEY: Optional[str] = None
+    
     # AWS Bedrock credentials
     AWS_ACCESS_KEY_ID: Optional[str] = None
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
     AWS_REGION_NAME: Optional[str] = None
     
     # Model configuration
-    MODEL_TO_USE: Optional[str] = "anthropic/claude-3-7-sonnet-latest"
+    MODEL_TO_USE: Optional[str] = "openrouter/google/gemini-2.5-flash-preview-05-20:thinking"
+
     
     # Supabase configuration
     SUPABASE_URL: str
@@ -156,7 +160,7 @@ class Configuration:
     STRIPE_DEFAULT_TRIAL_DAYS: int = 14
     
     # Stripe Product IDs
-    STRIPE_PRODUCT_ID_PROD: str = 'prod_SGT7srmz5hB2qo'  
+    STRIPE_PRODUCT_ID_PROD: str = 'prod_SGT7srmz5hB2qo'  # Production product ID
     STRIPE_PRODUCT_ID_STAGING: str = 'prod_SGT7srmz5hB2qo'  
     
     # Sandbox configuration
@@ -167,6 +171,9 @@ class Configuration:
     LANGFUSE_PUBLIC_KEY: Optional[str] = None
     LANGFUSE_SECRET_KEY: Optional[str] = None
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+    
+    # RabbitMQ configuration
+    RABBITMQ_URL: Optional[str] = None
 
     @property
     def STRIPE_PRODUCT_ID(self) -> str:

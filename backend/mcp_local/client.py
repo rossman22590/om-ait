@@ -204,7 +204,7 @@ class MCPManager:
             
         conn = self.connections[qualified_name]
             
-        logger.info(f"Executing MCP tool {original_tool_name} on server {qualified_name}")
+        logger.info(f"Executing MCP tool {original_tool_name} on server {qualified_name} with arguments: {json.dumps(arguments)}")
         
         # Check if Smithery API key is available
         if not SMITHERY_API_KEY:
@@ -216,53 +216,138 @@ class MCPManager:
             config_b64 = base64.b64encode(config_json.encode()).decode()
             url = f"{SMITHERY_SERVER_BASE_URL}/{qualified_name}/mcp?config={config_b64}&api_key={SMITHERY_API_KEY}"
             
-            # Use the documented pattern with proper context management
-            async with streamablehttp_client(url) as (read_stream, write_stream, _):
-                async with ClientSession(read_stream, write_stream) as session:
-                    # Initialize the connection
-                    await session.initialize()
-                    
-                    # Call the tool
-                    result = await session.call_tool(original_tool_name, arguments)
+            logger.debug(f"Connecting to MCP server at: {SMITHERY_SERVER_BASE_URL}/{qualified_name}/mcp")
             
-                    # Convert result to dict - handle MCP response properly
-                    if hasattr(result, 'content'):
-                        # Handle content which might be a list of TextContent objects
-                        content = result.content
-                        if isinstance(content, list):
-                            # Extract text from TextContent objects
-                            text_parts = []
-                            for item in content:
-                                if hasattr(item, 'text'):
-                                    text_parts.append(item.text)
-                                elif hasattr(item, 'content'):
-                                    text_parts.append(str(item.content))
+            try:
+                # Use the documented pattern with proper context management
+                async with streamablehttp_client(url) as (read_stream, write_stream, _):
+                    try:
+                        logger.debug(f"Establishing ClientSession for {tool_name}")
+                        async with ClientSession(read_stream, write_stream) as session:
+                            # Initialize the connection
+                            await session.initialize()
+                            logger.debug(f"Session initialized for {tool_name}")
+                            
+                            try:
+                                # Call the tool with a timeout to prevent hanging
+                                logger.debug(f"Calling tool {original_tool_name} with timeout of 60 seconds")
+                                result = await asyncio.wait_for(
+                                    session.call_tool(original_tool_name, arguments),
+                                    timeout=60.0  # 60 second timeout (increased from 30)
+                                )
+                                
+                                # Log the raw result for debugging
+                                logger.debug(f"Raw result from {tool_name}: {result}")
+                                
+                                # Convert result to dict - handle MCP response properly
+                                if hasattr(result, 'content'):
+                                    # Handle content which might be a list of TextContent objects
+                                    content = result.content
+                                    if isinstance(content, list):
+                                        # Extract text from TextContent objects
+                                        text_parts = []
+                                        for item in content:
+                                            if hasattr(item, 'text'):
+                                                text_parts.append(item.text)
+                                            elif hasattr(item, 'content'):
+                                                text_parts.append(str(item.content))
+                                            else:
+                                                text_parts.append(str(item))
+                                        content_str = "\n".join(text_parts)
+                                    elif hasattr(content, 'text'):
+                                        # Single TextContent object
+                                        content_str = content.text
+                                    elif hasattr(content, 'content'):
+                                        content_str = str(content.content)
+                                    elif isinstance(content, dict):
+                                        # Handle dictionary content
+                                        try:
+                                            content_str = json.dumps(content)
+                                        except:
+                                            content_str = str(content)
+                                    else:
+                                        content_str = str(content)
+                                    
+                                    is_error = getattr(result, 'isError', False)
                                 else:
-                                    text_parts.append(str(item))
-                            content_str = "\n".join(text_parts)
-                        elif hasattr(content, 'text'):
-                            # Single TextContent object
-                            content_str = content.text
-                        elif hasattr(content, 'content'):
-                            content_str = str(content.content)
-                        else:
-                            content_str = str(content)
-                        
-                        is_error = getattr(result, 'isError', False)
-                    else:
-                        content_str = str(result)
-                        is_error = False
-                        
+                                    # Try to handle various result formats
+                                    if isinstance(result, dict):
+                                        try:
+                                            content_str = json.dumps(result)
+                                        except:
+                                            content_str = str(result)
+                                        is_error = result.get('isError', False)
+                                    else:
+                                        content_str = str(result)
+                                        is_error = False
+                                
+                                logger.info(f"Successfully executed MCP tool {tool_name}")
+                                return {
+                                    "content": content_str,
+                                    "isError": is_error,
+                                    "tool_metadata": {
+                                        "server": qualified_name,
+                                        "tool": original_tool_name,
+                                        "full_tool_name": tool_name,
+                                        "arguments_used": arguments,
+                                        "is_mcp_tool": True
+                                    }
+                                }
+                            except asyncio.TimeoutError:
+                                logger.error(f"Timeout executing MCP tool {tool_name} after 60 seconds")
+                                return {
+                                    "content": f"Error: MCP tool execution timed out after 60 seconds",
+                                    "isError": True,
+                                    "tool_metadata": {
+                                        "server": qualified_name,
+                                        "tool": original_tool_name,
+                                        "error_type": "timeout"
+                                    }
+                                }
+                            except Exception as e:
+                                logger.error(f"Error during tool call for {tool_name}: {str(e)}", exc_info=True)
+                                return {
+                                    "content": f"Error during tool execution: {str(e)}",
+                                    "isError": True,
+                                    "tool_metadata": {
+                                        "server": qualified_name,
+                                        "tool": original_tool_name,
+                                        "error_type": "tool_execution"
+                                    }
+                                }
+                    except Exception as e:
+                        logger.error(f"Error in ClientSession for {tool_name}: {str(e)}", exc_info=True)
+                        return {
+                            "content": f"Error establishing MCP session: {str(e)}",
+                            "isError": True,
+                            "tool_metadata": {
+                                "server": qualified_name,
+                                "tool": original_tool_name,
+                                "error_type": "session_error"
+                            }
+                        }
+            except Exception as e:
+                logger.error(f"Error in streamablehttp_client for {tool_name}: {str(e)}", exc_info=True)
                 return {
-                        "content": content_str,
-                        "isError": is_error
+                    "content": f"Error connecting to MCP server: {str(e)}",
+                    "isError": True,
+                    "tool_metadata": {
+                        "server": qualified_name,
+                        "tool": original_tool_name,
+                        "error_type": "connection_error"
+                    }
                 }
                 
         except Exception as e:
-            logger.error(f"Error executing MCP tool {tool_name}: {str(e)}")
+            logger.error(f"Unexpected error executing MCP tool {tool_name}: {str(e)}", exc_info=True)
             return {
-                "content": f"Error executing tool: {str(e)}",
-                "isError": True
+                "content": f"Unexpected error: {str(e)}",
+                "isError": True,
+                "tool_metadata": {
+                    "server": qualified_name,
+                    "tool": original_tool_name,
+                    "error_type": "unexpected_error"
+                }
             }
             
     async def disconnect_all(self):

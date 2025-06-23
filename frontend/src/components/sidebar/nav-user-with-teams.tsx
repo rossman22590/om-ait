@@ -62,6 +62,7 @@ export function NavUserWithTeams({
   const { isMobile } = useSidebar();
   const { data: accounts } = useAccounts();
   const [showNewTeamDialog, setShowNewTeamDialog] = React.useState(false);
+  const [showUpdatesModal, setShowUpdatesModal] = React.useState(false);
   const { theme, setTheme } = useTheme();
 
   // Prepare personal account and team accounts
@@ -159,36 +160,16 @@ export function NavUserWithTeams({
   }
 
   return (
-    <Dialog open={showNewTeamDialog} onOpenChange={setShowNewTeamDialog}>
-      <SidebarMenu>
-        <SidebarMenuItem>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <SidebarMenuButton
-                size="lg"
-                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-              >
-                <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">
-                    {getInitials(user.name)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}</span>
-                  <span className="truncate text-xs">{user.email}</span>
-                </div>
-                <ChevronsUpDown className="ml-auto size-4" />
-              </SidebarMenuButton>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
-              side={isMobile ? 'bottom' : 'top'}
-              align="start"
-              sideOffset={4}
-            >
-              <DropdownMenuLabel className="p-0 font-normal">
-                <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+    <>
+      <Dialog open={showNewTeamDialog} onOpenChange={setShowNewTeamDialog}>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="lg"
+                  className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+                >
                   <Avatar className="h-8 w-8 rounded-lg">
                     <AvatarImage src={user.avatar} alt={user.name} />
                     <AvatarFallback className="rounded-lg">
@@ -199,130 +180,229 @@ export function NavUserWithTeams({
                     <span className="truncate font-medium">{user.name}</span>
                     <span className="truncate text-xs">{user.email}</span>
                   </div>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-
-              {/* Teams Section */}
-              {personalAccount && (
-                <>
-                  <DropdownMenuLabel className="text-muted-foreground text-xs">
-                    Personal Account
-                  </DropdownMenuLabel>
-                  <DropdownMenuItem
-                    key={personalAccount.account_id}
-                    onClick={() =>
-                      handleTeamSelect({
-                        name: personalAccount.name,
-                        logo: Command,
-                        plan: 'Personal',
-                        account_id: personalAccount.account_id,
-                        slug: personalAccount.slug,
-                        personal_account: true,
-                      })
-                    }
-                    className="gap-2 p-2"
-                  >
-                    <div className="flex size-6 items-center justify-center rounded-xs border">
-                      <Command className="size-4 shrink-0" />
+                  <ChevronsUpDown className="ml-auto size-4" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+                side={isMobile ? 'bottom' : 'top'}
+                align="start"
+                sideOffset={4}
+              >
+                <DropdownMenuLabel className="p-0 font-normal">
+                  <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                    <Avatar className="h-8 w-8 rounded-lg">
+                      <AvatarImage src={user.avatar} alt={user.name} />
+                      <AvatarFallback className="rounded-lg">
+                        {getInitials(user.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="grid flex-1 text-left text-sm leading-tight">
+                      <span className="truncate font-medium">{user.name}</span>
+                      <span className="truncate text-xs">{user.email}</span>
                     </div>
-                    {personalAccount.name}
-                    <DropdownMenuShortcut>⌘1</DropdownMenuShortcut>
-                  </DropdownMenuItem>
-                </>
-              )}
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
 
-              {teamAccounts?.length > 0 && (
-                <>
-                  <DropdownMenuLabel className="text-muted-foreground text-xs mt-2">
-                    Teams
-                  </DropdownMenuLabel>
-                  {teamAccounts.map((team, index) => (
+                {/* Teams Section */}
+                {personalAccount && (
+                  <>
+                    <DropdownMenuLabel className="text-muted-foreground text-xs">
+                      Personal Account
+                    </DropdownMenuLabel>
                     <DropdownMenuItem
-                      key={team.account_id}
+                      key={personalAccount.account_id}
                       onClick={() =>
                         handleTeamSelect({
-                          name: team.name,
-                          logo: AudioWaveform,
-                          plan: 'Team',
-                          account_id: team.account_id,
-                          slug: team.slug,
-                          personal_account: false,
+                          name: personalAccount.name,
+                          logo: Command,
+                          plan: 'Personal',
+                          account_id: personalAccount.account_id,
+                          slug: personalAccount.slug,
+                          personal_account: true,
                         })
                       }
                       className="gap-2 p-2"
                     >
                       <div className="flex size-6 items-center justify-center rounded-xs border">
-                        <AudioWaveform className="size-4 shrink-0" />
+                        <Command className="size-4 shrink-0" />
                       </div>
-                      {team.name}
-                      <DropdownMenuShortcut>⌘{index + 2}</DropdownMenuShortcut>
+                      {personalAccount.name}
+                      <DropdownMenuShortcut>⌘1</DropdownMenuShortcut>
                     </DropdownMenuItem>
-                  ))}
-                </>
-              )}
+                  </>
+                )}
 
-              {/* <DropdownMenuSeparator />
-              <DialogTrigger asChild>
+                {teamAccounts?.length > 0 && (
+                  <>
+                    <DropdownMenuLabel className="text-muted-foreground text-xs mt-2">
+                      Teams
+                    </DropdownMenuLabel>
+                    {teamAccounts.map((team, index) => (
+                      <DropdownMenuItem
+                        key={team.account_id}
+                        onClick={() =>
+                          handleTeamSelect({
+                            name: team.name,
+                            logo: AudioWaveform,
+                            plan: 'Team',
+                            account_id: team.account_id,
+                            slug: team.slug,
+                            personal_account: false,
+                          })
+                        }
+                        className="gap-2 p-2"
+                      >
+                        <div className="flex size-6 items-center justify-center rounded-xs border">
+                          <AudioWaveform className="size-4 shrink-0" />
+                        </div>
+                        {team.name}
+                        <DropdownMenuShortcut>⌘{index + 2}</DropdownMenuShortcut>
+                      </DropdownMenuItem>
+                    ))}
+                  </>
+                )}
+
+                {/* <DropdownMenuSeparator />
+                <DialogTrigger asChild>
+                  <DropdownMenuItem 
+                    className="gap-2 p-2"
+                    onClick={() => {
+                      setShowNewTeamDialog(true)
+                    }}
+                  >
+                    <div className="bg-background flex size-6 items-center justify-center rounded-md border">
+                      <Plus className="size-4" />
+                    </div>
+                    <div className="text-muted-foreground font-medium">Add team</div>
+                  </DropdownMenuItem>
+                </DialogTrigger> */}
+                <DropdownMenuSeparator />
+
+                {/* User Settings Section */}
+                <DropdownMenuGroup>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings/billing">
+                      <CreditCard className="h-4 w-4" />
+                      Billing
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings">
+                      <Settings className="h-4 w-4" />
+                      Settings
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                      <span>Theme</span>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem 
-                  className="gap-2 p-2"
                   onClick={() => {
-                    setShowNewTeamDialog(true)
+                    // Close the dropdown menu first
+                    document.body.click();
+                    // Then open the modal after a short delay
+                    setTimeout(() => {
+                      setShowUpdatesModal(true);
+                    }, 100);
                   }}
+                  className="cursor-pointer hover:bg-accent hover:text-accent-foreground"
                 >
-                  <div className="bg-background flex size-6 items-center justify-center rounded-md border">
-                    <Plus className="size-4" />
-                  </div>
-                  <div className="text-muted-foreground font-medium">Add team</div>
+                  <span className="text-xs">Version 9.0</span>
                 </DropdownMenuItem>
-              </DialogTrigger> */}
-              <DropdownMenuSeparator />
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className='text-destructive focus:text-destructive focus:bg-destructive/10' onClick={handleLogout}>
+                  <LogOut className="h-4 w-4 text-destructive" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
 
-              {/* User Settings Section */}
-              <DropdownMenuGroup>
-                <DropdownMenuItem asChild>
-                  <Link href="/settings/billing">
-                    <CreditCard className="h-4 w-4" />
-                    Billing
-                  </Link>
-                </DropdownMenuItem>
-                {/* <DropdownMenuItem asChild>
-                  <Link href="/settings">
-                    <Settings className="mr-2 h-4 w-4" />
-                    Settings
-                  </Link>
-                </DropdownMenuItem> */}
-                <DropdownMenuItem
-                  onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                >
-                  <div className="flex items-center gap-2">
-                    <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                    <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                    <span>Theme</span>
-                  </div>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className='text-destructive focus:text-destructive focus:bg-destructive/10' onClick={handleLogout}>
-                <LogOut className="h-4 w-4 text-destructive" />
-                Log out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </SidebarMenuItem>
-      </SidebarMenu>
+        <DialogContent className="sm:max-w-[425px] border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-2xl shadow-custom">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">
+              Create a new team
+            </DialogTitle>
+            <DialogDescription className="text-foreground/70">
+              Create a team to collaborate with others.
+            </DialogDescription>
+          </DialogHeader>
+          <NewTeamForm />
+        </DialogContent>
+      </Dialog>
 
-      <DialogContent className="sm:max-w-[425px] border-subtle dark:border-white/10 bg-card-bg dark:bg-background-secondary rounded-2xl shadow-custom">
-        <DialogHeader>
-          <DialogTitle className="text-foreground">
-            Create a new team
-          </DialogTitle>
-          <DialogDescription className="text-foreground/70">
-            Create a team to collaborate with others.
-          </DialogDescription>
-        </DialogHeader>
-        <NewTeamForm />
-      </DialogContent>
-    </Dialog>
+      {/* Updates Modal - Separate dialog component */}
+      <Dialog open={showUpdatesModal} onOpenChange={setShowUpdatesModal}>
+        <DialogContent className="sm:max-w-[550px] bg-white dark:bg-white border border-gray-200 rounded-2xl shadow-lg">
+          <DialogHeader>
+            <DialogTitle className="text-black dark:text-black flex items-center gap-2">
+              <BadgeCheck className="h-5 w-5 text-purple-500" /> 
+              Machine AI v9.0 Updates
+            </DialogTitle>
+            <DialogDescription className="text-black/70 dark:text-black/70">
+              Latest features and improvements in this version
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 text-black dark:text-black">
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-500">New Features</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Added "Stop All Agents" feature for easier workspace management</li>
+                <li>Integration with multiple cloud providers (MCPs) for enhanced flexibility</li>
+                <li>Ability to create and use custom prompts for tailored AI interactions</li>
+                <li>Introduced a marketplace for discovering and sharing AI agents</li>
+                <li>Implemented 7-day free trial for all subscription plans</li>
+                <li>Added support for promo codes during checkout</li>
+                <li>Enhanced image generation with high-quality settings</li>
+                <li>Improved image editing tools with professional-grade outputs</li>
+                <li>Faster website deployments and hosting options</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-500">Performance Improvements</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Faster response times from AI agents</li>
+                <li>Smoother checkout experience</li>
+                <li>More accurate usage tracking and billing</li>
+                <li>Faster image generation with less waiting time</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-500">UI Enhancements</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Redesigned navigation with improved user experience</li>
+                <li>Updated pricing display with clearer subscription benefits</li>
+                <li>New version indicator to track platform updates</li>
+                <li>Enhanced dark mode compatibility throughout the application</li>
+                <li>Improved mobile responsiveness for on-the-go usage</li>
+              </ul>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-purple-600 dark:text-purple-500">Bug Fixes</h3>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>Fixed issues with subscription recognition</li>
+                <li>Improved payment processing reliability</li>
+                <li>More reliable file operations in sandboxes</li>
+                <li>Fixed minor visual glitches in the interface</li>
+              </ul>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

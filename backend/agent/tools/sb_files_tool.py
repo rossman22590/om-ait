@@ -229,11 +229,14 @@ class SandboxFilesTool(SandboxToolsBase):
             
             # Get preview URL if it's an HTML file
             # preview_url = self._get_preview_url(file_path)
-            message = f"Replacement successful."
-            # if preview_url:
-            #     message += f"\n\nYou can preview this HTML file at: {preview_url}"
-            
-            return self.success_response(message)
+        
+            # Return comprehensive response with all data needed for diff display
+            return self.success_response({
+                "message": "Replacement successful.",
+                "old_str": old_str,
+                "new_str": new_str,
+                "file_path": file_path
+            })
             
         except Exception as e:
             return self.fail_response(f"Error replacing string: {str(e)}")
@@ -407,6 +410,7 @@ class SandboxFilesTool(SandboxToolsBase):
 
     #     <!-- Example 4: Read last 10 lines -->
     #     <read-file file_path="logs/app.log" start_line="-10">
+    #     Last 10 lines of the log file will be read.
     #     </read-file>
     #     '''
     # )
@@ -459,4 +463,3 @@ class SandboxFilesTool(SandboxToolsBase):
     #         return self.fail_response(f"File '{file_path}' appears to be binary and cannot be read as text")
     #     except Exception as e:
     #         return self.fail_response(f"Error reading file: {str(e)}")
-

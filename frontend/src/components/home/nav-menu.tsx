@@ -3,15 +3,26 @@
 import { siteConfig } from '@/lib/home';
 import { motion } from 'motion/react';
 import React, { useRef, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 interface NavItem {
   name: string;
   href: string;
 }
 
-const navs: NavItem[] = siteConfig.nav.links;
+
 
 export function NavMenu() {
+  const pathname = usePathname();
+  const navs: NavItem[] = siteConfig.nav.links.map(navItem => {
+    if (navItem.name === 'Home') {
+      return {
+        ...navItem,
+        href: (pathname === '/' || pathname === '') ? '#hero' : '/'
+      };
+    }
+    return navItem;
+  });
   const ref = useRef<HTMLUListElement>(null);
   const [left, setLeft] = useState(0);
   const [width, setWidth] = useState(0);
@@ -22,7 +33,7 @@ export function NavMenu() {
   React.useEffect(() => {
     // Initialize with first nav item
     const firstItem = ref.current?.querySelector(
-      `[href="#${navs[0].href.substring(1)}"]`,
+      `[href="${navs[0].href.startsWith('#') ? navs[0].href : '#' + navs[0].href.substring(1)}"]`,
     )?.parentElement;
     if (firstItem) {
       const rect = firstItem.getBoundingClientRect();
@@ -37,7 +48,7 @@ export function NavMenu() {
       // Skip scroll handling during manual click scrolling
       if (isManualScroll) return;
 
-      const sections = navs.map((item) => item.href.substring(1));
+      const sections = navs.filter(item => item.href.startsWith('#')).map((item) => item.href.substring(1));
 
       // Find the section closest to viewport top
       let closestSection = sections[0];
@@ -76,7 +87,8 @@ export function NavMenu() {
     e: React.MouseEvent<HTMLAnchorElement>,
     item: NavItem,
   ) => {
-    e.preventDefault();
+    if (item.href.startsWith('#')) { // Check if it's an in-page link
+    e.preventDefault(); // Only prevent default for in-page links
 
     const targetId = item.href.substring(1);
     const element = document.getElementById(targetId);
@@ -109,6 +121,8 @@ export function NavMenu() {
         setIsManualScroll(false);
       }, 500); // Adjust timing to match scroll animation duration
     }
+  }
+  // For external links, do nothing and let the browser handle navigation
   };
 
   return (

@@ -2,6 +2,10 @@ import { withSentryConfig } from '@sentry/nextjs';
 import type { NextConfig } from 'next';
 
 let nextConfig: NextConfig = {
+  // Configure allowed image domains for next/image
+  images: {
+    domains: ['pixiomedia.nyc3.digitaloceanspaces.com', 'images.unsplash.com', 'argildotai.s3-accelerate.amazonaws.com'],
+  },
   webpack: (config) => {
     // This rule prevents issues with pdf.js and canvas
     config.externals = [...(config.externals || []), { canvas: 'canvas' }];
