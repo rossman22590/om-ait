@@ -2,7 +2,9 @@
 
 import { memo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { MessageSquare, Mail, Download, Send } from "lucide-react";
+import { MessageSquare, Mail, Download, Send, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useWorkflow } from "../WorkflowContext";
 
 interface OutputNodeData {
   label: string;
@@ -10,8 +12,9 @@ interface OutputNodeData {
   config: any;
 }
 
-const OutputNode = memo(({ data, selected }: NodeProps) => {
+const OutputNode = memo(({ data, selected, id }: NodeProps) => {
   const nodeData = data as unknown as OutputNodeData;
+  const { deleteNode } = useWorkflow();
   
   const getIcon = () => {
     switch (nodeData.nodeId) {
@@ -33,8 +36,19 @@ const OutputNode = memo(({ data, selected }: NodeProps) => {
   return (
     <div className={`relative bg-gray-800 rounded-lg border border-gray-600 min-w-[160px] ${selected ? "ring-2 ring-blue-400" : ""}`}>
       {/* Icon section */}
-      <div className="flex items-center justify-center p-3 bg-blue-500 rounded-t-lg">
+      <div className="flex items-center justify-between p-3 bg-blue-500 rounded-t-lg">
         {getIcon()}
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-6 w-6 text-white hover:text-red-200 hover:bg-blue-600"
+          onClick={(e) => {
+            e.stopPropagation();
+            deleteNode(id as string);
+          }}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
       </div>
       
       {/* Content section */}

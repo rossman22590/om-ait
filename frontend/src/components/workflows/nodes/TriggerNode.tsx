@@ -4,7 +4,9 @@ import { memo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Clock, Mail } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Webhook, Clock, Mail, Trash2 } from "lucide-react";
+import { useWorkflow } from "../WorkflowContext";
 
 interface TriggerNodeData {
   label: string;
@@ -12,8 +14,9 @@ interface TriggerNodeData {
   config: any;
 }
 
-const TriggerNode = memo(({ data, selected }: NodeProps) => {
+const TriggerNode = memo(({ data, selected, id }: NodeProps) => {
   const nodeData = data as unknown as TriggerNodeData;
+  const { deleteNode } = useWorkflow();
   const getIcon = () => {
     switch (nodeData.triggerType) {
       case "webhook":
@@ -30,11 +33,24 @@ const TriggerNode = memo(({ data, selected }: NodeProps) => {
   return (
     <Card className={`min-w-[200px] ${selected ? "ring-2 ring-primary" : ""}`}>
       <div className="p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="p-1.5 bg-primary/10 rounded">
-            {getIcon()}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-primary/10 rounded">
+              {getIcon()}
+            </div>
+            <Badge variant="outline" className="text-xs">Trigger</Badge>
           </div>
-          <Badge variant="outline" className="text-xs">Trigger</Badge>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-muted/80"
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteNode(id as string);
+            }}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
         </div>
         <h3 className="font-medium text-sm">{nodeData.label}</h3>
       </div>

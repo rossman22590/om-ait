@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Settings, Server, Plus, Sparkles, User, Star, ChevronDown, ChevronUp } from "lucide-react";
+import { Settings, Server, Plus, Sparkles, User, Star, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 import { MCPConfigurationNew } from "@/app/(dashboard)/agents/_components/mcp/mcp-configuration-new";
 import { useWorkflow } from "../WorkflowContext";
 import { useCredentialProfilesForMcp, useGetDefaultProfile } from "@/hooks/react-query/mcp/use-credential-profiles";
@@ -40,7 +40,7 @@ const MCPNode = memo(({ data, selected, id }: NodeProps) => {
   const [showConfigDialog, setShowConfigDialog] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [localInstructions, setLocalInstructions] = useState(nodeData.instructions || '');
-  const { updateNodeData } = useWorkflow();
+  const { updateNodeData, deleteNode } = useWorkflow();
   
   const { data: credentialProfiles } = useCredentialProfilesForMcp(
     nodeData.mcpType === "smithery" ? nodeData.qualifiedName || null : null
@@ -205,6 +205,17 @@ const MCPNode = memo(({ data, selected, id }: NodeProps) => {
             )}
             {getStatusBadge()}
           </div>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-background/80"
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteNode(id as string);
+            }}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
         </CardHeader>
 
         <CardContent className="p-4 space-y-3">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -33,6 +33,8 @@ import {
 } from "lucide-react";
 import { useMCPServers } from "@/hooks/react-query/mcp/use-mcp-servers";
 import { truncateString } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+// We'll use the existing auth pattern for API calls
 
 const inputNodes = [
   {
@@ -45,7 +47,8 @@ const inputNodes = [
   },
 ];
 
-const agentNodes = [
+// Default agent that's always available
+const defaultAgentNodes = [
   {
     id: "agent",
     name: "General Agent",
@@ -164,6 +167,26 @@ interface NodePaletteProps {
 }
 
 export default function NodePalette({ onCollapseChange }: NodePaletteProps) {
+  // Fetch user agents
+  const { data: userAgentData, isLoading: agentsLoading, isError: agentsError } = useQuery({
+    queryKey: ['user-agents'],
+    queryFn: async () => {
+      try {
+        const response = await fetch('/api/agents');
+        if (!response.ok) {
+          console.error(`Error fetching agents: ${response.status}`);
+          throw new Error(`Error fetching agents: ${response.status}`);
+        }
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error("Error fetching agents:", error);
+        return { items: [] };
+      }
+    },
+    retry: 1,
+    staleTime: 60000 // Cache for 1 minute
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>("input");
   const [mcpSearchQuery, setMcpSearchQuery] = useState("");
@@ -182,7 +205,7 @@ export default function NodePalette({ onCollapseChange }: NodePaletteProps) {
       nodes = [...nodes, ...inputNodes];
     }
     if (!selectedCategory || selectedCategory === "agent") {
-      nodes = [...nodes, ...agentNodes];
+      nodes = [...nodes, ...defaultAgentNodes];
     }
     if (!selectedCategory || selectedCategory === "tools") {
       nodes = [...nodes, ...toolNodes];
@@ -214,8 +237,19 @@ export default function NodePalette({ onCollapseChange }: NodePaletteProps) {
   }, [searchQuery, selectedCategory, mcpServers, mcpSearchQuery, mcpSearchResults]);
 
   const getNodesByCategory = (category: string) => {
+    if (category === "agent") {
+      // Combine default agent with user's custom agents
+      const customAgentNodes = (userAgentData?.items || []).map(agent => ({
+        id: `custom-agent-${agent.agent_id}`,
+        name: agent.name || "Unnamed Agent",
+        description: agent.description || "Custom agent",
+        icon: Bot,
+        category: "agent",
+        agentData: agent // Include the full agent data
+      }));
+      return [...defaultAgentNodes, ...customAgentNodes];
+    }
     if (category === "input") return inputNodes;
-    if (category === "agent") return agentNodes;
     if (category === "tools") return toolNodes;
     if (category === "mcp") {
       const mcpServersToUse = mcpSearchQuery.length > 2 && mcpSearchResults?.servers 
@@ -343,7 +377,7 @@ export default function NodePalette({ onCollapseChange }: NodePaletteProps) {
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-sm font-medium text-muted-foreground">Agents</h4>
                     <Badge variant="outline" className="text-xs">
-                      {agentNodes.length} available
+                      {getNodesByCategory("agent").length} available
                     </Badge>
                   </div>
                   
@@ -363,6 +397,9 @@ export default function NodePalette({ onCollapseChange }: NodePaletteProps) {
                               label: node.name,
                               nodeId: node.id,
                               config: {},
+                              agentId: node.agentData?.agent_id,
+                              agentData: node.agentData, // Include the full agent data
+                              tools: node.agentData?.tools || []
                             }}
                           >
                             <Card className="bg-neutral-100 dark:bg-neutral-900 py-2 group transition-all duration-200 border hover:border-primary/50 cursor-move">
@@ -578,6 +615,7 @@ export default function NodePalette({ onCollapseChange }: NodePaletteProps) {
           {!isCollapsed && (
             <div className="text-xs text-muted-foreground">
               {filteredNodes.length} node{filteredNodes.length !== 1 ? 's' : ''} available
+              {agentsLoading && ' (Loading agents...)'}
             </div>
           )}
           <Button

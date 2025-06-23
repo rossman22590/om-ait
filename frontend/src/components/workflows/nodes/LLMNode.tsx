@@ -2,7 +2,9 @@
 
 import { memo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { Bot, FileText, Code, ChevronDown } from "lucide-react";
+import { Bot, FileText, Code, ChevronDown, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useWorkflow } from "../WorkflowContext";
 
 interface LLMNodeData {
   label: string;
@@ -10,8 +12,9 @@ interface LLMNodeData {
   config: any;
 }
 
-const LLMNode = memo(({ data, selected }: NodeProps) => {
+const LLMNode = memo(({ data, selected, id }: NodeProps) => {
   const nodeData = data as unknown as LLMNodeData;
+  const { deleteNode } = useWorkflow();
   
   const getIcon = () => {
     switch (nodeData.nodeId) {
@@ -61,8 +64,21 @@ const LLMNode = memo(({ data, selected }: NodeProps) => {
   return (
     <div className={`relative bg-gray-800 rounded-lg border border-gray-600 min-w-[200px] ${selected ? "ring-2 ring-green-400" : ""}`}>
       {/* Icon section */}
-      <div className={`flex items-center justify-center p-3 ${getHeaderColor()} rounded-t-lg`}>
-        {getIcon()}
+      <div className={`flex items-center justify-between p-3 ${getHeaderColor()} rounded-t-lg`}>
+        <div className="flex-grow flex justify-center">
+          {getIcon()}
+        </div>
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-6 w-6 text-white hover:text-red-200 hover:bg-opacity-25 hover:bg-black"
+          onClick={(e) => {
+            e.stopPropagation();
+            deleteNode(id as string);
+          }}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
       </div>
       
       {/* Content section */}

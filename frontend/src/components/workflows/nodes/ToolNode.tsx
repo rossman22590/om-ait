@@ -4,7 +4,9 @@ import { memo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Globe, FileText, Terminal, Image, MessageSquare } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Globe, FileText, Terminal, Image, MessageSquare, Trash2 } from "lucide-react";
+import { useWorkflow } from "../WorkflowContext";
 
 interface ToolNodeData {
   label: string;
@@ -12,8 +14,9 @@ interface ToolNodeData {
   config: any;
 }
 
-const ToolNode = memo(({ data, selected }: NodeProps) => {
+const ToolNode = memo(({ data, selected, id }: NodeProps) => {
   const nodeData = data as unknown as ToolNodeData;
+  const { deleteNode } = useWorkflow();
   const getIcon = () => {
     switch (nodeData.toolId) {
       case "web-search":
@@ -34,11 +37,24 @@ const ToolNode = memo(({ data, selected }: NodeProps) => {
   return (
     <Card className={`min-w-[200px] ${selected ? "ring-2 ring-blue-500" : ""}`}>
       <div className="p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="p-1.5 bg-blue-500/10 rounded">
-            {getIcon()}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-blue-500/10 rounded">
+              {getIcon()}
+            </div>
+            <Badge variant="outline" className="text-xs text-blue-600">Tool</Badge>
           </div>
-          <Badge variant="outline" className="text-xs text-blue-600">Tool</Badge>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-6 w-6 text-gray-500 hover:text-red-500 hover:bg-gray-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              deleteNode(id as string);
+            }}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
         </div>
         <h3 className="font-medium text-sm">{nodeData.label}</h3>
       </div>

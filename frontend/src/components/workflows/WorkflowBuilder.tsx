@@ -231,6 +231,19 @@ export default function WorkflowBuilder({ workflowId }: WorkflowBuilderProps = {
     );
   }, [setNodes]);
 
+  const deleteNode = useCallback((nodeId: string) => {
+    // Remove the node
+    setNodes((nds) => nds.filter((node) => node.id !== nodeId));
+    
+    // Remove any connected edges
+    setEdges((eds) => 
+      eds.filter((edge) => edge.source !== nodeId && edge.target !== nodeId)
+    );
+    
+    // Show confirmation toast
+    toast.success('Node deleted successfully');
+  }, [setNodes, setEdges]);
+
   // Function to check if current state differs from last saved state
   const hasChanges = useCallback(() => {
     if (!lastSavedState) return false;
@@ -859,7 +872,7 @@ export default function WorkflowBuilder({ workflowId }: WorkflowBuilderProps = {
           )} */}
 
           <div className="flex-1 border border-border/50 bg-background backdrop-blur-sm overflow-hidden">
-            <WorkflowProvider updateNodeData={updateNodeData} workflowId={workflowId}>
+            <WorkflowProvider updateNodeData={updateNodeData} deleteNode={deleteNode} workflowId={workflowId}>
               <ReactFlow
                 nodes={nodes}
                 edges={edges}

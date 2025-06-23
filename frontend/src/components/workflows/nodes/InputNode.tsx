@@ -2,7 +2,7 @@
 
 import { memo, useState, useEffect, useCallback } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
-import { Play, Settings, Clock, Webhook, User, ChevronDown, ChevronUp, Brain } from "lucide-react";
+import { Play, Settings, Clock, Webhook, User, ChevronDown, ChevronUp, Brain, Trash2 } from "lucide-react";
 import { CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +36,7 @@ const InputNode = memo(({ data, selected, id }: NodeProps) => {
   const [isWebhookDialogOpen, setIsWebhookDialogOpen] = useState(false);
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false);
   const [localPrompt, setLocalPrompt] = useState(nodeData.prompt || '');
-  const { updateNodeData, workflowId } = useWorkflow();
+  const { updateNodeData, workflowId, deleteNode } = useWorkflow();
 
   // Use the model selection hook
   const {
@@ -155,21 +155,35 @@ const InputNode = memo(({ data, selected, id }: NodeProps) => {
     <div className={`relative bg-neutral-100 dark:bg-neutral-900 rounded-2xl border-2 min-w-[280px] max-w-[400px] ${
       selected ? "border-primary shadow-lg" : "border-border"
     }`}>
-      <CardHeader className={`flex items-center justify-between p-4 rounded-t-lg`}>
-        <div className="flex items-center gap-2">
-          <div className={`p-2 rounded-lg ${getTriggerColor()} border ${getBorderColor()}`}>
-            <Play className={`h-5 w-5 ${getIconColor()}`} />
+      <CardContent className="p-4 pb-2 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className={`h-5 w-5 rounded-full flex justify-center items-center ${getTriggerColor()}`}>
+              <div className={getIconColor()}>
+                {getTriggerIcon()}
+              </div>
+            </div>
+            <Badge variant="outline" className="text-xs border-primary/20">
+              {nodeData.trigger_type || 'MANUAL'} INPUT
+            </Badge>
           </div>
-          <span className="font-medium">Input</span>
+          <div className="flex items-center gap-2">
+            {nodeData.schedule_config?.enabled && (
+              <Badge className="bg-green-600 hover:bg-green-500">ACTIVE</Badge>
+            )}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteNode(id as string);
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          {getTriggerIcon()}
-          <Badge variant="outline" className="text-xs border-primary/20">
-            {nodeData.trigger_type || 'MANUAL'}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent className="p-4 space-y-3">
         <div>
           <Label className="text-xs font-medium text-muted-foreground">Prompt</Label>
           <p className="text-sm mt-1 line-clamp-2 text-foreground">

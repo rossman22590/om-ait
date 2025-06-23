@@ -4,7 +4,9 @@ import { memo } from "react";
 import { Handle, Position, NodeProps } from "@xyflow/react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Bot, Zap, Plus, ArrowRight, ArrowDown } from "lucide-react";
+import { Bot, Zap, Plus, ArrowRight, ArrowDown, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useWorkflow } from "../WorkflowContext";
 
 interface AgentNodeData {
   label: string;
@@ -33,8 +35,9 @@ interface AgentNodeData {
   config?: any;
 }
 
-const AgentNode = memo(({ data, selected }: NodeProps) => {
+const AgentNode = memo(({ data, selected, id }: NodeProps) => {
   const nodeData = data as unknown as AgentNodeData;
+  const { deleteNode } = useWorkflow();
   
   const getAgentConfig = () => {
     switch (nodeData.nodeId || nodeData.agentType) {
@@ -68,6 +71,17 @@ const AgentNode = memo(({ data, selected }: NodeProps) => {
                 {/* <p className="text-xs text-muted-foreground">{agentConfig.description}</p> */}
               </div>
             </div>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteNode(id as string);
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
         </CardHeader>
 

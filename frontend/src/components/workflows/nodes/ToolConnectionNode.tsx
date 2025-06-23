@@ -21,7 +21,8 @@ import {
   Settings,
   Wrench,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Trash2
 } from "lucide-react";
 import { useWorkflow } from "../WorkflowContext";
 
@@ -37,7 +38,7 @@ const ToolConnectionNode = memo(({ data, selected, id }: NodeProps) => {
   const nodeData = data as unknown as ToolConnectionNodeData;
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [localInstructions, setLocalInstructions] = useState(nodeData.instructions || '');
-  const { updateNodeData } = useWorkflow();
+  const { updateNodeData, deleteNode } = useWorkflow();
   
   useEffect(() => {
     setLocalInstructions(nodeData.instructions || '');
@@ -148,14 +149,27 @@ const ToolConnectionNode = memo(({ data, selected, id }: NodeProps) => {
     <div className={`relative min-w-[260px] max-w-[280px] ${selected ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : ""}`}>
       <Card className="pt-4 pb-0 border bg-neutral-100 dark:bg-neutral-800 transition-all duration-200">
         <CardHeader className="px-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
-              <Icon className="h-5 w-5 text-primary" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
+                <Icon className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">{nodeData.label}</h3>
+                {/* <p className="text-xs text-muted-foreground">{toolConfig.description}</p> */}
+              </div>
             </div>
-            <div>
-              <h3 className="font-semibold text-sm">{nodeData.label}</h3>
-              {/* <p className="text-xs text-muted-foreground">{toolConfig.description}</p> */}
-            </div>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteNode(id as string);
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
         </CardHeader>
 
