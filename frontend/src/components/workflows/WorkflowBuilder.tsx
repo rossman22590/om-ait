@@ -18,6 +18,14 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { 
   Play, 
   Save, 
@@ -135,6 +143,7 @@ interface WorkflowBuilderProps {
 }
 
 export default function WorkflowBuilder({ workflowId }: WorkflowBuilderProps = {}) {
+  const [showWelcomeModal, setShowWelcomeModal] = useState(true);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [showSettings, setShowSettings] = useState(false);
@@ -719,6 +728,64 @@ export default function WorkflowBuilder({ workflowId }: WorkflowBuilderProps = {
 
   return (
     <>
+      {/* Workflow Builder Welcome Modal */}
+      <Dialog open={showWelcomeModal} onOpenChange={setShowWelcomeModal}>
+        <DialogContent className="max-w-md z-[100]" style={{ zIndex: 1000 }}>
+          <DialogHeader>
+            <DialogTitle className="text-xl">Welcome to Machine Flow</DialogTitle>
+            <DialogDescription className="text-base">
+              Build powerful automated workflows with a visual interface
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="bg-blue-100 dark:bg-blue-900/30 rounded-full p-2 mt-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 dark:text-blue-400">
+                  <rect width="8" height="8" x="8" y="8" rx="2" />
+                  <path d="M4 10a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2" />
+                  <path d="M14 20a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2" />
+                  <path d="M10 20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2" />
+                  <path d="M20 10a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="font-medium text-sm">Drag & Connect Nodes</h4>
+                <p className="text-sm text-muted-foreground">Add nodes from the left panel and connect them to create workflow logic.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="bg-green-100 dark:bg-green-900/30 rounded-full p-2 mt-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-600 dark:text-green-400">
+                  <path d="m22 2-7 20-4-9-9-4Z" />
+                  <path d="M22 2 11 13" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="font-medium text-sm">Configure Node Settings</h4>
+                <p className="text-sm text-muted-foreground">Click on any node to configure its settings and behavior.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="bg-purple-100 dark:bg-purple-900/30 rounded-full p-2 mt-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-purple-600 dark:text-purple-400">
+                  <path d="M12 5v14" />
+                  <path d="m19 12-7 7-7-7" />
+                </svg>
+              </div>
+              <div>
+                <h4 className="font-medium text-sm">Save & Run Workflow</h4>
+                <p className="text-sm text-muted-foreground">Save your workflow and run it to see results in real time.</p>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setShowWelcomeModal(false)} className="w-full sm:w-auto">
+              Continue to Builder
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
       <style jsx global>{`
         .react-flow__edge-path {
           stroke: #6366f1 !important;
@@ -909,6 +976,11 @@ export default function WorkflowBuilder({ workflowId }: WorkflowBuilderProps = {
                   gap={20} 
                   size={1}
                 /> */}
+                
+                {/* Machine Flow branding overlay */}
+                <div className="absolute bottom-4 right-4 z-[9999] bg-white dark:bg-slate-800 px-2 py-1 rounded shadow-sm border border-border/50 text-xs font-medium pointer-events-none" style={{ zIndex: 9999 }}>
+                  Machine Flow
+                </div>
               </ReactFlow>
             </WorkflowProvider>
           </div>
