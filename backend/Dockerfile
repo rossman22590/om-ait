@@ -1,12 +1,23 @@
-FROM ghcr.io/astral-sh/uv:python3.11-alpine
+FROM python:3.11-alpine
 
 ENV ENV_MODE production
 WORKDIR /app
 
-# Install Python dependencies
-COPY pyproject.toml uv.lock ./
-ENV UV_LINK_MODE=copy
-RUN uv sync --locked --quiet
+# Install system dependencies that might be needed
+RUN apk add --no-cache gcc musl-dev libffi-dev
+
+# Copy requirements file
+COPY requirements.txt .
+
+# Install Python dependencies using pip
+RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Verify critical dependencies are installed
+RUN python -c "import fastapi; print('FastAPI:', fastapi.__version__)"
+RUN python -c "import dramatiq; print('Dramatiq:', dramatiq.__version__)"
+RUN python -c "import uvicorn; print('Uvicorn:', uvicorn.__version__)"
+RUN python -c "import gunicorn; print('Gunicorn:', gunicorn.__version__)"
 
 # Copy application code
 COPY . .
@@ -21,7 +32,7 @@ ENV PYTHONPATH=/app
 EXPOSE 8000
 
 # Gunicorn configuration
-CMD ["sh", "-c", "uv run gunicorn api:app \
+CMD ["sh", "-c", "gunicorn api:app \
   --workers $WORKERS \
   --worker-class uvicorn.workers.UvicornWorker \
   --bind 0.0.0.0:8000 \
