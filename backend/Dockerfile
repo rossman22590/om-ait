@@ -3,8 +3,11 @@ FROM python:3.11-alpine
 ENV ENV_MODE production
 WORKDIR /app
 
-# Install system dependencies that might be needed
-RUN apk add --no-cache gcc musl-dev libffi-dev
+# Install system dependencies including timezone data
+RUN apk add --no-cache gcc musl-dev libffi-dev tzdata
+
+# Set timezone for New York (handles EST/EDT automatically)
+ENV TZ=America/New_York
 
 # Copy requirements file
 COPY requirements.txt .
