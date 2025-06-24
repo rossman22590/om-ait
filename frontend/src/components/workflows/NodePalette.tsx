@@ -95,6 +95,27 @@ const toolNodes = [
     category: "tools",
   },
   {
+    id: "sb_imagegen_tool",
+    name: "Image Generation",
+    description: "Generate images from text prompts using OpenAI's GPT-Image-1 model",
+    icon: Sparkles,
+    category: "tools",
+  },
+  {
+    id: "sb_image_edit_tool",
+    name: "Image Editing",
+    description: "Edit and modify existing images using AI-powered tools",
+    icon: Settings,
+    category: "tools",
+  },
+  {
+    id: "sb_avatar_tool",
+    name: "Avatar Videos",
+    description: "Generate AI avatar videos using Argil AI with custom voices and scripts",
+    icon: Bot,
+    category: "tools",
+  },
+  {
     id: "computer_use_tool",
     name: "Computer Use",
     description: "Interact with computer desktop and applications",

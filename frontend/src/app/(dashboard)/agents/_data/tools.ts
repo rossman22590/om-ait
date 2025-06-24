@@ -7,6 +7,9 @@ export const DEFAULT_AGENTPRESS_TOOLS: Record<string, { enabled: boolean; descri
     'web_search_tool': { enabled: false, description: 'Search the web using Tavily API and scrape webpages with Firecrawl for research', icon: '🔍', color: 'bg-yellow-100 dark:bg-yellow-800/50' },
     'sb_vision_tool': { enabled: false, description: 'Vision and image processing capabilities for visual content analysis', icon: '👁️', color: 'bg-pink-100 dark:bg-pink-800/50' },
     'data_providers_tool': { enabled: false, description: 'Access to data providers and external APIs (requires RapidAPI key)', icon: '🔗', color: 'bg-cyan-100 dark:bg-cyan-800/50' },
+    'sb_imagegen_tool': { enabled: false, description: 'Generate images from text prompts using OpenAI\'s GPT-Image-1 model for creative and professional use', icon: '🎨', color: 'bg-purple-100 dark:bg-purple-800/50' },
+    'sb_image_edit_tool': { enabled: false, description: 'Edit and modify existing images using AI-powered tools for enhancement and manipulation', icon: '✏️', color: 'bg-emerald-100 dark:bg-emerald-800/50' },
+    'sb_avatar_tool': { enabled: false, description: 'Generate AI avatar videos using Argil AI with custom voices, scripts, and realistic avatars', icon: '🎬', color: 'bg-red-100 dark:bg-red-800/50' },
 };
 
 export const getToolDisplayName = (toolName: string): string => {
@@ -19,6 +22,9 @@ export const getToolDisplayName = (toolName: string): string => {
       'web_search_tool': 'Web Search',
       'sb_vision_tool': 'Image Processing',
       'data_providers_tool': 'Data Providers',
+      'sb_imagegen_tool': 'Image Generation',
+      'sb_image_edit_tool': 'Image Editing',
+      'sb_avatar_tool': 'Avatar Videos',
     };
     
     return displayNames[toolName] || toolName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
