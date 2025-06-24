@@ -69,24 +69,40 @@ class DBConnection:
             raise RuntimeError("Database not initialized")
         return self._client
 
-    async def upload_base64_image(self, base64_data: str, bucket_name: str = "browser-screenshots") -> str:
+    async def upload_base64_image(self, base64_data, bucket_name: str = "browser-screenshots") -> str:
         """Upload a base64 encoded image to Supabase storage and return the URL.
         
         Args:
-            base64_data (str): Base64 encoded image data (with or without data URL prefix)
+            base64_data (str | bytes): Base64 encoded image data (with or without data URL prefix)
             bucket_name (str): Name of the storage bucket to upload to
             
         Returns:
             str: Public URL of the uploaded image
         """
         try:
-            # Remove data URL prefix if present
-            if base64_data.startswith('data:'):
-                base64_data = base64_data.split(',')[1]
+            # Ensure base64_data is a string for processing
+            if isinstance(base64_data, bytes):
+                # If bytes, try to decode to string
+                try:
+                    base64_data = base64_data.decode('utf-8')
+                except UnicodeDecodeError:
+                    # If it's not valid UTF-8, assume it's already binary image data
+                    image_data = base64_data
+                    base64_data = None
             
-            # Decode base64 data
-            image_data = base64.b64decode(base64_data)
+            # Process base64 string if we have one
+            if base64_data is not None:
+                # Remove data URL prefix if present
+                if base64_data.startswith('data:'):
+                    base64_data = base64_data.split(',')[1]
+                
+                # Decode base64 data
+                image_data = base64.b64decode(base64_data)
             
+            # Validate we have image data
+            if not image_data:
+                raise ValueError("No valid image data provided")
+                
             # Generate unique filename
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             unique_id = str(uuid.uuid4())[:8]

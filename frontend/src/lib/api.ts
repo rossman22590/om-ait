@@ -2033,6 +2033,116 @@ export const getWorkflows = async (projectId?: string): Promise<Workflow[]> => {
   }
 };
 
+
+// Stop all running agents for the current user - instant stop
+export const stopAllAgents = async (): Promise<{ stopped: number, errors: number }> => {
+  console.log('[API] Stopping all agents for current user - INSTANT STOP');
+  
+  const supabase = createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error('No access token available');
+  }
+
+  // Track results
+  let stoppedCount = 0;
+  let errorCount = 0;
+  
+  try {
+    // Direct query to get all running agents for this user
+    const { data: runningAgents, error } = await supabase
+      .from('agent_runs')
+      .select('id, thread_id')
+      .eq('status', 'running')
+      .order('created_at', { ascending: false });
+      
+    if (error) {
+      throw new Error(`Error fetching running agents: ${error.message}`);
+    }
+    
+    console.log(`[API] Found ${runningAgents?.length || 0} running agents to stop immediately`);
+    
+    if (!runningAgents || runningAgents.length === 0) {
+      return { stopped: 0, errors: 0 };
+    }
+    
+    // Immediately mark all as non-running to prevent reconnection attempts
+    for (const agent of runningAgents) {
+      nonRunningAgentRuns.add(agent.id);
+      
+      // Close any existing streams
+      const existingStream = activeStreams.get(agent.id);
+      if (existingStream) {
+        console.log(`[API] Closing existing stream for ${agent.id}`);
+        existingStream.close();
+        activeStreams.delete(agent.id);
+      }
+    }
+    
+    // Prepare all stop requests
+    const stopPromises = runningAgents.map(agent => {
+      return fetch(`${API_URL}/agent-run/${agent.id}/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        cache: 'no-store',
+      })
+      .then(response => {
+        if (response.ok) {
+          stoppedCount++;
+          console.log(`[API] Successfully stopped agent run ${agent.id}`);
+          return true;
+        } else {
+          errorCount++;
+          console.error(`[API] Error stopping agent run ${agent.id}: ${response.statusText}`);
+          return false;
+        }
+      })
+      .catch(error => {
+        errorCount++;
+        console.error(`[API] Error stopping agent run ${agent.id}:`, error);
+        return false;
+      });
+    });
+    
+    // Execute all stop requests in parallel for maximum speed
+    await Promise.all(stopPromises);
+    
+    // Also update the Supabase status to ensure DB consistency
+    if (stoppedCount > 0) {
+      try {
+        const stopTime = new Date().toISOString();
+        const ids = runningAgents.map(a => a.id);
+        
+        const { error: updateError } = await supabase
+          .from('agent_runs')
+          .update({ 
+            status: 'stopped',
+            completed_at: stopTime
+          })
+          .in('id', ids);
+          
+        if (updateError) {
+          console.warn(`[API] Error updating agent status in DB: ${updateError.message}`);
+        }
+      } catch (dbError) {
+        console.warn('[API] Error updating agent status in DB:', dbError);
+      }
+    }
+  } catch (error) {
+    console.error('[API] Error in stopAllAgents:', error);
+    throw error;
+  }
+  
+  return { stopped: stoppedCount, errors: errorCount };
+};
+
+
 export const getWorkflow = async (workflowId: string): Promise<Workflow> => {
   try {
     const supabase = createClient();

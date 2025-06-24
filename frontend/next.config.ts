@@ -14,6 +14,14 @@ let nextConfig: NextConfig = {
 
     return config;
   },
+  // Configure allowed image domains
+  images: {
+    domains: [
+      'pixiomedia.nyc3.digitaloceanspaces.com', 
+      'uplaodpixio-production.up.railway.app',
+      'argildotai.s3-accelerate.amazonaws.com',
+    ],
+  },
 };
 
 if (process.env.NEXT_PUBLIC_VERCEL_ENV === 'production') {

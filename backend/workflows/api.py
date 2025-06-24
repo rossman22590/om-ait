@@ -277,38 +277,25 @@ async def update_workflow(
             status_code=403, 
             detail="This feature is not available at the moment."
         )
-    """Update a workflow."""
+    """Update workflow metadata only. For trigger/schedule updates, use the /flow endpoint."""
     try:
         client = await db.client
-        existing = await client.table('workflows').select('*').eq('id', workflow_id).eq('created_by', user_id).execute()
+
+        existing = await client.table('workflows').select('id').eq('id', workflow_id).eq('created_by', user_id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Workflow not found")
-        
-        current_definition = existing.data[0].get('definition', {})
-        
+
         update_data = {}
-        
         if request.name is not None:
             update_data['name'] = request.name
         if request.description is not None:
             update_data['description'] = request.description
         if request.state is not None:
-            update_data['status'] = request.state.lower()
-        
-        definition_updated = False
-        if request.agent_id is not None:
-            current_definition['agent_id'] = request.agent_id
-            definition_updated = True
-        if request.max_execution_time is not None:
-            current_definition['max_execution_time'] = request.max_execution_time
-            definition_updated = True
-        if request.max_retries is not None:
-            current_definition['max_retries'] = request.max_retries
-            definition_updated = True
-        
-        if definition_updated:
-            update_data['definition'] = current_definition
-        
+            update_data['state'] = request.state
+
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
         result = await client.table('workflows').update(update_data).eq('id', workflow_id).execute()
         
         if not result.data:
@@ -317,26 +304,12 @@ async def update_workflow(
         data = result.data[0]
         updated_workflow = _map_db_to_workflow_definition(data)
         
-        if updated_workflow.state == 'ACTIVE':
-            schedule_triggers = [trigger for trigger in updated_workflow.triggers if trigger.type == 'SCHEDULE']
-            if schedule_triggers:
-                try:
-                    await _remove_qstash_schedules_for_workflow(workflow_id)
-                    for schedule_trigger in schedule_triggers:
-                        await _create_qstash_schedule_for_workflow(updated_workflow, schedule_trigger)
-                    
-                    logger.info(f"Successfully created QStash schedules for workflow {workflow_id}")
-                except Exception as e:
-                    logger.error(f"Failed to create QStash schedules for workflow {workflow_id}: {e}")
-                    raise HTTPException(status_code=500, detail=f"Failed to schedule workflow: {e}")
-        else:
-            try:
-                await _remove_qstash_schedules_for_workflow(workflow_id)
-                logger.info(f"Removed QStash schedules for inactive workflow {workflow_id}")
-            except Exception as e:
-                logger.warning(f"Failed to remove QStash schedules for workflow {workflow_id}: {e}")
-                await workflow_scheduler.unschedule_workflow(workflow_id)
+        # 🚀 SURGICAL FIX: Remove schedule handling from metadata-only updates
+        # Schedules are now handled ONLY by the /flow endpoint to prevent duplicates
+        # This endpoint is for basic metadata changes (name, description, state)
+        # The /flow endpoint handles triggers and scheduling when flow data changes
         
+        logger.info(f"Updated workflow metadata for {workflow_id} (schedules handled by /flow endpoint)")
         return updated_workflow
         
     except HTTPException:
@@ -426,6 +399,24 @@ async def execute_workflow(
         
         await client.table('workflow_executions').insert(execution_data).execute()
         
+        # 🚀 CRITICAL FIX: Create FRESH sandbox for manual workflow execution
+        # This ensures no issues with destroyed/corrupted sandboxes
+        logger.info(f"Creating fresh sandbox for manual workflow project {workflow.project_id}")
+        try:
+            # Always create a fresh sandbox for workflow execution (same as scheduled workflows)
+            await workflow_executor._create_new_sandbox_for_project(client, workflow.project_id)
+            logger.info(f"✅ Fresh sandbox created and ACTIVE for manual workflow {workflow_id}")
+            
+        except Exception as sandbox_error:
+            logger.error(f"❌ Failed to create fresh sandbox for manual workflow {workflow_id}: {sandbox_error}")
+            # Update execution status to failed
+            await client.table('workflow_executions').update({
+                "status": "failed",
+                "error": f"Sandbox creation failed: {str(sandbox_error)}",
+                "completed_at": datetime.now(timezone.utc).isoformat()
+            }).eq('id', execution_id).execute()
+            raise HTTPException(status_code=500, detail=f"Failed to create sandbox: {str(sandbox_error)}")
+        
         thread_id = str(uuid.uuid4())
         
         await _create_workflow_thread_for_api(thread_id, workflow.project_id, workflow, request.variables)
@@ -448,6 +439,7 @@ async def execute_workflow(
             if 'updated_at' in workflow_dict and workflow_dict['updated_at']:
                 workflow_dict['updated_at'] = workflow_dict['updated_at'].isoformat()
         
+        # Send workflow to background worker (sandbox is now guaranteed to be ready!)
         run_workflow_background.send(
             execution_id=execution_id,
             workflow_id=workflow_id,
@@ -460,6 +452,8 @@ async def execute_workflow(
             agent_run_id=agent_run_id,
             deterministic=deterministic
         )
+        
+        logger.info(f"✅ Manual workflow {workflow_id} sent to background worker with CONFIRMED ACTIVE sandbox")
         
         return {
             "execution_id": execution_id,
@@ -769,27 +763,40 @@ async def update_workflow_flow(
         data = result.data[0]
         updated_workflow = _map_db_to_workflow_definition(data)
         
-        # Handle scheduling with QStash for cloud-based persistent scheduling
+        # 🚀 SINGLE SOURCE OF TRUTH: Handle scheduling with QStash for cloud-based persistent scheduling
+        # This is the ONLY endpoint that manages QStash schedules to prevent duplicates
+        logger.info(f"Processing QStash schedules for workflow {workflow_id} (single source of truth)")
+        
         if updated_workflow.state == 'ACTIVE':
             schedule_triggers = [trigger for trigger in updated_workflow.triggers if trigger.type == 'SCHEDULE']
             if schedule_triggers:
                 try:
                     # Remove any existing QStash schedules first
+                    logger.info(f"Removing existing QStash schedules for workflow {workflow_id}")
                     await _remove_qstash_schedules_for_workflow(workflow_id)
                     
                     # Create new QStash schedules
+                    logger.info(f"Creating {len(schedule_triggers)} new QStash schedules for workflow {workflow_id}")
                     for schedule_trigger in schedule_triggers:
                         await _create_qstash_schedule_for_workflow(updated_workflow, schedule_trigger)
                     
-                    logger.info(f"Successfully created QStash schedules for workflow {workflow_id}")
+                    logger.info(f"✅ Successfully created {len(schedule_triggers)} QStash schedules for workflow {workflow_id}")
                 except Exception as e:
-                    logger.error(f"Failed to create QStash schedules for workflow {workflow_id}: {e}")
+                    logger.error(f"❌ Failed to create QStash schedules for workflow {workflow_id}: {e}")
                     raise HTTPException(status_code=500, detail=f"Failed to schedule workflow: {e}")
+            else:
+                # Workflow is active but has no schedule triggers - remove any existing schedules
+                try:
+                    logger.info(f"Workflow {workflow_id} is active but has no schedule triggers, removing existing schedules")
+                    await _remove_qstash_schedules_for_workflow(workflow_id)
+                except Exception as e:
+                    logger.warning(f"Failed to remove QStash schedules for workflow {workflow_id}: {e}")
         else:
             # Remove QStash schedules when workflow is not active
             try:
+                logger.info(f"Workflow {workflow_id} is not active (state: {updated_workflow.state}), removing QStash schedules")
                 await _remove_qstash_schedules_for_workflow(workflow_id)
-                logger.info(f"Removed QStash schedules for inactive workflow {workflow_id}")
+                logger.info(f"✅ Removed QStash schedules for inactive workflow {workflow_id}")
             except Exception as e:
                 logger.warning(f"Failed to remove QStash schedules for workflow {workflow_id}: {e}")
                 # Also try to unschedule from old APScheduler as fallback

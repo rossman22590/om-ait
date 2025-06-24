@@ -25,6 +25,49 @@ TOOL_XML_EXAMPLES = {
 
     "web_search_tool": '<function_calls>\n        <invoke name="web_search">\n        <parameter name="query">what is Kortix AI and what are they building?</parameter>\n        <parameter name="num_results">20</parameter>\n        </invoke>\n        </function_calls>\n        \n        <!-- Another search example -->\n        <function_calls>\n        <invoke name="web_search">\n        <parameter name="query">latest AI research on transformer models</parameter>\n        <parameter name="num_results">20</parameter>\n        </invoke>\n        </function_calls>\n\n<function_calls>\n        <invoke name="scrape_webpage">\n        <parameter name="urls">https://www.kortix.ai/,https://github.com/kortix-ai/suna</parameter>\n        </invoke>\n        </function_calls>',
 
+    "sb_avatar_tool": '''<!-- List available Argil AI avatars -->
+        <list-argil-avatars />
+
+        <!-- List available Argil AI voices -->  
+        <list-argil-voices />
+
+        <!-- Generate a video with Argil AI -->
+        <generate-argil-video avatar_name="Pipo" voice_name="Pipo US Male" video_name="Welcome Video">
+        Hello! Welcome to our service. We're excited to have you here and help you get started.
+        </generate-argil-video>
+
+        <!-- Check the status of a video generation -->
+        <check-argil-video-status video_id="3c90c3cc-0d44-4b50-8888-8dd25736052a" />''',
+
+    "sb_imagegen_tool": '''<!-- Generate an image using OpenAI's gpt-image-1 model -->
+        <generate-image prompt="A cute baby sea otter floating on its back" />
+        
+        <!-- Or with the prompt as content -->
+        <generate-image>
+        A photorealistic portrait of a majestic cat with soft fur, striking eyes, and whiskers in a sunlit room
+        </generate-image>
+        
+        <!-- With specific parameters -->
+        <generate-image prompt="A futuristic cityscape at sunset" size="1024x1024" quality="high" />''',
+
+    "sb_image_edit_tool": '''<!-- Edit images using OpenAI's gpt-image-1 model -->
+        <edit-image images="image1.png,image2.png,image3.png" prompt="Combine these product images into a gift basket" />
+        
+        <!-- Or with the prompt as content -->
+        <edit-image images="soap.png,bath-bomb.png,incense-kit.png">
+        Create a photorealistic gift basket containing all these items with a ribbon labeled "Relax & Unwind"
+        </edit-image>
+        
+        <!-- With additional parameters -->
+        <edit-image 
+          images="product1.png,product2.png" 
+          mask="mask.png"
+          quality="high" 
+          background="transparent"
+          size="1536x1024">
+        Create a professional product showcase with detailed lighting
+        </edit-image>''',
+
 }
 
 def get_tool_xml_example(tool_id: str) -> str:

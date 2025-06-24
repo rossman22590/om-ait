@@ -16,6 +16,8 @@ import { CompleteToolView } from '../CompleteToolView';
 import { ExecuteDataProviderCallToolView } from '../data-provider-tool/ExecuteDataProviderCallToolView';
 import { DataProviderEndpointsToolView } from '../data-provider-tool/DataProviderEndpointsToolView';
 import { DeployToolView } from '../DeployToolView';
+import { ImageGenToolView } from '../ImageGenToolView';
+import AvatarToolView from '../AvatarToolView';
 
 
 export type ToolViewComponent = React.ComponentType<ToolViewProps>;
@@ -68,6 +70,16 @@ const defaultRegistry: ToolViewRegistryType = {
   'complete': CompleteToolView,
 
   'deploy': DeployToolView,
+
+  // Image generation and editing tools
+  'generate-image': ImageGenToolView,
+  'edit-image': ImageGenToolView,
+
+  // Avatar tools - mapping all the Argil avatar tool methods
+  'list-argil-avatars': AvatarToolView,
+  'list-argil-voices': AvatarToolView,
+  'generate-argil-video': AvatarToolView,
+  'check-argil-video-status': AvatarToolView,
 
   'default': GenericToolView,
 };

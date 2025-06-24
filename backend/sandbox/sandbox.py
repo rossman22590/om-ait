@@ -55,7 +55,20 @@ async def get_or_start_sandbox(sandbox_id: str):
                 logger.error(f"Error starting sandbox: {e}")
                 raise e
         
-        logger.info(f"Sandbox {sandbox_id} is ready")
+        # Verify sandbox is actually running and responsive
+        if sandbox.state != SandboxState.STARTED:
+            logger.error(f"Sandbox {sandbox_id} is not in STARTED state, current state: {sandbox.state}")
+            raise RuntimeError(f"Sandbox {sandbox_id} is not running (state: {sandbox.state})")
+        
+        # Additional check: try to verify the sandbox is responsive
+        try:
+            # Quick test to see if sandbox responds to basic commands
+            sandbox.fs.list_files("/")
+            logger.info(f"Sandbox {sandbox_id} is ready and responsive")
+        except Exception as e:
+            logger.error(f"Sandbox {sandbox_id} is not responsive: {e}")
+            raise RuntimeError(f"Sandbox {sandbox_id} is not responsive: {e}")
+        
         return sandbox
         
     except Exception as e:

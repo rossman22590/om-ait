@@ -92,14 +92,33 @@ class DeterministicWorkflowExecutor:
         try:
             await self._store_execution(execution)
             
-            # Ensure project has a sandbox before executing workflow
-            await self._ensure_project_has_sandbox(project_id)
+            # 🎯 SANDBOX OPTIMIZATION: Sandbox is now guaranteed to be ACTIVE before background execution
+            # We still do a lightweight check for safety, but no longer need heavy initialization
+            logger.info(f"Verifying sandbox state for workflow project {project_id} (should already be active)")
+            try:
+                client = await self.db.client
+                project_result = await client.table('projects').select('sandbox').eq('project_id', project_id).execute()
+                if project_result.data:
+                    sandbox_info = project_result.data[0].get('sandbox', {})
+                    if sandbox_info.get('id'):
+                        logger.info(f"✅ Sandbox {sandbox_info['id']} verified for workflow project {project_id}")
+                    else:
+                        logger.warning(f"No sandbox found for project {project_id} - this should not happen with new fixes")
+                        # Fallback to full sandbox initialization if somehow missing
+                        await self._ensure_project_has_sandbox(project_id)
+                else:
+                    logger.error(f"Project {project_id} not found during sandbox verification")
+                    raise ValueError(f"Project {project_id} not found")
+            except Exception as sandbox_check_error:
+                logger.warning(f"Sandbox verification failed for project {project_id}: {sandbox_check_error}")
+                # Fallback to full initialization
+                await self._ensure_project_has_sandbox(project_id)
             
             # Load visual flow data if not present in workflow
             workflow_with_flow = await self._ensure_workflow_has_flow_data(workflow)
             
             # Build prompt and tool configuration from visual flow
-            flow_config = self._analyze_visual_flow(workflow_with_flow, variables or {})
+            flow_config = await self._analyze_visual_flow(workflow_with_flow, variables or {})
             
             # Create thread with the flow-based prompt
             await self._ensure_workflow_thread_exists(thread_id, project_id, workflow_with_flow, variables)
@@ -170,7 +189,7 @@ class DeterministicWorkflowExecutor:
                 "error": str(e)
             }
     
-    def _analyze_visual_flow(self, workflow: WorkflowDefinition, variables: Dict[str, Any]) -> Dict[str, Any]:
+    async def _analyze_visual_flow(self, workflow: WorkflowDefinition, variables: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze the visual flow to build prompt and tool configuration."""
         logger.info(f"Analyzing visual flow for workflow {workflow.id}")
         
@@ -190,7 +209,7 @@ class DeterministicWorkflowExecutor:
         if not workflow.nodes or not workflow.edges:
             logger.info("No visual flow data, using legacy extraction methods")
             enabled_tools.update(self._extract_enabled_tools_from_workflow(workflow))
-            mcp_configs = asyncio.run(self._extract_mcp_configurations_from_workflow_and_agent(workflow))
+            mcp_configs = await self._extract_mcp_configurations_from_workflow_and_agent(workflow)
             configured_mcps = mcp_configs["configured_mcps"]
             custom_mcps = mcp_configs["custom_mcps"]
             
@@ -272,7 +291,7 @@ class DeterministicWorkflowExecutor:
                 legacy_tools = self._extract_enabled_tools_from_workflow(workflow)
                 enabled_tools.update(legacy_tools)
                 
-                mcp_configs = asyncio.run(self._extract_mcp_configurations_from_workflow_and_agent(workflow))
+                mcp_configs = await self._extract_mcp_configurations_from_workflow_and_agent(workflow)
                 configured_mcps.extend(mcp_configs["configured_mcps"])
                 custom_mcps.extend(mcp_configs["custom_mcps"])
             except Exception as e:
@@ -1488,41 +1507,14 @@ INSTRUCTIONS:
             raise
 
     async def _ensure_project_has_sandbox(self, project_id: str):
-        """Ensure that a project has a sandbox, creating one if it doesn't exist."""
+        """Ensure that a project has a fresh sandbox for workflow execution."""
         try:
             client = await self.db.client
-            
-            # Get project data
-            project_result = await client.table('projects').select('*').eq('project_id', project_id).execute()
-            if not project_result.data:
-                raise ValueError(f"Project {project_id} not found")
-            
-            project_data = project_result.data[0]
-            sandbox_info = project_data.get('sandbox', {})
-            sandbox_id = sandbox_info.get('id') if sandbox_info else None
-            
-            # If no sandbox exists, create one
-            if not sandbox_id:
-                logger.info(f"No sandbox found for workflow project {project_id}, creating new sandbox")
-                await self._create_new_sandbox_for_project(client, project_id)
-            else:
-                # Sandbox ID exists, try to ensure it's running
-                logger.info(f"Sandbox {sandbox_id} already exists for workflow project {project_id}, ensuring it's active")
-                try:
-                    from sandbox.sandbox import get_or_start_sandbox
-                    await get_or_start_sandbox(sandbox_id)
-                    logger.info(f"Sandbox {sandbox_id} is now active for workflow project {project_id}")
-                except Exception as sandbox_error:
-                    # If sandbox doesn't exist in Daytona, create a new one
-                    if "not found" in str(sandbox_error).lower():
-                        logger.warning(f"Sandbox {sandbox_id} not found in Daytona system, creating new sandbox for project {project_id}")
-                        await self._create_new_sandbox_for_project(client, project_id)
-                    else:
-                        # Re-raise other errors
-                        raise sandbox_error
+            logger.info(f"Creating fresh sandbox for deterministic workflow project {project_id}")
+            await self._create_new_sandbox_for_project(client, project_id)
             
         except Exception as e:
-            logger.error(f"Failed to ensure sandbox for workflow project {project_id}: {e}")
+            logger.error(f"Failed to create sandbox for deterministic workflow project {project_id}: {e}")
             raise
 
     async def _create_new_sandbox_for_project(self, client, project_id: str):

@@ -11,6 +11,7 @@ from .models import (
 )
 from .qstash_service import QStashService
 from workflows.executor import WorkflowExecutor
+from workflows.models import WorkflowDefinition
 from services.supabase import DBConnection
 from flags.flags import is_enabled
 
@@ -325,36 +326,44 @@ async def execute_scheduled_workflow(
     workflow_id: str,
     trigger_data: dict
 ):
-    """Execute a workflow triggered by a schedule using background worker"""
+    """Execute a scheduled workflow in the background."""
     try:
-        logger.info(f"Scheduling background execution for workflow {workflow_id}")
-
-        # First, we need to fetch the workflow definition from the database
-        client = await db.client
-        result = await client.table('workflows').select('*').eq('id', workflow_id).execute()
+        logger.info(f"Starting scheduled execution of workflow: {workflow_id}")
         
-        if not result.data:
-            logger.error(f"Workflow {workflow_id} not found in database")
+        # Get the workflow definition
+        client = await db.client
+        workflow_result = await client.table('workflows').select('*').eq('id', workflow_id).execute()
+        
+        if not workflow_result.data:
+            logger.error(f"Workflow {workflow_id} not found")
             return
         
-        # Convert database record to WorkflowDefinition
-        from workflows.api import _map_db_to_workflow_definition
-        workflow_data = result.data[0]
-        workflow = _map_db_to_workflow_definition(workflow_data)
+        workflow_data = workflow_result.data[0]
+        workflow_definition = workflow_data.get('definition', {})
+        if not workflow_definition:
+            logger.error(f"Workflow {workflow_id} has no definition")
+            return
         
-        logger.info(f"Loaded workflow: {workflow.name} (ID: {workflow.id})")
+        # Create workflow instance using the proper mapping function
+        from workflows.api import _map_db_to_workflow_definition
+        workflow = _map_db_to_workflow_definition(workflow_data)
         
         # Extract variables from trigger data if any
         variables = trigger_data.get('payload', {})
         if not isinstance(variables, dict):
             variables = {}
         
-        # Add trigger metadata to variables
-        variables.update({
+        # Don't add trigger metadata as variables that will be shown to user
+        # These should be internal metadata only
+        trigger_metadata = {
+            'workflow_id': workflow_id,
             'trigger_type': trigger_data.get('trigger_type', 'SCHEDULE'),
-            'schedule_name': trigger_data.get('schedule_name', 'Unknown'),
+            'schedule_name': trigger_data.get('schedule_name', 'Unknown Schedule'),
+            'schedule_description': trigger_data.get('schedule_description', 'Auto-generated schedule for workflow'),
             'triggered_at': trigger_data.get('triggered_at')
-        })
+        }
+        
+        logger.info(f"Scheduled workflow {workflow_id} triggered by {trigger_metadata['schedule_name']} with variables: {variables}")
         
         # Create workflow execution record
         execution_id = str(uuid.uuid4())
@@ -363,7 +372,7 @@ async def execute_scheduled_workflow(
             "workflow_id": workflow_id,
             "workflow_version": getattr(workflow, 'version', 1),
             "workflow_name": workflow.name,
-            "execution_context": variables,
+            "execution_context": variables,  # Only actual workflow variables, not trigger metadata
             "project_id": workflow.project_id,
             "account_id": workflow.created_by,
             "triggered_by": "SCHEDULE",
@@ -373,6 +382,24 @@ async def execute_scheduled_workflow(
         
         await client.table('workflow_executions').insert(execution_data).execute()
         logger.info(f"Created workflow execution record: {execution_id}")
+        
+        # 🚀 CRITICAL FIX: Create FRESH sandbox for scheduled workflow execution
+        # This ensures no issues with destroyed/corrupted sandboxes
+        logger.info(f"Creating fresh sandbox for scheduled workflow project {workflow.project_id}")
+        try:
+            # Always create a fresh sandbox for workflow execution (same as manual workflows)
+            await workflow_executor._create_new_sandbox_for_project(client, workflow.project_id)
+            logger.info(f"✅ Fresh sandbox created and ACTIVE for scheduled workflow {workflow_id}")
+            
+        except Exception as sandbox_error:
+            logger.error(f"❌ Failed to create fresh sandbox for scheduled workflow {workflow_id}: {sandbox_error}")
+            # Update execution status to failed
+            await client.table('workflow_executions').update({
+                "status": "failed",
+                "error": f"Sandbox creation failed: {str(sandbox_error)}",
+                "completed_at": datetime.now(timezone.utc).isoformat()
+            }).eq('id', execution_id).execute()
+            return
         
         # Generate thread_id for execution
         thread_id = str(uuid.uuid4())
@@ -402,7 +429,7 @@ async def execute_scheduled_workflow(
             if 'updated_at' in workflow_dict and workflow_dict['updated_at']:
                 workflow_dict['updated_at'] = workflow_dict['updated_at'].isoformat()
         
-        # Send workflow to background worker
+        # Send workflow to background worker (sandbox is now guaranteed to be ready!)
         from run_agent_background import run_workflow_background
         run_workflow_background.send(
             execution_id=execution_id,
@@ -413,10 +440,11 @@ async def execute_scheduled_workflow(
             triggered_by="SCHEDULE",
             project_id=workflow.project_id,
             thread_id=thread_id,
-            agent_run_id=agent_run_id
+            agent_run_id=agent_run_id,
+            deterministic=True  # Use deterministic executor like manual executions
         )
         
-        logger.info(f"Scheduled workflow {workflow_id} sent to background worker (execution_id: {execution_id})")
+        logger.info(f"✅ Scheduled workflow {workflow_id} sent to background worker with CONFIRMED ACTIVE sandbox (execution_id: {execution_id})")
         
     except Exception as e:
         logger.error(f"Failed to schedule workflow {workflow_id} for background execution: {e}")

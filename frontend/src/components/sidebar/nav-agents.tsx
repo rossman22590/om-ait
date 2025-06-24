@@ -66,6 +66,7 @@ export function NavAgents() {
   const [selectedThreads, setSelectedThreads] = useState<Set<string>>(new Set());
   const [deleteProgress, setDeleteProgress] = useState(0);
   const [totalToDelete, setTotalToDelete] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const {
     data: projects = [],
@@ -88,6 +89,11 @@ export function NavAgents() {
   const combinedThreads: ThreadWithProject[] =
     !isProjectsLoading && !isThreadsLoading ?
       processThreadsWithProjects(threads, projects) : [];
+
+  // Filter threads based on search query
+  const filteredThreads = !searchQuery ? combinedThreads :
+    combinedThreads.filter(thread =>
+      thread.projectName.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const handleDeletionProgress = (completed: number, total: number) => {
     const percentage = (completed / total) * 100;
@@ -116,6 +122,25 @@ export function NavAgents() {
   useEffect(() => {
     setLoadingThreadId(null);
   }, [pathname]);
+
+  // Listen for search query changes from SidebarSearch component
+  useEffect(() => {
+    const handleSearchQueryChange = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail) {
+        const { query } = customEvent.detail;
+        setSearchQuery(query);
+      }
+    };
+
+    window.addEventListener('sidebar-search-query-changed', handleSearchQueryChange as EventListener);
+    return () => {
+      window.removeEventListener(
+        'sidebar-search-query-changed',
+        handleSearchQueryChange as EventListener,
+      );
+    };
+  }, []);
 
   useEffect(() => {
     const handleNavigationComplete = () => {
@@ -432,10 +457,10 @@ export function NavAgents() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))
-        ) : combinedThreads.length > 0 ? (
+        ) : filteredThreads.length > 0 ? (
           // Show all threads with project info
           <>
-            {combinedThreads.map((thread) => {
+            {filteredThreads.map((thread) => {
               // Check if this thread is currently active
               const isActive = pathname?.includes(thread.threadId) || false;
               const isThreadLoading = loadingThreadId === thread.threadId;
@@ -587,7 +612,7 @@ export function NavAgents() {
           <SidebarMenuItem>
             <SidebarMenuButton className="text-sidebar-foreground/70">
               <MessagesSquare className="h-4 w-4" />
-              <span>No tasks yet</span>
+              <span>{searchQuery ? 'No matching tasks' : 'No tasks yet'}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         )}

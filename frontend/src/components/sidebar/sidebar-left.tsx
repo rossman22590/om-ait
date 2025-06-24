@@ -2,12 +2,13 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Bot, Menu, Store, Shield, Key, Workflow } from 'lucide-react';
+import { Bot, Menu, Store, Shield, Key, Workflow, Search, X, StopCircle, UserCircle2, Clock } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
+import { SidebarSearch } from '@/components/sidebar/sidebar-search';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
-import { CTACard } from '@/components/sidebar/cta';
+// import { CTACard } from '@/components/sidebar/cta';
 import {
   Sidebar,
   SidebarContent,
@@ -31,12 +32,15 @@ import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 import { usePathname } from 'next/navigation';
 import { useFeatureFlags } from '@/lib/feature-flags';
+import { stopAllAgents } from '@/lib/api';
+import { toast } from 'sonner';
 
 export function SidebarLeft({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
   const { state, setOpen, setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
+  const [isStoppingAllAgents, setIsStoppingAllAgents] = useState(false);
   const [user, setUser] = useState<{
     name: string;
     email: string;
@@ -90,6 +94,33 @@ export function SidebarLeft({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [state, setOpen]);
 
+  // Handler for stopping all agents
+  const handleStopAllAgents = async () => {
+    if (isStoppingAllAgents) return;
+    
+    try {
+      setIsStoppingAllAgents(true);
+      const result = await stopAllAgents();
+      
+      if (result.stopped > 0) {
+        toast.success(`Stopped ${result.stopped} agent${result.stopped !== 1 ? 's' : ''}`);
+      } else {
+        toast.info('No running agents found');
+      }
+      
+      if (result.errors > 0) {
+        toast.error(`Failed to stop ${result.errors} agent${result.errors !== 1 ? 's' : ''}`);
+      }
+    } catch (error) {
+      toast.error('Failed to stop agents');
+      console.error('Error stopping all agents:', error);
+    } finally {
+      setIsStoppingAllAgents(false);
+    }
+  };
+
+  
+
   return (
     <Sidebar
       collapsible="icon"
@@ -132,6 +163,58 @@ export function SidebarLeft({
         </div>
       </SidebarHeader>
       <SidebarContent className="[&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+        {/* Stop All Agents Button */}
+        <div className="px-3 py-2">
+          {state === 'collapsed' ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleStopAllAgents}
+                  className="h-8 w-8 mx-auto flex items-center justify-center rounded-md bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 cursor-pointer hover:scale-105 transition-transform active:scale-95"
+                  disabled={isStoppingAllAgents}
+                  aria-label="Stop All Running Agents"
+                >
+                  {isStoppingAllAgents ? (
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
+                  ) : (
+                    <StopCircle className="h-4 w-4" />
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[200px] p-3">
+                <p className="font-semibold text-orange-500 mb-1">Stop All Running Agents</p>
+                <p className="text-xs text-muted-foreground">Immediately stops all running agents across all threads. This will save credits but won't delete any data.</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={handleStopAllAgents}
+                  className="w-full h-8 flex items-center justify-center gap-2 rounded-md bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 cursor-pointer hover:scale-105 transition-transform active:scale-95"
+                  disabled={isStoppingAllAgents}
+                  aria-label="Stop All Running Agents"
+                >
+                  {isStoppingAllAgents ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-solid border-current border-r-transparent" />
+                      <span>Stopping All Agents...</span>
+                    </>
+                  ) : (
+                    <>
+                      <StopCircle className="h-4 w-4" />
+                      <span>Stop All Agents</span>
+                    </>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[200px] p-3">
+                <p className="font-semibold text-orange-500 mb-1">Stop All Running Agents</p>
+                <p className="text-xs text-muted-foreground">Immediately stops all running agents across all threads. This will save credits but won't delete any data.</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
         {!flagsLoading && (customAgentsEnabled || marketplaceEnabled) && (
           <SidebarGroup>
             {customAgentsEnabled && (
@@ -142,10 +225,26 @@ export function SidebarLeft({
                   <Bot className="h-4 w-4 mr-2" />
                   <span className="flex items-center justify-between w-full">
                     Agent Playground
+                    {/* <Badge variant="new">
+                      New
+                    </Badge> */}
                   </span>
                 </SidebarMenuButton>
               </Link>
             )}
+            <Link href="/avatars">
+              <SidebarMenuButton className={cn({
+                'bg-primary/10 font-medium': pathname === '/avatars',
+              })}>
+                <UserCircle2 className="h-4 w-4 mr-2" />
+                <span className="flex items-center justify-between w-full">
+                  Avatars
+                  {/* <Badge variant="beta">
+                    Beta
+                  </Badge> */}
+                </span>
+              </SidebarMenuButton>
+            </Link>
             {marketplaceEnabled && (
               <Link href="/marketplace">
                 <SidebarMenuButton className={cn({
@@ -154,6 +253,9 @@ export function SidebarLeft({
                   <Store className="h-4 w-4 mr-2" />
                   <span className="flex items-center justify-between w-full">
                     Marketplace
+                    {/* <Badge variant="new">
+                      New
+                    </Badge> */}
                   </span>
                 </SidebarMenuButton>
               </Link>
@@ -166,6 +268,9 @@ export function SidebarLeft({
                   <Key className="h-4 w-4 mr-2" />
                   <span className="flex items-center justify-between w-full">
                     Credentials
+                    <Badge variant="beta">
+                    Beta
+                  </Badge>
                   </span>
                 </SidebarMenuButton>
               </Link>
@@ -178,17 +283,23 @@ export function SidebarLeft({
                   <Workflow className="h-4 w-4 mr-2" />
                   <span className="flex items-center justify-between w-full">
                     Workflows
+                    <Badge variant="beta">
+                    Beta
+                  </Badge>
                   </span>
                 </SidebarMenuButton>
               </Link>
             )}
+            
+            {/* Search feature */}
+            <SidebarSearch />
           </SidebarGroup>
         )}
         <NavAgents />
       </SidebarContent>
       {state !== 'collapsed' && (
         <div className="px-3 py-2">
-          <CTACard />
+          {/* <CTACard /> */}
         </div>
       )}
       <SidebarFooter>

@@ -290,7 +290,7 @@ class WorkflowConverter:
         """Generate a comprehensive system prompt that describes the workflow."""
         
         prompt_parts = [
-            f"You are Suna - Workflows, an autonomous AI Agent created by the Kortix team, specialized in executing visual workflows.",
+            f"You are Machine - Workflows, an autonomous AI Agent created by the Machine team, specialized in executing visual workflows.",
             "",
             "# 1. CORE IDENTITY & CAPABILITIES",
             "You are a workflow-specialized autonomous agent capable of executing complex visual workflows across domains including information gathering, content creation, software development, data analysis, and problem-solving. You operate within the Suna platform and have access to a comprehensive toolkit for workflow execution.",

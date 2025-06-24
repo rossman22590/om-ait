@@ -42,7 +42,27 @@ class WorkflowExecutor:
         try:
             await self._store_execution(execution)
             
-            await self._ensure_project_has_sandbox(project_id)
+            # 🎯 SANDBOX OPTIMIZATION: Sandbox is now guaranteed to be ACTIVE before background execution
+            # We still do a lightweight check for safety, but no longer need heavy initialization
+            logger.info(f"Verifying sandbox state for workflow project {project_id} (should already be active)")
+            try:
+                client = await self.db.client
+                project_result = await client.table('projects').select('sandbox').eq('project_id', project_id).execute()
+                if project_result.data:
+                    sandbox_info = project_result.data[0].get('sandbox', {})
+                    if sandbox_info.get('id'):
+                        logger.info(f"✅ Sandbox {sandbox_info['id']} verified for workflow project {project_id}")
+                    else:
+                        logger.warning(f"No sandbox found for project {project_id} - this should not happen with new fixes")
+                        # Fallback to full sandbox initialization if somehow missing
+                        await self._ensure_project_has_sandbox(project_id)
+                else:
+                    logger.error(f"Project {project_id} not found during sandbox verification")
+                    raise ValueError(f"Project {project_id} not found")
+            except Exception as sandbox_check_error:
+                logger.warning(f"Sandbox verification failed for project {project_id}: {sandbox_check_error}")
+                # Fallback to full initialization
+                await self._ensure_project_has_sandbox(project_id)
             
             await self._ensure_workflow_thread_exists(thread_id, project_id, workflow, variables)
 
@@ -486,35 +506,14 @@ class WorkflowExecutor:
             raise 
 
     async def _ensure_project_has_sandbox(self, project_id: str):
-        """Ensure that a project has a sandbox, creating one if it doesn't exist."""
+        """Ensure that a project has a fresh sandbox for workflow execution."""
         try:
             client = await self.db.client
-            project_result = await client.table('projects').select('*').eq('project_id', project_id).execute()
-            if not project_result.data:
-                raise ValueError(f"Project {project_id} not found")
-            
-            project_data = project_result.data[0]
-            sandbox_info = project_data.get('sandbox', {})
-            sandbox_id = sandbox_info.get('id') if sandbox_info else None
-            
-            if not sandbox_id:
-                logger.info(f"No sandbox found for workflow project {project_id}, creating new sandbox")
-                await self._create_new_sandbox_for_project(client, project_id)
-            else:
-                logger.info(f"Sandbox {sandbox_id} already exists for workflow project {project_id}, ensuring it's active")
-                try:
-                    from sandbox.sandbox import get_or_start_sandbox
-                    await get_or_start_sandbox(sandbox_id)
-                    logger.info(f"Sandbox {sandbox_id} is now active for workflow project {project_id}")
-                except Exception as sandbox_error:
-                    if "not found" in str(sandbox_error).lower():
-                        logger.warning(f"Sandbox {sandbox_id} not found in Daytona system, creating new sandbox for project {project_id}")
-                        await self._create_new_sandbox_for_project(client, project_id)
-                    else:
-                        raise sandbox_error
+            logger.info(f"Creating fresh sandbox for workflow project {project_id}")
+            await self._create_new_sandbox_for_project(client, project_id)
             
         except Exception as e:
-            logger.error(f"Failed to ensure sandbox for workflow project {project_id}: {e}")
+            logger.error(f"Failed to create sandbox for workflow project {project_id}: {e}")
             raise
 
     async def _create_new_sandbox_for_project(self, client, project_id: str):

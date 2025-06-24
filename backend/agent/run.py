@@ -9,6 +9,9 @@ from agent.tools.message_tool import MessageTool
 from agent.tools.sb_deploy_tool import SandboxDeployTool
 from agent.tools.sb_expose_tool import SandboxExposeTool
 from agent.tools.web_search_tool import SandboxWebSearchTool
+from agent.tools.sb_avatar_tool import SandboxAvatarTool
+from agent.tools.sb_image_edit_tool import SandboxImageEditTool
+from agent.tools.sb_imagegen_tool import SandboxImageGenTool
 from dotenv import load_dotenv
 from utils.config import config
 from flags.flags import is_enabled
@@ -107,6 +110,9 @@ async def run_agent(
         thread_manager.add_tool(MessageTool)
         thread_manager.add_tool(SandboxWebSearchTool, project_id=project_id, thread_manager=thread_manager)
         thread_manager.add_tool(SandboxVisionTool, project_id=project_id, thread_id=thread_id, thread_manager=thread_manager)
+        thread_manager.add_tool(SandboxAvatarTool, project_id=project_id, thread_id=thread_id, thread_manager=thread_manager)
+        thread_manager.add_tool(SandboxImageEditTool, project_id=project_id, thread_id=thread_id, thread_manager=thread_manager)
+        thread_manager.add_tool(SandboxImageGenTool, project_id=project_id, thread_id=thread_id, thread_manager=thread_manager)
         if config.RAPID_API_KEY:
             thread_manager.add_tool(DataProvidersTool)
     else:
@@ -127,6 +133,12 @@ async def run_agent(
             thread_manager.add_tool(SandboxWebSearchTool, project_id=project_id, thread_manager=thread_manager)
         if enabled_tools.get('sb_vision_tool', {}).get('enabled', False):
             thread_manager.add_tool(SandboxVisionTool, project_id=project_id, thread_id=thread_id, thread_manager=thread_manager)
+        if enabled_tools.get('sb_avatar_tool', {}).get('enabled', False):
+            thread_manager.add_tool(SandboxAvatarTool, project_id=project_id, thread_id=thread_id, thread_manager=thread_manager)
+        if enabled_tools.get('sb_image_edit_tool', {}).get('enabled', False):
+            thread_manager.add_tool(SandboxImageEditTool, project_id=project_id, thread_id=thread_id, thread_manager=thread_manager)
+        if enabled_tools.get('sb_imagegen_tool', {}).get('enabled', False):
+            thread_manager.add_tool(SandboxImageGenTool, project_id=project_id, thread_id=thread_id, thread_manager=thread_manager)
         if config.RAPID_API_KEY and enabled_tools.get('data_providers_tool', {}).get('enabled', False):
             thread_manager.add_tool(DataProvidersTool)
 

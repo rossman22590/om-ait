@@ -22,7 +22,7 @@ class QStashService:
             raise ValueError("QSTASH_TOKEN environment variable is required")
         
         self.client = QStash(self.qstash_token)
-        self.base_url = os.getenv("BACKEND_URL", "https://14ce-2401-4900-1c00-1334-6ca8-8fb8-19ca-2ccd.ngrok-free.app")
+        self.base_url = os.getenv("BACKEND_URL", "https://machinev9api.ngrok.io")
         self.webhook_endpoint = f"{self.base_url}/api/v1/schedules/trigger"
 
         logger.info(f"QStash service initialized with webhook endpoint: {self.webhook_endpoint}")
