@@ -6,7 +6,7 @@ WORKDIR /app
 # Install Python dependencies
 COPY pyproject.toml uv.lock ./
 ENV UV_LINK_MODE=copy
-RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv uv sync --locked --quiet
+RUN --mount=type=cache,id=cache-uv,target=/root/.cache/uv uv sync --locked --quiet
 
 # Copy application code
 COPY . .
