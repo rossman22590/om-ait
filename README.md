@@ -3,7 +3,7 @@
 # Suna - Open Source Generalist AI Agent
 
 (that acts on your behalf)
-
+ 
 ![Suna Screenshot](frontend/public/banner.png)
 
 Suna is a fully open source AI assistant that helps you accomplish real-world tasks with ease. Through natural conversation, Suna becomes your digital companion for research, data analysis, and everyday challenges—combining powerful capabilities with an intuitive interface that understands what you need and delivers results.
@@ -30,15 +30,22 @@ Suna's powerful toolkit includes seamless browser automation to navigate the web
 
 ## Table of Contents
 
-- [Suna Architecture](#project-architecture)
-  - [Backend API](#backend-api)
-  - [Frontend](#frontend)
-  - [Agent Docker](#agent-docker)
-  - [Supabase Database](#supabase-database)
-- [Use Cases](#use-cases)
-- [Self-Hosting](#self-hosting)
-- [Acknowledgements](#acknowledgements)
-- [License](#license)
+- [Suna - Open Source Generalist AI Agent](#suna---open-source-generalist-ai-agent)
+  - [Table of Contents](#table-of-contents)
+  - [Project Architecture](#project-architecture)
+    - [Backend API](#backend-api)
+    - [Frontend](#frontend)
+    - [Agent Docker](#agent-docker)
+    - [Supabase Database](#supabase-database)
+  - [Use Cases](#use-cases)
+  - [Self-Hosting](#self-hosting)
+    - [Quick Start](#quick-start)
+    - [Manual Setup](#manual-setup)
+  - [Contributing](#contributing)
+  - [Acknowledgements](#acknowledgements)
+    - [Main Contributors](#main-contributors)
+    - [Technologies](#technologies)
+  - [License](#license)
 
 ## Project Architecture
 
