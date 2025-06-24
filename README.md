@@ -1,6 +1,6 @@
 <div align="center">
 
-# Suna - Open Source Generalist AI Agent
+# Machine -  Generalist AI Agent
 
 (that acts on your behalf)
  
@@ -30,7 +30,7 @@ Suna's powerful toolkit includes seamless browser automation to navigate the web
 
 ## Table of Contents
 
-- [Suna - Open Source Generalist AI Agent](#suna---open-source-generalist-ai-agent)
+- [Machine -  Generalist AI Agent](#suna---open-source-generalist-ai-agent)
   - [Table of Contents](#table-of-contents)
   - [Project Architecture](#project-architecture)
     - [Backend API](#backend-api)
