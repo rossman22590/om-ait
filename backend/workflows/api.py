@@ -252,7 +252,7 @@ async def get_workflow(
     try:
         client = await db.client
         
-        result = await client.table('workflows').select('*').eq('id', workflow_id).eq('created_by', user_id).execute()
+        result = await client.table('workflows').select('*').eq('id', workflow_id).eq('account_id', user_id).execute()
         
         if not result.data:
             raise HTTPException(status_code=404, detail="Workflow not found")
@@ -281,7 +281,7 @@ async def update_workflow(
     try:
         client = await db.client
 
-        existing = await client.table('workflows').select('id').eq('id', workflow_id).eq('created_by', user_id).execute()
+        existing = await client.table('workflows').select('id').eq('id', workflow_id).eq('account_id', user_id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Workflow not found")
 
@@ -332,7 +332,7 @@ async def delete_workflow(
     try:
         client = await db.client
 
-        existing = await client.table('workflows').select('id').eq('id', workflow_id).eq('created_by', user_id).execute()
+        existing = await client.table('workflows').select('id').eq('id', workflow_id).eq('account_id', user_id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Workflow not found")
 
@@ -364,7 +364,7 @@ async def execute_workflow(
     try:
         client = await db.client
 
-        result = await client.table('workflows').select('*').eq('id', workflow_id).eq('created_by', user_id).execute()
+        result = await client.table('workflows').select('*').eq('id', workflow_id).eq('account_id', user_id).execute()
         if not result.data:
             raise HTTPException(status_code=404, detail="Workflow not found")
         
@@ -678,7 +678,7 @@ async def get_workflow_flow(
                 metadata=data.get('metadata', {})
             )
         
-        workflow_result = await client.table('workflows').select('*').eq('id', workflow_id).eq('created_by', user_id).execute()
+        workflow_result = await client.table('workflows').select('*').eq('id', workflow_id).eq('account_id', user_id).execute()
         
         if not workflow_result.data:
             raise HTTPException(status_code=404, detail="Workflow not found")
@@ -716,7 +716,7 @@ async def update_workflow_flow(
     """Update the visual flow of a workflow and convert it to executable definition."""
     try:
         client = await db.client
-        existing = await client.table('workflows').select('*').eq('id', workflow_id).eq('created_by', user_id).execute()
+        existing = await client.table('workflows').select('*').eq('id', workflow_id).eq('account_id', user_id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Workflow not found")
         
@@ -1128,7 +1128,7 @@ async def get_scheduler_status(
     try:
         scheduled_workflows = await workflow_scheduler.get_scheduled_workflows()
         client = await db.client
-        user_workflows = await client.table('workflows').select('id').eq('created_by', user_id).execute()
+        user_workflows = await client.table('workflows').select('id').eq('account_id', user_id).execute()
         user_workflow_ids = {w['id'] for w in user_workflows.data}
         
         filtered_scheduled = [

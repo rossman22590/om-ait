@@ -15,8 +15,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { CredentialProfileSelector } from '@/components/workflows/CredentialProfileSelector';
 
 import { 
+  useMarketplaceAgents, 
+  useAddAgentToLibrary,
+  MarketplaceAgent
+} from '@/hooks/react-query/marketplace/use-marketplace';
+import { 
   useMarketplaceTemplates, 
-  useInstallTemplate
+  useInstallTemplate,
+  AgentTemplate
 } from '@/hooks/react-query/secure-mcp/use-secure-mcp';
 import { useCredentialProfilesForMcp } from '@/hooks/react-query/mcp/use-credential-profiles';
 import { createClient } from '@/lib/supabase/client';
@@ -48,6 +54,7 @@ interface MarketplaceTemplate {
     source_agent_id?: string;
     source_version_id?: string;
     source_version_name?: string;
+    source_type?: 'agent' | 'template';
   };
 }
 
@@ -316,11 +323,11 @@ const InstallDialog: React.FC<InstallDialogProps> = ({
                         <div>
                           <span className="font-medium">{profile.display_name}</span>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {profile.required_config.map((config) => (
+                            {profile.required_config?.map((config) => (
                               <Badge key={config} variant="outline" className="text-xs">
                                 {config}
                               </Badge>
-                            ))}
+                            )) || <Badge variant="outline" className="text-xs">No config required</Badge>}
                           </div>
                         </div>
                       </div>
@@ -526,36 +533,79 @@ export default function MarketplacePage() {
     }
   }, [flagLoading, agentMarketplaceEnabled, router]);
 
-  const [page, setPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<SortOption>('newest');
-  const [installingItemId, setInstallingItemId] = useState<string | null>(null);
-  const [selectedItem, setSelectedItem] = useState<MarketplaceTemplate | null>(null);
-  const [showInstallDialog, setShowInstallDialog] = useState(false);
+  const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [sortBy, setSortBy] = React.useState<SortOption>('newest');
+  const [page, setPage] = React.useState(1);
+  const [selectedItem, setSelectedItem] = React.useState<MarketplaceTemplate | null>(null);
+  const [showInstallDialog, setShowInstallDialog] = React.useState(false);
+  const [installingItemId, setInstallingItemId] = React.useState<string | null>(null);
 
-  // Secure marketplace data (all templates are now secure)
-  const secureQueryParams = useMemo(() => ({
+  const marketplaceQueryParams = React.useMemo(() => ({
+    limit: 20,
+    page: page,
+    search: searchQuery || undefined,
+    tags: selectedTags.length > 0 ? selectedTags : undefined,
+    sort_by: sortBy as 'newest' | 'popular' | 'most_downloaded' | 'name',
+  }), [page, searchQuery, selectedTags, sortBy]);
+
+  // Fetch from both sources
+  const { data: marketplaceData, isLoading: agentsLoading } = useMarketplaceAgents(marketplaceQueryParams);
+  const { data: templatesData, isLoading: templatesLoading } = useMarketplaceTemplates({
     limit: 20,
     offset: (page - 1) * 20,
     search: searchQuery || undefined,
     tags: selectedTags.length > 0 ? selectedTags.join(',') : undefined,
-  }), [page, searchQuery, selectedTags]);
-
-  const { data: secureTemplates, isLoading } = useMarketplaceTemplates(secureQueryParams);
+  });
+  
+  const addToLibraryMutation = useAddAgentToLibrary();
   const installTemplateMutation = useInstallTemplate();
+  
+  const isLoading = agentsLoading || templatesLoading;
 
-  // Transform secure templates data
-  const marketplaceItems = useMemo(() => {
+  // Transform and combine data from both sources
+  const marketplaceItems = React.useMemo(() => {
     const items: MarketplaceTemplate[] = [];
 
-    // Add secure templates (all items are now secure)
-    if (secureTemplates) {
-      secureTemplates.forEach(template => {
+    // Add marketplace agents (from agents table)
+    if (marketplaceData?.agents) {
+      marketplaceData.agents.forEach(agent => {
+        items.push({
+          id: agent.agent_id,
+          name: agent.name,
+          description: agent.description || '',
+          tags: agent.tags || [],
+          download_count: agent.download_count || 0,
+          creator_name: agent.creator_name || 'Anonymous',
+          created_at: agent.created_at,
+          marketplace_published_at: agent.marketplace_published_at,
+          avatar: agent.avatar,
+          avatar_color: agent.avatar_color,
+          template_id: agent.agent_id,
+          mcp_requirements: Array.isArray(agent.configured_mcps) 
+            ? agent.configured_mcps.map(mcp => ({
+                qualified_name: mcp.name || mcp.qualified_name || 'unknown',
+                display_name: mcp.display_name || mcp.name || 'Unknown Service',
+                enabled_tools: mcp.enabled_tools || [],
+                required_config: mcp.required_config || [],
+                custom_type: mcp.custom_type
+              }))
+            : [],
+          metadata: {
+            source_agent_id: agent.agent_id,
+            source_type: 'agent', // Mark as agent
+          },
+        });
+      });
+    }
+
+    // Add secure templates (from agent_templates table)
+    if (templatesData && Array.isArray(templatesData)) {
+      templatesData.forEach(template => {
         items.push({
           id: template.template_id,
           name: template.name,
-          description: template.description,
+          description: template.description || '',
           tags: template.tags || [],
           download_count: template.download_count || 0,
           creator_name: template.creator_name || 'Anonymous',
@@ -564,13 +614,16 @@ export default function MarketplacePage() {
           avatar: template.avatar,
           avatar_color: template.avatar_color,
           template_id: template.template_id,
-          mcp_requirements: template.mcp_requirements,
-          metadata: template.metadata,
+          mcp_requirements: template.mcp_requirements || [],
+          metadata: {
+            ...template.metadata,
+            source_type: 'template', // Mark as template
+          },
         });
       });
     }
 
-    // Sort items
+    // Sort combined items
     return items.sort((a, b) => {
       switch (sortBy) {
         case 'newest':
@@ -585,7 +638,7 @@ export default function MarketplacePage() {
           return 0;
       }
     });
-  }, [secureTemplates, sortBy]);
+  }, [marketplaceData, templatesData, sortBy]);
 
   React.useEffect(() => {
     setPage(1);
@@ -613,25 +666,44 @@ export default function MarketplacePage() {
     setInstallingItemId(item.id);
     
     try {
-      const result = await installTemplateMutation.mutateAsync({
-        template_id: item.template_id,
-        instance_name: instanceName,
-        profile_mappings: profileMappings,
-        custom_mcp_configs: customMcpConfigs
-      });
+      const isTemplate = item.metadata?.source_type === 'template';
+      
+      if (isTemplate) {
+        // Handle secure template installation
+        const result = await installTemplateMutation.mutateAsync({
+          template_id: item.template_id,
+          instance_name: instanceName,
+          profile_mappings: profileMappings,
+          custom_mcp_configs: customMcpConfigs
+        });
 
-      if (result.status === 'installed') {
-        toast.success('Agent installed successfully!');
+        if (result.status === 'installed') {
+          toast.success('Template installed successfully!');
+          setShowInstallDialog(false);
+        } else if (result.status === 'configs_required') {
+          toast.error('Please provide all required configurations');
+          return;
+        }
+      } else {
+        // Handle regular agent installation
+        // Validate UUID format before sending
+        const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(item.template_id);
+        
+        if (!isValidUUID) {
+          toast.error('Invalid agent ID format. This agent may be from an older version and needs to be republished.');
+          setShowInstallDialog(false);
+          return;
+        }
+        
+        const result = await addToLibraryMutation.mutateAsync(item.template_id);
+        toast.success('Agent added to your library successfully!');
         setShowInstallDialog(false);
-      } else if (result.status === 'configs_required') {
-        toast.error('Please provide all required configurations');
-        return;
       }
     } catch (error: any) {
       if (error.message?.includes('already in your library')) {
-        toast.error('This agent is already in your library');
+        toast.error('This item is already in your library');
       } else {
-        toast.error(error.message || 'Failed to install agent');
+        toast.error(error.message || 'Failed to install item');
       }
     } finally {
       setInstallingItemId(null);
