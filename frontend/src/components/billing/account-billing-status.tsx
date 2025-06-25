@@ -11,19 +11,71 @@ import {
 } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 type Props = {
   accountId: string;
   returnUrl: string;
 };
 
+// CSS for the progress bar and keyframes animation for the gradient
+const progressBarStyles = `
+  .progress-bar-container {
+    width: 100%;
+    height: 0.75rem;
+    background-color: rgba(75, 75, 75, 0.25);
+    border-radius: 9999px;
+    margin-top: 0.5rem;
+    overflow: hidden;
+  }
+
+  @keyframes flow {
+    0% { background-position: 200% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+
+  .progress-bar {
+    height: 100%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, 
+      #ff5bce, 
+      #da6ad5, 
+      #c17afc, 
+      #a46cf4, 
+      #845ef7, 
+      #a46cf4, 
+      #c17afc, 
+      #da6ad5, 
+      #ff5bce
+    );
+    background-size: 500% 100%;
+    animation: flow 12s linear infinite;
+  }
+`;
+
 export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
+  // Add the keyframes animation to the document head
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = progressBarStyles;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
   const { session, isLoading: authLoading } = useAuth();
   const [subscriptionData, setSubscriptionData] =
     useState<SubscriptionStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isManaging, setIsManaging] = useState(false);
+  const [isAddingMinutes, setIsAddingMinutes] = useState(false);
 
   useEffect(() => {
     async function fetchSubscription() {
@@ -63,6 +115,11 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
     }
   };
 
+  const handleBuyAdditionalMinutes = () => {
+    setIsAddingMinutes(true);
+    window.location.href = "https://buy.stripe.com/4gMdR9gyU22V5hC74i8AE02";
+  };
+
   // In local development mode, show a simplified component
   // if (isLocalMode()) {
   //   return (
@@ -80,7 +137,7 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
   //   );
   // }
 
-  // // Show loading state
+  // Show loading state
   if (isLoading || authLoading) {
     return (
       <div className="rounded-xl border shadow-sm bg-card p-6">
@@ -127,15 +184,58 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
       {subscriptionData ? (
         <>
           <div className="mb-6">
-            <div className="rounded-lg border bg-background p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-foreground/90">
-                  Agent Usage This Month
-                </span>
-                <span className="text-sm font-medium text-card-title">
-                  {subscriptionData.current_usage?.toFixed(2) || '0'} /{' '}
-                  {subscriptionData.minutes_limit || '0'} minutes
-                </span>
+            <div className="rounded-lg border bg-background p-6 space-y-4">
+              <div className="flex flex-col space-y-1">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-md font-semibold text-foreground">
+                    Agent Usage This Month
+                  </h3>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={handleBuyAdditionalMinutes}
+                          disabled={isAddingMinutes}
+                          size="sm"
+                          className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm hover:shadow-md transition-all"
+                        >
+                          {isAddingMinutes ? 'Redirecting...' : 'Buy Additional Minutes'}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="w-64 p-2">
+                        <p className="text-sm text-center">One hour costs $10. You can purchase up to 50 additional hours. If you need more, please reach out to support.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <div className="flex flex-col space-y-1 mt-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-primary">
+                        {subscriptionData.current_usage?.toFixed(2) || '0'}
+                      </span>
+                      <span className="text-xs text-muted-foreground px-1">of</span>
+                      <span className="text-lg font-semibold text-foreground/80">
+                        {subscriptionData.minutes_limit || '0'}
+                      </span>
+                      <span className="text-xs text-muted-foreground">minutes</span>
+                    </div>
+                    <div className="text-sm font-medium text-primary">
+                      {subscriptionData.minutes_limit && subscriptionData.current_usage 
+                        ? `${Math.max(0, (subscriptionData.minutes_limit - subscriptionData.current_usage)).toFixed(2)} remaining`
+                        : ''}
+                    </div>
+                  </div>
+                </div>
+                {/* Progress bar */}
+                <div className="progress-bar-container">
+                  <div 
+                    className="progress-bar"
+                    style={{
+                      width: `${Math.min(100, ((subscriptionData.current_usage || 0) / (subscriptionData.minutes_limit || 1)) * 100)}%`
+                    }}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -155,24 +255,62 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
       ) : (
         <>
           <div className="mb-6">
-            <div className="rounded-lg border bg-background p-4 gap-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-foreground/90">
+            <div className="rounded-lg border bg-background p-6 space-y-4">
+              <div className="flex justify-between items-center pb-1">
+                <span className="text-md font-semibold text-foreground">
                   Current Plan
                 </span>
-                <span className="text-sm font-medium text-card-title">
+                <span className="text-md font-bold py-1 px-3 bg-muted rounded-full">
                   Free
                 </span>
               </div>
 
-              <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-foreground/90">
-                  Agent Usage This Month
-                </span>
-                <span className="text-sm font-medium text-card-title">
-                  {subscriptionData?.current_usage?.toFixed(2) || '0'} /{' '}
-                  {subscriptionData?.minutes_limit || '0'} minutes
-                </span>
+              <div className="flex flex-col space-y-1 pt-2">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-md font-semibold text-foreground">
+                    Agent Usage This Month
+                  </h3>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          onClick={handleBuyAdditionalMinutes}
+                          disabled={isAddingMinutes}
+                          size="sm"
+                          className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm hover:shadow-md transition-all"
+                        >
+                          {isAddingMinutes ? 'Redirecting...' : 'Buy Additional Minutes'}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent className="w-64 p-2">
+                        <p className="text-sm text-center">One hour costs $10. You can purchase up to 50 additional hours. If you need more, please reach out to support.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <div className="flex flex-col space-y-1 mt-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold text-primary">
+                        {subscriptionData?.current_usage?.toFixed(2) || '0'}
+                      </span>
+                      <span className="text-xs text-muted-foreground px-1">of</span>
+                      <span className="text-lg font-semibold text-foreground/80">
+                        {subscriptionData?.minutes_limit || '0'}
+                      </span>
+                      <span className="text-xs text-muted-foreground">minutes</span>
+                    </div>
+                  </div>
+                </div>
+                {/* Progress bar */}
+                <div className="progress-bar-container">
+                  <div 
+                    className="progress-bar"
+                    style={{
+                      width: `${Math.min(100, ((subscriptionData?.current_usage || 0) / (subscriptionData?.minutes_limit || 1)) * 100)}%`
+                    }}
+                  />
+                </div>
               </div>
             </div>
           </div>
