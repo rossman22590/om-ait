@@ -188,25 +188,28 @@ interface NodePaletteProps {
 }
 
 export default function NodePalette({ onCollapseChange }: NodePaletteProps) {
-  // Fetch user agents
+  // Fetch user agents from the /api/agents endpoint
   const { data: userAgentData, isLoading: agentsLoading, isError: agentsError } = useQuery({
     queryKey: ['user-agents'],
     queryFn: async () => {
       try {
-        const response = await fetch('/api/agents');
+        console.log('Fetching user agents from /api/agents');
+        const response = await fetch('/api/agents?limit=100'); // Get more agents for workflows
         if (!response.ok) {
           console.error(`Error fetching agents: ${response.status}`);
           throw new Error(`Error fetching agents: ${response.status}`);
         }
         const data = await response.json();
+        console.log('User agents fetched successfully:', data.items?.length || 0, 'agents');
         return data;
       } catch (error) {
-        console.error("Error fetching agents:", error);
+        console.error("Error fetching user agents:", error);
         return { items: [] };
       }
     },
     retry: 1,
-    staleTime: 60000 // Cache for 1 minute
+    staleTime: 30000, // Cache for 30 seconds
+    refetchOnWindowFocus: false // Don't refetch when window gets focus
   });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>("input");
@@ -263,11 +266,14 @@ export default function NodePalette({ onCollapseChange }: NodePaletteProps) {
       const customAgentNodes = (userAgentData?.items || []).map(agent => ({
         id: `custom-agent-${agent.agent_id}`,
         name: agent.name || "Unnamed Agent",
-        description: agent.description || "Custom agent",
+        description: agent.description || "Custom agent configuration",
         icon: Bot,
         category: "agent",
-        agentData: agent // Include the full agent data
+        agentData: agent, // Include the full agent data
+        isCustom: true // Flag to identify custom agents
       }));
+      
+      console.log('Loading agents - Default:', defaultAgentNodes.length, 'Custom:', customAgentNodes.length);
       return [...defaultAgentNodes, ...customAgentNodes];
     }
     if (category === "input") return inputNodes;
@@ -420,7 +426,8 @@ export default function NodePalette({ onCollapseChange }: NodePaletteProps) {
                               config: {},
                               agentId: node.agentData?.agent_id,
                               agentData: node.agentData, // Include the full agent data
-                              tools: node.agentData?.tools || []
+                              tools: node.agentData?.tools || [],
+                              isCustom: node.isCustom
                             }}
                           >
                             <Card className="bg-neutral-100 dark:bg-neutral-900 py-2 group transition-all duration-200 border hover:border-primary/50 cursor-move">

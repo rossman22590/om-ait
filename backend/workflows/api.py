@@ -291,7 +291,7 @@ async def update_workflow(
         if request.description is not None:
             update_data['description'] = request.description
         if request.state is not None:
-            update_data['state'] = request.state
+            update_data['status'] = request.state.lower()
 
         if not update_data:
             raise HTTPException(status_code=400, detail="No fields to update")
