@@ -63,7 +63,8 @@ export default function WorkflowsPage() {
         }
         const firstProject = projects[0];
         setProjectId(firstProject.id);
-        const workflowsData = await getWorkflows(firstProject.id);
+        // 🚀 FIX: Load ALL workflows for user, not filtered by project
+        const workflowsData = await getWorkflows(); // Remove project filter
         setWorkflows(workflowsData);
       } catch (err) {
         console.error('Error loading workflows:', err);

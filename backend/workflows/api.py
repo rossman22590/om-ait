@@ -172,7 +172,9 @@ async def list_workflows(
     try:
         client = await db.client
         
-        query = client.table('workflows').select('*').eq('account_id', user_id)
+        # 🚀 SURGICAL FIX: Use BOTH account_id and created_by for consistent workflow visibility
+        # This ensures workflows show up regardless of which field was set during creation
+        query = client.table('workflows').select('*').or_(f'account_id.eq.{user_id},created_by.eq.{user_id}')
         
         if x_project_id:
             query = query.eq('project_id', x_project_id)
@@ -180,10 +182,28 @@ async def list_workflows(
         result = await query.execute()
         
         workflows = []
+        seen_workflow_ids = set()  # Prevent duplicates if both fields match
+        
         for data in result.data:
+            # Skip duplicates (in case both account_id and created_by match)
+            if data['id'] in seen_workflow_ids:
+                continue
+            seen_workflow_ids.add(data['id'])
+            
+            # Ensure account_id is set for future consistency
+            if not data.get('account_id') and data.get('created_by') == user_id:
+                # Fix the record in the background
+                try:
+                    await client.table('workflows').update({'account_id': user_id}).eq('id', data['id']).execute()
+                    data['account_id'] = user_id  # Update local data
+                    logger.info(f"Auto-fixed workflow {data['name']} - set account_id to {user_id}")
+                except Exception as fix_error:
+                    logger.warning(f"Could not auto-fix workflow {data['id']}: {fix_error}")
+            
             workflow = _map_db_to_workflow_definition(data)
             workflows.append(workflow)
         
+        logger.info(f"Found {len(workflows)} workflows for user {user_id} using combined account_id/created_by query")
         return workflows
         
     except Exception as e:
@@ -252,12 +272,23 @@ async def get_workflow(
     try:
         client = await db.client
         
-        result = await client.table('workflows').select('*').eq('id', workflow_id).eq('account_id', user_id).execute()
+        # 🚀 SURGICAL FIX: Use BOTH account_id and created_by for consistent workflow access
+        result = await client.table('workflows').select('*').eq('id', workflow_id).or_(f'account_id.eq.{user_id},created_by.eq.{user_id}').execute()
         
         if not result.data:
             raise HTTPException(status_code=404, detail="Workflow not found")
         
         data = result.data[0]
+        
+        # Auto-fix missing account_id
+        if not data.get('account_id') and data.get('created_by') == user_id:
+            try:
+                await client.table('workflows').update({'account_id': user_id}).eq('id', workflow_id).execute()
+                data['account_id'] = user_id
+                logger.info(f"Auto-fixed workflow {data['name']} - set account_id to {user_id}")
+            except Exception as fix_error:
+                logger.warning(f"Could not auto-fix workflow {workflow_id}: {fix_error}")
+        
         return _map_db_to_workflow_definition(data)
         
     except HTTPException:
@@ -281,7 +312,8 @@ async def update_workflow(
     try:
         client = await db.client
 
-        existing = await client.table('workflows').select('id').eq('id', workflow_id).eq('account_id', user_id).execute()
+        # 🚀 SURGICAL FIX: Use BOTH account_id and created_by for consistent workflow access
+        existing = await client.table('workflows').select('id').eq('id', workflow_id).or_(f'account_id.eq.{user_id},created_by.eq.{user_id}').execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Workflow not found")
 
@@ -332,7 +364,8 @@ async def delete_workflow(
     try:
         client = await db.client
 
-        existing = await client.table('workflows').select('id').eq('id', workflow_id).eq('account_id', user_id).execute()
+        # 🚀 SURGICAL FIX: Use BOTH account_id and created_by for consistent workflow access
+        existing = await client.table('workflows').select('id').eq('id', workflow_id).or_(f'account_id.eq.{user_id},created_by.eq.{user_id}').execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Workflow not found")
 
@@ -364,7 +397,8 @@ async def execute_workflow(
     try:
         client = await db.client
 
-        result = await client.table('workflows').select('*').eq('id', workflow_id).eq('account_id', user_id).execute()
+        # 🚀 SURGICAL FIX: Use BOTH account_id and created_by for consistent workflow access
+        result = await client.table('workflows').select('*').eq('id', workflow_id).or_(f'account_id.eq.{user_id},created_by.eq.{user_id}').execute()
         if not result.data:
             raise HTTPException(status_code=404, detail="Workflow not found")
         
@@ -678,7 +712,8 @@ async def get_workflow_flow(
                 metadata=data.get('metadata', {})
             )
         
-        workflow_result = await client.table('workflows').select('*').eq('id', workflow_id).eq('account_id', user_id).execute()
+        # 🚀 SURGICAL FIX: Use BOTH account_id and created_by for consistent workflow access
+        workflow_result = await client.table('workflows').select('*').eq('id', workflow_id).or_(f'account_id.eq.{user_id},created_by.eq.{user_id}').execute()
         
         if not workflow_result.data:
             raise HTTPException(status_code=404, detail="Workflow not found")
@@ -716,7 +751,8 @@ async def update_workflow_flow(
     """Update the visual flow of a workflow and convert it to executable definition."""
     try:
         client = await db.client
-        existing = await client.table('workflows').select('*').eq('id', workflow_id).eq('account_id', user_id).execute()
+        # 🚀 SURGICAL FIX: Use BOTH account_id and created_by for consistent workflow access
+        existing = await client.table('workflows').select('*').eq('id', workflow_id).or_(f'account_id.eq.{user_id},created_by.eq.{user_id}').execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Workflow not found")
         
@@ -1128,7 +1164,8 @@ async def get_scheduler_status(
     try:
         scheduled_workflows = await workflow_scheduler.get_scheduled_workflows()
         client = await db.client
-        user_workflows = await client.table('workflows').select('id').eq('account_id', user_id).execute()
+        # 🚀 SURGICAL FIX: Use BOTH account_id and created_by for consistent workflow access
+        user_workflows = await client.table('workflows').select('id').or_(f'account_id.eq.{user_id},created_by.eq.{user_id}').execute()
         user_workflow_ids = {w['id'] for w in user_workflows.data}
         
         filtered_scheduled = [
@@ -1268,3 +1305,72 @@ async def _setup_telegram_webhooks_for_workflow(workflow: WorkflowDefinition, ba
                 
     except Exception as e:
         logger.error(f"Error setting up Telegram webhooks for workflow {workflow.id}: {e}")
+
+@router.get("/workflows/debug/ownership")
+async def debug_workflow_ownership(
+    user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    """Temporary debug endpoint to check workflow ownership issues."""
+    try:
+        client = await db.client
+        
+        # Get all workflows to check ownership
+        all_workflows = await client.table('workflows').select('id, name, account_id, created_by, created_at').execute()
+        
+        # Get workflows by account_id (current method)
+        user_workflows_by_account = await client.table('workflows').select('id, name, account_id, created_by').eq('account_id', user_id).execute()
+        
+        # Get workflows by created_by (old method)
+        user_workflows_by_created = await client.table('workflows').select('id, name, account_id, created_by').eq('created_by', user_id).execute()
+        
+        # Analysis
+        total_workflows = len(all_workflows.data)
+        workflows_by_account = len(user_workflows_by_account.data)
+        workflows_by_created = len(user_workflows_by_created.data)
+        
+        # Find workflows missing account_id but having created_by
+        missing_account_id = []
+        for wf in all_workflows.data:
+            if not wf.get('account_id') and wf.get('created_by') == user_id:
+                missing_account_id.append(wf)
+        
+        return {
+            "user_id": user_id,
+            "total_workflows_in_db": total_workflows,
+            "workflows_found_by_account_id": workflows_by_account,
+            "workflows_found_by_created_by": workflows_by_created,
+            "workflows_missing_account_id_for_user": len(missing_account_id),
+            "workflows_by_account_id": [{"id": w["id"], "name": w["name"]} for w in user_workflows_by_account.data],
+            "workflows_by_created_by": [{"id": w["id"], "name": w["name"]} for w in user_workflows_by_created.data],
+            "workflows_needing_fix": [{"id": w["id"], "name": w["name"]} for w in missing_account_id]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error debugging workflow ownership: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/workflows/debug/fix-ownership")
+async def fix_workflow_ownership(
+    user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    """Temporary endpoint to fix workflow ownership issues."""
+    try:
+        client = await db.client
+        
+        # Find workflows with created_by = user_id but missing account_id
+        workflows_to_fix = await client.table('workflows').select('id, name, created_by').eq('created_by', user_id).is_('account_id', 'null').execute()
+        
+        fixed_count = 0
+        for workflow in workflows_to_fix.data:
+            await client.table('workflows').update({'account_id': user_id}).eq('id', workflow['id']).execute()
+            fixed_count += 1
+            logger.info(f"Fixed workflow {workflow['name']} - set account_id to {user_id}")
+        
+        return {
+            "message": f"Fixed {fixed_count} workflows",
+            "fixed_workflows": [{"id": w["id"], "name": w["name"]} for w in workflows_to_fix.data]
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fixing workflow ownership: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
