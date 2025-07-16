@@ -394,7 +394,28 @@ async def run_agent(
                     continue_execution = False
                     break
         else:
-            logger.debug(f"Skipping assistant message check for workflow execution {agent_config.get('workflow_execution_id')}")
+            # For workflow executions, check if workflow is complete
+            latest_message = await client.table('messages').select('*').eq('thread_id', thread_id).eq('type', 'assistant').order('created_at', desc=True).limit(1).execute()
+            if latest_message.data and len(latest_message.data) > 0:
+                message_content = latest_message.data[0].get('content', '')
+                if isinstance(message_content, str):
+                    try:
+                        parsed_content = json.loads(message_content)
+                        content_text = parsed_content.get('content', '')
+                    except:
+                        content_text = message_content
+                else:
+                    content_text = str(message_content)
+                
+                # Check if the message contains workflow completion indicator
+                if "🎉 WORKFLOW COMPLETE:" in content_text and "steps executed successfully" in content_text:
+                    logger.info(f"Workflow completion detected, stopping execution")
+                    if trace:
+                        trace.event(name="workflow_complete", level="DEFAULT", status_message="Workflow execution completed successfully")
+                    continue_execution = False
+                    break
+            
+            logger.debug(f"Continuing workflow execution {agent_config.get('workflow_execution_id')}")
 
         # ---- Temporary Message Handling (Browser State & Image Context) ----
         temporary_message = None
