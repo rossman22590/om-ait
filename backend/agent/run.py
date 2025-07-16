@@ -247,10 +247,16 @@ async def run_agent(
     if agent_config and agent_config.get('system_prompt'):
         custom_system_prompt = agent_config['system_prompt'].strip()
         
-        # Completely replace the default system prompt with the custom one
-        # This prevents confusion and tool hallucination
-        system_content = custom_system_prompt
-        logger.info(f"Using ONLY custom agent system prompt for: {agent_config.get('name', 'Unknown')}")
+        # For workflow executions, the system_prompt already contains the enhanced workflow instructions
+        # For regular executions, completely replace the default system prompt with the custom one
+        if agent_config.get('is_workflow_execution'):
+            system_content = custom_system_prompt  # Already enhanced with workflow instructions
+            logger.info(f"Using workflow-enhanced system prompt for: {agent_config.get('name', 'Unknown')}")
+        else:
+            # Completely replace the default system prompt with the custom one
+            # This prevents confusion and tool hallucination
+            system_content = custom_system_prompt
+            logger.info(f"Using ONLY custom agent system prompt for: {agent_config.get('name', 'Unknown')}")
     elif is_agent_builder:
         system_content = get_agent_builder_prompt()
         logger.info("Using agent builder system prompt")
@@ -375,15 +381,20 @@ async def run_agent(
             }
             break
         # Check if last message is from assistant using direct Supabase query
-        latest_message = await client.table('messages').select('*').eq('thread_id', thread_id).in_('type', ['assistant', 'tool', 'user']).order('created_at', desc=True).limit(1).execute()
-        if latest_message.data and len(latest_message.data) > 0:
-            message_type = latest_message.data[0].get('type')
-            if message_type == 'assistant':
-                logger.info(f"Last message was from assistant, stopping execution")
-                if trace:
-                    trace.event(name="last_message_from_assistant", level="DEFAULT", status_message=(f"Last message was from assistant, stopping execution"))
-                continue_execution = False
-                break
+        # Skip this check for workflow executions to allow multi-step workflows
+        is_workflow_execution = agent_config and agent_config.get('workflow_execution_id')
+        if not is_workflow_execution:
+            latest_message = await client.table('messages').select('*').eq('thread_id', thread_id).in_('type', ['assistant', 'tool', 'user']).order('created_at', desc=True).limit(1).execute()
+            if latest_message.data and len(latest_message.data) > 0:
+                message_type = latest_message.data[0].get('type')
+                if message_type == 'assistant':
+                    logger.info(f"Last message was from assistant, stopping execution")
+                    if trace:
+                        trace.event(name="last_message_from_assistant", level="DEFAULT", status_message=(f"Last message was from assistant, stopping execution"))
+                    continue_execution = False
+                    break
+        else:
+            logger.debug(f"Skipping assistant message check for workflow execution {agent_config.get('workflow_execution_id')}")
 
         # ---- Temporary Message Handling (Browser State & Image Context) ----
         temporary_message = None

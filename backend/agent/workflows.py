@@ -105,6 +105,21 @@ class WorkflowExecuteRequest(BaseModel):
 WorkflowStepRequest.model_rebuild()
 WorkflowStepResponse.model_rebuild()
 
+async def complete_workflow_execution(client, execution_id: str, status: str = 'completed', error_message: str = None):
+    """Mark workflow execution as completed."""
+    try:
+        update_data = {
+            'status': status,
+            'completed_at': datetime.now(timezone.utc).isoformat()
+        }
+        if error_message:
+            update_data['error_message'] = error_message
+            
+        await client.table('workflow_executions').update(update_data).eq('id', execution_id).execute()
+        logger.info(f"Workflow execution {execution_id} marked as {status}")
+    except Exception as e:
+        logger.error(f"Failed to complete workflow execution {execution_id}: {e}")
+
 @router.get("/agents/{agent_id}/workflows")
 async def get_agent_workflows(
     agent_id: str,
@@ -328,9 +343,10 @@ async def delete_agent_workflow(
 def build_workflow_system_prompt(workflow: dict, steps_json: List[dict], input_data: dict = None, available_tools: List[str] = None) -> str:
     def convert_to_llm_format(steps: List[dict]) -> List[dict]:
         result = []
-        for step in steps:
+        for i, step in enumerate(steps):
             llm_step = {
-                "step": step['name'],
+                "step_number": i + 1,
+                "step_name": step['name'],
             }
 
             if step.get('description'):
@@ -369,32 +385,65 @@ def build_workflow_system_prompt(workflow: dict, steps_json: List[dict], input_d
         llm_workflow["description"] = workflow['description']
     
     workflow_json = json.dumps(llm_workflow, indent=2)
-    workflow_prompt = f"""You are executing a structured workflow. Follow the steps exactly as specified in the JSON below.
+    total_steps = len(steps_json)
+    
+    workflow_prompt = f"""
+🔄 WORKFLOW EXECUTION MODE ACTIVATED 🔄
 
-WORKFLOW STRUCTURE:
+⚠️⚠️⚠️ CRITICAL WORKFLOW DIRECTIVE ⚠️⚠️⚠️
+
+THIS IS A {total_steps}-STEP WORKFLOW THAT YOU **MUST** EXECUTE IN ITS ENTIRETY.
+
+YOU ARE **PROHIBITED** FROM STOPPING AFTER STEP 1 OR ANY EARLY STEP.
+
+WORKFLOW NAME: {workflow['name']}
+TOTAL STEPS: {total_steps}
+
+WORKFLOW DEFINITION:
 {workflow_json}
 
-EXECUTION INSTRUCTIONS:
-1. Execute each step in the order presented
-2. For steps with a "tool" field, you MUST use that specific tool
-3. For conditional steps (with "condition" field):
-   - Evaluate the condition based on the current context
-   - If the condition is true (or if it's an "else" condition), execute the steps in the "then" array
-   - State clearly which branch you're taking and why
-4. Provide clear progress updates as you complete each step
-5. If a tool is not available, explain what you would do instead
+🚨🚨🚨 MANDATORY EXECUTION PROTOCOL 🚨🚨🚨
 
-AVAILABLE TOOLS:
-{', '.join(available_tools) if available_tools else 'Use any available tools from your system prompt'}
+1. **ABSOLUTE REQUIREMENT: EXECUTE ALL {total_steps} STEPS**
+   - You MUST complete every single step from 1 to {total_steps}
+   - Stopping early is FORBIDDEN and constitutes task failure
+   - Each step completion triggers immediate progression to the next
 
-IMPORTANT TOOL USAGE:
-- When a step specifies a tool, that tool MUST be used
-- If the specified tool is not available, explain what you would do instead
-- Use only the tools that are listed as available
+2. **STEP EXECUTION FORMAT:**
+   - Start each step: "🔄 EXECUTING STEP X OF {total_steps}: [Step Name]"
+   - Complete the step's required action/tool
+   - Immediately announce: "✅ STEP X COMPLETE. CONTINUING TO STEP Y..."
+   - BEGIN the next step WITHOUT pausing or waiting
 
-Current input data: {json.dumps(input_data) if input_data else 'None provided'}
+3. **CONTINUATION PROTOCOL:**
+   - After Step 1: "Step 1 complete. Now continuing to Step 2..."
+   - After Step 2: "Step 2 complete. Now continuing to Step 3..."
+   - Continue this exact pattern until step {total_steps}
+   - NO EXCEPTIONS TO THIS CONTINUATION RULE
 
-Begin executing the workflow now, starting with the first step."""
+4. **TOOL EXECUTION:**
+   Available Tools: {', '.join(available_tools) if available_tools else 'Use standard tools'}
+   - Execute the tool specified in each step
+   - Use tool results, then IMMEDIATELY proceed to next step
+   - DO NOT stop to analyze or summarize between steps
+
+5. **COMPLETION CRITERIA:**
+   - Execute Step 1, then Step 2, then Step 3... until Step {total_steps}
+   - Only announce completion after Step {total_steps} is finished:
+   - "🎉 WORKFLOW COMPLETE: All {total_steps} steps executed successfully"
+
+❌❌❌ STRICTLY FORBIDDEN ❌❌❌
+- Stopping after Step 1 (FORBIDDEN)
+- Waiting for user input between steps (FORBIDDEN) 
+- Asking questions mid-workflow (FORBIDDEN)
+- Ending early without completing all steps (FORBIDDEN)
+- Summarizing or pausing between steps (FORBIDDEN)
+
+INPUT DATA: {json.dumps(input_data) if input_data else 'None provided'}
+
+🚀🚀🚀 EXECUTE NOW: BEGIN WITH STEP 1 AND CONTINUE THROUGH ALL {total_steps} STEPS 🚀🚀🚀
+
+REMEMBER: YOU MUST COMPLETE **ALL {total_steps} STEPS** - NO STOPPING EARLY!"""
 
     return workflow_prompt
 
@@ -489,13 +538,23 @@ async def execute_agent_workflow(
         available_tools.extend(enabled_tools_list)
     
     workflow_prompt = build_workflow_system_prompt(workflow, steps_json, execution_data.input_data, available_tools)
-    enhanced_system_prompt = f"""{agent_config['system_prompt']}
+    
+    # For workflows, we need to preserve both the agent's custom prompt AND add workflow instructions
+    # The run.py logic will use this enhanced prompt instead of overriding it
+    if agent_config.get('system_prompt'):
+        enhanced_system_prompt = f"""{agent_config['system_prompt']}
 
 --- WORKFLOW EXECUTION MODE ---
 {workflow_prompt}"""
+    else:
+        # If no custom system prompt, just use the workflow prompt
+        enhanced_system_prompt = workflow_prompt
     
     # Update agent config with workflow-enhanced system prompt
     agent_config['system_prompt'] = enhanced_system_prompt
+    
+    # Add a flag to indicate this is a workflow execution (for run.py to handle properly)
+    agent_config['is_workflow_execution'] = True
     
     # Handle thread creation or reuse
     thread_id = execution_data.thread_id
@@ -652,6 +711,11 @@ async def execute_agent_workflow(
     }).execute()
     
     execution_id = execution_result.data[0]['id']
+    
+    # Add workflow metadata to agent config to track completion
+    agent_config['workflow_execution_id'] = execution_id
+    agent_config['workflow_total_steps'] = len(steps_json)
+    agent_config['workflow_name'] = workflow['name']
     
     agent_run = await client.table('agent_runs').insert({
         "thread_id": thread_id, 
