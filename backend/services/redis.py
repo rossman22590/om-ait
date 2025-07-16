@@ -53,9 +53,11 @@ def initialize():
     
     # Add SSL configuration for Upstash
     if redis_ssl:
-        pool_kwargs["ssl"] = True
-        pool_kwargs["ssl_check_hostname"] = False
-        pool_kwargs["ssl_cert_reqs"] = None
+        import ssl
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        pool_kwargs["ssl"] = ssl_context
         logger.info("SSL enabled for Redis connection (Upstash mode)")
 
     pool = redis.ConnectionPool(**pool_kwargs)
