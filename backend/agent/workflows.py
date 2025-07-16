@@ -683,8 +683,8 @@ async def execute_agent_workflow(
         project_id=project_id,
         model_name=model_name,
         enable_thinking=False,
-        reasoning_effort='medium',
-        stream=False,
+        reasoning_effort='low',
+        stream=True,
         enable_context_manager=True,
         agent_config=agent_config,
         is_agent_builder=False,
@@ -697,6 +697,7 @@ async def execute_agent_workflow(
     return {
         "execution_id": execution_id,
         "thread_id": thread_id,
+        "project_id": project_id,
         "agent_run_id": agent_run_id,
         "status": "running",
         "message": f"Workflow '{workflow['name']}' execution started"

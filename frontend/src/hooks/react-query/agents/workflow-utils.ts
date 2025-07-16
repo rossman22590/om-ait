@@ -165,7 +165,20 @@ export const getAgentWorkflows = async (agentId: string): Promise<AgentWorkflow[
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+      
+      // Handle case where detail is an object with a message property
+      let errorMessage = 'Unknown error';
+      if (typeof errorData.detail === 'string') {
+        errorMessage = errorData.detail;
+      } else if (errorData.detail && typeof errorData.detail === 'object' && errorData.detail.message) {
+        errorMessage = errorData.detail.message;
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      } else {
+        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const workflows = await response.json();
@@ -201,7 +214,20 @@ export const createAgentWorkflow = async (agentId: string, workflow: CreateWorkf
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+      
+      // Handle case where detail is an object with a message property
+      let errorMessage = 'Unknown error';
+      if (typeof errorData.detail === 'string') {
+        errorMessage = errorData.detail;
+      } else if (errorData.detail && typeof errorData.detail === 'object' && errorData.detail.message) {
+        errorMessage = errorData.detail.message;
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      } else {
+        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const result = await response.json();
@@ -242,7 +268,20 @@ export const updateAgentWorkflow = async (
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+      
+      // Handle case where detail is an object with a message property
+      let errorMessage = 'Unknown error';
+      if (typeof errorData.detail === 'string') {
+        errorMessage = errorData.detail;
+      } else if (errorData.detail && typeof errorData.detail === 'object' && errorData.detail.message) {
+        errorMessage = errorData.detail.message;
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      } else {
+        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const result = await response.json();
@@ -277,7 +316,20 @@ export const deleteAgentWorkflow = async (agentId: string, workflowId: string): 
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+      
+      // Handle case where detail is an object with a message property
+      let errorMessage = 'Unknown error';
+      if (typeof errorData.detail === 'string') {
+        errorMessage = errorData.detail;
+      } else if (errorData.detail && typeof errorData.detail === 'object' && errorData.detail.message) {
+        errorMessage = errorData.detail.message;
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      } else {
+        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     console.log('[API] Deleted workflow:', workflowId);
@@ -294,6 +346,7 @@ export const executeWorkflow = async (
 ): Promise<{ 
   execution_id: string; 
   thread_id?: string; 
+  project_id?: string;
   agent_run_id?: string; 
   status: string; 
   message?: string; 
@@ -321,7 +374,20 @@ export const executeWorkflow = async (
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+      
+      // Handle case where detail is an object with a message property
+      let errorMessage = 'Unknown error';
+      if (typeof errorData.detail === 'string') {
+        errorMessage = errorData.detail;
+      } else if (errorData.detail && typeof errorData.detail === 'object' && errorData.detail.message) {
+        errorMessage = errorData.detail.message;
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      } else {
+        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const result = await response.json();
@@ -360,7 +426,20 @@ export const getWorkflowExecutions = async (
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+      
+      // Handle case where detail is an object with a message property
+      let errorMessage = 'Unknown error';
+      if (typeof errorData.detail === 'string') {
+        errorMessage = errorData.detail;
+      } else if (errorData.detail && typeof errorData.detail === 'object' && errorData.detail.message) {
+        errorMessage = errorData.detail.message;
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      } else {
+        errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      }
+      
+      throw new Error(errorMessage);
     }
 
     const executions = await response.json();

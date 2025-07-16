@@ -39,6 +39,11 @@ class FeatureFlagManager:
     
     async def is_enabled(self, key: str) -> bool:
         """Check if a feature flag is enabled"""
+        # Check if global feature flag override is enabled
+        if os.getenv('FEATURE_FLAGS', '').lower() == 'true':
+            logger.debug(f"Feature flag {key} enabled via FEATURE_FLAGS=true override")
+            return True
+            
         try:
             flag_key = f"{self.flag_prefix}{key}"
             redis_client = await redis.get_client()

@@ -114,14 +114,49 @@ export function AgentWorkflowsConfiguration({ agentId, agentName }: AgentWorkflo
       setWorkflowToExecute(null);
       setExecutionInput('');
       
+      // Fetch thread data to get project_id for correct URL navigation
+      const handleViewExecution = async () => {
+        if (!result.thread_id) return;
+        
+        // If project_id is included in the response, use it directly
+        if (result.project_id) {
+          window.open(`/projects/${result.project_id}/thread/${result.thread_id}`, '_blank');
+          return;
+        }
+        
+        try {
+          // Fallback: Import the API client to fetch thread data
+          const { createClient } = await import('@/lib/supabase/client');
+          const supabase = createClient();
+          
+          const { data: threadData, error } = await supabase
+            .from('threads')
+            .select('project_id')
+            .eq('thread_id', result.thread_id)
+            .single();
+          
+          if (error || !threadData?.project_id) {
+            console.error('Error fetching thread project_id:', error);
+            // Fallback to the old URL format if we can't get project_id
+            window.open(`/thread/${result.thread_id}`, '_blank');
+            return;
+          }
+          
+          // Navigate to the correct URL format
+          window.open(`/projects/${threadData.project_id}/thread/${result.thread_id}`, '_blank');
+        } catch (error) {
+          console.error('Error navigating to thread:', error);
+          // Fallback to the old URL format
+          window.open(`/thread/${result.thread_id}`, '_blank');
+        }
+      };
+      
       toast.success(
         `${result.message}. Thread ID: ${result.thread_id}`,
         {
           action: result.thread_id ? {
             label: "View Execution",
-            onClick: () => {
-              window.open(`/thread/${result.thread_id}`, '_blank');
-            }
+            onClick: handleViewExecution
           } : undefined,
           duration: 10000
         }

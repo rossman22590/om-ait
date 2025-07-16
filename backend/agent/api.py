@@ -520,9 +520,26 @@ async def get_thread_agent(thread_id: str, user_id: str = Depends(get_current_us
         
         agent_data = agent_result.data[0]
         
+        # Initialize current_version
+        current_version = None
+        
         # Use version data if available, otherwise fall back to agent data (for backward compatibility)
         if agent_data.get('agent_versions'):
             version_data = agent_data['agent_versions']
+            current_version = AgentVersionResponse(
+                version_id=version_data['version_id'],
+                agent_id=version_data['agent_id'],
+                version_number=version_data['version_number'],
+                version_name=version_data['version_name'],
+                system_prompt=version_data['system_prompt'],
+                configured_mcps=version_data.get('configured_mcps', []),
+                custom_mcps=version_data.get('custom_mcps', []),
+                agentpress_tools=version_data.get('agentpress_tools', {}),
+                is_active=version_data.get('is_active', True),
+                created_at=version_data['created_at'],
+                updated_at=version_data.get('updated_at', version_data['created_at']),
+                created_by=version_data.get('created_by')
+            )
             # Use the version data for the response
             system_prompt = version_data['system_prompt']
             configured_mcps = version_data.get('configured_mcps', [])

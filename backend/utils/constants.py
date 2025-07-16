@@ -10,6 +10,14 @@ MODELS = {
         },
         "tier_availability": ["free", "paid"]
     },
+       "openrouter/moonshotai/kimi-k2": {
+        "aliases": ["moonshotai/kimi-k2", "kimi-k2"],
+        "pricing": {
+            "input_cost_per_million_tokens": 1.00,
+            "output_cost_per_million_tokens": 3.00
+        },
+         "tier_availability": ["free", "paid"]
+    },
         
     "openrouter/deepseek/deepseek-chat": {
         "aliases": ["deepseek"],
@@ -50,14 +58,6 @@ MODELS = {
         "pricing": {
             "input_cost_per_million_tokens": 1.25,
             "output_cost_per_million_tokens": 10.00
-        },
-        "tier_availability": ["paid"]
-    },
-    "openrouter/moonshotai/kimi-k2": {
-        "aliases": ["moonshotai/kimi-k2", "kimi-k2"],
-        "pricing": {
-            "input_cost_per_million_tokens": 1.00,
-            "output_cost_per_million_tokens": 3.00
         },
         "tier_availability": ["paid"]
     },

@@ -53,7 +53,7 @@ class ScheduleTriggerProvider(TriggerProvider):
         if config.ENV_MODE == EnvMode.STAGING:
             vercel_bypass_key = os.getenv("VERCEL_PROTECTION_BYPASS_KEY", "")
         else:
-            vercel_bypass_key = ""
+            vercel_bypass_key = "dsade284e72462742t67842424232323"
         try:
             webhook_url = f"{self.webhook_base_url}/api/triggers/qstash/webhook"
             execution_type = trigger_config.config.get('execution_type', 'agent')

@@ -1,0 +1,31 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    "sonner",
+    "kortix",
+    "supabase",
+    "tailwindcss",
+    "shadcn",
+    "radix",
+    "lucide",
+    "framer",
+    "nextjs",
+    "typescript",
+    "vercel",
+    "github",
+    "oauth",
+    "webhook",
+    "webhooks",
+    "pipedream",
+    "smithery"
+  ],
+  "ignorePaths": [
+    "node_modules/**",
+    ".next/**",
+    "dist/**",
+    "build/**",
+    "*.min.js",
+    "*.bundle.js"
+  ]
+} 
