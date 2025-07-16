@@ -360,56 +360,70 @@ async def get_pipedream_apps(
 ):
     logger.info(f"Fetching Pipedream apps registry, after: {after}, search: {q}")
     
-    try:
-        client = get_pipedream_client()
-        access_token = await client._obtain_access_token()
-        await client._ensure_rate_limit_token()
-        
-        url = f"https://api.pipedream.com/v1/apps"
-        params = {}
-        
-        if after:
-            params["after"] = after
-        if q:
-            params["q"] = q
-        if category:
-            params["category"] = category
-        
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json"
-        }
-        
-        response = await client._make_request_with_retry(
-            "GET",
-            url,
-            headers=headers,
-            params=params
-        )
-        
-        data = response.json()
-        
-        page_info = data.get("page_info", {})
-        
-        # For cursor-based pagination, has_more is determined by presence of end_cursor
-        page_info["has_more"] = bool(page_info.get("end_cursor"))
-        
-        logger.info(f"Successfully fetched {len(data.get('data', []))} apps from Pipedream registry")
-        logger.info(f"Pagination: after={after}, total_count={page_info.get('total_count', 0)}, current_count={page_info.get('count', 0)}, has_more={page_info['has_more']}, end_cursor={page_info.get('end_cursor', 'None')}")
-        
-        return {
-            "success": True,
-            "apps": data.get("data", []),
-            "page_info": page_info,
-            "total_count": page_info.get("total_count", 0)
-        }
-        
-    except Exception as e:
-        logger.error(f"Failed to fetch Pipedream apps: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to fetch Pipedream apps: {str(e)}"
-        )
+    # Retry with fresh tokens if first attempt fails
+    for attempt in range(2):
+        try:
+            client = get_pipedream_client()
+            
+            # Force fresh tokens on retry
+            if attempt > 0:
+                logger.info("Retrying with fresh tokens")
+                client.access_token = None
+                client.rate_limit_token = None
+            
+            access_token = await client._obtain_access_token()
+            await client._ensure_rate_limit_token()
+            
+            url = f"https://api.pipedream.com/v1/apps"
+            params = {}
+            
+            if after:
+                params["after"] = after
+            if q:
+                params["q"] = q
+            if category:
+                params["category"] = category
+            
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+            
+            response = await client._make_request_with_retry(
+                "GET",
+                url,
+                headers=headers,
+                params=params
+            )
+            
+            data = response.json()
+            
+            page_info = data.get("page_info", {})
+            
+            # For cursor-based pagination, has_more is determined by presence of end_cursor
+            page_info["has_more"] = bool(page_info.get("end_cursor"))
+            
+            logger.info(f"Successfully fetched {len(data.get('data', []))} apps from Pipedream registry")
+            logger.info(f"Pagination: after={after}, total_count={page_info.get('total_count', 0)}, current_count={page_info.get('count', 0)}, has_more={page_info['has_more']}, end_cursor={page_info.get('end_cursor', 'None')}")
+            
+            return {
+                "success": True,
+                "apps": data.get("data", []),
+                "page_info": page_info,
+                "total_count": page_info.get("total_count", 0)
+            }
+            
+        except Exception as e:
+            if attempt == 0:
+                logger.warning(f"Pipedream apps fetch failed, retrying with fresh tokens: {str(e)}")
+                await asyncio.sleep(1)
+                continue
+            else:
+                logger.error(f"Failed to fetch Pipedream apps after retry: {str(e)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to fetch Pipedream apps: {str(e)}"
+                )
 
 @router.post("/profiles", response_model=PipedreamProfile)
 async def create_credential_profile(
