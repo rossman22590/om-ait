@@ -186,11 +186,11 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
                     size="sm"
                     className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm hover:shadow-md transition-all whitespace-nowrap"
                   >
-                    {isAddingMinutes ? 'Redirecting...' : 'Buy Additional Minutes'}
+                    {isAddingMinutes ? 'Redirecting...' : 'Buy Additional Credits'}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent className="w-64 p-2">
-                  <p className="text-sm text-center">One hour costs $10. You can purchase up to 50 additional hours. If you need more, please reach out to support.</p>
+                  <p className="text-sm text-center">$10 of credits costs $10. You can purchase up to 50 additional credits. If you need more, please reach out to support.</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
