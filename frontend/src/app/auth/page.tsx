@@ -28,7 +28,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import GitHubSignIn from '@/components/GithubSignIn';
+
 
 function LoginContent() {
   const router = useRouter();
@@ -392,9 +392,6 @@ function LoginContent() {
               <div className="w-full flex flex-col gap-3 mb-6">
                 <div className="w-full">
                   <GoogleSignIn returnUrl={returnUrl || undefined} />
-                </div>
-                <div className="w-full">
-                  <GitHubSignIn returnUrl={returnUrl || undefined} />
                 </div>
               </div>
 
