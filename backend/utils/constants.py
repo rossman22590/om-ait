@@ -35,7 +35,7 @@ MODELS = {
         },
         "tier_availability": ["free", "paid"]
     },
-    "openrouter/google/gemini-2.5-flash-preview-05-20": {
+    "openrouter/google/gemini-2.5-flash": {
         "aliases": ["gemini-flash-2.5"],
         "pricing": {
             "input_cost_per_million_tokens": 0.15,
