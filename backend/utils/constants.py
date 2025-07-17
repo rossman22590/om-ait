@@ -12,8 +12,8 @@ MODEL_ACCESS_TIERS = {
         "openrouter/qwen/qwen-turbo",
 
         # Gemini
-        "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
-        "openrouter/google/gemini-2.5-flash-preview-05-20",
+        "",
+        "openrouter/google/gemini-2.5",
         "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
@@ -39,8 +39,8 @@ MODEL_ACCESS_TIERS = {
         "openrouter/qwen/qwen-turbo",
 
         # Gemini
-        "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
-        "openrouter/google/gemini-2.5-flash-preview-05-20",
+        "",
+        # "",
         "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
@@ -66,8 +66,8 @@ MODEL_ACCESS_TIERS = {
         "openrouter/qwen/qwen-turbo",
 
         # Gemini
-        "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
-        "openrouter/google/gemini-2.5-flash-preview-05-20",
+        "",
+        # "",
         "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
@@ -93,8 +93,8 @@ MODEL_ACCESS_TIERS = {
         "openrouter/qwen/qwen-turbo",
 
         # Gemini
-        "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
-        "openrouter/google/gemini-2.5-flash-preview-05-20",
+        "",
+        # "",
         "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
@@ -120,8 +120,8 @@ MODEL_ACCESS_TIERS = {
         "openrouter/qwen/qwen-turbo",
 
         # Gemini
-        "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
-        "openrouter/google/gemini-2.5-flash-preview-05-20",
+        "",
+        "",
         "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
@@ -147,8 +147,8 @@ MODEL_ACCESS_TIERS = {
         "openrouter/qwen/qwen-turbo",
 
         # Gemini
-        "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
-        "openrouter/google/gemini-2.5-flash-preview-05-20",
+        # "",
+        "openrouter/google/gemini-2.5-flash",
         "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
@@ -175,8 +175,8 @@ MODEL_ACCESS_TIERS = {
         "openrouter/qwen/qwen-turbo",
 
         # Gemini
-        "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
-        "openrouter/google/gemini-2.5-flash-preview-05-20",
+        # "openrouter/google/gemini-2.5-flash",
+        "openrouter/google/gemini-2.5-flash",
         "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
@@ -211,19 +211,19 @@ MODEL_NAME_ALIASES = {
     # "o3-mini": "openai/o3-mini",
     # "gpt-4-turbo": "openai/gpt-4-turbo",  # Commented out in constants.py
     # "gpt-4": "openai/gpt-4",  # Commented out in constants.py
-    # "gemini-flash-2.5": "openrouter/google/gemini-2.5-flash-preview",  # Commented out in constants.py
+    # "gemini-flash-2.5": "",  # Commented out in constants.py
     # "grok-3": "xai/grok-3-fast-latest",  # Commented out in constants.py
     "deepseek": "openrouter/deepseek/deepseek-chat",
     # "deepseek-r1": "openrouter/deepseek/deepseek-r1",
     # "grok-3-mini": "xai/grok-3-mini-fast-beta",  # Commented out in constants.py
     # "qwen3": "openrouter/qwen/qwen3-235b-a22b",  # Commented out in constants.py
     "qwen-turbo": "openrouter/qwen/qwen-turbo",  # Commented out in constants.py
-    "gemini-flash-2.5": "openrouter/google/gemini-2.5-flash-preview-05-20",
-    "gemini-2.5-flash:thinking":"openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
+    "gemini-flash-2.5": ",
+    "gemini-2.5-flash":"",
     "gemini-2.0-flash-lite-001":"openrouter/google/gemini-2.0-flash-lite-001",
     
-    # "google/gemini-2.5-flash-preview":"openrouter/google/gemini-2.5-flash-preview",
-    # "google/gemini-2.5-flash-preview:thinking":"openrouter/google/gemini-2.5-flash-preview:thinking",
+    # "google/gemini-2.5-flash":"",
+    # "google/gemini-2.5-flash":"",
     "gemini-2.5-pro":"gemini/gemini-2.5-pro",
     "deepseek-chat-v3-0324":"openrouter/deepseek/deepseek-chat-v3-0324",
 
@@ -239,7 +239,7 @@ MODEL_NAME_ALIASES = {
     # "openai/gpt-4o": "openai/gpt-4o",
     # "openai/gpt-4-turbo": "openai/gpt-4-turbo",  # Commented out in constants.py
     # "openai/gpt-4": "openai/gpt-4",  # Commented out in constants.py
-    # "openrouter/google/gemini-2.5-flash-preview": "openrouter/google/gemini-2.5-flash-preview",  # Commented out in constants.py
+    # "": "",  # Commented out in constants.py
     # "xai/grok-3-fast-latest": "xai/grok-3-fast-latest",  # Commented out in constants.py
     # "deepseek/deepseek-chat": "openrouter/deepseek/deepseek-chat",    
     # "deepseek/deepseek-r1": "openrouter/deepseek/deepseek-r1",
