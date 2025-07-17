@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     template: `%s - ${siteConfig.name}`,
   },
   description:
-    'Machine is a fully open source AI assistant that helps you accomplish real-world tasks with ease. Through natural conversation, Machine becomes your digital companion for research, data analysis, and everyday challenges.',
+    'Machine is an AI assistant that helps you accomplish real-world tasks with ease. Through natural conversation, Machine becomes your digital companion for research, data analysis, and everyday challenges.',
   keywords: [
     'AI',
     'artificial intelligence',
@@ -40,7 +40,6 @@ export const metadata: Metadata = {
     'web scraping',
     'file management',
     'AI assistant',
-    'open source',
     'research',
     'data analysis',
   ],
@@ -67,7 +66,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Machine - A Generalist AI Agent',
     description:
-      'Machine is a fully open source AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
+      'Machine is a an AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
     url: siteConfig.url,
     siteName: 'Machine',
     images: [
