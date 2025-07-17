@@ -70,6 +70,7 @@ MODEL_ACCESS_TIERS = {
         # Gemini
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
         "openrouter/google/gemini-2.5-flash-preview-05-20",
+        "openrouter/google/gemini-2.5-flash",
         "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
@@ -97,6 +98,7 @@ MODEL_ACCESS_TIERS = {
         # Gemini
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
         "openrouter/google/gemini-2.5-flash-preview-05-20",
+        "openrouter/google/gemini-2.5-flash",
         "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
 
@@ -123,6 +125,7 @@ MODEL_ACCESS_TIERS = {
 
         # Gemini
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
+        "openrouter/google/gemini-2.5-flash",
         "openrouter/google/gemini-2.5-flash-preview-05-20",
         
         "gemini/gemini-2.5-pro",
@@ -151,6 +154,7 @@ MODEL_ACCESS_TIERS = {
 
         # Gemini
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
+        "openrouter/google/gemini-2.5-flash",
         "openrouter/google/gemini-2.5-flash-preview-05-20",
         "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
@@ -179,6 +183,7 @@ MODEL_ACCESS_TIERS = {
 
         # Gemini
         "openrouter/google/gemini-2.5-flash-preview-05-20:thinking",
+        "openrouter/google/gemini-2.5-flash",
         "openrouter/google/gemini-2.5-flash-preview-05-20",
         "gemini/gemini-2.5-pro",
         "openrouter/google/gemini-2.0-flash-lite-001"
