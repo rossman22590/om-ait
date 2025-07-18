@@ -84,7 +84,7 @@ class SandboxDeployTool(SandboxToolsBase):
                     # Escape file path for shell use
                     escaped_path = file_path.replace('"', '\"')
                     cat_cmd = f"cat \"{escaped_path}\""
-                    result = self.sandbox.process.exec(cat_cmd, timeout=10)
+                    result = await self.sandbox.process.exec(cat_cmd, timeout=10)
                     content = result.result
                 except Exception as e:
                     print(f"Could not read file using shell command: {str(e)}")
@@ -141,7 +141,7 @@ class SandboxDeployTool(SandboxToolsBase):
                 except AttributeError:
                     # Try alternative method if write_file doesn't exist
                     write_cmd = f"echo '{content}' > {self.mappings_file}"
-                    self.sandbox.process.exec(write_cmd, timeout=10)
+                    await self.sandbox.process.exec(write_cmd, timeout=10)
                     print(f"Saved project mappings using shell command")
         except Exception as e:
             print(f"Warning: Could not save project mappings: {str(e)}")
@@ -509,7 +509,7 @@ class SandboxDeployTool(SandboxToolsBase):
                 # Install wrangler locally
                 print("Installing wrangler locally...")
                 install_cmd = "npm install wrangler --no-save"
-                install_result = self.sandbox.process.exec(install_cmd, cwd=full_path, timeout=120)
+                install_result = await self.sandbox.process.exec(install_cmd, cwd=full_path, timeout=120)
                 print(f"Install result: Exit code {install_result.exit_code}")
                 project_name = final_project_name
                 
@@ -522,7 +522,7 @@ class SandboxDeployTool(SandboxToolsBase):
                 
                 try:
                     # Create a new session for the deployment
-                    self.sandbox.process.create_session(deploy_session_id)
+                    await self.sandbox.process.create_session(deploy_session_id)
                     
                     # Set up environment variables for the deployment
                     env_vars = {"CLOUDFLARE_API_TOKEN": self.cloudflare_api_token}
@@ -530,7 +530,7 @@ class SandboxDeployTool(SandboxToolsBase):
                     # First run npm init to create package.json if it doesn't exist
                     print("Initializing npm project...")
                     init_cmd = "npm init -y"
-                    init_result = self.sandbox.process.exec(init_cmd, cwd=full_path, timeout=30)
+                    init_result = await self.sandbox.process.exec(init_cmd, cwd=full_path, timeout=30)
                     print(f"Init result: Exit code {init_result.exit_code}")
                     
                     if init_result.exit_code != 0:
@@ -539,7 +539,7 @@ class SandboxDeployTool(SandboxToolsBase):
                     # Install wrangler locally
                     print("Installing wrangler locally...")
                     install_cmd = "npm install wrangler --no-save"
-                    install_result = self.sandbox.process.exec(install_cmd, cwd=full_path, timeout=120)
+                    install_result = await self.sandbox.process.exec(install_cmd, cwd=full_path, timeout=120)
                     print(f"Install result: Exit code {install_result.exit_code}")
                     
                     if install_result.exit_code != 0:
@@ -548,7 +548,7 @@ class SandboxDeployTool(SandboxToolsBase):
                     # First create the project, then deploy to it
                     print("Creating new Cloudflare Pages project...")
                     create_cmd = f"./node_modules/.bin/wrangler pages project create {project_name} --production-branch production"
-                    create_result = self.sandbox.process.exec(create_cmd, cwd=full_path, env=env_vars, timeout=60)
+                    create_result = await self.sandbox.process.exec(create_cmd, cwd=full_path, env=env_vars, timeout=60)
                     print(f"Project creation result: Exit code {create_result.exit_code}")
                     
                     if create_result.exit_code != 0:
@@ -558,7 +558,7 @@ class SandboxDeployTool(SandboxToolsBase):
                     # Now deploy to the project
                     print("Starting deployment with Wrangler...")
                     deploy_cmd = f"./node_modules/.bin/wrangler pages deploy . --project-name {project_name} --commit-dirty=true"
-                    response = self.sandbox.process.exec(deploy_cmd, cwd=full_path, env=env_vars, timeout=300)
+                    response = await self.sandbox.process.exec(deploy_cmd, cwd=full_path, env=env_vars, timeout=300)
                     
                     print(f"Deployment exit code: {response.exit_code}")
                     print(f"Deployment output: {response.result}")
@@ -567,7 +567,7 @@ class SandboxDeployTool(SandboxToolsBase):
                     # Clean up the session properly as per Daytona SDK best practices
                     try:
                         print(f"Cleaning up deployment session...")
-                        self.sandbox.process.delete_session(deploy_session_id)
+                        await self.sandbox.process.delete_session(deploy_session_id)
                     except Exception as e:
                         print(f"Warning: Failed to clean up deployment session: {str(e)}")
                 
