@@ -22,6 +22,11 @@ interface DeployResult {
     output?: string;
     success?: boolean;
     url?: string;
+    urls?: {
+        cloudflare?: string;
+        custom_domain?: string;
+    };
+    custom_domain_status?: string;
 }
 
 function extractDeployData(assistantContent: any, toolContent: any): {
@@ -79,10 +84,15 @@ function extractDeployData(assistantContent: any, toolContent: any): {
                     message: resultData.output?.message || null,
                     output: resultData.output?.output || null,
                     success: resultData.success !== undefined ? resultData.success : true,
+                    urls: resultData.output?.urls || null,
+                    custom_domain_status: resultData.output?.custom_domain_status || null
                 };
 
-                // Try to extract deployment URL from output
-                if (deployResult.output) {
+                // Set the primary URL for the view
+                if (deployResult.urls) {
+                    deployResult.url = deployResult.urls.custom_domain || deployResult.urls.cloudflare;
+                } else if (deployResult.output) {
+                    // Fallback to old URL extraction method
                     const urlMatch = deployResult.output.match(/https:\/\/[^\s]+\.pages\.dev[^\s]*/);
                     if (urlMatch) {
                         deployResult.url = urlMatch[0];
@@ -200,11 +210,32 @@ export function DeployToolView({
                                                     </Badge>
                                                 </div>
 
-                                                <div className="bg-zinc-50 dark:bg-zinc-800 rounded p-2 mb-3">
-                                                    <code className="text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all">
-                                                        {deployResult.url}
-                                                    </code>
-                                                </div>
+                                                {deployResult.urls ? (
+                                                    <div className="space-y-2 mb-3">
+                                                        {deployResult.urls.cloudflare && (
+                                                            <div className="bg-zinc-50 dark:bg-zinc-800 rounded p-2">
+                                                                <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Cloudflare URL:</div>
+                                                                <code className="text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all">
+                                                                    {deployResult.urls.cloudflare}
+                                                                </code>
+                                                            </div>
+                                                        )}
+                                                        {deployResult.urls.custom_domain && (
+                                                            <div className="bg-zinc-50 dark:bg-zinc-800 rounded p-2">
+                                                                <div className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">Custom Domain:</div>
+                                                                <code className="text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all">
+                                                                    {deployResult.urls.custom_domain}
+                                                                </code>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-zinc-50 dark:bg-zinc-800 rounded p-2 mb-3">
+                                                        <code className="text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all">
+                                                            {deployResult.url}
+                                                        </code>
+                                                    </div>
+                                                )}
 
                                                 <Button
                                                     asChild
