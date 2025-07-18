@@ -151,16 +151,7 @@ export function AgentWorkflowsConfiguration({ agentId, agentName }: AgentWorkflo
         }
       };
       
-      toast.success(
-        `${result.message}. Thread ID: ${result.thread_id}`,
-        {
-          action: result.thread_id ? {
-            label: "View Execution",
-            onClick: handleViewExecution
-          } : undefined,
-          duration: 10000
-        }
-      );
+      toast.success(`${result.message}`);
     } catch (error) {
       toast.error('Failed to execute workflow');
     }
@@ -234,15 +225,7 @@ export function AgentWorkflowsConfiguration({ agentId, agentName }: AgentWorkflo
                           {workflow.is_default && <Badge variant="outline">Default</Badge>}
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">{workflow.description}</p>
-                        {workflow.trigger_phrase && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Trigger: "{workflow.trigger_phrase}"
-                          </p>
-                        )}
                         <div className="flex items-center gap-4 mt-2">
-                          <span className="text-xs text-muted-foreground">
-                            {workflow.steps.length} steps
-                          </span>
                           <span className="text-xs text-muted-foreground">
                             Created {new Date(workflow.created_at).toLocaleDateString()}
                           </span>
