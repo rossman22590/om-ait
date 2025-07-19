@@ -10,8 +10,16 @@ MODELS = {
         },
         "tier_availability": ["free", "paid"]
     },
+    "anthropic/claude-3.5-haiku": {
+        "aliases": ["claude-3.5-haiku"],
+        "pricing": {
+            "input_cost_per_million_tokens": 0.80,
+            "output_cost_per_million_tokens": 4.00
+        },
+        "tier_availability": ["free", "paid"]
+    },
        "openrouter/moonshotai/kimi-k2": {
-        "aliases": ["moonshotai/kimi-k2", "kimi-k2"],
+        "aliases": ["moonshotai/kimi-k2"],
         "pricing": {
             "input_cost_per_million_tokens": 1.00,
             "output_cost_per_million_tokens": 3.00
@@ -36,7 +44,7 @@ MODELS = {
         "tier_availability": ["free", "paid"]
     },
     "openrouter/google/gemini-2.5-flash": {
-        "aliases": ["gemini-flash-2.5"],
+        "aliases": ["gemini-2.5-flash"],
         "pricing": {
             "input_cost_per_million_tokens": 0.15,
             "output_cost_per_million_tokens": 0.60
@@ -46,7 +54,7 @@ MODELS = {
     
     # Paid tier only models
     "openrouter/google/gemini-2.5-pro": {
-        "aliases": ["google/gemini-2.5-pro"],
+        "aliases": ["gemini-2.5-pro"],
         "pricing": {
             "input_cost_per_million_tokens": 1.25,
             "output_cost_per_million_tokens": 10.00
@@ -71,6 +79,14 @@ MODELS = {
     },
     "openai/gpt-4.1-mini": {
         "aliases": ["gpt-4.1-mini"],
+        "pricing": {
+            "input_cost_per_million_tokens": 1.50,
+            "output_cost_per_million_tokens": 6.00
+        },
+        "tier_availability": ["paid"]
+    },
+    "openai/gpt-4.1-nano": {
+        "aliases": ["gpt-4.1-nano"],
         "pricing": {
             "input_cost_per_million_tokens": 1.50,
             "output_cost_per_million_tokens": 6.00

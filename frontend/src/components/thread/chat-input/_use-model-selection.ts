@@ -7,9 +7,9 @@ import { useAvailableModels } from '@/hooks/react-query/subscriptions/use-model'
 
 export const STORAGE_KEY_MODEL = 'suna-preferred-model-v2';
 export const STORAGE_KEY_CUSTOM_MODELS = 'customModels';
-export const DEFAULT_PREMIUM_MODEL_ID = 'claude-sonnet-4';
+export const DEFAULT_PREMIUM_MODEL_ID = 'gemini-2.5-flash';
 // export const DEFAULT_FREE_MODEL_ID = 'deepseek';
-export const DEFAULT_FREE_MODEL_ID = 'claude-sonnet-4';
+export const DEFAULT_FREE_MODEL_ID = 'gemini-2.5-flash';
 
 export type SubscriptionStatus = 'no_subscription' | 'active';
 
@@ -29,83 +29,96 @@ export interface CustomModel {
 }
 
 // SINGLE SOURCE OF TRUTH for all model data - aligned with backend constants
-export const MODELS = {
-  // Free tier models (available to all users)
-  'claude-sonnet-4': { 
-    tier: 'free',
-    priority: 100, 
+export const MODELS = {  // 1. Gemini 2.5 Flash (recommended, default)
+  'gemini-2.5-flash': { 
+    tier: 'free', 
+    priority: 100,
     recommended: true,
     lowQuality: false
   },
-
-  // 'gemini-flash-2.5': { 
-  //   tier: 'free', 
-  //   priority: 70,
-  //   recommended: false,
-  //   lowQuality: false
-  // },
-  // 'qwen3': { 
-  //   tier: 'free', 
-  //   priority: 60,
-  //   recommended: false,
-  //   lowQuality: false
-  // },
-
-  // Premium/Paid tier models (require subscription) - except specific free models
-  'moonshotai/kimi-k2': { 
-    tier: 'free', 
-    priority: 99,
-    recommended: false,
+  // 2. Claude Sonnet 4 (recommended)
+  'claude-sonnet-4': { 
+    tier: 'premium',
+    priority: 99, 
+    recommended: true,
     lowQuality: false
   },
-  'grok-4': { 
-    tier: 'free', 
-    priority: 98,
-    recommended: false,
-    lowQuality: false
-  },
-  'sonnet-3.7': { 
+  // 3. Gemini 2.5 Pro (recommended)
+  'gemini-2.5-pro': { 
     tier: 'premium', 
+    priority: 98,
+    recommended: true,
+    lowQuality: false
+  },
+  // 4. Claude 3.5 Haiku
+  'claude-3.5-haiku': { 
+    tier: 'free',
     priority: 97, 
     recommended: false,
     lowQuality: false
   },
-  'google/gemini-2.5-pro': { 
-    tier: 'premium', 
-    priority: 96,
-    recommended: false,
-    lowQuality: false
-  },
+  // 5. GPT 4.1
   'gpt-4.1': { 
     tier: 'premium', 
     priority: 96,
     recommended: false,
     lowQuality: false
   },
+  // 6. GPT 4.1 mini
+  'gpt-4.1-mini': { 
+    tier: 'premium', 
+    priority: 95,
+    recommended: false,
+    lowQuality: false
+  },
+  'gpt-4.1-nano': { 
+    tier: 'free', 
+    priority: 94,
+    recommended: false,
+    lowQuality: false
+  },
+  // 7. Grok 4
+  'grok-4': { 
+    tier: 'premium', 
+    priority: 93,
+    recommended: false,
+    lowQuality: false
+  },
+  // 8. kimi k2
+  'moonshotai/kimi-k2': { 
+    tier: 'free', 
+    priority: 92,
+    recommended: false,
+    lowQuality: false
+  },
+  // 9. Sonnet 3.7
+  'sonnet-3.7': { 
+    tier: 'premium', 
+    priority: 91, 
+    recommended: false,
+    lowQuality: false
+  },
+  // 10. Sonnet 3.5
   'sonnet-3.5': { 
     tier: 'premium', 
     priority: 90,
     recommended: false,
     lowQuality: false
   },
+  // 11. Deepseek
+  'deepseek': { 
+    tier: 'free', 
+    priority: 89,
+    recommended: false,
+    lowQuality: false
+  },
+  // 12. GPT 4o
   'gpt-4o': { 
     tier: 'premium', 
     priority: 88,
     recommended: false,
     lowQuality: false
   },
-  'gemini-2.5-flash:thinking': { 
-    tier: 'premium', 
-    priority: 84,
-    recommended: false,
-    lowQuality: false
-  },
-  // 'deepseek/deepseek-chat-v3-0324': { 
-  //   tier: 'free', 
-  //   priority: 75,
-  //   recommended: false,
-  //   lowQuality: false
-  // },
 };
 
 // Helper to check if a user can access a model based on subscription status
