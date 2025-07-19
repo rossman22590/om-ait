@@ -11,7 +11,7 @@ class PipedreamAppRepository:
         self._http_client = http_client
         self._logger = logger
         import asyncio
-        self._semaphore = asyncio.Semaphore(5)  # Reduce concurrent requests to avoid rate limits
+        self._semaphore = asyncio.Semaphore(10)
 
     async def search(self, query: SearchQuery, category: Optional[Category] = None, 
                     page: int = 1, limit: int = 20, cursor: Optional[PaginationCursor] = None) -> Dict[str, Any]:
@@ -66,7 +66,7 @@ class PipedreamAppRepository:
             cached_data = await redis_client.get(cache_key)
             
             if cached_data:
-                self._logger.info(f"Found cached app for slug: {app_slug.value}")
+                self._logger.debug(f"Found cached app for slug: {app_slug.value}")
                 cached_app_data = json.loads(cached_data)
                 return self._map_cached_app_to_domain(cached_app_data)
         except Exception as e:
@@ -77,16 +77,12 @@ class PipedreamAppRepository:
             params = {"q": app_slug.value, "pageSize": 20}
             
             try:
-                self._logger.info(f"Fetching app {app_slug.value} from API...")
                 data = await self._http_client.get(url, params=params)
                 
                 apps = data.get("data", [])
-                self._logger.info(f"Got {len(apps)} results for {app_slug.value}")
-                
                 exact_match = next((app for app in apps if app.get("name_slug") == app_slug.value), None)
                 
                 if exact_match:
-                    self._logger.info(f"Found exact match for {app_slug.value}")
                     app = self._map_to_domain(exact_match)
                     
                     try:
@@ -94,21 +90,16 @@ class PipedreamAppRepository:
                         redis_client = await redis.get_client()
                         app_data = self._map_domain_app_to_cache(app)
                         await redis_client.setex(cache_key, 21600, json.dumps(app_data))
-                        self._logger.info(f"Cached app: {app_slug.value}")
+                        self._logger.debug(f"Cached app: {app_slug.value}")
                     except Exception as e:
                         self._logger.warning(f"Failed to cache app {app_slug.value}: {e}")
                     
                     return app
-                else:
-                    self._logger.warning(f"No exact match found for {app_slug.value}")
                 
                 return None
                 
             except Exception as e:
-                self._logger.error(f"Error getting app {app_slug.value}: {str(e)}")
-                if hasattr(e, 'response'):
-                    self._logger.error(f"Response status: {e.response.status_code}")
-                    self._logger.error(f"Response body: {e.response.text}")
+                self._logger.error(f"Error getting app by slug: {str(e)}")
                 return None
 
     async def get_icon_url(self, app_slug: AppSlug) -> Optional[str]:
@@ -134,8 +125,6 @@ class PipedreamAppRepository:
             return None
 
     async def get_popular(self, category: Optional[Category] = None, limit: int = 100) -> List[App]:
-        self._logger.info(f"Getting popular apps (limit: {limit}, category: {category})")
-        
         cache_key = f"pipedream:popular_apps:{category.value if category else 'all'}:{limit}"
         try:
             from services import redis
@@ -145,9 +134,7 @@ class PipedreamAppRepository:
             if cached_data:
                 self._logger.info(f"Found cached popular apps for category: {category.value if category else 'all'}")
                 cached_apps_data = json.loads(cached_data)
-                apps = [self._map_cached_app_to_domain(app_data) for app_data in cached_apps_data]
-                self._logger.info(f"Returning {len(apps)} cached popular apps")
-                return apps
+                return [self._map_cached_app_to_domain(app_data) for app_data in cached_apps_data]
         except Exception as e:
             self._logger.warning(f"Redis cache error for popular apps: {e}")
         
@@ -189,65 +176,38 @@ class PipedreamAppRepository:
         apps = []
         import asyncio
         
-        batch_size = 10  # Smaller batches to avoid rate limits
+        batch_size = 20
         target_slugs = popular_slugs[:limit]
         
         async def fetch_app(slug: str):
             try:
-                async with self._semaphore:  # Use semaphore to limit concurrent requests
-                    app = await self.get_by_slug(AppSlug(slug))
-                    if app and (not category or app.category == category.value):
-                        self._logger.info(f"Successfully fetched app {slug}")
-                        return app
-                    self._logger.debug(f"App {slug} not found or doesn't match category")
-                    return None
+                app = await self.get_by_slug(AppSlug(slug))
+                if app and (not category or app.category == category.value):
+                    return app
+                return None
             except Exception as e:
-                if "429" in str(e):  # Rate limit hit
-                    self._logger.warning(f"Rate limit hit for {slug}, waiting longer...")
-                    await asyncio.sleep(2.0)  # Wait longer on rate limit
-                    try:
-                        async with self._semaphore:
-                            app = await self.get_by_slug(AppSlug(slug))
-                            if app and (not category or app.category == category.value):
-                                self._logger.info(f"Successfully fetched app {slug} after rate limit")
-                                return app
-                    except Exception as retry_e:
-                        self._logger.error(f"Failed to fetch {slug} after rate limit: {retry_e}")
-                else:
-                    self._logger.warning(f"Error fetching popular app {slug}: {e}")
+                self._logger.warning(f"Error fetching popular app {slug}: {e}")
                 return None
         
         for i in range(0, len(target_slugs), batch_size):
             batch_slugs = target_slugs[i:i+batch_size]
             
             if i > 0:
-                await asyncio.sleep(1.0)  # Increase delay to avoid rate limits
+                await asyncio.sleep(0.1)
             
-            self._logger.info(f"Processing batch of {len(batch_slugs)} apps...")
             batch_tasks = [fetch_app(slug) for slug in batch_slugs]
             batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
             
             for result in batch_results:
-                if isinstance(result, Exception):
-                    self._logger.error(f"Batch error: {str(result)}")
-                    continue
                 if isinstance(result, App):
-                    self._logger.info(f"Successfully fetched app: {result.name}")
                     apps.append(result)
                     
                 if len(apps) >= limit:
-                    self._logger.info(f"Reached limit of {limit} apps")
                     break
-            
-            self._logger.info(f"Batch complete. Total apps so far: {len(apps)}")
             
             if len(apps) >= limit:
                 break
         
-        if not apps:
-            self._logger.warning("No popular apps found after fetching all batches")
-            return []
-
         try:
             from services import redis
             redis_client = await redis.get_client()
@@ -257,7 +217,6 @@ class PipedreamAppRepository:
         except Exception as e:
             self._logger.warning(f"Failed to cache popular apps: {e}")
         
-        self._logger.info(f"Returning {len(apps)} popular apps")
         return apps
 
     async def get_by_category(self, category: Category, limit: int = 20) -> List[App]:
