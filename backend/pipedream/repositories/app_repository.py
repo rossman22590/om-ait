@@ -125,99 +125,45 @@ class PipedreamAppRepository:
             return None
 
     async def get_popular(self, category: Optional[Category] = None, limit: int = 100) -> List[App]:
-        cache_key = f"pipedream:popular_apps:{category.value if category else 'all'}:{limit}"
+        # Use single API call approach like search_apps (which works in production)
         try:
-            from services import redis
-            redis_client = await redis.get_client()
-            cached_data = await redis_client.get(cache_key)
+            url = f"{self._http_client.base_url}/apps"
+            params = {
+                "pageSize": limit,
+                "featured": "true"  # Get featured/popular apps
+            }
             
-            if cached_data:
-                self._logger.info(f"Found cached popular apps for category: {category.value if category else 'all'}")
-                cached_apps_data = json.loads(cached_data)
-                return [self._map_cached_app_to_domain(app_data) for app_data in cached_apps_data]
+            data = await self._http_client.get(url, params=params)
+            apps = []
+            
+            for app_data in data.get("data", []):
+                try:
+                    app = self._map_to_domain(app_data)
+                    if not category or app.category == category.value:
+                        apps.append(app)
+                except Exception as e:
+                    self._logger.warning(f"Error mapping app data: {str(e)}")
+                    continue
+            
+            self._logger.info(f"Successfully fetched {len(apps)} popular apps")
+            return apps[:limit]
+            
         except Exception as e:
-            self._logger.warning(f"Redis cache error for popular apps: {e}")
-        
-        popular_slugs = [
-            "slack", "microsoft_teams", "discord", "zoom", "telegram_bot_api", "whatsapp",
+            self._logger.error(f"Error getting popular apps: {str(e)}")
+            # Fallback to a few key apps if API fails
+            fallback_slugs = ["slack", "gmail", "github", "notion", "stripe"]
+            apps = []
             
-            "gmail", "microsoft_outlook", "google_calendar", "microsoft_exchange", "calendly",
+            for slug in fallback_slugs[:limit]:
+                try:
+                    app = await self.get_by_slug(AppSlug(slug))
+                    if app and (not category or app.category == category.value):
+                        apps.append(app)
+                except Exception as e:
+                    self._logger.warning(f"Error fetching fallback app {slug}: {e}")
+                    continue
             
-            "google_drive", "microsoft_onedrive", "dropbox", "google_docs", "google_sheets",
-            "microsoft_word", "microsoft_excel", "microsoft_powerpoint",
-            
-            "notion", "asana", "monday", "trello", "linear", "jira", "clickup", "basecamp",
-            
-            "salesforce", "hubspot", "pipedrive", "zendesk", "freshdesk", "intercom",
-            
-            "github", "gitlab", "bitbucket", "docker", "jenkins", "vercel", "netlify",
-            
-            "supabase", "firebase", "mongodb", "postgresql", "mysql", "redis", "airtable",
-            
-            "openai", "anthropic", "hugging_face", "replicate",
-            
-            "google_analytics", "facebook", "instagram", "twitter", "linkedin", "mailchimp", "constant_contact",
-            
-            "stripe", "paypal", "quickbooks", "xero", "square",
-            
-            "aws", "google_cloud", "microsoft_azure", "digitalocean", "heroku",
-            
-            "shopify", "woocommerce", "magento", "bigcommerce",
-            
-            "bamboohr", "workday", "greenhouse", "lever",
-            
-            "figma", "canva", "adobe_creative_cloud",
-            
-            "okta", "auth0", "datadog", "new_relic", "pagerduty",
-            
-            "hootsuite", "buffer", "sprout_social",
-        ]
-        
-        apps = []
-        import asyncio
-        
-        batch_size = 20
-        target_slugs = popular_slugs[:limit]
-        
-        async def fetch_app(slug: str):
-            try:
-                app = await self.get_by_slug(AppSlug(slug))
-                if app and (not category or app.category == category.value):
-                    return app
-                return None
-            except Exception as e:
-                self._logger.warning(f"Error fetching popular app {slug}: {e}")
-                return None
-        
-        for i in range(0, len(target_slugs), batch_size):
-            batch_slugs = target_slugs[i:i+batch_size]
-            
-            if i > 0:
-                await asyncio.sleep(0.1)
-            
-            batch_tasks = [fetch_app(slug) for slug in batch_slugs]
-            batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
-            
-            for result in batch_results:
-                if isinstance(result, App):
-                    apps.append(result)
-                    
-                if len(apps) >= limit:
-                    break
-            
-            if len(apps) >= limit:
-                break
-        
-        try:
-            from services import redis
-            redis_client = await redis.get_client()
-            apps_data = [self._map_domain_app_to_cache(app) for app in apps]
-            await redis_client.setex(cache_key, 86400, json.dumps(apps_data))
-            self._logger.info(f"Cached {len(apps)} popular apps for category: {category.value if category else 'all'}")
-        except Exception as e:
-            self._logger.warning(f"Failed to cache popular apps: {e}")
-        
-        return apps
+            return apps
 
     async def get_by_category(self, category: Category, limit: int = 20) -> List[App]:
         query = SearchQuery(None)
