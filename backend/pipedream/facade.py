@@ -44,12 +44,8 @@ class PipedreamManager:
         self._external_user_id_service = ExternalUserIdService()
         self._mcp_qualified_name_service = MCPQualifiedNameService()
         self._profile_config_service = ProfileConfigurationService()
+        self._connection_status_service = ConnectionStatusService(self._connection_repo, self._logger)
         self._connection_token_service = ConnectionTokenService(self._http_client, self._logger)
-        self._connection_status_service = ConnectionStatusService(
-            self._connection_repo,
-            self._connection_token_service,
-            self._logger
-        )
         
         self._profile_service = ProfileService(
             self._profile_repo,

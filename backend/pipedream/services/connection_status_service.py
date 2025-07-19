@@ -1,44 +1,19 @@
-from ..protocols import ConnectionStatusService, ConnectionRepository, ConnectionTokenService, Logger
+from ..protocols import ConnectionStatusService, ConnectionRepository, Logger
 from ..domain.entities import Profile
 
 
 class ConnectionStatusService:
-    def __init__(self, connection_repo: ConnectionRepository, connection_token_service: ConnectionTokenService, logger: Logger):
+    def __init__(self, connection_repo: ConnectionRepository, logger: Logger):
         self._connection_repo = connection_repo
-        self._connection_token_service = connection_token_service
         self._logger = logger
 
     async def check_connection_status(self, profile: Profile) -> bool:
         try:
-            # First try to get connections
             connections = await self._connection_repo.get_by_external_user_id(profile.external_user_id)
             
-            # Check if we have an active connection for this app
             for connection in connections:
                 if connection.app.slug == profile.app_slug and connection.is_active:
-                    # Connection is active, no need to refresh token yet
                     return True
-            
-            # Only create new token if no active connection exists
-            try:
-                result = await self._connection_token_service.create(profile.external_user_id, profile.app_slug)
-                if result and result.get("token"):
-                    self._logger.info(f"Created new token for profile {profile.profile_id}")
-                    return True
-            except Exception as e:
-                self._logger.warning(f"Failed to create new token: {str(e)}")
-                return False
-            
-            # If no active connection, try to refresh the token silently
-            try:
-                await self._connection_token_service.create(profile.external_user_id, profile.app_slug)
-                # Check connections again after refresh
-                connections = await self._connection_repo.get_by_external_user_id(profile.external_user_id)
-                for connection in connections:
-                    if connection.app.slug == profile.app_slug and connection.is_active:
-                        return True
-            except Exception as e:
-                self._logger.warning(f"Failed to refresh connection for profile {profile.profile_id}: {str(e)}")
             
             return False
         except Exception as e:
