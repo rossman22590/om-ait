@@ -15,7 +15,9 @@ class HttpClient:
         if self.session is None or self.session.is_closed:
             self.session = httpx.AsyncClient(
                 timeout=httpx.Timeout(30.0),
-                headers={"User-Agent": "Suna-Pipedream-Client/1.0"}
+                headers={"User-Agent": "Suna-Pipedream-Client/1.0"},
+                limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+                transport=httpx.AsyncHTTPTransport(retries=3)
             )
         return self.session
     

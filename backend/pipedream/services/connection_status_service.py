@@ -16,7 +16,18 @@ class ConnectionStatusService:
             # Check if we have an active connection for this app
             for connection in connections:
                 if connection.app.slug == profile.app_slug and connection.is_active:
+                    # Connection is active, no need to refresh token yet
                     return True
+            
+            # Only create new token if no active connection exists
+            try:
+                result = await self._connection_token_service.create(profile.external_user_id, profile.app_slug)
+                if result and result.get("token"):
+                    self._logger.info(f"Created new token for profile {profile.profile_id}")
+                    return True
+            except Exception as e:
+                self._logger.warning(f"Failed to create new token: {str(e)}")
+                return False
             
             # If no active connection, try to refresh the token silently
             try:
