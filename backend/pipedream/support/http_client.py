@@ -1,5 +1,6 @@
 import os
 import httpx
+import time
 from typing import Dict, Any, Optional
 from ..domain.exceptions import HttpClientException, AuthenticationException, RateLimitException
 
@@ -9,6 +10,7 @@ class HttpClient:
         self.base_url = "https://api.pipedream.com/v1"
         self.session: Optional[httpx.AsyncClient] = None
         self.access_token: Optional[str] = None
+        self.token_expires_at: Optional[float] = None
         self.rate_limit_token: Optional[str] = None
         
     async def _get_session(self) -> httpx.AsyncClient:
@@ -20,8 +22,14 @@ class HttpClient:
         return self.session
     
     async def _ensure_access_token(self) -> str:
-        if self.access_token:
+        current_time = time.time()
+        if (self.access_token and self.token_expires_at and 
+            current_time < (self.token_expires_at - 300)):  # 5 min buffer
             return self.access_token
+            
+        # Clear expired token
+        self.access_token = None
+        self.token_expires_at = None
             
         project_id = os.getenv("PIPEDREAM_PROJECT_ID")
         client_id = os.getenv("PIPEDREAM_CLIENT_ID")
@@ -45,6 +53,11 @@ class HttpClient:
             
             data = response.json()
             self.access_token = data["access_token"]
+            
+            # Set expiration time (default to 1 hour if not provided)
+            expires_in = data.get("expires_in", 3600)
+            self.token_expires_at = current_time + expires_in
+            
             return self.access_token
             
         except httpx.HTTPStatusError as e:
@@ -75,6 +88,15 @@ class HttpClient:
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429:
                 raise RateLimitException()
+            elif e.response.status_code == 401:
+                # Token expired, clear it and retry once
+                self.access_token = None
+                self.token_expires_at = None
+                access_token = await self._ensure_access_token()
+                request_headers["Authorization"] = f"Bearer {access_token}"
+                response = await session.get(url, headers=request_headers, params=params)
+                response.raise_for_status()
+                return response.json()
             raise HttpClientException(url, e.response.status_code, str(e))
     
     async def post(self, url: str, headers: Dict[str, str] = None, json: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -100,8 +122,17 @@ class HttpClient:
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429:
                 raise RateLimitException()
+            elif e.response.status_code == 401:
+                # Token expired, clear it and retry once
+                self.access_token = None
+                self.token_expires_at = None
+                access_token = await self._ensure_access_token()
+                request_headers["Authorization"] = f"Bearer {access_token}"
+                response = await session.post(url, headers=request_headers, json=json)
+                response.raise_for_status()
+                return response.json()
             raise HttpClientException(url, e.response.status_code, str(e))
     
     async def close(self) -> None:
         if self.session and not self.session.is_closed:
-            await self.session.aclose() 
+            await self.session.aclose()
