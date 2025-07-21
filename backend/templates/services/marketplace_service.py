@@ -70,7 +70,7 @@ class MarketplaceService:
         return [self._format_marketplace_template(t) for t in templates]
     
     def _format_marketplace_template(self, template: AgentTemplate) -> Dict[str, Any]:
-        kortix_team_ids = ['xxxxxxxx']
+        kortix_team_ids = ['dca2d98d-9891-4300-9b7b-2c990c0bdc08' , 'e82067b4-378f-4d9c-9f4a-4d84437dfc6b', '']
         is_kortix = template.creator_id in kortix_team_ids
         
         return {
