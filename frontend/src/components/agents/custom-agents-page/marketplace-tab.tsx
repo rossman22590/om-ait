@@ -49,7 +49,7 @@ export const MarketplaceTab = ({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Agents</SelectItem>
-            <SelectItem value="kortix">Kortix Verified</SelectItem>
+            <SelectItem value="kortix">Machine Verified</SelectItem>
             <SelectItem value="community">Community</SelectItem>
           </SelectContent>
         </Select>
