@@ -32,9 +32,13 @@ MODELS = {
         "pricing": {
             "input_cost_per_million_tokens": 1.00,
             "output_cost_per_million_tokens": 3.00
+            "input_cost_per_million_tokens": 1.00,
+            "output_cost_per_million_tokens": 3.00
         },
         "tier_availability": ["free", "paid"]
     },
+    "xai/grok-4": {
+        "aliases": ["grok-4"],
     "xai/grok-4": {
         "aliases": ["grok-4"],
         "pricing": {
@@ -49,7 +53,7 @@ MODELS = {
             "input_cost_per_million_tokens": 0.15,
             "output_cost_per_million_tokens": 0.60
         },
-        "tier_availability": ["free", "paid"]
+        "tier_availability": ["paid"]
     },
     
     # Paid tier only models
@@ -108,6 +112,7 @@ MODELS = {
             "output_cost_per_million_tokens": 15.00
         },
         "tier_availability": ["paid"]
+    },   
     },   
 }
 

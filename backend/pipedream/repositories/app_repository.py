@@ -125,32 +125,58 @@ class PipedreamAppRepository:
             return None
 
     async def get_popular(self, category: Optional[Category] = None, limit: int = 100) -> List[App]:
-        # Use the same popular apps list as frontend constants
+        cache_key = f"pipedream:popular_apps:{category.value if category else 'all'}:{limit}"
+        try:
+            from services import redis
+            redis_client = await redis.get_client()
+            cached_data = await redis_client.get(cache_key)
+            
+            if cached_data:
+                self._logger.info(f"Found cached popular apps for category: {category.value if category else 'all'}")
+                cached_apps_data = json.loads(cached_data)
+                return [self._map_cached_app_to_domain(app_data) for app_data in cached_apps_data]
+        except Exception as e:
+            self._logger.warning(f"Redis cache error for popular apps: {e}")
+        
         popular_slugs = [
-            'slack', 'microsoft_teams', 'discord', 'zoom', 'telegram_bot_api', 'whatsapp',
-            'gmail', 'microsoft_outlook', 'google_calendar', 'microsoft_exchange', 'calendly',
-            'google_drive', 'microsoft_onedrive', 'dropbox', 'google_docs', 'google_sheets',
-            'microsoft_word', 'microsoft_excel', 'microsoft_powerpoint',
-            'notion', 'asana', 'monday', 'trello', 'linear', 'jira', 'clickup', 'basecamp',
-            'salesforce', 'hubspot', 'pipedrive', 'zendesk', 'freshdesk', 'intercom',
-            'github', 'gitlab', 'bitbucket', 'docker', 'jenkins', 'vercel', 'netlify',
-            'supabase', 'firebase', 'mongodb', 'postgresql', 'mysql', 'redis', 'airtable',
-            'openai', 'anthropic', 'hugging_face', 'replicate',
-            'google_analytics', 'facebook', 'instagram', 'twitter', 'linkedin', 'mailchimp', 'constant_contact',
-            'stripe', 'paypal', 'quickbooks', 'xero', 'square',
-            'aws', 'google_cloud', 'microsoft_azure', 'digitalocean', 'heroku',
-            'shopify', 'woocommerce', 'magento', 'bigcommerce',
-            'bamboohr', 'workday', 'greenhouse', 'lever',
-            'figma', 'canva', 'adobe_creative_cloud',
-            'okta', 'auth0', 'datadog', 'new_relic', 'pagerduty',
-            'hootsuite', 'buffer', 'sprout_social',
+            "slack", "microsoft_teams", "discord", "zoom", "telegram_bot_api", "whatsapp",
+            
+            "gmail", "microsoft_outlook", "google_calendar", "microsoft_exchange", "calendly",
+            
+            "google_drive", "microsoft_onedrive", "dropbox", "google_docs", "google_sheets",
+            "microsoft_word", "microsoft_excel", "microsoft_powerpoint",
+            
+            "notion", "asana", "monday", "trello", "linear", "jira", "clickup", "basecamp",
+            
+            "salesforce", "hubspot", "pipedrive", "zendesk", "freshdesk", "intercom",
+            
+            "github", "gitlab", "bitbucket", "docker", "jenkins", "vercel", "netlify",
+            
+            "supabase", "firebase", "mongodb", "postgresql", "mysql", "redis", "airtable",
+            
+            "openai", "anthropic", "hugging_face", "replicate",
+            
+            "google_analytics", "facebook", "instagram", "twitter", "linkedin", "mailchimp", "constant_contact",
+            
+            "stripe", "paypal", "quickbooks", "xero", "square",
+            
+            "aws", "google_cloud", "microsoft_azure", "digitalocean", "heroku",
+            
+            "shopify", "woocommerce", "magento", "bigcommerce",
+            
+            "bamboohr", "workday", "greenhouse", "lever",
+            
+            "figma", "canva", "adobe_creative_cloud",
+            
+            "okta", "auth0", "datadog", "new_relic", "pagerduty",
+            
+            "hootsuite", "buffer", "sprout_social",
         ]
         
         apps = []
         import asyncio
         
-        # Use smaller batch size to avoid rate limiting in production
-        batch_size = 10
+        batch_size = 20
         target_slugs = popular_slugs[:limit]
         
         async def fetch_app(slug: str):
@@ -163,13 +189,11 @@ class PipedreamAppRepository:
                 self._logger.warning(f"Error fetching popular app {slug}: {e}")
                 return None
         
-        # Process in smaller batches to avoid overwhelming the API
         for i in range(0, len(target_slugs), batch_size):
             batch_slugs = target_slugs[i:i+batch_size]
             
-            # Add delay between batches to be respectful to the API
             if i > 0:
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(0.1)
             
             batch_tasks = [fetch_app(slug) for slug in batch_slugs]
             batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
@@ -184,7 +208,15 @@ class PipedreamAppRepository:
             if len(apps) >= limit:
                 break
         
-        self._logger.info(f"Successfully fetched {len(apps)} popular apps from predefined list")
+        try:
+            from services import redis
+            redis_client = await redis.get_client()
+            apps_data = [self._map_domain_app_to_cache(app) for app in apps]
+            await redis_client.setex(cache_key, 86400, json.dumps(apps_data))
+            self._logger.info(f"Cached {len(apps)} popular apps for category: {category.value if category else 'all'}")
+        except Exception as e:
+            self._logger.warning(f"Failed to cache popular apps: {e}")
+        
         return apps
 
     async def get_by_category(self, category: Category, limit: int = 20) -> List[App]:
