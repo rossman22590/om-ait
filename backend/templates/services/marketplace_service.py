@@ -93,7 +93,7 @@ class MarketplaceService:
             'download_count': template.download_count,
             'marketplace_published_at': template.marketplace_published_at,
             'created_at': template.created_at,
-            'creator_name': 'Kortix Team' if is_kortix else 'Community',
+            'creator_name': 'Machine Team' if is_kortix else 'Community',
             'avatar': template.avatar,
             'avatar_color': template.avatar_color,
             'is_kortix_team': is_kortix

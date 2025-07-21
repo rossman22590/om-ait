@@ -43,11 +43,11 @@ export const metadata: Metadata = {
     'research',
     'data analysis',
   ],
-  authors: [{ name: 'Kortix Team', url: 'https://Machine.so' }],
+  authors: [{ name: 'Machine Team', url: 'https://machine.myapps.ai' }],
   creator:
-    'Kortix Team - Adam Cohen Hillel, Marko Kraemer, Domenico Gagliardi, and Quoc Dat Le',
+    'Machine',
   publisher:
-    'Kortix Team - Adam Cohen Hillel, Marko Kraemer, Domenico Gagliardi, and Quoc Dat Le',
+    'Machine',
   category: 'Technology',
   applicationName: 'Machine',
   formatDetection: {
