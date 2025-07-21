@@ -7,11 +7,11 @@ export const metadata: Metadata = {
   keywords: ['Machine', 'AI', 'Agent'],
   authors: [
     {
-      name: 'Kortix AI Corp',
-      url: 'https://kortix.ai',
+      name: 'Machine AI Corp',
+      url: 'https://machine.myapps.ai',
     },
   ],
-  creator: 'Kortix AI Corp',
+  creator: 'Machine AI Corp',
   openGraph: {
     type: 'website',
     locale: 'en_US',
