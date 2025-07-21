@@ -197,7 +197,7 @@ MCP_CREDENTIAL_ENCRYPTION_KEY=your-generated-encryption-key
 RAPID_API_KEY=your-rapidapi-key
 SMITHERY_API_KEY=your-smithery-key
 
-NEXT_PUBLIC_URL=http://localhost:3000
+NEXT_PUBLIC_URL=https://machinev9.ngrok.io
 ```
 
 ### Frontend Configuration (.env.local)
@@ -213,7 +213,7 @@ Example configuration:
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 NEXT_PUBLIC_BACKEND_URL=http://localhost:8000/api
-NEXT_PUBLIC_URL=http://localhost:3000
+NEXT_PUBLIC_URL=https://machinev9.ngrok.io
 NEXT_PUBLIC_ENV_MODE=LOCAL
 ```
 

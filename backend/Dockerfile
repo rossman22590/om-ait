@@ -1,17 +1,39 @@
-FROM ghcr.io/astral-sh/uv:python3.11-alpine
+FROM python:3.11-slim
 
-ENV ENV_MODE production
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    ENV_MODE="production" \
+    PYTHONPATH=/app
+
 WORKDIR /app
 
-RUN apk add --no-cache curl git
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user and set up directories
+RUN useradd -m -u 1000 appuser && \
+    mkdir -p /app/logs && \
+    chown -R appuser:appuser /app
 
 # Install Python dependencies
-COPY pyproject.toml uv.lock ./
-ENV UV_LINK_MODE=copy
-RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --quiet
+COPY --chown=appuser:appuser requirements.txt .
+RUN pip install --no-cache-dir -v -r requirements.txt gunicorn
+# Explicit install of langfuse
+RUN pip install --no-cache-dir langfuse==2.60.5
+
+# Switch to non-root user
+USER appuser
 
 # Copy application code
-COPY . .
+COPY --chown=appuser:appuser . .
+
+# Expose the port the app runs on
+EXPOSE 8000
 
 # Calculate optimal worker count based on 16 vCPUs
 # Using (2*CPU)+1 formula for CPU-bound applications
@@ -19,26 +41,67 @@ ENV WORKERS=33
 ENV THREADS=2
 ENV WORKER_CONNECTIONS=2000
 
-ENV PYTHONPATH=/app
-EXPOSE 8000
-
 # Gunicorn configuration
-CMD ["sh", "-c", "uv run gunicorn api:app \
-  --workers $WORKERS \
-  --worker-class uvicorn.workers.UvicornWorker \
-  --bind 0.0.0.0:8000 \
-  --timeout 1800 \
-  --graceful-timeout 600 \
-  --keep-alive 1800 \
-  --max-requests 0 \
-  --max-requests-jitter 0 \
-  --forwarded-allow-ips '*' \
-  --worker-connections $WORKER_CONNECTIONS \
-  --worker-tmp-dir /dev/shm \
-  --preload \
-  --log-level info \
-  --access-logfile - \
-  --error-logfile - \
-  --capture-output \
-  --enable-stdio-inheritance \
-  --threads $THREADS"]
+CMD ["sh", "-c", "gunicorn api:app \
+     --workers $WORKERS \
+     --worker-class uvicorn.workers.UvicornWorker \
+     --bind 0.0.0.0:8000 \
+     --timeout 1800 \
+     --graceful-timeout 600 \
+     --keep-alive 1800 \
+     --max-requests 0 \
+     --max-requests-jitter 0 \
+     --forwarded-allow-ips '*' \
+     --worker-connections $WORKER_CONNECTIONS \
+     --worker-tmp-dir /dev/shm \
+     --preload \
+     --log-level info \
+     --access-logfile - \
+     --error-logfile - \
+     --capture-output \
+     --enable-stdio-inheritance \
+     --threads $THREADS"]
+# FROM ghcr.io/astral-sh/uv:python3.11-alpine
+
+# ENV ENV_MODE production
+# WORKDIR /app
+
+# RUN apk add --no-cache curl git
+
+# # Install Python dependencies
+# COPY pyproject.toml uv.lock ./
+# ENV UV_LINK_MODE=copy
+# RUN --mount=type=cache,target=/root/.cache/uv uv sync --locked --quiet
+
+# # Copy application code
+# COPY . .
+
+# # Calculate optimal worker count based on 16 vCPUs
+# # Using (2*CPU)+1 formula for CPU-bound applications
+# ENV WORKERS=33
+# ENV THREADS=2
+# ENV WORKER_CONNECTIONS=2000
+
+# ENV PYTHONPATH=/app
+# EXPOSE 8000
+
+# # Gunicorn configuration
+# CMD ["sh", "-c", "uv run gunicorn api:app \
+#   --workers $WORKERS \
+#   --worker-class uvicorn.workers.UvicornWorker \
+#   --bind 0.0.0.0:8000 \
+#   --timeout 1800 \
+#   --graceful-timeout 600 \
+#   --keep-alive 1800 \
+#   --max-requests 0 \
+#   --max-requests-jitter 0 \
+#   --forwarded-allow-ips '*' \
+#   --worker-connections $WORKER_CONNECTIONS \
+#   --worker-tmp-dir /dev/shm \
+#   --preload \
+#   --log-level info \
+#   --access-logfile - \
+#   --error-logfile - \
+#   --capture-output \
+#   --enable-stdio-inheritance \
+#   --threads $THREADS"]
