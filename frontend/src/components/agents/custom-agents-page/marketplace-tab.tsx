@@ -3,6 +3,7 @@
 import React from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Users } from 'lucide-react';
 import { SearchBar } from './search-bar';
 import { MarketplaceSectionHeader } from './marketplace-section-header';
 import { AgentCard } from './agent-card';
@@ -49,7 +50,7 @@ export const MarketplaceTab = ({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Agents</SelectItem>
-            <SelectItem value="kortix">Kortix Verified</SelectItem>
+            <SelectItem value="kortix">Machine Verified</SelectItem>
             <SelectItem value="community">Community</SelectItem>
           </SelectContent>
         </Select>
@@ -87,7 +88,7 @@ export const MarketplaceTab = ({
                 {kortixTeamItems.length > 0 && (
                   <div className="space-y-6">
                     <MarketplaceSectionHeader
-                      title="Verified by Kortix"
+                      title="Verified by Machine"
                       subtitle="Official agents, maintained and supported"
                     />
                     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -107,6 +108,11 @@ export const MarketplaceTab = ({
                 )}
                 {communityItems.length > 0 && (
                   <div className="space-y-6">
+                    <MarketplaceSectionHeader
+                      title="Community Templates"
+                      subtitle="Templates created by the community"
+                      icon={<Users className="h-5 w-5 text-white" />}
+                    />
                     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                       {communityItems.map((item) => (
                         <AgentCard

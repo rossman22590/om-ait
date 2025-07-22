@@ -16,7 +16,7 @@ class ScheduleTriggerProvider(TriggerProvider):
         super().__init__(provider_definition)
         
         self._qstash_token = os.getenv("QSTASH_TOKEN")
-        self._webhook_base_url = os.getenv("WEBHOOK_BASE_URL", "http://localhost:3000")
+        self._webhook_base_url = os.getenv("WEBHOOK_BASE_URL", "https://machinev9.ngrok.io")
         
         if not self._qstash_token:
             logger.warning("QSTASH_TOKEN not found. QStash provider will not work without it.")

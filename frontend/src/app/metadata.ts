@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   authors: [
     {
       name: 'Machine AI Corp',
-      url: 'https://Machine.ai',
+      url: 'https://machine.myapps.ai',
     },
   ],
   creator: 'Machine AI Corp',
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: siteConfig.name,
     description: siteConfig.description,
-    creator: '@Machineai',
+    creator: '@the_machine_ai',
   },
   robots: {
     index: true,

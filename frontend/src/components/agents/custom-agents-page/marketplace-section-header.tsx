@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Shield } from 'lucide-react';
+import { Shield, Users } from 'lucide-react';
 
 interface MarketplaceSectionHeaderProps {
   title: string;

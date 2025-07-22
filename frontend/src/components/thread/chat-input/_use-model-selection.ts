@@ -427,4 +427,3 @@ export const useModelSelection = () => {
   };
 };
 
-// Export the hook but not any sorting logic - sorting is handled internally

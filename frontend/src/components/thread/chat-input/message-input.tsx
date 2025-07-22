@@ -17,6 +17,7 @@ import { TooltipProvider, TooltipTrigger } from '@radix-ui/react-tooltip';
 import { BillingModal } from '@/components/billing/billing-modal';
 import ChatDropdown from './chat-dropdown';
 import { handleFiles } from './file-upload-handler';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface MessageInputProps {
   value: string;
@@ -94,6 +95,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
   ) => {
     const [billingModalOpen, setBillingModalOpen] = useState(false);
     const { enabled: customAgentsEnabled, loading: flagsLoading } = useFeatureFlag('custom_agents');
+    const queryClient = useQueryClient();
 
     useEffect(() => {
       const textarea = ref as React.RefObject<HTMLTextAreaElement>;
@@ -149,6 +151,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
           setUploadedFiles,
           setIsUploading,
           messages,
+          queryClient,
         );
       }
     };

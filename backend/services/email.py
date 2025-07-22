@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class EmailService:
     def __init__(self):
         self.api_token = os.getenv('MAILTRAP_API_TOKEN')
-        self.sender_email = os.getenv('MAILTRAP_SENDER_EMAIL', 'dom@Machine.ai')
+        self.sender_email = os.getenv('MAILTRAP_SENDER_EMAIL', 'dom@kortix.ai')
         self.sender_name = os.getenv('MAILTRAP_SENDER_NAME', 'Machine Team')
         
         if not self.api_token:
@@ -137,7 +137,7 @@ class EmailService:
 <body>
   <div class="container">
     <div class="logo-container">
-      <img src="https://i.postimg.cc/WdNtRx5Z/Machine-Machine-logo.png" alt="Machine Logo" class="logo">
+      <img src="https://i.postimg.cc/WdNtRx5Z/kortix-Machine-logo.png" alt="Machine Logo" class="logo">
     </div>
     <h1>Welcome to Machine!</h1>
 
@@ -153,7 +153,7 @@ class EmailService:
 
     <p>Let us know if you need help getting started or have questions — we're always here, and join our <a href="https://discord.com/invite/FjD644cfcs">Discord community</a>.</p>
 
-    <p><strong>For your business:</strong> if you want to automate manual and ordinary tasks for your company, book a call with us <a href="https://cal.com/team/Machine/enterprise-demo">here</a></p>
+    <p><strong>For your business:</strong> if you want to automate manual and ordinary tasks for your company, book a call with us <a href="https://cal.com/team/kortix/enterprise-demo">here</a></p>
 
     <p>Thanks again, and welcome to the Machine community <span class="emoji">🌞</span></p>
 
@@ -177,7 +177,7 @@ To celebrate your arrival, here's a 15% discount for your first month to get mor
 
 Let us know if you need help getting started or have questions — we're always here, and join our Discord community: https://discord.com/invite/FjD644cfcs
 
-For your business: if you want to automate manual and ordinary tasks for your company, book a call with us here: https://cal.com/team/Machine/enterprise-demo 
+For your business: if you want to automate manual and ordinary tasks for your company, book a call with us here: https://cal.com/team/kortix/enterprise-demo 
 
 Thanks again, and welcome to the Machine community 🌞
 

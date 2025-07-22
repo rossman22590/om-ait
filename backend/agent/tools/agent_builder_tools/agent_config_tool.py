@@ -5,6 +5,7 @@ from agentpress.thread_manager import ThreadManager
 from .base_tool import AgentBuilderBaseTool
 from utils.logger import logger
 from agent.config_helper import build_unified_config
+from agent.versioning.facade import version_manager
 
 
 class AgentConfigTool(AgentBuilderBaseTool):
@@ -114,13 +115,12 @@ class AgentConfigTool(AgentBuilderBaseTool):
             
             current_agent = agent_result.data[0]
             
-            update_data = {}
-            if name is not None:
-                update_data["name"] = name
-            if description is not None:
-                update_data["description"] = description
+            # Separate versioned fields from non-versioned fields
+            versioned_fields = {}
+            non_versioned_fields = {}
+            
             if system_prompt is not None:
-                update_data["system_prompt"] = system_prompt
+                versioned_fields["system_prompt"] = system_prompt
             if agentpress_tools is not None:
                 formatted_tools = {}
                 for tool_name, tool_config in agentpress_tools.items():
@@ -129,65 +129,95 @@ class AgentConfigTool(AgentBuilderBaseTool):
                             "enabled": tool_config.get("enabled", False),
                             "description": tool_config.get("description", "")
                         }
-                update_data["agentpress_tools"] = formatted_tools
+                versioned_fields["agentpress_tools"] = formatted_tools
             if configured_mcps is not None:
                 if isinstance(configured_mcps, str):
                     configured_mcps = json.loads(configured_mcps)
-                update_data["configured_mcps"] = configured_mcps
+                versioned_fields["configured_mcps"] = configured_mcps
+            
+            if name is not None:
+                non_versioned_fields["name"] = name
+            if description is not None:
+                non_versioned_fields["description"] = description
             if avatar is not None:
-                update_data["avatar"] = avatar
+                non_versioned_fields["avatar"] = avatar
             if avatar_color is not None:
-                update_data["avatar_color"] = avatar_color
+                non_versioned_fields["avatar_color"] = avatar_color
                 
-            if not update_data:
+            if not versioned_fields and not non_versioned_fields:
                 return self.fail_response("No fields provided to update")
             
-            current_system_prompt = system_prompt if system_prompt is not None else current_agent.get('system_prompt', '')
-            current_agentpress_tools = update_data.get('agentpress_tools', current_agent.get('agentpress_tools', {}))
-            current_configured_mcps = configured_mcps if configured_mcps is not None else current_agent.get('configured_mcps', [])
-
-            raw_custom_mcps = current_agent.get('custom_mcps', [])
-            import re
-            sanitized_custom_mcps = []
-            for mcp in raw_custom_mcps:
-                headers = mcp.get('config', {}).get('headers', {})
-                slug_val = headers.get('x-pd-app-slug')
-                if isinstance(slug_val, str):
-                    match = re.match(r"AppSlug\(value='(.+)'\)", slug_val)
-                    if match:
-                        headers['x-pd-app-slug'] = match.group(1)
-                sanitized_custom_mcps.append(mcp)
-            current_custom_mcps = sanitized_custom_mcps
-            
-            current_avatar = avatar if avatar is not None else current_agent.get('avatar')
-            current_avatar_color = avatar_color if avatar_color is not None else current_agent.get('avatar_color')
-            
-            unified_config = build_unified_config(
-                system_prompt=current_system_prompt,
-                agentpress_tools=current_agentpress_tools,
-                configured_mcps=current_configured_mcps,
-                custom_mcps=current_custom_mcps,
-                avatar=current_avatar,
-                avatar_color=current_avatar_color
-            )
-            
-            update_data["config"] = unified_config
-            
-            if "custom_mcps" not in update_data:
-                update_data["custom_mcps"] = current_custom_mcps
+            # Handle versioned fields using version_manager
+            if versioned_fields:
+                # Get user_id for versioning
+                user_id = await self._get_current_account_id()
                 
-            result = await client.table('agents').update(update_data).eq('agent_id', self.agent_id).execute()
+                # Initialize version manager with database connection
+                from agent.versioning.infrastructure.dependencies import set_db_connection
+                set_db_connection(self.db)
+                
+                # Generate change description
+                change_parts = []
+                if "system_prompt" in versioned_fields:
+                    change_parts.append("system prompt")
+                if "agentpress_tools" in versioned_fields:
+                    change_parts.append("tools configuration")
+                if "configured_mcps" in versioned_fields:
+                    change_parts.append("MCP servers")
+                
+                change_description = f"Updated {', '.join(change_parts)}"
+                
+                # Create new version with versioned fields
+                version_result = await version_manager.create_version(
+                    agent_id=self.agent_id,
+                    user_id=user_id,
+                    system_prompt=versioned_fields.get("system_prompt", current_agent.get('system_prompt', '')),
+                    configured_mcps=versioned_fields.get("configured_mcps", current_agent.get('configured_mcps', [])),
+                    custom_mcps=current_agent.get('custom_mcps', []),
+                    agentpress_tools=versioned_fields.get("agentpress_tools", current_agent.get('agentpress_tools', {})),
+                    change_description=change_description
+                )
+                
+                if not version_result:
+                    return self.fail_response("Failed to create new version")
+                
+                # Update agent record with new version info
+                agent_update = {
+                    "current_version_id": version_result["version_id"],
+                    "version_count": current_agent.get("version_count", 0) + 1
+                }
+                
+                if non_versioned_fields:
+                    agent_update.update(non_versioned_fields)
+                
+                result = await client.table('agents').update(agent_update).eq('agent_id', self.agent_id).execute()
+            else:
+                # Only non-versioned fields, direct update
+                result = await client.table('agents').update(non_versioned_fields).eq('agent_id', self.agent_id).execute()
             
             if not result.data:
                 return self.fail_response("Failed to update agent")
 
-            return self.success_response({
+            # Get the updated agent data
+            updated_agent = result.data[0]
+            
+            # Include version info in response if versioned fields were updated
+            response_data = {
                 "message": "Agent updated successfully",
-                "updated_fields": list(update_data.keys()),
-                "agent": result.data[0]
-            })
+                "updated_fields": list(versioned_fields.keys()) + list(non_versioned_fields.keys()),
+                "agent": updated_agent
+            }
+            
+            if versioned_fields:
+                response_data["version_info"] = {
+                    "version_id": updated_agent.get("current_version_id"),
+                    "version_count": updated_agent.get("version_count")
+                }
+
+            return self.success_response(response_data)
             
         except Exception as e:
+            logger.error(f"Error updating agent {self.agent_id}: {str(e)}")
             return self.fail_response(f"Error updating agent: {str(e)}")
 
     @openapi_schema({

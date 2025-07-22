@@ -43,7 +43,6 @@ export default function AgentConfigurationPageRefactored() {
   const { agent, versionData, isViewingOldVersion, isLoading, error } = useAgentVersionData({ agentId });
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab');
-  const initialAccordion = searchParams.get('accordion');
   const { hasUnsavedChanges, setHasUnsavedChanges } = useAgentVersionStore();
   
   const updateAgentMutation = useUpdateAgent();
@@ -338,7 +337,6 @@ export default function AgentConfigurationPageRefactored() {
                       isViewingOldVersion={isViewingOldVersion}
                       onFieldChange={handleFieldChange}
                       onMCPChange={handleMCPChange}
-                      initialAccordion={initialAccordion}
                     />
                   </TabsContent>
                 </Tabs>
@@ -445,7 +443,6 @@ export default function AgentConfigurationPageRefactored() {
                     isViewingOldVersion={isViewingOldVersion}
                     onFieldChange={handleFieldChange}
                     onMCPChange={handleMCPChange}
-                    initialAccordion={initialAccordion}
                   />
                 </TabsContent>
               </Tabs>

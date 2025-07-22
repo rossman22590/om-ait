@@ -39,20 +39,22 @@ class FeatureFlagManager:
     
     async def is_enabled(self, key: str) -> bool:
         """Check if a feature flag is enabled"""
-        # Check if global feature flag override is enabled
-        if os.getenv('FEATURE_FLAGS', '').lower() == 'true':
-            logger.debug(f"Feature flag {key} enabled via FEATURE_FLAGS=true override")
+        # Check if ENABLE_ALL_FEATURES environment variable is set to true
+        enable_all = os.getenv('ENABLE_ALL_FEATURES', '').lower() == 'true'
+        if enable_all:
+            logger.debug(f"ENABLE_ALL_FEATURES=true, returning True for flag: {key}")
             return True
             
         try:
             flag_key = f"{self.flag_prefix}{key}"
             redis_client = await redis.get_client()
             enabled = await redis_client.hget(flag_key, 'enabled')
-            return enabled == 'true' if enabled else False
+            # Return True by default if flag doesn't exist (enable all flags by default)
+            return enabled != 'false' if enabled else True
         except Exception as e:
             logger.error(f"Failed to check feature flag {key}: {e}")
-            # Return False by default if Redis is unavailable
-            return False
+            # Return True by default if Redis is unavailable (enable all flags by default)
+            return True
     
     async def get_flag(self, key: str) -> Optional[Dict[str, str]]:
         """Get feature flag details"""
@@ -130,6 +132,10 @@ async def set_flag(key: str, enabled: bool, description: str = "") -> bool:
 
 
 async def is_enabled(key: str) -> bool:
+    # Check if ENABLE_ALL_FEATURES environment variable is set to true
+    enable_all = os.getenv('ENABLE_ALL_FEATURES', '').lower() == 'true'
+    if enable_all:
+        return True
     return await get_flag_manager().is_enabled(key)
 
 

@@ -143,6 +143,7 @@ class Configuration:
     DAYTONA_API_KEY: str
     DAYTONA_SERVER_URL: str
     DAYTONA_TARGET: str
+    SANDBOX_SNAPSHOT_NAME: str = "kortix/suna:0.1.3"
     
     # Search and other API keys
     TAVILY_API_KEY: str
@@ -157,13 +158,14 @@ class Configuration:
     STRIPE_DEFAULT_PLAN_ID: Optional[str] = None
     STRIPE_DEFAULT_TRIAL_DAYS: int = 14
     
+    
     # Stripe Product IDs
     STRIPE_PRODUCT_ID_PROD: str = 'prod_SGT7srmz5hB2qo'
     STRIPE_PRODUCT_ID_STAGING: str = 'prod_SGT7srmz5hB2qo'
     
+    
     # Sandbox configuration
     SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3"
-    SANDBOX_SNAPSHOT_NAME = "kortix/suna:0.1.3"
     SANDBOX_ENTRYPOINT = "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
 
     # LangFuse configuration

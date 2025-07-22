@@ -86,13 +86,15 @@ async def run_agent(
         logger.info(f"Using custom tool configuration from agent")
     
 
+    # Agent builder tools (including AgentConfigTool) are restricted to agent builder mode only
     if is_agent_builder:
+        from services.supabase import DBConnection
         from agent.tools.agent_builder_tools.agent_config_tool import AgentConfigTool
         from agent.tools.agent_builder_tools.mcp_search_tool import MCPSearchTool
         from agent.tools.agent_builder_tools.credential_profile_tool import CredentialProfileTool
         from agent.tools.agent_builder_tools.workflow_tool import WorkflowTool
         from agent.tools.agent_builder_tools.trigger_tool import TriggerTool
-        from services.supabase import DBConnection
+         
         db = DBConnection()
          
         thread_manager.add_tool(AgentConfigTool, thread_manager=thread_manager, db_connection=db, agent_id=target_agent_id)

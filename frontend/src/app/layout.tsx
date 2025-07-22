@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     template: `%s - ${siteConfig.name}`,
   },
   description:
-    'Machine is AI assistant that helps you accomplish real-world tasks with ease. Through natural conversation, Machine becomes your digital companion for research, data analysis, and everyday challenges.',
+    'Machine is an AI assistant that helps you accomplish real-world tasks with ease. Through natural conversation, Machine becomes your digital companion for research, data analysis, and everyday challenges.',
   keywords: [
     'AI',
     'artificial intelligence',
@@ -45,9 +45,9 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: 'Machine Team', url: 'https://machine.myapps.ai' }],
   creator:
-    'Machine Team ',
+    'Machine',
   publisher:
-    'Machine Team',
+    'Machine',
   category: 'Technology',
   applicationName: 'Machine',
   formatDetection: {
@@ -64,17 +64,17 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: 'Machine - Generalist AI Agent',
+    title: 'Machine - Connected Generalist AI Agent',
     description:
-      'Machine is AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
+      'Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
     url: siteConfig.url,
     siteName: 'Machine',
     images: [
       {
-        url: '/meta.png',
+        url: '/banner.png',
         width: 1200,
         height: 630,
-        alt: 'Machine - Generalist AI Agent',
+        alt: 'Machine - Connected Generalist AI Agent',
         type: 'image/png',
       },
     ],
@@ -83,17 +83,17 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Machine - Generalist AI Agent',
+    title: 'Machine - Connected Generalist AI Agent',
     description:
-      'Machine is AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
+      'Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
     creator: '@the_machine_ai',
     site: '@the_machine_ai',
     images: [
       {
-        url: '/meta.png',
+        url: '/banner.png',
         width: 1200,
         height: 630,
-        alt: 'Machine - Generalist AI Agent',
+        alt: 'Machine - Connected Generalist AI Agent',
       },
     ],
   },

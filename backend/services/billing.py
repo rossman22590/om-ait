@@ -145,7 +145,7 @@ async def get_user_subscription(user_id: str) -> Optional[Dict]:
                     config.STRIPE_TIER_25_200_ID,
                     config.STRIPE_TIER_50_400_ID,
                     config.STRIPE_TIER_125_800_ID,
-                    config.STRIPE_TIER_200_1000_ID,
+                    config.STRIPE_TIER_200_1000_ID
                 ]:
                     our_subscriptions.append(sub)
         
@@ -337,8 +337,19 @@ def calculate_token_cost(prompt_tokens: int, completion_tokens: int, model: str)
         prompt_tokens = int(prompt_tokens) if prompt_tokens is not None else 0
         completion_tokens = int(completion_tokens) if completion_tokens is not None else 0
         
+        # Clean up model name - handle old model names and :thinking suffix
+        cleaned_model = model
+        
+        # Remove :thinking suffix if present
+        if ':thinking' in cleaned_model:
+            cleaned_model = cleaned_model.split(':thinking')[0]
+        
+        # Handle old model name mappings
+        if 'gemini-2.5-flash-preview-05-20' in cleaned_model:
+            cleaned_model = cleaned_model.replace('gemini-2.5-flash-preview-05-20', 'gemini-2.5-flash')
+        
         # Try to resolve the model name using MODEL_NAME_ALIASES first
-        resolved_model = MODEL_NAME_ALIASES.get(model, model)
+        resolved_model = MODEL_NAME_ALIASES.get(cleaned_model, cleaned_model)
 
         # Check if we have hardcoded pricing for this model (try both original and resolved)
         hardcoded_pricing = get_model_pricing(model) or get_model_pricing(resolved_model)
