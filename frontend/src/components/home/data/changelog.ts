@@ -6,7 +6,7 @@ export const changeLogData: ChangelogData[] = [
       date: "July 2025",
       title: "Introducing Custom Agents, Agent Marketplace, and much more!",
       description:
-        "The most significant update for Suna yet. Build, customize, and share AI agents. Connect any service, automate complex workflows, and discover a thriving marketplace of community-built agents.",
+        "The most significant update for Machine yet. Build, customize, and share AI agents. Connect any service, automate complex workflows, and discover a thriving marketplace of community-built agents.",
       items: [
         "Custom Agent Builder - Create specialized AI agents with tailored system prompts and behaviors",
         "Model Context Protocol (MCP) Integration - Connect agents to any external service",
