@@ -480,6 +480,30 @@ async def stop_agent(agent_run_id: str, user_id: str = Depends(get_current_user_
     await stop_agent_run(agent_run_id)
     return {"status": "stopped"}
 
+@router.post("/agent-runs/stop-all")
+async def stop_all_agents(user_id: str = Depends(get_current_user_id_from_jwt)):
+    """Stop all running agents for the current user."""
+    logger.info(f"Stop all agents request for user: {user_id}")
+    client = await db.client
+    
+    # Get all running agent runs
+    running_runs = await client.table('agent_runs').select('id, thread_id').eq('status', 'running').execute()
+    
+    if not running_runs.data:
+        return {"stopped_count": 0, "message": "No running agents found"}
+    
+    # Filter to user's threads and stop them
+    stopped_count = 0
+    for run in running_runs.data:
+        try:
+            await verify_thread_access(client, run['thread_id'], user_id)
+            await stop_agent_run(run['id'])
+            stopped_count += 1
+        except:
+            continue
+    
+    return {"stopped_count": stopped_count, "message": f"Stopped {stopped_count} agents"}
+
 @router.get("/thread/{thread_id}/agent-runs")
 async def get_agent_runs(thread_id: str, user_id: str = Depends(get_current_user_id_from_jwt)):
     """Get all agent runs for a thread."""
