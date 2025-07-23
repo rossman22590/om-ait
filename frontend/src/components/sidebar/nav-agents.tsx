@@ -1,21 +1,20 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpRight,
-  Link as LinkIcon,
   MoreHorizontal,
   Trash2,
-  MessagesSquare,
   Loader2,
   Share2,
   X,
   Check,
-  History
-} from "lucide-react"
-import { toast } from "sonner"
-import { usePathname, useRouter } from "next/navigation"
+  Search,
+  Edit2,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { usePathname, useRouter } from 'next/navigation';
 
 import {
   DropdownMenu,
@@ -28,65 +27,94 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuAction,
-  SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuButton,
   useSidebar,
 } from '@/components/ui/sidebar';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger
-} from "@/components/ui/tooltip"
-import Link from "next/link"
-import { ShareModal } from "./share-modal"
-import { DeleteConfirmationDialog } from "@/components/thread/DeleteConfirmationDialog"
-import { useDeleteOperation } from '@/contexts/DeleteOperationContext'
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
+import Link from 'next/link';
+import { ShareModal } from './share-modal';
+import { DeleteConfirmationDialog } from '@/components/thread/DeleteConfirmationDialog';
+import { useDeleteOperation } from '@/contexts/DeleteOperationContext';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { ThreadWithProject } from '@/hooks/react-query/sidebar/use-sidebar';
-import { processThreadsWithProjects, useDeleteMultipleThreads, useDeleteThread, useProjects, useThreads } from '@/hooks/react-query/sidebar/use-sidebar';
+import {
+  processThreadsWithProjects,
+  useDeleteMultipleThreads,
+  useDeleteThread,
+  useProjects,
+  useThreads,
+} from '@/hooks/react-query/sidebar/use-sidebar';
 import { projectKeys, threadKeys } from '@/hooks/react-query/sidebar/keys';
+import { useUpdateProject } from '@/hooks/react-query/sidebar/use-project-mutations';
 
 export function NavAgents() {
-  const { isMobile, state } = useSidebar()
-  const [loadingThreadId, setLoadingThreadId] = useState<string | null>(null)
-  const [showShareModal, setShowShareModal] = useState(false)
-  const [selectedItem, setSelectedItem] = useState<{ threadId: string, projectId: string } | null>(null)
-  const pathname = usePathname()
-  const router = useRouter()
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [threadToDelete, setThreadToDelete] = useState<{ id: string; name: string } | null>(null)
-  const isNavigatingRef = useRef(false)
+  const { isMobile, state } = useSidebar();
+  const [loadingThreadId, setLoadingThreadId] = useState<string | null>(null);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<{
+    threadId: string;
+    projectId: string;
+  } | null>(null);
+  const pathname = usePathname();
+  const router = useRouter();
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [threadToDelete, setThreadToDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const isNavigatingRef = useRef(false);
   const { performDelete } = useDeleteOperation();
   const isPerformingActionRef = useRef(false);
   const queryClient = useQueryClient();
 
-  const [selectedThreads, setSelectedThreads] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedThreads, setSelectedThreads] = useState<Set<string>>(
+    new Set(),
+  );
   const [deleteProgress, setDeleteProgress] = useState(0);
   const [totalToDelete, setTotalToDelete] = useState(0);
+
+  const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
+  const [newThreadName, setNewThreadName] = useState('');
+  const { mutate: updateProjectMutation } = useUpdateProject();
 
   const {
     data: projects = [],
     isLoading: isProjectsLoading,
-    error: projectsError
+    error: projectsError,
   } = useProjects();
 
   const {
     data: threads = [],
     isLoading: isThreadsLoading,
-    error: threadsError
+    error: threadsError,
   } = useThreads();
 
-  const { mutate: deleteThreadMutation, isPending: isDeletingSingle } = useDeleteThread();
+  const { mutate: deleteThreadMutation, isPending: isDeletingSingle } =
+    useDeleteThread();
   const {
     mutate: deleteMultipleThreadsMutation,
-    isPending: isDeletingMultiple
+    isPending: isDeletingMultiple,
   } = useDeleteMultipleThreads();
 
-  const combinedThreads: ThreadWithProject[] =
-    !isProjectsLoading && !isThreadsLoading ?
-      processThreadsWithProjects(threads, projects) : [];
+  const combinedThreads: ThreadWithProject[] = useMemo(
+    () =>
+      !isProjectsLoading && !isThreadsLoading
+        ? processThreadsWithProjects(threads, projects)
+        : [],
+    [threads, projects, isProjectsLoading, isThreadsLoading],
+  );
+
+  const filteredThreads = useMemo(() => {
+    if (!searchQuery) {
+      return combinedThreads;
+    }
+    return combinedThreads.filter((thread) =>
+      thread.projectName.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [combinedThreads, searchQuery]);
 
   const handleDeletionProgress = (completed: number, total: number) => {
     const percentage = (completed / total) * 100;
@@ -97,13 +125,18 @@ export function NavAgents() {
     const handleProjectUpdate = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail) {
-        const { projectId, updatedData } = customEvent.detail;
-        queryClient.invalidateQueries({ queryKey: projectKeys.details(projectId) });
+        const { projectId } = customEvent.detail;
+        queryClient.invalidateQueries({
+          queryKey: projectKeys.details(projectId),
+        });
         queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
       }
     };
 
-    window.addEventListener('project-updated', handleProjectUpdate as EventListener);
+    window.addEventListener(
+      'project-updated',
+      handleProjectUpdate as EventListener,
+    );
     return () => {
       window.removeEventListener(
         'project-updated',
@@ -118,47 +151,45 @@ export function NavAgents() {
 
   useEffect(() => {
     const handleNavigationComplete = () => {
-      console.log('NAVIGATION - Navigation event completed');
       document.body.style.pointerEvents = 'auto';
       isNavigatingRef.current = false;
     };
 
-    window.addEventListener("popstate", handleNavigationComplete);
+    window.addEventListener('popstate', handleNavigationComplete);
 
     return () => {
       window.removeEventListener('popstate', handleNavigationComplete);
-      // Ensure we clean up any leftover styles
-      document.body.style.pointerEvents = "auto";
+      document.body.style.pointerEvents = 'auto';
     };
   }, []);
 
-  // Reset isNavigatingRef when pathname changes
   useEffect(() => {
     isNavigatingRef.current = false;
     document.body.style.pointerEvents = 'auto';
   }, [pathname]);
 
-  // Function to handle thread click with loading state
-  const handleThreadClick = (e: React.MouseEvent<HTMLAnchorElement>, threadId: string, url: string) => {
-    // If thread is selected, prevent navigation 
-    if (selectedThreads.has(threadId)) {
+  const handleThreadClick = (
+    e: React.MouseEvent<HTMLAnchorElement>,
+    threadId: string,
+    url: string,
+  ) => {
+    if (selectedThreads.has(threadId) || renamingThreadId === threadId) {
       e.preventDefault();
       return;
     }
 
-    e.preventDefault()
-    setLoadingThreadId(threadId)
-    router.push(url)
-  }
+    e.preventDefault();
+    setLoadingThreadId(threadId);
+    router.push(url);
+  };
 
-  // Toggle thread selection for multi-select
   const toggleThreadSelection = (threadId: string, e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
 
-    setSelectedThreads(prev => {
+    setSelectedThreads((prev) => {
       const newSelection = new Set(prev);
       if (newSelection.has(threadId)) {
         newSelection.delete(threadId);
@@ -169,36 +200,34 @@ export function NavAgents() {
     });
   };
 
-  // Select all threads
   const selectAllThreads = () => {
-    const allThreadIds = combinedThreads.map(thread => thread.threadId);
+    const allThreadIds = filteredThreads.map((thread) => thread.threadId);
     setSelectedThreads(new Set(allThreadIds));
   };
 
-  // Deselect all threads
   const deselectAllThreads = () => {
     setSelectedThreads(new Set());
   };
 
-  // Function to handle thread deletion
   const handleDeleteThread = async (threadId: string, threadName: string) => {
     setThreadToDelete({ id: threadId, name: threadName });
     setIsDeleteDialogOpen(true);
   };
 
-  // Function to handle multi-delete
   const handleMultiDelete = () => {
     if (selectedThreads.size === 0) return;
 
-    // Get thread names for confirmation dialog
-    const threadsToDelete = combinedThreads.filter(t => selectedThreads.has(t.threadId));
-    const threadNames = threadsToDelete.map(t => t.projectName).join(", ");
+    const threadsToDelete = combinedThreads.filter((t) =>
+      selectedThreads.has(t.threadId),
+    );
+    const threadNames = threadsToDelete.map((t) => t.projectName).join(', ');
 
     setThreadToDelete({
-      id: "multiple",
-      name: selectedThreads.size > 3
-        ? `${selectedThreads.size} conversations`
-        : threadNames
+      id: 'multiple',
+      name:
+        selectedThreads.size > 3
+          ? `${selectedThreads.size} conversations`
+          : threadNames,
     });
 
     setTotalToDelete(selectedThreads.size);
@@ -209,107 +238,85 @@ export function NavAgents() {
   const confirmDelete = async () => {
     if (!threadToDelete || isPerformingActionRef.current) return;
 
-    // Mark action in progress
     isPerformingActionRef.current = true;
-
-    // Close dialog first for immediate feedback
     setIsDeleteDialogOpen(false);
 
-    // Check if it's a single thread or multiple threads
-    if (threadToDelete.id !== "multiple") {
-      // Single thread deletion
+    if (threadToDelete.id !== 'multiple') {
       const threadId = threadToDelete.id;
       const isActive = pathname?.includes(threadId);
-
-      // Store threadToDelete in a local variable since it might be cleared
       const deletedThread = { ...threadToDelete };
-
-      // Get sandbox ID from projects data
-      const thread = combinedThreads.find(t => t.threadId === threadId);
-      const project = projects.find(p => p.id === thread?.projectId);
+      const thread = combinedThreads.find((t) => t.threadId === threadId);
+      const project = projects.find((p) => p.id === thread?.projectId);
       const sandboxId = project?.sandbox?.id;
 
-      // Log operation start
-      console.log('DELETION - Starting thread deletion process', {
-        threadId: deletedThread.id,
-        isCurrentThread: isActive,
-        sandboxId
-      });
-
-      // Use the centralized deletion system with completion callback
       await performDelete(
         threadId,
         isActive,
         async () => {
-          // Delete the thread using the mutation with sandbox ID
           deleteThreadMutation(
             { threadId, sandboxId },
             {
               onSuccess: () => {
-                // Invalidate queries to refresh the list
                 queryClient.invalidateQueries({ queryKey: threadKeys.lists() });
                 toast.success('Conversation deleted successfully');
               },
               onSettled: () => {
                 setThreadToDelete(null);
                 isPerformingActionRef.current = false;
-              }
-            }
+              },
+            },
           );
         },
-        // Completion callback to reset local state
         () => {
           setThreadToDelete(null);
           isPerformingActionRef.current = false;
         },
       );
     } else {
-      // Multi-thread deletion
       const threadIdsToDelete = Array.from(selectedThreads);
-      const isActiveThreadIncluded = threadIdsToDelete.some(id => pathname?.includes(id));
+      const isActiveThreadIncluded = threadIdsToDelete.some((id) =>
+        pathname?.includes(id),
+      );
 
-      // Show initial toast
       toast.info(`Deleting ${threadIdsToDelete.length} conversations...`);
 
       try {
-        // If the active thread is included, handle navigation first
         if (isActiveThreadIncluded) {
-          // Navigate to dashboard before deleting
           isNavigatingRef.current = true;
           document.body.style.pointerEvents = 'none';
           router.push('/dashboard');
-
-          // Wait a moment for navigation to start
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         }
 
-        // Use the mutation for bulk deletion
         deleteMultipleThreadsMutation(
           {
             threadIds: threadIdsToDelete,
             threadSandboxMap: Object.fromEntries(
-              threadIdsToDelete.map(threadId => {
-                const thread = combinedThreads.find(t => t.threadId === threadId);
-                const project = projects.find(p => p.id === thread?.projectId);
-                return [threadId, project?.sandbox?.id || ''];
-              }).filter(([, sandboxId]) => sandboxId)
+              threadIdsToDelete
+                .map((threadId) => {
+                  const thread = combinedThreads.find(
+                    (t) => t.threadId === threadId,
+                  );
+                  const project = projects.find(
+                    (p) => p.id === thread?.projectId,
+                  );
+                  return [threadId, project?.sandbox?.id || ''];
+                })
+                .filter(([, sandboxId]) => sandboxId),
             ),
-            onProgress: handleDeletionProgress
+            onProgress: handleDeletionProgress,
           },
           {
             onSuccess: (data) => {
-              // Invalidate queries to refresh the list
               queryClient.invalidateQueries({ queryKey: threadKeys.lists() });
-
-              // Show success message
-              toast.success(`Successfully deleted ${data.successful.length} conversations`);
-
-              // If some deletions failed, show warning
+              toast.success(
+                `Successfully deleted ${data.successful.length} conversations`,
+              );
               if (data.failed.length > 0) {
-                toast.warning(`Failed to delete ${data.failed.length} conversations`);
+                toast.warning(
+                  `Failed to delete ${data.failed.length} conversations`,
+                );
               }
-
-              // Reset states
               setSelectedThreads(new Set());
               setDeleteProgress(0);
               setTotalToDelete(0);
@@ -323,14 +330,12 @@ export function NavAgents() {
               isPerformingActionRef.current = false;
               setDeleteProgress(0);
               setTotalToDelete(0);
-            }
-          }
+            },
+          },
         );
       } catch (err) {
         console.error('Error initiating bulk deletion:', err);
         toast.error('Error initiating deletion process');
-
-        // Reset states
         setSelectedThreads(new Set());
         setThreadToDelete(null);
         isPerformingActionRef.current = false;
@@ -340,7 +345,60 @@ export function NavAgents() {
     }
   };
 
-  // Loading state or error handling
+  const handleStartRename = (thread: ThreadWithProject) => {
+    setRenamingThreadId(thread.threadId);
+    setNewThreadName(thread.projectName);
+  };
+
+  const handleCancelRename = () => {
+    setRenamingThreadId(null);
+    setNewThreadName('');
+  };
+
+  const handleSaveRename = () => {
+    if (!renamingThreadId || !newThreadName.trim()) {
+      handleCancelRename();
+      return;
+    }
+
+    const threadToRename = combinedThreads.find(
+      (t) => t.threadId === renamingThreadId,
+    );
+    if (!threadToRename || threadToRename.projectName === newThreadName.trim()) {
+      handleCancelRename();
+      return;
+    }
+
+    updateProjectMutation(
+      {
+        projectId: threadToRename.projectId,
+        data: { name: newThreadName.trim() },
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+          queryClient.invalidateQueries({ queryKey: threadKeys.lists() });
+          toast.success('Conversation renamed successfully');
+          handleCancelRename();
+        },
+        onError: (error: any) => {
+          toast.error(`Failed to rename: ${error.message}`);
+          handleCancelRename();
+        },
+      },
+    );
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveRename();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelRename();
+    }
+  };
+
   const isLoading = isProjectsLoading || isThreadsLoading;
   const hasError = projectsError || threadsError;
 
@@ -368,7 +426,7 @@ export function NavAgents() {
                   variant="ghost"
                   size="icon"
                   onClick={selectAllThreads}
-                  disabled={selectedThreads.size === combinedThreads.length}
+                  disabled={selectedThreads.size === filteredThreads.length}
                   className="h-7 w-7"
                 >
                   <Check className="h-4 w-4" />
@@ -387,13 +445,23 @@ export function NavAgents() {
         ) : null}
       </div>
 
+      {state !== 'collapsed' && (
+        <div className="relative mb-2">
+          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search tasks..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-8 h-8 w-full rounded-md"
+          />
+        </div>
+      )}
+
       <SidebarMenu className="overflow-y-auto max-h-[calc(100vh-200px)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-
-
         {state !== 'collapsed' && (
           <>
             {isLoading ? (
-              // Show skeleton loaders while loading
               Array.from({ length: 3 }).map((_, index) => (
                 <SidebarMenuItem key={`skeleton-${index}`}>
                   <SidebarMenuButton>
@@ -402,107 +470,169 @@ export function NavAgents() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))
-            ) : combinedThreads.length > 0 ? (
-              // Show all threads with project info
+            ) : filteredThreads.length > 0 ? (
               <>
-                {combinedThreads.map((thread) => {
-                  // Check if this thread is currently active
+                {filteredThreads.map((thread) => {
                   const isActive = pathname?.includes(thread.threadId) || false;
                   const isThreadLoading = loadingThreadId === thread.threadId;
                   const isSelected = selectedThreads.has(thread.threadId);
 
                   return (
-                    <SidebarMenuItem key={`thread-${thread.threadId}`} className="group/row">
+                    <SidebarMenuItem
+                      key={`thread-${thread.threadId}`}
+                      className="group/row"
+                    >
                       <SidebarMenuButton
                         asChild
-                        className={`relative ${isActive
-                          ? 'bg-accent text-accent-foreground font-medium'
-                          : isSelected
-                            ? 'bg-primary/10'
-                            : ''
-                          }`}
+                        className={`relative ${
+                          isActive
+                            ? 'bg-accent text-accent-foreground font-medium'
+                            : isSelected
+                              ? 'bg-primary/10'
+                              : ''
+                        }`}
                       >
                         <div className="flex items-center w-full">
-                          <Link
-                            href={thread.url}
-                            onClick={(e) =>
-                              handleThreadClick(e, thread.threadId, thread.url)
-                            }
-                            className="flex items-center flex-1 min-w-0"
-                          >
-                            {isThreadLoading ? (
-                              <Loader2 className="h-4 w-4 animate-spin mr-2 flex-shrink-0" />
-                            ) : null}
-                            <span className="truncate">{thread.projectName}</span>
-                          </Link>
-                          
-                          {/* Checkbox - only visible on hover of this specific area */}
-                          <div
-                            className="mr-1 flex-shrink-0 w-4 h-4 flex items-center justify-center group/checkbox"
-                            onClick={(e) => toggleThreadSelection(thread.threadId, e)}
-                          >
-                            <div
-                              className={`h-4 w-4 border rounded cursor-pointer transition-all duration-150 flex items-center justify-center ${isSelected
-                                ? 'opacity-100 bg-primary border-primary hover:bg-primary/90'
-                                : 'opacity-0 group-hover/checkbox:opacity-100 border-muted-foreground/30 bg-background hover:bg-muted/50'
-                                }`}
-                            >
-                              {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
-                            </div>
-                          </div>
-
-                          {/* Dropdown Menu - inline with content */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                className="flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-muted/50 rounded transition-all duration-150 text-muted-foreground hover:text-foreground opacity-0 group-hover/row:opacity-100"
+                          {renamingThreadId === thread.threadId ? (
+                            <div className="flex items-center flex-1 min-w-0 gap-1">
+                              <Input
+                                value={newThreadName}
+                                onChange={(e) => setNewThreadName(e.target.value)}
+                                onKeyDown={handleRenameKeyDown}
+                                onBlur={handleSaveRename}
+                                autoFocus
+                                className="h-6 text-sm px-1 bg-transparent border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/50"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
                                 onClick={(e) => {
-                                  e.preventDefault();
                                   e.stopPropagation();
-                                  // Ensure pointer events are enabled when dropdown opens
-                                  document.body.style.pointerEvents = 'auto';
+                                  handleSaveRename();
                                 }}
                               >
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">More actions</span>
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                              className="w-56 rounded-lg"
-                              side={isMobile ? 'bottom' : 'right'}
-                              align={isMobile ? 'end' : 'start'}
-                            >
-                              <DropdownMenuItem onClick={() => {
-                                setSelectedItem({ threadId: thread?.threadId, projectId: thread?.projectId })
-                                setShowShareModal(true)
-                              }}>
-                                <Share2 className="text-muted-foreground" />
-                                <span>Share Chat</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <a
-                                  href={thread.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  <ArrowUpRight className="text-muted-foreground" />
-                                  <span>Open in New Tab</span>
-                                </a>
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleDeleteThread(
+                                <Check className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCancelRename();
+                                }}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <>
+                              <Link
+                                href={thread.url}
+                                onClick={(e) =>
+                                  handleThreadClick(
+                                    e,
                                     thread.threadId,
-                                    thread.projectName,
+                                    thread.url,
                                   )
                                 }
+                                className="flex items-center flex-1 min-w-0"
                               >
-                                <Trash2 className="text-muted-foreground" />
-                                <span>Delete</span>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                                {isThreadLoading ? (
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2 flex-shrink-0" />
+                                ) : null}
+                                <span className="truncate">
+                                  {thread.projectName}
+                                </span>
+                              </Link>
+
+                              <div
+                                className="mr-1 flex-shrink-0 w-4 h-4 flex items-center justify-center group/checkbox"
+                                onClick={(e) =>
+                                  toggleThreadSelection(thread.threadId, e)
+                                }
+                              >
+                                <div
+                                  className={`h-4 w-4 border rounded cursor-pointer transition-all duration-150 flex items-center justify-center ${
+                                    isSelected
+                                      ? 'opacity-100 bg-primary border-primary hover:bg-primary/90'
+                                      : 'opacity-0 group-hover/checkbox:opacity-100 border-muted-foreground/30 bg-background hover:bg-muted/50'
+                                  }`}
+                                >
+                                  {isSelected && (
+                                    <Check className="h-3 w-3 text-primary-foreground" />
+                                  )}
+                                </div>
+                              </div>
+
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    className="flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-muted/50 rounded transition-all duration-150 text-muted-foreground hover:text-foreground opacity-0 group-hover/row:opacity-100"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      document.body.style.pointerEvents =
+                                        'auto';
+                                    }}
+                                  >
+                                    <MoreHorizontal className="h-4 w-4" />
+                                    <span className="sr-only">
+                                      More actions
+                                    </span>
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                  className="w-56 rounded-lg"
+                                  side={isMobile ? 'bottom' : 'right'}
+                                  align={isMobile ? 'end' : 'start'}
+                                >
+                                  <DropdownMenuItem
+                                    onClick={() => handleStartRename(thread)}
+                                  >
+                                    <Edit2 className="text-muted-foreground" />
+                                    <span>Rename</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedItem({
+                                        threadId: thread?.threadId,
+                                        projectId: thread?.projectId,
+                                      });
+                                      setShowShareModal(true);
+                                    }}
+                                  >
+                                    <Share2 className="text-muted-foreground" />
+                                    <span>Share Chat</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem asChild>
+                                    <a
+                                      href={thread.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <ArrowUpRight className="text-muted-foreground" />
+                                      <span>Open in New Tab</span>
+                                    </a>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleDeleteThread(
+                                        thread.threadId,
+                                        thread.projectName,
+                                      )
+                                    }
+                                  >
+                                    <Trash2 className="text-muted-foreground" />
+                                    <span>Delete</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </>
+                          )}
                         </div>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -512,7 +642,9 @@ export function NavAgents() {
             ) : (
               <SidebarMenuItem>
                 <SidebarMenuButton className="text-sidebar-foreground/70">
-                  <span>No tasks yet</span>
+                  <span>
+                    {searchQuery ? 'No results found' : 'No tasks yet'}
+                  </span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
@@ -523,7 +655,10 @@ export function NavAgents() {
       {(isDeletingSingle || isDeletingMultiple) && totalToDelete > 0 && (
         <div className="mt-2 px-2">
           <div className="text-xs text-muted-foreground mb-1">
-            Deleting {deleteProgress > 0 ? `(${Math.floor(deleteProgress)}%)` : '...'}
+            Deleting{' '}
+            {deleteProgress > 0
+              ? `(${Math.floor(deleteProgress)}%)`
+              : '...'}
           </div>
           <div className="w-full bg-secondary h-1 rounded-full overflow-hidden">
             <div

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { ArrowDown, CircleDashed, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/ui/markdown';
@@ -18,6 +18,7 @@ import { KortixLogo } from '@/components/sidebar/kortix-logo';
 import { AgentLoader } from './loader';
 import { parseXmlToolCalls, isNewXmlFormat, extractToolNameFromStream } from '@/components/thread/tool-views/xml-parser';
 import { parseToolResult } from '@/components/thread/tool-views/tool-result-parser';
+import { cn } from '@/lib/utils';
 
 // Define the set of  tags whose raw XML should be hidden during streaming
 const HIDE_STREAMING_XML_TAGS = new Set([
@@ -329,6 +330,8 @@ export interface ThreadContentProps {
     agentName?: string;
     agentAvatar?: React.ReactNode;
     emptyStateComponent?: React.ReactNode; // Add custom empty state component prop
+    isSidePanelOpen?: boolean; // Add isSidePanelOpen prop
+    leftSidebarState?: string; // Add leftSidebarState prop
 }
 
 export const ThreadContent: React.FC<ThreadContentProps> = ({
@@ -351,12 +354,15 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
     agentName = 'Machine',
     agentAvatar = <KortixLogo size={16} />,
     emptyStateComponent,
+    isSidePanelOpen = false,
+    leftSidebarState = 'collapsed',
 }) => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const latestMessageRef = useRef<HTMLDivElement>(null);
     const [showScrollButton, setShowScrollButton] = useState(false);
     const [, setUserHasScrolled] = useState(false);
+    const hasInitiallyScrolledRef = useRef(false);
     const { session } = useAuth();
 
     // React Query file preloader
@@ -380,6 +386,39 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
     const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
         messagesEndRef.current?.scrollIntoView({ behavior });
     }, []);
+
+    // Initial scroll to bottom when thread opens
+    useEffect(() => {
+        if (!hasInitiallyScrolledRef.current && displayMessages.length > 0) {
+            hasInitiallyScrolledRef.current = true;
+            // Use instant scroll for initial load
+            setTimeout(() => {
+                scrollToBottom('instant');
+            }, 100);
+        }
+    }, [displayMessages.length, scrollToBottom]);
+
+    // Calculate scroll button position based on sidebar states
+    const getScrollButtonPosition = () => {
+        // Base positioning
+        let position = "right-96"; // Default 24px from right
+
+        // If side panel is open, move button left to account for side panel width
+        if (isSidePanelOpen) {
+            if (leftSidebarState === 'expanded') {
+                // Both left sidebar expanded and side panel open
+                position = "right-[calc(90%-2rem)] sm:right-[calc(450px+1rem)] md:right-[calc(500px+1rem)] lg:right-[calc(550px+1rem)] xl:right-[calc(650px+1rem)] bottom-36";
+            } else {
+                // Only side panel open
+                position = "right-[calc(90%-2rem)] sm:right-[calc(450px+1rem)] md:right-[calc(500px+1rem)] lg:right-[calc(550px+1rem)] xl:right-[calc(650px+1rem)]";
+            }
+        } else if (leftSidebarState === 'expanded') {
+            // Only left sidebar expanded (doesn't affect right positioning)
+            position = "right-72";
+        }
+
+        return position;
+    };
 
     // Preload all message attachments when messages change or sandboxId is provided
     React.useEffect(() => {
@@ -1014,7 +1053,10 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                 <Button
                     variant="outline"
                     size="icon"
-                    className="fixed bottom-20 right-6 z-10 h-8 w-8 rounded-full shadow-md"
+                    className={cn(
+                        "fixed bottom-6 z-99 h-8 w-8 rounded-full shadow-md transition-all duration-200 ease-in-out",
+                        getScrollButtonPosition()
+                    )}
                     onClick={() => scrollToBottom('smooth')}
                 >
                     <ArrowDown className="h-4 w-4" />
@@ -1024,4 +1066,4 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
     );
 };
 
-export default ThreadContent; 
+export default ThreadContent;

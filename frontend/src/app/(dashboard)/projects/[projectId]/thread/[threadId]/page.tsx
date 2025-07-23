@@ -637,6 +637,8 @@ export default function ThreadPage({
           debugMode={debugMode}
           agentName={agent && agent.name}
           agentAvatar={agent && agent.avatar}
+          isSidePanelOpen={isSidePanelOpen}
+          leftSidebarState={leftSidebarState}
         />
 
         <div
