@@ -309,7 +309,7 @@ export function SidebarLeft({
               <TooltipContent>
                 {hasFragmentsAccess 
                   ? 'Access Machine Fragments (extra cost)' 
-                  : 'Requires Enterprise, Scale, or Premium plan'
+                  : 'Requires Ultra, Enterprise, Scale, or Premium plan'
                 }
               </TooltipContent>
             </Tooltip>
