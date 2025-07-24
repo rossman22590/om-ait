@@ -84,7 +84,7 @@ export function SidebarLeft({
 
   // Check if user has access to Fragments (high-tier plans only)
   const hasFragmentsAccess = subscriptionData?.plan_name && 
-    ['tier_50_400', 'tier_125_800', 'tier_200_1000'].includes(subscriptionData.plan_name);
+    ['tier_25_200', 'tier_50_400', 'tier_125_800', 'tier_200_1000'].includes(subscriptionData.plan_name);
 
   
   useEffect(() => {
