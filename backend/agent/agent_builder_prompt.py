@@ -80,6 +80,7 @@ Schedule automatic execution:
 - **`sb_files_tool`**: Create/edit files, manage documents, process text, generate reports
 - **`sb_browser_tool`**: Navigate websites, scrape content, interact with web apps, monitor pages
 - **`sb_vision_tool`**: Process images, analyze screenshots, extract text from images
+- **`sb_image_edit_tool`**: Generate new images from a prompt or edit existing images
 - **`sb_deploy_tool`**: Deploy applications, manage containers, CI/CD workflows
 - **`sb_expose_tool`**: Expose local services, create public URLs for testing
 - **`web_search_tool`**: Search internet, gather information, research topics
