@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Bot, Menu, Store, Plus, Zap, Plug, ChevronRight, Loader2, StopCircle } from 'lucide-react';
+import { Bot, Menu, Store, Plus, Zap, Plug, ChevronRight, Loader2, StopCircle, Puzzle } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
@@ -52,6 +52,7 @@ import { cn } from '@/lib/utils';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useFeatureFlags } from '@/lib/feature-flags';
 import { useCreateNewAgent } from '@/hooks/react-query/agents/use-agents';
+import { useSubscription } from '@/hooks/react-query/subscriptions/use-subscriptions';
 import { Button } from '../ui/button';
 import { stopAllAgents } from '@/lib/api';
 import { toast } from 'sonner';
@@ -77,8 +78,13 @@ export function SidebarLeft({
   const customAgentsEnabled = flags.custom_agents;
   const marketplaceEnabled = flags.agent_marketplace;
   const createNewAgentMutation = useCreateNewAgent();
+  const { data: subscriptionData } = useSubscription();
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false);
   const [isStoppingAll, setIsStoppingAll] = useState(false);
+
+  // Check if user has access to Fragments (high-tier plans only)
+  const hasFragmentsAccess = subscriptionData?.plan_name && 
+    ['tier_25_200', 'tier_50_400', 'tier_125_800', 'tier_200_1000'].includes(subscriptionData.plan_name);
 
   
   useEffect(() => {
@@ -277,6 +283,36 @@ export function SidebarLeft({
                 </span>
               </SidebarMenuButton>
             </Link>
+          )}
+          {!flagsLoading && customAgentsEnabled && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div>
+                  <SidebarMenuButton 
+                    className={cn({
+                      'opacity-50 cursor-not-allowed': !hasFragmentsAccess,
+                      'cursor-pointer': hasFragmentsAccess,
+                    })}
+                    onClick={() => {
+                      if (hasFragmentsAccess) {
+                        window.open('https://machine-fragments.up.railway.app/', '_blank');
+                      }
+                    }}
+                  >
+                    <Puzzle className="h-4 w-4 mr-1" />
+                    <span className="flex items-center justify-between w-full">
+                      Fragments
+                    </span>
+                  </SidebarMenuButton>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                {hasFragmentsAccess 
+                  ? 'Access Machine Fragments' 
+                  : 'Requires Ultra, Enterprise, Scale, or Premium plan'
+                }
+              </TooltipContent>
+            </Tooltip>
           )}
         </SidebarGroup>
         <NavAgents />
