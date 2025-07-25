@@ -91,31 +91,37 @@ export const MODELS = {  // 1. Gemini 2.5 Flash (recommended, default)
     recommended: false,
     lowQuality: false
   },
+    'qwen3-coder': { 
+    tier: 'premium', 
+    priority: 91,
+    recommended: false,
+    lowQuality: false
+  },
   // 9. Sonnet 3.7
   'sonnet-3.7': { 
     tier: 'premium', 
-    priority: 91, 
+    priority: 90, 
     recommended: false,
     lowQuality: false
   },
   // 10. Sonnet 3.5
   'sonnet-3.5': { 
     tier: 'premium', 
-    priority: 90,
+    priority: 89,
     recommended: false,
     lowQuality: false
   },
   // 11. Deepseek
   'deepseek': { 
     tier: 'free', 
-    priority: 89,
+    priority: 88,
     recommended: false,
     lowQuality: false
   },
   // 12. GPT 4o
   'gpt-4o': { 
     tier: 'premium', 
-    priority: 88,
+    priority: 87,
     recommended: false,
     lowQuality: false
   },

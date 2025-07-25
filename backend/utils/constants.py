@@ -69,6 +69,14 @@ MODELS = {
         },
         "tier_availability": ["paid"]
     },
+    "openrouter/qwen/qwen3-coder@preset/alibaba-provider-prest": {
+        "aliases": ["qwen3-coder"],
+        "pricing": {
+            "input_cost_per_million_tokens": 6.00,
+            "output_cost_per_million_tokens": 60.00
+        },
+        "tier_availability": ["paid"]
+    },
     "openai/gpt-4.1": {
         "aliases": ["gpt-4.1"],
         "pricing": {
