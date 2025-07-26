@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 import {
   File,
   Folder,
@@ -21,6 +22,13 @@ import {
   FileText,
   ChevronDown,
   Archive,
+  Grid3X3,
+  List,
+  Edit,
+  Save,
+  X,
+  MoreHorizontal,
+  FolderOpen,
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -47,6 +55,12 @@ import {
 } from '@/hooks/react-query/files';
 import JSZip from 'jszip';
 import { normalizeFilenameToNFC } from '@/lib/utils/unicode';
+
+// Import updated components
+import { FileListView } from './file-viewer/file-list-view';
+import { FileSearchBar } from './file-viewer/file-search-bar';
+import { FileToolbar } from './file-viewer/file-toolbar';
+import { FileRenameModal } from './file-viewer/file-rename-modal';
 
 // Define API_URL
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
@@ -82,6 +96,29 @@ export function FileViewerModal({
   const [currentFileIndex, setCurrentFileIndex] = useState<number>(-1);
   const isFileListMode = Boolean(filePathList && filePathList.length > 0);
 
+  // Enhanced state for file management features
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set(['/workspace']));
+  const [loadingFolders, setLoadingFolders] = useState<Set<string>>(new Set());
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isCreatingZip, setIsCreatingZip] = useState(false);
+
+  // Modal states for rename and delete (files only now)
+  const [renameModal, setRenameModal] = useState<{ open: boolean; file: FileInfo | null }>({ open: false, file: null });
+  const [deleteModal, setDeleteModal] = useState<{ open: boolean; file: FileInfo | null }>({ open: false, file: null });
+  const [multiDeleteModal, setMultiDeleteModal] = useState<{ open: boolean; items: string[] }>({ open: false, items: [] });
+
+  // Inline editing state (replaces modal editing)
+  const [inlineEditMode, setInlineEditMode] = useState<{path: string, content: string} | null>(null);
+  const [editContent, setEditContent] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  // Store folder contents for tree view
+  const [folderContents, setFolderContents] = useState<Map<string, FileInfo[]>>(new Map());
+
   // Debug filePathList changes
   useEffect(() => {
     console.log('[FILE VIEWER DEBUG] filePathList changed:', {
@@ -103,6 +140,11 @@ export function FileViewerModal({
     staleTime: 30 * 1000, // 30 seconds
   });
 
+  // Filter files based on search query
+  const filteredFiles = files.filter(file => 
+    file.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   // Add a navigation lock to prevent race conditions
   const currentNavigationRef = useRef<string | null>(null);
 
@@ -122,6 +164,7 @@ export function FileViewerModal({
     data: cachedFileContent,
     isLoading: isCachedFileLoading,
     error: cachedFileError,
+    refetch: refetchFileContent
   } = useFileContentQuery(
     sandboxId,
     selectedFilePath || undefined,
@@ -183,6 +226,718 @@ export function FileViewerModal({
       ? path
       : `/workspace/${path.replace(/^\//, '')}`;
   }, []);
+
+  // NEW: Recursive function to get all files and folders within a folder
+  const getAllItemsInFolder = useCallback(async (folderPath: string): Promise<string[]> => {
+    const allItems: string[] = [];
+    const visited = new Set<string>();
+
+    const exploreFolder = async (path: string) => {
+      if (visited.has(path)) return;
+      visited.add(path);
+
+      try {
+        const items = await listSandboxFiles(sandboxId, path);
+        
+        for (const item of items) {
+          allItems.push(item.path);
+          
+          if (item.is_dir) {
+            // Recursively get items from subfolders
+            await exploreFolder(item.path);
+          }
+        }
+      } catch (error) {
+        console.error(`Error exploring folder ${path}:`, error);
+      }
+    };
+
+    await exploreFolder(folderPath);
+    return allItems;
+  }, [sandboxId]);
+
+  // Enhanced file selection functions with recursive folder selection
+  const handleFileSelect = useCallback(async (filePath: string, checked: boolean) => {
+    const file = filteredFiles.find(f => f.path === filePath);
+    if (!file) return;
+
+    let itemsToUpdate = [filePath];
+
+    // If selecting a folder, get all items inside it recursively
+    if (file.is_dir && checked) {
+      console.log(`[FOLDER SELECTION] Getting all items in folder: ${filePath}`);
+      try {
+        const folderItems = await getAllItemsInFolder(filePath);
+        itemsToUpdate = [filePath, ...folderItems];
+        console.log(`[FOLDER SELECTION] Found ${folderItems.length} items in ${filePath}`);
+      } catch (error) {
+        console.error(`Failed to get folder contents for selection:`, error);
+        toast.error('Failed to load folder contents for selection');
+      }
+    }
+
+    setSelectedFiles(prev => {
+      let newSelection: string[];
+      
+      if (checked) {
+        // Add all items (remove duplicates)
+        const itemsToAdd = itemsToUpdate.filter(item => !prev.includes(item));
+        newSelection = [...prev, ...itemsToAdd];
+      } else {
+        // Remove all items
+        newSelection = prev.filter(item => !itemsToUpdate.includes(item));
+      }
+      
+      // Update multi-select mode based on selection count
+      setMultiSelectMode(newSelection.length > 0);
+      return newSelection;
+    });
+  }, [filteredFiles, getAllItemsInFolder]);
+
+  const handleSelectAll = useCallback(() => {
+    const allPaths = filteredFiles.map(f => f.path); // Include both files and folders
+    setSelectedFiles(allPaths);
+    setMultiSelectMode(true);
+  }, [filteredFiles]);
+
+  const handleDeselectAll = useCallback(() => {
+    setSelectedFiles([]);
+    setMultiSelectMode(false);
+  }, []);
+
+  // Function to calculate accurate file and folder counts from selection
+  const getSelectionStats = useCallback(async () => {
+    if (selectedFiles.length === 0) {
+      return { totalFiles: 0, totalFolders: 0, rootFolders: 0, rootFiles: 0 };
+    }
+
+    let totalFiles = 0;
+    let totalFolders = 0;
+    let rootFiles = 0;
+    let rootFolders = 0;
+    
+    // Get files that are directly selected (not just included because their parent folder is selected)
+    const directlySelectedItems = new Set(selectedFiles);
+    
+    for (const selectedPath of selectedFiles) {
+      // Check if this item is a root selection or a child of a selected folder
+      const isRootSelection = !selectedFiles.some(otherPath => 
+        otherPath !== selectedPath && selectedPath.startsWith(otherPath + '/')
+      );
+      
+      if (isRootSelection) {
+        // This is a directly selected item
+        const item = filteredFiles.find(f => f.path === selectedPath);
+        if (item) {
+          if (item.is_dir) {
+            rootFolders++;
+            // Count all items in this folder
+            try {
+              const folderItems = await getAllItemsInFolder(selectedPath);
+              for (const itemPath of folderItems) {
+                // Determine if it's a file or folder by checking if it ends with a known file extension
+                // or by trying to find it in our known files
+                const isFile = !itemPath.endsWith('/') && (
+                  itemPath.includes('.') || 
+                  !selectedFiles.some(p => p.startsWith(itemPath + '/'))
+                );
+                
+                if (isFile) {
+                  totalFiles++;
+                } else {
+                  totalFolders++;
+                }
+              }
+            } catch (error) {
+              console.error(`Error counting items in folder ${selectedPath}:`, error);
+            }
+          } else {
+            rootFiles++;
+          }
+        }
+      }
+    }
+    
+    // Add root files to total
+    totalFiles += rootFiles;
+    totalFolders += rootFolders;
+
+    return { totalFiles, totalFolders, rootFiles, rootFolders };
+  }, [selectedFiles, filteredFiles, getAllItemsInFolder]);
+
+  // Folder expansion toggle for tree view with loading
+  const toggleFolderExpansion = useCallback(async (folderPath: string) => {
+    if (loadingFolders.has(folderPath)) return; // Prevent double-loading
+
+    if (expandedFolders.has(folderPath)) {
+      // Collapse folder
+      setExpandedFolders(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(folderPath);
+        return newSet;
+      });
+    } else {
+      // Expand folder - load contents if not already loaded
+      setLoadingFolders(prev => new Set(prev).add(folderPath));
+      
+      try {
+        const folderFiles = await listSandboxFiles(sandboxId, folderPath);
+        
+        // Store folder contents
+        setFolderContents(prev => new Map(prev).set(folderPath, folderFiles));
+        
+        // Expand folder
+        setExpandedFolders(prev => new Set(prev).add(folderPath));
+        
+        console.log(`[FOLDER EXPANSION] Loaded ${folderFiles.length} items for ${folderPath}`);
+      } catch (error) {
+        console.error(`[FOLDER EXPANSION] Failed to load ${folderPath}:`, error);
+        toast.error(`Failed to load folder contents: ${folderPath.split('/').pop()}`);
+      } finally {
+        setLoadingFolders(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(folderPath);
+          return newSet;
+        });
+      }
+    }
+  }, [expandedFolders, loadingFolders, sandboxId]);
+
+  // Modal handlers for rename (files only)
+  const handleTriggerRename = useCallback((file: FileInfo) => {
+    if (file.is_dir) return; // Don't allow folder renaming
+    setRenameModal({ open: true, file });
+  }, []);
+
+  const handleRenameModalSave = useCallback(async (newName: string) => {
+    if (!renameModal.file || !session?.access_token || !newName.trim() || renameModal.file.is_dir) {
+      setRenameModal({ open: false, file: null });
+      return;
+    }
+
+    const file = renameModal.file;
+    
+    try {
+      // For files only
+      const response = await fetch(
+        `${API_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(file.path)}`,
+        {
+          headers: { 'Authorization': `Bearer ${session.access_token}` }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch file content');
+      }
+
+      const blob = await response.blob();
+      
+      const pathParts = file.path.split('/');
+      pathParts[pathParts.length - 1] = newName;
+      const newPath = pathParts.join('/');
+
+      const formData = new FormData();
+      formData.append('file', blob, newName);
+      formData.append('path', newPath);
+
+      const uploadResponse = await fetch(
+        `${API_URL}/sandboxes/${sandboxId}/files`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload renamed file');
+      }
+
+      // Delete the old file
+      const deleteResponse = await fetch(
+        `${API_URL}/sandboxes/${sandboxId}/files?path=${encodeURIComponent(file.path)}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        }
+      );
+
+      if (deleteResponse.ok) {
+        // Clear cache for old path
+        FileCache.delete(`${sandboxId}:${file.path}:text`);
+        FileCache.delete(`${sandboxId}:${file.path}:blob`);
+        FileCache.delete(`${sandboxId}:${file.path}:json`);
+      }
+      
+      await refetchFiles();
+      toast.success(`Renamed to ${newName}`);
+      
+      // Update selected file path if it was the renamed file
+      if (selectedFilePath === file.path) {
+        const pathParts = file.path.split('/');
+        pathParts[pathParts.length - 1] = newName;
+        const newPath = pathParts.join('/');
+        setSelectedFilePath(newPath);
+      }
+      
+      // Update selected files list - if the renamed item was selected, update its path
+      setSelectedFiles(prev => prev.map(p => {
+        if (p === file.path || p.startsWith(file.path + '/')) {
+          // Update the path
+          const pathParts = file.path.split('/');
+          pathParts[pathParts.length - 1] = newName;
+          const newBasePath = pathParts.join('/');
+          return p.replace(file.path, newBasePath);
+        }
+        return p;
+      }));
+
+    } catch (error) {
+      console.error('Rename failed:', error);
+      toast.error(`Failed to rename: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setRenameModal({ open: false, file: null });
+    }
+  }, [renameModal, sandboxId, session?.access_token, refetchFiles, selectedFilePath]);
+
+  // Modal handlers for delete (files only)
+  const handleTriggerDelete = useCallback((file: FileInfo) => {
+    if (file.is_dir) return; // Don't allow folder deletion
+    setDeleteModal({ open: true, file });
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteModal.file || !session?.access_token || deleteModal.file.is_dir) {
+      setDeleteModal({ open: false, file: null });
+      return;
+    }
+
+    const file = deleteModal.file;
+    setIsDeleting(true);
+
+    try {
+      console.log(`[DELETE] Deleting file: ${file.path}`);
+      
+      const response = await fetch(`${API_URL}/sandboxes/${sandboxId}/files?path=${encodeURIComponent(file.path)}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error(`Delete failed: ${response.status} - ${errorData}`);
+        throw new Error(`Failed to delete file: ${errorData}`);
+      }
+
+      // Clear from cache
+      FileCache.delete(`${sandboxId}:${file.path}:text`);
+      FileCache.delete(`${sandboxId}:${file.path}:blob`);
+      FileCache.delete(`${sandboxId}:${file.path}:json`);
+
+      // Remove from selected files
+      setSelectedFiles(prev => prev.filter(p => p !== file.path && !p.startsWith(file.path + '/')));
+
+      await refetchFiles();
+      toast.success(`Deleted file: ${file.name}`);
+
+    } catch (error) {
+      console.error('Delete failed:', error);
+      toast.error(`Failed to delete: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsDeleting(false);
+      setDeleteModal({ open: false, file: null });
+    }
+  }, [deleteModal, sandboxId, session?.access_token, refetchFiles]);
+
+  // Updated handleDeleteSelected to only handle files
+  const handleDeleteSelected = useCallback(async () => {
+    if (!session?.access_token || selectedFiles.length === 0 || isDeleting) return;
+
+    // Filter to only include files, not folders
+    const filesToDelete = selectedFiles.filter(filePath => {
+      const file = filteredFiles.find(f => f.path === filePath);
+      return file && !file.is_dir;
+    });
+
+    if (filesToDelete.length === 0) {
+      toast.warning('Only files can be deleted through multi-select. Folders should be downloaded as ZIP instead.');
+      return;
+    }
+
+    // Open the multi-delete modal with only files
+    setMultiDeleteModal({ open: true, items: filesToDelete });
+  }, [selectedFiles, session?.access_token, isDeleting, filteredFiles]);
+
+  // New function to handle multi-delete confirmation (files only)
+  const handleConfirmMultiDelete = useCallback(async () => {
+    if (!session?.access_token || multiDeleteModal.items.length === 0 || isDeleting) {
+      setMultiDeleteModal({ open: false, items: [] });
+      return;
+    }
+
+    setIsDeleting(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      console.log(`[MULTI-DELETE] Deleting ${multiDeleteModal.items.length} files`);
+
+      for (const filePath of multiDeleteModal.items) {
+        try {
+          // Only delete files (should already be filtered)
+          const file = filteredFiles.find(f => f.path === filePath);
+          if (file && file.is_dir) {
+            console.log(`[MULTI-DELETE] Skipping folder: ${filePath}`);
+            continue;
+          }
+          
+          console.log(`[MULTI-DELETE] Deleting file: ${filePath}`);
+          
+          const response = await fetch(`${API_URL}/sandboxes/${sandboxId}/files?path=${encodeURIComponent(filePath)}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            successCount++;
+            // Remove from cache
+            FileCache.delete(`${sandboxId}:${filePath}:text`);
+            FileCache.delete(`${sandboxId}:${filePath}:blob`);
+            FileCache.delete(`${sandboxId}:${filePath}:json`);
+          } else {
+            errorCount++;
+            const errorText = await response.text();
+            console.error(`Failed to delete ${filePath}: ${response.status} - ${errorText}`);
+          }
+        } catch (error) {
+          errorCount++;
+          console.error(`Error deleting ${filePath}:`, error);
+        }
+      }
+
+      // Clear selections and refresh
+      handleDeselectAll();
+      await refetchFiles();
+
+      if (successCount > 0) {
+        toast.success(`Deleted ${successCount} file(s)`);
+      }
+      if (errorCount > 0) {
+        toast.error(`Failed to delete ${errorCount} file(s)`);
+      }
+
+    } catch (error) {
+      console.error('Delete operation failed:', error);
+      toast.error('Failed to delete files');
+    } finally {
+      setIsDeleting(false);
+      setMultiDeleteModal({ open: false, items: [] });
+    }
+  }, [sandboxId, multiDeleteModal.items, session?.access_token, isDeleting, refetchFiles, handleDeselectAll, filteredFiles]);
+
+  // Download individual file
+  const handleDownloadFile = useCallback(async (file: FileInfo) => {
+    if (file.is_dir || !session?.access_token) return;
+
+    try {
+      setIsDownloading(true);
+      console.log(`[DOWNLOAD FILE] Downloading: ${file.path}`);
+
+      const response = await fetch(
+        `${API_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(file.path)}`,
+        {
+          headers: { 'Authorization': `Bearer ${session.access_token}` }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to download file: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const mimeType = FileCache.getMimeTypeFromPath?.(file.path) || 'application/octet-stream';
+      const finalBlob = new Blob([blob], { type: mimeType });
+      
+      // Download the file
+      const url = URL.createObjectURL(finalBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // Track URL and schedule cleanup
+      activeDownloadUrls.current.add(url);
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        activeDownloadUrls.current.delete(url);
+      }, 10000);
+
+      toast.success(`Downloaded: ${file.name}`);
+
+    } catch (error) {
+      console.error('Download failed:', error);
+      toast.error(`Failed to download file: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [sandboxId, session?.access_token]);
+
+  // Download folder as ZIP
+  const handleDownloadFolderAsZip = useCallback(async (folder: FileInfo) => {
+    if (!folder.is_dir || !session?.access_token) return;
+
+    try {
+      setIsCreatingZip(true);
+      console.log(`[DOWNLOAD FOLDER] Creating ZIP for folder: ${folder.path}`);
+
+      const zip = new JSZip();
+
+      // Get all files in the folder recursively
+      const folderItems = await getAllItemsInFolder(folder.path);
+      console.log(`[DOWNLOAD FOLDER] Found ${folderItems.length} items in folder`);
+
+      let addedFiles = 0;
+      for (const itemPath of folderItems) {
+        try {
+          // Only add files, not folders
+          const response = await fetch(
+            `${API_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(itemPath)}`,
+            {
+              headers: { 'Authorization': `Bearer ${session.access_token}` }
+            }
+          );
+          
+          if (response.ok) {
+            const blob = await response.blob();
+            const relativePath = itemPath.replace(`${folder.path}/`, '');
+            zip.file(relativePath, blob);
+            addedFiles++;
+          }
+        } catch (error) {
+          // Skip files that can't be loaded (they might be folders)
+          console.log(`Skipping ${itemPath} - might be a folder or inaccessible`);
+        }
+      }
+
+      if (addedFiles === 0) {
+        toast.warning(`No files found in folder "${folder.name}" to download`);
+        return;
+      }
+
+      // Generate and download ZIP
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${folder.name}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast.success(`Downloaded folder "${folder.name}" as ZIP with ${addedFiles} files`);
+
+    } catch (error) {
+      console.error('Folder ZIP creation failed:', error);
+      toast.error(`Failed to create ZIP: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsCreatingZip(false);
+    }
+  }, [sandboxId, session?.access_token, getAllItemsInFolder]);
+
+  // Download selected files/folders as ZIP
+  const handleDownloadSelected = useCallback(async () => {
+    if (!session?.access_token || selectedFiles.length === 0 || isCreatingZip) return;
+
+    setIsCreatingZip(true);
+    try {
+      const zip = new JSZip();
+
+      // Get root items only to avoid duplicates
+      const rootItems = selectedFiles.filter(selectedPath => 
+        !selectedFiles.some(otherPath => 
+          otherPath !== selectedPath && selectedPath.startsWith(otherPath + '/')
+        )
+      );
+
+      for (let i = 0; i < rootItems.length; i++) {
+        const filePath = rootItems[i];
+        const file = filteredFiles.find(f => f.path === filePath);
+        
+        if (!file) continue;
+        
+        if (file.is_dir) {
+          // For folders, recursively add all files
+          try {
+            const folderItems = await getAllItemsInFolder(filePath);
+            for (const itemPath of folderItems) {
+              // Only add files, not folders
+              try {
+                const response = await fetch(
+                  `${API_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(itemPath)}`,
+                  {
+                    headers: { 'Authorization': `Bearer ${session.access_token}` }
+                  }
+                );
+                
+                if (response.ok) {
+                  const blob = await response.blob();
+                  const relativePath = itemPath.replace(`${filePath}/`, '');
+                  zip.file(`${file.name}/${relativePath}`, blob);
+                }
+              } catch (error) {
+                // Skip files that can't be loaded (they might be folders)
+                console.log(`Skipping ${itemPath} - might be a folder`);
+              }
+            }
+          } catch (error) {
+            console.error(`Failed to load folder ${filePath} for zip:`, error);
+          }
+        } else {
+          // For files
+          try {
+            const response = await fetch(
+              `${API_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(filePath)}`,
+              {
+                headers: { 'Authorization': `Bearer ${session.access_token}` }
+              }
+            );
+
+            if (response.ok) {
+              const blob = await response.blob();
+              zip.file(file.name, blob);
+            }
+          } catch (error) {
+            console.error(`Failed to load ${filePath} for zip:`, error);
+          }
+        }
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `selected-items-${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast.success(`Downloaded ${rootItems.length} items as ZIP`);
+
+    } catch (error) {
+      console.error('ZIP creation failed:', error);
+      toast.error('Failed to create ZIP file');
+    } finally {
+      setIsCreatingZip(false);
+    }
+  }, [sandboxId, selectedFiles, session?.access_token, isCreatingZip, filteredFiles, getAllItemsInFolder]);
+
+  // Start inline editing (replaces opening modal)
+  const handleStartEdit = useCallback(async () => {
+    if (!selectedFilePath || !session?.access_token) return;
+
+    try {
+      const response = await fetch(
+        `${API_URL}/sandboxes/${sandboxId}/files/content?path=${encodeURIComponent(selectedFilePath)}`,
+        {
+          headers: { 'Authorization': `Bearer ${session.access_token}` }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch file content');
+      }
+
+      const content = await response.text();
+      setInlineEditMode({ path: selectedFilePath, content });
+      setEditContent(content);
+
+    } catch (error) {
+      console.error('Failed to load file for editing:', error);
+      toast.error('Failed to load file for editing');
+    }
+  }, [selectedFilePath, sandboxId, session?.access_token]);
+
+  // Save inline edit with refetch
+  const handleSaveEdit = useCallback(async () => {
+    if (!inlineEditMode || !session?.access_token) return;
+
+    setIsSavingEdit(true);
+    try {
+      const blob = new Blob([editContent], { type: 'text/plain' });
+      const formData = new FormData();
+      formData.append('file', blob, inlineEditMode.path.split('/').pop() || 'file');
+      formData.append('path', inlineEditMode.path);
+
+      const response = await fetch(
+        `${API_URL}/sandboxes/${sandboxId}/files`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to save file');
+      }
+
+      // Clear cache to force reload
+      FileCache.delete(`${sandboxId}:${inlineEditMode.path}:text`);
+      FileCache.delete(`${sandboxId}:${inlineEditMode.path}:blob`);
+      FileCache.delete(`${sandboxId}:${inlineEditMode.path}:json`);
+      
+      // Refetch both the file list and the specific file content
+      await Promise.all([
+        refetchFiles(),
+        refetchFileContent()
+      ]);
+      
+      toast.success('File saved successfully');
+      
+      // Exit edit mode
+      setInlineEditMode(null);
+      setEditContent('');
+
+    } catch (error) {
+      console.error('Save failed:', error);
+      toast.error(`Failed to save: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }, [inlineEditMode, editContent, sandboxId, session?.access_token, refetchFiles, refetchFileContent]);
+
+  // Cancel inline edit
+  const handleCancelEdit = useCallback(() => {
+    setInlineEditMode(null);
+    setEditContent('');
+  }, []);
+
+  // Edit file function (for dropdown menu action)
+  const handleEditFile = useCallback(async (filePath: string) => {
+    // First open the file, then start editing
+    const file = filteredFiles.find(f => f.path === filePath);
+    if (file && !file.is_dir) {
+      await openFile(file);
+      // Small delay to ensure file is loaded
+      setTimeout(() => handleStartEdit(), 100);
+    }
+  }, [filteredFiles, handleStartEdit]);
 
   // Recursive function to discover all files in the workspace
   const discoverAllFiles = useCallback(async (
@@ -379,6 +1134,8 @@ export function FileViewerModal({
     setTextContentForRenderer(null); // Clear derived text content
     setBlobUrlForRenderer(null); // Clear derived blob URL
     setContentError(null);
+    setInlineEditMode(null); // Clear edit mode
+    setEditContent('');
     // Only reset file list mode index when not in file list mode
     if (!isFileListMode) {
       console.log(`[FILE VIEWER DEBUG] Resetting currentFileIndex in clearSelectedFile`);
@@ -501,6 +1258,9 @@ export function FileViewerModal({
 
       // Clear selected file when navigating
       clearSelectedFile();
+      // Clear selections when navigating
+      setSelectedFiles([]);
+      setMultiSelectMode(false);
 
       // Update path state - must happen after clearing selection
       setCurrentPath(normalizedPath);
@@ -520,6 +1280,8 @@ export function FileViewerModal({
 
       // Clear selected file and set path
       clearSelectedFile();
+      setSelectedFiles([]);
+      setMultiSelectMode(false);
       setCurrentPath(normalizedPath);
     },
     [normalizePath, clearSelectedFile],
@@ -531,6 +1293,8 @@ export function FileViewerModal({
     console.log('[FILE VIEWER] Navigating home from:', currentPath);
 
     clearSelectedFile();
+    setSelectedFiles([]);
+    setMultiSelectMode(false);
     setCurrentPath('/workspace');
   }, [clearSelectedFile, currentPath]);
 
@@ -838,6 +1602,21 @@ export function FileViewerModal({
         // Reset download all state
         setIsDownloadingAll(false);
         setDownloadProgress(null);
+
+        // Reset enhanced state
+        setSelectedFiles([]);
+        setMultiSelectMode(false);
+        setSearchQuery('');
+        setExpandedFolders(new Set(['/workspace']));
+        setLoadingFolders(new Set());
+        setFolderContents(new Map());
+        setInlineEditMode(null);
+        setEditContent('');
+        
+        // Reset modal states
+        setRenameModal({ open: false, file: null });
+        setDeleteModal({ open: false, file: null });
+        setMultiDeleteModal({ open: false, items: [] });
       }
       onOpenChange(open);
     },
@@ -1117,8 +1896,6 @@ export function FileViewerModal({
     }
   }, []);
 
-
-
   // Process uploaded file - Define after helpers
   const processUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1187,6 +1964,22 @@ export function FileViewerModal({
     }
   }, [open, filePathList]);
 
+  // Helper functions for file actions - Updated to allow only file operations
+  const canRenameFile = useCallback((file: FileInfo) => {
+    return !file.is_dir; // Only allow renaming files
+  }, []);
+
+  const canEditFile = useCallback((file: FileInfo) => {
+    if (file.is_dir) return false; // Can't edit folders
+    const ext = file.name.split('.').pop()?.toLowerCase() || '';
+    const editableExtensions = ['txt', 'md', 'js', 'ts', 'jsx', 'tsx', 'css', 'html', 'json', 'yml', 'yaml', 'xml', 'svg', 'py', 'java', 'cpp', 'c', 'h', 'php', 'rb', 'go', 'rs', 'sh', 'bat', 'sql', 'r', 'scala', 'kt', 'swift', 'dart', 'vue', 'scss', 'sass', 'less', 'config', 'conf', 'ini', 'env', 'gitignore', 'dockerfile', 'makefile', 'readme'];
+    return editableExtensions.includes(ext) || !ext; // Allow files without extensions
+  }, []);
+
+  const canDeleteFile = useCallback((file: FileInfo) => {
+    return !file.is_dir; // Only allow deleting files
+  }, []);
+
   // --- Render --- //
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -1215,6 +2008,28 @@ export function FileViewerModal({
           )}
 
           <div className="flex items-center gap-2">
+            {/* View mode toggle - only show when not viewing a file */}
+            {!selectedFilePath && (
+              <div className="flex items-center border rounded-md">
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('grid')}
+                  className="h-8 px-3"
+                >
+                  <Grid3X3 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === 'list' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('list')}
+                  className="h-8 px-3"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
             {/* Navigation arrows for file list mode */}
             {(() => {
               // Debug logging
@@ -1240,7 +2055,7 @@ export function FileViewerModal({
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  <div className="text-xs text-muted-foreground px-1">
+                                    <div className="text-xs text-muted-foreground px-1">
                     {currentFileIndex + 1} / {(filePathList?.length || 0)}
                   </div>
                   <Button
@@ -1311,8 +2126,60 @@ export function FileViewerModal({
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Search bar - only show when not viewing a file */}
+            {!selectedFilePath && (
+              <FileSearchBar
+                value={searchQuery}
+                onChange={setSearchQuery}
+                className="w-64"
+              />
+            )}
+
             {selectedFilePath && (
               <>
+                {/* Edit button for inline editing */}
+                {canEditFile({ name: selectedFilePath.split('/').pop() || '', is_dir: false } as FileInfo) && (
+                  <>
+                    {inlineEditMode ? (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleSaveEdit}
+                          disabled={isSavingEdit}
+                          className="h-8 gap-1"
+                        >
+                          {isSavingEdit ? (
+                            <Loader className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4" />
+                          )}
+                          <span className="hidden sm:inline">Save</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCancelEdit}
+                          className="h-8 gap-1"
+                        >
+                          <X className="h-4 w-4" />
+                          <span className="hidden sm:inline">Cancel</span>
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleStartEdit}
+                        className="h-8 gap-1"
+                      >
+                        <Edit className="h-4 w-4" />
+                        <span className="hidden sm:inline">Edit</span>
+                      </Button>
+                    )}
+                  </>
+                )}
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -1328,7 +2195,7 @@ export function FileViewerModal({
                   <span className="hidden sm:inline">Download</span>
                 </Button>
 
-                {/* Replace the Export as PDF button with a dropdown */}
+                {/* PDF export dropdown for markdown files */}
                 {isMarkdownFile(selectedFilePath) && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -1417,12 +2284,33 @@ export function FileViewerModal({
           </div>
         </div>
 
+        {/* Bulk actions toolbar - only show when in multi-select mode */}
+        {multiSelectMode && !selectedFilePath && (
+          <FileToolbar
+            selectedCount={selectedFiles.length}
+            onDelete={handleDeleteSelected}
+            onDownload={handleDownloadSelected}
+            onDeselectAll={handleDeselectAll}
+            disabled={isDeleting || isCreatingZip}
+          />
+        )}
+
         {/* Content Area */}
         <div className="flex-1 overflow-hidden">
           {selectedFilePath ? (
-            /* File Viewer */
+            /* File Viewer with Inline Editing */
             <div className="h-full w-full overflow-auto">
-              {isCachedFileLoading ? (
+              {inlineEditMode ? (
+                /* Inline Editor */
+                <div className="h-full w-full p-4">
+                  <Textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full h-full resize-none font-mono text-sm"
+                    placeholder="Edit your file content here..."
+                  />
+                </div>
+              ) : isCachedFileLoading ? (
                 <div className="h-full w-full flex flex-col items-center justify-center">
                   <Loader className="h-8 w-8 animate-spin text-primary mb-3" />
                   <p className="text-sm text-muted-foreground">
@@ -1533,53 +2421,284 @@ export function FileViewerModal({
                 <div className="h-full w-full flex items-center justify-center">
                   <Loader className="h-6 w-6 animate-spin text-primary" />
                 </div>
-              ) : files.length === 0 ? (
+              ) : filteredFiles.length === 0 ? (
                 <div className="h-full w-full flex flex-col items-center justify-center">
                   <Folder className="h-12 w-12 mb-2 text-muted-foreground opacity-30" />
                   <p className="text-sm text-muted-foreground">
-                    Directory is empty
+                    {searchQuery ? 'No files match your search' : 'Directory is empty'}
                   </p>
+                  {searchQuery && (
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() => setSearchQuery('')}
+                      className="mt-2"
+                    >
+                      Clear search
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <ScrollArea className="h-full w-full p-2">
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
-                    {files.map((file) => (
-                      <button
-                        key={file.path}
-                        className={`flex flex-col items-center p-3 rounded-2xl border hover:bg-muted/50 transition-colors ${selectedFilePath === file.path
-                          ? 'bg-muted border-primary/20'
-                          : ''
-                          }`}
-                        onClick={() => {
-                          if (file.is_dir) {
-                            console.log(
-                              `[FILE VIEWER] Folder clicked: ${file.name}, path: ${file.path}`,
-                            );
-                            navigateToFolder(file);
-                          } else {
-                            openFile(file);
+                  {viewMode === 'grid' ? (
+                    /* Grid View with 3-dots menu */
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-4">
+                      {filteredFiles.map((file) => (
+                        <div key={file.path} className="relative group">
+                          {/* Checkbox - show in multi-select mode for both files and folders */}
+                          {multiSelectMode && (
+                            <input
+                              type="checkbox"
+                              checked={selectedFiles.includes(file.path)}
+                              onChange={(e) => handleFileSelect(file.path, e.target.checked)}
+                              className="absolute top-1 left-1 z-10"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          )}
+                          
+                          {/* 3-dots menu */}
+                          <div className="absolute top-1 right-1 z-10">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 hover:opacity-100 bg-background/80 backdrop-blur-sm"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                {/* Select/Deselect option - for both files and folders */}
+                                <DropdownMenuItem onClick={() => handleFileSelect(file.path, !selectedFiles.includes(file.path))}>
+                                  {selectedFiles.includes(file.path) ? 'Deselect' : 'Select'}
+                                </DropdownMenuItem>
+                                
+                                {/* Download option - different for files vs folders */}
+                                {file.is_dir ? (
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDownloadFolderAsZip(file)}
+                                    disabled={isCreatingZip}
+                                  >
+                                    Download as ZIP
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem 
+                                    onClick={() => handleDownloadFile(file)}
+                                    disabled={isDownloading}
+                                  >
+                                    Download
+                                  </DropdownMenuItem>
+                                )}
+                                
+                                {/* Rename option - only for files */}
+                                {canRenameFile(file) && (
+                                  <DropdownMenuItem onClick={() => handleTriggerRename(file)}>
+                                    Rename
+                                  </DropdownMenuItem>
+                                )}
+                                
+                                {/* Edit option - only for files */}
+                                {/* {canEditFile(file) && (
+                                  <DropdownMenuItem onClick={() => handleEditFile(file.path)}>
+                                    Edit
+                                  </DropdownMenuItem>
+                                )} */}
+                                
+                                {/* Delete option - only for files */}
+                                {canDeleteFile(file) && (
+                                  <DropdownMenuItem 
+                                    onClick={() => handleTriggerDelete(file)}
+                                    className="text-destructive focus:text-destructive"
+                                  >
+                                    Delete
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+
+                          <button
+                            className={`group flex flex-col items-center p-3 rounded-2xl border hover:bg-muted/50 transition-colors w-full ${
+                              selectedFilePath === file.path
+                                ? 'bg-muted border-primary/20'
+                                : ''
+                            }`}
+                            onClick={() => {
+                              if (file.is_dir) {
+                                console.log(
+                                  `[FILE VIEWER] Folder clicked: ${file.name}, path: ${file.path}`,
+                                );
+                                navigateToFolder(file);
+                              } else {
+                                openFile(file);
+                              }
+                            }}
+                          >
+                            <div className="w-12 h-12 flex items-center justify-center mb-1">
+                              {file.is_dir ? (
+                                <Folder className="h-9 w-9 text-blue-500" />
+                              ) : (
+                                <File className="h-8 w-8 text-muted-foreground" />
+                              )}
+                            </div>
+                            <span className="text-xs text-center font-medium truncate max-w-full">
+                              {file.name}
+                            </span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    /* List View - VSCode-like Tree Structure */
+                    <div className="p-4">
+                      <FileListView
+                        files={filteredFiles}
+                        selectedFiles={selectedFiles}
+                        multiSelectMode={multiSelectMode}
+                        expandedFolders={expandedFolders}
+                        loadingFolders={loadingFolders}
+                        folderContents={folderContents}
+                        onSelectFile={handleFileSelect}
+                        onToggleExpansion={toggleFolderExpansion}
+                        onRenameFile={handleTriggerRename}
+                        onDeleteFile={handleTriggerDelete}
+                        onEditFile={handleEditFile}
+                        onOpenFile={(filePath) => {
+                          const file = filteredFiles.find(f => f.path === filePath);
+                          if (file) {
+                            if (file.is_dir) {
+                              navigateToFolder(file);
+                            } else {
+                              openFile(file);
+                            }
                           }
                         }}
-                      >
-                        <div className="w-12 h-12 flex items-center justify-center mb-1">
-                          {file.is_dir ? (
-                            <Folder className="h-9 w-9 text-blue-500" />
-                          ) : (
-                            <File className="h-8 w-8 text-muted-foreground" />
-                          )}
-                        </div>
-                        <span className="text-xs text-center font-medium truncate max-w-full">
-                          {file.name}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                        canRename={canRenameFile}
+                        canEdit={canEditFile}
+                        canDelete={canDeleteFile}
+                        onDownloadFile={handleDownloadFile}
+                        onDownloadFolder={handleDownloadFolderAsZip}
+                      />
+                    </div>
+                  )}
                 </ScrollArea>
               )}
             </div>
           )}
         </div>
       </DialogContent>
+
+      {/* Rename Modal - Files Only */}
+      <FileRenameModal
+        open={renameModal.open}
+        initialName={renameModal.file?.name || ''}
+        onSave={handleRenameModalSave}
+        onCancel={() => setRenameModal({ open: false, file: null })}
+      />
+
+      {/* Single Delete Confirmation Dialog - Files Only */}
+      <Dialog open={deleteModal.open} onOpenChange={(open) => setDeleteModal({ open, file: null })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Delete File
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            Are you sure you want to delete <strong>{deleteModal.file?.name}</strong>?
+            <p className="text-sm text-muted-foreground mt-2">
+              This action cannot be undone.
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setDeleteModal({ open: false, file: null })}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Multi-Delete Confirmation Dialog - Files Only */}
+      <Dialog open={multiDeleteModal.open} onOpenChange={(open) => setMultiDeleteModal({ open, items: [] })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Delete Multiple Files
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p>Are you sure you want to delete <strong>{multiDeleteModal.items.length}</strong> selected file(s)?</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              This action cannot be undone.
+            </p>
+            
+            {/* Show first few files being deleted */}
+            <div className="mt-3 max-h-32 overflow-y-auto">
+              <p className="text-sm font-medium mb-1">Files to delete:</p>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                {multiDeleteModal.items.slice(0, 10).map(path => {
+                  const file = filteredFiles.find(f => f.path === path);
+                  return (
+                    <li key={path} className="flex items-center gap-1">
+                      <File className="h-3 w-3" />
+                      <span className="truncate">{file?.name || path.split('/').pop()}</span>
+                    </li>
+                  );
+                })}
+                {multiDeleteModal.items.length > 10 && (
+                  <li className="text-xs italic">... and {multiDeleteModal.items.length - 10} more files</li>
+                )}
+              </ul>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setMultiDeleteModal({ open: false, items: [] })}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="destructive" 
+              onClick={handleConfirmMultiDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                `Delete ${multiDeleteModal.items.length} Files`
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
+
