@@ -29,21 +29,28 @@ export interface CustomModel {
 }
 
 // SINGLE SOURCE OF TRUTH for all model data - aligned with backend constants
-export const MODELS = {  // 1. Gemini 2.5 Flash (recommended, default)
+export const MODELS = {  // 1. Gemini 2.5 Flash Lite (cheapest, recommended)
+  'gemini-2.5-flash-lite': { 
+    tier: 'free', 
+    priority: 101,
+    recommended: true,
+    lowQuality: false
+  },
+  // 2. Gemini 2.5 Flash (recommended, default)
   'gemini-2.5-flash': { 
     tier: 'free', 
     priority: 100,
     recommended: true,
     lowQuality: false
   },
-  // 2. Claude Sonnet 4 (recommended)
+  // 3. Claude Sonnet 4 (recommended)
   'claude-sonnet-4': { 
     tier: 'premium',
     priority: 99, 
     recommended: true,
     lowQuality: false
   },
-  // 3. Gemini 2.5 Pro (recommended)
+  // 4. Gemini 2.5 Pro (recommended)
   'gemini-2.5-pro': { 
     tier: 'premium', 
     priority: 98,

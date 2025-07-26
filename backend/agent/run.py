@@ -232,7 +232,7 @@ async def run_agent(
 
     # Prepare system prompt
     # First, get the default system prompt
-    if "gemini-2.5-flash" in model_name.lower() and "gemini-2.5-pro" not in model_name.lower():
+    if "gemini-2.5" in model_name.lower():
         default_system_content = get_gemini_system_prompt()
     else:
         # Use the original prompt - the LLM can only use tools that are registered

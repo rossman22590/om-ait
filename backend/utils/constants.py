@@ -10,7 +10,7 @@ MODELS = {
         },
         "tier_availability": ["free", "paid"]
     },
-    "anthropic/claude-3.5-haiku": {
+    "anthropic/claude-3-5-haiku-20241022": {
         "aliases": ["claude-3.5-haiku"],
         "pricing": {
             "input_cost_per_million_tokens": 0.80,
@@ -48,6 +48,14 @@ MODELS = {
         "pricing": {
             "input_cost_per_million_tokens": 0.15,
             "output_cost_per_million_tokens": 0.60
+        },
+        "tier_availability": ["free", "paid"]
+    },
+    "openrouter/google/gemini-2.5-flash-lite": {
+        "aliases": ["gemini-2.5-flash-lite"],
+        "pricing": {
+            "input_cost_per_million_tokens": 0.075,
+            "output_cost_per_million_tokens": 0.30
         },
         "tier_availability": ["free", "paid"]
     },
