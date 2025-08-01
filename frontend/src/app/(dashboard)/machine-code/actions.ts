@@ -21,10 +21,6 @@ const BASE_URL = process.env.NEXT_PUBLIC_LITELLM_BASE_URL || "https://machine-co
 
 // Fetch all teams and filter by email (team name === user email)
 export async function fetchUserTeam(email: string) {
-  // DEBUG: Log the API key value to the server console
-  // eslint-disable-next-line no-console
-  console.log("[DEBUG] LITELLM_API_KEY in fetchUserTeam:", process.env.LITELLM_API_KEY);
-
   if (!process.env.LITELLM_API_KEY) {
     throw new Error(
       "LITELLM_API_KEY is not set in the environment. Please set this variable in your .env file (for local dev) or in your deployment environment (for production)."
@@ -56,9 +52,6 @@ export async function fetchAllTeams() {
       "LITELLM_API_KEY is not set in the environment. Please set this variable in your .env file (for local dev) or in your deployment environment (for production)."
     );
   }
-  // Debug: log the API key (masked)
-  // eslint-disable-next-line no-console
-  console.log("[DEBUG] Using LITELLM_API_KEY:", apiKey.slice(0, 6) + "..." + apiKey.slice(-4));
 
   const res = await fetch(`${BASE_URL}/team/list`, {
     method: "GET",
@@ -68,18 +61,11 @@ export async function fetchAllTeams() {
     },
   });
 
-  // Debug: log status and response
-  // eslint-disable-next-line no-console
-  console.log("[DEBUG] fetchAllTeams response status:", res.status, res.statusText);
-
   let data: any = {};
   try {
     data = await res.json();
-    // eslint-disable-next-line no-console
-    console.log("[DEBUG] fetchAllTeams response body:", data);
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.log("[DEBUG] fetchAllTeams failed to parse JSON:", err);
+    // Failed to parse JSON response
   }
 
   if (!res.ok) throw new Error("Failed to fetch teams: " + res.status + " " + res.statusText);
@@ -88,6 +74,7 @@ export async function fetchAllTeams() {
   if (Array.isArray(data)) return data;
   return data.teams || [];
 }
+
 /**
  * Create a team key and ensure the key is visible (not redacted) by setting permissions.hide_secrets = false.
  */
@@ -118,8 +105,6 @@ export async function createTeamKey(email: string, team_id: string) {
   });
   if (!res.ok) throw new Error("Failed to create team key: " + res.status + " " + res.statusText);
   const response = await res.json();
-  // eslint-disable-next-line no-console
-  console.log("[DEBUG] createTeamKey response:", response);
   return response;
 }
 

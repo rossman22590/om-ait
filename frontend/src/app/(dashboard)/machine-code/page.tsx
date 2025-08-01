@@ -168,19 +168,15 @@ export default function MachineCodePage() {
     if (!email || !team?.team_id) return false;
     
     try {
-      console.log(`[REFRESH] Attempting to refresh team data (attempt ${retryCount + 1})`);
       const [info, keys] = await Promise.all([
         fetchTeamInfo(team.team_id),
         fetchTeamKeys(team.team_id),
       ]);
       
-      console.log("[REFRESH] Fetched team data:", { info, keys: keys.keys });
-      
       setTeamInfo(info);
       setTeamKeys(keys.keys || []);
       return true;
     } catch (e: any) {
-      console.error(`[REFRESH] Failed to refresh team data (attempt ${retryCount + 1}):`, e);
       if (retryCount < 3) {
         // Retry after a delay
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -196,14 +192,9 @@ export default function MachineCodePage() {
     const maxAttempts = 10;
     const delayMs = 2000;
     
-    console.log(`[BUDGET_POLL] Starting to poll for budget update. Original: $${originalBudget}, Expected increase: $${expectedIncrease}`);
-    
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      console.log(`[BUDGET_POLL] Attempt ${attempt}/${maxAttempts}`);
-      
       const success = await refreshTeamData();
       if (!success) {
-        console.log(`[BUDGET_POLL] Failed to fetch data on attempt ${attempt}`);
         continue;
       }
       
@@ -214,20 +205,15 @@ export default function MachineCodePage() {
         currentTeamObj?.max_budget ?? 
         0;
       
-      console.log(`[BUDGET_POLL] Current budget: $${currentBudget}, Expected: $${originalBudget + expectedIncrease}`);
-      
       if (currentBudget >= originalBudget + expectedIncrease) {
-        console.log(`[BUDGET_POLL] Budget updated successfully! New budget: $${currentBudget}`);
         return true;
       }
       
       if (attempt < maxAttempts) {
-        console.log(`[BUDGET_POLL] Budget not updated yet, waiting ${delayMs}ms...`);
         await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
     
-    console.log(`[BUDGET_POLL] Timeout waiting for budget update after ${maxAttempts} attempts`);
     return false;
   }, [teamInfo, refreshTeamData]);
 
@@ -297,7 +283,6 @@ export default function MachineCodePage() {
         // FIX: Clean the key to remove the double dash
         const cleanedKey = keyResponse.key.replace(/^sk--/, 'sk-');
         localStorage.setItem("machine_code_secret_key", cleanedKey);
-        console.log(`[CLAIM] Original key: ${keyResponse.key}, Cleaned key: ${cleanedKey}`);
       }
 
       // Fetch info
@@ -326,8 +311,6 @@ export default function MachineCodePage() {
       currentTeamObj?.max_budget ?? 
       0;
     
-    console.log(`[CHECKOUT] Payment completed. Current budget: $${currentBudget}, Purchased: $${purchasedAmount || 'unknown'}`);
-    
     try {
       // If we know the purchased amount, poll for the specific budget increase
       if (purchasedAmount) {
@@ -342,7 +325,6 @@ export default function MachineCodePage() {
         await refreshTeamData();
       }
     } catch (error) {
-      console.error("[CHECKOUT] Error refreshing data:", error);
       // Try one more time
       await refreshTeamData();
     } finally {
