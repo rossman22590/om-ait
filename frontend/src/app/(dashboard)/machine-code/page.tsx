@@ -27,6 +27,7 @@ import {
 
 // Custom components
 import StripeModal from "./stripe-modal";
+import InstallationGuide from "./installation-guide";
 
 // Helper UI components
 function Loading() {
@@ -149,7 +150,7 @@ function BaseUrlBox({ baseUrl }: { baseUrl: string }) {
 }
 
 export default function MachineCodePage() {
-  const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false); // <-- NEW STATE
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stripeModalOpen, setStripeModalOpen] = useState(false);
@@ -234,8 +235,6 @@ export default function MachineCodePage() {
   useEffect(() => {
     let cancelled = false;
     async function init() {
-      setLoading(true);
-      setError(null);
       try {
         const userEmail = await getCurrentUserEmail();
         if (!userEmail) throw new Error("Could not determine your email.");
@@ -268,7 +267,10 @@ export default function MachineCodePage() {
       } catch (e: any) {
         setError(e.message || "Unknown error");
       } finally {
-        setLoading(false);
+        // This is the key change: only mark as initialized at the very end.
+        if (!cancelled) {
+          setInitialized(true);
+        }
       }
     }
     init();
@@ -359,16 +361,20 @@ export default function MachineCodePage() {
     }
   }, [refreshTeamData]);
 
-  // --- START: FIXED RENDER LOGIC ---
-  if (loading) {
+  // --- START: NEW, MORE ROBUST RENDER LOGIC ---
+  
+  // Show loading screen until the initialization process is fully complete.
+  if (!initialized) {
     return <Loading />;
   }
 
+  // If initialization is done and there's an error, show the error box.
   if (error) {
     return <ErrorBox error={error} />;
   }
 
-  // If initial load is complete and there's no team, show the claim card.
+  // Once initialized, we can safely decide which component to render.
+  // If there's no team, the user needs to claim one.
   if (!team) {
     return (
       <div className="min-h-[100vh] flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20">
@@ -390,12 +396,12 @@ export default function MachineCodePage() {
     );
   }
 
-  // If a team exists but its info hasn't loaded yet, show loading.
-  // This handles the transition period after a successful claim.
+  // If a team exists but its info hasn't loaded yet (e.g., right after claiming), show loading.
   if (!teamInfo || !teamKeys) {
     return <Loading />;
   }
-  // --- END: FIXED RENDER LOGIC ---
+  
+  // --- END: NEW RENDER LOGIC ---
 
   // If we get here, the user has a team and all data is loaded. Show the dashboard.
   let teamObj = teamInfo;
@@ -418,7 +424,7 @@ export default function MachineCodePage() {
       teamObj = teamInfo[0];
     }
   }
-
+  
   // Read budget and spend from nested team_info if present
   const budget =
     teamObj && teamObj.team_info && typeof teamObj.team_info.max_budget === "number"
@@ -428,7 +434,7 @@ export default function MachineCodePage() {
     teamObj && teamObj.team_info && typeof teamObj.team_info.spend === "number"
       ? teamObj.team_info.spend
       : 0;
-
+  
   // Try to get the secret key from localStorage if available (for new claims)
   let secretKey = "—";
   if (typeof window !== "undefined") {
@@ -460,10 +466,10 @@ export default function MachineCodePage() {
       }
     }
   }
-
+  
   // Use env variable for base URL
   const baseUrl = process.env.NEXT_PUBLIC_LITELLM_BASE_URL || "";
-
+  
   // Progress bar width calculation
   const progress = budget > 0 ? Math.min(100, (spend / budget) * 100) : 0;
 
@@ -564,9 +570,7 @@ export default function MachineCodePage() {
             </CardContent>
           </Card>
         </div>
-        <div className="text-muted-foreground text-sm mt-10 text-center max-w-md">
-          Use your secret key and base URL to access Machine Code models via API.
-        </div>
+         <InstallationGuide />
       </div>
 
       <Dialog open={stripeModalOpen} onOpenChange={setStripeModalOpen}>
