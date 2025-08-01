@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   getCurrentUserEmail,
   fetchUserTeam,
@@ -14,7 +15,18 @@ import {
 // shadcn/ui components
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy } from "lucide-react";
+import { Copy, RefreshCw } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
+// Custom components
+import StripeModal from "./stripe-modal";
 
 // Helper UI components
 function Loading() {
@@ -63,7 +75,6 @@ function SecretKeyBox({ secretKey }: { secretKey: string }) {
     setTimeout(() => setCopied(false), 1200);
   }, [secretKey]);
 
-  // Mask the key except for the last 4 characters
   const masked = secretKey && secretKey !== "—"
     ? "*".repeat(Math.max(secretKey.length - 4, 0)) + secretKey.slice(-4)
     : secretKey;
@@ -141,6 +152,9 @@ export default function MachineCodePage() {
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stripeModalOpen, setStripeModalOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [postCheckoutRefresh, setPostCheckoutRefresh] = useState(false);
 
   const [email, setEmail] = useState<string | null>(null);
   const [team, setTeam] = useState<any>(null);
@@ -148,8 +162,75 @@ export default function MachineCodePage() {
   const [teamKeys, setTeamKeys] = useState<any[]>([]);
   const [allTeams, setAllTeams] = useState<any[]>([]);
 
+  // Function to refresh team data
+  const refreshTeamData = useCallback(async (retryCount = 0): Promise<boolean> => {
+    if (!email || !team?.team_id) return false;
+    
+    try {
+      console.log(`[REFRESH] Attempting to refresh team data (attempt ${retryCount + 1})`);
+      const [info, keys] = await Promise.all([
+        fetchTeamInfo(team.team_id),
+        fetchTeamKeys(team.team_id),
+      ]);
+      
+      console.log("[REFRESH] Fetched team data:", { info, keys: keys.keys });
+      
+      setTeamInfo(info);
+      setTeamKeys(keys.keys || []);
+      return true;
+    } catch (e: any) {
+      console.error(`[REFRESH] Failed to refresh team data (attempt ${retryCount + 1}):`, e);
+      if (retryCount < 3) {
+        // Retry after a delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return refreshTeamData(retryCount + 1);
+      }
+      setError("Failed to refresh data: " + e.message);
+      return false;
+    }
+  }, [email, team?.team_id]);
+
+  // Function to wait for budget update with polling
+  const waitForBudgetUpdate = useCallback(async (originalBudget: number, expectedIncrease: number) => {
+    const maxAttempts = 10;
+    const delayMs = 2000;
+    
+    console.log(`[BUDGET_POLL] Starting to poll for budget update. Original: $${originalBudget}, Expected increase: $${expectedIncrease}`);
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      console.log(`[BUDGET_POLL] Attempt ${attempt}/${maxAttempts}`);
+      
+      const success = await refreshTeamData();
+      if (!success) {
+        console.log(`[BUDGET_POLL] Failed to fetch data on attempt ${attempt}`);
+        continue;
+      }
+      
+      // Check if budget has been updated
+      const currentTeamObj = Array.isArray(teamInfo) ? teamInfo[0] : teamInfo;
+      const currentBudget = 
+        currentTeamObj?.team_info?.max_budget ?? 
+        currentTeamObj?.max_budget ?? 
+        0;
+      
+      console.log(`[BUDGET_POLL] Current budget: $${currentBudget}, Expected: $${originalBudget + expectedIncrease}`);
+      
+      if (currentBudget >= originalBudget + expectedIncrease) {
+        console.log(`[BUDGET_POLL] Budget updated successfully! New budget: $${currentBudget}`);
+        return true;
+      }
+      
+      if (attempt < maxAttempts) {
+        console.log(`[BUDGET_POLL] Budget not updated yet, waiting ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+    
+    console.log(`[BUDGET_POLL] Timeout waiting for budget update after ${maxAttempts} attempts`);
+    return false;
+  }, [teamInfo, refreshTeamData]);
+
   // Fetch user email and team on mount
-  // Only use the server action for fetching the user's team
   useEffect(() => {
     let cancelled = false;
     async function init() {
@@ -197,6 +278,8 @@ export default function MachineCodePage() {
   }, []);
 
   // Claim credits: create team and key, then reload info
+  const router = useRouter();
+
   const handleClaim = useCallback(async () => {
     if (!email) return;
     setClaiming(true);
@@ -209,7 +292,10 @@ export default function MachineCodePage() {
 
       // Save the key in localStorage for the user
       if (keyResponse && keyResponse.key) {
-        localStorage.setItem("machine_code_secret_key", keyResponse.key);
+        // FIX: Clean the key to remove the double dash
+        const cleanedKey = keyResponse.key.replace(/^sk--/, 'sk-');
+        localStorage.setItem("machine_code_secret_key", cleanedKey);
+        console.log(`[CLAIM] Original key: ${keyResponse.key}, Cleaned key: ${cleanedKey}`);
       }
 
       // Fetch info
@@ -227,19 +313,62 @@ export default function MachineCodePage() {
     }
   }, [email]);
 
-  // UI rendering
-  // Show loading until all required data is present
-  const isDataLoading =
-    loading ||
-    !team ||
-    !teamInfo ||
-    (Array.isArray(teamInfo) && teamInfo.length === 0) ||
-    !teamKeys;
+  const handleCheckoutStarted = useCallback(async (purchasedAmount?: number) => {
+    setStripeModalOpen(false);
+    setPostCheckoutRefresh(true);
+    
+    // Get current budget for comparison
+    const currentTeamObj = Array.isArray(teamInfo) ? teamInfo[0] : teamInfo;
+    const currentBudget = 
+      currentTeamObj?.team_info?.max_budget ?? 
+      currentTeamObj?.max_budget ?? 
+      0;
+    
+    console.log(`[CHECKOUT] Payment completed. Current budget: $${currentBudget}, Purchased: $${purchasedAmount || 'unknown'}`);
+    
+    try {
+      // If we know the purchased amount, poll for the specific budget increase
+      if (purchasedAmount) {
+        const success = await waitForBudgetUpdate(currentBudget, purchasedAmount);
+        if (!success) {
+          // Fallback to regular refresh
+          await refreshTeamData();
+        }
+      } else {
+        // Fallback: wait a bit then refresh
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        await refreshTeamData();
+      }
+    } catch (error) {
+      console.error("[CHECKOUT] Error refreshing data:", error);
+      // Try one more time
+      await refreshTeamData();
+    } finally {
+      setPostCheckoutRefresh(false);
+    }
+  }, [teamInfo, waitForBudgetUpdate, refreshTeamData]);
 
-  if (isDataLoading) return <Loading />;
-  if (error) return <ErrorBox error={error} />;
+  // Manual refresh function
+  const handleManualRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      await refreshTeamData();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshTeamData]);
 
-  // If user does not have a team, show claim card
+  // --- START: FIXED RENDER LOGIC ---
+  if (loading) {
+    return <Loading />;
+  }
+
+  if (error) {
+    return <ErrorBox error={error} />;
+  }
+
+  // If initial load is complete and there's no team, show the claim card.
   if (!team) {
     return (
       <div className="min-h-[100vh] flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20">
@@ -261,12 +390,16 @@ export default function MachineCodePage() {
     );
   }
 
-  // If user has a team, show bento boxes
-  // Extract info for bento boxes
-  // If teamInfo is an array, select the correct team by team_id or team_alias
+  // If a team exists but its info hasn't loaded yet, show loading.
+  // This handles the transition period after a successful claim.
+  if (!teamInfo || !teamKeys) {
+    return <Loading />;
+  }
+  // --- END: FIXED RENDER LOGIC ---
+
+  // If we get here, the user has a team and all data is loaded. Show the dashboard.
   let teamObj = teamInfo;
   if (Array.isArray(teamInfo)) {
-    // Normalize for case and whitespace
     if (team && team.team_id) {
       teamObj = teamInfo.find((t: any) =>
         typeof t.team_id === "string" &&
@@ -285,15 +418,7 @@ export default function MachineCodePage() {
       teamObj = teamInfo[0];
     }
   }
-  // DEBUG: Log team, teamObj, and teamInfo for diagnosis
-  if (typeof window !== "undefined") {
-    // eslint-disable-next-line no-console
-    console.log("[DEBUG] team value in MachineCodePage:", team);
-    // eslint-disable-next-line no-console
-    console.log("[DEBUG] teamObj value in MachineCodePage:", teamObj);
-    // eslint-disable-next-line no-console
-    console.log("[DEBUG] teamInfo value in MachineCodePage:", teamInfo);
-  }
+
   // Read budget and spend from nested team_info if present
   const budget =
     teamObj && teamObj.team_info && typeof teamObj.team_info.max_budget === "number"
@@ -303,7 +428,7 @@ export default function MachineCodePage() {
     teamObj && teamObj.team_info && typeof teamObj.team_info.spend === "number"
       ? teamObj.team_info.spend
       : 0;
-  // Try to find a property that starts with "sk" in any key object
+
   // Try to get the secret key from localStorage if available (for new claims)
   let secretKey = "—";
   if (typeof window !== "undefined") {
@@ -335,6 +460,7 @@ export default function MachineCodePage() {
       }
     }
   }
+
   // Use env variable for base URL
   const baseUrl = process.env.NEXT_PUBLIC_LITELLM_BASE_URL || "";
 
@@ -349,7 +475,17 @@ export default function MachineCodePage() {
         </h1>
         <div className="flex flex-row flex-wrap gap-12 w-full max-w-7xl justify-center">
           {/* Budget & Spend Card */}
-          <Card className="flex-1 min-w-[520px] max-w-[700px] rounded-2xl border border-purple-200/50 dark:border-purple-800/50 shadow-lg bg-white/80 dark:bg-gray-900/60 p-12">
+          <Card className="flex-1 min-w-[520px] max-w-[700px] rounded-2xl border border-purple-200/50 dark:border-purple-800/50 shadow-lg bg-white/80 dark:bg-gray-900/60 p-12 relative">
+            {(refreshing || postCheckoutRefresh) && (
+              <div className="absolute inset-0 bg-white/50 dark:bg-gray-900/50 flex items-center justify-center rounded-2xl backdrop-blur-sm">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500"></div>
+                  <span className="text-sm text-purple-600 dark:text-purple-400 font-medium">
+                    {postCheckoutRefresh ? "Updating budget..." : "Refreshing..."}
+                  </span>
+                </div>
+              </div>
+            )}
             <CardHeader className="pb-2">
               <CardTitle className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
                 Budget & Spend
@@ -376,6 +512,24 @@ export default function MachineCodePage() {
                 <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
                   <span>$0</span>
                   <span>${budget.toFixed(2)}</span>
+                </div>
+                <div className="mt-4 flex gap-2">
+                  <Button
+                    onClick={() => setStripeModalOpen(true)}
+                    className="px-6 py-2 text-base font-semibold bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-pink-600 hover:to-purple-600 transition-all"
+                    disabled={postCheckoutRefresh}
+                  >
+                    Get More Credits
+                  </Button>
+                  <Button
+                    onClick={handleManualRefresh}
+                    disabled={refreshing || postCheckoutRefresh}
+                    variant="outline"
+                    className="px-4 py-2 text-sm"
+                  >
+                    <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+                    {refreshing ? "Refreshing..." : "Refresh"}
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -414,6 +568,19 @@ export default function MachineCodePage() {
           Use your secret key and base URL to access Machine Code models via API.
         </div>
       </div>
+
+      <Dialog open={stripeModalOpen} onOpenChange={setStripeModalOpen}>
+        <DialogContent className="sm:max-w-[425px] p-0 border-none bg-transparent">
+          <StripeModal
+            open={stripeModalOpen}
+            onClose={() => setStripeModalOpen(false)}
+            email={email}
+            teamId={team?.team_id || null}
+            onCheckoutStarted={handleCheckoutStarted}
+          />
+        </DialogContent>
+      </Dialog>
+
       <style jsx>{`
         .mc-progress-bar-container {
           width: 100%;
