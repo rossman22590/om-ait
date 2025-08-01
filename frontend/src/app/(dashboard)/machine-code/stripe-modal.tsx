@@ -195,8 +195,7 @@ export default function StripeModal({
   teamId,
   onCheckoutStarted,
 }: StripeModalProps) {
-  if (!open) return null;
-  
+  // Move all hooks to the top, before any conditional logic
   const [selectedPack, setSelectedPack] = useState<Pack | null>(null);
   const [promoCode, setPromoCode] = useState<string>("");
   const [appliedPromoCode, setAppliedPromoCode] = useState<string>("");
@@ -208,6 +207,7 @@ export default function StripeModal({
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isApplyingPromo, setIsApplyingPromo] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   const packs = getStripePacks();
 
@@ -313,8 +313,6 @@ export default function StripeModal({
     setPreviewError(null);
   }, [selectedPack]);
 
-  const [isDarkMode, setIsDarkMode] = useState(false);
-
   useEffect(() => {
     setIsDarkMode(document.documentElement.classList.contains('dark'));
 
@@ -329,6 +327,9 @@ export default function StripeModal({
 
     return () => observer.disconnect();
   }, []);
+
+  // Now handle the conditional rendering after all hooks are declared
+  if (!open) return null;
 
   const appearance: StripeElementsOptions["appearance"] = {
     theme: isDarkMode ? "night" : "stripe",
