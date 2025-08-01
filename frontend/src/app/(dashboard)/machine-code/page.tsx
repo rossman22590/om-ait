@@ -10,12 +10,13 @@ import {
   createTeamKey,
   fetchTeamInfo,
   fetchTeamKeys,
+  regenerateKey,
 } from "./actions";
 
 // shadcn/ui components
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, RefreshCw } from "lucide-react";
+import { Copy, RefreshCw, RotateCcw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -65,8 +66,16 @@ function ClaimButton({ onClick, loading }: { onClick: () => void; loading: boole
   );
 }
 
-// Copy-to-clipboard for secret key
-function SecretKeyBox({ secretKey }: { secretKey: string }) {
+// Copy-to-clipboard for secret key with regenerate functionality
+function SecretKeyBox({ 
+  secretKey, 
+  onRegenerate, 
+  isRegenerating 
+}: { 
+  secretKey: string; 
+  onRegenerate: () => void;
+  isRegenerating: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const [show, setShow] = useState(false);
 
@@ -81,40 +90,66 @@ function SecretKeyBox({ secretKey }: { secretKey: string }) {
     : secretKey;
 
   return (
-    <div className="flex items-center gap-2">
-      <span
-        className="break-all font-mono text-card-foreground text-base select-all"
-        style={{ wordBreak: "break-all" }}
-      >
-        {show ? secretKey : masked}
-      </span>
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        aria-label="Copy secret key"
-        onClick={handleCopy}
-        className="ml-1"
-      >
-        <Copy className="w-4 h-4" />
-      </Button>
-      <Button
-        type="button"
-        size="icon"
-        variant="ghost"
-        aria-label={show ? "Hide key" : "Show key"}
-        onClick={() => setShow((v) => !v)}
-        className="ml-1"
-      >
-        {show ? (
-          <span className="font-mono text-xs">Hide</span>
-        ) : (
-          <span className="font-mono text-xs">Show</span>
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span
+          className="break-all font-mono text-card-foreground text-base select-all"
+          style={{ wordBreak: "break-all" }}
+        >
+          {show ? secretKey : masked}
+        </span>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          aria-label="Copy secret key"
+          onClick={handleCopy}
+          className="ml-1"
+          disabled={secretKey === "—"}
+        >
+          <Copy className="w-4 h-4" />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          aria-label={show ? "Hide key" : "Show key"}
+          onClick={() => setShow((v) => !v)}
+          className="ml-1"
+          disabled={secretKey === "—"}
+        >
+          {show ? (
+            <span className="font-mono text-xs">Hide</span>
+          ) : (
+            <span className="font-mono text-xs">Show</span>
+          )}
+        </Button>
+        {copied && (
+          <span className="text-xs text-green-600 dark:text-green-400 ml-1">Copied!</span>
         )}
-      </Button>
-      {copied && (
-        <span className="text-xs text-green-600 dark:text-green-400 ml-1">Copied!</span>
-      )}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={onRegenerate}
+          disabled={isRegenerating}
+          className="px-3 py-1 text-xs"
+        >
+          <RotateCcw className={`w-3 h-3 mr-1 ${isRegenerating ? 'animate-spin' : ''}`} />
+          {isRegenerating ? "Regenerating..." : "Regenerate Key"}
+        </Button>
+      </div>
+      
+      <div className="flex items-center gap-2">
+
+        
+        {secretKey === "—" && (
+          <div className="text-xs text-yellow-600 dark:text-yellow-400">
+            <strong>Note:</strong> Key not found. Try regenerating.
+          </div>
+        )}
+      </div>
+      
     </div>
   );
 }
@@ -150,18 +185,64 @@ function BaseUrlBox({ baseUrl }: { baseUrl: string }) {
 }
 
 export default function MachineCodePage() {
-  const [initialized, setInitialized] = useState(false); // <-- NEW STATE
+  const [initialized, setInitialized] = useState(false);
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stripeModalOpen, setStripeModalOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [postCheckoutRefresh, setPostCheckoutRefresh] = useState(false);
+  const [regeneratingKey, setRegeneratingKey] = useState(false);
 
   const [email, setEmail] = useState<string | null>(null);
   const [team, setTeam] = useState<any>(null);
   const [teamInfo, setTeamInfo] = useState<any>(null);
   const [teamKeys, setTeamKeys] = useState<any[]>([]);
   const [allTeams, setAllTeams] = useState<any[]>([]);
+  const [secretKey, setSecretKey] = useState<string>("—");
+
+  // Function to update secret key from localStorage or team keys
+  const updateSecretKey = useCallback(() => {
+    let newSecretKey = "—";
+    
+    // Try to get from localStorage first
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("machine_code_secret_key");
+      if (stored) {
+        setSecretKey(stored);
+        return;
+      }
+    }
+    
+    // Fallback to team keys
+    if (Array.isArray(teamKeys)) {
+      let foundKeyObj: any = null;
+      for (const k of teamKeys) {
+        for (const prop of Object.keys(k)) {
+          if (typeof k[prop] === "string" && k[prop].startsWith("sk")) {
+            newSecretKey = k[prop];
+            foundKeyObj = k;
+            break;
+          }
+        }
+        if (foundKeyObj) break;
+      }
+      
+      // Fallback: try key_alias === email
+      if (newSecretKey === "—" && email) {
+        const keyObj = teamKeys.find((k: any) => k.key_alias === email) || teamKeys[0];
+        if (keyObj) {
+          newSecretKey =
+            keyObj.key ||
+            keyObj.token ||
+            keyObj.api_key ||
+            keyObj.secret ||
+            "—";
+        }
+      }
+    }
+    
+    setSecretKey(newSecretKey);
+  }, [teamKeys, email]);
 
   // Function to refresh team data
   const refreshTeamData = useCallback(async (retryCount = 0): Promise<boolean> => {
@@ -216,6 +297,43 @@ export default function MachineCodePage() {
     
     return false;
   }, [teamInfo, refreshTeamData]);
+
+  // Handle key regeneration
+  const handleRegenerateKey = useCallback(async () => {
+    if (!email || !team?.team_id) return;
+    
+    setRegeneratingKey(true);
+    setError(null);
+    
+    try {
+      const newKeyResponse = await regenerateKey(email, team.team_id);
+      
+      if (newKeyResponse && newKeyResponse.key) {
+        // Clean the key to remove any double dash issues
+        const cleanedKey = newKeyResponse.key.replace(/^sk--/, 'sk-');
+        
+        // Save the new key in localStorage
+        localStorage.setItem("machine_code_secret_key", cleanedKey);
+        
+        // Update the secret key state immediately
+        setSecretKey(cleanedKey);
+        
+        // Refresh team data to get updated keys list
+        await refreshTeamData();
+      } else {
+        throw new Error("No key returned from regeneration");
+      }
+    } catch (e: any) {
+      setError("Failed to regenerate key: " + e.message);
+    } finally {
+      setRegeneratingKey(false);
+    }
+  }, [email, team?.team_id, refreshTeamData]);
+
+  // Update secret key when team keys change
+  useEffect(() => {
+    updateSecretKey();
+  }, [updateSecretKey]);
 
   // Fetch user email and team on mount
   useEffect(() => {
@@ -283,6 +401,7 @@ export default function MachineCodePage() {
         // FIX: Clean the key to remove the double dash
         const cleanedKey = keyResponse.key.replace(/^sk--/, 'sk-');
         localStorage.setItem("machine_code_secret_key", cleanedKey);
+        setSecretKey(cleanedKey);
       }
 
       // Fetch info
@@ -417,38 +536,6 @@ export default function MachineCodePage() {
       ? teamObj.team_info.spend
       : 0;
   
-  // Try to get the secret key from localStorage if available (for new claims)
-  let secretKey = "—";
-  if (typeof window !== "undefined") {
-    const stored = localStorage.getItem("machine_code_secret_key");
-    if (stored) secretKey = stored;
-  }
-  let foundKeyObj: any = null;
-  if (secretKey === "—" && Array.isArray(teamKeys)) {
-    for (const k of teamKeys) {
-      for (const prop of Object.keys(k)) {
-        if (typeof k[prop] === "string" && k[prop].startsWith("sk")) {
-          secretKey = k[prop];
-          foundKeyObj = k;
-          break;
-        }
-      }
-      if (foundKeyObj) break;
-    }
-    // Fallback: try key_alias === email
-    if (secretKey === "—") {
-      const keyObj = teamKeys.find((k: any) => k.key_alias === email) || teamKeys[0];
-      if (keyObj) {
-        secretKey =
-          keyObj.key ||
-          keyObj.token ||
-          keyObj.api_key ||
-          keyObj.secret ||
-          "—";
-      }
-    }
-  }
-  
   // Use env variable for base URL
   const baseUrl = process.env.NEXT_PUBLIC_LITELLM_BASE_URL || "";
   
@@ -522,8 +609,9 @@ export default function MachineCodePage() {
               </div>
             </CardContent>
           </Card>
+          
           {/* Secret Key & Base URL Card */}
-          <Card className="flex-1 min-w-[520px] max-w-[700px] rounded-2xl border border-pink-200/50 dark:border-pink-800/50 shadow-lg bg-white/80 dark:bg-gray-900/60 p-12">
+          <Card className="flex-1 min-w-[520px] max-w-[700px] rounded-2xl border border-pink-200/50 dark:border-pink-800/50 shadow-lg bg-white/80 dark:bg-gray-900/60 p-8">
             <CardHeader className="pb-2">
               <CardTitle className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
                 Secret Key & Base URL
@@ -534,13 +622,12 @@ export default function MachineCodePage() {
                 <div>
                   <span className="font-semibold text-gray-700 dark:text-gray-200">Secret Key:</span>
                   <div className="mt-1">
-                    <SecretKeyBox secretKey={secretKey} />
+                    <SecretKeyBox 
+                      secretKey={secretKey} 
+                      onRegenerate={handleRegenerateKey}
+                      isRegenerating={regeneratingKey}
+                    />
                   </div>
-                  {secretKey === "—" && (
-                    <div className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
-                      <strong>Note:</strong> For security, the secret key is only shown once when you first create it. If you do not see a key starting with <code>sk</code> below, you may need to re-claim or generate a new key.
-                    </div>
-                  )}
                 </div>
                 <div>
                   <span className="font-semibold text-gray-700 dark:text-gray-200">Base URL:</span>
