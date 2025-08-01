@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Bot, Menu, Store, Plus, Zap, Plug, ChevronRight, Loader2, StopCircle, Puzzle } from 'lucide-react';
+import { Bot, Menu, CodeSquare, Plus, Zap, Plug, ChevronRight, Loader2, StopCircle, Puzzle } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
@@ -314,6 +314,17 @@ export function SidebarLeft({
               </TooltipContent>
             </Tooltip>
           )}
+          {/* Machine Code button under Fragments */}
+          <SidebarMenu>
+            <Link href="/machine-code">
+              <SidebarMenuButton>
+                <CodeSquare className="h-4 w-4 mr-1" />
+                <span className="flex items-center justify-between w-full">
+                  Machine Code
+                </span>
+              </SidebarMenuButton>
+            </Link>
+          </SidebarMenu>
         </SidebarGroup>
         <NavAgents />
       </SidebarContent>

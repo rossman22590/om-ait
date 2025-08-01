@@ -1,0 +1,443 @@
+"use client";
+
+import React, { useEffect, useState, useCallback } from "react";
+import {
+  getCurrentUserEmail,
+  fetchUserTeam,
+  fetchAllTeams,
+  createUserTeam,
+  createTeamKey,
+  fetchTeamInfo,
+  fetchTeamKeys,
+} from "./actions";
+
+// shadcn/ui components
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Copy } from "lucide-react";
+
+// Helper UI components
+function Loading() {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen w-full bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20">
+      <div className="flex flex-col items-center">
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-purple-400 border-opacity-60 mb-6" style={{
+          borderTopColor: "#a855f7",
+          borderBottomColor: "#f472b6"
+        }} />
+        <span className="text-lg text-muted-foreground font-semibold">Loading...</span>
+      </div>
+    </div>
+  );
+}
+
+function ErrorBox({ error }: { error: string }) {
+  return (
+    <div className="bg-destructive/10 text-destructive border border-destructive/30 p-4 rounded-xl mb-4 max-w-lg w-full">
+      {error}
+    </div>
+  );
+}
+
+function ClaimButton({ onClick, loading }: { onClick: () => void; loading: boolean }) {
+  return (
+    <Button
+      className="px-6 py-2 text-base font-semibold"
+      onClick={onClick}
+      disabled={loading}
+      variant="default"
+    >
+      {loading ? "Claiming..." : "Claim Machine Code Account"}
+    </Button>
+  );
+}
+
+// Copy-to-clipboard for secret key
+function SecretKeyBox({ secretKey }: { secretKey: string }) {
+  const [copied, setCopied] = useState(false);
+  const [show, setShow] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(secretKey);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  }, [secretKey]);
+
+  // Mask the key except for the last 4 characters
+  const masked = secretKey && secretKey !== "—"
+    ? "*".repeat(Math.max(secretKey.length - 4, 0)) + secretKey.slice(-4)
+    : secretKey;
+
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className="break-all font-mono text-card-foreground text-base select-all"
+        style={{ wordBreak: "break-all" }}
+      >
+        {show ? secretKey : masked}
+      </span>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        aria-label="Copy secret key"
+        onClick={handleCopy}
+        className="ml-1"
+      >
+        <Copy className="w-4 h-4" />
+      </Button>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        aria-label={show ? "Hide key" : "Show key"}
+        onClick={() => setShow((v) => !v)}
+        className="ml-1"
+      >
+        {show ? (
+          <span className="font-mono text-xs">Hide</span>
+        ) : (
+          <span className="font-mono text-xs">Show</span>
+        )}
+      </Button>
+      {copied && (
+        <span className="text-xs text-green-600 dark:text-green-400 ml-1">Copied!</span>
+      )}
+    </div>
+  );
+}
+
+// Copy-to-clipboard for base url
+function BaseUrlBox({ baseUrl }: { baseUrl: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(baseUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  }, [baseUrl]);
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="break-all font-mono text-card-foreground text-base select-all">{baseUrl}</span>
+      <Button
+        type="button"
+        size="icon"
+        variant="ghost"
+        aria-label="Copy base url"
+        onClick={handleCopy}
+        className="ml-1"
+      >
+        <Copy className="w-4 h-4" />
+      </Button>
+      {copied && (
+        <span className="text-xs text-green-600 dark:text-green-400 ml-1">Copied!</span>
+      )}
+    </div>
+  );
+}
+
+export default function MachineCodePage() {
+  const [loading, setLoading] = useState(true);
+  const [claiming, setClaiming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [email, setEmail] = useState<string | null>(null);
+  const [team, setTeam] = useState<any>(null);
+  const [teamInfo, setTeamInfo] = useState<any>(null);
+  const [teamKeys, setTeamKeys] = useState<any[]>([]);
+  const [allTeams, setAllTeams] = useState<any[]>([]);
+
+  // Fetch user email and team on mount
+  // Only use the server action for fetching the user's team
+  useEffect(() => {
+    let cancelled = false;
+    async function init() {
+      setLoading(true);
+      setError(null);
+      try {
+        const userEmail = await getCurrentUserEmail();
+        if (!userEmail) throw new Error("Could not determine your email.");
+        if (cancelled) return;
+        setEmail(userEmail);
+
+        // Fetch all teams
+        const teams = await fetchAllTeams();
+        setAllTeams(teams);
+
+        // Find a team where team_alias or team_id matches the email (case-insensitive, trimmed)
+        const normalizedEmail = userEmail.trim().toLowerCase();
+        const matchedTeam = teams.find(
+          (t: any) =>
+            (typeof t.team_alias === "string" && t.team_alias.trim().toLowerCase() === normalizedEmail) ||
+            (typeof t.team_id === "string" && t.team_id.trim().toLowerCase() === normalizedEmail)
+        );
+        setTeam(matchedTeam);
+
+        if (matchedTeam) {
+          // Fetch team info and keys
+          const [info, keys] = await Promise.all([
+            fetchTeamInfo(matchedTeam.team_id),
+            fetchTeamKeys(matchedTeam.team_id),
+          ]);
+          if (cancelled) return;
+          setTeamInfo(info);
+          setTeamKeys(keys.keys || []);
+        }
+      } catch (e: any) {
+        setError(e.message || "Unknown error");
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Claim credits: create team and key, then reload info
+  const handleClaim = useCallback(async () => {
+    if (!email) return;
+    setClaiming(true);
+    setError(null);
+    try {
+      // Create team
+      const newTeam = await createUserTeam(email);
+      // Create key and get the response
+      const keyResponse = await createTeamKey(email, newTeam.team_id);
+
+      // Save the key in localStorage for the user
+      if (keyResponse && keyResponse.key) {
+        localStorage.setItem("machine_code_secret_key", keyResponse.key);
+      }
+
+      // Fetch info
+      const [info, keys] = await Promise.all([
+        fetchTeamInfo(newTeam.team_id),
+        fetchTeamKeys(newTeam.team_id),
+      ]);
+      setTeam(newTeam);
+      setTeamInfo(info);
+      setTeamKeys(keys.keys || []);
+    } catch (e: any) {
+      setError(e.message || "Failed to claim credits");
+    } finally {
+      setClaiming(false);
+    }
+  }, [email]);
+
+  // UI rendering
+  // Show loading until all required data is present
+  const isDataLoading =
+    loading ||
+    !team ||
+    !teamInfo ||
+    (Array.isArray(teamInfo) && teamInfo.length === 0) ||
+    !teamKeys;
+
+  if (isDataLoading) return <Loading />;
+  if (error) return <ErrorBox error={error} />;
+
+  // If user does not have a team, show claim card
+  if (!team) {
+    return (
+      <div className="min-h-[100vh] flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20">
+        <Card className="w-full max-w-2xl p-12 rounded-2xl shadow-xl border border-purple-200/50 dark:border-purple-800/50 bg-white/80 dark:bg-gray-900/60 flex flex-col items-center">
+          <CardHeader className="pb-2 w-full flex flex-col items-center">
+            <CardTitle className="text-3xl font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent drop-shadow-lg mb-2">
+              Machine Code
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="w-full flex flex-col items-center">
+            <p className="text-muted-foreground text-lg mb-6 text-center">
+              You have not claimed your Machine Code account yet.<br />
+              Click Claim to get started with Machine Code in your IDE.
+            </p>
+            <ClaimButton onClick={handleClaim} loading={claiming} />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // If user has a team, show bento boxes
+  // Extract info for bento boxes
+  // If teamInfo is an array, select the correct team by team_id or team_alias
+  let teamObj = teamInfo;
+  if (Array.isArray(teamInfo)) {
+    // Normalize for case and whitespace
+    if (team && team.team_id) {
+      teamObj = teamInfo.find((t: any) =>
+        typeof t.team_id === "string" &&
+        typeof team.team_id === "string" &&
+        t.team_id.trim().toLowerCase() === team.team_id.trim().toLowerCase()
+      );
+    }
+    if (!teamObj && team && team.team_alias) {
+      teamObj = teamInfo.find((t: any) =>
+        typeof t.team_alias === "string" &&
+        typeof team.team_alias === "string" &&
+        t.team_alias.trim().toLowerCase() === team.team_alias.trim().toLowerCase()
+      );
+    }
+    if (!teamObj) {
+      teamObj = teamInfo[0];
+    }
+  }
+  // DEBUG: Log team, teamObj, and teamInfo for diagnosis
+  if (typeof window !== "undefined") {
+    // eslint-disable-next-line no-console
+    console.log("[DEBUG] team value in MachineCodePage:", team);
+    // eslint-disable-next-line no-console
+    console.log("[DEBUG] teamObj value in MachineCodePage:", teamObj);
+    // eslint-disable-next-line no-console
+    console.log("[DEBUG] teamInfo value in MachineCodePage:", teamInfo);
+  }
+  // Read budget and spend from nested team_info if present
+  const budget =
+    teamObj && teamObj.team_info && typeof teamObj.team_info.max_budget === "number"
+      ? teamObj.team_info.max_budget
+      : 0;
+  const spend =
+    teamObj && teamObj.team_info && typeof teamObj.team_info.spend === "number"
+      ? teamObj.team_info.spend
+      : 0;
+  // Try to find a property that starts with "sk" in any key object
+  // Try to get the secret key from localStorage if available (for new claims)
+  let secretKey = "—";
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem("machine_code_secret_key");
+    if (stored) secretKey = stored;
+  }
+  let foundKeyObj: any = null;
+  if (secretKey === "—" && Array.isArray(teamKeys)) {
+    for (const k of teamKeys) {
+      for (const prop of Object.keys(k)) {
+        if (typeof k[prop] === "string" && k[prop].startsWith("sk")) {
+          secretKey = k[prop];
+          foundKeyObj = k;
+          break;
+        }
+      }
+      if (foundKeyObj) break;
+    }
+    // Fallback: try key_alias === email
+    if (secretKey === "—") {
+      const keyObj = teamKeys.find((k: any) => k.key_alias === email) || teamKeys[0];
+      if (keyObj) {
+        secretKey =
+          keyObj.key ||
+          keyObj.token ||
+          keyObj.api_key ||
+          keyObj.secret ||
+          "—";
+      }
+    }
+  }
+  // Use env variable for base URL
+  const baseUrl = process.env.NEXT_PUBLIC_LITELLM_BASE_URL || "";
+
+  // Progress bar width calculation
+  const progress = budget > 0 ? Math.min(100, (spend / budget) * 100) : 0;
+
+  return (
+    <>
+      <div className="min-h-[100vh] flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 py-16">
+        <h1 className="text-4xl font-extrabold mb-10 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent drop-shadow-lg">
+          Machine Code
+        </h1>
+        <div className="flex flex-row flex-wrap gap-12 w-full max-w-7xl justify-center">
+          {/* Budget & Spend Card */}
+          <Card className="flex-1 min-w-[520px] max-w-[700px] rounded-2xl border border-purple-200/50 dark:border-purple-800/50 shadow-lg bg-white/80 dark:bg-gray-900/60 p-12">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                Budget & Spend
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-end gap-2">
+                  <span className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                    ${spend.toFixed(2)}
+                  </span>
+                  <span className="text-base text-gray-500 dark:text-gray-400">of</span>
+                  <span className="text-xl font-semibold text-gray-700 dark:text-gray-300">
+                    ${budget.toFixed(2)}
+                  </span>
+                  <span className="text-base text-gray-500 dark:text-gray-400">budget</span>
+                </div>
+                <div className="mc-progress-bar-container">
+                  <div
+                    className="mc-progress-bar"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  <span>$0</span>
+                  <span>${budget.toFixed(2)}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          {/* Secret Key & Base URL Card */}
+          <Card className="flex-1 min-w-[520px] max-w-[700px] rounded-2xl border border-pink-200/50 dark:border-pink-800/50 shadow-lg bg-white/80 dark:bg-gray-900/60 p-12">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                Secret Key & Base URL
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-4">
+                <div>
+                  <span className="font-semibold text-gray-700 dark:text-gray-200">Secret Key:</span>
+                  <div className="mt-1">
+                    <SecretKeyBox secretKey={secretKey} />
+                  </div>
+                  {secretKey === "—" && (
+                    <div className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
+                      <strong>Note:</strong> For security, the secret key is only shown once when you first create it. If you do not see a key starting with <code>sk</code> below, you may need to re-claim or generate a new key.
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <span className="font-semibold text-gray-700 dark:text-gray-200">Base URL:</span>
+                  <div className="mt-1">
+                    <BaseUrlBox baseUrl={baseUrl} />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        <div className="text-muted-foreground text-sm mt-10 text-center max-w-md">
+          Use your secret key and base URL to access Machine Code models via API.
+        </div>
+      </div>
+      <style jsx>{`
+        .mc-progress-bar-container {
+          width: 100%;
+          height: 0.75rem;
+          background-color: rgba(75, 75, 75, 0.15);
+          border-radius: 9999px;
+          margin-top: 0.75rem;
+          overflow: hidden;
+        }
+        @keyframes mc-flow {
+          0% { background-position: 200% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        .mc-progress-bar {
+          height: 100%;
+          border-radius: 9999px;
+          background: linear-gradient(90deg,
+            #8b5cf6, #a855f7, #c084fc, #d946ef, #f472b6, #ec4899, #d946ef, #c084fc, #a855f7, #8b5cf6
+          );
+          background-size: 500% 100%;
+          animation: mc-flow 12s linear infinite;
+          transition: width 0.3s cubic-bezier(.4,1,.7,1);
+        }
+      `}</style>
+    </>
+  );
+}
