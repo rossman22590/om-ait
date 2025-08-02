@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useFeatureFlags } from "@/lib/feature-flags";
+import { UsageDisplay } from './usage-display';
 
 interface ThreadSiteHeaderProps {
   threadId: string;
@@ -213,55 +214,59 @@ export function SiteHeader({
             </Button>
           ) : (
             // Desktop view - show all buttons with tooltips
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onViewFiles}
-                    className="h-9 w-9 cursor-pointer"
-                  >
-                    <FolderOpen className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>View Files in Task</p>
-                </TooltipContent>
-              </Tooltip>
+            <>
+                <UsageDisplay
+                  threadId={threadId}
+                  projectId={projectId}
+                  className="mr-2" /><TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={onViewFiles}
+                        className="h-9 w-9 cursor-pointer"
+                      >
+                        <FolderOpen className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>View Files in Task</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={openShareModal}
-                    className="h-9 w-9 cursor-pointer"
-                  >
-                    <Share2 className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Share Chat</p>
-                </TooltipContent>
-              </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={openShareModal}
+                        className="h-9 w-9 cursor-pointer"
+                      >
+                        <Share2 className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Share Chat</p>
+                    </TooltipContent>
+                  </Tooltip>
 
-              {/* <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onToggleSidePanel}
-                    className="h-9 w-9 cursor-pointer"
-                  >
-                    <PanelRightOpen className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Toggle Computer Preview (CMD+I)</p>
-                </TooltipContent>
-              </Tooltip> */}
-            </TooltipProvider>
+                  {/* <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggleSidePanel}
+          className="h-9 w-9 cursor-pointer"
+        >
+          <PanelRightOpen className="h-4 w-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        <p>Toggle Computer Preview (CMD+I)</p>
+      </TooltipContent>
+    </Tooltip> */}
+                </TooltipProvider></>
           )}
         </div>
       </header>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpRight,
@@ -12,7 +12,9 @@ import {
   Share2,
   X,
   Check,
-  History
+  History,
+  Search,
+  Edit2
 } from "lucide-react"
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
@@ -44,9 +46,11 @@ import { DeleteConfirmationDialog } from "@/components/thread/DeleteConfirmation
 import { useDeleteOperation } from '@/contexts/DeleteOperationContext'
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from '@/components/ui/input';
 import { ThreadWithProject } from '@/hooks/react-query/sidebar/use-sidebar';
 import { processThreadsWithProjects, useDeleteMultipleThreads, useDeleteThread, useProjects, useThreads } from '@/hooks/react-query/sidebar/use-sidebar';
 import { projectKeys, threadKeys } from '@/hooks/react-query/sidebar/keys';
+import { useUpdateProject } from '@/hooks/react-query/sidebar/use-project-mutations';
 
 export function NavAgents() {
   const { isMobile, state } = useSidebar()
@@ -62,9 +66,14 @@ export function NavAgents() {
   const isPerformingActionRef = useRef(false);
   const queryClient = useQueryClient();
 
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedThreads, setSelectedThreads] = useState<Set<string>>(new Set());
   const [deleteProgress, setDeleteProgress] = useState(0);
   const [totalToDelete, setTotalToDelete] = useState(0);
+
+  const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
+  const [newThreadName, setNewThreadName] = useState('');
+  const { mutate: updateProjectMutation } = useUpdateProject();
 
   const {
     data: projects = [],
@@ -84,9 +93,22 @@ export function NavAgents() {
     isPending: isDeletingMultiple
   } = useDeleteMultipleThreads();
 
-  const combinedThreads: ThreadWithProject[] =
-    !isProjectsLoading && !isThreadsLoading ?
-      processThreadsWithProjects(threads, projects) : [];
+  const combinedThreads: ThreadWithProject[] = useMemo(
+    () =>
+      !isProjectsLoading && !isThreadsLoading
+        ? processThreadsWithProjects(threads, projects)
+        : [],
+    [threads, projects, isProjectsLoading, isThreadsLoading],
+  );
+
+  const filteredThreads = useMemo(() => {
+    if (!searchQuery) {
+      return combinedThreads;
+    }
+    return combinedThreads.filter((thread) =>
+      thread.projectName.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [combinedThreads, searchQuery]);
 
   const handleDeletionProgress = (completed: number, total: number) => {
     const percentage = (completed / total) * 100;
@@ -97,7 +119,7 @@ export function NavAgents() {
     const handleProjectUpdate = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail) {
-        const { projectId, updatedData } = customEvent.detail;
+        const { projectId } = customEvent.detail;
         queryClient.invalidateQueries({ queryKey: projectKeys.details(projectId) });
         queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
       }
@@ -140,8 +162,8 @@ export function NavAgents() {
 
   // Function to handle thread click with loading state
   const handleThreadClick = (e: React.MouseEvent<HTMLAnchorElement>, threadId: string, url: string) => {
-    // If thread is selected, prevent navigation 
-    if (selectedThreads.has(threadId)) {
+    // If thread is selected or being renamed, prevent navigation 
+    if (selectedThreads.has(threadId) || renamingThreadId === threadId) {
       e.preventDefault();
       return;
     }
@@ -171,7 +193,7 @@ export function NavAgents() {
 
   // Select all threads
   const selectAllThreads = () => {
-    const allThreadIds = combinedThreads.map(thread => thread.threadId);
+    const allThreadIds = filteredThreads.map(thread => thread.threadId);
     setSelectedThreads(new Set(allThreadIds));
   };
 
@@ -204,6 +226,60 @@ export function NavAgents() {
     setTotalToDelete(selectedThreads.size);
     setDeleteProgress(0);
     setIsDeleteDialogOpen(true);
+  };
+
+  const handleStartRename = (thread: ThreadWithProject) => {
+    setRenamingThreadId(thread.threadId);
+    setNewThreadName(thread.projectName);
+  };
+
+  const handleCancelRename = () => {
+    setRenamingThreadId(null);
+    setNewThreadName('');
+  };
+
+  const handleSaveRename = () => {
+    if (!renamingThreadId || !newThreadName.trim()) {
+      handleCancelRename();
+      return;
+    }
+
+    const threadToRename = combinedThreads.find(
+      (t) => t.threadId === renamingThreadId,
+    );
+    if (!threadToRename || threadToRename.projectName === newThreadName.trim()) {
+      handleCancelRename();
+      return;
+    }
+
+    updateProjectMutation(
+      {
+        projectId: threadToRename.projectId,
+        data: { name: newThreadName.trim() },
+      },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+          queryClient.invalidateQueries({ queryKey: threadKeys.lists() });
+          toast.success('Conversation renamed successfully');
+          handleCancelRename();
+        },
+        onError: (error: any) => {
+          toast.error(`Failed to rename: ${error.message}`);
+          handleCancelRename();
+        },
+      },
+    );
+  };
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveRename();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelRename();
+    }
   };
 
   const confirmDelete = async () => {
@@ -368,7 +444,7 @@ export function NavAgents() {
                   variant="ghost"
                   size="icon"
                   onClick={selectAllThreads}
-                  disabled={selectedThreads.size === combinedThreads.length}
+                  disabled={selectedThreads.size === filteredThreads.length}
                   className="h-7 w-7"
                 >
                   <Check className="h-4 w-4" />
@@ -387,9 +463,20 @@ export function NavAgents() {
         ) : null}
       </div>
 
+      {state !== 'collapsed' && (
+        <div className="relative mb-2">
+          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search tasks..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-8 h-8 w-full rounded-md"
+          />
+        </div>
+      )}
+
       <SidebarMenu className="overflow-y-auto max-h-[calc(100vh-200px)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-
-
         {state !== 'collapsed' && (
           <>
             {isLoading ? (
@@ -402,10 +489,10 @@ export function NavAgents() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))
-            ) : combinedThreads.length > 0 ? (
+            ) : filteredThreads.length > 0 ? (
               // Show all threads with project info
               <>
-                {combinedThreads.map((thread) => {
+                {filteredThreads.map((thread) => {
                   // Check if this thread is currently active
                   const isActive = pathname?.includes(thread.threadId) || false;
                   const isThreadLoading = loadingThreadId === thread.threadId;
@@ -423,86 +510,130 @@ export function NavAgents() {
                           }`}
                       >
                         <div className="flex items-center w-full">
-                          <Link
-                            href={thread.url}
-                            onClick={(e) =>
-                              handleThreadClick(e, thread.threadId, thread.url)
-                            }
-                            className="flex items-center flex-1 min-w-0"
-                          >
-                            {isThreadLoading ? (
-                              <Loader2 className="h-4 w-4 animate-spin mr-2 flex-shrink-0" />
-                            ) : null}
-                            <span className="truncate">{thread.projectName}</span>
-                          </Link>
-                          
-                          {/* Checkbox - only visible on hover of this specific area */}
-                          <div
-                            className="mr-1 flex-shrink-0 w-4 h-4 flex items-center justify-center group/checkbox"
-                            onClick={(e) => toggleThreadSelection(thread.threadId, e)}
-                          >
-                            <div
-                              className={`h-4 w-4 border rounded cursor-pointer transition-all duration-150 flex items-center justify-center ${isSelected
-                                ? 'opacity-100 bg-primary border-primary hover:bg-primary/90'
-                                : 'opacity-0 group-hover/checkbox:opacity-100 border-muted-foreground/30 bg-background hover:bg-muted/50'
-                                }`}
-                            >
-                              {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
-                            </div>
-                          </div>
-
-                          {/* Dropdown Menu - inline with content */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                className="flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-muted/50 rounded transition-all duration-150 text-muted-foreground hover:text-foreground opacity-0 group-hover/row:opacity-100"
+                          {renamingThreadId === thread.threadId ? (
+                            <div className="flex items-center flex-1 min-w-0 gap-1">
+                              <Input
+                                value={newThreadName}
+                                onChange={(e) => setNewThreadName(e.target.value)}
+                                onKeyDown={handleRenameKeyDown}
+                                onBlur={handleSaveRename}
+                                autoFocus
+                                className="h-6 text-sm px-1 bg-transparent border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/50"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
                                 onClick={(e) => {
-                                  e.preventDefault();
                                   e.stopPropagation();
-                                  // Ensure pointer events are enabled when dropdown opens
-                                  document.body.style.pointerEvents = 'auto';
+                                  handleSaveRename();
                                 }}
                               >
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">More actions</span>
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent
-                              className="w-56 rounded-lg"
-                              side={isMobile ? 'bottom' : 'right'}
-                              align={isMobile ? 'end' : 'start'}
-                            >
-                              <DropdownMenuItem onClick={() => {
-                                setSelectedItem({ threadId: thread?.threadId, projectId: thread?.projectId })
-                                setShowShareModal(true)
-                              }}>
-                                <Share2 className="text-muted-foreground" />
-                                <span>Share Chat</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem asChild>
-                                <a
-                                  href={thread.url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  <ArrowUpRight className="text-muted-foreground" />
-                                  <span>Open in New Tab</span>
-                                </a>
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  handleDeleteThread(
-                                    thread.threadId,
-                                    thread.projectName,
-                                  )
-                                }
+                                <Check className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCancelRename();
+                                }}
                               >
-                                <Trash2 className="text-muted-foreground" />
-                                <span>Delete</span>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <>
+                              <Link
+                                href={thread.url}
+                                onClick={(e) =>
+                                  handleThreadClick(e, thread.threadId, thread.url)
+                                }
+                                className="flex items-center flex-1 min-w-0"
+                              >
+                                {isThreadLoading ? (
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2 flex-shrink-0" />
+                                ) : null}
+                                <span className="truncate">{thread.projectName}</span>
+                              </Link>
+                              
+                              {/* Checkbox - only visible on hover of this specific area */}
+                              <div
+                                className="mr-1 flex-shrink-0 w-4 h-4 flex items-center justify-center group/checkbox"
+                                onClick={(e) => toggleThreadSelection(thread.threadId, e)}
+                              >
+                                <div
+                                  className={`h-4 w-4 border rounded cursor-pointer transition-all duration-150 flex items-center justify-center ${isSelected
+                                    ? 'opacity-100 bg-primary border-primary hover:bg-primary/90'
+                                    : 'opacity-0 group-hover/checkbox:opacity-100 border-muted-foreground/30 bg-background hover:bg-muted/50'
+                                    }`}
+                                >
+                                  {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
+                                </div>
+                              </div>
+
+                              {/* Dropdown Menu - inline with content */}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    className="flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-muted/50 rounded transition-all duration-150 text-muted-foreground hover:text-foreground opacity-0 group-hover/row:opacity-100"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      // Ensure pointer events are enabled when dropdown opens
+                                      document.body.style.pointerEvents = 'auto';
+                                    }}
+                                  >
+                                    <MoreHorizontal className="h-4 w-4" />
+                                    <span className="sr-only">More actions</span>
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                  className="w-56 rounded-lg"
+                                  side={isMobile ? 'bottom' : 'right'}
+                                  align={isMobile ? 'end' : 'start'}
+                                >
+                                  <DropdownMenuItem
+                                    onClick={() => handleStartRename(thread)}
+                                  >
+                                    <Edit2 className="text-muted-foreground" />
+                                    <span>Rename</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => {
+                                    setSelectedItem({ threadId: thread?.threadId, projectId: thread?.projectId })
+                                    setShowShareModal(true)
+                                  }}>
+                                    <Share2 className="text-muted-foreground" />
+                                    <span>Share Chat</span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem asChild>
+                                    <a
+                                      href={thread.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      <ArrowUpRight className="text-muted-foreground" />
+                                      <span>Open in New Tab</span>
+                                    </a>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      handleDeleteThread(
+                                        thread.threadId,
+                                        thread.projectName,
+                                      )
+                                    }
+                                  >
+                                    <Trash2 className="text-muted-foreground" />
+                                    <span>Delete</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </>
+                          )}
                         </div>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -512,7 +643,7 @@ export function NavAgents() {
             ) : (
               <SidebarMenuItem>
                 <SidebarMenuButton className="text-sidebar-foreground/70">
-                  <span>No tasks yet</span>
+                  <span>{searchQuery ? 'No results found' : 'No tasks yet'}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
