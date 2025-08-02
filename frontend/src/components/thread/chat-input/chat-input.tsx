@@ -121,7 +121,7 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
     const [uncontrolledValue, setUncontrolledValue] = useState('');
     const value = isControlled ? controlledValue : uncontrolledValue;
 
-    const isSunaAgent = agentMetadata?.is_suna_default || false;
+    const isSunaAgent = agentMetadata?.is_suna_default || true;
 
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -196,8 +196,11 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
           if (savedAgentId) {
             if (savedAgentId === 'suna') {
               const defaultSunaAgent = agents.find(agent => agent.metadata?.is_suna_default);
-              if (defaultSunaAgent) {
-                onAgentSelect(defaultSunaAgent.agent_id);
+              const defaultAgent = agents.find(agent => agent.is_default);
+              const selectedDefaultAgent = defaultSunaAgent || defaultAgent;
+
+              if (selectedDefaultAgent) {
+                onAgentSelect(selectedDefaultAgent.agent_id);
               } else {
                 onAgentSelect(undefined);
               }
@@ -206,11 +209,15 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
             }
           } else {
             const defaultSunaAgent = agents.find(agent => agent.metadata?.is_suna_default);
-            if (defaultSunaAgent) {
-              console.log('Auto-selecting default Suna agent:', defaultSunaAgent.agent_id);
-              onAgentSelect(defaultSunaAgent.agent_id);
+            const defaultAgent = agents.find(agent => agent.is_default);
+
+            const selectedDefaultAgent = defaultSunaAgent || defaultAgent;
+
+            if (selectedDefaultAgent) {
+              console.log('Auto-selecting default agent:', selectedDefaultAgent.name, 'ID:', selectedDefaultAgent.agent_id);
+              onAgentSelect(selectedDefaultAgent.agent_id);
             } else if (agents.length > 0) {
-              console.log('No default Suna agent found, selecting first available agent:', agents[0].agent_id);
+              console.log('No default agent found, selecting first available agent:', agents[0].agent_id);
               onAgentSelect(agents[0].agent_id);
             } else {
               console.log('No agents available, keeping undefined');

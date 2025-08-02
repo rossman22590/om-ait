@@ -159,7 +159,7 @@ export default function AgentsPage() {
           metadata: template.metadata,
         };
 
-        if (template.is_kortix_team) {
+        if (template.metadata?.is_kortix_team) {
           kortixItems.push(item);
         } else {
           communityItems.push(item);
@@ -184,11 +184,25 @@ export default function AgentsPage() {
       });
     };
 
-    return {
-      kortixTeamItems: sortItems(kortixItems),
-      communityItems: sortItems(communityItems)
+    const filterItems = (items: MarketplaceTemplate[]) => {
+      if (!marketplaceSearchQuery.trim()) {
+        return items;
+      }
+      
+      const query = marketplaceSearchQuery.toLowerCase().trim();
+      return items.filter(item => 
+        item.name.toLowerCase().includes(query) ||
+        item.description.toLowerCase().includes(query) ||
+        item.creator_name.toLowerCase().includes(query) ||
+        item.tags.some(tag => tag.toLowerCase().includes(query))
+      );
     };
-  }, [marketplaceTemplates, marketplaceSortBy]);
+
+    return {
+      kortixTeamItems: sortItems(filterItems(kortixItems)),
+      communityItems: sortItems(filterItems(communityItems))
+    };
+  }, [marketplaceTemplates, marketplaceSortBy, marketplaceSearchQuery]);
 
   const allMarketplaceItems = useMemo(() => {
     if (marketplaceFilter === 'kortix') {

@@ -95,7 +95,7 @@ export function MaintenanceAlert({
             </motion.div>
           </AlertDialogHeader>
 
-          <AlertDialogFooter className="p-8 pt-4 border-t border-border/40 bg-background/40 backdrop-blur-sm">
+          {/* <AlertDialogFooter className="p-8 pt-4 border-t border-border/40 bg-background/40 backdrop-blur-sm">
             <Link
               href="https://github.com/kortix-ai/suna"
               target="_blank"
@@ -105,7 +105,7 @@ export function MaintenanceAlert({
               <Github className="h-5 w-5 transition-transform group-hover:scale-110" />
               <span>Explore Self-Hosted Version</span>
             </Link>
-          </AlertDialogFooter>
+          </AlertDialogFooter> */}
         </motion.div>
       </AlertDialogContent>
     </AlertDialog>

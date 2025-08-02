@@ -16,7 +16,7 @@ export const MarketplaceSectionHeader = ({
 }: MarketplaceSectionHeaderProps) => {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg">
+      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-pink-500 to-pink-600 shadow-lg">
         {icon}
       </div>
       <div>

@@ -794,6 +794,36 @@ export const stopAgent = async (agentRunId: string): Promise<void> => {
   }
 };
 
+export const stopAllAgents = async (): Promise<{ stopped_count: number; message: string }> => {
+  const supabase = createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    const authError = new NoAccessTokenAvailableError();
+    handleApiError(authError, { operation: 'stop all agents', resource: 'AI assistant' });
+    throw authError;
+  }
+
+  const response = await fetch(`${API_URL}/agent-runs/stop-all`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    const stopError = new Error(`Error stopping all agents: ${response.statusText}`);
+    handleApiError(stopError, { operation: 'stop all agents', resource: 'AI assistant' });
+    throw stopError;
+  }
+
+  return await response.json();
+};
+
 export const getAgentStatus = async (agentRunId: string): Promise<AgentRun> => {
   console.log(`[API] Requesting agent status for ${agentRunId}`);
 

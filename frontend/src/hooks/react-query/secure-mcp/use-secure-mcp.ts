@@ -49,6 +49,7 @@ export interface AgentTemplate {
     source_agent_id?: string;
     source_version_id?: string;
     source_version_name?: string;
+    is_kortix_team?: boolean;
   };
 }
 

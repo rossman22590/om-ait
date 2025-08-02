@@ -29,30 +29,18 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 # Plan validation functions
 def get_plan_info(price_id: str) -> dict:
     """Get plan information including tier level and type."""
-    # Production plans mapping
+    # Production plans mapping - using consistent names with SUBSCRIPTION_TIERS
     PLAN_TIERS = {
-        # Monthly plans
-        config.STRIPE_TIER_2_20_ID: {'tier': 1, 'type': 'monthly', 'name': '2h/$20'},
-        config.STRIPE_TIER_6_50_ID: {'tier': 2, 'type': 'monthly', 'name': '6h/$50'},
-        config.STRIPE_TIER_12_100_ID: {'tier': 3, 'type': 'monthly', 'name': '12h/$100'},
-        config.STRIPE_TIER_25_200_ID: {'tier': 4, 'type': 'monthly', 'name': '25h/$200'},
-        config.STRIPE_TIER_50_400_ID: {'tier': 5, 'type': 'monthly', 'name': '50h/$400'},
-        config.STRIPE_TIER_125_800_ID: {'tier': 6, 'type': 'monthly', 'name': '125h/$800'},
-        config.STRIPE_TIER_200_1000_ID: {'tier': 7, 'type': 'monthly', 'name': '200h/$1000'},
-        
-        # Yearly plans
-        config.STRIPE_TIER_2_20_YEARLY_ID: {'tier': 1, 'type': 'yearly', 'name': '2h/$204/year'},
-        config.STRIPE_TIER_6_50_YEARLY_ID: {'tier': 2, 'type': 'yearly', 'name': '6h/$510/year'},
-        config.STRIPE_TIER_12_100_YEARLY_ID: {'tier': 3, 'type': 'yearly', 'name': '12h/$1020/year'},
-        config.STRIPE_TIER_25_200_YEARLY_ID: {'tier': 4, 'type': 'yearly', 'name': '25h/$2040/year'},
-        config.STRIPE_TIER_50_400_YEARLY_ID: {'tier': 5, 'type': 'yearly', 'name': '50h/$4080/year'},
-        config.STRIPE_TIER_125_800_YEARLY_ID: {'tier': 6, 'type': 'yearly', 'name': '125h/$8160/year'},
-        config.STRIPE_TIER_200_1000_YEARLY_ID: {'tier': 7, 'type': 'yearly', 'name': '200h/$10200/year'},
-        
-        # Yearly commitment plans
-        config.STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID: {'tier': 1, 'type': 'yearly_commitment', 'name': '2h/$17/month'},
-        config.STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID: {'tier': 2, 'type': 'yearly_commitment', 'name': '6h/$42.50/month'},
-        config.STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID: {'tier': 4, 'type': 'yearly_commitment', 'name': '25h/$170/month'},
+        # Free tier
+        config.STRIPE_FREE_TIER_ID: {'tier': 0, 'type': 'free', 'name': 'free'},
+        # Monthly plans only
+        config.STRIPE_TIER_2_20_ID: {'tier': 1, 'type': 'monthly', 'name': 'tier_2_20'},
+        config.STRIPE_TIER_6_50_ID: {'tier': 2, 'type': 'monthly', 'name': 'tier_6_50'},
+        config.STRIPE_TIER_12_100_ID: {'tier': 3, 'type': 'monthly', 'name': 'tier_12_100'},
+        config.STRIPE_TIER_25_200_ID: {'tier': 4, 'type': 'monthly', 'name': 'tier_25_200'},
+        config.STRIPE_TIER_50_400_ID: {'tier': 5, 'type': 'monthly', 'name': 'tier_50_400'},
+        config.STRIPE_TIER_125_800_ID: {'tier': 6, 'type': 'monthly', 'name': 'tier_125_800'},
+        config.STRIPE_TIER_200_1000_ID: {'tier': 7, 'type': 'monthly', 'name': 'tier_200_1000'},
     }
     
     return PLAN_TIERS.get(price_id, {'tier': 0, 'type': 'unknown', 'name': 'Unknown'})
@@ -117,18 +105,7 @@ SUBSCRIPTION_TIERS = {
     config.STRIPE_TIER_50_400_ID: {'name': 'tier_50_400', 'minutes': 3000, 'cost': 400 + 5},  # 50 hours
     config.STRIPE_TIER_125_800_ID: {'name': 'tier_125_800', 'minutes': 7500, 'cost': 800 + 5},  # 125 hours
     config.STRIPE_TIER_200_1000_ID: {'name': 'tier_200_1000', 'minutes': 12000, 'cost': 1000 + 5},  # 200 hours
-    # Yearly tiers (same usage limits, different billing period)
-    config.STRIPE_TIER_2_20_YEARLY_ID: {'name': 'tier_2_20', 'minutes': 120, 'cost': 20 + 5},  # 2 hours/month, $204/year
-    config.STRIPE_TIER_6_50_YEARLY_ID: {'name': 'tier_6_50', 'minutes': 360, 'cost': 50 + 5},  # 6 hours/month, $510/year
-    config.STRIPE_TIER_12_100_YEARLY_ID: {'name': 'tier_12_100', 'minutes': 720, 'cost': 100 + 5},  # 12 hours/month, $1020/year
-    config.STRIPE_TIER_25_200_YEARLY_ID: {'name': 'tier_25_200', 'minutes': 1500, 'cost': 200 + 5},  # 25 hours/month, $2040/year
-    config.STRIPE_TIER_50_400_YEARLY_ID: {'name': 'tier_50_400', 'minutes': 3000, 'cost': 400 + 5},  # 50 hours/month, $4080/year
-    config.STRIPE_TIER_125_800_YEARLY_ID: {'name': 'tier_125_800', 'minutes': 7500, 'cost': 800 + 5},  # 125 hours/month, $8160/year
-    config.STRIPE_TIER_200_1000_YEARLY_ID: {'name': 'tier_200_1000', 'minutes': 12000, 'cost': 1000 + 5},  # 200 hours/month, $10200/year
-    # Yearly commitment tiers (15% discount, monthly payments with 12-month commitment via schedules)
-    config.STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID: {'name': 'tier_2_17_yearly_commitment', 'minutes': 120, 'cost': 20 + 5},  # 2 hours/month, $17/month (12-month commitment)
-    config.STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID: {'name': 'tier_6_42_yearly_commitment', 'minutes': 360, 'cost': 50 + 5},  # 6 hours/month, $42.50/month (12-month commitment)
-    config.STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID: {'name': 'tier_25_170_yearly_commitment', 'minutes': 1500, 'cost': 200 + 5},  # 25 hours/month, $170/month (12-month commitment)
+
 }
 
 # Pydantic models for request/response validation
@@ -224,15 +201,6 @@ async def get_user_subscription(user_id: str) -> Optional[Dict]:
                     config.STRIPE_TIER_2_20_ID, config.STRIPE_TIER_6_50_ID, config.STRIPE_TIER_12_100_ID,
                     config.STRIPE_TIER_25_200_ID, config.STRIPE_TIER_50_400_ID, config.STRIPE_TIER_125_800_ID,
                     config.STRIPE_TIER_200_1000_ID,
-                    # Yearly tiers
-                    config.STRIPE_TIER_2_20_YEARLY_ID, config.STRIPE_TIER_6_50_YEARLY_ID,
-                    config.STRIPE_TIER_12_100_YEARLY_ID, config.STRIPE_TIER_25_200_YEARLY_ID,
-                    config.STRIPE_TIER_50_400_YEARLY_ID, config.STRIPE_TIER_125_800_YEARLY_ID,
-                    config.STRIPE_TIER_200_1000_YEARLY_ID,
-                    # Yearly commitment tiers (monthly payments with 12-month commitment)
-                    config.STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID,
-                    config.STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID,
-                    config.STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID
                 ]:
                     our_subscriptions.append(sub)
         
@@ -424,34 +392,43 @@ def calculate_token_cost(prompt_tokens: int, completion_tokens: int, model: str)
         prompt_tokens = int(prompt_tokens) if prompt_tokens is not None else 0
         completion_tokens = int(completion_tokens) if completion_tokens is not None else 0
         
-        # Try to resolve the model name using MODEL_NAME_ALIASES first
-        resolved_model = MODEL_NAME_ALIASES.get(model, model)
+        # Clean up model name FIRST - remove :thinking suffix and handle old mappings
+        cleaned_model = model
+        if ':thinking' in cleaned_model:
+            cleaned_model = cleaned_model.replace(':thinking', '')
+        
+        # Handle old model name mappings
+        if cleaned_model == 'gemini-2.5-flash-preview-05-20':
+            cleaned_model = 'gemini-2.5-flash'
+        
+        # Try to resolve the model name using MODEL_NAME_ALIASES with cleaned model
+        resolved_model = MODEL_NAME_ALIASES.get(cleaned_model, cleaned_model)
 
-        # Check if we have hardcoded pricing for this model (try both original and resolved)
-        hardcoded_pricing = get_model_pricing(model) or get_model_pricing(resolved_model)
+        # Check if we have hardcoded pricing for this model (use cleaned and resolved models)
+        hardcoded_pricing = get_model_pricing(cleaned_model) or get_model_pricing(resolved_model)
         if hardcoded_pricing:
             input_cost_per_million, output_cost_per_million = hardcoded_pricing
             input_cost = (prompt_tokens / 1_000_000) * input_cost_per_million
             output_cost = (completion_tokens / 1_000_000) * output_cost_per_million
             message_cost = input_cost + output_cost
         else:
-            # Use litellm pricing as fallback - try multiple variations
+            # Use litellm pricing as fallback - try multiple variations with cleaned models
             try:
-                models_to_try = [model]
+                models_to_try = [cleaned_model]
                 
                 # Add resolved model if different
-                if resolved_model != model:
+                if resolved_model != cleaned_model:
                     models_to_try.append(resolved_model)
                 
                 # Try without provider prefix if it has one
-                if '/' in model:
-                    models_to_try.append(model.split('/', 1)[1])
-                if '/' in resolved_model and resolved_model != model:
+                if '/' in cleaned_model:
+                    models_to_try.append(cleaned_model.split('/', 1)[1])
+                if '/' in resolved_model and resolved_model != cleaned_model:
                     models_to_try.append(resolved_model.split('/', 1)[1])
                     
                 # Special handling for Google models accessed via OpenRouter
-                if model.startswith('openrouter/google/'):
-                    google_model_name = model.replace('openrouter/', '')
+                if cleaned_model.startswith('openrouter/google/'):
+                    google_model_name = cleaned_model.replace('openrouter/', '')
                     models_to_try.append(google_model_name)
                 if resolved_model.startswith('openrouter/google/'):
                     google_model_name = resolved_model.replace('openrouter/', '')
@@ -470,11 +447,11 @@ def calculate_token_cost(prompt_tokens: int, completion_tokens: int, model: str)
                         continue
                 
                 if message_cost is None:
-                    logger.warning(f"Could not get pricing for model {model} (resolved: {resolved_model}), returning 0 cost")
+                    logger.warning(f"Could not get pricing for model {model} (cleaned: {cleaned_model}, resolved: {resolved_model}), returning 0 cost")
                     return 0.0
                     
             except Exception as e:
-                logger.warning(f"Could not get pricing for model {model} (resolved: {resolved_model}): {str(e)}, returning 0 cost")
+                logger.warning(f"Could not get pricing for model {model} (cleaned: {cleaned_model}, resolved: {resolved_model}): {str(e)}, returning 0 cost")
                 return 0.0
         
         # Apply the TOKEN_PRICE_MULTIPLIER
@@ -567,7 +544,7 @@ async def check_billing_status(client, user_id: str) -> Tuple[bool, str, Optiona
     
     # Calculate current month's usage
     current_usage = await calculate_monthly_usage(client, user_id)
-    
+
     # TODO: also do user's AAL check
     # Check if within limits
     if current_usage >= tier_info['cost']:
@@ -1433,7 +1410,7 @@ async def get_available_models(
                     if input_cost_per_token is not None and output_cost_per_token is not None:
                         pricing_info = {
                             "input_cost_per_million_tokens": input_cost_per_token * TOKEN_PRICE_MULTIPLIER,
-                            "output_cost_per_million_tokens": output_cost_per_million * TOKEN_PRICE_MULTIPLIER,
+                            "output_cost_per_million_tokens": output_cost_per_token * TOKEN_PRICE_MULTIPLIER,
                             "max_tokens": None  # cost_per_token doesn't provide max_tokens info
                         }
                     else:
@@ -1647,17 +1624,21 @@ async def cancel_subscription(
             logger.error(f"No current_period_end found in subscription {subscription_id} even after fresh fetch")
             raise HTTPException(status_code=500, detail="Unable to determine subscription period end")
         
-        period_end_date = datetime.fromtimestamp(current_period_end, timezone.utc)
-        
         return {
             "success": True,
             "status": "cancelled_at_period_end",
             "message": "Subscription will be cancelled at the end of your current billing period.",
             "details": {
                 "subscription_id": subscription_id,
-                "cancellation_effective_date": period_end_date.isoformat(),
+                "cancellation_effective_date": datetime.fromtimestamp(
+                    current_period_end, 
+                    timezone.utc
+                ).strftime("%B %d, %Y"),
                 "current_period_end": current_period_end,
-                "access_until": period_end_date.strftime("%B %d, %Y")
+                "access_until": datetime.fromtimestamp(
+                    current_period_end, 
+                    timezone.utc
+                ).strftime("%B %d, %Y")
             }
         }
         

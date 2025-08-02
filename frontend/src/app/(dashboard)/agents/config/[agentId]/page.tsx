@@ -105,11 +105,11 @@ export default function AgentConfigurationPage() {
     
     if (isSunaAgent) {
       if (restrictions.name_editable === false && data.name !== originalData.name) {
-        throw new Error("Suna's name cannot be modified.");
+        throw new Error("Machine's name cannot be modified.");
       }
 
       if (restrictions.tools_editable === false && JSON.stringify(data.agentpress_tools) !== JSON.stringify(originalData.agentpress_tools)) {
-        throw new Error("Suna's default tools cannot be modified.");
+        throw new Error("Machine's default tools cannot be modified.");
       }
     }
     

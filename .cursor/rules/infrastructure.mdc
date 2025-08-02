@@ -179,7 +179,7 @@ docker-compose -f docker-compose.dev.yml exec backend python -m alembic upgrade 
 echo "✅ Database migrations completed"
 
 echo "🚀 Development environment is ready!"
-echo "Frontend: http://localhost:3000"
+echo "Frontend: https://machinev9.ngrok.io"
 echo "Backend: http://localhost:8000"
 echo "Redis: localhost:6379"
 ```

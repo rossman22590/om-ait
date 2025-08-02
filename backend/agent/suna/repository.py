@@ -156,6 +156,7 @@ class SunaAgentRepository:
     async def create_suna_agent_simple(
         self, 
         account_id: str,
+        version_tag: str = None
     ) -> str:
         try:
             from agent.suna.config import SunaConfig

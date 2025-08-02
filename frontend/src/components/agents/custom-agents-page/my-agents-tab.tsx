@@ -71,15 +71,53 @@ export const MyAgentsTab = ({
   const [agentFilter, setAgentFilter] = useState<AgentFilter>('all');
 
   const filteredAgents = useMemo(() => {
+    let filtered = agents;
+    
+    // Filter by agent type
     if (agentFilter === 'templates') {
-      return [];
+      filtered = [];
     }
-    return agents;
-  }, [agents, agentFilter]);
+    
+    // Filter by search query
+    if (agentsSearchQuery.trim()) {
+      const query = agentsSearchQuery.toLowerCase().trim();
+      filtered = filtered.filter(agent => 
+        agent.name?.toLowerCase().includes(query) ||
+        agent.description?.toLowerCase().includes(query) ||
+        agent.system_prompt?.toLowerCase().includes(query) ||
+        (agent.agentpress_tools && agent.agentpress_tools.some((tool: string) => 
+          tool.toLowerCase().includes(query)
+        )) ||
+        (agent.configured_mcps && agent.configured_mcps.some((mcp: any) => 
+          mcp.qualified_name?.toLowerCase().includes(query) ||
+          mcp.display_name?.toLowerCase().includes(query)
+        ))
+      );
+    }
+    
+    return filtered;
+  }, [agents, agentFilter, agentsSearchQuery]);
+
+  const filteredTemplates = useMemo(() => {
+    if (!myTemplates) return [];
+    
+    if (agentsSearchQuery.trim()) {
+      const query = agentsSearchQuery.toLowerCase().trim();
+      return myTemplates.filter(template => 
+        template.name?.toLowerCase().includes(query) ||
+        template.description?.toLowerCase().includes(query) ||
+        (template.tags && template.tags.some((tag: string) => 
+          tag.toLowerCase().includes(query)
+        ))
+      );
+    }
+    
+    return myTemplates;
+  }, [myTemplates, agentsSearchQuery]);
 
   const templateAgentsCount = useMemo(() => {
-    return myTemplates?.length || 0;
-  }, [myTemplates]);
+    return filteredTemplates?.length || 0;
+  }, [filteredTemplates]);
 
   const handleClearFilters = () => {
     setAgentFilter('all');
@@ -108,7 +146,21 @@ export const MyAgentsTab = ({
       );
     }
 
-    if (!myTemplates || myTemplates.length === 0) {
+    if (!filteredTemplates || filteredTemplates.length === 0) {
+      if (agentsSearchQuery.trim()) {
+        return (
+          <div className="text-center py-16">
+            <div className="mx-auto w-20 h-20 bg-gradient-to-br from-primary/20 to-primary/10 rounded-3xl flex items-center justify-center mb-6">
+              <Globe className="h-10 w-10 text-primary" />
+            </div>
+            <h3 className="text-xl font-semibold mb-3">No templates found</h3>
+            <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+              No templates match your search criteria. Try adjusting your search query.
+            </p>
+          </div>
+        );
+      }
+      
       return (
         <div className="text-center py-16">
           <div className="mx-auto w-20 h-20 bg-gradient-to-br from-primary/20 to-primary/10 rounded-3xl flex items-center justify-center mb-6">
@@ -124,7 +176,7 @@ export const MyAgentsTab = ({
 
     return (
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {myTemplates.map((template) => {
+        {filteredTemplates.map((template) => {
           const isActioning = templatesActioningId === template.template_id;
           return (
             <AgentCard

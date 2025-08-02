@@ -81,25 +81,25 @@ export default function SubscriptionManagementModal({
   };
 
   // In local development mode, show a simplified component
-  if (isLocalMode()) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Subscription Management</DialogTitle>
-          </DialogHeader>
-          <div className="p-4 mb-4 bg-muted/30 border border-border rounded-lg text-center">
-            <p className="text-sm text-muted-foreground">
-              Running in local development mode - billing features are disabled
-            </p>
-            <p className="text-xs text-muted-foreground mt-2">
-              Agent usage limits are not enforced in this environment
-            </p>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+  // if (isLocalMode()) {
+  //   return (
+  //     <Dialog open={open} onOpenChange={onOpenChange}>
+  //       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+  //         <DialogHeader>
+  //           <DialogTitle>Subscription Management</DialogTitle>
+  //         </DialogHeader>
+  //         <div className="p-4 mb-4 bg-muted/30 border border-border rounded-lg text-center">
+  //           <p className="text-sm text-muted-foreground">
+  //             Running in local development mode - billing features are disabled
+  //           </p>
+  //           <p className="text-xs text-muted-foreground mt-2">
+  //             Agent usage limits are not enforced in this environment
+  //           </p>
+  //         </div>
+  //       </DialogContent>
+  //     </Dialog>
+  //   );
+  // }
 
   // Show loading state
   if (isLoading || authLoading) {

@@ -331,7 +331,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
     project,
     debugMode = false,
     isPreviewMode = false,
-    agentName = 'Suna',
+    agentName = 'Machine',
     agentAvatar = <KortixLogo size={16} />,
     emptyStateComponent,
     threadMetadata,
@@ -384,7 +384,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
         }
 
         if (recentAssistantWithAgent?.agents?.name) {
-            const isSunaAgent = recentAssistantWithAgent.agents.name === 'Suna';
+            const isSunaAgent = recentAssistantWithAgent.agents.name === 'Machine';
             const avatar = recentAssistantWithAgent.agents.avatar ? (
                 <>
                     {isSunaAgent ? (
@@ -408,7 +408,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
             };
         }
         return {
-            name: agentName || 'Suna',
+            name: agentName || 'Machine',
             avatar: agentAvatar
         };
     }, [threadMetadata, displayMessages, agentName, agentAvatar]);

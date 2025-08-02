@@ -39,53 +39,26 @@ class Configuration:
     # Environment mode
     ENV_MODE: EnvMode = EnvMode.LOCAL
     
-    # Subscription tier IDs - Production
-    STRIPE_FREE_TIER_ID_PROD: str = 'price_1RILb4G6l1KZGqIrK4QLrx9i'
-    STRIPE_TIER_2_20_ID_PROD: str = 'price_1RILb4G6l1KZGqIrhomjgDnO'
-    STRIPE_TIER_6_50_ID_PROD: str = 'price_1RILb4G6l1KZGqIr5q0sybWn'
-    STRIPE_TIER_12_100_ID_PROD: str = 'price_1RILb4G6l1KZGqIr5Y20ZLHm'
-    STRIPE_TIER_25_200_ID_PROD: str = 'price_1RILb4G6l1KZGqIrGAD8rNjb'
-    STRIPE_TIER_50_400_ID_PROD: str = 'price_1RILb4G6l1KZGqIruNBUMTF1'
-    STRIPE_TIER_125_800_ID_PROD: str = 'price_1RILb3G6l1KZGqIrbJA766tN'
-    STRIPE_TIER_200_1000_ID_PROD: str = 'price_1RILb3G6l1KZGqIrmauYPOiN'
+   # Subscription tier IDs - Production
+    STRIPE_FREE_TIER_ID_PROD: str = 'price_1RLwBMG23sSyONuFrhkNh9fe'
+    STRIPE_TIER_2_20_ID_PROD: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'
+    STRIPE_TIER_6_50_ID_PROD: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'
+    STRIPE_TIER_12_100_ID_PROD: str = 'price_1RLyE5G23sSyONuFHJiqvoLo'
+    STRIPE_TIER_25_200_ID_PROD: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
+    STRIPE_TIER_50_400_ID_PROD: str = 'price_1RLyEhG23sSyONuFioU064nT'
+    STRIPE_TIER_125_800_ID_PROD: str = 'price_1RLyEnG23sSyONuFE9wBSfvN'
+    STRIPE_TIER_200_1000_ID_PROD: str = 'price_1RLyErG23sSyONuFjGphWKjB'
     
-    # Yearly subscription tier IDs - Production (15% discount)
-    STRIPE_TIER_2_20_YEARLY_ID_PROD: str = 'price_1ReHB5G6l1KZGqIrD70I1xqM'
-    STRIPE_TIER_6_50_YEARLY_ID_PROD: str = 'price_1ReHAsG6l1KZGqIrlAog487C'
-    STRIPE_TIER_12_100_YEARLY_ID_PROD: str = 'price_1ReHAWG6l1KZGqIrBHer2PQc'
-    STRIPE_TIER_25_200_YEARLY_ID_PROD: str = 'price_1ReH9uG6l1KZGqIrsvMLHViC'
-    STRIPE_TIER_50_400_YEARLY_ID_PROD: str = 'price_1ReH9fG6l1KZGqIrsPtu5KIA'
-    STRIPE_TIER_125_800_YEARLY_ID_PROD: str = 'price_1ReH9GG6l1KZGqIrfgqaJyat'
-    STRIPE_TIER_200_1000_YEARLY_ID_PROD: str = 'price_1ReH8qG6l1KZGqIrK1akY90q'
-
-    # Yearly commitment prices - Production (15% discount, monthly payments with 12-month commitment via schedules)
-    STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID_PROD: str = 'price_1RqtqiG6l1KZGqIrhjVPtE1s'  # $17/month
-    STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID_PROD: str = 'price_1Rqtr8G6l1KZGqIrQ0ql0qHi'  # $42.50/month
-    STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID_PROD: str = 'price_1RqtrUG6l1KZGqIrEb8hLsk3'  # $170/month
-
     # Subscription tier IDs - Staging
-    STRIPE_FREE_TIER_ID_STAGING: str = 'price_1RIGvuG6l1KZGqIrw14abxeL'
-    STRIPE_TIER_2_20_ID_STAGING: str = 'price_1RIGvuG6l1KZGqIrCRu0E4Gi'
-    STRIPE_TIER_6_50_ID_STAGING: str = 'price_1RIGvuG6l1KZGqIrvjlz5p5V'
-    STRIPE_TIER_12_100_ID_STAGING: str = 'price_1RIGvuG6l1KZGqIrT6UfgblC'
-    STRIPE_TIER_25_200_ID_STAGING: str = 'price_1RIGvuG6l1KZGqIrOVLKlOMj'
-    STRIPE_TIER_50_400_ID_STAGING: str = 'price_1RIKNgG6l1KZGqIrvsat5PW7'
-    STRIPE_TIER_125_800_ID_STAGING: str = 'price_1RIKNrG6l1KZGqIrjKT0yGvI'
-    STRIPE_TIER_200_1000_ID_STAGING: str = 'price_1RIKQ2G6l1KZGqIrum9n8SI7'
+    STRIPE_FREE_TIER_ID_STAGING: str = 'price_1RLwBMG23sSyONuFrhkNh9fe'
+    STRIPE_TIER_2_20_ID_STAGING: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'
+    STRIPE_TIER_6_50_ID_STAGING: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'
+    STRIPE_TIER_12_100_ID_STAGING: str = 'price_1RLyE5G23sSyONuFHJiqvoLo'
+    STRIPE_TIER_25_200_ID_STAGING: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
+    STRIPE_TIER_50_400_ID_STAGING: str = 'price_1RLyEhG23sSyONuFioU064nT'
+    STRIPE_TIER_125_800_ID_STAGING: str = 'price_1RLyEnG23sSyONuFE9wBSfvN'
+    STRIPE_TIER_200_1000_ID_STAGING: str = 'price_1RLyErG23sSyONuFjGphWKjB'
     
-    # Yearly subscription tier IDs - Staging (15% discount)
-    STRIPE_TIER_2_20_YEARLY_ID_STAGING: str = 'price_1ReGogG6l1KZGqIrEyBTmtPk'
-    STRIPE_TIER_6_50_YEARLY_ID_STAGING: str = 'price_1ReGoJG6l1KZGqIr0DJWtoOc'
-    STRIPE_TIER_12_100_YEARLY_ID_STAGING: str = 'price_1ReGnZG6l1KZGqIr0ThLEl5S'
-    STRIPE_TIER_25_200_YEARLY_ID_STAGING: str = 'price_1ReGmzG6l1KZGqIre31mqoEJ'
-    STRIPE_TIER_50_400_YEARLY_ID_STAGING: str = 'price_1ReGmgG6l1KZGqIrn5nBc7e5'
-    STRIPE_TIER_125_800_YEARLY_ID_STAGING: str = 'price_1ReGmMG6l1KZGqIrvE2ycrAX'
-    STRIPE_TIER_200_1000_YEARLY_ID_STAGING: str = 'price_1ReGlXG6l1KZGqIrlgurP5GU'
-
-    # Yearly commitment prices - Staging (15% discount, monthly payments with 12-month commitment via schedules)
-    STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID_STAGING: str = 'price_1RqYGaG6l1KZGqIrIzcdPzeQ'  # $17/month
-    STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID_STAGING: str = 'price_1RqYH1G6l1KZGqIrWDKh8xIU'  # $42.50/month
-    STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID_STAGING: str = 'price_1RqYHbG6l1KZGqIrAUVf8KpG'  # $170/month
     
     # Computed subscription tier IDs based on environment
     @property
@@ -136,68 +109,6 @@ class Configuration:
             return self.STRIPE_TIER_200_1000_ID_STAGING
         return self.STRIPE_TIER_200_1000_ID_PROD
     
-    # Yearly tier computed properties
-    @property
-    def STRIPE_TIER_2_20_YEARLY_ID(self) -> str:
-        if self.ENV_MODE == EnvMode.STAGING:
-            return self.STRIPE_TIER_2_20_YEARLY_ID_STAGING
-        return self.STRIPE_TIER_2_20_YEARLY_ID_PROD
-    
-    @property
-    def STRIPE_TIER_6_50_YEARLY_ID(self) -> str:
-        if self.ENV_MODE == EnvMode.STAGING:
-            return self.STRIPE_TIER_6_50_YEARLY_ID_STAGING
-        return self.STRIPE_TIER_6_50_YEARLY_ID_PROD
-    
-    @property
-    def STRIPE_TIER_12_100_YEARLY_ID(self) -> str:
-        if self.ENV_MODE == EnvMode.STAGING:
-            return self.STRIPE_TIER_12_100_YEARLY_ID_STAGING
-        return self.STRIPE_TIER_12_100_YEARLY_ID_PROD
-    
-    @property
-    def STRIPE_TIER_25_200_YEARLY_ID(self) -> str:
-        if self.ENV_MODE == EnvMode.STAGING:
-            return self.STRIPE_TIER_25_200_YEARLY_ID_STAGING
-        return self.STRIPE_TIER_25_200_YEARLY_ID_PROD
-    
-    @property
-    def STRIPE_TIER_50_400_YEARLY_ID(self) -> str:
-        if self.ENV_MODE == EnvMode.STAGING:
-            return self.STRIPE_TIER_50_400_YEARLY_ID_STAGING
-        return self.STRIPE_TIER_50_400_YEARLY_ID_PROD
-    
-    @property
-    def STRIPE_TIER_125_800_YEARLY_ID(self) -> str:
-        if self.ENV_MODE == EnvMode.STAGING:
-            return self.STRIPE_TIER_125_800_YEARLY_ID_STAGING
-        return self.STRIPE_TIER_125_800_YEARLY_ID_PROD
-    
-    @property
-    def STRIPE_TIER_200_1000_YEARLY_ID(self) -> str:
-        if self.ENV_MODE == EnvMode.STAGING:
-            return self.STRIPE_TIER_200_1000_YEARLY_ID_STAGING
-        return self.STRIPE_TIER_200_1000_YEARLY_ID_PROD
-    
-    # Yearly commitment prices computed properties
-    @property
-    def STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID(self) -> str:
-        if self.ENV_MODE == EnvMode.STAGING:
-            return self.STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID_STAGING
-        return self.STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID_PROD
-
-    @property
-    def STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID(self) -> str:
-        if self.ENV_MODE == EnvMode.STAGING:
-            return self.STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID_STAGING
-        return self.STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID_PROD
-
-    @property
-    def STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID(self) -> str:
-        if self.ENV_MODE == EnvMode.STAGING:
-            return self.STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID_STAGING
-        return self.STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID_PROD
-    
     # LLM API keys
     ANTHROPIC_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
@@ -207,8 +118,8 @@ class Configuration:
     MORPH_API_KEY: Optional[str] = None
     GEMINI_API_KEY: Optional[str] = None
     OPENROUTER_API_BASE: Optional[str] = "https://openrouter.ai/api/v1"
-    OR_SITE_URL: Optional[str] = "https://kortix.ai"
-    OR_APP_NAME: Optional[str] = "Kortix AI"    
+    OR_SITE_URL: Optional[str] = "https://machine.myapps.ai"
+    OR_APP_NAME: Optional[str] = "Machine"    
     
     # AWS Bedrock credentials
     AWS_ACCESS_KEY_ID: Optional[str] = None
@@ -248,8 +159,9 @@ class Configuration:
     STRIPE_DEFAULT_TRIAL_DAYS: int = 14
     
     # Stripe Product IDs
-    STRIPE_PRODUCT_ID_PROD: str = 'prod_SCl7AQ2C8kK1CD'
-    STRIPE_PRODUCT_ID_STAGING: str = 'prod_SCgIj3G7yPOAWY'
+    STRIPE_PRODUCT_ID_PROD: str = 'prod_SGT7srmz5hB2qo'
+    STRIPE_PRODUCT_ID_STAGING: str = 'prod_SGT7srmz5hB2qo'
+    
     
     # Sandbox configuration
     SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3"

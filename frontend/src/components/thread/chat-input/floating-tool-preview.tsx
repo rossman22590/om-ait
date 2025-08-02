@@ -154,12 +154,12 @@ export const FloatingToolPreview: React.FC<FloatingToolPreviewProps> = ({
                     isStreaming
                       ? "bg-blue-500 animate-pulse"
                       : isSuccess
-                        ? "bg-green-500"
+                        ? "bg-green-500"  
                         : "bg-red-500"
                   )} />
                   <span className="text-xs text-muted-foreground truncate">
                     {isStreaming
-                      ? `${agentName || 'Suna'} is working...`
+                      ? `${agentName || 'Machine'} is working...`
                       : isSuccess
                         ? "Success"
                         : "Failed"

@@ -159,7 +159,7 @@ class TemplateService:
             marketplace_published_at=datetime.now(timezone.utc) if make_public else None,
             avatar=agent.get('avatar'),
             avatar_color=agent.get('avatar_color'),
-            metadata=agent.get('metadata', {})
+            metadata=metadata
         )
         
         await self._save_template(template)
@@ -195,6 +195,10 @@ class TemplateService:
             .order('download_count', desc=True)\
             .order('marketplace_published_at', desc=True)\
             .execute()
+        
+        logger.info(f"Raw database result count: {len(result.data)}")
+        for data in result.data:
+            logger.info(f"Raw DB data for {data.get('name', 'Unknown')}: is_kortix_team={data.get('is_kortix_team')}, metadata={data.get('metadata')}")
         
         return [self._map_to_template(data) for data in result.data]
     
@@ -343,6 +347,11 @@ class TemplateService:
         await client.table('agent_templates').insert(template_data).execute()
     
     def _map_to_template(self, data: Dict[str, Any]) -> AgentTemplate:
+        metadata = data.get('metadata', {})
+        is_kortix_team = data.get('is_kortix_team', False)
+        logger.info(f"Template {data.get('name', 'Unknown')} - is_kortix_team from DB: {is_kortix_team}")
+        metadata['is_kortix_team'] = is_kortix_team
+        
         return AgentTemplate(
             template_id=data['template_id'],
             creator_id=data['creator_id'],
@@ -357,7 +366,7 @@ class TemplateService:
             updated_at=datetime.fromisoformat(data['updated_at'].replace('Z', '+00:00')),
             avatar=data.get('avatar'),
             avatar_color=data.get('avatar_color'),
-            metadata=data.get('metadata', {})
+            metadata=metadata
         )
 
 def get_template_service(db_connection: DBConnection) -> TemplateService:

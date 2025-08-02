@@ -94,7 +94,7 @@ export const MODELS = {
     recommended: false,
     lowQuality: false
   },
-  'gemini-2.5-flash:thinking': { 
+  'gemini-2.5-flash': { 
     tier: 'premium', 
     priority: 84,
     recommended: false,

@@ -149,7 +149,8 @@ class ProfileService:
     async def _map_row_to_profile(self, row: Dict[str, Any]) -> Profile:
         try:
             config = self._decrypt_config(row['encrypted_config'])
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to decrypt config for profile {row.get('profile_id', 'unknown')}: {e}")
             config = {
                 "app_slug": "unknown",
                 "app_name": "Unknown App",
@@ -158,6 +159,22 @@ class ProfileService:
                 "oauth_app_id": None,
                 "description": None
             }
+        
+        # Handle legacy profiles that don't have external_user_id
+        if 'external_user_id' not in config or not config['external_user_id']:
+            # Generate external_user_id for legacy profiles
+            account_id = row['account_id']
+            app_slug = config.get('app_slug', 'unknown')
+            profile_name = row['profile_name']
+            config['external_user_id'] = self._generate_external_user_id(account_id, app_slug, profile_name)
+            logger.info(f"Generated external_user_id for legacy profile {row.get('profile_id', 'unknown')}")
+        
+        # Ensure other required fields exist with defaults
+        config.setdefault('app_slug', 'unknown')
+        config.setdefault('app_name', 'Unknown App')
+        config.setdefault('enabled_tools', [])
+        config.setdefault('oauth_app_id', None)
+        config.setdefault('description', None)
         
         is_connected = await self._check_connection_status(config['external_user_id'], config['app_slug'])
         

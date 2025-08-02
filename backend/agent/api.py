@@ -184,6 +184,7 @@ async def cleanup():
                     await stop_agent_run(agent_run_id, error_message=f"Instance {instance_id} shutting down")
                 else:
                     logger.warning(f"Unexpected key format found: {key}")
+
         else:
             logger.warning("Instance ID not set, cannot clean up instance-specific agent runs.")
 
@@ -402,11 +403,49 @@ async def start_agent(
                 logger.info(f"Using default agent: {agent_config['name']} ({agent_config['agent_id']}) - no version data")
         else:
             logger.warning(f"[AGENT LOAD] No default agent found for account {account_id}")
+            
+            # Auto-install Machine agent for users who don't have one
+            try:
+                logger.info(f"[AUTO-INSTALL] Installing Machine agent for account {account_id}")
+                suna_service = SunaDefaultAgentService(db)
+                installed_agent_id = await suna_service.install_suna_agent_for_user(account_id)
+                
+                if installed_agent_id:
+                    logger.info(f"[AUTO-INSTALL] Successfully installed Machine agent {installed_agent_id}")
+                    
+                    # Query the newly created agent
+                    new_agent_result = await client.table('agents').select('*').eq('agent_id', installed_agent_id).eq('account_id', account_id).execute()
+                    
+                    if new_agent_result.data:
+                        agent_data = new_agent_result.data[0]
+                        
+                        # Load version data if available
+                        version_data = None
+                        if agent_data.get('current_version_id'):
+                            try:
+                                version_service = await _get_version_service()
+                                version_obj = await version_service.get_version(
+                                    agent_id=installed_agent_id,
+                                    version_id=agent_data['current_version_id'],
+                                    user_id=user_id
+                                )
+                                version_data = version_obj.to_dict()
+                                logger.info(f"[AUTO-INSTALL] Loaded version data for new agent")
+                            except Exception as e:
+                                logger.warning(f"[AUTO-INSTALL] Failed to get version data: {e}")
+                        
+                        agent_config = extract_agent_config(agent_data, version_data)
+                        logger.info(f"[AUTO-INSTALL] Machine agent ready: {agent_config['name']} ({installed_agent_id})")
+                else:
+                    logger.error(f"[AUTO-INSTALL] Failed to install Machine agent for account {account_id}")
+                    
+            except Exception as e:
+                logger.error(f"[AUTO-INSTALL] Error during auto-installation: {str(e)}")
+                # Continue with agent_config=None as fallback
     
     logger.info(f"[AGENT LOAD] Final agent_config: {agent_config is not None}")
     if agent_config:
         logger.info(f"[AGENT LOAD] Agent config keys: {list(agent_config.keys())}")
-        logger.info(f"Using agent {agent_config['agent_id']} for this agent run (thread remains agent-agnostic)")
 
     can_use, model_message, allowed_models = await can_use_model(client, account_id, model_name)
     if not can_use:
@@ -486,6 +525,42 @@ async def stop_agent(agent_run_id: str, user_id: str = Depends(get_current_user_
     await get_agent_run_with_access_check(client, agent_run_id, user_id)
     await stop_agent_run(agent_run_id)
     return {"status": "stopped"}
+
+@router.post("/agent-runs/stop-all")
+async def stop_all_agents(user_id: str = Depends(get_current_user_id_from_jwt)):
+    """Stop all running agents for the current user."""
+    structlog.contextvars.bind_contextvars(
+        user_id=user_id,
+    )
+    logger.info(f"Received request to stop all agent runs for user: {user_id}")
+    client = await db.client
+    
+    try:
+        # Get all running agent runs for the user
+        agent_runs_result = await client.table('agent_runs').select('agent_run_id, thread_id').eq('account_id', user_id).eq('status', 'running').execute()
+        
+        if not agent_runs_result.data:
+            return {"stopped_count": 0, "message": "No running agents found"}
+        
+        stopped_count = 0
+        for agent_run in agent_runs_result.data:
+            try:
+                # Verify thread access before stopping
+                await verify_thread_access(client, agent_run['thread_id'], user_id)
+                await stop_agent_run(agent_run['agent_run_id'])
+                stopped_count += 1
+                logger.info(f"Stopped agent run: {agent_run['agent_run_id']}")
+            except Exception as e:
+                logger.error(f"Failed to stop agent run {agent_run['agent_run_id']}: {str(e)}")
+                continue
+        
+        message = f"Stopped {stopped_count} agent(s)"
+        logger.info(f"Stop all agents completed for user {user_id}: {message}")
+        return {"stopped_count": stopped_count, "message": message}
+        
+    except Exception as e:
+        logger.error(f"Error stopping all agents for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to stop all agents: {str(e)}")
 
 @router.get("/thread/{thread_id}/agent-runs")
 async def get_agent_runs(thread_id: str, user_id: str = Depends(get_current_user_id_from_jwt)):
@@ -574,7 +649,6 @@ async def get_thread_agent(thread_id: str, user_id: str = Depends(get_current_us
         
         # Use versioning system to get current version data
         version_data = None
-        current_version = None
         if agent_data.get('current_version_id'):
             try:
                 version_service = await _get_version_service()
@@ -1015,6 +1089,21 @@ async def initiate_agent_with_files(
                 logger.info(f"Using default agent: {agent_config['name']} ({agent_config['agent_id']}) - no version data")
         else:
             logger.warning(f"[AGENT INITIATE] No default agent found for account {account_id}")
+            # Auto-install Machine (Suna) agent for users who don't have a default agent
+            try:
+                logger.info(f"[AGENT INITIATE] Auto-installing Machine agent for account {account_id}")
+                suna_service = SunaDefaultAgentService()
+                await suna_service.install_suna_agent_for_user(account_id)
+                
+                # Query the newly created agent
+                agent_query = await client.table('agents').select('*').eq('account_id', account_id).eq('is_default', True).execute()
+                if agent_query.data:
+                    agent_config = await extract_agent_config(agent_query.data[0], client)
+                    logger.info(f"[AGENT INITIATE] Successfully auto-installed and loaded Machine agent: {agent_config['name']}")
+                else:
+                    logger.error(f"[AGENT INITIATE] Failed to find auto-installed Machine agent for account {account_id}")
+            except Exception as e:
+                logger.error(f"[AGENT INITIATE] Failed to auto-install Machine agent for account {account_id}: {str(e)}")
     
     logger.info(f"[AGENT INITIATE] Final agent_config: {agent_config is not None}")
     if agent_config:
@@ -1787,12 +1876,13 @@ async def update_agent(
         if existing_data.get('current_version_id'):
             try:
                 version_service = await _get_version_service()
-                current_version_obj = await version_service.get_version(
+
+                version_obj = await version_service.get_version(
                     agent_id=agent_id,
                     version_id=existing_data['current_version_id'],
                     user_id=user_id
                 )
-                current_version_data = current_version_obj.to_dict()
+                current_version_data = version_obj.to_dict()
             except Exception as e:
                 logger.warning(f"Failed to get current version data for agent {agent_id}: {e}")
         
@@ -2101,8 +2191,9 @@ async def get_agent_builder_chat_history(
     try:
         # First verify the agent exists and belongs to the user
         agent_result = await client.table('agents').select('*').eq('agent_id', agent_id).eq('account_id', user_id).execute()
+        
         if not agent_result.data:
-            raise HTTPException(status_code=404, detail="Agent not found or access denied")
+            raise HTTPException(status_code=404, detail="Agent not found")
         
         # Get all threads for this user with metadata field included
         threads_result = await client.table('threads').select('thread_id, created_at, metadata').eq('account_id', user_id).order('created_at', desc=True).execute()
@@ -2306,7 +2397,7 @@ async def update_pipedream_tools_for_agent(
                 agent_config = version_result.data['config']
 
         tools = agent_config.get('tools', {})
-        custom_mcps = tools.get('custom_mcp', []) or []
+        custom_mcps = tools.get('custom_mcp', [])
 
         if any(mcp.get('config', {}).get('profile_id') == profile_id for mcp in custom_mcps):
             raise HTTPException(status_code=400, detail="This profile is already added to this agent")
@@ -2377,7 +2468,7 @@ async def get_custom_mcp_tools_for_agent(
                 .execute()
             if version_result.data and version_result.data.get('config'):
                 agent_config = version_result.data['config']
-        
+
         tools = agent_config.get('tools', {})
         custom_mcps = tools.get('custom_mcp', [])
         
@@ -2412,7 +2503,7 @@ async def get_custom_mcp_tools_for_agent(
         
         # Format tools for response
         tools = []
-        enabled_tools = existing_mcp.get('enabledTools', []) if existing_mcp else []
+        enabled_tools = existing_mcp.get('enabledTools') or existing_mcp.get('enabled_tools') or []
         
         for tool in discovery_result.tools:
             tools.append({
@@ -2465,13 +2556,10 @@ async def update_custom_mcp_tools_for_agent(
         
         tools = agent_config.get('tools', {})
         custom_mcps = tools.get('custom_mcp', [])
-        
+
         mcp_url = request.get('url')
         mcp_type = request.get('type', 'sse')
         enabled_tools = request.get('enabled_tools', [])
-        
-        if not mcp_url:
-            raise HTTPException(status_code=400, detail="MCP URL is required")
         
         updated = False
         for i, mcp in enumerate(custom_mcps):
@@ -2681,7 +2769,6 @@ async def get_user_threads(
     except Exception as e:
         logger.error(f"Error fetching threads for user {user_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch threads: {str(e)}")
-
 
 @router.get("/threads/{thread_id}")
 async def get_thread(
@@ -2925,7 +3012,7 @@ async def get_agent_run(
 async def add_message_to_thread(
     thread_id: str,
     message: str,
-    user_id: str = Depends(get_current_user_id_from_jwt),
+    user_id: str = Depends(get_current_user_id_from_jwt)
 ):
     """Add a message to a thread"""
     logger.info(f"Adding message to thread: {thread_id}")

@@ -20,10 +20,10 @@ export function FooterSection() {
   }, []);
 
   const logoSrc = !mounted
-    ? '/kortix-logo.svg'
+    ? '/logo.png'
     : resolvedTheme === 'dark'
       ? '/kortix-logo-white.svg'
-      : '/kortix-logo.svg';
+      : '/logo.png';
 
   return (
     <footer id="footer" className="w-full pb-0">
@@ -61,7 +61,7 @@ export function FooterSection() {
               </svg>
             </a>
             <a
-              href="https://x.com/kortixai"
+              href="https://x.com/the_machine_ai"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="X (Twitter)"
