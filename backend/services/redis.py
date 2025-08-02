@@ -6,9 +6,8 @@ from utils.logger import logger
 from typing import List, Any
 from utils.retry import retry
 
-# Redis client and connection pool
+# Redis client
 client: redis.Redis | None = None
-pool: redis.ConnectionPool | None = None
 _initialized = False
 _init_lock = asyncio.Lock()
 
@@ -17,8 +16,8 @@ REDIS_KEY_TTL = 3600 * 24  # 24 hour TTL as safety mechanism
 
 
 def initialize():
-    """Initialize Redis connection pool and client using environment variables."""
-    global client, pool
+    """Initialize Redis connection using environment variables."""
+    global client
 
     # Load environment variables if not already loaded
     load_dotenv()
@@ -27,31 +26,36 @@ def initialize():
     redis_host = os.getenv("REDIS_HOST", "redis")
     redis_port = int(os.getenv("REDIS_PORT", 6379))
     redis_password = os.getenv("REDIS_PASSWORD", "")
-    
-    # Connection pool configuration - optimized for production
-    max_connections = 128            # Reasonable limit for production
-    socket_timeout = 15.0            # 15 seconds socket timeout
-    connect_timeout = 10.0           # 10 seconds connection timeout
-    retry_on_timeout = not (os.getenv("REDIS_RETRY_ON_TIMEOUT", "True").lower() != "true")
+    redis_ssl = os.getenv("REDIS_SSL", "False").lower() == "true"
 
-    logger.info(f"Initializing Redis connection pool to {redis_host}:{redis_port} with max {max_connections} connections")
+    logger.info(f"Initializing Redis connection to {redis_host}:{redis_port} (SSL: {redis_ssl})")
 
-    # Create connection pool with production-optimized settings
-    pool = redis.ConnectionPool(
-        host=redis_host,
-        port=redis_port,
-        password=redis_password,
-        decode_responses=True,
-        socket_timeout=socket_timeout,
-        socket_connect_timeout=connect_timeout,
-        socket_keepalive=True,
-        retry_on_timeout=retry_on_timeout,
-        health_check_interval=30,
-        max_connections=max_connections,
-    )
-
-    # Create Redis client from connection pool
-    client = redis.Redis(connection_pool=pool)
+    # For Upstash/SSL connections, use URL-based connection
+    if redis_ssl and redis_password:
+        redis_url = f"rediss://default:{redis_password}@{redis_host}:{redis_port}"
+        logger.info("Using Redis URL connection for SSL (Upstash)")
+        client = redis.from_url(
+            redis_url,
+            decode_responses=True,
+            socket_timeout=15.0,
+            socket_connect_timeout=15.0,
+            retry_on_timeout=True,
+            health_check_interval=30,
+            ssl_cert_reqs=None,
+        )
+    else:
+        # Fallback to direct connection for local Redis
+        logger.info("Using direct Redis connection")
+        client = redis.Redis(
+            host=redis_host,
+            port=redis_port,
+            password=redis_password,
+            decode_responses=True,
+            socket_timeout=10.0,
+            socket_connect_timeout=10.0,
+            retry_on_timeout=True,
+            health_check_interval=30,
+        )
 
     return client
 
@@ -66,15 +70,9 @@ async def initialize_async():
             initialize()
 
         try:
-            # Test connection with timeout
-            await asyncio.wait_for(client.ping(), timeout=5.0)
+            await asyncio.wait_for(client.ping(), timeout=10.0)
             logger.info("Successfully connected to Redis")
             _initialized = True
-        except asyncio.TimeoutError:
-            logger.error("Redis connection timeout during initialization")
-            client = None
-            _initialized = False
-            raise ConnectionError("Redis connection timeout")
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
             client = None
@@ -85,32 +83,14 @@ async def initialize_async():
 
 
 async def close():
-    """Close Redis connection and connection pool."""
-    global client, pool, _initialized
+    """Close Redis connection."""
+    global client, _initialized
     if client:
         logger.info("Closing Redis connection")
-        try:
-            await asyncio.wait_for(client.aclose(), timeout=5.0)
-        except asyncio.TimeoutError:
-            logger.warning("Redis close timeout, forcing close")
-        except Exception as e:
-            logger.warning(f"Error closing Redis client: {e}")
-        finally:
-            client = None
-    
-    if pool:
-        logger.info("Closing Redis connection pool")
-        try:
-            await asyncio.wait_for(pool.aclose(), timeout=5.0)
-        except asyncio.TimeoutError:
-            logger.warning("Redis pool close timeout, forcing close")
-        except Exception as e:
-            logger.warning(f"Error closing Redis pool: {e}")
-        finally:
-            pool = None
-    
-    _initialized = False
-    logger.info("Redis connection and pool closed")
+        await client.aclose()
+        client = None
+        _initialized = False
+        logger.info("Redis connection closed")
 
 
 async def get_client():
@@ -167,8 +147,6 @@ async def lrange(key: str, start: int, end: int) -> List[str]:
 
 
 # Key management
-
-
 async def keys(pattern: str) -> List[str]:
     redis_client = await get_client()
     return await redis_client.keys(pattern)
