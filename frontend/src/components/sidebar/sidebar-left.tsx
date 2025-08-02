@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Bot, Menu, Store, Plus, Zap, Plug, ChevronRight, Loader2, Puzzle } from 'lucide-react';
+import { Bot, Menu, Store, Plus, Zap, Plug, ChevronRight, Loader2, Puzzle, CodeSquare, StopCircle } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
@@ -123,9 +123,21 @@ export function SidebarLeft({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [state, setOpen]);
 
-
   const handleCreateNewAgent = () => {
     createNewAgentMutation.mutate();
+  };
+
+  const handleStopAllAgents = async () => {
+    if (isStoppingAll) return;
+    setIsStoppingAll(true);
+    try {
+      const result = await stopAllAgents();
+      toast.success(result.message);
+    } catch (error) {
+      toast.error('Failed to stop all agents');
+    } finally {
+      setIsStoppingAll(false);
+    }
   };
 
   return (
@@ -169,6 +181,34 @@ export function SidebarLeft({
         </div>
       </SidebarHeader>
       <SidebarContent className="[&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
+        <div className="px-2 mb-4">
+          {/* <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={handleStopAllAgents}
+                disabled={isStoppingAll}
+                variant="outline"
+                size={state === 'collapsed' ? 'icon' : 'sm'}
+                className={`${state === 'collapsed' ? 'w-8 h-8' : 'w-full'} bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 dark:bg-orange-950 dark:border-orange-800 dark:text-orange-300`}
+              >
+                {isStoppingAll ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {state !== 'collapsed' && <span className="ml-2">Stopping...</span>}
+                  </>
+                ) : (
+                  <>
+                    <StopCircle className="h-4 w-4" />
+                    {state !== 'collapsed' && <span className="ml-2">Stop All Agents</span>}
+                  </>
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Stop all currently running agents for your account</p>
+            </TooltipContent>
+          </Tooltip> */}
+        </div>
         <SidebarGroup>
           <Link href="/dashboard">
             <SidebarMenuButton className={cn({
@@ -278,6 +318,17 @@ export function SidebarLeft({
               </TooltipContent>
             </Tooltip>
           )}
+          {/* Machine Code button under Fragments */}
+          <Link href="/machine-code">
+            <SidebarMenuButton className={cn({
+              'bg-accent text-accent-foreground font-medium': pathname === '/machine-code',
+            })}>
+              <CodeSquare className="h-4 w-4 mr-1" />
+              <span className="flex items-center justify-between w-full">
+                Machine Code
+              </span>
+            </SidebarMenuButton>
+          </Link>
         </SidebarGroup>
         <NavAgents />
       </SidebarContent>
