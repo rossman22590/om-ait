@@ -176,7 +176,7 @@ function PricingTier({
   isAuthenticated = false,
   returnUrl,
   insideDialog = false,
-  billingPeriod = 'monthly' as 'monthly',
+  billingPeriod = 'monthly' as const,
 }: PricingTierProps) {
   
   // Always return the monthly price since we only support monthly subscriptions
