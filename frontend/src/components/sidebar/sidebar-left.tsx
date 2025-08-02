@@ -302,7 +302,7 @@ export function SidebarLeft({
                     <span className="flex items-center justify-between w-full">
                       Fragments
                       {!hasFragmentsAccess && (
-                        <Badge variant="secondary" className="ml-2 text-xs">
+                        <Badge variant="secondary" className="ml-2 text-xs bg-pink-500 text-white border-pink-500">
                           Pro+
                         </Badge>
                       )}
