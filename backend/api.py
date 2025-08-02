@@ -140,7 +140,7 @@ if config.ENV_MODE == EnvMode.LOCAL:
 # Add staging-specific origins
 if config.ENV_MODE == EnvMode.STAGING:
     allowed_origins.append("https://beta.machine.myapps.ai")
-    allowed_origins.append("https://machinev9.ngrok.io")
+    allowed_origins.append("https://beta.machine.myapps.ai")
     allow_origin_regex = r"https://suna-.*-prjcts\.vercel\.app"
 
 app.add_middleware(

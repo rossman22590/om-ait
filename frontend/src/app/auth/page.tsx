@@ -29,7 +29,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import GitHubSignIn from '@/components/GithubSignIn';
+
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
 import { Ripple } from '@/components/ui/ripple';
 import { ReleaseBadge } from '@/components/auth/release-badge';
@@ -294,7 +294,6 @@ function LoginContent() {
               </div>
             <div className="space-y-3 mb-4">
               <GoogleSignIn returnUrl={returnUrl || undefined} />
-              <GitHubSignIn returnUrl={returnUrl || undefined} />
             </div>
             <div className="relative my-4">
               <div className="absolute inset-0 flex items-center">
