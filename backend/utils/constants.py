@@ -26,14 +26,14 @@ MODELS = {
     #     },
     #     "tier_availability": ["free", "paid"]
     # },
-    # "openrouter/google/gemini-2.5-flash-preview-05-20": {
-    #     "aliases": ["gemini-flash-2.5"],
-    #     "pricing": {
-    #         "input_cost_per_million_tokens": 0.15,
-    #         "output_cost_per_million_tokens": 0.60
-    #     },
-    #     "tier_availability": ["free", "paid"]
-    # },
+    "openrouter/google/gemini-2.5-flash-preview-05-20": {
+        "aliases": ["gemini-flash-2.5"],
+        "pricing": {
+            "input_cost_per_million_tokens": 0.15,
+            "output_cost_per_million_tokens": 0.60
+        },
+        "tier_availability": ["free", "paid"]
+    },
     # "openrouter/deepseek/deepseek-chat-v3-0324": {
     #     "aliases": ["deepseek/deepseek-chat-v3-0324"],
     #     "pricing": {
@@ -60,8 +60,8 @@ MODELS = {
     },
     
     # Paid tier only models
-    "gemini/gemini-2.5-pro": {
-        "aliases": ["google/gemini-2.5-pro"],
+    "openrouter/google/gemini-2.5-pro": {
+        "aliases": ["gemini-2.5-pro", "google/gemini-2.5-pro"],
         "pricing": {
             "input_cost_per_million_tokens": 1.25,
             "output_cost_per_million_tokens": 10.00
