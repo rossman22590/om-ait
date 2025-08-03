@@ -118,6 +118,8 @@ class ToolManager:
             self.thread_manager.add_tool(SandboxExposeTool, project_id=self.project_id, thread_manager=self.thread_manager)
         if safe_tool_check('web_search_tool'):
             self.thread_manager.add_tool(SandboxWebSearchTool, project_id=self.project_id, thread_manager=self.thread_manager)
+        if enabled_tools.get('sb_image_edit_tool'):
+            self.thread_manager.add_tool(SandboxImageEditTool, project_id=self.project_id, thread_manager=self.thread_manager)
         if safe_tool_check('sb_vision_tool'):
             self.thread_manager.add_tool(SandboxVisionTool, project_id=self.project_id, thread_id=self.thread_id, thread_manager=self.thread_manager)
         if config.RAPID_API_KEY and safe_tool_check('data_providers_tool'):
