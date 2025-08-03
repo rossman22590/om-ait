@@ -108,11 +108,11 @@ export default function AgentConfigurationPage() {
     const restrictions = agent?.metadata?.restrictions || {};
     
     if (isSunaAgent) {
-      if (restrictions.name_editable === false && data.name !== originalData.name) {
+      if (restrictions.name_editable === false && formData.name !== originalData.name) {
         throw new Error("Machine's name cannot be modified.");
       }
 
-      if (restrictions.tools_editable === false && JSON.stringify(data.agentpress_tools) !== JSON.stringify(originalData.agentpress_tools)) {
+      if (restrictions.tools_editable === false && JSON.stringify(formData.agentpress_tools) !== JSON.stringify(originalData.agentpress_tools)) {
         throw new Error("Machine's default tools cannot be modified.");
       }
     }
@@ -574,7 +574,7 @@ export default function AgentConfigurationPage() {
                         onFieldChange={handleFieldChange}
                         onMCPChange={handleMCPChange}
                         onSystemPromptSave={handleSystemPromptSave}
-                      onToolsSave={handleToolsSave}
+                        onToolsSave={handleToolsSave}
                         initialAccordion={initialAccordion}
                         agentMetadata={agent?.metadata}
                       />
