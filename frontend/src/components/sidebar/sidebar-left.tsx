@@ -29,16 +29,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { NewAgentDialog } from '@/components/agents/new-agent-dialog';
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -47,13 +38,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useFeatureFlags } from '@/lib/feature-flags';
 import { useCreateNewAgent } from '@/hooks/react-query/agents/use-agents';
 import { useSubscription } from '@/hooks/react-query/subscriptions/use-subscriptions';
 import { Button } from '../ui/button';
+import { Badge } from '../ui/badge';
 import { stopAllAgents } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -77,7 +68,6 @@ export function SidebarLeft({
   const { flags, loading: flagsLoading } = useFeatureFlags(['custom_agents', 'agent_marketplace']);
   const customAgentsEnabled = flags.custom_agents;
   const marketplaceEnabled = flags.agent_marketplace;
-  const createNewAgentMutation = useCreateNewAgent();
   const { data: subscriptionData } = useSubscription();
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false);
   const [isStoppingAll, setIsStoppingAll] = useState(false);
@@ -123,9 +113,7 @@ export function SidebarLeft({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [state, setOpen]);
 
-  const handleCreateNewAgent = () => {
-    createNewAgentMutation.mutate();
-  };
+
 
   const handleStopAllAgents = async () => {
     if (isStoppingAll) return;
@@ -351,20 +339,10 @@ export function SidebarLeft({
         <NavUserWithTeams user={user} />
       </SidebarFooter>
       <SidebarRail />
-      <AlertDialog open={showNewAgentDialog} onOpenChange={setShowNewAgentDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Create New Agent</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will create a new agent with a default name and description.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCreateNewAgent}>Create</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <NewAgentDialog 
+        open={showNewAgentDialog} 
+        onOpenChange={setShowNewAgentDialog}
+      />
     </Sidebar>
   );
 }
