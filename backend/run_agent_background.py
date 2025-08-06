@@ -20,6 +20,7 @@ import os
 import urllib.parse
 from services.langfuse import langfuse
 from utils.retry import retry
+from dramatiq.brokers.rabbitmq import RabbitmqBroker
 
 # Import PeriodiqMiddleware if available
 try:

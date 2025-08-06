@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Bot, Menu, Store, Plus, Zap, Plug, ChevronRight, Loader2, Puzzle, CodeSquare, StopCircle } from 'lucide-react';
+import { Bot, Menu, Store, Plus, Zap, Plug, ChevronRight, Loader2, Puzzle, CodeSquare } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
@@ -41,6 +41,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useFeatureFlags } from '@/lib/feature-flags';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 
 export function SidebarLeft({
   ...props
@@ -63,11 +65,9 @@ export function SidebarLeft({
   const customAgentsEnabled = flags.custom_agents;
   const marketplaceEnabled = flags.agent_marketplace;
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false);
-  const [isStoppingAll, setIsStoppingAll] = useState(false);
-
   // Check if user has access to Fragments (high-tier plans only)
-  const hasFragmentsAccess = subscriptionData?.plan_name && 
-    ['tier_25_200', 'tier_50_400', 'tier_125_800', 'tier_200_1000', 'enterprise', 'scale', 'premium', 'ultra'].includes(subscriptionData.plan_name);
+  // Temporarily set to true until we implement proper subscription checks
+  const hasFragmentsAccess = true;
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -107,19 +107,6 @@ export function SidebarLeft({
   }, [state, setOpen]);
 
 
-
-  const handleStopAllAgents = async () => {
-    if (isStoppingAll) return;
-    setIsStoppingAll(true);
-    try {
-      const result = await stopAllAgents();
-      toast.success(result.message);
-    } catch (error) {
-      toast.error('Failed to stop all agents');
-    } finally {
-      setIsStoppingAll(false);
-    }
-  };
 
 
   return (
