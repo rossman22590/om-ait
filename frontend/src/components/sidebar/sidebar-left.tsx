@@ -41,12 +41,6 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useFeatureFlags } from '@/lib/feature-flags';
-import { useCreateNewAgent } from '@/hooks/react-query/agents/use-agents';
-import { useSubscription } from '@/hooks/react-query/subscriptions/use-subscriptions';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { stopAllAgents } from '@/lib/api';
-import { toast } from 'sonner';
 
 export function SidebarLeft({
   ...props
@@ -68,7 +62,6 @@ export function SidebarLeft({
   const { flags, loading: flagsLoading } = useFeatureFlags(['custom_agents', 'agent_marketplace']);
   const customAgentsEnabled = flags.custom_agents;
   const marketplaceEnabled = flags.agent_marketplace;
-  const { data: subscriptionData } = useSubscription();
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false);
   const [isStoppingAll, setIsStoppingAll] = useState(false);
 
@@ -127,6 +120,7 @@ export function SidebarLeft({
       setIsStoppingAll(false);
     }
   };
+
 
   return (
     <Sidebar

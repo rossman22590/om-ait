@@ -62,7 +62,7 @@ class TemplateResponse(BaseModel):
     creator_name: Optional[str] = None
     avatar: Optional[str]
     avatar_color: Optional[str]
-    metadata: Optional[Dict[str, Any]] = None
+    metadata: Dict[str, Any] = {}
 
 
 class InstallationResponse(BaseModel):
@@ -383,21 +383,15 @@ async def get_marketplace_templates():
     This endpoint is public and doesn't require authentication.
     """
     try:
-        logger.info("Getting marketplace templates...")
+        logger.info("Fetching marketplace templates")
+        
         template_service = get_template_service(db)
         templates = await template_service.get_public_templates()
         
         logger.info(f"Retrieved {len(templates)} marketplace templates")
         
-        logger.info(f"Found {len(templates)} public templates")
-        for template in templates:
-            logger.info(f"Template: {template.name} (ID: {template.template_id}, Public: {template.is_public})")
-        
-        response = [
-            TemplateResponse(
-                **format_template_for_response(template),
-                creator_name=None 
-            )
+        return [
+            TemplateResponse(**format_template_for_response(template))
             for template in templates
         ]
         
@@ -405,9 +399,7 @@ async def get_marketplace_templates():
         return response
         
     except Exception as e:
-        logger.error(f"Error getting marketplace templates: {e}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Error getting marketplace templates: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
