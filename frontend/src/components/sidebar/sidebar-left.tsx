@@ -41,7 +41,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useFeatureFlags } from '@/lib/feature-flags';
-import posthog from 'posthog-js';
+import posthog from '@/lib/posthog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 

@@ -28,7 +28,7 @@ import { useSubscriptionWithStreaming } from '@/hooks/react-query/subscriptions/
 import { isLocalMode } from '@/lib/config';
 import { BillingModal } from '@/components/billing/billing-modal';
 import { useRouter } from 'next/navigation';
-import posthog from 'posthog-js';
+import posthog from '@/lib/posthog';
 
 export interface ChatInputHandles {
   getPendingFiles: () => File[];
