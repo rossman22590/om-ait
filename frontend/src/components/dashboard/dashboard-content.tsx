@@ -55,6 +55,8 @@ export function DashboardContent() {
   const [initiatedThreadId, setInitiatedThreadId] = useState<string | null>(null);
   const [showAgentNudge, setShowAgentNudge] = useState(false);
   const [showCreateAgentDialog, setShowCreateAgentDialog] = useState(false);
+  const [hasDecidedNudge, setHasDecidedNudge] = useState(false);
+
   const { billingError, handleBillingError, clearBillingError } =
     useBillingError();
   const router = useRouter();
@@ -95,11 +97,13 @@ export function DashboardContent() {
     }
   }, [searchParams, selectedAgentId, router]);
 
-  // Onboarding popup logic
+  // Onboarding popup logic (decide once per load)
   useEffect(() => {
+    if (hasDecidedNudge) return;
     const force = searchParams.get('showAgentNudge') === '1';
     if (force) {
       setShowAgentNudge(true);
+      setHasDecidedNudge(true);
       return;
     }
 
@@ -109,7 +113,8 @@ export function DashboardContent() {
     } else {
       setShowAgentNudge(false);
     }
-  }, [searchParams, currentAgentIsDefault]);
+    setHasDecidedNudge(true);
+  }, [searchParams, currentAgentIsDefault, hasDecidedNudge]);
 
   useEffect(() => {
     if (threadQuery.data && initiatedThreadId) {
@@ -218,10 +223,9 @@ export function DashboardContent() {
       <ModalProviders />
       {/* Onboarding Nudge */}
       <AlertDialog open={showAgentNudge} onOpenChange={(open) => {
-        if (!open) {
-          localStorage.setItem(DASHBOARD_AGENT_NUDGE_DISMISSED, '1');
-        }
-        setShowAgentNudge(open);
+        // Keep dialog open unless explicitly dismissed via buttons
+        if (open) setShowAgentNudge(true);
+        // ignore attempts to close via backdrop/Escape
       }}>
         <AlertDialogContent className="sm:max-w-lg">
           <AlertDialogHeader>
