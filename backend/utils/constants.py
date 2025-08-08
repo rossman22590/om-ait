@@ -187,6 +187,9 @@ MODEL_ACCESS_TIERS = {
     "tier_50_400": PAID_TIER_MODELS,
     "tier_125_800": PAID_TIER_MODELS,
     "tier_200_1000": PAID_TIER_MODELS,
+    "tier_25_170_yearly_commitment": PAID_TIER_MODELS,
+    "tier_6_42_yearly_commitment": PAID_TIER_MODELS,
+    "tier_12_84_yearly_commitment": PAID_TIER_MODELS,
 }
 # # Master model configuration - single source of truth
 # MODELS = {

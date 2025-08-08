@@ -7,6 +7,7 @@ export const AGENTPRESS_TOOL_DEFINITIONS: Record<string, { enabled: boolean; des
     'web_search_tool': { enabled: true, description: 'Search the web using Tavily API and scrape webpages with Firecrawl for research', icon: '🔍', color: 'bg-yellow-100 dark:bg-yellow-800/50' },
     'sb_vision_tool': { enabled: true, description: 'Vision and image processing capabilities for visual content analysis', icon: '👁️', color: 'bg-pink-100 dark:bg-pink-800/50' },
     'data_providers_tool': { enabled: true, description: 'Access to data providers and external APIs (requires RapidAPI key)', icon: '🔗', color: 'bg-cyan-100 dark:bg-cyan-800/50' },
+    'sb_sheets_tool': { enabled: true, description: 'Create, view, update, analyze, visualize, and format spreadsheets (XLSX/CSV) with Luckysheet viewer', icon: '📊', color: 'bg-purple-100 dark:bg-purple-800/50' },
     'sb_image_edit_tool': { enabled: false, description: 'Generate new images from a prompt or edit existing images', icon: '🎨', color: 'bg-purple-100 dark:bg-purple-800/50' },
 };
 
@@ -25,6 +26,7 @@ export const getToolDisplayName = (toolName: string): string => {
       'web_search_tool': 'Web Search',
       'sb_vision_tool': 'Image Processing',
       'data_providers_tool': 'Data Providers',
+      'sb_sheets_tool': 'Sheets Tool',
       'sb_image_edit_tool': 'Image Generation & Editing',
     };
     
