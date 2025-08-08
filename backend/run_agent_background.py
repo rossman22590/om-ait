@@ -15,69 +15,38 @@ import uuid
 from agentpress.thread_manager import ThreadManager
 from services.supabase import DBConnection
 from services import redis
-from dramatiq.brokers.rabbitmq import RabbitmqBroker
+from dramatiq.brokers.redis import RedisBroker
 import os
-import urllib.parse
 from services.langfuse import langfuse
 from utils.retry import retry
 
-# Import PeriodiqMiddleware if available
-try:
-    from dramatiq_periodiq import PeriodiqMiddleware
-    logger.info("PeriodiqMiddleware imported successfully")
-except ImportError:
-    logger.warning("PeriodiqMiddleware not available, continuing without it")
-    PeriodiqMiddleware = None
+import sentry_sdk
+from typing import Dict, Any
 
-# Set up RabbitMQ connection
-try:
-    rabbitmq_url = os.getenv('RABBITMQ_URL', "amqp://hTr960Qev0Mu4REA:ZOcf-ScmY54iyj7EFPSaysGddT-i-2WW@gondola.proxy.rlwy.net:32418")
+# Get Redis configuration for Dramatiq broker
+redis_host = os.getenv('REDIS_HOST', 'redis')
+redis_port = int(os.getenv('REDIS_PORT', 6379))
+redis_password = os.getenv('REDIS_PASSWORD', '')
+redis_ssl = os.getenv('REDIS_SSL', 'False').lower() == 'true'
 
-    # Define the middleware list once
-    middleware = [
-        dramatiq.middleware.AsyncIO(),
-    ]
-    
-    # Add PeriodiqMiddleware if available
-    if PeriodiqMiddleware:
-        middleware.append(PeriodiqMiddleware(skip_delay=30))
-    
-    if rabbitmq_url:
-        # Use URL-based connection when RABBITMQ_URL is provided (Railway)
-        logger.info(f"Connecting to RabbitMQ using URL (first 10 chars): {rabbitmq_url[:10]}...")
-        
-        # Parse URL components manually to handle special characters
-        # Format: amqp://username:password@hostname:port
-        if '@' in rabbitmq_url:
-            credentials, server = rabbitmq_url.split('@', 1)
-            protocol, credentials = credentials.split('://', 1)
-            if ':' in credentials:
-                username, password = credentials.split(':', 1)
-                # URL decode the password in case it contains special characters
-                password = urllib.parse.unquote(password)
-                
-                # Reconstruct the URL with properly encoded components
-                hostname, port = server.split(':', 1) if ':' in server else (server, '5672')
-                rabbitmq_url = f"{protocol}://{username}:{urllib.parse.quote(password, safe='')}@{hostname}:{port}"
-                logger.info(f"Reconstructed RabbitMQ URL with proper encoding")
-        
-        rabbitmq_broker = RabbitmqBroker(url=rabbitmq_url, middleware=middleware)
-        logger.info("Successfully created RabbitMQ broker with URL")
-    else:
-        # Fall back to host/port configuration (local development)
-        rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
-        rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
-        logger.info(f"Connecting to RabbitMQ using host/port: {rabbitmq_host}:{rabbitmq_port}")
-        rabbitmq_broker = RabbitmqBroker(host=rabbitmq_host, port=rabbitmq_port, middleware=middleware)
-        logger.info("Successfully created RabbitMQ broker with host/port")
-except Exception as e:
-    logger.error(f"Error setting up RabbitMQ connection: {e}")
-    # Fallback to a local RabbitMQ instance as a last resort
-    logger.info("Falling back to local RabbitMQ instance")
-    middleware = [dramatiq.middleware.AsyncIO()]
-    rabbitmq_broker = RabbitmqBroker(host='localhost', port=5672, middleware=middleware)
+# Configure Redis broker for Dramatiq with Upstash support
+if redis_ssl and redis_password:
+    # Use URL-based connection for SSL (Upstash)
+    redis_url = f"rediss://default:{redis_password}@{redis_host}:{redis_port}"
+    redis_broker = RedisBroker(url=redis_url, middleware=[dramatiq.middleware.AsyncIO()])
+else:
+    # Fallback to direct connection for local Redis
+    broker_kwargs = {
+        'host': redis_host,
+        'port': redis_port,
+        'middleware': [dramatiq.middleware.AsyncIO()]
+    }
+    if redis_password:
+        broker_kwargs['password'] = redis_password
+    redis_broker = RedisBroker(**broker_kwargs)
 
-dramatiq.set_broker(rabbitmq_broker)
+dramatiq.set_broker(redis_broker)
+
 
 _initialized = False
 db = DBConnection()

@@ -288,6 +288,12 @@ class ThreadManager:
 
         logger.info(f"Starting thread execution for thread {thread_id}")
         logger.info(f"Using model: {llm_model}")
+        
+        # Ensure GPT-5 uses temperature 1.0 as required
+        if 'gpt-5' in llm_model.lower() and llm_temperature == 0:
+            logger.warning(f"GPT-5 requires temperature=1.0, overriding provided temperature {llm_temperature}")
+            llm_temperature = 1.0
+            
         logger.info(f"Parameters: model={llm_model}, temperature={llm_temperature}, max_tokens={llm_max_tokens}")
         logger.info(f"Auto-continue: max={native_max_auto_continues}, XML tool limit={max_xml_tool_calls}")
 
