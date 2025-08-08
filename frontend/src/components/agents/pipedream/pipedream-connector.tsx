@@ -64,10 +64,7 @@ export const PipedreamConnector: React.FC<PipedreamConnectorProps> = ({
   agentId,
   existingProfileIds = []
 }) => {
-  // If Pipedream UI is disabled, don't render anything
-  if (!showPipedreamUI) {
-    return null;
-  }
+  // Hooks must be called unconditionally; we'll conditionally render null later
 
   const [step, setStep] = useState<'profile' | 'tools'>('profile');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
@@ -556,6 +553,11 @@ export const PipedreamConnector: React.FC<PipedreamConnectorProps> = ({
     proceedToTools
   ]);
 
+  // Conditionally render based on feature flag
+  if (!showPipedreamUI) {
+    return null;
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
@@ -590,4 +592,4 @@ export const PipedreamConnector: React.FC<PipedreamConnectorProps> = ({
       </DialogContent>
     </Dialog>
   );
-}; 
+};

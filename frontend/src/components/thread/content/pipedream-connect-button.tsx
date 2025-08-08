@@ -1,4 +1,6 @@
 import React from 'react';
+import Image from 'next/image';
+
 import { ExternalLink, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -90,10 +92,7 @@ export function PipedreamConnectButton({
   url, 
   appSlug: providedAppSlug 
 }: PipedreamConnectButtonProps) {
-  // If Pipedream UI is disabled, don't render anything
-  if (!showPipedreamUI) {
-    return null;
-  }
+  // Hooks must be called unconditionally; conditionally render later
 
   const extractedAppSlug = providedAppSlug || extractAppSlug(url);
   const appName = extractedAppSlug ? formatAppName(extractedAppSlug) : 'this app';
@@ -109,16 +108,24 @@ export function PipedreamConnectButton({
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
+  // Conditionally render based on feature flag
+  if (!showPipedreamUI) {
+    return null;
+  }
+
   return (
     <div className="mt-4">
       <Card className="border-dashed border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
         <CardContent className="p-4">
           <div className="flex items-center gap-4">
             {iconData?.icon_url ? (
-              <img 
-                src={iconData.icon_url} 
-                alt={`${appName} icon`} 
+              <Image
+                src={iconData.icon_url}
+                alt={`${appName} icon`}
+                width={40}
+                height={40}
                 className="w-10 h-10 rounded-lg object-cover"
+                unoptimized
               />
             ) : (
               <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-800 flex items-center justify-center">
