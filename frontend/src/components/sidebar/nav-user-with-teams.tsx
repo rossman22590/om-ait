@@ -19,6 +19,7 @@ import {
   Sun,
   Moon,
   KeyRound,
+  BookOpen,
 } from 'lucide-react';
 import { useAccounts } from '@/hooks/use-accounts';
 import NewTeamForm from '@/components/basejump/new-team-form';
@@ -285,6 +286,16 @@ export function NavUserWithTeams({
 
               {/* User Settings Section */}
               <DropdownMenuGroup>
+                <DropdownMenuItem asChild>
+                  <a
+                    href="https://support.myapps.ai/introduction"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    Docs
+                  </a>
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/settings/billing">
                     <CreditCard className="h-4 w-4" />
