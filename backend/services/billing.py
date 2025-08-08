@@ -272,18 +272,23 @@ async def get_user_subscription(user_id: str) -> Optional[Dict]:
         logger.error(f"Error getting subscription from Stripe: {str(e)}")
         return None
 
-async def calculate_monthly_usage(client, user_id: str) -> float:
-    """Calculate total agent run minutes for the current month for a user."""
+async def calculate_monthly_usage(client, user_id: str, page_size: int = 100) -> float:
+    """Calculate total agent run minutes for the current month for a user.
+    
+    Args:
+        client: Database client
+        user_id: ID of the user
+        page_size: Number of items to fetch per page (smaller values prevent 414 errors)
+    """
     start_time = time.time()
     
     # Use get_usage_logs to fetch all usage data (it already handles the date filtering and batching)
     total_cost = 0.0
     page = 0
-    items_per_page = 1000
     
     while True:
-        # Get usage logs for this page
-        usage_result = await get_usage_logs(client, user_id, page, items_per_page)
+        # Get usage logs for this page with the specified page size
+        usage_result = await get_usage_logs(client, user_id, page, page_size)
         
         if not usage_result['logs']:
             break
@@ -304,123 +309,98 @@ async def calculate_monthly_usage(client, user_id: str) -> float:
     
     return total_cost
 
-
-async def get_usage_logs(client, user_id: str, page: int = 0, items_per_page: int = 1000) -> Dict:
+async def get_usage_logs(client, user_id: str, page: int = 0, items_per_page: int = 100) -> Dict:
     """Get detailed usage logs for a user with pagination."""
-    # Get start of current month in UTC
-    now = datetime.now(timezone.utc)
-    start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
-    
-    # Use fixed cutoff date: June 26, 2025 midnight UTC
-    # Ignore all token counts before this date
-    cutoff_date = datetime(2025, 6, 30, 9, 0, 0, tzinfo=timezone.utc)
-    
-    start_of_month = max(start_of_month, cutoff_date)
-    
-    # First get all threads for this user in batches
-    batch_size = 1000
-    offset = 0
-    all_threads = []
-    
-    while True:
-        threads_batch = await client.table('threads') \
-            .select('thread_id, agent_runs(thread_id)') \
+    try:
+        now = datetime.now(timezone.utc)
+        start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+        cutoff_date = datetime(2025, 6, 30, 9, 0, 0, tzinfo=timezone.utc)
+        start_of_month = max(start_of_month, cutoff_date)
+        
+        offset = page * items_per_page
+        batch_size = min(20, items_per_page)  # Process in smaller batches
+        processed_logs = []
+        
+        # First, get the thread IDs for this user with pagination
+        thread_result = await client.table('threads') \
+            .select('thread_id, created_at, project_id') \
             .eq('account_id', user_id) \
-            .gte('agent_runs.created_at', start_of_month.isoformat()) \
-            .range(offset, offset + batch_size - 1) \
+            .order('created_at', desc=True) \
+            .range(offset, offset + items_per_page - 1) \
             .execute()
         
-        if not threads_batch.data:
-            break
-            
-        all_threads.extend(threads_batch.data)
+        if not thread_result.data:
+            return {"logs": [], "has_more": False}
         
-        # If we got less than batch_size, we've reached the end
-        if len(threads_batch.data) < batch_size:
-            break
+        thread_ids = [t['thread_id'] for t in thread_result.data]
+        
+        # Now get messages for these threads in batches to avoid large queries
+        for i in range(0, len(thread_ids), batch_size):
+            batch_threads = thread_ids[i:i + batch_size]
             
-        offset += batch_size
-    
-    if not all_threads:
-        return {"logs": [], "has_more": False}
-    
-    thread_ids = [t['thread_id'] for t in all_threads]
-    
-    # Fetch usage messages with pagination, including thread project info
-    start_time = time.time()
-    messages_result = await client.table('messages') \
-        .select(
-            'message_id, thread_id, created_at, content, threads!inner(project_id)'
-        ) \
-        .in_('thread_id', thread_ids) \
-        .eq('type', 'assistant_response_end') \
-        .gte('created_at', start_of_month.isoformat()) \
-        .order('created_at', desc=True) \
-        .range(page * items_per_page, (page + 1) * items_per_page - 1) \
-        .execute()
-    
-    end_time = time.time()
-    execution_time = end_time - start_time
-    logger.info(f"Database query for usage logs took {execution_time:.3f} seconds")
-
-    if not messages_result.data:
-        return {"logs": [], "has_more": False}
-
-    # Process messages into usage log entries
-    processed_logs = []
-    
-    for message in messages_result.data:
-        try:
-            # Safely extract usage data with defaults
-            content = message.get('content', {})
-            usage = content.get('usage', {})
+            # Get messages for these threads
+            messages_result = await client.table('messages') \
+                .select('message_id, thread_id, created_at, content, threads!inner(project_id)') \
+                .in_('thread_id', batch_threads) \
+                .eq('type', 'assistant_response_end') \
+                .gte('created_at', start_of_month.isoformat()) \
+                .execute()
             
-            # Ensure usage has required fields with safe defaults
-            prompt_tokens = usage.get('prompt_tokens', 0)
-            completion_tokens = usage.get('completion_tokens', 0)
-            model = content.get('model', 'unknown')
-            
-            # Safely calculate total tokens
-            total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
-            
-            # Calculate estimated cost using the same logic as calculate_monthly_usage
-            estimated_cost = calculate_token_cost(
-                prompt_tokens,
-                completion_tokens,
-                model
-            )
-            
-            # Safely extract project_id from threads relationship
-            project_id = 'unknown'
-            if message.get('threads') and isinstance(message['threads'], list) and len(message['threads']) > 0:
-                project_id = message['threads'][0].get('project_id', 'unknown')
-            
-            processed_logs.append({
-                'message_id': message.get('message_id', 'unknown'),
-                'thread_id': message.get('thread_id', 'unknown'),
-                'created_at': message.get('created_at', None),
-                'content': {
-                    'usage': {
-                        'prompt_tokens': prompt_tokens,
-                        'completion_tokens': completion_tokens
-                    },
-                    'model': model
-                },
-                'total_tokens': total_tokens,
-                'estimated_cost': estimated_cost,
-                'project_id': project_id
-            })
-        except Exception as e:
-            logger.warning(f"Error processing usage log entry for message {message.get('message_id', 'unknown')}: {str(e)}")
-            continue
-    
-    # Check if there are more results
-    has_more = len(processed_logs) == items_per_page
-    
-    return {
-        "logs": processed_logs,
-        "has_more": has_more
-    }
+            # Process messages in this batch
+            for message in messages_result.data:
+                try:
+                    content = message.get('content', {})
+                    usage = content.get('usage', {})
+                    
+                    prompt_tokens = usage.get('prompt_tokens', 0)
+                    completion_tokens = usage.get('completion_tokens', 0)
+                    model = content.get('model', 'unknown')
+                    
+                    total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
+                    estimated_cost = calculate_token_cost(
+                        prompt_tokens,
+                        completion_tokens,
+                        model
+                    )
+                    
+                    # Get project_id from thread data
+                    project_id = 'unknown'
+                    if message.get('threads') and isinstance(message['threads'], list) and len(message['threads']) > 0:
+                        project_id = message['threads'][0].get('project_id', 'unknown')
+                    
+                    processed_logs.append({
+                        'message_id': message.get('message_id', 'unknown'),
+                        'thread_id': message.get('thread_id', 'unknown'),
+                        'created_at': message.get('created_at'),
+                        'content': {
+                            'usage': {
+                                'prompt_tokens': prompt_tokens,
+                                'completion_tokens': completion_tokens
+                            },
+                            'model': model
+                        },
+                        'total_tokens': total_tokens,
+                        'estimated_cost': estimated_cost,
+                        'project_id': project_id
+                    })
+                except Exception as e:
+                    logger.warning(f"Error processing message {message.get('message_id', 'unknown')}: {str(e)}")
+                    continue
+        
+        # Check if there are more results
+        has_more = len(thread_result.data) == items_per_page
+        
+        # Sort logs by created_at in descending order
+        processed_logs.sort(key=lambda x: x.get('created_at') or '', reverse=True)
+        
+        return {
+            "logs": processed_logs[:items_per_page],  # Ensure we don't return more than requested
+            "has_more": has_more
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in get_usage_logs: {str(e)}", exc_info=True)
+        raise
 
 
 def calculate_token_cost(prompt_tokens: int, completion_tokens: int, model: str) -> float:
@@ -450,6 +430,12 @@ def calculate_token_cost(prompt_tokens: int, completion_tokens: int, model: str)
             output_cost = (completion_tokens / 1_000_000) * output_cost_per_million
             message_cost = input_cost + output_cost
         else:
+            # Skip LiteLLM pricing lookup for GPT-5 models to avoid provider errors
+            if ('gpt-5' in cleaned_model.lower() or 'gpt-5' in resolved_model.lower() or
+                'openrouter/openai/gpt-5' in cleaned_model.lower() or 'openrouter/openai/gpt-5' in resolved_model.lower()):
+                logger.warning(f"GPT-5 model {model} not found in hardcoded pricing, returning 0 cost")
+                return 0.0
+            
             # Use litellm pricing as fallback - try multiple variations with cleaned models
             try:
                 models_to_try = [cleaned_model]
@@ -476,7 +462,15 @@ def calculate_token_cost(prompt_tokens: int, completion_tokens: int, model: str)
                 message_cost = None
                 for model_name in models_to_try:
                     try:
-                        prompt_token_cost, completion_token_cost = cost_per_token(model_name, prompt_tokens, completion_tokens)
+                        # Suppress LiteLLM output during cost calculation
+                        import os
+                        import sys
+                        from contextlib import redirect_stdout, redirect_stderr
+                        
+                        with open(os.devnull, 'w') as devnull:
+                            with redirect_stdout(devnull), redirect_stderr(devnull):
+                                prompt_token_cost, completion_token_cost = cost_per_token(model_name, prompt_tokens, completion_tokens)
+                        
                         if prompt_token_cost is not None and completion_token_cost is not None:
                             message_cost = prompt_token_cost + completion_token_cost
                             break
@@ -580,8 +574,8 @@ async def check_billing_status(client, user_id: str) -> Tuple[bool, str, Optiona
         logger.warning(f"Unknown subscription tier: {price_id}, defaulting to free tier")
         tier_info = SUBSCRIPTION_TIERS[config.STRIPE_FREE_TIER_ID]
     
-    # Calculate current month's usage
-    current_usage = await calculate_monthly_usage(client, user_id)
+    # Calculate current month's usage with smaller page size to prevent 414 errors
+    current_usage = await calculate_monthly_usage(client, user_id, page_size=100)
 
     # TODO: also do user's AAL check
     # Check if within limits
@@ -1395,75 +1389,91 @@ async def get_available_models(
                     "max_tokens": None
                 }
             else:
-                try:
-                    # Try to get pricing using cost_per_token function
-                    models_to_try = []
-                    
-                    # Add the original model name
-                    models_to_try.append(model)
-                    
-                    # Try to resolve the model name using MODEL_NAME_ALIASES
-                    if model in MODEL_NAME_ALIASES:
-                        resolved_model = MODEL_NAME_ALIASES[model]
-                        models_to_try.append(resolved_model)
-                        # Also try without provider prefix if it has one
-                        if '/' in resolved_model:
-                            models_to_try.append(resolved_model.split('/', 1)[1])
-                    
-                    # If model is a value in aliases, try to find a matching key
-                    for alias_key, alias_value in MODEL_NAME_ALIASES.items():
-                        if alias_value == model:
-                            models_to_try.append(alias_key)
-                            break
-                    
-                    # Also try without provider prefix for the original model
-                    if '/' in model:
-                        models_to_try.append(model.split('/', 1)[1])
-                    
-                    # Special handling for Google models accessed via Google API
-                    if model.startswith('gemini/'):
-                        google_model_name = model.replace('gemini/', '')
-                        models_to_try.append(google_model_name)
-                    
-                    # Special handling for Google models accessed via Google API
-                    if model.startswith('gemini/'):
-                        google_model_name = model.replace('gemini/', '')
-                        models_to_try.append(google_model_name)
-                    
-                    # Try each model name variation until we find one that works
-                    input_cost_per_token = None
-                    output_cost_per_token = None
-                    
-                    for model_name in models_to_try:
-                        try:
-                            # Use cost_per_token with sample token counts to get the per-token costs
-                            input_cost, output_cost = cost_per_token(model_name, 1000000, 1000000)
-                            if input_cost is not None and output_cost is not None:
-                                input_cost_per_token = input_cost
-                                output_cost_per_token = output_cost
-                                break
-                        except Exception:
-                            continue
-                    
-                    if input_cost_per_token is not None and output_cost_per_token is not None:
-                        pricing_info = {
-                            "input_cost_per_million_tokens": input_cost_per_token * TOKEN_PRICE_MULTIPLIER,
-                            "output_cost_per_million_tokens": output_cost_per_token * TOKEN_PRICE_MULTIPLIER,
-                            "max_tokens": None  # cost_per_token doesn't provide max_tokens info
-                        }
-                    else:
-                        pricing_info = {
-                            "input_cost_per_million_tokens": None,
-                            "output_cost_per_million_tokens": None,
-                            "max_tokens": None
-                        }
-                except Exception as e:
-                    logger.warning(f"Could not get pricing for model {model}: {str(e)}")
+                # Skip LiteLLM pricing lookup for GPT-5 models to avoid provider errors
+                if 'gpt-5' in model.lower() or 'openrouter/openai/gpt-5' in model.lower():
                     pricing_info = {
                         "input_cost_per_million_tokens": None,
                         "output_cost_per_million_tokens": None,
                         "max_tokens": None
                     }
+                else:
+                    try:
+                        # Try to get pricing using cost_per_token function
+                        models_to_try = []
+                        
+                        # Add the original model name
+                        models_to_try.append(model)
+                        
+                        # Try to resolve the model name using MODEL_NAME_ALIASES
+                        if model in MODEL_NAME_ALIASES:
+                            resolved_model = MODEL_NAME_ALIASES[model]
+                            models_to_try.append(resolved_model)
+                            # Also try without provider prefix if it has one
+                            if '/' in resolved_model:
+                                models_to_try.append(resolved_model.split('/', 1)[1])
+                        
+                        # If model is a value in aliases, try to find a matching key
+                        for alias_key, alias_value in MODEL_NAME_ALIASES.items():
+                            if alias_value == model:
+                                models_to_try.append(alias_key)
+                                break
+                        
+                        # Also try without provider prefix for the original model
+                        if '/' in model:
+                            models_to_try.append(model.split('/', 1)[1])
+                        
+                        # Special handling for Google models accessed via Google API
+                        if model.startswith('gemini/'):
+                            google_model_name = model.replace('gemini/', '')
+                            models_to_try.append(google_model_name)
+                        
+                        # Special handling for Google models accessed via Google API
+                        if model.startswith('gemini/'):
+                            google_model_name = model.replace('gemini/', '')
+                            models_to_try.append(google_model_name)
+                        
+                        # Try each model name variation until we find one that works
+                        input_cost_per_token = None
+                        output_cost_per_token = None
+                        
+                        for model_name in models_to_try:
+                            try:
+                                # Suppress LiteLLM output during cost calculation
+                                import os
+                                import sys
+                                from contextlib import redirect_stdout, redirect_stderr
+                                
+                                with open(os.devnull, 'w') as devnull:
+                                    with redirect_stdout(devnull), redirect_stderr(devnull):
+                                        # Use cost_per_token with sample token counts to get the per-token costs
+                                        input_cost, output_cost = cost_per_token(model_name, 1000000, 1000000)
+                                
+                                if input_cost is not None and output_cost is not None:
+                                    input_cost_per_token = input_cost
+                                    output_cost_per_token = output_cost
+                                    break
+                            except Exception:
+                                continue
+                        
+                        if input_cost_per_token is not None and output_cost_per_token is not None:
+                            pricing_info = {
+                                "input_cost_per_million_tokens": input_cost_per_token * TOKEN_PRICE_MULTIPLIER,
+                                "output_cost_per_million_tokens": output_cost_per_token * TOKEN_PRICE_MULTIPLIER,
+                                "max_tokens": None  # cost_per_token doesn't provide max_tokens info
+                            }
+                        else:
+                            pricing_info = {
+                                "input_cost_per_million_tokens": None,
+                                "output_cost_per_million_tokens": None,
+                                "max_tokens": None
+                            }
+                    except Exception as e:
+                        logger.warning(f"Could not get pricing for model {model}: {str(e)}")
+                        pricing_info = {
+                            "input_cost_per_million_tokens": None,
+                            "output_cost_per_million_tokens": None,
+                            "max_tokens": None
+                        }
 
             model_info.append({
                 "id": model,

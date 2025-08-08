@@ -258,13 +258,15 @@ export function SidebarLeft({
               </Collapsible>
             </SidebarMenu>
           )}
+          {/* Integrations with pointer cursor and hover effect */}
           {!flagsLoading && customAgentsEnabled && (
             <Link href="/settings/credentials">
-              <SidebarMenuButton className={cn({
+              <SidebarMenuButton className={cn("group relative cursor-pointer transition-all duration-200", {
                 'bg-accent text-accent-foreground font-medium': pathname === '/settings/credentials',
+                'hover:bg-accent/80': true,
               })}>
-                <Plug className="h-4 w-4 mr-1" />
-                <span className="flex items-center justify-between w-full">
+                <Plug className="h-4 w-4 mr-1 group-hover:scale-110 transition-transform" />
+                <span className="flex items-center">
                   Integrations
                 </span>
               </SidebarMenuButton>

@@ -109,16 +109,12 @@ export default function AgentConfigurationPage() {
     
     if (isSunaAgent) {
       if (restrictions.name_editable === false && formData.name !== originalData.name) {
-        throw new Error("Machine's name cannot be modified.");
-      if (restrictions.name_editable === false && formData.name !== originalData.name) {
-        toast.error("Suna's name cannot be modified.");
+        toast.error("Machine's name cannot be modified.");
         return;
       }
 
       if (restrictions.tools_editable === false && JSON.stringify(formData.agentpress_tools) !== JSON.stringify(originalData.agentpress_tools)) {
-        throw new Error("Machine's default tools cannot be modified.");
-      if (restrictions.tools_editable === false && JSON.stringify(formData.agentpress_tools) !== JSON.stringify(originalData.agentpress_tools)) {
-        toast.error("Suna's default tools cannot be modified.");
+        toast.error("Machine's default tools cannot be modified.");
         return;
       }
     }
@@ -508,7 +504,7 @@ export default function AgentConfigurationPage() {
                         >
                           {isSaving ? (
                             <>
-                              <Loader2 className="h-3 w-3 animate-spin" />
+                              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
                               Saving...
                             </>
                           ) : (
@@ -580,7 +576,7 @@ export default function AgentConfigurationPage() {
                         onFieldChange={handleFieldChange}
                         onMCPChange={handleMCPChange}
                         onSystemPromptSave={handleSystemPromptSave}
-                      onToolsSave={handleToolsSave}
+                        onToolsSave={handleToolsSave}
                         initialAccordion={initialAccordion}
                         agentMetadata={agent?.metadata}
                       />
