@@ -183,7 +183,7 @@ export function SidebarLeft({
           <Link href="/dashboard">
             <SidebarMenuButton className={cn({
               'bg-accent text-accent-foreground font-medium': pathname === '/dashboard',
-            })} onClick={() => posthog.capture('new_task_clicked')}>
+            }, 'cursor-pointer')} onClick={() => posthog.capture('new_task_clicked')}>
               <Plus className="h-4 w-4 mr-1" />
               <span className="flex items-center justify-between w-full">
                 New Task
@@ -200,6 +200,7 @@ export function SidebarLeft({
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton
                       tooltip="Agents"
+                      className="cursor-pointer"
                     >
                       <Bot className="h-4 w-4 mr-1" />
                       <span>Agents</span>
@@ -241,16 +242,21 @@ export function SidebarLeft({
             </SidebarMenu>
           )}
           {!flagsLoading && customAgentsEnabled && (
-            <Link href="/settings/credentials">
-              <SidebarMenuButton className={cn({
-                'bg-accent text-accent-foreground font-medium': pathname === '/settings/credentials',
-              })}>
-                <Plug className="h-4 w-4 mr-1" />
-                <span className="flex items-center justify-between w-full">
-                  Integrations
-                </span>
-              </SidebarMenuButton>
-            </Link>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link href="/settings/credentials">
+                  <SidebarMenuButton className={cn({
+                    'bg-accent text-accent-foreground font-medium': pathname === '/settings/credentials',
+                  }, 'cursor-pointer')}>
+                    <Plug className="h-4 w-4 mr-1" />
+                    <span className="flex items-center justify-between w-full">
+                      Integrations
+                    </span>
+                  </SidebarMenuButton>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">Manage API keys & integrations</TooltipContent>
+            </Tooltip>
           )}
           {!flagsLoading && customAgentsEnabled && (
             <Tooltip>
@@ -280,7 +286,7 @@ export function SidebarLeft({
                   </SidebarMenuButton>
                 </div>
               </TooltipTrigger>
-              <TooltipContent>
+              <TooltipContent side="right">
                 {hasFragmentsAccess 
                   ? 'Access Machine Fragments - Advanced workflow automation' 
                   : 'Upgrade to Ultra, Enterprise, Scale, or Premium plan to access Fragments'
@@ -288,17 +294,21 @@ export function SidebarLeft({
               </TooltipContent>
             </Tooltip>
           )}
-          {/* Machine Code button under Fragments */}
-          <Link href="/machine-code">
-            <SidebarMenuButton className={cn({
-              'bg-accent text-accent-foreground font-medium': pathname === '/machine-code',
-            })}>
-              <CodeSquare className="h-4 w-4 mr-1" />
-              <span className="flex items-center justify-between w-full">
-                Machine Code
-              </span>
-            </SidebarMenuButton>
-          </Link>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href="/machine-code">
+                <SidebarMenuButton className={cn({
+                  'bg-accent text-accent-foreground font-medium': pathname === '/machine-code',
+                }, 'cursor-pointer')}>
+                  <CodeSquare className="h-4 w-4 mr-1" />
+                  <span className="flex items-center justify-between w-full">
+                    Machine Code
+                  </span>
+                </SidebarMenuButton>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">Full IDE-like code editor for building and editing Machine projects</TooltipContent>
+          </Tooltip>
         </SidebarGroup>
         <NavAgents />
       </SidebarContent>
