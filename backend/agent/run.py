@@ -161,6 +161,23 @@ class MCPManager:
                     if 'headers' in custom_mcp['config'] and 'x-pd-app-slug' in custom_mcp['config']['headers']:
                         custom_mcp['config']['app_slug'] = custom_mcp['config']['headers']['x-pd-app-slug']
                 
+                elif custom_type == 'composio':
+                    qualified_name = custom_mcp.get('qualifiedName')
+                    if not qualified_name:
+                        qualified_name = f"composio.{custom_mcp['name'].replace(' ', '_').lower()}"
+                    
+                    mcp_config = {
+                        'name': custom_mcp['name'],
+                        'qualifiedName': qualified_name,
+                        'config': custom_mcp.get('config', {}),
+                        'enabledTools': custom_mcp.get('enabledTools', []),
+                        'instructions': custom_mcp.get('instructions', ''),
+                        'isCustom': True,
+                        'customType': 'composio'
+                    }
+                    all_mcps.append(mcp_config)
+                    continue
+                
                 mcp_config = {
                     'name': custom_mcp['name'],
                     'qualifiedName': f"custom_{custom_type}_{custom_mcp['name'].replace(' ', '_').lower()}",
@@ -187,6 +204,7 @@ class MCPManager:
                         "schema": schema
                     }
             
+            logger.info(f"⚡ Registered {len(updated_schemas)} MCP tools (Redis cache enabled)")
             return mcp_wrapper_instance
         except Exception as e:
             logger.error(f"Failed to initialize MCP tools: {e}")
@@ -217,26 +235,6 @@ class PromptManager:
         else:
             system_content = default_system_content
         
-        if await is_enabled("knowledge_base"):
-            try:
-                from services.supabase import DBConnection
-                kb_db = DBConnection()
-                kb_client = await kb_db.client
-                
-                current_agent_id = agent_config.get('agent_id') if agent_config else None
-                
-                kb_result = await kb_client.rpc('get_combined_knowledge_base_context', {
-                    'p_thread_id': thread_id,
-                    'p_agent_id': current_agent_id,
-                    'p_max_tokens': 4000
-                }).execute()
-                
-                if kb_result.data and kb_result.data.strip():
-                    system_content += "\n\n" + kb_result.data
-                        
-            except Exception as e:
-                logger.error(f"Error retrieving knowledge base context for thread {thread_id}: {e}")
-
         if agent_config and (agent_config.get('configured_mcps') or agent_config.get('custom_mcps')) and mcp_wrapper_instance and mcp_wrapper_instance._initialized:
             mcp_info = "\n\n--- MCP Tools Available ---\n"
             mcp_info += "You have access to external MCP (Model Context Protocol) server tools.\n"

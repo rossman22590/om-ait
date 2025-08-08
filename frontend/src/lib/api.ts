@@ -29,6 +29,35 @@ export class BillingError extends Error {
   }
 }
 
+// Custom error for agent run limit exceeded
+export class AgentRunLimitError extends Error {
+  status: number;
+  detail: { 
+    message: string;
+    running_thread_ids: string[];
+    running_count: number;
+  };
+
+  constructor(
+    status: number,
+    detail: { 
+      message: string;
+      running_thread_ids: string[];
+      running_count: number;
+      [key: string]: any;
+    },
+    message?: string,
+  ) {
+    super(message || detail.message || `Agent Run Limit Exceeded: ${status}`);
+    this.name = 'AgentRunLimitError';
+    this.status = status;
+    this.detail = detail;
+
+    // Set the prototype explicitly.
+    Object.setPrototypeOf(this, AgentRunLimitError.prototype);
+  }
+}
+
 export class NoAccessTokenAvailableError extends Error {
   constructor(message?: string, options?: { cause?: Error }) {
     super(message || 'No access token available', options);
@@ -707,6 +736,28 @@ export const startAgent = async (
         }
       }
 
+      // Check for 429 Too Many Requests (Agent Run Limit)
+      if (response.status === 429) {
+          const errorData = await response.json();
+          console.error(`[API] Agent run limit error starting agent (429):`, errorData);
+          // Ensure detail exists and has required properties
+          const detail = errorData?.detail || { 
+            message: 'Too many agent runs running',
+            running_thread_ids: [],
+            running_count: 0,
+          };
+          if (typeof detail.message !== 'string') {
+            detail.message = 'Too many agent runs running';
+          }
+          if (!Array.isArray(detail.running_thread_ids)) {
+            detail.running_thread_ids = [];
+          }
+          if (typeof detail.running_count !== 'number') {
+            detail.running_count = 0;
+          }
+          throw new AgentRunLimitError(response.status, detail);
+      }
+
       // Handle other errors
       const errorText = await response
         .text()
@@ -723,8 +774,8 @@ export const startAgent = async (
     const result = await response.json();
     return result;
   } catch (error) {
-    // Rethrow BillingError instances directly
-    if (error instanceof BillingError) {
+    // Rethrow BillingError and AgentRunLimitError instances directly
+    if (error instanceof BillingError || error instanceof AgentRunLimitError) {
       throw error;
     }
 
@@ -1031,7 +1082,7 @@ export const streamAgent = (
       eventSource.onmessage = (event) => {
         try {
           const rawData = event.data;
-          if (rawData.includes('"type":"ping"')) return;
+          if (rawData.includes('"type": "ping"')) return;
 
           // Log raw data for debugging (truncated for readability)
           console.log(
@@ -1085,18 +1136,15 @@ export const streamAgent = (
 
           // Check for completion messages
           if (
-            rawData.includes('"type":"status"') &&
-            rawData.includes('"status":"completed"')
+            rawData.includes('"type": "status"') &&
+            rawData.includes('"status": "completed"')
           ) {
             console.log(
               `[STREAM] Detected completion status message for ${agentRunId}`,
             );
 
             // Check for specific completion messages that indicate we should stop checking
-            if (
-              rawData.includes('Run data not available for streaming') ||
-              rawData.includes('Stream ended with status: completed')
-            ) {
+            if (rawData.includes('Agent run completed successfully')) {
               console.log(
                 `[STREAM] Detected final completion message for ${agentRunId}, adding to non-running set`,
               );
@@ -1117,24 +1165,15 @@ export const streamAgent = (
 
           // Check for thread run end message
           if (
-            rawData.includes('"type":"status"') &&
-            rawData.includes('"status_type":"thread_run_end"')
+            rawData.includes('"type": "status"') &&
+            rawData.includes('thread_run_end')
           ) {
             console.log(
               `[STREAM] Detected thread run end message for ${agentRunId}`,
             );
 
-            // Add to non-running set
-            nonRunningAgentRuns.add(agentRunId);
-
             // Notify about the message
             callbacks.onMessage(rawData);
-
-            // Clean up
-            eventSource.close();
-            activeStreams.delete(agentRunId);
-            callbacks.onClose();
-
             return;
           }
 
@@ -1555,6 +1594,54 @@ export const initiateAgent = async (
     });
 
     if (!response.ok) {
+      // Check for 402 Payment Required first
+      if (response.status === 402) {
+        try {
+          const errorData = await response.json();
+          console.error(`[API] Billing error initiating agent (402):`, errorData);
+          // Ensure detail exists and has a message property
+          const detail = errorData?.detail || { message: 'Payment Required' };
+          if (typeof detail.message !== 'string') {
+            detail.message = 'Payment Required'; // Default message if missing
+          }
+          throw new BillingError(response.status, detail);
+        } catch (parseError) {
+          // Handle cases where parsing fails or the structure isn't as expected
+          console.error(
+            '[API] Could not parse 402 error response body:',
+            parseError,
+          );
+          throw new BillingError(
+            response.status,
+            { message: 'Payment Required' },
+            `Error initiating agent: ${response.statusText} (402)`,
+          );
+        }
+      }
+
+      // Check for 429 Too Many Requests (Agent Run Limit)
+      if (response.status === 429) {
+          const errorData = await response.json();
+          console.error(`[API] Agent run limit error initiating agent (429):`, errorData);
+          // Ensure detail exists and has required properties
+          const detail = errorData?.detail || { 
+            message: 'Too many agent runs running',
+            running_thread_ids: [],
+            running_count: 0,
+          };
+          if (typeof detail.message !== 'string') {
+            detail.message = 'Too many agent runs running';
+          }
+          if (!Array.isArray(detail.running_thread_ids)) {
+            detail.running_thread_ids = [];
+          }
+          if (typeof detail.running_count !== 'number') {
+            detail.running_count = 0;
+          }
+          throw new AgentRunLimitError(response.status, detail);
+      }
+
+      // Handle other errors
       const errorText = await response
         .text()
         .catch(() => 'No error details available');
@@ -1564,9 +1651,7 @@ export const initiateAgent = async (
         errorText,
       );
     
-      if (response.status === 402) {
-        throw new Error('Payment Required');
-      } else if (response.status === 401) {
+      if (response.status === 401) {
         throw new Error('Authentication error: Please sign in again');
       } else if (response.status >= 500) {
         throw new Error('Server error: Please try again later');
@@ -1580,6 +1665,11 @@ export const initiateAgent = async (
     const result = await response.json();
     return result;
   } catch (error) {
+    // Rethrow BillingError and AgentRunLimitError instances directly
+    if (error instanceof BillingError || error instanceof AgentRunLimitError) {
+      throw error;
+    }
+
     console.error('[API] Failed to initiate agent:', error);
 
     if (

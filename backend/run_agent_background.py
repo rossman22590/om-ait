@@ -15,7 +15,7 @@ import uuid
 from agentpress.thread_manager import ThreadManager
 from services.supabase import DBConnection
 from services import redis
-from dramatiq.brokers.rabbitmq import RabbitmqBroker
+from dramatiq.brokers.redis import RedisBroker
 import os
 import urllib.parse
 from services.langfuse import langfuse
@@ -65,10 +65,10 @@ try:
         logger.info("Successfully created RabbitMQ broker with URL")
     else:
         # Fall back to host/port configuration (local development)
-        rabbitmq_host = os.getenv('RABBITMQ_HOST', 'rabbitmq')
-        rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
-        logger.info(f"Connecting to RabbitMQ using host/port: {rabbitmq_host}:{rabbitmq_port}")
-        rabbitmq_broker = RabbitmqBroker(host=rabbitmq_host, port=rabbitmq_port, middleware=middleware)
+        redis_host = os.getenv('REDIS_HOST', 'redis')
+        redis_port = int(os.getenv('REDIS_PORT', 6379))
+        logger.info(f"Connecting to RabbitMQ using host/port: {redis_host}:{rabbitmq_port}")
+        rabbitmq_broker = RedisBroker(host=redis_host, port=redis_port, middleware=middleware)
         logger.info("Successfully created RabbitMQ broker with host/port")
 except Exception as e:
     logger.error(f"Error setting up RabbitMQ connection: {e}")
@@ -77,7 +77,8 @@ except Exception as e:
     middleware = [dramatiq.middleware.AsyncIO()]
     rabbitmq_broker = RabbitmqBroker(host='localhost', port=5672, middleware=middleware)
 
-dramatiq.set_broker(rabbitmq_broker)
+
+dramatiq.set_broker(redis_broker)
 
 _initialized = False
 db = DBConnection()

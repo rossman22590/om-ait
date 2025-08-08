@@ -1,6 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { ArrowDown, CircleDashed, CheckCircle, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { CircleDashed, CheckCircle, AlertTriangle } from 'lucide-react';
 import { UnifiedMessage, ParsedContent, ParsedMetadata } from '@/components/thread/types';
 import { FileAttachmentGrid } from '@/components/thread/file-attachment';
 import { useFilePreloader } from '@/hooks/react-query/files';
@@ -16,8 +15,7 @@ import { KortixLogo } from '@/components/sidebar/kortix-logo';
 import { AgentLoader } from './loader';
 import { parseXmlToolCalls, isNewXmlFormat } from '@/components/thread/tool-views/xml-parser';
 import { ShowToolStream } from './ShowToolStream';
-import { PipedreamUrlDetector } from './pipedream-url-detector';
-import { cn } from '@/lib/utils';
+import { ComposioUrlDetector } from './composio-url-detector';
 
 const HIDE_STREAMING_XML_TAGS = new Set([
     'execute-command',
@@ -57,11 +55,12 @@ const HIDE_STREAMING_XML_TAGS = new Set([
 export function renderAttachments(attachments: string[], fileViewerHandler?: (filePath?: string, filePathList?: string[]) => void, sandboxId?: string, project?: Project) {
     if (!attachments || attachments.length === 0) return null;
 
-    // Note: Preloading is now handled by React Query in the main ThreadContent component
-    // to avoid duplicate requests with different content types
+    // Filter out empty strings and check if we have any valid attachments
+    const validAttachments = attachments.filter(attachment => attachment && attachment.trim() !== '');
+    if (validAttachments.length === 0) return null;
 
     return <FileAttachmentGrid
-        attachments={attachments}
+        attachments={validAttachments}
         onFileClick={fileViewerHandler}
         showPreviews={true}
         sandboxId={sandboxId}
@@ -102,7 +101,7 @@ export function renderMarkdownContent(
                 const textBeforeBlock = content.substring(lastIndex, match.index);
                 if (textBeforeBlock.trim()) {
                     contentParts.push(
-                        <PipedreamUrlDetector key={`md-${lastIndex}`} content={textBeforeBlock} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words" />
+                        <ComposioUrlDetector key={`md-${lastIndex}`} content={textBeforeBlock} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words" />
                     );
                 }
             }
@@ -125,7 +124,7 @@ export function renderMarkdownContent(
                     // Render ask tool content with attachment UI
                     contentParts.push(
                         <div key={`ask-${match.index}-${index}`} className="space-y-3">
-                            <PipedreamUrlDetector content={askText} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words [&>:first-child]:mt-0 prose-headings:mt-3" />
+                            <ComposioUrlDetector content={askText} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words [&>:first-child]:mt-0 prose-headings:mt-3" />
                             {renderAttachments(attachmentArray, fileViewerHandler, sandboxId, project)}
                         </div>
                     );
@@ -141,7 +140,7 @@ export function renderMarkdownContent(
                     // Render complete tool content with attachment UI
                     contentParts.push(
                         <div key={`complete-${match.index}-${index}`} className="space-y-3">
-                            <PipedreamUrlDetector content={completeText} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words [&>:first-child]:mt-0 prose-headings:mt-3" />
+                            <ComposioUrlDetector content={completeText} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words [&>:first-child]:mt-0 prose-headings:mt-3" />
                             {renderAttachments(attachmentArray, fileViewerHandler, sandboxId, project)}
                         </div>
                     );
@@ -188,12 +187,12 @@ export function renderMarkdownContent(
             const remainingText = content.substring(lastIndex);
             if (remainingText.trim()) {
                 contentParts.push(
-                    <PipedreamUrlDetector key={`md-${lastIndex}`} content={remainingText} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words" />
+                    <ComposioUrlDetector key={`md-${lastIndex}`} content={remainingText} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words" />
                 );
             }
         }
 
-        return contentParts.length > 0 ? contentParts : <PipedreamUrlDetector content={content} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words" />;
+        return contentParts.length > 0 ? contentParts : <ComposioUrlDetector content={content} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words" />;
     }
 
     // Fall back to old XML format handling
@@ -204,7 +203,7 @@ export function renderMarkdownContent(
 
     // If no XML tags found, just return the full content as markdown
     if (!content.match(xmlRegex)) {
-        return <PipedreamUrlDetector content={content} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words" />;
+        return <ComposioUrlDetector content={content} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words" />;
     }
 
     while ((match = xmlRegex.exec(content)) !== null) {
@@ -212,7 +211,7 @@ export function renderMarkdownContent(
         if (match.index > lastIndex) {
             const textBeforeTag = content.substring(lastIndex, match.index);
             contentParts.push(
-                <PipedreamUrlDetector key={`md-${lastIndex}`} content={textBeforeTag} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none inline-block mr-1 break-words" />
+                <ComposioUrlDetector key={`md-${lastIndex}`} content={textBeforeTag} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none inline-block mr-1 break-words" />
             );
         }
 
@@ -234,7 +233,7 @@ export function renderMarkdownContent(
             // Render <ask> tag content with attachment UI (using the helper)
             contentParts.push(
                 <div key={`ask-${match.index}`} className="space-y-3">
-                    <PipedreamUrlDetector content={askContent} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words [&>:first-child]:mt-0 prose-headings:mt-3" />
+                    <ComposioUrlDetector content={askContent} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words [&>:first-child]:mt-0 prose-headings:mt-3" />
                     {renderAttachments(attachments, fileViewerHandler, sandboxId, project)}
                 </div>
             );
@@ -252,7 +251,7 @@ export function renderMarkdownContent(
             // Render <complete> tag content with attachment UI (using the helper)
             contentParts.push(
                 <div key={`complete-${match.index}`} className="space-y-3">
-                    <PipedreamUrlDetector content={completeContent} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words [&>:first-child]:mt-0 prose-headings:mt-3" />
+                    <ComposioUrlDetector content={completeContent} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words [&>:first-child]:mt-0 prose-headings:mt-3" />
                     {renderAttachments(attachments, fileViewerHandler, sandboxId, project)}
                 </div>
             );
@@ -285,7 +284,7 @@ export function renderMarkdownContent(
     // Add text after the last tag
     if (lastIndex < content.length) {
         contentParts.push(
-            <PipedreamUrlDetector key={`md-${lastIndex}`} content={content.substring(lastIndex)} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words" />
+            <ComposioUrlDetector key={`md-${lastIndex}`} content={content.substring(lastIndex)} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words" />
         );
     }
 
@@ -313,8 +312,7 @@ export interface ThreadContentProps {
     agentAvatar?: React.ReactNode;
     emptyStateComponent?: React.ReactNode; // Add custom empty state component prop
     threadMetadata?: any; // Add thread metadata prop
-    isSidePanelOpen?: boolean; // Add isSidePanelOpen prop
-    leftSidebarState?: string; 
+    scrollContainerRef?: React.RefObject<HTMLDivElement>; // Add scroll container ref prop
 }
 
 export const ThreadContent: React.FC<ThreadContentProps> = ({
@@ -338,14 +336,12 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
     agentAvatar = <KortixLogo size={16} />,
     emptyStateComponent,
     threadMetadata,
-    isSidePanelOpen = false,
-    leftSidebarState = 'collapsed',
+    scrollContainerRef,
 }) => {
-    const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const latestMessageRef = useRef<HTMLDivElement>(null);
-    const [showScrollButton, setShowScrollButton] = useState(false);
-    const [, setUserHasScrolled] = useState(false);
+    const contentRef = useRef<HTMLDivElement>(null);
+    const [shouldJustifyToTop, setShouldJustifyToTop] = useState(false);
     const { session } = useAuth();
     const hasInitiallyScrolledRef = useRef(false);
 
@@ -353,8 +349,8 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
     const { preloadFiles } = useFilePreloader();
 
     const containerClassName = isPreviewMode
-        ? "flex-1 overflow-y-auto scrollbar-thin scrollbar-track-secondary/0 scrollbar-thumb-primary/10 scrollbar-thumb-rounded-full hover:scrollbar-thumb-primary/10 px-6 py-4 pb-72"
-        : "flex-1 overflow-y-auto scrollbar-thin scrollbar-track-secondary/0 scrollbar-thumb-primary/10 scrollbar-thumb-rounded-full hover:scrollbar-thumb-primary/10 px-6 py-4 pb-72 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60";
+        ? "flex-1 overflow-y-auto scrollbar-thin scrollbar-track-secondary/0 scrollbar-thumb-primary/10 scrollbar-thumb-rounded-full hover:scrollbar-thumb-primary/10 px-6 py-4 pb-0"
+        : "flex-1 overflow-y-auto scrollbar-thin scrollbar-track-secondary/0 scrollbar-thumb-primary/10 scrollbar-thumb-rounded-full hover:scrollbar-thumb-primary/10 px-6 py-4 pb-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60";
 
     // In playback mode, we use visibleMessages instead of messages
     const displayMessages = readOnly && visibleMessages ? visibleMessages : messages;
@@ -419,52 +415,35 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
         };
     }, [threadMetadata, displayMessages, agentName, agentAvatar]);
 
-    const handleScroll = () => {
-        if (!messagesContainerRef.current) return;
-        const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-        const isScrolledUp = scrollHeight - scrollTop - clientHeight > 100;
-        setShowScrollButton(isScrolledUp);
-        setUserHasScrolled(isScrolledUp);
-    };
-
-    const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-        messagesEndRef.current?.scrollIntoView({ behavior });
+    // Simplified scroll handler - flex-column-reverse handles positioning
+    const handleScroll = useCallback(() => {
+        // No scroll logic needed with flex-column-reverse
     }, []);
 
-    
-    // Initial scroll to bottom when thread opens
+    // No scroll-to-bottom needed with flex-column-reverse
+
+    // No auto-scroll needed with flex-column-reverse - CSS handles it
+
+    // Smart justify-content based on content height
     useEffect(() => {
-        if (!hasInitiallyScrolledRef.current && displayMessages.length > 0) {
-            hasInitiallyScrolledRef.current = true;
-            // Use instant scroll for initial load
-            setTimeout(() => {
-                scrollToBottom('instant');
-            }, 100);
-        }
-    }, [displayMessages.length, scrollToBottom]);
+        const checkContentHeight = () => {
+            const container = (scrollContainerRef || messagesContainerRef).current;
+            const content = contentRef.current;
+            if (!container || !content) return;
 
-    // Calculate scroll button position based on sidebar states
-    const getScrollButtonPosition = () => {
-        // Base positioning
-        let position = "right-96"; // Default 24px from right
+            const containerHeight = container.clientHeight;
+            const contentHeight = content.scrollHeight;
+            setShouldJustifyToTop(contentHeight <= containerHeight);
+        };
 
-        // If side panel is open, move button left to account for side panel width
-        if (isSidePanelOpen) {
-            if (leftSidebarState === 'expanded') {
-                // Both left sidebar expanded and side panel open
-                position = "right-[calc(90%-2rem)] sm:right-[calc(450px+1rem)] md:right-[calc(500px+1rem)] lg:right-[calc(550px+1rem)] xl:right-[calc(650px+1rem)] bottom-36";
-            } else {
-                // Only side panel open
-                position = "right-[calc(90%-2rem)] sm:right-[calc(450px+1rem)] md:right-[calc(500px+1rem)] lg:right-[calc(550px+1rem)] xl:right-[calc(650px+1rem)]";
-            }
-        } else if (leftSidebarState === 'expanded') {
-            // Only left sidebar expanded (doesn't affect right positioning)
-            position = "right-72";
-        }
+        checkContentHeight();
+        const resizeObserver = new ResizeObserver(checkContentHeight);
+        if (contentRef.current) resizeObserver.observe(contentRef.current);
+        const containerRef = (scrollContainerRef || messagesContainerRef).current;
+        if (containerRef) resizeObserver.observe(containerRef);
 
-        return position;
-    };
-
+        return () => resizeObserver.disconnect();
+    }, [displayMessages, streamingTextContent, agentStatus, scrollContainerRef]);
 
     // Preload all message attachments when messages change or sandboxId is provided
     React.useEffect(() => {
@@ -514,13 +493,13 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                     )}
                 </div>
             ) : (
-                // Render scrollable content container
+                // Render scrollable content container with column-reverse
                 <div
-                    ref={messagesContainerRef}
-                    className={containerClassName}
+                    ref={scrollContainerRef || messagesContainerRef}
+                    className={`${containerClassName} flex flex-col-reverse ${shouldJustifyToTop ? 'justify-end min-h-full' : ''}`}
                     onScroll={handleScroll}
                 >
-                    <div className="mx-auto max-w-3xl md:px-8 min-w-0">
+                    <div ref={contentRef} className="mx-auto max-w-3xl md:px-8 min-w-0 w-full">
                         <div className="space-y-8 min-w-0">
                             {(() => {
 
@@ -711,9 +690,9 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                                             <div key={group.key} className="flex justify-end">
                                                 <div className="flex max-w-[85%] rounded-3xl rounded-br-lg bg-card border px-4 py-3 break-words overflow-hidden">
                                                     <div className="space-y-3 min-w-0 flex-1">
-                                                                                                {cleanContent && (
-                                            <PipedreamUrlDetector content={cleanContent} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none [&>:first-child]:mt-0 prose-headings:mt-3 break-words overflow-wrap-anywhere" />
-                                        )}
+                                                        {cleanContent && (
+                                                            <ComposioUrlDetector content={cleanContent} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none [&>:first-child]:mt-0 prose-headings:mt-3 break-words overflow-wrap-anywhere" />
+                                                        )}
 
                                                         {/* Use the helper function to render user attachments */}
                                                         {renderAttachments(attachments as string[], handleOpenFileViewer, sandboxId, project)}
@@ -854,7 +833,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                                                                         return (
                                                                             <>
                                                                                 {textBeforeTag && (
-                                                                                    <PipedreamUrlDetector content={textBeforeTag} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none [&>:first-child]:mt-0 prose-headings:mt-3 break-words overflow-wrap-anywhere" />
+                                                                                    <ComposioUrlDetector content={textBeforeTag} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none [&>:first-child]:mt-0 prose-headings:mt-3 break-words overflow-wrap-anywhere" />
                                                                                 )}
                                                                                 {showCursor && (
                                                                                     <span className="inline-block h-4 w-0.5 bg-primary ml-0.5 -mb-1 animate-pulse" />
@@ -917,7 +896,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                                                                                 ) : (
                                                                                     <>
                                                                                         {textBeforeTag && (
-                                                                                            <PipedreamUrlDetector content={textBeforeTag} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none [&>:first-child]:mt-0 prose-headings:mt-3 break-words overflow-wrap-anywhere" />
+                                                                                            <ComposioUrlDetector content={textBeforeTag} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none [&>:first-child]:mt-0 prose-headings:mt-3 break-words overflow-wrap-anywhere" />
                                                                                         )}
                                                                                         {showCursor && (
                                                                                             <span className="inline-block h-4 w-0.5 bg-primary ml-0.5 -mb-1 animate-pulse" />
@@ -1021,27 +1000,13 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                                     </div>
                                 </div>
                             )}
+                            <div className="!h-48" />
                         </div>
                     </div>
-                    <div ref={messagesEndRef} className="h-1" />
                 </div>
             )}
 
-            {/* Scroll to bottom button */}
-            {showScrollButton && (
-                <Button
-                    variant="outline"
-                    size="icon"
-                    className={cn(
-                        "fixed bottom-6 z-99 h-8 w-8 rounded-full shadow-md transition-all duration-200 ease-in-out",
-                        getScrollButtonPosition()
-                    )}
-                    onClick={() => scrollToBottom('smooth')}
-                >
-                    <ArrowDown className="h-4 w-4" />
-                </Button>
- 
-            )}
+            {/* No scroll button needed with flex-column-reverse */}
         </>
     );
 };
