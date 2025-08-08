@@ -35,6 +35,9 @@ import { pipedreamApi } from '@/hooks/react-query/pipedream/utils';
 import type { CreateProfileRequest } from '@/components/agents/pipedream/pipedream-types';
 import type { PipedreamApp } from '@/hooks/react-query/pipedream/utils';
 
+// Check if Pipedream UI is enabled
+const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
+
 interface PipedreamConnectorProps {
   app: PipedreamApp;
   open: boolean;
@@ -61,6 +64,11 @@ export const PipedreamConnector: React.FC<PipedreamConnectorProps> = ({
   agentId,
   existingProfileIds = []
 }) => {
+  // If Pipedream UI is disabled, don't render anything
+  if (!showPipedreamUI) {
+    return null;
+  }
+
   const [step, setStep] = useState<'profile' | 'tools'>('profile');
   const [selectedProfileId, setSelectedProfileId] = useState<string>('');
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);

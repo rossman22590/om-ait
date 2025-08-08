@@ -7,19 +7,23 @@ import { ComposioConnectionsSection } from '../agents/composio/composio-connecti
 import { Zap, GitBranch } from 'lucide-react';
 
 export function IntegrationsTabs() {
+  const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
+
   return (
     <div className="space-y-8">
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center space-x-2">
-            <Zap className="h-5 w-5 text-blue-500" />
-            <CardTitle>Pipedream Integrations</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <PipedreamConnectionsSection />
-        </CardContent>
-      </Card>
+      {showPipedreamUI && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center space-x-2">
+              <Zap className="h-5 w-5 text-blue-500" />
+              <CardTitle>Pipedream Integrations</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <PipedreamConnectionsSection />
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-2">

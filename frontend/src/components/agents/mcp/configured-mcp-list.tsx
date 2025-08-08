@@ -270,6 +270,8 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
     return mcp.qualifiedName || (mcp as any).mcp_qualified_name || '';
   };
 
+  const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
+
   if (configuredMCPs.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
@@ -322,21 +324,21 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
   return (
     <div className="space-y-8 w-full overflow-hidden">
       {renderMCPs(composioMCPs, composioMCPs.length > 0 ? 'Composio Integrations' : undefined)}
-      {renderMCPs(pipedreamMCPs, pipedreamMCPs.length > 0 ? 'Pipedream Integrations' : undefined)}
+      {showPipedreamUI && renderMCPs(pipedreamMCPs, pipedreamMCPs.length > 0 ? 'Pipedream Integrations' : undefined)}
       {renderMCPs(otherMCPs, otherMCPs.length > 0 ? 'Other MCP Servers' : undefined)}
       
       {/* Available integrations section */}
       {availableMCPs.length > 0 && (
         <div className="border-t border-border pt-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="h-2 w-2 rounded-full bg-green-500"></div>
+          <div className="flex items-center gap-2 mb-4 bg-grey-50 dark:bg-grey-900/20 p-3 rounded-lg">
+            <div className="h-2 w-2 rounded-full bg-pink-500"></div>
             <h3 className="text-sm font-semibold text-foreground">Available Integrations</h3>
-            <Badge variant="secondary" className="text-xs">
+            <Badge variant="default" className="text-xs bg-pink-50 text-pink-700 border-pink-200">
               {availableMCPs.length} ready to connect
             </Badge>
           </div>
           {renderMCPs(availableComposioMCPs, availableComposioMCPs.length > 0 ? 'Composio' : undefined)}
-          {renderMCPs(availablePipedreamMCPs, availablePipedreamMCPs.length > 0 ? 'Pipedream' : undefined)}
+          {showPipedreamUI && renderMCPs(availablePipedreamMCPs, availablePipedreamMCPs.length > 0 ? 'Pipedream' : undefined)}
         </div>
       )}
     </div>

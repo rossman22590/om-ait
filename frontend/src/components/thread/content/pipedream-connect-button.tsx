@@ -4,6 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { usePipedreamAppIcon } from '@/hooks/react-query/pipedream/use-pipedream';
 
+// Check if Pipedream UI is enabled
+const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
+
 interface PipedreamConnectButtonProps {
   url: string;
   appSlug?: string;
@@ -83,59 +86,63 @@ function extractAppSlug(url: string): string | null {
   }
 }
 
-export const PipedreamConnectButton: React.FC<PipedreamConnectButtonProps> = ({ 
+export function PipedreamConnectButton({ 
   url, 
   appSlug: providedAppSlug 
-}) => {
-  const appSlug = providedAppSlug || extractAppSlug(url);
-  const appName = appSlug ? formatAppName(appSlug) : 'Service';
-  
-  const { data: iconData } = usePipedreamAppIcon(appSlug || '', {
-    enabled: !!appSlug
+}: PipedreamConnectButtonProps) {
+  // If Pipedream UI is disabled, don't render anything
+  if (!showPipedreamUI) {
+    return null;
+  }
+
+  const extractedAppSlug = providedAppSlug || extractAppSlug(url);
+  const appName = extractedAppSlug ? formatAppName(extractedAppSlug) : 'this app';
+  const appSlugToUse = providedAppSlug || extractedAppSlug;
+
+  const { data: iconData } = usePipedreamAppIcon(appSlugToUse || '', {
+    enabled: !!appSlugToUse,
   });
 
-  const handleConnect = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
-    <Card className="my-3 bg-muted/80 border p-0 shadow-none">
-      <CardContent className='p-4'>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex-shrink-0 w-10 h-10 bg-muted border rounded-lg flex items-center justify-center overflow-hidden">
-              {iconData?.icon_url ? (
-                <img
-                  src={iconData.icon_url}
-                  alt={`${appName} logo`}
-                  className="w-6 h-6 object-cover rounded"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = 'none';
-                    const fallback = target.nextElementSibling as HTMLElement;
-                    if (fallback) fallback.style.display = 'block';
-                  }}
-                />
-              ) : null}
-              <Link2 
-                className={`h-5 w-5 text-blue-600 dark:text-blue-400 ${iconData?.icon_url ? 'hidden' : 'block'}`} 
+    <div className="mt-4">
+      <Card className="border-dashed border-2 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20">
+        <CardContent className="p-4">
+          <div className="flex items-center gap-4">
+            {iconData?.icon_url ? (
+              <img 
+                src={iconData.icon_url} 
+                alt={`${appName} icon`} 
+                className="w-10 h-10 rounded-lg object-cover"
               />
-            </div>
-            <div>
-              <p className="text-sm font-semibold">
-                Connect Your {appName} Account
+            ) : (
+              <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-800 flex items-center justify-center">
+                <Link2 className="w-5 h-5 text-blue-600 dark:text-blue-300" />
+              </div>
+            )}
+            <div className="flex-1">
+              <h4 className="font-medium">Connect to {appName}</h4>
+              <p className="text-sm text-muted-foreground">
+                Authorize {appName} to enable this integration
               </p>
             </div>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2"
+              onClick={handleClick}
+            >
+              Connect
+              <ExternalLink className="w-3.5 h-3.5" />
+            </Button>
           </div>
-          <Button 
-            onClick={handleConnect}
-            size="sm"
-          >
-            Connect to {appName}
-            <ExternalLink className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
-}; 
+}

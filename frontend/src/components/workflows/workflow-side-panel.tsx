@@ -77,6 +77,7 @@ export function WorkflowSidePanel({
     const [showPipedreamRegistry, setShowPipedreamRegistry] = useState(false);
     const [showComposioRegistry, setShowComposioRegistry] = useState(false);
     const [showCustomMCPDialog, setShowCustomMCPDialog] = useState(false);
+    const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
     const queryClient = useQueryClient();
     const { data: agent } = useAgent(agentId || '');
     const updateAgentMutation = useUpdateAgent();
@@ -412,6 +413,21 @@ export function WorkflowSidePanel({
                     {renderContent()}
                 </motion.div>
             </AnimatePresence>
+            {showPipedreamUI && (
+                <Dialog open={showPipedreamRegistry} onOpenChange={setShowPipedreamRegistry}>
+                    <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
+                        <DialogHeader>
+                            <DialogTitle>Pipedream Tools</DialogTitle>
+                        </DialogHeader>
+                        <div className="flex-1 overflow-auto">
+                            <PipedreamRegistry 
+                                selectedAgentId={agentId} 
+                                onClose={() => setShowPipedreamRegistry(false)} 
+                            />
+                        </div>
+                    </DialogContent>
+                </Dialog>
+            )}
             <Dialog open={showComposioRegistry} onOpenChange={setShowComposioRegistry}>
                 <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-hidden">
                     <DialogHeader className="sr-only">
