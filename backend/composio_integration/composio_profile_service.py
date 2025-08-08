@@ -297,4 +297,72 @@ class ComposioProfileService:
             
         except Exception as e:
             logger.error(f"Failed to get Composio profiles: {e}", exc_info=True)
-            raise 
+            raise
+
+    async def delete_profile(self, profile_id: str, account_id: str) -> bool:
+        """Delete a Composio profile"""
+        try:
+            client = await self.db.client
+            
+            # First verify the profile exists and belongs to the user
+            result = await client.table('user_mcp_credential_profiles').select('profile_id').eq(
+                'profile_id', profile_id
+            ).eq('account_id', account_id).execute()
+            
+            if not result.data:
+                logger.warning(f"Profile {profile_id} not found or access denied for user {account_id}")
+                return False
+            
+            # Delete the profile
+            delete_result = await client.table('user_mcp_credential_profiles').delete().eq(
+                'profile_id', profile_id
+            ).eq('account_id', account_id).execute()
+            
+            if delete_result.data:
+                logger.info(f"Successfully deleted Composio profile: {profile_id}")
+                return True
+            else:
+                logger.warning(f"No profile was deleted for profile_id: {profile_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Failed to delete Composio profile {profile_id}: {e}", exc_info=True)
+            raise
+
+    async def get_profile(self, profile_id: str, account_id: str) -> Optional[ComposioProfile]:
+        """Get a single profile by ID"""
+        try:
+            client = await self.db.client
+            
+            result = await client.table('user_mcp_credential_profiles').select('*').eq(
+                'profile_id', profile_id
+            ).eq('account_id', account_id).execute()
+            
+            if not result.data:
+                return None
+            
+            row = result.data[0]
+            config = self._decrypt_config(row['encrypted_config'])
+            
+            return ComposioProfile(
+                profile_id=row['profile_id'],
+                account_id=row['account_id'],
+                mcp_qualified_name=row['mcp_qualified_name'],
+                profile_name=row['profile_name'],
+                display_name=row['display_name'],
+                encrypted_config=row['encrypted_config'],
+                config_hash=row['config_hash'],
+                toolkit_slug=config.get('toolkit_slug', ''),
+                toolkit_name=config.get('toolkit_name', ''),
+                mcp_url=config.get('mcp_url', ''),
+                redirect_url=config.get('redirect_url'),
+                is_active=row.get('is_active', True),
+                is_default=row.get('is_default', False),
+                is_connected=bool(config.get('redirect_url')),
+                created_at=datetime.fromisoformat(row['created_at'].replace('Z', '+00:00')) if row.get('created_at') else None,
+                updated_at=datetime.fromisoformat(row['updated_at'].replace('Z', '+00:00')) if row.get('updated_at') else None
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to get Composio profile {profile_id}: {e}", exc_info=True)
+            raise

@@ -375,6 +375,31 @@ async def get_toolkit_icon(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.delete("/profiles/{profile_id}")
+async def delete_profile(
+    profile_id: str,
+    current_user_id: str = Depends(get_current_user_id_from_jwt)
+) -> Dict[str, Any]:
+    try:
+        profile_service = ComposioProfileService(db)
+        success = await profile_service.delete_profile(profile_id, current_user_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Profile not found or access denied")
+        
+        return {
+            "success": True,
+            "message": "Profile deleted successfully",
+            "profile_id": profile_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete profile {profile_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to delete profile: {str(e)}")
+
+
 @router.get("/health")
 async def health_check() -> Dict[str, str]:
     try:

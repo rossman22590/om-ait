@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { composioApi, type ComposioProfile, type ComposioToolkitGroup, type ComposioMcpUrlResponse } from './utils';
 import { composioKeys } from './keys';
 
@@ -39,4 +39,16 @@ export const useComposioMcpUrl = (profileId: string, enabled = false) => {
     staleTime: 0,
     gcTime: 0,
   });
-}; 
+};
+
+export const useDeleteComposioProfile = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (profileId: string) => composioApi.deleteProfile(profileId),
+    onSuccess: () => {
+      // Invalidate and refetch profiles
+      queryClient.invalidateQueries({ queryKey: composioKeys.profiles.all() });
+    },
+  });
+};

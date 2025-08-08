@@ -242,4 +242,19 @@ export const composioApi = {
       icon_url: response.data.icon_url
     };
   },
-}; 
+
+  async deleteProfile(profileId: string): Promise<{ success: boolean; message: string }> {
+    const result = await backendApi.delete<{ success: boolean; message: string; profile_id: string }>(
+      `/composio/profiles/${profileId}`,
+      {
+        errorContext: { operation: 'delete profile', resource: 'Composio profile' },
+      }
+    );
+
+    if (!result.success) {
+      throw new Error(result.error?.message || 'Failed to delete profile');
+    }
+
+    return result.data!;
+  },
+};
