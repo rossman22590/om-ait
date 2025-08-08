@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { handleApiError } from './error-handler';
-import posthog from 'posthog-js';
+import posthog from '@/lib/posthog';
 
 // Get backend URL from environment variables
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';

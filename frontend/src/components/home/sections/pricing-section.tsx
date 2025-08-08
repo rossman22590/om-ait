@@ -16,7 +16,7 @@ import {
 import { toast } from 'sonner';
 import { isLocalMode, isPlanChangeAllowed, getPlanInfo } from '@/lib/config';
 import { useSubscription } from '@/hooks/react-query';
-import posthog from 'posthog-js';
+import posthog from '@/lib/posthog';
 
 // Constants
 export const SUBSCRIPTION_PLANS = {

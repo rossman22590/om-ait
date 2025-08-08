@@ -47,7 +47,7 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { stopAllAgents } from '@/lib/api';
 import { toast } from 'sonner';
-import posthog from 'posthog-js';
+// import posthog from 'posthog-js';
 
 export function SidebarLeft({
   ...props
@@ -202,7 +202,7 @@ export function SidebarLeft({
           <Link href="/dashboard">
             <SidebarMenuButton className={cn({
               'bg-accent text-accent-foreground font-medium': pathname === '/dashboard',
-            })} onClick={() => posthog.capture('new_task_clicked')}>
+            })}>
               <Plus className="h-4 w-4 mr-1" />
               <span className="flex items-center justify-between w-full">
                 New Task
