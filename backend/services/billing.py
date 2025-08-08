@@ -430,6 +430,12 @@ def calculate_token_cost(prompt_tokens: int, completion_tokens: int, model: str)
             output_cost = (completion_tokens / 1_000_000) * output_cost_per_million
             message_cost = input_cost + output_cost
         else:
+            # Skip LiteLLM pricing lookup for GPT-5 models to avoid provider errors
+            if ('gpt-5' in cleaned_model.lower() or 'gpt-5' in resolved_model.lower() or
+                'openrouter/openai/gpt-5' in cleaned_model.lower() or 'openrouter/openai/gpt-5' in resolved_model.lower()):
+                logger.warning(f"GPT-5 model {model} not found in hardcoded pricing, returning 0 cost")
+                return 0.0
+            
             # Use litellm pricing as fallback - try multiple variations with cleaned models
             try:
                 models_to_try = [cleaned_model]
@@ -456,7 +462,15 @@ def calculate_token_cost(prompt_tokens: int, completion_tokens: int, model: str)
                 message_cost = None
                 for model_name in models_to_try:
                     try:
-                        prompt_token_cost, completion_token_cost = cost_per_token(model_name, prompt_tokens, completion_tokens)
+                        # Suppress LiteLLM output during cost calculation
+                        import os
+                        import sys
+                        from contextlib import redirect_stdout, redirect_stderr
+                        
+                        with open(os.devnull, 'w') as devnull:
+                            with redirect_stdout(devnull), redirect_stderr(devnull):
+                                prompt_token_cost, completion_token_cost = cost_per_token(model_name, prompt_tokens, completion_tokens)
+                        
                         if prompt_token_cost is not None and completion_token_cost is not None:
                             message_cost = prompt_token_cost + completion_token_cost
                             break
@@ -1375,75 +1389,91 @@ async def get_available_models(
                     "max_tokens": None
                 }
             else:
-                try:
-                    # Try to get pricing using cost_per_token function
-                    models_to_try = []
-                    
-                    # Add the original model name
-                    models_to_try.append(model)
-                    
-                    # Try to resolve the model name using MODEL_NAME_ALIASES
-                    if model in MODEL_NAME_ALIASES:
-                        resolved_model = MODEL_NAME_ALIASES[model]
-                        models_to_try.append(resolved_model)
-                        # Also try without provider prefix if it has one
-                        if '/' in resolved_model:
-                            models_to_try.append(resolved_model.split('/', 1)[1])
-                    
-                    # If model is a value in aliases, try to find a matching key
-                    for alias_key, alias_value in MODEL_NAME_ALIASES.items():
-                        if alias_value == model:
-                            models_to_try.append(alias_key)
-                            break
-                    
-                    # Also try without provider prefix for the original model
-                    if '/' in model:
-                        models_to_try.append(model.split('/', 1)[1])
-                    
-                    # Special handling for Google models accessed via Google API
-                    if model.startswith('gemini/'):
-                        google_model_name = model.replace('gemini/', '')
-                        models_to_try.append(google_model_name)
-                    
-                    # Special handling for Google models accessed via Google API
-                    if model.startswith('gemini/'):
-                        google_model_name = model.replace('gemini/', '')
-                        models_to_try.append(google_model_name)
-                    
-                    # Try each model name variation until we find one that works
-                    input_cost_per_token = None
-                    output_cost_per_token = None
-                    
-                    for model_name in models_to_try:
-                        try:
-                            # Use cost_per_token with sample token counts to get the per-token costs
-                            input_cost, output_cost = cost_per_token(model_name, 1000000, 1000000)
-                            if input_cost is not None and output_cost is not None:
-                                input_cost_per_token = input_cost
-                                output_cost_per_token = output_cost
-                                break
-                        except Exception:
-                            continue
-                    
-                    if input_cost_per_token is not None and output_cost_per_token is not None:
-                        pricing_info = {
-                            "input_cost_per_million_tokens": input_cost_per_token * TOKEN_PRICE_MULTIPLIER,
-                            "output_cost_per_million_tokens": output_cost_per_token * TOKEN_PRICE_MULTIPLIER,
-                            "max_tokens": None  # cost_per_token doesn't provide max_tokens info
-                        }
-                    else:
-                        pricing_info = {
-                            "input_cost_per_million_tokens": None,
-                            "output_cost_per_million_tokens": None,
-                            "max_tokens": None
-                        }
-                except Exception as e:
-                    logger.warning(f"Could not get pricing for model {model}: {str(e)}")
+                # Skip LiteLLM pricing lookup for GPT-5 models to avoid provider errors
+                if 'gpt-5' in model.lower() or 'openrouter/openai/gpt-5' in model.lower():
                     pricing_info = {
                         "input_cost_per_million_tokens": None,
                         "output_cost_per_million_tokens": None,
                         "max_tokens": None
                     }
+                else:
+                    try:
+                        # Try to get pricing using cost_per_token function
+                        models_to_try = []
+                        
+                        # Add the original model name
+                        models_to_try.append(model)
+                        
+                        # Try to resolve the model name using MODEL_NAME_ALIASES
+                        if model in MODEL_NAME_ALIASES:
+                            resolved_model = MODEL_NAME_ALIASES[model]
+                            models_to_try.append(resolved_model)
+                            # Also try without provider prefix if it has one
+                            if '/' in resolved_model:
+                                models_to_try.append(resolved_model.split('/', 1)[1])
+                        
+                        # If model is a value in aliases, try to find a matching key
+                        for alias_key, alias_value in MODEL_NAME_ALIASES.items():
+                            if alias_value == model:
+                                models_to_try.append(alias_key)
+                                break
+                        
+                        # Also try without provider prefix for the original model
+                        if '/' in model:
+                            models_to_try.append(model.split('/', 1)[1])
+                        
+                        # Special handling for Google models accessed via Google API
+                        if model.startswith('gemini/'):
+                            google_model_name = model.replace('gemini/', '')
+                            models_to_try.append(google_model_name)
+                        
+                        # Special handling for Google models accessed via Google API
+                        if model.startswith('gemini/'):
+                            google_model_name = model.replace('gemini/', '')
+                            models_to_try.append(google_model_name)
+                        
+                        # Try each model name variation until we find one that works
+                        input_cost_per_token = None
+                        output_cost_per_token = None
+                        
+                        for model_name in models_to_try:
+                            try:
+                                # Suppress LiteLLM output during cost calculation
+                                import os
+                                import sys
+                                from contextlib import redirect_stdout, redirect_stderr
+                                
+                                with open(os.devnull, 'w') as devnull:
+                                    with redirect_stdout(devnull), redirect_stderr(devnull):
+                                        # Use cost_per_token with sample token counts to get the per-token costs
+                                        input_cost, output_cost = cost_per_token(model_name, 1000000, 1000000)
+                                
+                                if input_cost is not None and output_cost is not None:
+                                    input_cost_per_token = input_cost
+                                    output_cost_per_token = output_cost
+                                    break
+                            except Exception:
+                                continue
+                        
+                        if input_cost_per_token is not None and output_cost_per_token is not None:
+                            pricing_info = {
+                                "input_cost_per_million_tokens": input_cost_per_token * TOKEN_PRICE_MULTIPLIER,
+                                "output_cost_per_million_tokens": output_cost_per_token * TOKEN_PRICE_MULTIPLIER,
+                                "max_tokens": None  # cost_per_token doesn't provide max_tokens info
+                            }
+                        else:
+                            pricing_info = {
+                                "input_cost_per_million_tokens": None,
+                                "output_cost_per_million_tokens": None,
+                                "max_tokens": None
+                            }
+                    except Exception as e:
+                        logger.warning(f"Could not get pricing for model {model}: {str(e)}")
+                        pricing_info = {
+                            "input_cost_per_million_tokens": None,
+                            "output_cost_per_million_tokens": None,
+                            "max_tokens": None
+                        }
 
             model_info.append({
                 "id": model,

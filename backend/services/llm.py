@@ -252,6 +252,15 @@ def prepare_params(
         params["reasoning_effort"] = effort_level
         logger.info(f"xAI thinking enabled with reasoning_effort='{effort_level}'")
 
+    # Handle GPT-5 temperature requirement - GPT-5 only supports temperature=1
+    is_gpt5 = ("gpt-5" in effective_model_name.lower() or
+               "gpt-5" in model_name.lower() or
+               "openai/gpt-5" in model_name.lower() or
+               "openrouter/openai/gpt-5" in model_name.lower())
+    if is_gpt5:
+        params["temperature"] = 1.0  # GPT-5 only supports temperature=1
+        logger.info(f"GPT-5 model detected, forcing temperature=1.0 for model: {model_name}")
+
     # Add xAI-specific parameters
     if model_name.startswith("xai/"):
         logger.debug(f"Preparing xAI parameters for model: {model_name}")

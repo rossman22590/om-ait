@@ -306,7 +306,10 @@ export const pipedreamApi = {
       throw new Error(result.error?.message || 'Failed to get profiles');
     }
 
-    return result.data!;
+    // DEFENSIVE FILTER: Ensure only Pipedream profiles are returned
+    // This prevents any potential cross-contamination with Composio profiles
+    const profiles = result.data!;
+    return profiles.filter(profile => profile.mcp_qualified_name?.startsWith('pipedream:'));
   },
 
   async getProfile(profileId: string): Promise<PipedreamProfile> {

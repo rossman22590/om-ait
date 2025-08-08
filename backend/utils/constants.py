@@ -84,6 +84,14 @@ MODELS = {
         },
         "tier_availability": ["paid"]
     },
+    "openrouter/openai/gpt-5": {
+        "aliases": ["gpt-5"],
+        "pricing": {
+            "input_cost_per_million_tokens": 20.00,
+            "output_cost_per_million_tokens": 80.00
+        },
+        "tier_availability": ["paid"]
+    },
     "openai/gpt-4.1-mini": {
         "aliases": ["gpt-4.1-mini"],
         "pricing": {

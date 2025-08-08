@@ -322,6 +322,10 @@ class ProfileService:
             if app_slug:
                 mcp_qualified_name = f"pipedream:{app_slug}"
                 query = query.eq('mcp_qualified_name', mcp_qualified_name)
+            else:
+                # CRITICAL FIX: Only return Pipedream profiles when no specific app_slug is provided
+                # This prevents Composio profiles (composio.*) from appearing in Pipedream section
+                query = query.like('mcp_qualified_name', 'pipedream:%')
             
             if is_active is not None:
                 query = query.eq('is_active', is_active)

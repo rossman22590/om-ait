@@ -55,6 +55,7 @@ interface McpUrlDialogProps {
 
 interface ToolkitTableProps {
   toolkit: ComposioToolkitGroup;
+  onConnect: (toolkitSlug: string) => void;
 }
 
 const McpUrlDialog: React.FC<McpUrlDialogProps> = ({
@@ -206,7 +207,7 @@ const McpUrlDialog: React.FC<McpUrlDialogProps> = ({
   );
 };
 
-const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit }) => {
+const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit, onConnect }) => {
   const [selectedProfile, setSelectedProfile] = useState<{
     profileId: string;
     profileName: string;
@@ -255,7 +256,20 @@ const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit }) => {
               </code>
             </div>
           ) : (
-            <span className="text-xs text-muted-foreground">No URL available</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">No URL available</span>
+              <Button
+                variant="default"
+                size="sm"
+                className="h-6 px-2 text-xs bg-black hover:bg-gray-800"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onConnect(toolkit.toolkit_slug);
+                }}
+              >
+                Connect
+              </Button>
+            </div>
           )}
         </div>
       ),
@@ -415,6 +429,10 @@ export const ComposioConnectionsSection: React.FC<ComposioConnectionsSectionProp
     toast.success(`Successfully connected ${appName}!`);
   };
 
+  const handleConnect = (toolkitSlug: string) => {
+    setShowRegistry(true);
+  };
+
   if (isLoading) {
     return (
       <div className={cn("space-y-6", className)}>
@@ -544,7 +562,11 @@ export const ComposioConnectionsSection: React.FC<ComposioConnectionsSectionProp
               return b.profiles.length - a.profiles.length;
             })
             .map((toolkit) => (
-              <ToolkitTable key={toolkit.toolkit_slug} toolkit={toolkit} />
+              <ToolkitTable 
+                key={toolkit.toolkit_slug} 
+                toolkit={toolkit} 
+                onConnect={handleConnect} 
+              />
             ))}
         </div>
       )}

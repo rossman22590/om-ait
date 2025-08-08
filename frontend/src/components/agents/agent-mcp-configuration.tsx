@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { MCPConfigurationNew } from './mcp/mcp-configuration-new';
+import { usePipedreamProfiles } from '@/hooks/react-query/pipedream/use-pipedream-profiles';
+import { useComposioCredentialsProfiles } from '@/hooks/react-query/composio/use-composio-profiles';
 
 interface AgentMCPConfigurationProps {
   configuredMCPs: any[];
@@ -25,6 +27,79 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
   saveMode = 'direct',
   versionId
 }) => {
+  // Load available credential profiles
+  const { data: pipedreamProfiles } = usePipedreamProfiles();
+  const { data: composioToolkits } = useComposioCredentialsProfiles();
+
+  // Convert credential profiles to MCP configurations that aren't already configured
+  const availableIntegrations = useMemo(() => {
+    const integrations: any[] = [];
+    
+    // Get existing profile IDs to avoid duplicates
+    const existingProfileIds = new Set(
+      customMCPs
+        .filter(mcp => mcp.config?.profile_id)
+        .map(mcp => mcp.config.profile_id)
+    );
+
+    // Add Pipedream profiles as available integrations
+    if (pipedreamProfiles) {
+      pipedreamProfiles
+        .filter(profile => profile.is_connected && !existingProfileIds.has(profile.profile_id))
+        .forEach(profile => {
+          integrations.push({
+            name: `${profile.app_name} (${profile.profile_name})`,
+            qualifiedName: `pipedream_${profile.app_slug}_${profile.profile_id}`,
+            config: {
+              profile_id: profile.profile_id,
+              app_slug: profile.app_slug,
+              app_name: profile.app_name,
+              profile_name: profile.profile_name,
+              external_user_id: profile.external_user_id
+            },
+            enabledTools: profile.enabled_tools || [],
+            isCustom: true,
+            customType: 'pipedream',
+            isPipedream: true,
+            app_slug: profile.app_slug, // Add app_slug as direct property for icon loading
+            isAvailable: true, // Mark as available for connection
+            profileData: profile
+          });
+        });
+    }
+
+    // Add Composio profiles as available integrations
+    if (composioToolkits) {
+      composioToolkits.forEach(toolkit => {
+        toolkit.profiles
+          .filter(profile => profile.has_mcp_url && !existingProfileIds.has(profile.profile_id))
+          .forEach(profile => {
+            integrations.push({
+              name: `${toolkit.toolkit_name} (${profile.profile_name})`,
+              qualifiedName: `composio.${toolkit.toolkit_slug}`,
+              mcp_qualified_name: `composio.${toolkit.toolkit_slug}`,
+              config: {
+                profile_id: profile.profile_id,
+                toolkit_slug: toolkit.toolkit_slug,
+                toolkit_name: toolkit.toolkit_name,
+                profile_name: profile.profile_name
+              },
+              enabledTools: [],
+              isCustom: true,
+              customType: 'composio',
+              isComposio: true,
+              isAvailable: true, // Mark as available for connection
+              toolkitSlug: toolkit.toolkit_slug,
+              toolkit_slug: toolkit.toolkit_slug,
+              profileData: profile
+            });
+          });
+      });
+    }
+
+    return integrations;
+  }, [pipedreamProfiles, composioToolkits, customMCPs]);
+
   const allMCPs = [
     ...(configuredMCPs || []),
     ...(customMCPs || []).map(customMcp => {
@@ -42,6 +117,19 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
           toolkit_slug: customMcp.toolkit_slug || customMcp.config?.toolkit_slug  // Add for logo system
         };
       }
+
+      if (customMcp.type === 'pipedream' || customMcp.customType === 'pipedream') {
+        return {
+          name: customMcp.name,
+          qualifiedName: customMcp.qualifiedName || `pipedream_${customMcp.config?.app_slug || 'unknown'}_${customMcp.config?.profile_id || Date.now()}`,
+          config: customMcp.config,
+          enabledTools: customMcp.enabledTools,
+          isCustom: true,
+          customType: 'pipedream',
+          isPipedream: true,
+          app_slug: customMcp.config?.app_slug || customMcp.app_slug // Add app_slug as direct property for icon loading
+        };
+      }
       
       return {
         name: customMcp.name,
@@ -51,19 +139,31 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
         isCustom: true,
         customType: customMcp.type || customMcp.customType
       };
-    })
+    }),
+    // Add available integrations that aren't configured yet
+    ...availableIntegrations
   ];
 
   const handleConfigurationChange = (mcps: any[]) => {
     const configured = mcps.filter(mcp => !mcp.isCustom);
     const custom = mcps
-      .filter(mcp => mcp.isCustom)
+      .filter(mcp => mcp.isCustom && !mcp.isAvailable) // Only include actually configured MCPs, not just available ones
       .map(mcp => {
         if (mcp.customType === 'composio' || mcp.isComposio) {
           return {
             name: mcp.name,
             type: 'composio',
             customType: 'composio',
+            config: mcp.config,
+            enabledTools: mcp.enabledTools
+          };
+        }
+
+        if (mcp.customType === 'pipedream' || mcp.isPipedream) {
+          return {
+            name: mcp.name,
+            type: 'pipedream',
+            customType: 'pipedream',
             config: mcp.config,
             enabledTools: mcp.enabledTools
           };
@@ -94,4 +194,4 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
       versionId={versionId}
     />
   );
-}; 
+};

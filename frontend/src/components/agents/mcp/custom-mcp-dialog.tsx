@@ -43,6 +43,7 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
   const [serverName, setServerName] = useState('');
   const [manualServerName, setManualServerName] = useState('');
   const [isValidating, setIsValidating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [discoveredTools, setDiscoveredTools] = useState<MCPTool[]>([]);
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set());
@@ -293,13 +294,13 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
                     MCP Server URL
                   </Label>
                   <Input
-                      id="config"
-                      type="url"
-                      placeholder={exampleConfigs.http}
-                      value={configText}
-                      onChange={(e) => setConfigText(e.target.value)}
-                      className="w-full px-4 py-3 border border-input bg-muted rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent font-mono"
-                    />
+                    id="config"
+                    type="url"
+                    placeholder={exampleConfigs.http}
+                    value={configText}
+                    onChange={(e) => setConfigText(e.target.value)}
+                    className="w-full px-4 py-3 border border-input bg-muted rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent font-mono"
+                  />
                   <p className="text-sm text-muted-foreground">
                     Enter the complete URL to your MCP server endpoint
                   </p>
@@ -400,7 +401,7 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
           ) : null}
         </div>
 
-        <DialogFooter className="flex-shrink-0 pt-4">
+        <DialogFooter>
           {step === 'tools' ? (
             <>
               <Button variant="outline" onClick={handleBack}>
@@ -410,7 +411,7 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
                 Cancel
               </Button>
               <Button 
-                onClick={handleToolsNext}
+                onClick={handleSave}
                 disabled={selectedTools.size === 0}
               >
                 Add MCP Server ({selectedTools.size} tools)
@@ -418,7 +419,11 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
             </>
           ) : (
             <>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+              <Button 
+                variant="outline" 
+                onClick={() => onOpenChange(false)} 
+                disabled={isSubmitting}
+              >
                 Cancel
               </Button>
               <Button

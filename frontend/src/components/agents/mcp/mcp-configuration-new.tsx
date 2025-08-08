@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Zap, Server, Store } from 'lucide-react'
+import { Zap, Server, Store, GitBranch, GitCommit } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MCPConfigurationProps, MCPConfiguration as MCPConfigurationType } from './types';
 import { ConfiguredMcpList } from './configured-mcp-list';
 import { CustomMCPDialog } from './custom-mcp-dialog';
 import { ComposioRegistry } from '../composio/composio-registry';
 import { ComposioToolsManager } from '../composio/composio-tools-manager';
+import { PipedreamConnector } from '../pipedream/pipedream-connector';
+import { PipedreamRegistry } from '../pipedream/pipedream-registry';
 import { ToolsManager } from './tools-manager';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { PipedreamApp } from '@/hooks/react-query/pipedream/utils';
 
 export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
   configuredMCPs,
@@ -21,6 +25,9 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
 }) => {
   const [showCustomDialog, setShowCustomDialog] = useState(false);
   const [showRegistryDialog, setShowRegistryDialog] = useState(false);
+  const [showPipedreamRegistry, setShowPipedreamRegistry] = useState(false);
+  const [showPipedreamConnector, setShowPipedreamConnector] = useState(false);
+  const [selectedPipedreamApp, setSelectedPipedreamApp] = useState<PipedreamApp | null>(null);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [showComposioToolsManager, setShowComposioToolsManager] = useState(false);
   const [showCustomToolsManager, setShowCustomToolsManager] = useState(false);
@@ -38,6 +45,40 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
 
   const handleEditMCP = (index: number) => {
     const mcp = configuredMCPs[index];
+    
+    // If this is an available Pipedream integration, use the Pipedream connector
+    if (mcp.isAvailable && mcp.customType === 'pipedream') {
+      const pipedreamApp: PipedreamApp = {
+        id: mcp.config.app_slug || 'unknown',
+        name: mcp.config.app_name || mcp.name,
+        name_slug: mcp.config.app_slug || 'unknown',
+        auth_type: 'oauth',
+        description: `Connect to ${mcp.config.app_name || mcp.name}`,
+        img_src: '',
+        custom_fields_json: '[]',
+        categories: [],
+        featured_weight: 0,
+        connect: {
+          allowed_domains: null,
+          base_proxy_target_url: '',
+          proxy_enabled: false,
+        },
+      };
+      setSelectedPipedreamApp(pipedreamApp);
+      setShowPipedreamConnector(true);
+      return;
+    }
+    
+    // If this is an available Composio integration, convert it to configured
+    if (mcp.isAvailable && mcp.customType === 'composio') {
+      const configuredMcp = { ...mcp, isAvailable: false };
+      const newMCPs = [...configuredMCPs];
+      newMCPs[index] = configuredMcp;
+      onConfigurationChange(newMCPs);
+      return;
+    }
+    
+    // Otherwise, edit as normal
     if (mcp.customType === 'composio') {
       setEditingIndex(index);
       setShowCustomDialog(true);
@@ -63,6 +104,11 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
       } else {
         console.warn('Composio MCP has no profile_id:', mcp);
       }
+    } else if (mcp.customType === 'pipedream') {
+      // For Pipedream, we need to use the Pipedream-specific tools manager
+      // But since we don't have a separate Pipedream tools manager dialog in this component,
+      // we'll use the custom tools manager but ensure it gets the right data
+      setShowCustomToolsManager(true);
     } else {
       setShowCustomToolsManager(true);
     }
@@ -96,6 +142,60 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
     toast.success(`Connected ${appName} integration!`);
   };
 
+  const handlePipedreamConnectionComplete = (profileId: string, selectedTools: string[], appName: string, appSlug: string) => {
+    console.log('Pipedream connection complete:', { profileId, selectedTools, appName, appSlug });
+    
+    // Create a proper Pipedream MCP configuration
+    const pipedreamMcp: MCPConfigurationType = {
+      name: `${appName} (Pipedream)`,
+      qualifiedName: `pipedream_${appSlug}_${profileId}`,
+      config: {
+        profile_id: profileId,
+        app_slug: appSlug,
+        app_name: appName,
+      },
+      enabledTools: selectedTools,
+      isCustom: true,
+      customType: 'pipedream',
+      app_slug: appSlug, // Add app_slug as direct property for icon loading
+      isPipedream: true, // Add isPipedream flag for type checking
+    };
+    
+    // Add to configured MCPs
+    const newMCPs = [...configuredMCPs.filter(mcp => !mcp.isAvailable || mcp.customType !== 'pipedream' || mcp.config?.profile_id !== profileId), pipedreamMcp];
+    onConfigurationChange(newMCPs);
+    
+    setShowPipedreamConnector(false);
+    setSelectedPipedreamApp(null);
+    queryClient.invalidateQueries({ queryKey: ['agents'] });
+    queryClient.invalidateQueries({ queryKey: ['agent', selectedAgentId] });
+    queryClient.invalidateQueries({ queryKey: ['pipedream', 'profiles'] });
+    toast.success(`Connected ${appName} via Pipedream!`);
+  };
+
+  const handlePipedreamAppSelected = (app: { app_slug: string; app_name: string }) => {
+    const pipedreamApp: PipedreamApp = {
+      id: app.app_slug,
+      name: app.app_name,
+      name_slug: app.app_slug,
+      auth_type: 'oauth',
+      description: `Connect to ${app.app_name}`,
+      img_src: '',
+      custom_fields_json: '[]',
+      categories: [],
+      featured_weight: 0,
+      connect: {
+        allowed_domains: null,
+        base_proxy_target_url: '',
+        proxy_enabled: false,
+      },
+    };
+    
+    setSelectedPipedreamApp(pipedreamApp);
+    setShowPipedreamRegistry(false);
+    setShowPipedreamConnector(true);
+  };
+
   const handleCustomToolsUpdate = (enabledTools: string[]) => {
     if (!selectedMCPForTools) return;
     
@@ -109,59 +209,213 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
     setSelectedMCPForTools(null);
   };
 
+  // Categorize MCPs by type
+  const composioMCPs = configuredMCPs.filter(mcp => mcp.customType === 'composio');
+  const pipedreamMCPs = configuredMCPs.filter(mcp => mcp.customType === 'pipedream');
+  const otherMCPs = configuredMCPs.filter(mcp =>
+    mcp.customType !== 'composio' && mcp.customType !== 'pipedream'
+  );
+
+  const [activeTab, setActiveTab] = useState('all');
+
+  const renderTabActions = (tab: string) => {
+    switch (tab) {
+      case 'composio':
+        return (
+          <Button
+            onClick={() => setShowRegistryDialog(true)}
+            variant="outline"
+            size="sm"
+            className="gap-1 h-9 px-3 text-xs sm:text-sm sm:gap-2 sm:px-4 flex-shrink-0"
+          >
+            <Store className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+            <span className="hidden sm:inline">Browse Composio</span>
+            <span className="sm:hidden">Add App</span>
+          </Button>
+        );
+      case 'pipedream':
+        return (
+          <Button
+            onClick={() => setShowPipedreamRegistry(true)}
+            variant="outline"
+            size="sm"
+            className="gap-1 h-9 px-3 text-xs sm:text-sm sm:gap-2 sm:px-4 flex-shrink-0"
+          >
+            <Zap className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+            <span className="hidden sm:inline">Browse Pipedream</span>
+            <span className="sm:hidden">Add App</span>
+          </Button>
+        );
+      case 'other':
+        return (
+          <Button
+            onClick={() => setShowCustomDialog(true)}
+            variant="outline"
+            size="sm"
+            className="gap-1 h-9 px-3 text-xs sm:text-sm sm:gap-2 sm:px-4 flex-shrink-0"
+          >
+            <Server className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+            <span className="hidden sm:inline">Add Custom MCP</span>
+            <span className="sm:hidden">Add MCP</span>
+          </Button>
+        );
+      default: // 'all' tab
+        return (
+          <Button
+            onClick={() => setShowCustomDialog(true)}
+            variant="outline"
+            size="sm"
+            className="gap-1 h-9 px-3 text-xs sm:text-sm sm:gap-2 sm:px-4 flex-shrink-0"
+          >
+            <Server className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+            <span className="hidden sm:inline">Add Custom MCP</span>
+            <span className="sm:hidden">Add MCP</span>
+          </Button>
+        );
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
       <div className="flex-1 overflow-y-auto">
-        {configuredMCPs.length === 0 && (
-          <div className="text-center py-12 px-6 bg-muted/30 rounded-xl border-2 border-dashed border-border">
-            <div className="mx-auto w-12 h-12 bg-muted rounded-full flex items-center justify-center mb-4">
-              <Zap className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <h4 className="text-sm font-medium text-foreground mb-2">
-              No integrations configured
-            </h4>
-            <p className="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
-              Browse the app registry to connect your apps through Composio or add custom MCP servers
-            </p>
-            <div className="flex gap-2 justify-center">
-              <Button onClick={() => setShowRegistryDialog(true)} variant="default">
-                <Store className="h-4 w-4" />
-                Browse Apps
-              </Button>
-              <Button onClick={() => setShowCustomDialog(true)} variant="outline">
-                <Server className="h-4 w-4" />
-                Custom MCP
-              </Button>
+        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <div className="space-y-4 mb-6">
+            <div className="space-y-4">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <TabsList className="h-10 p-1 bg-muted/50 flex-shrink-0 overflow-x-auto">
+                  <TabsTrigger value="all" className="px-2 py-2 text-xs sm:text-sm sm:px-3 whitespace-nowrap">All</TabsTrigger>
+                  <TabsTrigger value="composio" className="px-2 py-2 text-xs sm:text-sm sm:px-3 whitespace-nowrap">Composio</TabsTrigger>
+                  <TabsTrigger value="pipedream" className="px-2 py-2 text-xs sm:text-sm sm:px-3 whitespace-nowrap">Pipedream</TabsTrigger>
+                  {otherMCPs.length > 0 && (
+                    <TabsTrigger value="other" className="px-2 py-2 text-xs sm:text-sm sm:px-3 whitespace-nowrap">Other</TabsTrigger>
+                  )}
+                </TabsList>
+                <div className="flex-shrink-0 min-w-0">
+                  {renderTabActions(activeTab)}
+                </div>
+              </div>
             </div>
           </div>
-        )}
-        
-        {configuredMCPs.length > 0 && (
-          <div className="space-y-4">
-            <ConfiguredMcpList
-              configuredMCPs={configuredMCPs}
-              onEdit={handleEditMCP}
-              onRemove={handleRemoveMCP}
-              onConfigureTools={handleConfigureTools}
-            />
-          </div>
-        )}
+
+          {configuredMCPs.length === 0 ? (
+            <div className="text-center py-16 px-6">
+              <div className="mx-auto w-16 h-16 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl flex items-center justify-center mb-6">
+                <Zap className="h-8 w-8 text-primary" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground mb-2">
+                No integrations configured
+              </h3>
+              <p className="text-sm text-muted-foreground mb-8 max-w-md mx-auto">
+                Connect your favorite apps and services to enhance your agent's capabilities
+              </p>
+              <div className="flex flex-wrap gap-3 justify-center">
+                <Button
+                  onClick={() => setShowRegistryDialog(true)}
+                  className="gap-2 h-10 px-6"
+                >
+                  <Store className="h-4 w-4" />
+                  Browse Composio Apps
+                </Button>
+                <Button
+                  onClick={() => setShowPipedreamRegistry(true)}
+                  className="gap-2 h-10 px-6"
+                >
+                  <Zap className="h-4 w-4" />
+                  Browse Pipedream Apps
+                </Button>
+                <Button
+                  onClick={() => setShowCustomDialog(true)}
+                  variant="outline"
+                  className="gap-2 h-10 px-6"
+                >
+                  <Server className="h-4 w-4" />
+                  Add Custom Server
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <TabsContent value="all" className="space-y-6">
+                <ConfiguredMcpList
+                  configuredMCPs={configuredMCPs}
+                  onEdit={handleEditMCP}
+                  onRemove={handleRemoveMCP}
+                  onConfigureTools={handleConfigureTools}
+                />
+              </TabsContent>
+              
+              <TabsContent value="composio" className="space-y-6">
+                {composioMCPs.length > 0 ? (
+                  <ConfiguredMcpList
+                    configuredMCPs={composioMCPs}
+                    onEdit={handleEditMCP}
+                    onRemove={handleRemoveMCP}
+                    onConfigureTools={handleConfigureTools}
+                  />
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="mx-auto w-12 h-12 bg-muted/50 rounded-xl flex items-center justify-center mb-4">
+                      <Store className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      No Composio integrations configured
+                    </p>
+                    <Button
+                      onClick={() => setShowRegistryDialog(true)}
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                    >
+                      <Store className="h-4 w-4" />
+                      Browse Composio Apps
+                    </Button>
+                  </div>
+                )}
+              </TabsContent>
+              
+              <TabsContent value="pipedream" className="space-y-6">
+                {pipedreamMCPs.length > 0 ? (
+                  <ConfiguredMcpList
+                    configuredMCPs={pipedreamMCPs}
+                    onEdit={handleEditMCP}
+                    onRemove={handleRemoveMCP}
+                    onConfigureTools={handleConfigureTools}
+                  />
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="mx-auto w-12 h-12 bg-muted/50 rounded-xl flex items-center justify-center mb-4">
+                      <Zap className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      No Pipedream integrations configured
+                    </p>
+                    <Button
+                      onClick={() => setShowPipedreamRegistry(true)}
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                    >
+                      <Zap className="h-4 w-4" />
+                      Browse Pipedream Apps
+                    </Button>
+                  </div>
+                )}
+              </TabsContent>
+              
+              {otherMCPs.length > 0 && (
+                <TabsContent value="other" className="space-y-6">
+                  <ConfiguredMcpList
+                    configuredMCPs={otherMCPs}
+                    onEdit={handleEditMCP}
+                    onRemove={handleRemoveMCP}
+                    onConfigureTools={handleConfigureTools}
+                  />
+                </TabsContent>
+              )}
+            </>
+          )}
+        </Tabs>
       </div>
-      
-      {configuredMCPs.length > 0 && (
-        <div className="flex-shrink-0 pt-4">
-          <div className="flex gap-2 justify-center">
-            <Button onClick={() => setShowRegistryDialog(true)} variant="default">
-              <Store className="h-4 w-4" />
-              Browse Apps
-            </Button>
-            <Button onClick={() => setShowCustomDialog(true)} variant="outline">
-              <Server className="h-4 w-4" />
-              Custom MCP
-            </Button>
-          </div>
-        </div>
-      )}
       
       <Dialog open={showRegistryDialog} onOpenChange={setShowRegistryDialog}>
         <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-hidden">
@@ -199,7 +453,24 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
           }}
         />
       )}
-      {selectedMCPForTools && selectedMCPForTools.customType !== 'composio' && (
+      {selectedMCPForTools && selectedMCPForTools.customType === 'pipedream' && (
+        <ToolsManager
+          mode="pipedream"
+          agentId={selectedAgentId || ''}
+          profileId={selectedMCPForTools.config?.profile_id || ''}
+          appName={selectedMCPForTools.config?.app_name || selectedMCPForTools.name}
+          profileName={selectedMCPForTools.config?.profile_name}
+          open={showCustomToolsManager}
+          onOpenChange={setShowCustomToolsManager}
+          onToolsUpdate={handleCustomToolsUpdate}
+          versionData={versionData}
+          saveMode={saveMode}
+          versionId={versionId}
+          initialEnabledTools={selectedMCPForTools.enabledTools}
+        />
+      )}
+      
+      {selectedMCPForTools && selectedMCPForTools.customType !== 'composio' && selectedMCPForTools.customType !== 'pipedream' && (
         <ToolsManager
           mode="custom"
           agentId={selectedAgentId}
@@ -223,6 +494,34 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
             return selectedMCPForTools.enabledTools;
           })()}
         />
+      )}
+
+      {selectedPipedreamApp && (
+        <PipedreamConnector
+          app={selectedPipedreamApp}
+          open={showPipedreamConnector}
+          onOpenChange={setShowPipedreamConnector}
+          onComplete={handlePipedreamConnectionComplete}
+          mode="full"
+          saveMode="callback"
+          agentId={selectedAgentId}
+        />
+      )}
+
+      {showPipedreamRegistry && (
+        <Dialog open={showPipedreamRegistry} onOpenChange={setShowPipedreamRegistry}>
+          <DialogContent className="p-0 max-w-6xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader className="sr-only">
+              <DialogTitle>Browse Pipedream Apps</DialogTitle>
+            </DialogHeader>
+            <PipedreamRegistry
+              mode="profile-only"
+              showAgentSelector={false}
+              onAppSelected={handlePipedreamAppSelected}
+              onClose={() => setShowPipedreamRegistry(false)}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
