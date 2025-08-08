@@ -3,7 +3,7 @@
 import React, { useState, Suspense, useEffect, useRef } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Menu } from 'lucide-react';
+import { Menu, Sparkles, Puzzle } from 'lucide-react';
 import {
   ChatInput,
   ChatInputHandles,
@@ -19,6 +19,16 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useBillingError } from '@/hooks/useBillingError';
 import { BillingErrorAlert } from '@/components/billing/usage-limit-alert';
 import { useAccounts } from '@/hooks/use-accounts';
@@ -32,8 +42,10 @@ import { Examples } from './examples';
 import { useThreadQuery } from '@/hooks/react-query/threads/use-threads';
 import { normalizeFilenameToNFC } from '@/lib/utils/unicode';
 import { KortixLogo } from '../sidebar/kortix-logo';
+import { NewAgentDialog } from '@/components/agents/new-agent-dialog';
 
 const PENDING_PROMPT_KEY = 'pendingAgentPrompt';
+const DASHBOARD_AGENT_NUDGE_DISMISSED = 'dashboardAgentNudgeDismissed';
 
 export function DashboardContent() {
   const [inputValue, setInputValue] = useState('');
@@ -41,6 +53,8 @@ export function DashboardContent() {
   const [autoSubmit, setAutoSubmit] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>();
   const [initiatedThreadId, setInitiatedThreadId] = useState<string | null>(null);
+  const [showAgentNudge, setShowAgentNudge] = useState(false);
+  const [showCreateAgentDialog, setShowCreateAgentDialog] = useState(false);
   const { billingError, handleBillingError, clearBillingError } =
     useBillingError();
   const router = useRouter();
@@ -67,6 +81,7 @@ export function DashboardContent() {
   const displayName = selectedAgent?.name || 'Suna';
   const agentAvatar = selectedAgent?.avatar;
   const isSunaAgent = selectedAgent?.metadata?.is_suna_default || false;
+  const currentAgentIsDefault = !selectedAgent || !!selectedAgent?.metadata?.is_suna_default;
 
   const threadQuery = useThreadQuery(initiatedThreadId || '');
 
@@ -79,6 +94,22 @@ export function DashboardContent() {
       router.replace(newUrl.pathname + newUrl.search, { scroll: false });
     }
   }, [searchParams, selectedAgentId, router]);
+
+  // Onboarding popup logic
+  useEffect(() => {
+    const force = searchParams.get('showAgentNudge') === '1';
+    if (force) {
+      setShowAgentNudge(true);
+      return;
+    }
+
+    const dismissed = typeof window !== 'undefined' && localStorage.getItem(DASHBOARD_AGENT_NUDGE_DISMISSED) === '1';
+    if (!dismissed && currentAgentIsDefault) {
+      setShowAgentNudge(true);
+    } else {
+      setShowAgentNudge(false);
+    }
+  }, [searchParams, currentAgentIsDefault]);
 
   useEffect(() => {
     if (threadQuery.data && initiatedThreadId) {
@@ -185,6 +216,81 @@ export function DashboardContent() {
   return (
     <>
       <ModalProviders />
+      {/* Onboarding Nudge */}
+      <AlertDialog open={showAgentNudge} onOpenChange={(open) => {
+        if (!open) {
+          localStorage.setItem(DASHBOARD_AGENT_NUDGE_DISMISSED, '1');
+        }
+        setShowAgentNudge(open);
+      }}>
+        <AlertDialogContent className="sm:max-w-lg">
+          <AlertDialogHeader>
+            <div className="flex items-start gap-3">
+              <div className="mt-1 rounded-md bg-primary/10 p-2 text-primary">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div className="space-y-1">
+                <AlertDialogTitle className="text-xl">Create your own Agent</AlertDialogTitle>
+                <AlertDialogDescription>
+                  You're currently using the General agent. Create your own Agent to unlock the full Machine toolkit, customize behavior, and save configurations.
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="mt-3 space-y-3">
+            <div className="text-sm text-muted-foreground">
+              After creating your Agent, open its configuration to add tools. Agents don’t have tools by default — you enable the ones you need.
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-foreground/80">
+                <Puzzle className="h-3.5 w-3.5" /> Browser
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-foreground/80">
+                <Puzzle className="h-3.5 w-3.5" /> Sandbox
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-foreground/80">
+                <Puzzle className="h-3.5 w-3.5" /> Image Gen
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-foreground/80">
+                <Puzzle className="h-3.5 w-3.5" /> External APIs
+              </span>
+            </div>
+
+            <ul className="ml-5 list-disc space-y-1 text-sm text-muted-foreground">
+              <li>Tailor system prompts and behavior</li>
+              <li>Turn on only the tools you need</li>
+              <li>Save and reuse configurations across threads</li>
+            </ul>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              localStorage.setItem(DASHBOARD_AGENT_NUDGE_DISMISSED, '1');
+              setShowAgentNudge(false);
+            }}>
+              Not now
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              localStorage.setItem(DASHBOARD_AGENT_NUDGE_DISMISSED, '1');
+              setShowAgentNudge(false);
+              setShowCreateAgentDialog(true);
+            }}>
+              Create Agent
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Create Agent Dialog */}
+      <NewAgentDialog
+        open={showCreateAgentDialog}
+        onOpenChange={setShowCreateAgentDialog}
+        onSuccess={() => {
+          localStorage.setItem(DASHBOARD_AGENT_NUDGE_DISMISSED, '1');
+          setShowAgentNudge(false);
+          setShowCreateAgentDialog(false);
+        }}
+      />
       <div className="flex flex-col h-screen w-full">
         {isMobile && (
           <div className="absolute top-4 left-4 z-10">
