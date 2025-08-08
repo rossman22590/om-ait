@@ -705,8 +705,6 @@ export default function ThreadPage({
           agentName={agent && agent.name}
           agentAvatar={agent && agent.avatar}
           scrollContainerRef={scrollContainerRef}
-          isSidePanelOpen={isSidePanelOpen}
-          leftSidebarState={leftSidebarState}
         />
 
 
