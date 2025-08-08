@@ -8,6 +8,7 @@ export const AGENTPRESS_TOOL_DEFINITIONS: Record<string, { enabled: boolean; des
     'sb_vision_tool': { enabled: true, description: 'Vision and image processing capabilities for visual content analysis', icon: '👁️', color: 'bg-pink-100 dark:bg-pink-800/50' },
     'data_providers_tool': { enabled: true, description: 'Access to data providers and external APIs (requires RapidAPI key)', icon: '🔗', color: 'bg-cyan-100 dark:bg-cyan-800/50' },
     'sb_image_edit_tool': { enabled: false, description: 'Generate new images from a prompt or edit existing images', icon: '🎨', color: 'bg-purple-100 dark:bg-purple-800/50' },
+    'sb_sheets_tool': { enabled: true, description: 'Create, view, update, analyze, visualize, and format spreadsheets (XLSX/CSV) with Luckysheet viewer', icon: '📊', color: 'bg-purple-100 dark:bg-purple-800/50' },
 };
 
 export const DEFAULT_AGENTPRESS_TOOLS: Record<string, boolean> = Object.entries(AGENTPRESS_TOOL_DEFINITIONS).reduce((acc, [key, value]) => {
@@ -26,6 +27,7 @@ export const getToolDisplayName = (toolName: string): string => {
       'sb_vision_tool': 'Image Processing',
       'data_providers_tool': 'Data Providers',
       'sb_image_edit_tool': 'Image Generation & Editing',
+      'sb_sheets_tool': 'Sheets Tool',
     };
     
     return displayNames[toolName] || toolName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
