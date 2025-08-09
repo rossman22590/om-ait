@@ -23,22 +23,37 @@ def initialize():
     load_dotenv()
 
     # Get Redis configuration
+    redis_url_env = os.getenv("REDIS_URL", "").strip()
     redis_host = os.getenv("REDIS_HOST", "redis")
     redis_port = int(os.getenv("REDIS_PORT", 6379))
     redis_password = os.getenv("REDIS_PASSWORD", "")
     redis_ssl = os.getenv("REDIS_SSL", "False").lower() == "true"
+
+    # Prefer a full REDIS_URL if provided
+    if redis_url_env:
+        logger.info(f"Initializing Redis via REDIS_URL (masked): {redis_url_env.split('@')[-1]}")
+        client = redis.from_url(
+            redis_url_env,
+            decode_responses=True,
+            socket_timeout=30.0,
+            socket_connect_timeout=20.0,
+            retry_on_timeout=True,
+            health_check_interval=30,
+            ssl_cert_reqs=None,
+        )
+        return client
 
     logger.info(f"Initializing Redis connection to {redis_host}:{redis_port} (SSL: {redis_ssl})")
 
     # For Upstash/SSL connections, use URL-based connection
     if redis_ssl and redis_password:
         redis_url = f"rediss://default:{redis_password}@{redis_host}:{redis_port}"
-        logger.info("Using Redis URL connection for SSL (Upstash)")
+        logger.info(f"Using Redis URL connection for SSL (Upstash): {redis_host}:{redis_port}")
         client = redis.from_url(
             redis_url,
             decode_responses=True,
-            socket_timeout=15.0,
-            socket_connect_timeout=15.0,
+            socket_timeout=30.0,
+            socket_connect_timeout=20.0,
             retry_on_timeout=True,
             health_check_interval=30,
             ssl_cert_reqs=None,
@@ -51,7 +66,7 @@ def initialize():
             port=redis_port,
             password=redis_password,
             decode_responses=True,
-            socket_timeout=10.0,
+            socket_timeout=15.0,
             socket_connect_timeout=10.0,
             retry_on_timeout=True,
             health_check_interval=30,
