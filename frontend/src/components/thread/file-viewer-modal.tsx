@@ -190,6 +190,41 @@ export function FileViewerModal({
       : `/workspace/${path.replace(/^\//, '')}`;
   }, []);
 
+  // Helper to ignore heavy/system folders in downloads (node_modules, dot-folders, venv, caches, etc.)
+  const isIgnoredPath = useCallback((fullPath: string): boolean => {
+    // Remove /workspace prefix for simpler matching
+    const rel = fullPath.replace(/^\/workspace\/?/, '');
+    if (!rel) return false;
+
+    const IGNORED_NAMES = new Set([
+      'node_modules',
+      '.git',
+      '.next',
+      '.cache',
+      '.turbo',
+      '.pnpm-store',
+      '.pytest_cache',
+      '.mypy_cache',
+      '.idea',
+      '.vscode',
+      '__pycache__',
+      'venv',
+      '.venv',
+      'env',
+      'dist',
+      'build',
+      'coverage',
+      '.DS_Store',
+    ]);
+
+    const parts = rel.split('/').filter(Boolean);
+    for (const part of parts) {
+      if (part.startsWith('.')) return true; // any dot-folder/file
+      if (IGNORED_NAMES.has(part)) return true;
+    }
+    return false;
+  }, []);
+
   // Recursive function to discover all files in the workspace
   const discoverAllFiles = useCallback(async (
     startPath: string = '/workspace'
@@ -202,11 +237,22 @@ export function FileViewerModal({
       if (visited.has(dirPath)) return;
       visited.add(dirPath);
 
+      // Skip ignored directories entirely
+      if (isIgnoredPath(dirPath)) {
+        console.log(`[DOWNLOAD ALL] Skipping ignored directory: ${dirPath}`);
+        return;
+      }
+
       try {
         console.log(`[DOWNLOAD ALL] Exploring directory: ${dirPath}`);
         const files = await listSandboxFiles(sandboxId, dirPath);
 
         for (const file of files) {
+          if (isIgnoredPath(file.path)) {
+            // Skip ignored files/subdirectories
+            continue;
+          }
+
           if (file.is_dir) {
             // Recursively explore subdirectories
             await exploreDirectory(file.path);
@@ -226,7 +272,7 @@ export function FileViewerModal({
 
     console.log(`[DOWNLOAD ALL] Discovered ${allFiles.length} files, total size: ${totalSize} bytes`);
     return { files: allFiles, totalSize };
-  }, [sandboxId]);
+  }, [sandboxId, isIgnoredPath]);
 
   // Function to download all files as a zip
   const handleDownloadAll = useCallback(async () => {
@@ -259,6 +305,12 @@ export function FileViewerModal({
           total: files.length,
           currentFile: relativePath
         });
+
+        // Extra safeguard: skip any file that matches ignore rules
+        if (isIgnoredPath(file.path)) {
+          console.log(`[DOWNLOAD ALL] Skipping ignored file: ${file.path}`);
+          continue;
+        }
 
         try {
           // Determine content type for proper loading
@@ -1159,8 +1211,6 @@ export function FileViewerModal({
       fileInputRef.current.click();
     }
   }, []);
-
-
 
   // Process uploaded file - Define after helpers
   const processUpload = useCallback(
