@@ -23,27 +23,9 @@ from utils.retry import retry
 import sentry_sdk
 from typing import Dict, Any
 
-# Get Redis configuration for Dramatiq broker
 redis_host = os.getenv('REDIS_HOST', 'redis')
 redis_port = int(os.getenv('REDIS_PORT', 6379))
-redis_password = os.getenv('REDIS_PASSWORD', '')
-redis_ssl = os.getenv('REDIS_SSL', 'False').lower() == 'true'
-
-# Configure Redis broker for Dramatiq with Upstash support
-if redis_ssl and redis_password:
-    # Use URL-based connection for SSL (Upstash)
-    redis_url = f"rediss://default:{redis_password}@{redis_host}:{redis_port}"
-    redis_broker = RedisBroker(url=redis_url, middleware=[dramatiq.middleware.AsyncIO()])
-else:
-    # Fallback to direct connection for local Redis
-    broker_kwargs = {
-        'host': redis_host,
-        'port': redis_port,
-        'middleware': [dramatiq.middleware.AsyncIO()]
-    }
-    if redis_password:
-        broker_kwargs['password'] = redis_password
-    redis_broker = RedisBroker(**broker_kwargs)
+redis_broker = RedisBroker(host=redis_host, port=redis_port, middleware=[dramatiq.middleware.AsyncIO()])
 
 dramatiq.set_broker(redis_broker)
 
