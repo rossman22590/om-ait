@@ -190,6 +190,27 @@ export function FileViewerModal({
       : `/workspace/${path.replace(/^\//, '')}`;
   }, []);
 
+  // Helper to determine if a path should be ignored in downloads
+  const IGNORED_SEGMENTS = new Set([
+    'node_modules', '.git', '.next', '.cache', '.turbo', '.pnpm-store',
+    '.pytest_cache', '.mypy_cache', '.idea', '.vscode', '__pycache__',
+    'venv', '.venv', 'env', 'dist', 'build', 'coverage', '.DS_Store'
+  ]);
+
+  const isIgnoredPath = useCallback((fullPath: string): boolean => {
+    if (typeof fullPath !== 'string' || !fullPath) return false;
+    // Make relative to /workspace if present
+    const rel = fullPath.replace(/^\/workspace\/?/, '');
+    if (!rel) return false; // root workspace is fine
+    const segments = rel.split('/').filter(Boolean);
+    for (const seg of segments) {
+      if (!seg) continue;
+      if (seg.startsWith('.')) return true; // ignore dot-folders/files broadly
+      if (IGNORED_SEGMENTS.has(seg)) return true;
+    }
+    return false;
+  }, []);
+
   // Recursive function to discover all files in the workspace
   const discoverAllFiles = useCallback(async (
     startPath: string = '/workspace'
@@ -207,6 +228,10 @@ export function FileViewerModal({
         const files = await listSandboxFiles(sandboxId, dirPath);
 
         for (const file of files) {
+          if (isIgnoredPath(file.path)) {
+            // Skip ignored directories and files
+            continue;
+          }
           if (file.is_dir) {
             // Recursively explore subdirectories
             await exploreDirectory(file.path);
@@ -226,7 +251,7 @@ export function FileViewerModal({
 
     console.log(`[DOWNLOAD ALL] Discovered ${allFiles.length} files, total size: ${totalSize} bytes`);
     return { files: allFiles, totalSize };
-  }, [sandboxId]);
+  }, [sandboxId, isIgnoredPath]);
 
   // Function to download all files as a zip
   const handleDownloadAll = useCallback(async () => {
@@ -238,25 +263,26 @@ export function FileViewerModal({
 
       // Step 1: Discover all files
       const { files } = await discoverAllFiles();
+      const filteredFiles = files.filter(f => !isIgnoredPath(f.path));
 
-      if (files.length === 0) {
+      if (filteredFiles.length === 0) {
         toast.error('No files found to download');
         return;
       }
 
-      console.log(`[DOWNLOAD ALL] Starting download of ${files.length} files`);
+      console.log(`[DOWNLOAD ALL] Starting download of ${filteredFiles.length} files`);
 
       // Step 2: Create zip and load files
       const zip = new JSZip();
-      setDownloadProgress({ current: 0, total: files.length, currentFile: 'Creating archive...' });
+      setDownloadProgress({ current: 0, total: filteredFiles.length, currentFile: 'Creating archive...' });
 
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
+      for (let i = 0; i < filteredFiles.length; i++) {
+        const file = filteredFiles[i];
         const relativePath = file.path.replace(/^\/workspace\//, ''); // Remove /workspace/ prefix
 
         setDownloadProgress({
           current: i + 1,
-          total: files.length,
+          total: filteredFiles.length,
           currentFile: relativePath
         });
 
@@ -326,7 +352,7 @@ export function FileViewerModal({
             zip.file(relativePath, JSON.stringify(content, null, 2));
           }
 
-          console.log(`[DOWNLOAD ALL] Added to zip: ${relativePath} (${i + 1}/${files.length})`);
+          console.log(`[DOWNLOAD ALL] Added to zip: ${relativePath} (${i + 1}/${filteredFiles.length})`);
 
         } catch (fileError) {
           console.error(`[DOWNLOAD ALL] Error processing file ${file.path}:`, fileError);
@@ -336,8 +362,8 @@ export function FileViewerModal({
 
       // Step 3: Generate and download the zip
       setDownloadProgress({
-        current: files.length,
-        total: files.length,
+        current: filteredFiles.length,
+        total: filteredFiles.length,
         currentFile: 'Generating zip file...'
       });
 
@@ -360,8 +386,8 @@ export function FileViewerModal({
       // Clean up
       setTimeout(() => URL.revokeObjectURL(url), 10000);
 
-      toast.success(`Downloaded ${files.length} files as zip archive`);
-      console.log(`[DOWNLOAD ALL] Successfully created zip with ${files.length} files`);
+      toast.success(`Downloaded ${filteredFiles.length} files as zip archive`);
+      console.log(`[DOWNLOAD ALL] Successfully created zip with ${filteredFiles.length} files`);
 
     } catch (error) {
       console.error('[DOWNLOAD ALL] Error creating zip:', error);
@@ -370,7 +396,7 @@ export function FileViewerModal({
       setIsDownloadingAll(false);
       setDownloadProgress(null);
     }
-  }, [sandboxId, session?.access_token, isDownloadingAll, discoverAllFiles]);
+  }, [sandboxId, session?.access_token, isDownloadingAll, discoverAllFiles, isIgnoredPath]);
 
   // Helper function to check if a value is a Blob (type-safe version of instanceof)
   const isBlob = (value: any): value is Blob => {
@@ -1159,8 +1185,6 @@ export function FileViewerModal({
       fileInputRef.current.click();
     }
   }, []);
-
-
 
   // Process uploaded file - Define after helpers
   const processUpload = useCallback(
