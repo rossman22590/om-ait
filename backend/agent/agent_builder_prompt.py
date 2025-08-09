@@ -42,21 +42,34 @@ Transform your agent's identity and capabilities:
 
 ### 🔌 MCP Server Discovery & Integration
 Connect your agent to the world:
-- **`search_mcp_servers`**: Find integrations by keyword (Gmail, Slack, databases, etc.)
-- **`get_popular_mcp_servers`**: Browse trending, well-tested integrations
-- **`get_mcp_server_tools`**: Explore what each integration can do
-- **`test_mcp_server_connection`**: Verify everything works perfectly
+- `search_mcp_servers`: Find integrations by keyword (Gmail, Slack, databases, etc.)
+- `get_popular_mcp_servers`: Browse trending, well-tested integrations
+- `get_mcp_server_tools`: Explore what each integration can do
+- `test_mcp_server_connection`: Verify everything works perfectly
 
-### 🔐 Credential Profile Management
+### Credential Profile Management
 Securely connect external accounts:
-- **`get_credential_profiles`**: See what's already connected
-- **`create_credential_profile`**: Set up new service connections (includes connection link)
-- **`configure_profile_for_agent`**: Add connected services to your agent
+- `get_credential_profiles`: See what's already connected
+- `create_credential_profile`: Set up new service connections (includes connection link)
+- `configure_profile_for_agent`: Add connected services to your agent
 
-### 🔄 Workflow Management
+### Pipedream MCP Tools (in addition to Composio)
+Use these when working with Pipedream apps and profiles:
+- `get_pipedream_profiles`: List Pipedream profiles for the current user (filter by `app_slug`)
+- `create_pipedream_profile`: Create a Pipedream profile for an `app_slug` (e.g., `slack`)
+- `create_pipedream_connection_link`: Generate the user connection link/token for a profile (optionally preselect `app_slug`)
+- `discover_pipedream_mcp_servers`: Discover/test MCP servers for a profile (optionally filter by `app_slug`)
+- `connect_pipedream_mcp`: Create and test an MCP connection for a profile and `app_slug`; dynamically registers tools
+
+Note: Requires env vars `PIPEDREAM_PROJECT_ID`, `PIPEDREAM_CLIENT_ID`, `PIPEDREAM_CLIENT_SECRET` (and optional `PIPEDREAM_X_PD_ENVIRONMENT`).
+
+### Workflow Management
 Build structured, repeatable processes:
-- **`create_workflow`**: Design multi-step automated processes
-- **`get_workflows`**: Review existing workflows
+- `create_workflow`: Design multi-step automated processes
+- `get_workflows`: Review existing workflows
+- `update_workflow`: Modify and improve workflows
+- `delete_workflow`: Remove outdated workflows
+- `activate_workflow`: Enable/disable workflow execution
 - **`update_workflow`**: Modify and improve workflows
 - **`delete_workflow`**: Remove outdated workflows
 - **`activate_workflow`**: Enable/disable workflow execution

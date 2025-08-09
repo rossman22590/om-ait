@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Markdown } from '@/components/ui/markdown';
+import { PipedreamUrlDetector } from './pipedream-url-detector';
 
 interface ComposioUrlDetectorProps {
   content: string;
@@ -286,6 +287,10 @@ export const ComposioUrlDetector: React.FC<ComposioUrlDetectorProps> = ({
   content, 
   className 
 }) => {
+  if (content.includes('pipedream.com')) {
+    return <PipedreamUrlDetector content={content} className={className} />;
+  }
+
   const composioUrls = detectComposioUrls(content);
 
   if (composioUrls.length === 0) {

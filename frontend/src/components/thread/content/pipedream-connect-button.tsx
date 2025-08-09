@@ -5,6 +5,8 @@ import { ExternalLink, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { usePipedreamAppIcon } from '@/hooks/react-query/pipedream/use-pipedream';
+import { toast } from 'sonner';
+import { pipedreamApi } from '@/hooks/react-query/pipedream/utils';
 
 // Check if Pipedream UI is enabled
 const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
@@ -12,6 +14,7 @@ const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
 interface PipedreamConnectButtonProps {
   url: string;
   appSlug?: string;
+  onConnected?: (appSlug: string) => void;
 }
 
 // Common app name mappings for better display
@@ -90,7 +93,8 @@ function extractAppSlug(url: string): string | null {
 
 export function PipedreamConnectButton({ 
   url, 
-  appSlug: providedAppSlug 
+  appSlug: providedAppSlug,
+  onConnected,
 }: PipedreamConnectButtonProps) {
   // Hooks must be called unconditionally; conditionally render later
 
@@ -105,7 +109,66 @@ export function PipedreamConnectButton({
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    window.open(url, '_blank', 'noopener,noreferrer');
+
+    // Pre-open a popup and immediately navigate to same-origin holding page
+    const popup = window.open('', '_blank', 'width=600,height=700');
+    if (!popup) {
+      toast.error('Popup blocked. Please allow popups and try again.');
+      return;
+    }
+    try {
+      // Navigate to holding page under same origin
+      const origin = window.location.origin;
+      popup.location.href = `${origin}/pipedream/connecting`;
+    } catch {}
+
+    // Hand off the final link via postMessage; only fallback later if still on holding page
+    try {
+      popup.postMessage({ link: url }, '*');
+    } catch {}
+    setTimeout(() => {
+      try {
+        const href = popup.location?.href || '';
+        if (href.includes('/pipedream/connecting')) {
+          try { popup.location.href = url; } catch {}
+        }
+      } catch {}
+    }, 800);
+
+    // Poll until the popup closes, then verify connection
+    const checkClosed = setInterval(async () => {
+      if (popup.closed) {
+        clearInterval(checkClosed);
+        try {
+          const connections = await pipedreamApi.getConnections();
+          const targetSlug = appSlugToUse || extractAppSlug(url) || '';
+          const isConnected = !!connections.connections.find(
+            (c) => c.app === targetSlug && c.status === 'connected'
+          );
+
+          if (isConnected) {
+            toast.success(`${formatAppName(targetSlug)} successfully connected!`);
+            // Align with other components: dispatch success event
+            window.dispatchEvent(
+              new CustomEvent('pipedream-connection-success', {
+                detail: { profileId: 'unknown', profileName: formatAppName(targetSlug) },
+              })
+            );
+            // Notify parent so it can open the tool-selection flow
+            try {
+              onConnected?.(targetSlug);
+            } catch {}
+          } else {
+            toast.error(`Authorization not completed for ${formatAppName(targetSlug)}. Please try again.`);
+          }
+        } catch (err) {
+          console.error('Failed to verify Pipedream connection', err);
+          toast.error('Failed to verify connection. Please refresh and try again.');
+        }
+      }
+    }, 800);
+    // Safety: stop polling after 5 minutes
+    setTimeout(() => clearInterval(checkClosed), 5 * 60 * 1000);
   };
 
   // Conditionally render based on feature flag

@@ -130,9 +130,25 @@ export function ConnectCredentialProfileToolView({
   };
 
   const openConnectionLink = () => {
-    if (connection_link) {
-      window.open(connection_link, '_blank', 'noopener,noreferrer');
-    }
+    if (!connection_link) return;
+    // Pre-open popup (blank) to avoid blockers, then navigate via holding page
+    const popup = window.open('', '_blank', 'width=600,height=700');
+    if (!popup) return;
+    try {
+      const origin = window.location.origin;
+      popup.location.href = `${origin}/pipedream/connecting`;
+    } catch {}
+    try {
+      popup.postMessage({ link: connection_link }, '*');
+    } catch {}
+    setTimeout(() => {
+      try {
+        const href = popup.location?.href || '';
+        if (href.includes('/pipedream/connecting')) {
+          try { popup.location.href = connection_link; } catch {}
+        }
+      } catch {}
+    }, 800);
   };
 
   const isExpired = expires_at && new Date(expires_at) <= new Date();

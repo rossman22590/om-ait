@@ -6,6 +6,7 @@ from .base_tool import AgentBuilderBaseTool
 from composio_integration.toolkit_service import ToolkitService
 from composio_integration.composio_service import get_integration_service
 from utils.logger import logger
+from pipedream.app_service import get_app_service
 
 
 class MCPSearchTool(AgentBuilderBaseTool):
@@ -57,6 +58,7 @@ class MCPSearchTool(AgentBuilderBaseTool):
             else:
                 toolkits = await toolkit_service.list_toolkits(limit=limit, category=category)
             
+            # Respect limit for Composio first to preserve existing behavior
             if len(toolkits) > limit:
                 toolkits = toolkits[:limit]
             
@@ -72,6 +74,36 @@ class MCPSearchTool(AgentBuilderBaseTool):
                     "categories": toolkit.categories
                 })
             
+            # If we still have room, supplement with Pipedream app search results
+            remaining = max(0, limit - len(formatted_toolkits))
+            if remaining > 0 and query:
+                try:
+                    app_service = get_app_service()
+                    pd_result = await app_service.search_apps(query=query, category=category)
+                    pd_apps = pd_result.get("apps", [])
+                    pd_formatted = []
+                    for app in pd_apps:
+                        try:
+                            pd_formatted.append({
+                                "name": getattr(app, "name", ""),
+                                "toolkit_slug": getattr(app, "slug", ""),
+                                "description": getattr(app, "description", None) or f"Toolkit for {getattr(app, 'name', '')}",
+                                "logo_url": getattr(app, "logo_url", "") or '',
+                                # Map single auth_type into list to match Composio schema
+                                "auth_schemes": [getattr(getattr(app, "auth_type", None), "value", "").upper()] if getattr(app, "auth_type", None) else [],
+                                "tags": getattr(app, "tags", []) or [],
+                                # Pipedream has a single category string; wrap as list
+                                "categories": [getattr(app, "category", "")] if getattr(app, "category", None) else []
+                            })
+                        except Exception as map_err:
+                            logger.warning(f"Failed to map Pipedream app to toolkit shape: {map_err}")
+                            continue
+                    if pd_formatted:
+                        formatted_toolkits.extend(pd_formatted[:remaining])
+                except Exception as pd_err:
+                    # Non-fatal: if Pipedream search fails, keep Composio-only results
+                    logger.warning(f"Pipedream search failed or unavailable: {pd_err}")
+            
             if not formatted_toolkits:
                 return ToolResult(
                     success=False,
@@ -80,11 +112,11 @@ class MCPSearchTool(AgentBuilderBaseTool):
             
             return ToolResult(
                 success=True,
-                output=json.dumps(formatted_toolkits, ensure_ascii=False)
+                output=json.dumps(formatted_toolkits[:limit], ensure_ascii=False)
             )
                 
         except Exception as e:
-            return self.fail_response(f"Error searching Composio toolkits: {str(e)}")
+            return self.fail_response(f"Error searching MCP toolkits: {str(e)}")
 
     @openapi_schema({
         "type": "function",
@@ -113,28 +145,62 @@ class MCPSearchTool(AgentBuilderBaseTool):
     async def get_app_details(self, toolkit_slug: str) -> ToolResult:
         try:
             toolkit_service = ToolkitService()
-            toolkit_data = await toolkit_service.get_toolkit_by_slug(toolkit_slug)
-            
-            if not toolkit_data:
+            # Detect pipedream-qualified slug and normalize
+            is_pipedream = toolkit_slug.startswith("pipedream:")
+            pd_slug = toolkit_slug.split(":", 1)[1] if is_pipedream else toolkit_slug
+
+            toolkit_data = None
+            if not is_pipedream:
+                # Try Composio first (preserve existing behavior)
+                toolkit_data = await toolkit_service.get_toolkit_by_slug(toolkit_slug)
+
+            if toolkit_data:
+                formatted_toolkit = {
+                    "name": toolkit_data.name,
+                    "toolkit_slug": toolkit_data.slug,
+                    "description": toolkit_data.description or f"Toolkit for {toolkit_data.name}",
+                    "logo_url": toolkit_data.logo or '',
+                    "auth_schemes": toolkit_data.auth_schemes,
+                    "tags": toolkit_data.tags,
+                    "categories": toolkit_data.categories
+                }
+                result = {
+                    "message": f"Retrieved details for {formatted_toolkit['name']}",
+                    "toolkit": formatted_toolkit,
+                    "supports_oauth": "OAUTH2" in toolkit_data.auth_schemes,
+                    "auth_schemes": toolkit_data.auth_schemes
+                }
+                return self.success_response(result)
+
+            # Fallback or explicit Pipedream slug: fetch from Pipedream app service
+            try:
+                app_service = get_app_service()
+                app = await app_service.get_app_by_slug(pd_slug)
+            except Exception as e:
+                app = None
+                logger.warning(f"Pipedream get_app_by_slug failed for '{pd_slug}': {e}")
+
+            if not app:
                 return self.fail_response(f"Could not find toolkit details for '{toolkit_slug}'")
-            
+
+            # Map Pipedream App -> toolkit shape
+            auth_value = getattr(getattr(app, "auth_type", None), "value", "")
             formatted_toolkit = {
-                "name": toolkit_data.name,
-                "toolkit_slug": toolkit_data.slug,
-                "description": toolkit_data.description or f"Toolkit for {toolkit_data.name}",
-                "logo_url": toolkit_data.logo or '',
-                "auth_schemes": toolkit_data.auth_schemes,
-                "tags": toolkit_data.tags,
-                "categories": toolkit_data.categories
+                "name": getattr(app, "name", pd_slug),
+                "toolkit_slug": getattr(app, "slug", pd_slug),
+                "description": getattr(app, "description", None) or f"Toolkit for {getattr(app, 'name', pd_slug)}",
+                "logo_url": getattr(app, "logo_url", "") or '',
+                "auth_schemes": [auth_value.upper()] if auth_value else [],
+                "tags": getattr(app, "tags", []) or [],
+                "categories": [getattr(app, "category", "")] if getattr(app, "category", None) else []
             }
-            
+
             result = {
                 "message": f"Retrieved details for {formatted_toolkit['name']}",
                 "toolkit": formatted_toolkit,
-                "supports_oauth": "OAUTH2" in toolkit_data.auth_schemes,
-                "auth_schemes": toolkit_data.auth_schemes
+                "supports_oauth": (auth_value == "oauth"),
+                "auth_schemes": formatted_toolkit["auth_schemes"]
             }
-            
             return self.success_response(result)
             
         except Exception as e:
@@ -212,4 +278,4 @@ class MCPSearchTool(AgentBuilderBaseTool):
             })
             
         except Exception as e:
-            return self.fail_response(f"Error discovering MCP tools: {str(e)}") 
+            return self.fail_response(f"Error discovering MCP tools: {str(e)}")

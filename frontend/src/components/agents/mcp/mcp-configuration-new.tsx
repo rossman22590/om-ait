@@ -46,26 +46,9 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
   const handleEditMCP = (index: number) => {
     const mcp = configuredMCPs[index];
     
-    // If this is an available Pipedream integration, use the Pipedream connector
+    // If this is an available Pipedream integration, open the registry to connect
     if (mcp.isAvailable && mcp.customType === 'pipedream') {
-      const pipedreamApp: PipedreamApp = {
-        id: mcp.config.app_slug || 'unknown',
-        name: mcp.config.app_name || mcp.name,
-        name_slug: mcp.config.app_slug || 'unknown',
-        auth_type: 'oauth',
-        description: `Connect to ${mcp.config.app_name || mcp.name}`,
-        img_src: '',
-        custom_fields_json: '[]',
-        categories: [],
-        featured_weight: 0,
-        connect: {
-          allowed_domains: null,
-          base_proxy_target_url: '',
-          proxy_enabled: false,
-        },
-      };
-      setSelectedPipedreamApp(pipedreamApp);
-      setShowPipedreamConnector(true);
+      setShowPipedreamRegistry(true);
       return;
     }
     
@@ -165,36 +148,17 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
     const newMCPs = [...configuredMCPs.filter(mcp => !mcp.isAvailable || mcp.customType !== 'pipedream' || mcp.config?.profile_id !== profileId), pipedreamMcp];
     onConfigurationChange(newMCPs);
     
+    // Clean up state
     setShowPipedreamConnector(false);
     setSelectedPipedreamApp(null);
+    
+    // Invalidate queries
     queryClient.invalidateQueries({ queryKey: ['agents'] });
     queryClient.invalidateQueries({ queryKey: ['agent', selectedAgentId] });
     queryClient.invalidateQueries({ queryKey: ['pipedream', 'profiles'] });
     toast.success(`Connected ${appName} via Pipedream!`);
   };
 
-  const handlePipedreamAppSelected = (app: { app_slug: string; app_name: string }) => {
-    const pipedreamApp: PipedreamApp = {
-      id: app.app_slug,
-      name: app.app_name,
-      name_slug: app.app_slug,
-      auth_type: 'oauth',
-      description: `Connect to ${app.app_name}`,
-      img_src: '',
-      custom_fields_json: '[]',
-      categories: [],
-      featured_weight: 0,
-      connect: {
-        allowed_domains: null,
-        base_proxy_target_url: '',
-        proxy_enabled: false,
-      },
-    };
-    
-    setSelectedPipedreamApp(pipedreamApp);
-    setShowPipedreamRegistry(false);
-    setShowPipedreamConnector(true);
-  };
 
   const handleCustomToolsUpdate = (enabledTools: string[]) => {
     if (!selectedMCPForTools) return;
@@ -495,6 +459,7 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
         />
       )}
 
+
       {selectedPipedreamApp && (
         <PipedreamConnector
           app={selectedPipedreamApp}
@@ -514,9 +479,30 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
               <DialogTitle>Browse Pipedream Apps</DialogTitle>
             </DialogHeader>
             <PipedreamRegistry
-              mode="profile-only"
+              mode="simple"
               showAgentSelector={false}
-              onAppSelected={handlePipedreamAppSelected}
+              onAppSelected={(app) => {
+                // Create PipedreamApp object and show our own connector
+                const pipedreamApp: PipedreamApp = {
+                  id: app.app_slug,
+                  name: app.app_name,
+                  name_slug: app.app_slug,
+                  auth_type: 'oauth',
+                  description: `Connect to ${app.app_name}`,
+                  img_src: '',
+                  custom_fields_json: '[]',
+                  categories: [],
+                  featured_weight: 0,
+                  connect: {
+                    allowed_domains: null,
+                    base_proxy_target_url: '',
+                    proxy_enabled: false,
+                  },
+                };
+                setSelectedPipedreamApp(pipedreamApp);
+                setShowPipedreamRegistry(false);
+                setShowPipedreamConnector(true);
+              }}
               onClose={() => setShowPipedreamRegistry(false)}
             />
           </DialogContent>

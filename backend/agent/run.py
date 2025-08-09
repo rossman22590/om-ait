@@ -83,6 +83,7 @@ class ToolManager:
         from agent.tools.agent_builder_tools.credential_profile_tool import CredentialProfileTool
         from agent.tools.agent_builder_tools.workflow_tool import WorkflowTool
         from agent.tools.agent_builder_tools.trigger_tool import TriggerTool
+        from agent.tools.agent_builder_tools.pipedream_mcp_tool import PipedreamMCPTool
         from services.supabase import DBConnection
         
         db = DBConnection()
@@ -91,6 +92,7 @@ class ToolManager:
         self.thread_manager.add_tool(CredentialProfileTool, thread_manager=self.thread_manager, db_connection=db, agent_id=agent_id)
         self.thread_manager.add_tool(WorkflowTool, thread_manager=self.thread_manager, db_connection=db, agent_id=agent_id)
         self.thread_manager.add_tool(TriggerTool, thread_manager=self.thread_manager, db_connection=db, agent_id=agent_id)
+        self.thread_manager.add_tool(PipedreamMCPTool, thread_manager=self.thread_manager, db_connection=db, agent_id=agent_id)
     
     def register_custom_tools(self, enabled_tools: Dict[str, Any]):
         self.thread_manager.add_tool(ExpandMessageTool, thread_id=self.thread_id, thread_manager=self.thread_manager)

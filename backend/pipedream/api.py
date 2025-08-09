@@ -141,6 +141,9 @@ def _strip_pipedream_prefix(app_slug: Optional[str]) -> Optional[str]:
 
 
 def _handle_pipedream_exception(e: Exception) -> HTTPException:
+    # Preserve FastAPI HTTPExceptions as-is so their status codes are not lost
+    if isinstance(e, HTTPException):
+        return e
     if isinstance(e, ProfileNotFoundError):
         return HTTPException(status_code=404, detail=str(e))
     elif isinstance(e, ProfileAlreadyExistsError):
@@ -158,6 +161,54 @@ def _handle_pipedream_exception(e: Exception) -> HTTPException:
     else:
         return HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+
+def _normalize_app_slug(app_slug: str) -> str:
+    """
+    Normalize common alias variants to Pipedream app slugs.
+    Examples:
+    - googledrive -> google_drive
+    - googlecalendar -> google_calendar
+    - onedrive -> microsoft_onedrive (best-effort)
+    - ms_teams / microsoftteams -> microsoft_teams
+    - gcal -> google_calendar
+    The function is conservative and only maps known aliases. Fallbacks try
+    simple underscore insertion for common vendor names.
+    """
+    if not app_slug:
+        return app_slug
+
+    slug = app_slug.strip().lower()
+
+    alias_map = {
+        "googledrive": "google_drive",
+        "google-drive": "google_drive",
+        "googlecalendar": "google_calendar",
+        "google-calendar": "google_calendar",
+        "microsoftteams": "microsoft_teams",
+        "ms_teams": "microsoft_teams",
+        "teams": "microsoft_teams",
+        "onedrive": "microsoft_onedrive",
+        "ms_onedrive": "microsoft_onedrive",
+        "gcal": "google_calendar",
+        "gdrive": "google_drive",
+    }
+
+    if slug in alias_map:
+        return alias_map[slug]
+
+    # generic vendor underscore insertion
+    if slug.startswith("google") and "_" not in slug:
+        # insert underscore after 'google' if followed by letters
+        rest = slug[len("google"):]
+        if rest:
+            return f"google_{rest}"
+
+    if slug.startswith("microsoft") and "_" not in slug:
+        rest = slug[len("microsoft"):]
+        if rest:
+            return f"microsoft_{rest}"
+
+    return slug.replace('-', '_')
 
 @router.post("/connection-token", response_model=ConnectionTokenResponse)
 async def create_connection_token(
@@ -478,12 +529,13 @@ async def get_popular_pipedream_apps():
 async def get_app_icon(app_slug: str):
     logger.info(f"Fetching icon for app: {app_slug}")
     try:
-        app = await app_service.get_app_by_slug(app_slug)
+        normalized = _normalize_app_slug(app_slug)
+        app = await app_service.get_app_by_slug(normalized)
         icon_url = app.logo_url if app else None
         if icon_url:
             return {
                 "success": True,
-                "app_slug": app_slug,
+                "app_slug": normalized,
                 "icon_url": icon_url
             }
         else:
@@ -499,7 +551,8 @@ async def get_app_icon(app_slug: str):
 @router.get("/apps/{app_slug}/tools")
 async def get_app_tools(app_slug: str):
     logger.info(f"Getting tools for app: {app_slug}")
-    url = f"https://remote.mcp.pipedream.net/?app={app_slug}&externalUserId=tools_preview"
+    normalized = _normalize_app_slug(app_slug)
+    url = f"https://remote.mcp.pipedream.net/?app={normalized}&externalUserId=tools_preview"
     payload = {"jsonrpc": "2.0", "method": "tools/list", "params": {}, "id": 1}
     headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
     try:

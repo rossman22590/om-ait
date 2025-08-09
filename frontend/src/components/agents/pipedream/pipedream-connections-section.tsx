@@ -154,6 +154,7 @@ const AppTable: React.FC<AppTableProps> = ({
         profileId: newProfile.profile_id,
         app: appSlug,
         profileName: newProfile.profile_name,
+        openInPopup: true,
       });
 
       setNewProfileName('');
@@ -543,6 +544,7 @@ export const PipedreamConnectionsSection: React.FC<PipedreamConnectionsSectionPr
         profileId: profile.profile_id,
         app: profile.app_slug,
         profileName: profile.profile_name,
+        openInPopup: true,
       });
       toast.success('Profile connected successfully');
     } catch (error) {

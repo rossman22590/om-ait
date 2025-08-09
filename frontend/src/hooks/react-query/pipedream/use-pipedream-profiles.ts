@@ -90,34 +90,95 @@ export const useDeletePipedreamProfile = () => {
 export const useConnectPipedreamProfile = () => {
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: ({ profileId, app, profileName }: { profileId: string; app?: string; profileName?: string }) =>
-      pipedreamApi.connectProfile(profileId, app),
-    onSuccess: (data, variables) => {
+  type Vars = { profileId: string; app?: string; profileName?: string; openInPopup?: boolean };
+  type Ctx = { popup?: Window | null };
+
+  return useMutation<
+    Awaited<ReturnType<typeof pipedreamApi.connectProfile>>,
+    Error,
+    Vars,
+    Ctx
+  >({
+    mutationFn: ({ profileId, app }: Vars) => pipedreamApi.connectProfile(profileId, app),
+    onMutate: (variables) => {
+      let popup: Window | null = null;
+      // Pre-open a window during the user gesture to avoid popup blockers
+      if (variables.openInPopup !== false) {
+        try {
+          popup = window.open('', '_blank', 'width=600,height=700');
+          if (popup) {
+            // Immediately navigate to a same-origin holding page
+            try {
+              const origin = window.location.origin;
+              popup.location.href = `${origin}/pipedream/connecting`;
+            } catch {}
+          }
+        } catch {}
+      }
+      return { popup };
+    },
+    onSuccess: (data, variables, context) => {
       queryClient.invalidateQueries({ queryKey: pipedreamKeys.profiles.all() });
       queryClient.invalidateQueries({ queryKey: pipedreamKeys.profiles.detail(data.profile_id) });
       queryClient.invalidateQueries({ queryKey: pipedreamKeys.profiles.connections(data.profile_id) });
       if (data.link) {
-        const connectWindow = window.open(data.link, '_blank', 'width=600,height=700');
+        const connectWindow = context?.popup ?? window.open(data.link, '_blank', 'width=600,height=700');
         if (connectWindow) {
+          // If we pre-opened our holding page, try to hand off the link via postMessage after a short delay
+          if (context?.popup && context.popup !== null) {
+            setTimeout(() => {
+              try {
+                context.popup?.postMessage({ link: data.link }, '*');
+              } catch {}
+            }, 300);
+            // After a slightly longer delay, if we're still on our holding page, force navigate
+            setTimeout(() => {
+              try {
+                const href = context.popup?.location?.href || '';
+                if (href.includes('/pipedream/connecting')) {
+                  try { context.popup!.location.href = data.link; } catch {}
+                }
+              } catch {}
+            }, 800);
+          }
           const checkClosed = setInterval(() => {
             if (connectWindow.closed) {
               clearInterval(checkClosed);
-              queryClient.invalidateQueries({ queryKey: pipedreamKeys.profiles.all() });
-              queryClient.invalidateQueries({ queryKey: pipedreamKeys.profiles.detail(data.profile_id) });
-              queryClient.invalidateQueries({ queryKey: pipedreamKeys.profiles.connections(data.profile_id) });
-              
-              // Enhanced success message with profile name and icon
-              const profileName = variables.profileName || 'Profile';
-              toast.success(`${profileName} successfully connected!`, {
-                icon: '✅',
-                duration: 4000,
-              });
-              
-              // Trigger a custom event for components to listen to
-              window.dispatchEvent(new CustomEvent('pipedream-connection-success', {
-                detail: { profileId: data.profile_id, profileName }
-              }));
+              (async () => {
+                try {
+                  // Revalidate caches
+                  queryClient.invalidateQueries({ queryKey: pipedreamKeys.profiles.all() });
+                  queryClient.invalidateQueries({ queryKey: pipedreamKeys.profiles.detail(data.profile_id) });
+                  queryClient.invalidateQueries({ queryKey: pipedreamKeys.profiles.connections(data.profile_id) });
+
+                  // Verify connection status for this profile
+                  const connections = await pipedreamApi.getProfileConnections(data.profile_id);
+                  const targetApp = variables.app;
+                  const isConnected = Array.isArray(connections?.connections)
+                    ? connections.connections.some((c: any) =>
+                        (targetApp ? c.app === targetApp : true) && c.status === 'connected'
+                      )
+                    : false;
+
+                  if (isConnected) {
+                    const profileName = variables.profileName || 'Profile';
+                    toast.success(`${profileName} successfully connected!`, {
+                      icon: '✅',
+                      duration: 4000,
+                    });
+                    window.dispatchEvent(new CustomEvent('pipedream-connection-success', {
+                      detail: { profileId: data.profile_id, profileName }
+                    }));
+                  } else {
+                    const name = variables.profileName || 'Profile';
+                    toast.error(`${name} authorization not completed. Please try again.`);
+                  }
+                } catch (e) {
+                  const name = variables.profileName || 'Profile';
+                  console.error('Failed to verify Pipedream connection', e);
+                  toast.error(`Failed to verify ${name} connection. Please refresh and try again.`);
+                }
+              })();
             }
           }, 1000);
           setTimeout(() => {
@@ -128,8 +189,9 @@ export const useConnectPipedreamProfile = () => {
         }
       }
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      try { context?.popup?.close(); } catch {}
       toast.error(error.message || 'Failed to connect profile');
     },
   });
-}; 
+};

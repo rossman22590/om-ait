@@ -114,7 +114,8 @@ class ConnectionTokenService:
 
     async def create(self, external_user_id: ExternalUserId, app: Optional[AppSlug] = None) -> Dict[str, Any]:
         project_id = os.getenv("PIPEDREAM_PROJECT_ID")
-        environment = os.getenv("PIPEDREAM_X_PD_ENVIRONMENT", "development")
+        # Environment comes from config; do not force a switch silently
+        environment = os.getenv("PIPEDREAM_X_PD_ENVIRONMENT", "production")
 
         if not project_id:
             raise AuthenticationError("Missing PIPEDREAM_PROJECT_ID")
@@ -132,18 +133,27 @@ class ConnectionTokenService:
             "X-PD-Environment": environment
         }
 
-        logger.info(f"Creating connection token for user: {external_user_id.value}")
+        logger.info(
+            f"Creating Pipedream connection token for user={external_user_id.value} env={environment} project={(project_id or '')[:6]}***"
+        )
 
         try:
             data = await self._make_request(url, headers=headers, json=payload)
 
-            if app and "connect_link_url" in data:
-                link = data["connect_link_url"]
-                if "app=" not in link:
-                    separator = "&" if "?" in link else "?"
-                    data["connect_link_url"] = f"{link}{separator}app={app.value}"
+            # If an app was specified, ensure the connect_link_url includes app param (parity with old behavior)
+            try:
+                if app and "connect_link_url" in data and isinstance(data["connect_link_url"], str):
+                    link = data["connect_link_url"]
+                    if "app=" not in link:
+                        sep = "&" if "?" in link else "?"
+                        data["connect_link_url"] = f"{link}{sep}app={app.value}"
+            except Exception:
+                # Non-fatal: best-effort to append app param
+                pass
 
-            logger.info(f"Successfully created connection token for user: {external_user_id.value}")
+            logger.info(
+                f"Created Pipedream token ok env={environment} expires_at={data.get('expires_at', 'unknown')}"
+            )
             return data
 
         except Exception as e:

@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
+
 import { Button } from '@/components/ui/button';
 import { Loader2, Zap } from 'lucide-react';
 import { pipedreamApi } from '@/hooks/react-query/pipedream/utils';
+
 import { toast } from 'sonner';
 
 interface PipedreamConnectButtonProps {
@@ -25,14 +27,49 @@ export const PipedreamConnectButton: React.FC<PipedreamConnectButtonProps> = ({
       const response = await pipedreamApi.createConnectionToken({ app });
       
       if (response.success && response.link) {
-        const connectWindow = window.open(response.link, '_blank', 'width=600,height=700');
-        
+        // Pre-open popup synchronously to avoid blockers
+        const connectWindow = window.open('', '_blank', 'width=600,height=700');
+
         if (connectWindow) {
-          const checkClosed = setInterval(() => {
+          try {
+            const origin = window.location.origin;
+            connectWindow.location.href = `${origin}/pipedream/connecting`;
+          } catch {}
+
+          // PostMessage the actual link; delayed fallback if still on holding page
+          try {
+            connectWindow.postMessage({ link: response.link }, '*');
+          } catch {}
+          setTimeout(() => {
+            try {
+              const href = connectWindow.location?.href || '';
+              if (href.includes('/pipedream/connecting')) {
+                try { connectWindow.location.href = response.link; } catch {}
+              }
+            } catch {}
+          }, 800);
+
+          const checkClosed = setInterval(async () => {
             if (connectWindow.closed) {
               clearInterval(checkClosed);
-              setIsConnecting(false);
-              onConnect?.();
+              // After the popup closes, verify a connection actually exists
+              try {
+                // small delay to allow backend to persist connection
+                await new Promise(r => setTimeout(r, 800));
+                const connections = await pipedreamApi.getConnections();
+                const target = app?.replace(/^pipedream:/, '');
+                const isConnected = connections.connections?.some(c => (c.name_slug === target || c.app === target) && c.is_active !== false);
+                if (isConnected) {
+                  setIsConnecting(false);
+                  onConnect?.();
+                } else {
+                  setIsConnecting(false);
+                  toast.error('No Pipedream connection detected. Please complete the authorization or try again.');
+                }
+              } catch (e) {
+                setIsConnecting(false);
+                toast.error('Failed to verify connection status.');
+              }
             }
           }, 1000);
           

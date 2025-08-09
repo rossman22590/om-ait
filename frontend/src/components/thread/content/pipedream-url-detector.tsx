@@ -1,6 +1,7 @@
 import React from 'react';
 import { Markdown } from '@/components/ui/markdown';
 import { PipedreamConnectButton } from './pipedream-connect-button';
+import { ComposioUrlDetector } from './composio-url-detector';
 
 interface PipedreamUrlDetectorProps {
   content: string;
@@ -59,9 +60,7 @@ export const PipedreamUrlDetector: React.FC<PipedreamUrlDetectorProps> = ({
 
   if (pipedreamUrls.length === 0) {
     return (
-      <Markdown className={className}>
-        {content}
-      </Markdown>
+      <ComposioUrlDetector content={content} className={className} />
     );
   }
 
@@ -78,9 +77,7 @@ export const PipedreamUrlDetector: React.FC<PipedreamUrlDetectorProps> = ({
 
       if (cleanedTextBefore.trim()) {
         contentParts.push(
-          <Markdown key={`text-${index}`} className={className}>
-            {cleanedTextBefore}
-          </Markdown>
+          <ComposioUrlDetector key={`text-${index}`} content={cleanedTextBefore} className={className} />
         );
       }
     }
@@ -100,9 +97,7 @@ export const PipedreamUrlDetector: React.FC<PipedreamUrlDetectorProps> = ({
     const remainingText = content.substring(lastIndex);
     if (remainingText.trim()) {
       contentParts.push(
-        <Markdown key="text-end" className={className}>
-          {remainingText}
-        </Markdown>
+        <ComposioUrlDetector key="text-end" content={remainingText} className={className} />
       );
     }
   }

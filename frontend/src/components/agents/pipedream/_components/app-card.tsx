@@ -80,12 +80,16 @@ export const AppCard: React.FC<AppCardProps> = ({
   };
 
   const handleActualConnect = () => {
-    setIsDialogOpen(false);
-    
     if (mode === 'simple' && onAppSelected) {
       onAppSelected({ app_slug: app.name_slug, app_name: app.name });
+      // Close dialog after callback to prevent interference
+      setTimeout(() => setIsDialogOpen(false), 50);
     } else if (onConnectApp) {
       onConnectApp(app);
+      // Close dialog after callback to prevent interference
+      setTimeout(() => setIsDialogOpen(false), 50);
+    } else {
+      setIsDialogOpen(false);
     }
   };
 

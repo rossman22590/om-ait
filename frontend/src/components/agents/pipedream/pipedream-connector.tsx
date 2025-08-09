@@ -134,6 +134,7 @@ export const PipedreamConnector: React.FC<PipedreamConnectorProps> = ({
         profileId: newProfile.profile_id,
         app: app.name_slug,
         profileName: newProfile.profile_name,
+        openInPopup: true,
       });
 
       await refetchProfiles();
