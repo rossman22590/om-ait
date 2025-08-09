@@ -67,7 +67,6 @@ def initialize():
             socket_keepalive=True,
             health_check_interval=30,
             retry_on_timeout=retry_on_timeout,
-            ssl=ssl_on,
             max_connections=max_connections,
         )
 
