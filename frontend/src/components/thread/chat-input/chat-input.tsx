@@ -8,6 +8,7 @@ import React, {
   useImperativeHandle,
 } from 'react';
 import { useAgents } from '@/hooks/react-query/agents/use-agents';
+import { useAgentSelection } from '@/lib/stores/agent-selection-store';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { handleFiles } from './file-upload-handler';
@@ -178,84 +179,25 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
       }
     }, [subscriptionData, showSnackbar, defaultShowSnackbar, shouldShowUsage, subscriptionStatus, showToLowCreditUsers, userDismissedUsage]);
 
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const hasLoadedFromLocalStorage = useRef(false);
+      const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const { data: agentsResponse } = useAgents();
-    const agents = agentsResponse?.agents || [];
-
+  const { data: agentsResponse } = useAgents();
+  const agents = agentsResponse?.agents || [];
+  
+  const { initializeFromAgents } = useAgentSelection();
     useImperativeHandle(ref, () => ({
       getPendingFiles: () => pendingFiles,
       clearPendingFiles: () => setPendingFiles([]),
     }));
 
-    useEffect(() => {
-      if (typeof window !== 'undefined' && onAgentSelect && !hasLoadedFromLocalStorage.current && agents.length > 0) {
-        const urlParams = new URLSearchParams(window.location.search);
-        const hasAgentIdInUrl = urlParams.has('agent_id');
-        if (!selectedAgentId && !hasAgentIdInUrl) {
-          const savedAgentId = localStorage.getItem('lastSelectedAgentId');
-          if (savedAgentId) {
-            if (savedAgentId === 'suna') {
-              const defaultSunaAgent = agents.find(agent => agent.metadata?.is_suna_default);
-              const defaultAgent = agents.find(agent => agent.is_default);
-              const selectedDefaultAgent = defaultSunaAgent || defaultAgent;
+  useEffect(() => {
+    if (agents.length > 0 && !onAgentSelect) {
+      initializeFromAgents(agents);
+    }
+  }, [agents, onAgentSelect, initializeFromAgents]);
 
-              if (selectedDefaultAgent) {
-                onAgentSelect(selectedDefaultAgent.agent_id);
-              } else {
-                onAgentSelect(undefined);
-              }
-            } else {
-              onAgentSelect(savedAgentId);
-            }
-          } else {
-            const defaultSunaAgent = agents.find(agent => agent.metadata?.is_suna_default);
-            const defaultAgent = agents.find(agent => agent.is_default);
-
-            const selectedDefaultAgent = defaultSunaAgent || defaultAgent;
-
-            if (selectedDefaultAgent) {
-              console.log('Auto-selecting default agent:', selectedDefaultAgent.name, 'ID:', selectedDefaultAgent.agent_id);
-              onAgentSelect(selectedDefaultAgent.agent_id);
-            } else if (agents.length > 0) {
-              console.log('No default agent found, selecting first available agent:', agents[0].agent_id);
-              onAgentSelect(agents[0].agent_id);
-            } else {
-              console.log('No agents available, keeping undefined');
-              onAgentSelect(undefined);
-            }
-          }
-        } else {
-          console.log('Skipping localStorage load:', {
-            hasSelectedAgent: !!selectedAgentId,
-            hasAgentIdInUrl,
-            selectedAgentId
-          });
-        }
-        hasLoadedFromLocalStorage.current = true;
-      }
-    }, [onAgentSelect, selectedAgentId, agents]); // Add agents to dependencies
-
-    // Save selected agent to localStorage whenever it changes
-    useEffect(() => {
-      if (typeof window === 'undefined' || agents.length === 0) return;
-
-      const selectedAgent = agents.find(agent => agent.agent_id === selectedAgentId);
-
-      // If no concrete selection, do not overwrite whatever is in storage
-      if (!selectedAgentId && !selectedAgent) {
-        return;
-      }
-
-      // Use 'suna' as a special key ONLY when the selected agent is the Suna default
-      const isSunaDefault = !!selectedAgent?.metadata?.is_suna_default;
-      const keyToStore = isSunaDefault ? 'suna' : (selectedAgentId as string);
-
-      console.log('Saving selected agent to localStorage:', keyToStore, 'for selectedAgentId:', selectedAgentId);
-      localStorage.setItem('lastSelectedAgentId', keyToStore);
-    }, [selectedAgentId, agents]);
+    
 
     useEffect(() => {
       if (autoFocus && textareaRef.current) {

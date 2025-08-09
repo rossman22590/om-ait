@@ -15,7 +15,7 @@ const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
 interface CustomMCPDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (config: CustomMCPConfiguration) => void;
+  onSave: (config: CustomMCPConfiguration) => Promise<void>;
 }
 
 interface CustomMCPConfiguration {
@@ -48,6 +48,7 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
   const [discoveredTools, setDiscoveredTools] = useState<MCPTool[]>([]);
   const [selectedTools, setSelectedTools] = useState<Set<string>>(new Set());
   const [processedConfig, setProcessedConfig] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   const validateAndDiscoverTools = async () => {
     setIsValidating(true);
@@ -119,17 +120,16 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
     }
   };
 
-  const handleToolsNext = () => {
+  const handleToolsNext = async () => {
     if (selectedTools.size === 0) {
       setValidationError('Please select at least one tool to continue.');
       return;
     }
     setValidationError(null);
-    // Custom MCP servers don't need credentials, so save directly
-    handleSave();
+    await handleSave();
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (discoveredTools.length === 0 || selectedTools.size === 0) {
       setValidationError('Please select at least one tool to continue.');
       return;
@@ -140,15 +140,17 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
       return;
     }
 
+    setIsSaving(true);
+    setValidationError(null);
+
     try {
       let configToSave: any = { url: configText.trim() };
       
-      onSave({
+      await onSave({
         name: serverName,
         type: serverType,
         config: configToSave,
         enabledTools: Array.from(selectedTools),
-        // Custom MCP servers don't need credential profiles since they're just URLs
         selectedProfileId: undefined
       });
       
@@ -158,12 +160,13 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
       setSelectedTools(new Set());
       setServerName('');
       setProcessedConfig(null);
-
       setValidationError(null);
       setStep('setup');
       onOpenChange(false);
-    } catch (error) {
-      setValidationError('Invalid configuration format.');
+    } catch (error: any) {
+      setValidationError(error.message || 'Failed to save MCP configuration. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -194,6 +197,7 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
     
     setValidationError(null);
     setStep('setup');
+    setIsSaving(false);
   };
 
   const exampleConfigs = {
@@ -404,17 +408,24 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
         <DialogFooter>
           {step === 'tools' ? (
             <>
-              <Button variant="outline" onClick={handleBack}>
+              <Button variant="outline" onClick={handleBack} disabled={isSaving}>
                 Back
               </Button>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
                 Cancel
               </Button>
               <Button 
                 onClick={handleSave}
                 disabled={selectedTools.size === 0}
               >
-                Add MCP Server ({selectedTools.size} tools)
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Adding MCP Server...
+                  </>
+                ) : (
+                  `Add MCP Server (${selectedTools.size} tools)`
+                )}
               </Button>
             </>
           ) : (
