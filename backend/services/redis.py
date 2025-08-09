@@ -47,11 +47,12 @@ def initialize():
     """Initialize Redis client using a single asyncio connection from URL with proper TLS."""
     global client, pool
 
-    # Connection options - optimized for production and Upstash
-    max_connections = int(os.getenv("REDIS_MAX_CONNECTIONS", "512"))  # Increased from 128 to 512
-    socket_timeout = 15.0            # 15 seconds socket timeout
-    connect_timeout = 10.0           # 10 seconds connection timeout
+    # Connection options - optimized for high-load production and Upstash
+    max_connections = int(os.getenv("REDIS_MAX_CONNECTIONS", "2048"))  # Increased to handle high concurrent load
+    socket_timeout = 30.0            # 30 seconds socket timeout for stability
+    connect_timeout = 15.0           # 15 seconds connection timeout
     retry_on_timeout = not (os.getenv("REDIS_RETRY_ON_TIMEOUT", "True").lower() != "true")
+    retry_on_error = [ConnectionError, TimeoutError]  # Retry on connection errors
 
     redis_url, ssl_on = _build_redis_url()
 
@@ -65,9 +66,19 @@ def initialize():
             socket_timeout=socket_timeout,
             socket_connect_timeout=connect_timeout,
             socket_keepalive=True,
-            health_check_interval=30,
+            socket_keepalive_options={},
+            health_check_interval=60,  # Increased to reduce overhead
             retry_on_timeout=retry_on_timeout,
+            retry_on_error=retry_on_error,
             max_connections=max_connections,
+            # Connection pool optimizations for high load
+            retry=redis.Retry(redis.backoff.ExponentialBackoff(), retries=3),
+            connection_pool_kwargs={
+                'max_connections': max_connections,
+                'retry_on_timeout': retry_on_timeout,
+                'socket_keepalive': True,
+                'socket_keepalive_options': {},
+            }
         )
 
         # Use a connection pool under the hood via from_url; keep a reference for graceful close
@@ -145,65 +156,112 @@ async def get_client():
     global client, _initialized
     if client is None or not _initialized:
         await retry(lambda: initialize_async())
+    
+    # Additional health check to ensure connection is still valid
+    try:
+        await asyncio.wait_for(client.ping(), timeout=2.0)
+    except (ConnectionError, TimeoutError, asyncio.TimeoutError) as e:
+        logger.warning(f"Redis connection health check failed: {e}, reinitializing...")
+        _initialized = False
+        await retry(lambda: initialize_async())
+    
     return client
 
 
-# Basic Redis operations
+# Basic Redis operations with error handling
 async def set(key: str, value: str, ex: int = None, nx: bool = False):
-    """Set a Redis key."""
-    redis_client = await get_client()
-    return await redis_client.set(key, value, ex=ex, nx=nx)
+    """Set a Redis key with retry logic."""
+    try:
+        redis_client = await get_client()
+        return await redis_client.set(key, value, ex=ex, nx=nx)
+    except (ConnectionError, TimeoutError) as e:
+        logger.error(f"Redis SET operation failed for key {key}: {e}")
+        raise
 
 
 async def get(key: str, default: str = None):
-    """Get a Redis key."""
-    redis_client = await get_client()
-    result = await redis_client.get(key)
-    return result if result is not None else default
+    """Get a Redis key with retry logic."""
+    try:
+        redis_client = await get_client()
+        result = await redis_client.get(key)
+        return result if result is not None else default
+    except (ConnectionError, TimeoutError) as e:
+        logger.error(f"Redis GET operation failed for key {key}: {e}")
+        return default
 
 
 async def delete(key: str):
-    """Delete a Redis key."""
-    redis_client = await get_client()
-    return await redis_client.delete(key)
+    """Delete a Redis key with retry logic."""
+    try:
+        redis_client = await get_client()
+        return await redis_client.delete(key)
+    except (ConnectionError, TimeoutError) as e:
+        logger.error(f"Redis DELETE operation failed for key {key}: {e}")
+        raise
 
 
 async def publish(channel: str, message: str):
-    """Publish a message to a Redis channel."""
-    redis_client = await get_client()
-    return await redis_client.publish(channel, message)
+    """Publish a message to a Redis channel with retry logic."""
+    try:
+        redis_client = await get_client()
+        return await redis_client.publish(channel, message)
+    except (ConnectionError, TimeoutError) as e:
+        logger.error(f"Redis PUBLISH operation failed for channel {channel}: {e}")
+        raise
 
 
 async def create_pubsub():
-    """Create a Redis pubsub object."""
-    redis_client = await get_client()
-    return redis_client.pubsub()
+    """Create a Redis pubsub object with error handling."""
+    try:
+        redis_client = await get_client()
+        return redis_client.pubsub()
+    except (ConnectionError, TimeoutError) as e:
+        logger.error(f"Redis PUBSUB creation failed: {e}")
+        raise
 
 
-# List operations
+# List operations with error handling
 async def rpush(key: str, *values: Any):
-    """Append one or more values to a list."""
-    redis_client = await get_client()
-    return await redis_client.rpush(key, *values)
+    """Append one or more values to a list with retry logic."""
+    try:
+        redis_client = await get_client()
+        return await redis_client.rpush(key, *values)
+    except (ConnectionError, TimeoutError) as e:
+        logger.error(f"Redis RPUSH operation failed for key {key}: {e}")
+        raise
 
 
 async def lrange(key: str, start: int, end: int) -> List[str]:
-    """Get a range of elements from a list."""
-    redis_client = await get_client()
-    return await redis_client.lrange(key, start, end)
+    """Get a range of elements from a list with retry logic."""
+    try:
+        redis_client = await get_client()
+        return await redis_client.lrange(key, start, end)
+    except (ConnectionError, TimeoutError) as e:
+        logger.error(f"Redis LRANGE operation failed for key {key}: {e}")
+        return []
 
 
-# Key management
+# Key management with error handling
 
 
 async def keys(pattern: str) -> List[str]:
-    redis_client = await get_client()
-    return await redis_client.keys(pattern)
+    """Get keys matching pattern with retry logic."""
+    try:
+        redis_client = await get_client()
+        return await redis_client.keys(pattern)
+    except (ConnectionError, TimeoutError) as e:
+        logger.error(f"Redis KEYS operation failed for pattern {pattern}: {e}")
+        return []
 
 
 async def expire(key: str, seconds: int):
-    redis_client = await get_client()
-    return await redis_client.expire(key, seconds)
+    """Set key expiration with retry logic."""
+    try:
+        redis_client = await get_client()
+        return await redis_client.expire(key, seconds)
+    except (ConnectionError, TimeoutError) as e:
+        logger.error(f"Redis EXPIRE operation failed for key {key}: {e}")
+        raise
 # import redis.asyncio as redis
 # import os
 # from dotenv import load_dotenv
