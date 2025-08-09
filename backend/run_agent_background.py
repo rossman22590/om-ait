@@ -24,43 +24,27 @@ from utils.retry import retry
 import sentry_sdk
 from typing import Dict, Any
 
-def _redis_broker_kwargs() -> dict:
-    """Support both REDIS_URL and split vars for Dramatiq RedisBroker.
+def _redis_broker_url() -> str:
+    """Build a Redis URL for Dramatiq RedisBroker.
 
-    Priority:
-    1) REDIS_URL (rediss://:password@host:port)
-    2) REDIS_HOST/REDIS_PORT/REDIS_PASSWORD/REDIS_SSL
+    Prefer REDIS_URL; otherwise use split vars and construct
+    redis:// or rediss:// with password when provided.
     """
     url = os.getenv('REDIS_URL')
     if url:
-        parsed = urlparse(url)
-        host = parsed.hostname or 'redis'
-        port = parsed.port or 6379
-        # urlparse yields password in parsed.password
-        password = parsed.password or None
-        ssl_on = (parsed.scheme == 'rediss')
-        return {
-            'host': host,
-            'port': port,
-            'password': password,
-            'ssl': ssl_on,
-        }
+        return url
 
-    # Fallback to split vars
     host = os.getenv('REDIS_HOST', 'redis')
-    port = int(os.getenv('REDIS_PORT', 6379))
-    password = os.getenv('REDIS_PASSWORD', '') or None
-    ssl_on = os.getenv('REDIS_SSL', 'false').lower() == 'true'
-    return {
-        'host': host,
-        'port': port,
-        'password': password,
-        'ssl': ssl_on,
-    }
+    port = os.getenv('REDIS_PORT', '6379')
+    password = os.getenv('REDIS_PASSWORD', '')
+    use_ssl = os.getenv('REDIS_SSL', 'false').lower() == 'true'
+    scheme = 'rediss' if use_ssl else 'redis'
+    auth = f":{password}@" if password else ''
+    return f"{scheme}://{auth}{host}:{port}"
 
-# Configure Dramatiq Redis broker for Upstash/production with either URL or split vars
+# Configure Dramatiq Redis broker using URL (supports TLS via rediss://)
 redis_broker = RedisBroker(
-    **_redis_broker_kwargs(),
+    url=_redis_broker_url(),
     middleware=[dramatiq.middleware.AsyncIO()],
 )
 
