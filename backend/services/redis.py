@@ -48,7 +48,7 @@ def initialize():
     global client, pool
 
     # Connection options - optimized for production and Upstash
-    max_connections = 128            # Reasonable limit for production
+    max_connections = int(os.getenv("REDIS_MAX_CONNECTIONS", "512"))  # Increased from 128 to 512
     socket_timeout = 15.0            # 15 seconds socket timeout
     connect_timeout = 10.0           # 10 seconds connection timeout
     retry_on_timeout = not (os.getenv("REDIS_RETRY_ON_TIMEOUT", "True").lower() != "true")
