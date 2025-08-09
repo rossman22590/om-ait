@@ -81,8 +81,6 @@ export interface UploadedFile {
   localUrl?: string;
 }
 
-
-
 export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
   (
     {
@@ -126,7 +124,7 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
     const [uncontrolledValue, setUncontrolledValue] = useState('');
     const value = isControlled ? controlledValue : uncontrolledValue;
 
-    const isSunaAgent = agentMetadata?.is_suna_default || true;
+    const isSunaAgent = !!agentMetadata?.is_suna_default;
 
     const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -242,16 +240,21 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
 
     // Save selected agent to localStorage whenever it changes
     useEffect(() => {
-      if (typeof window !== 'undefined' && agents.length > 0) {
-        // Check if the selected agent is the Suna default agent
-        const selectedAgent = agents.find(agent => agent.agent_id === selectedAgentId);
-        const isSunaAgent = selectedAgent?.metadata?.is_suna_default || selectedAgentId === undefined;
+      if (typeof window === 'undefined' || agents.length === 0) return;
 
-        // Use 'suna' as a special key for the Suna default agent
-        const keyToStore = isSunaAgent ? 'suna' : selectedAgentId;
-        console.log('Saving selected agent to localStorage:', keyToStore, 'for selectedAgentId:', selectedAgentId);
-        localStorage.setItem('lastSelectedAgentId', keyToStore);
+      const selectedAgent = agents.find(agent => agent.agent_id === selectedAgentId);
+
+      // If no concrete selection, do not overwrite whatever is in storage
+      if (!selectedAgentId && !selectedAgent) {
+        return;
       }
+
+      // Use 'suna' as a special key ONLY when the selected agent is the Suna default
+      const isSunaDefault = !!selectedAgent?.metadata?.is_suna_default;
+      const keyToStore = isSunaDefault ? 'suna' : (selectedAgentId as string);
+
+      console.log('Saving selected agent to localStorage:', keyToStore, 'for selectedAgentId:', selectedAgentId);
+      localStorage.setItem('lastSelectedAgentId', keyToStore);
     }, [selectedAgentId, agents]);
 
     useEffect(() => {
@@ -370,8 +373,6 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
       e.stopPropagation();
       setIsDraggingOver(false);
     };
-
-
 
     return (
       <div className="mx-auto w-full max-w-4xl relative">

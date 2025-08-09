@@ -50,6 +50,7 @@ export const useUsageLogs = (page: number = 0, itemsPerPage: number = 1000) =>
     {
       staleTime: 30 * 1000, // 30 seconds
       refetchOnMount: true,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true,
+      refetchInterval: 5 * 1000, // poll every 5s for near-real-time updates
     }
-  )(); 
+  )();

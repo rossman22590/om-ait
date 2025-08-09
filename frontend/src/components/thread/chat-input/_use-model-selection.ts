@@ -7,9 +7,9 @@ import { useAvailableModels } from '@/hooks/react-query/subscriptions/use-model'
 
 export const STORAGE_KEY_MODEL = 'suna-preferred-model-v3';
 export const STORAGE_KEY_CUSTOM_MODELS = 'customModels';
-export const DEFAULT_PREMIUM_MODEL_ID = 'claude-sonnet-4';
+export const DEFAULT_PREMIUM_MODEL_ID = 'gpt-5';
 // export const DEFAULT_FREE_MODEL_ID = 'moonshotai/kimi-k2';
-export const DEFAULT_FREE_MODEL_ID = 'claude-sonnet-4';
+export const DEFAULT_FREE_MODEL_ID = 'gpt-5';
 
 export type SubscriptionStatus = 'no_subscription' | 'active';
 
@@ -67,19 +67,37 @@ export const MODELS = {
   'sonnet-3.7': { 
     tier: 'premium', 
     priority: 97, 
-    recommended: false,
+    recommended: true,
     lowQuality: false
   },
   'google/gemini-2.5-pro': {
     tier: 'premium',
     priority: 96,
-    recommended: false,
+    recommended: true,
+    lowQuality: false
+  },
+  'gemini-2.5-pro': {
+    tier: 'premium',
+    priority: 96,
+    recommended: true,
     lowQuality: false
   },
   'gpt-5': {
     tier: 'premium',
     priority: 99,
-    recommended: false,
+    recommended: true,
+    lowQuality: false
+  },
+  'gpt-5-mini': {
+    tier: 'premium',
+    priority: 92,
+    recommended: true,
+    lowQuality: false
+  },
+  'openai/gpt-5-mini': {
+    tier: 'premium',
+    priority: 92,
+    recommended: true,
     lowQuality: false
   },
   'gpt-4.1': {
@@ -91,7 +109,7 @@ export const MODELS = {
   'sonnet-3.5': { 
     tier: 'premium', 
     priority: 90,
-    recommended: false,
+    recommended: true,
     lowQuality: false
   },
   'gpt-4o': { 
@@ -103,7 +121,37 @@ export const MODELS = {
   'gemini-2.5-flash': { 
     tier: 'premium', 
     priority: 84,
-    recommended: false,
+    recommended: true,
+    lowQuality: false
+  },
+  'google/gemini-2.5-flash': {
+    tier: 'premium',
+    priority: 84,
+    recommended: true,
+    lowQuality: false
+  },
+  'flash-2.5': {
+    tier: 'premium',
+    priority: 84,
+    recommended: true,
+    lowQuality: false
+  },
+  'google/flash-2.5': {
+    tier: 'premium',
+    priority: 84,
+    recommended: true,
+    lowQuality: false
+  },
+  'gemini-flash-2.5': {
+    tier: 'premium',
+    priority: 84,
+    recommended: true,
+    lowQuality: false
+  },
+  'google/gemini-flash-2.5': {
+    tier: 'premium',
+    priority: 84,
+    recommended: true,
     lowQuality: false
   },
   // 'deepseek/deepseek-chat-v3-0324': { 
@@ -208,13 +256,13 @@ export const useModelSelection = () => {
       models = [
         { 
           id: DEFAULT_FREE_MODEL_ID, 
-          label: 'DeepSeek', 
+          label: 'GPT-5', 
           requiresSubscription: false,
           priority: MODELS[DEFAULT_FREE_MODEL_ID]?.priority || 50
         },
         { 
           id: DEFAULT_PREMIUM_MODEL_ID, 
-          label: 'Sonnet 4', 
+          label: 'GPT-5', 
           requiresSubscription: true, 
           priority: MODELS[DEFAULT_PREMIUM_MODEL_ID]?.priority || 100
         },

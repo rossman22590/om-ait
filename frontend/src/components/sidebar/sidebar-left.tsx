@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Bot, Menu, Store, Plus, Zap, Plug, ChevronRight, Loader2, Puzzle, CodeSquare } from 'lucide-react';
+import { Bot, Menu, Store, Plus, Zap, Plug, ChevronRight, Loader2, Puzzle, CodeSquare, StopCircle } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
@@ -44,6 +44,8 @@ import { useFeatureFlags } from '@/lib/feature-flags';
 import posthog from '@/lib/posthog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { stopAllAgents } from '@/lib/api';
 
 export function SidebarLeft({
   ...props
@@ -66,8 +68,8 @@ export function SidebarLeft({
   const customAgentsEnabled = flags.custom_agents;
   const marketplaceEnabled = flags.agent_marketplace;
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false);
-  // Check if user has access to Fragments (high-tier plans only)
-  // Temporarily set to true until we implement proper subscription checks
+  const [isStoppingAll, setIsStoppingAll] = useState(false);
+
   const hasFragmentsAccess = true;
 
   useEffect(() => {
@@ -107,8 +109,19 @@ export function SidebarLeft({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [state, setOpen]);
 
-
-
+  const handleStopAllAgents = async () => {
+    if (isStoppingAll) return;
+    setIsStoppingAll(true);
+    try {
+      const result = await stopAllAgents();
+      toast.success(result?.message || `Stopped ${result?.stopped_count ?? 0} running agent(s).`);
+    } catch (err: any) {
+      console.error('Failed to stop all agents:', err);
+      toast.error(err?.message || 'Failed to stop all agents');
+    } finally {
+      setIsStoppingAll(false);
+    }
+  };
 
   return (
     <Sidebar
@@ -152,7 +165,7 @@ export function SidebarLeft({
       </SidebarHeader>
       <SidebarContent className="[&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
         <div className="px-2 mb-4">
-          {/* <Tooltip>
+          <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 onClick={handleStopAllAgents}
@@ -177,7 +190,7 @@ export function SidebarLeft({
             <TooltipContent>
               <p>Stop all currently running agents for your account</p>
             </TooltipContent>
-          </Tooltip> */}
+          </Tooltip>
         </div>
         <SidebarGroup>
           <Link href="/dashboard">

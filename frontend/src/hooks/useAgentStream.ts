@@ -164,7 +164,7 @@ export function useAgentStream(
       }
 
       // Reset streaming-specific state
-      setTextContent([]);
+      // setTextContent([]); // Removed this line
       setToolCall(null);
 
       // Update status and clear run ID
@@ -276,7 +276,7 @@ export function useAgentStream(
             });
             callbacks.onAssistantChunk?.({ content: parsedContent.content });
           } else if (parsedMetadata.stream_status === 'complete') {
-            setTextContent([]);
+            // setTextContent([]); // Removed this line
             setToolCall(null);
             if (message.message_id) callbacks.onMessage(message);
           } else if (!parsedMetadata.stream_status) {

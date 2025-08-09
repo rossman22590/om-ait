@@ -265,7 +265,8 @@ async def stop_agent_run(agent_run_id: str, error_message: Optional[str] = None)
         raise HTTPException(status_code=500, detail="Failed to update agent run status in database")
 
     # Send STOP signal to the global control channel
-    global_control_channel = f"agent_run:{agent_run_id}:control"
+    global_control_channel = f"agent_run:{agent_run_id}:control" # Global control channel
+
     try:
         await redis.publish(global_control_channel, "STOP")
         logger.debug(f"Published STOP signal to global channel {global_control_channel}")
@@ -591,28 +592,47 @@ async def stop_all_agents(user_id: str = Depends(get_current_user_id_from_jwt)):
     client = await db.client
     
     try:
-        # Get all running agent runs for the user
-        agent_runs_result = await client.table('agent_runs').select('agent_run_id, thread_id').eq('account_id', user_id).eq('status', 'running').execute()
+        # Resolve all thread IDs owned by this user (account)
+        threads_result = await client.table('threads').select('thread_id').eq('account_id', user_id).execute()
+        # Coerce to strings to ensure JSON serializable payload for Supabase filters
+        raw_thread_ids = [t.get('thread_id') for t in (threads_result.data or [])]
+        thread_ids: list[str] = [str(tid) for tid in raw_thread_ids if tid]
+
+        if not thread_ids:
+            return {"stopped_count": 0, "message": "No running agents found"}
+
+        # Batch IN queries to avoid large JSON payloads
+        BATCH_SIZE = 100
+        all_runs: list[dict] = []
+        for i in range(0, len(thread_ids), BATCH_SIZE):
+            batch = thread_ids[i:i + BATCH_SIZE]
+            runs_res = await client.table('agent_runs') \
+                .select('id, thread_id') \
+                .in_('thread_id', batch) \
+                .eq('status', 'running') \
+                .execute()
+            if runs_res.data:
+                all_runs.extend(runs_res.data)
         
-        if not agent_runs_result.data:
+        if not all_runs:
             return {"stopped_count": 0, "message": "No running agents found"}
         
         stopped_count = 0
-        for agent_run in agent_runs_result.data:
+        for agent_run in all_runs:
             try:
                 # Verify thread access before stopping
                 await verify_thread_access(client, agent_run['thread_id'], user_id)
-                await stop_agent_run(agent_run['agent_run_id'])
+                await stop_agent_run(agent_run['id'])
                 stopped_count += 1
-                logger.info(f"Stopped agent run: {agent_run['agent_run_id']}")
+                logger.info(f"Stopped agent run: {agent_run['id']}")
             except Exception as e:
-                logger.error(f"Failed to stop agent run {agent_run['agent_run_id']}: {str(e)}")
+                logger.error(f"Failed to stop agent run {agent_run.get('id')}: {str(e)}")
                 continue
         
         message = f"Stopped {stopped_count} agent(s)"
         logger.info(f"Stop all agents completed for user {user_id}: {message}")
         return {"stopped_count": stopped_count, "message": message}
-        
+         
     except Exception as e:
         logger.error(f"Error stopping all agents for user {user_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to stop all agents: {str(e)}")
@@ -2567,7 +2587,7 @@ async def update_pipedream_tools_for_agent(
             .execute()
         if not agent_row.data:
             raise HTTPException(status_code=404, detail="Agent not found")
-
+        
         agent_config = {}
         if agent_row.data.get('current_version_id'):
             version_result = await client.table('agent_versions')\
@@ -2653,7 +2673,7 @@ async def get_custom_mcp_tools_for_agent(
 
         tools = agent_config.get('tools', {})
         custom_mcps = tools.get('custom_mcp', [])
-        
+
         mcp_url = request.headers.get('X-MCP-URL')
         mcp_type = request.headers.get('X-MCP-Type', 'sse')
         
@@ -2677,8 +2697,8 @@ async def get_custom_mcp_tools_for_agent(
         
         existing_mcp = None
         for mcp in custom_mcps:
-            if (mcp.get('type') == mcp_type and 
-                mcp.get('config', {}).get('url') == mcp_url):
+            mcp_profile_id = mcp.get('config', {}).get('profile_id')
+            if mcp_profile_id == mcp_url:
                 existing_mcp = mcp
                 break
         
@@ -3050,7 +3070,6 @@ async def get_thread(
         logger.error(f"Error fetching thread {thread_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch thread: {str(e)}")
 
-
 @router.post("/threads", response_model=CreateThreadResponse)
 async def create_thread(
     name: Optional[str] = Form(None),
@@ -3101,10 +3120,8 @@ async def create_thread(
             logger.error(f"Error creating sandbox: {str(e)}")
             await client.table('projects').delete().eq('project_id', project_id).execute()
             if sandbox_id:
-                try: 
-                    await delete_sandbox(sandbox_id)
-                except Exception as e: 
-                    pass
+                try: await delete_sandbox(sandbox_id)
+                except Exception as e: pass
             raise Exception("Failed to create sandbox")
 
         # Update project with sandbox info
@@ -3121,10 +3138,8 @@ async def create_thread(
         if not update_result.data:
             logger.error(f"Failed to update project {project_id} with new sandbox {sandbox_id}")
             if sandbox_id:
-                try: 
-                    await delete_sandbox(sandbox_id)
-                except Exception as e: 
-                    logger.error(f"Error deleting sandbox: {str(e)}")
+                try: await delete_sandbox(sandbox_id)
+                except Exception as e: logger.error(f"Error deleting sandbox: {str(e)}")
             raise Exception("Database update failed")
 
         # 3. Create Thread
@@ -3198,7 +3213,7 @@ async def get_agent_run(
     logger.warning(f"[DEPRECATED] Fetching agent run: {agent_run_id}")
     client = await db.client
     try:
-        agent_run_result = await client.table('agent_runs').select('*').eq('agent_run_id', agent_run_id).eq('account_id', user_id).execute()
+        agent_run_result = await client.table('agent_runs').select('*').eq('id', agent_run_id).execute()
         if not agent_run_result.data:
             raise HTTPException(status_code=404, detail="Agent run not found")
         return agent_run_result.data[0]
