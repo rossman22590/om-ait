@@ -25,10 +25,44 @@ from typing import Dict, Any
 
 redis_host = os.getenv('REDIS_HOST', 'redis')
 redis_port = int(os.getenv('REDIS_PORT', 6379))
-redis_broker = RedisBroker(host=redis_host, port=redis_port, middleware=[dramatiq.middleware.AsyncIO()])
+redis_password = os.getenv('REDIS_PASSWORD', '')
+redis_ssl = os.getenv('REDIS_SSL', 'false').lower() == 'true'
+redis_url = os.getenv('REDIS_URL')
 
-dramatiq.set_broker(redis_broker)
+# Configure Dramatiq Redis broker with proper TLS/auth handling
+try:
+    if redis_url:
+        # If TLS requested but URL is redis://, upgrade to rediss://
+        if redis_ssl and redis_url.startswith('redis://'):
+            redis_url = 'rediss://' + redis_url.split('://', 1)[1]
 
+        broker_kwargs = {
+            'middleware': [dramatiq.middleware.AsyncIO()],
+            'url': redis_url,
+        }
+        # Explicit ssl flag helps when using redis:// with stunnel or providers
+        if redis_ssl:
+            broker_kwargs['ssl'] = True
+        # Some providers require explicit password even when present in URL envs
+        if redis_password and '://' not in redis_url:
+            broker_kwargs['password'] = redis_password
+
+        redis_broker = RedisBroker(**broker_kwargs)
+        logger.info(f"Configured RedisBroker via URL (ssl={redis_ssl})")
+    else:
+        redis_broker = RedisBroker(
+            host=redis_host,
+            port=redis_port,
+            password=(redis_password or None),
+            ssl=redis_ssl,
+            middleware=[dramatiq.middleware.AsyncIO()],
+        )
+        logger.info(f"Configured RedisBroker host={redis_host} port={redis_port} ssl={redis_ssl}")
+
+    dramatiq.set_broker(redis_broker)
+except Exception as e:
+    logger.critical(f"Failed to configure Dramatiq RedisBroker: {e}")
+    raise
 
 _initialized = False
 db = DBConnection()

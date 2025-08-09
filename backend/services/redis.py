@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 import asyncio
 from utils.logger import logger
+
 from typing import List, Any
 from utils.retry import retry
 
@@ -23,24 +24,58 @@ def initialize():
     # Load environment variables if not already loaded
     load_dotenv()
 
-    # Get Redis configuration
+    # Primary configuration
+    redis_url = os.getenv("REDIS_URL")
     redis_host = os.getenv("REDIS_HOST", "redis")
     redis_port = int(os.getenv("REDIS_PORT", 6379))
     redis_password = os.getenv("REDIS_PASSWORD", "")
-    
+    redis_username = os.getenv("REDIS_USERNAME", "")
+    redis_ssl = os.getenv("REDIS_SSL", "false").lower() == "true"
+
     # Connection pool configuration - optimized for production
     max_connections = 128            # Reasonable limit for production
     socket_timeout = 15.0            # 15 seconds socket timeout
     connect_timeout = 10.0           # 10 seconds connection timeout
     retry_on_timeout = not (os.getenv("REDIS_RETRY_ON_TIMEOUT", "True").lower() != "true")
 
-    logger.info(f"Initializing Redis connection pool to {redis_host}:{redis_port} with max {max_connections} connections")
+    # URL handling (preferred)
+    if redis_url:
+        if redis_ssl and redis_url.startswith("redis://"):
+            redis_url = "rediss://" + redis_url.split("://", 1)[1]
+        logger.info("Initializing Redis client via URL (ssl=%s)" % redis_ssl)
+        client_kwargs = {
+            "decode_responses": True,
+            "socket_timeout": socket_timeout,
+            "socket_connect_timeout": connect_timeout,
+            "socket_keepalive": True,
+            "health_check_interval": 30,
+            "retry_on_timeout": retry_on_timeout,
+        }
+        # redis.asyncio.from_url accepts ssl param if not encoded in URL
+        if redis_ssl and redis_url.startswith("redis://"):
+            client_kwargs["ssl"] = True
+        if redis_username:
+            client_kwargs["username"] = redis_username
+        if redis_password and ("@" not in redis_url):
+            client_kwargs["password"] = redis_password
+
+        # Create client directly from URL
+        pool = None
+        client_url = redis_url
+        client_obj = redis.from_url(client_url, **client_kwargs)
+        # Assign to globals
+        client = client_obj
+        return client
+
+    # Host/port handling
+    logger.info(f"Initializing Redis connection pool to {redis_host}:{redis_port} ssl={redis_ssl} with max {max_connections} connections")
 
     # Create connection pool with production-optimized settings
     pool = redis.ConnectionPool(
         host=redis_host,
         port=redis_port,
-        password=redis_password,
+        username=(redis_username or None),
+        password=(redis_password or None),
         decode_responses=True,
         socket_timeout=socket_timeout,
         socket_connect_timeout=connect_timeout,
@@ -48,6 +83,7 @@ def initialize():
         retry_on_timeout=retry_on_timeout,
         health_check_interval=30,
         max_connections=max_connections,
+        ssl=redis_ssl,
     )
 
     # Create Redis client from connection pool
@@ -70,11 +106,13 @@ async def initialize_async():
             await asyncio.wait_for(client.ping(), timeout=5.0)
             logger.info("Successfully connected to Redis")
             _initialized = True
+
         except asyncio.TimeoutError:
             logger.error("Redis connection timeout during initialization")
             client = None
             _initialized = False
             raise ConnectionError("Redis connection timeout")
+
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
             client = None
