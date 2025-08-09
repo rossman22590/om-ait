@@ -297,6 +297,16 @@ export function NavUserWithTeams({
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
+                  <a
+                    href="https://ai-tutor-x-pixio.instatus.com"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    Status
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
                   <Link href="/settings/billing">
                     <CreditCard className="h-4 w-4" />
                     Billing

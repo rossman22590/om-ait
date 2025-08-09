@@ -74,8 +74,8 @@ export const siteConfig = {
     links: [
       { id: 1, name: 'Home', href: '#hero' },
       { id: 2, name: 'Use Cases', href: '#use-cases' },
-      // { id: 3, name: 'Open Source', href: '#open-source' },
-      { id: 4, name: 'Pricing', href: '#pricing' },
+      // { id: 3, name: 'Status', href: 'https://ai-tutor-x-pixio.instatus.com/' },
+      // { id: 4, name: 'Pricing', href: '#pricing' },
     ],
   },
   hero: {

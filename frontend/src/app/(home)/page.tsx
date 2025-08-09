@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useReducedMotion, useScroll } from "framer-motion";
 import Link from "next/link";
 import { CheckCircle2, ArrowRight, Check, Zap, BookOpen, Users, MessageCircle, Award, Globe, Code, Brain, Shield, AlertCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Script from "next/script";
 import { 
   Card, 
   CardContent,
@@ -13,12 +14,12 @@ import {
   CardHeader, 
   CardTitle 
 } from "@/components/ui/card";
-import Script from "next/script";
 import { FlickeringGrid } from "@/components/home/ui/flickering-grid";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState(0);
-  const [showRegistrationPopup, setShowRegistrationPopup] = useState(true);
+  // Make registration notice non-blocking by default; can be toggled via future banner
+  const [showRegistrationPopup, setShowRegistrationPopup] = useState(false);
   
   // Demo animation states
   const [agentProgress, setAgentProgress] = useState(0);
@@ -37,6 +38,55 @@ export default function Home() {
     chart: false,
     data: false
   });
+  
+  // Microinteraction: magnetic primary CTA + 3D tilt on demo card
+  const prefersReducedMotion = useReducedMotion();
+  // Magnetic button motion values
+  const btnX = useMotionValue(0);
+  const btnY = useMotionValue(0);
+  const btnXSpring = useSpring(btnX, { stiffness: 200, damping: 20, mass: 0.2 });
+  const btnYSpring = useSpring(btnY, { stiffness: 200, damping: 20, mass: 0.2 });
+  const buttonRef = useRef<HTMLDivElement | null>(null);
+  const handleButtonMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (prefersReducedMotion) return;
+    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+    const relX = e.clientX - rect.left - rect.width / 2;
+    const relY = e.clientY - rect.top - rect.height / 2;
+    btnX.set(relX * 0.15);
+    btnY.set(relY * 0.15);
+  };
+  const handleButtonMouseLeave = () => {
+    btnX.set(0);
+    btnY.set(0);
+  };
+
+  // Demo card tilt values
+  const cardRotX = useMotionValue(0);
+  const cardRotY = useMotionValue(0);
+  const cardRotXSpring = useSpring(cardRotX, { stiffness: 120, damping: 14 });
+  const cardRotYSpring = useSpring(cardRotY, { stiffness: 120, damping: 14 });
+  const cardGlow = useTransform([cardRotXSpring, cardRotYSpring], ([rx, ry]) => {
+    const intensity = Math.min(1, (Math.abs(Number(rx)) + Math.abs(Number(ry))) / 30);
+    return `0 0 ${12 + intensity * 24}px rgba(236,72,153,${0.25 + intensity * 0.25})`;
+  });
+  const handleCardMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (prefersReducedMotion) return;
+    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+    const relX = e.clientX - rect.left;
+    const relY = e.clientY - rect.top;
+    const rotY = ((relX / rect.width) - 0.5) * 16; // left/right
+    const rotX = -((relY / rect.height) - 0.5) * 10; // up/down
+    cardRotX.set(rotX);
+    cardRotY.set(rotY);
+  };
+  const handleCardMouseLeave = () => {
+    cardRotX.set(0);
+    cardRotY.set(0);
+  };
+
+  // Parallax: hero headline slight lift on scroll
+  const { scrollYProgress } = useScroll();
+  const heroParallax = useTransform(scrollYProgress, [0, 0.2], [0, -20]);
   
   // Simulate agent working through the process
   useEffect(() => {
@@ -60,25 +110,25 @@ export default function Home() {
     
     // Simulate agent workflow with delays
     const timeline = [
-      // Task accepted - already showing
-      { time: 1500, action: () => setSearchingDatabases(true) },
-      { time: 4000, action: () => setFoundPapers(true) },
-      { time: 5500, action: () => setReviewingIndustry(true) },
-      { time: 7000, action: () => setGeneratingDocument(true) },
-      { time: 8000, action: () => {
+      // Snappier progression (~5.5s total)
+      { time: 500, action: () => setSearchingDatabases(true) },
+      { time: 1200, action: () => setFoundPapers(true) },
+      { time: 1800, action: () => setReviewingIndustry(true) },
+      { time: 2400, action: () => setGeneratingDocument(true) },
+      { time: 2800, action: () => {
         setDocumentSections(prev => ({ ...prev, executive: true }));
-        setDocumentProgress(15);
+        setDocumentProgress(20);
       }},
-      { time: 10000, action: () => {
+      { time: 3400, action: () => {
         setDocumentSections(prev => ({ ...prev, hardware: true }));
-        setDocumentProgress(35);
+        setDocumentProgress(45);
       }},
-      { time: 11000, action: () => setFilesGenerated(prev => ({ ...prev, chart: true }))},
-      { time: 14000, action: () => {
+      { time: 3800, action: () => setFilesGenerated(prev => ({ ...prev, chart: true }))},
+      { time: 4600, action: () => {
         setDocumentSections(prev => ({ ...prev, algorithm: true }));
-        setDocumentProgress(70);
+        setDocumentProgress(75);
       }},
-      { time: 17000, action: () => {
+      { time: 5400, action: () => {
         setDocumentSections(prev => ({ ...prev, commercial: true }));
         setDocumentProgress(100);
         setFilesGenerated(prev => ({ ...prev, data: true }));
@@ -94,12 +144,12 @@ export default function Home() {
     const progressInterval = setInterval(() => {
       setAgentProgress(prev => {
         if (prev < 100) {
-          return prev + 1;
+          return prev + 2;
         }
         clearInterval(progressInterval);
         return 100;
       });
-    }, 200);
+    }, 80);
     
     // Clean up timers on unmount
     return () => {
@@ -233,6 +283,7 @@ export default function Home() {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
+              style={{ y: heroParallax }}
             >
               <style jsx global>{`
                 @keyframes gradientPulse {
@@ -319,9 +370,19 @@ export default function Home() {
               transition={{ duration: 0.6, delay: 0.3 }}
               className="flex flex-col sm:flex-row gap-5 mt-10 w-full justify-center"
             >
-              <Button size="lg" className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 text-white dark:text-white rounded-full px-10 py-7 text-lg shadow-xl shadow-pink-500/25 dark:shadow-pink-600/50 transition-all duration-300 hover:scale-105 font-bold h-12 border-2 border-transparent dark:border-white/20">
-                <Link href="/dashboard" className="flex items-center gap-2 text-white dark:text-white font-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>Get Started <ArrowRight className="h-5 w-5" /></Link>
-              </Button>
+              {/* Magnetic primary CTA */}
+              <motion.div
+                ref={buttonRef}
+                onMouseMove={handleButtonMouseMove}
+                onMouseLeave={handleButtonMouseLeave}
+                style={{ x: btnXSpring, y: btnYSpring, willChange: "transform" }}
+              >
+                <Button size="lg" className="relative overflow-hidden bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 text-white dark:text-white rounded-full px-10 py-7 text-lg shadow-xl shadow-pink-500/25 dark:shadow-pink-600/50 transition-all duration-300 hover:scale-[1.04] font-bold h-12 border-2 border-transparent dark:border-white/20">
+                  {/* subtle sheen */}
+                  <span className="pointer-events-none absolute inset-0 opacity-0 hover:opacity-100 transition-opacity duration-300" style={{ background: "radial-gradient(600px 120px at var(--x,50%) 0%, rgba(255,255,255,0.35), transparent 40%)" }} />
+                  <Link href="/dashboard" className="flex items-center gap-2 text-white dark:text-white font-bold" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>Get Started <ArrowRight className="h-5 w-5" /></Link>
+                </Button>
+              </motion.div>
               <Button variant="outline" size="lg" className="bg-white dark:bg-gray-800 rounded-full px-10 py-7 text-lg border-2 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-300 hover:scale-105 font-medium h-12">
                 <Link href="#features" className="flex items-center gap-2">Learn More <ArrowRight className="h-5 w-5" /></Link>
               </Button>
@@ -333,7 +394,13 @@ export default function Home() {
               transition={{ duration: 0.7, delay: 0.4 }}
               className="mt-16 relative w-full max-w-4xl mx-auto"
             >
-              <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700">
+              {/* 3D tilt + glow demo card */}
+              <motion.div
+                onMouseMove={handleCardMouseMove}
+                onMouseLeave={handleCardMouseLeave}
+                style={{ rotateX: cardRotXSpring, rotateY: cardRotYSpring, boxShadow: cardGlow, transformStyle: "preserve-3d", willChange: "transform, box-shadow" }}
+                className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700"
+              >
                 <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2 bg-gray-50 dark:bg-gray-900">
                   <div className="w-3 h-3 rounded-full bg-red-400"></div>
                   <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
@@ -656,9 +723,7 @@ export default function Home() {
                                   </svg>
                                   <span className="text-gray-700 dark:text-gray-300">Qubit_Growth_Chart.png</span>
                                 </div>
-                                <button className="text-xs px-2 py-0.5 bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors">
-                                  View
-                                </button>
+                                <button className="text-xs px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">View</button>
                               </motion.div>
                             )}
                             
@@ -675,9 +740,7 @@ export default function Home() {
                                   </svg>
                                   <span className="text-gray-700 dark:text-gray-300">Research_Data.xlsx</span>
                                 </div>
-                                <button className="text-xs px-2 py-0.5 bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors">
-                                  Download
-                                </button>
+                                <button className="text-xs px-2 py-1 rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">Download</button>
                               </motion.div>
                             ) : (
                               generatingDocument && (
@@ -699,14 +762,107 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             </motion.div>
           </div>
         </div>
       </section>
       
+      {/* Trusted By Strip */}
+      <section className="w-full py-8 md:py-10 bg-white dark:bg-black border-y border-gray-100 dark:border-gray-800">
+        <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6 opacity-90">
+            <p className="text-gray-500 dark:text-gray-400 text-sm">Trusted by teams.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 items-center w-full">
+              {[
+                'PIXIO', 'DOE', 'AI TUTOR', 'UFT'
+              ].map((name, i) => (
+                <div key={i} className="h-8 flex items-center justify-center relative group">
+                  <span className="text-gray-400 dark:text-gray-500 text-sm tracking-[0.25em]">
+                    {name}
+                  </span>
+                  <span className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ background: 'linear-gradient(90deg, transparent, rgba(236,72,153,0.18), transparent)', maskImage: 'linear-gradient(90deg, transparent, black 20%, black 80%, transparent)' }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      
+      {/* Integrations (with official logos) */}
+      <section id="integrations" className="w-full py-24 md:py-28 bg-white dark:bg-black">
+        <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white">Integrations</h2>
+            <div className="hidden md:flex gap-2">
+              {['AI','Databases','Messaging','DevOps','Productivity','Payments'].map((tag,i)=> (
+                <span key={i} className={`px-3 py-1.5 rounded-full text-sm bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-200 ${i===0?'ring-1 ring-pink-500/50':''}`}>{tag}</span>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-gray-600 dark:text-gray-300 mb-8 max-w-3xl">
+            Embed prebuilt triggers and actions with retries, OAuth, and typed inputs. Connect your stack in minutes.
+          </p>
+
+          {/* brand slugs: openai, anthropic, google (Gemini), slack, discord, notion, postgresql, mongodb, stripe, github, amazonaws, googlecloud */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+            {[
+              { name:'HTTP / Webhook', slug:null, desc:'Send HTTP & webhooks to unique URLs',premium:true },
+              { name:'Node', slug:'nodedotjs', desc:'Use any of npm’s 400k+ packages',premium:true },
+              { name:'Python', slug:'python', desc:'Use any of PyPI’s 350k+ packages',premium:true },
+              { name:'Notion', slug:'notion', desc:'The all‑in‑one workspace',premium:true },
+              { name:'OpenAI', slug:'openai', desc:'ChatGPT, DALL·E, Whisper',premium:true },
+              { name:'Anthropic', slug:'anthropic', desc:'Claude models',premium:true },
+              { name:'Google Sheets', slug:'googlesheets', desc:'Real‑time spreadsheets',premium:true },
+              { name:'Telegram', slug:'telegram', desc:'Cloud messaging',premium:true },
+              { name:'Google Drive', slug:'googledrive', desc:'Store and share files',premium:true },
+              { name:'Pinterest', slug:'pinterest', desc:'Visual discovery', premium:true },
+              { name:'Google Calendar', slug:'googlecalendar', desc:'Schedule and reminders',premium:true },
+              { name:'Shopify', slug:'shopify', desc:'Commerce platform',premium:true },
+              { name:'Supabase', slug:'supabase', desc:'Open source Firebase',premium:true },
+              { name:'MySQL', slug:'mysql', desc:'Relational database',premium:true },
+              { name:'PostgreSQL', slug:'postgresql', desc:'Advanced RDBMS',premium:true },
+              { name:'Twilio', slug:'sendgrid', desc:'Email delivery', premium:true },
+              { name:'Zendesk', slug:'zendesk', desc:'Customer service', premium:true },
+              { name:'ServiceNow', slug:null, desc:'Workflow platform', premium:true },
+              { name:'Slack', slug:'slack', desc:'Team messaging',premium:true },
+              { name:'Stripe', slug:'stripe', desc:'Payments',premium:true },
+              { name:'GitHub', slug:'github', desc:'Code hosting',premium:true },
+              { name:'MongoDB', slug:'mongodb', desc:'Document database',premium:true },
+              { name:'GCP', slug:'googlecloud', desc:'Google Cloud',premium:true },
+              { name:'Gemini', slug:'googlegemini', desc:'Google AI',premium:true },
+            ].map((p,i)=> (
+              <div key={i} className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 flex flex-col items-center justify-center h-28">
+                {/* Light/Dark logo or fallback icon */}
+                {p.slug ? (
+                  <>
+                    <img src={`https://cdn.simpleicons.org/${p.slug}/111827`} alt={`${p.name} logo`} className="h-6 w-6 mb-2 opacity-80 group-hover:opacity-100 transition-opacity dark:hidden" loading="lazy" onError={(e)=>{(e.currentTarget as HTMLImageElement).style.display='none'}} />
+                    <img src={`https://cdn.simpleicons.org/${p.slug}/FFFFFF`} alt={`${p.name} logo`} className="h-6 w-6 mb-2 opacity-80 group-hover:opacity-100 transition-opacity hidden dark:block" loading="lazy" onError={(e)=>{(e.currentTarget as HTMLImageElement).style.display='none'}} />
+                  </>
+                ) : (
+                  <svg className="h-6 w-6 mb-2 text-gray-800 dark:text-gray-200 opacity-80 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 0 20M12 2a15.3 15.3 0 0 0 0 20"/></svg>
+                )}
+                <div className="text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">{p.name}</span>
+                    {p.premium && <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">Premium</span>}
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 truncate max-w-[180px]">{p.desc}</p>
+                </div>
+                <span className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 bg-gradient-to-r from-transparent via-pink-500/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 flex justify-center">
+            <Link href="/marketplace" className="px-4 py-2 text-sm rounded-md bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700">View all integrations</Link>
+          </div>
+        </div>
+      </section>
+      
       {/* Features Section */}
-      <section id="features" className="w-full py-24 md:py-32 bg-white dark:bg-gray-900">
+      <section id="features" className="w-full py-24 md:py-32 bg-gray-50 dark:bg-gray-900">
         <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white">Autonomous Intelligence</h2>
@@ -795,7 +951,7 @@ export default function Home() {
               {
                 icon: <BookOpen className="h-6 w-6 text-pink-500" />,
                 title: "Write product launch email series",
-                description: "AI Tutor creates a strategic 5-email sequence for your product launch with compelling subject lines, engaging copy, and clear CTAs to maximize conversion.",
+                description: "Machine creates a strategic 5-email sequence for your product launch with compelling subject lines, engaging copy, and clear CTAs to maximize conversion.",
                 image: "/images/examples/japan-trip.jpg",
                 time: "9-min",
                 workflow: "Marketing"
@@ -803,7 +959,7 @@ export default function Home() {
               {
                 icon: <Code className="h-6 w-6 text-pink-500" />,
                 title: "Analyze website accessibility",
-                description: "AI Tutor performs a comprehensive accessibility audit of your website, identifying WCAG compliance issues and providing actionable recommendations for improvement.",
+                description: "Machine performs a comprehensive accessibility audit of your website, identifying WCAG compliance issues and providing actionable recommendations for improvement.",
                 image: "/images/examples/tesla-analysis.jpg",
                 time: "11-min",
                 workflow: "Coding"
@@ -811,7 +967,7 @@ export default function Home() {
               {
                 icon: <Brain className="h-6 w-6 text-pink-500" />,
                 title: "Create interactive lesson plan",
-                description: "AI Tutor designs an engaging, standards-aligned lesson plan with interactive activities, discussion prompts, and assessment strategies for your specific grade level and subject.",
+                description: "Machine designs an engaging, standards-aligned lesson plan with interactive activities, discussion prompts, and assessment strategies for your specific grade level and subject.",
                 image: "/images/examples/meeting-summary.jpg",
                 time: "8-min",
                 workflow: "Education"
@@ -819,7 +975,7 @@ export default function Home() {
               {
                 icon: <Shield className="h-6 w-6 text-pink-500" />,
                 title: "Draft privacy policy document",
-                description: "AI Tutor generates a comprehensive, legally-sound privacy policy tailored to your business type, location, and data collection practices to ensure regulatory compliance.",
+                description: "Machine generates a comprehensive, legally-sound privacy policy tailored to your business type, location, and data collection practices to ensure regulatory compliance.",
                 image: "/images/examples/job-email.jpg",
                 time: "7-min",
                 workflow: "Legal"
@@ -827,7 +983,7 @@ export default function Home() {
               {
                 icon: <Globe className="h-6 w-6 text-pink-500" />,
                 title: "Research emerging market trends",
-                description: "AI Tutor analyzes global market data to identify emerging trends, growth opportunities, and potential disruptions in your industry with actionable strategic recommendations.",
+                description: "Machine analyzes global market data to identify emerging trends, growth opportunities, and potential disruptions in your industry with actionable strategic recommendations.",
                 image: "/images/examples/job-email.jpg",
                 time: "12-min",
                 workflow: "Business"
@@ -835,7 +991,7 @@ export default function Home() {
               {
                 icon: <Users className="h-6 w-6 text-pink-500" />,
                 title: "Generate competitive analysis report",
-                description: "AI Tutor creates a detailed competitive landscape analysis comparing your product against key competitors across features, pricing, market position, and customer sentiment.",
+                description: "Machine creates a detailed competitive landscape analysis comparing your product against key competitors across features, pricing, market position, and customer sentiment.",
                 image: "/images/examples/meeting-summary.jpg",
                 time: "10-min",
                 workflow: "Strategy"
@@ -843,7 +999,7 @@ export default function Home() {
               {
                 icon: <MessageCircle className="h-6 w-6 text-pink-500" />,
                 title: "Create social media content calendar",
-                description: "AI Tutor develops a month-long social media content plan with platform-specific post ideas, optimal posting times, hashtag strategies, and engagement tactics.",
+                description: "Machine develops a month-long social media content plan with platform-specific post ideas, optimal posting times, hashtag strategies, and engagement tactics.",
                 image: "/images/examples/tesla-analysis.jpg",
                 time: "8-min",
                 workflow: "Social"
@@ -851,7 +1007,7 @@ export default function Home() {
               {
                 icon: <Award className="h-6 w-6 text-pink-500" />,
                 title: "Design customer feedback survey",
-                description: "AI Tutor crafts a comprehensive customer feedback survey with strategic questions to gather actionable insights on satisfaction, preferences, and improvement areas.",
+                description: "Machine crafts a comprehensive customer feedback survey with strategic questions to gather actionable insights on satisfaction, preferences, and improvement areas.",
                 image: "/images/examples/japan-trip.jpg",
                 time: "6-min",
                 workflow: "Research"
@@ -960,155 +1116,3 @@ export default function Home() {
     </main>
   );
 }
-// 'use client';
-
-// import { useEffect, useState } from 'react';
-// import { CTASection } from '@/components/home/sections/cta-section';
-// // import { FAQSection } from "@/components/sections/faq-section";
-// import { FooterSection } from '@/components/home/sections/footer-section';
-// import { HeroSection } from '@/components/home/sections/hero-section';
-// import { OpenSourceSection } from '@/components/home/sections/open-source-section';
-// import { PricingSection } from '@/components/home/sections/pricing-section';
-// import { UseCasesSection } from '@/components/home/sections/use-cases-section';
-
-// export default function Home() {
-//   return (
-//     <main className="flex flex-col items-center justify-center min-h-screen w-full">
-//       <div className="w-full divide-y divide-border">
-//         <HeroSection />
-//         <UseCasesSection />
-//         {/* <CompanyShowcase /> */}
-//         {/* <BentoSection /> */}
-//         {/* <QuoteSection /> */}
-//         {/* <FeatureSection /> */}
-//         {/* <GrowthSection /> */}
-//         <OpenSourceSection />
-//         <PricingSection />
-//         {/* <TestimonialSection /> */}
-//         {/* <FAQSection /> */}
-//         <CTASection />
-//         <FooterSection />
-//       </div>
-//     </main>
-//   );
-// }
-
-// 'use client';
-
-// import { useEffect, useState } from 'react';
-// import { CTASection } from '@/components/home/sections/cta-section';
-// // import { FAQSection } from "@/components/sections/faq-section";
-// import { FooterSection } from '@/components/home/sections/footer-section';
-// import { HeroSection } from '@/components/home/sections/hero-section';
-// import { OpenSourceSection } from '@/components/home/sections/open-source-section';
-// import { PricingSection } from '@/components/home/sections/pricing-section';
-// import { UseCasesSection } from '@/components/home/sections/use-cases-section';
-// import { ModalProviders } from '@/providers/modal-providers';
-
-// export default function Home() {
-//   return (
-//     <>
-//       <ModalProviders />
-//       <main className="flex flex-col items-center justify-center min-h-screen w-full">
-//         <div className="w-full divide-y divide-border">
-//           <HeroSection />
-//           <UseCasesSection />
-//           {/* <CompanyShowcase /> */}
-//           {/* <BentoSection /> */}
-//           {/* <QuoteSection /> */}
-//           {/* <FeatureSection /> */}
-//           {/* <GrowthSection /> */}
-//           <OpenSourceSection />
-//           <PricingSection />
-//           {/* <TestimonialSection /> */}
-//           {/* <FAQSection /> */}
-//           <CTASection />
-//           <FooterSection />
-//         </div>
-//       </main>
-//     </>
-//   );
-// }
-
-// 'use client';
-
-// import { useEffect, useState } from 'react';
-// import { CTASection } from '@/components/home/sections/cta-section';
-// // import { FAQSection } from "@/components/sections/faq-section";
-// import { FooterSection } from '@/components/home/sections/footer-section';
-// import { HeroSection } from '@/components/home/sections/hero-section';
-// import { OpenSourceSection } from '@/components/home/sections/open-source-section';
-// import { PricingSection } from '@/components/home/sections/pricing-section';
-// import { UseCasesSection } from '@/components/home/sections/use-cases-section';
-// import { ModalProviders } from '@/providers/modal-providers';
-
-// export default function Home() {
-//   return (
-//     <>
-//       <ModalProviders />
-//       <main className="flex flex-col items-center justify-center min-h-screen w-full">
-//         <div className="w-full divide-y divide-border">
-//           <HeroSection />
-//           <UseCasesSection />
-//           {/* <CompanyShowcase /> */}
-//           {/* <BentoSection /> */}
-//           {/* <QuoteSection /> */}
-//           {/* <FeatureSection /> */}
-//           {/* <GrowthSection /> */}
-//           <OpenSourceSection />
-//           <PricingSection />
-//           {/* <TestimonialSection /> */}
-//           {/* <FAQSection /> */}
-//           <CTASection />
-//           <FooterSection />
-//         </div>
-//       </main>
-//     </>
-//   );
-// }
-
-// 'use client';
-
-// import { useEffect, useState } from 'react';
-// import { CTASection } from '@/components/home/sections/cta-section';
-// // import { FAQSection } from "@/components/sections/faq-section";
-// import { FooterSection } from '@/components/home/sections/footer-section';
-// import { HeroSection } from '@/components/home/sections/hero-section';
-// import { OpenSourceSection } from '@/components/home/sections/open-source-section';
-// import { PricingSection } from '@/components/home/sections/pricing-section';
-// import { UseCasesSection } from '@/components/home/sections/use-cases-section';
-// import { ModalProviders } from '@/providers/modal-providers';
-// import { HeroVideoSection } from '@/components/home/sections/hero-video-section';
-// import { BackgroundAALChecker } from '@/components/auth/background-aal-checker';
-
-// export default function Home() {
-//   return (
-//     <>
-//       <ModalProviders />
-//       <BackgroundAALChecker>
-//         <main className="flex flex-col items-center justify-center min-h-screen w-full">
-//           <div className="w-full divide-y divide-border">
-//             <HeroSection />
-//             <UseCasesSection />
-//             {/* <CompanyShowcase /> */}
-//             {/* <BentoSection /> */}
-//             {/* <QuoteSection /> */}
-//             {/* <FeatureSection /> */}
-//             {/* <GrowthSection /> */}
-//             <OpenSourceSection />
-//             <div className='flex flex-col items-center px-4'>
-//               <PricingSection />
-//             </div>
-//             <div className="pb-10 mx-auto">
-//               <HeroVideoSection />
-//             </div>
-//             {/* <TestimonialSection /> */}
-//             {/* <FAQSection /> */}
-//             <CTASection />
-//             <FooterSection />
-//           </div>
-//         </main>
-//       </BackgroundAALChecker>
-//     </>
-//   );
-// }
