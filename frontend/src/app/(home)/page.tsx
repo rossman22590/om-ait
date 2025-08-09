@@ -794,9 +794,9 @@ export default function Home() {
       <section id="integrations" className="w-full py-24 md:py-28 bg-white dark:bg-black">
         <div className="container px-4 sm:px-6 lg:px-8 mx-auto">
           <div className="flex items-center justify-between mb-8">
-            <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white">Integrations</h2>
+            <h2 className="text-3xl md:text-5xl font-bold text-gray-900 dark:text-white">One Click Integrations</h2>
             <div className="hidden md:flex gap-2">
-              {['AI','Databases','Messaging','DevOps','Productivity','Payments'].map((tag,i)=> (
+              {['Popular','Databases','Messaging','DevOps','Productivity','Payments'].map((tag,i)=> (
                 <span key={i} className={`px-3 py-1.5 rounded-full text-sm bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-200 ${i===0?'ring-1 ring-pink-500/50':''}`}>{tag}</span>
               ))}
             </div>
