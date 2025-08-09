@@ -3,7 +3,7 @@
 This guide provides detailed instructions for setting up and hosting your own instance of Suna, an open-source generalist AI agent.
 
 ## Table of Contents
-
+ 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)
 - [Installation Steps](#installation-steps)
