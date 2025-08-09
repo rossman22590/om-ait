@@ -47,11 +47,11 @@ def initialize():
     """Initialize Redis client using a single asyncio connection from URL with proper TLS."""
     global client, pool
 
-    # Connection options - optimized for high-load production and Upstash
-    max_connections = int(os.getenv("REDIS_MAX_CONNECTIONS", "2048"))  # Increased to handle high concurrent load
-    socket_timeout = 30.0            # 30 seconds socket timeout for stability
-    connect_timeout = 15.0           # 15 seconds connection timeout
-    retry_on_timeout = not (os.getenv("REDIS_RETRY_ON_TIMEOUT", "True").lower() != "true")
+    # Connection options - optimized specifically for Upstash Redis
+    max_connections = int(os.getenv("REDIS_MAX_CONNECTIONS", "1024"))  # Upstash recommends lower connection counts
+    socket_timeout = 5.0             # Upstash recommends shorter timeouts (5s)
+    connect_timeout = 5.0            # Upstash recommends shorter connection timeout (5s)
+    retry_on_timeout = True          # Always retry on timeout for Upstash
     retry_on_error = [ConnectionError, TimeoutError]  # Retry on connection errors
 
     redis_url, ssl_on = _build_redis_url()
@@ -67,18 +67,12 @@ def initialize():
             socket_connect_timeout=connect_timeout,
             socket_keepalive=True,
             socket_keepalive_options={},
-            health_check_interval=60,  # Increased to reduce overhead
+            health_check_interval=30,   # Upstash recommends 30s health checks
             retry_on_timeout=retry_on_timeout,
-            retry_on_error=retry_on_error,
             max_connections=max_connections,
-            # Connection pool optimizations for high load
-            retry=redis.Retry(redis.backoff.ExponentialBackoff(), retries=3),
-            connection_pool_kwargs={
-                'max_connections': max_connections,
-                'retry_on_timeout': retry_on_timeout,
-                'socket_keepalive': True,
-                'socket_keepalive_options': {},
-            }
+            # Upstash-specific optimizations
+            retry=redis.Retry(redis.backoff.ExponentialBackoff(cap=2, base=0.1), retries=5),
+            # Remove connection_pool_kwargs as it can cause conflicts with from_url
         )
 
         # Use a connection pool under the hood via from_url; keep a reference for graceful close
