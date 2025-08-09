@@ -18,6 +18,8 @@ export const changeLogData: ChangelogData[] = [
         "Composio Integration - One-click access to hundreds of SaaS actions and APIs",
         "Google Sheets Tool - Create, read, write, append rows, and update cells from agents",
         "Fragments (Pro+) - Advanced workflow automation portal with tier-gated access",
+        "GPT-5 as default model with recommendation badges across aliases",
+        "GPT-5 Mini variant for faster, cost-efficient tasks",
         "Machine Code - New code-generation and execution primitives for agents"
       ],
       image: "/meta.png",
