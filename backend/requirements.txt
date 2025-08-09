@@ -1,5 +1,5 @@
 python-dotenv==1.0.1
-litellm[proxy]==1.75.2
+litellm==1.75.2
 orjson>=3.10.0
 click==8.1.7
 questionary==2.0.1
