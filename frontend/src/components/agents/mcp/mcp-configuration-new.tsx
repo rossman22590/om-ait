@@ -103,7 +103,7 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
     onConfigurationChange(newMCPs);
   };
 
-  const handleSaveCustomMCP = (customConfig: any) => {
+  const handleSaveCustomMCP = async (customConfig: any) => {
     const mcpConfig: MCPConfigurationType = {
       name: customConfig.name,
       qualifiedName: `custom_${customConfig.type}_${Date.now()}`,
@@ -416,22 +416,7 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
           }}
         />
       )}
-      {selectedMCPForTools && selectedMCPForTools.customType === 'pipedream' && (
-        <ToolsManager
-          mode="pipedream"
-          agentId={selectedAgentId || ''}
-          profileId={selectedMCPForTools.config?.profile_id || ''}
-          appName={selectedMCPForTools.config?.app_name || selectedMCPForTools.name}
-          profileName={selectedMCPForTools.config?.profile_name}
-          open={showCustomToolsManager}
-          onOpenChange={setShowCustomToolsManager}
-          onToolsUpdate={handleCustomToolsUpdate}
-          versionData={versionData}
-          saveMode={saveMode}
-          versionId={versionId}
-          initialEnabledTools={selectedMCPForTools.enabledTools}
-        />
-      )}
+      {selectedMCPForTools && selectedMCPForTools.customType === 'pipedream' && null}
       
       {selectedMCPForTools && selectedMCPForTools.customType !== 'composio' && selectedMCPForTools.customType !== 'pipedream' && (
         <ToolsManager

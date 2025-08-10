@@ -17,6 +17,7 @@ interface UseWorkflowStepsProps {
     agentTools?: {
         agentpress_tools: Array<{ name: string; description: string; icon?: string; enabled: boolean }>;
         mcp_tools: Array<{ name: string; description: string; icon?: string; server?: string }>;
+        pipedream_tools?: Array<{ name: string; description: string; icon?: string; server?: string }>;
     };
     setIsPanelOpen: (open: boolean) => void;
     setPanelMode: (mode: 'add' | 'edit') => void;

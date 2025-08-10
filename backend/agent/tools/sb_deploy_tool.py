@@ -1,4 +1,8 @@
 import os
+import re
+import json
+import time
+import requests
 from dotenv import load_dotenv
 from agentpress.tool import ToolResult, openapi_schema, usage_example
 from sandbox.tool_base import SandboxToolsBase
@@ -15,26 +19,227 @@ class SandboxDeployTool(SandboxToolsBase):
         super().__init__(project_id, thread_manager)
         self.workspace_path = "/workspace"  # Ensure we're always operating in /workspace
         self.cloudflare_api_token = os.getenv("CLOUDFLARE_API_TOKEN")
+        self.cloudflare_account_id = os.getenv("CLOUDFLARE_ACCOUNT_ID")
+        self.cloudflare_zone_id = os.getenv("CLOUDFLARE_ZONE_ID")
+        self.custom_domain = os.getenv("CUSTOM_DOMAIN", "mymachine.space")
+
+        # Headers for Cloudflare API requests
+        self.cf_headers = {
+            "Authorization": f"Bearer {self.cloudflare_api_token}",
+            "Content-Type": "application/json",
+        }
+
+        # Project mapping persistence in workspace
+        self.mappings_file = "/workspace/cloudflare_mappings.json"
+        self.project_mappings = {}
 
     def clean_path(self, path: str) -> str:
         """Clean and normalize a path to be relative to /workspace"""
         return clean_path(path, self.workspace_path)
 
+    async def _file_exists(self, path: str) -> bool:
+        try:
+            await self.sandbox.fs.get_file_info(path)
+            return True
+        except Exception:
+            return False
+
+    async def _read_file(self, file_path: str, start_line: int = 1, end_line: int = None) -> str:
+        try:
+            if not await self._file_exists(file_path):
+                return ""
+
+            content = None
+            try:
+                content = await self.sandbox.fs.read_file(file_path)
+            except Exception:
+                pass
+
+            if content is None:
+                try:
+                    content = (await self.sandbox.fs.download_file(file_path)).decode()
+                except Exception:
+                    pass
+
+            if content is None:
+                try:
+                    escaped = file_path.replace('"', '\\"')
+                    res = await self.sandbox.process.exec(f'cat "{escaped}"', timeout=10)
+                    content = res.result
+                except Exception:
+                    return ""
+
+            if start_line > 1 or end_line is not None:
+                lines = content.split('\n')
+                total = len(lines)
+                s = max(0, start_line - 1)
+                e = end_line if end_line is not None else total
+                e = min(e, total)
+                content = '\n'.join(lines[s:e])
+            return content
+        except UnicodeDecodeError:
+            return ""
+        except Exception:
+            return ""
+
+    async def _load_project_mappings(self):
+        try:
+            if self.sandbox and await self._file_exists(self.mappings_file):
+                content = await self._read_file(self.mappings_file)
+                if content:
+                    return json.loads(content)
+            else:
+                await self._save_project_mappings()
+            return {}
+        except Exception:
+            return {}
+
+    async def _save_project_mappings(self):
+        try:
+            if self.sandbox:
+                content = json.dumps(self.project_mappings, indent=2)
+                try:
+                    await self.sandbox.fs.write_file(self.mappings_file, content)
+                except AttributeError:
+                    await self.sandbox.process.exec(f"echo '{content}' > {self.mappings_file}", timeout=10)
+        except Exception:
+            pass
+
+    def format_subdomain(self, project_name: str) -> str:
+        return project_name
+
+    def check_dns_record_exists(self, subdomain: str) -> bool:
+        if not all([self.cloudflare_api_token, self.cloudflare_zone_id]):
+            return False
+        url = f"https://api.cloudflare.com/client/v4/zones/{self.cloudflare_zone_id}/dns_records"
+        params = {"name": f"{subdomain}.{self.custom_domain}"}
+        try:
+            response = requests.get(url, headers=self.cf_headers, params=params)
+            if response.status_code != 200:
+                return False
+            data = response.json()
+            if not data.get("success", False):
+                return False
+            return len(data.get("result", [])) > 0
+        except Exception:
+            return False
+
+    def create_dns_record(self, subdomain: str, target: str) -> bool:
+        if not all([self.cloudflare_api_token, self.cloudflare_zone_id]):
+            return False
+        if self.check_dns_record_exists(subdomain):
+            return True
+        url = f"https://api.cloudflare.com/client/v4/zones/{self.cloudflare_zone_id}/dns_records"
+        payload = {"type": "CNAME", "name": subdomain, "content": target, "ttl": 1, "proxied": True}
+        try:
+            response = requests.post(url, headers=self.cf_headers, json=payload)
+            return response.status_code == 200
+        except Exception:
+            return False
+
+    def assign_custom_domain_to_pages(self, project_name: str, subdomain: str) -> bool:
+        if not all([self.cloudflare_api_token, self.cloudflare_account_id]):
+            return False
+        check_url = f"https://api.cloudflare.com/client/v4/accounts/{self.cloudflare_account_id}/pages/projects/{project_name}/domains"
+        try:
+            check_response = requests.get(check_url, headers=self.cf_headers)
+            if check_response.status_code == 200:
+                existing = check_response.json().get("result", [])
+                names = [d.get("name") for d in existing]
+                full = f"{subdomain}.{self.custom_domain}"
+                if full in names:
+                    return True
+        except Exception:
+            pass
+
+        url = f"https://api.cloudflare.com/client/v4/accounts/{self.cloudflare_account_id}/pages/projects/{project_name}/domains"
+        payload = {"name": f"{subdomain}.{self.custom_domain}"}
+        try:
+            response = requests.post(url, headers=self.cf_headers, json=payload)
+            if response.status_code == 200:
+                time.sleep(2)
+                return True
+            return False
+        except Exception:
+            return False
+
+    def prepare_deployment_directory(self, source_path: str) -> tuple:
+        try:
+            import shutil
+            import tempfile
+            temp_dir = tempfile.mkdtemp(prefix="deploy_", dir=source_path)
+            file_count = 0
+            has_index = False
+            html_files = []
+            for root, dirs, files in os.walk(source_path):
+                if os.path.abspath(root) == os.path.abspath(temp_dir):
+                    continue
+                for file in files:
+                    src = os.path.join(root, file)
+                    rel = os.path.relpath(src, source_path)
+                    dst = os.path.join(temp_dir, rel)
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    shutil.copy2(src, dst)
+                    file_count += 1
+                    if file.lower().endswith('.html'):
+                        html_files.append(rel)
+                        if file.lower() == 'index.html':
+                            has_index = True
+            if not has_index and html_files:
+                first_html = html_files[0]
+                first_path = os.path.join(temp_dir, first_html)
+                index_path = os.path.join(os.path.dirname(first_path), 'index.html')
+                if os.path.dirname(first_html) == '':
+                    shutil.copy2(first_path, index_path)
+                else:
+                    with open(os.path.join(temp_dir, 'index.html'), 'w') as f:
+                        f.write(f"<meta http-equiv=\"refresh\" content=\"0; url={first_html}\" />")
+            elif not has_index and not html_files:
+                with open(os.path.join(temp_dir, 'index.html'), 'w') as f:
+                    f.write("<html><body><h1>Deployed Files</h1><p>The deployed files don't include an HTML file. This is a placeholder.</p></body></html>")
+            return temp_dir, file_count, f"Prepared {file_count} files for deployment"
+        except Exception as e:
+            return source_path, 0, f"Failed to prepare deployment directory: {str(e)}"
+
+    def _clear_wrangler_cache(self, directory_path: str):
+        try:
+            node_modules = os.path.join(directory_path, "node_modules")
+            if os.path.exists(node_modules):
+                cache_dir = os.path.join(node_modules, ".cache", "wrangler")
+                if os.path.exists(cache_dir):
+                    pages_json = os.path.join(cache_dir, "pages.json")
+                    if os.path.exists(pages_json):
+                        os.remove(pages_json)
+            wrangler_toml = os.path.join(directory_path, "wrangler.toml")
+            if not os.path.exists(wrangler_toml):
+                try:
+                    with open(wrangler_toml, "w") as f:
+                        f.write(f"[site]\nname = \"{os.path.basename(directory_path)}\"\n")
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     @openapi_schema({
         "type": "function",
         "function": {
             "name": "deploy",
-            "description": "Deploy a static website (HTML+CSS+JS) from a directory in the sandbox to Cloudflare Pages. Only use this tool when permanent deployment to a production environment is needed. The directory path must be relative to /workspace. The website will be deployed to {name}.kortix.cloud.",
+            "description": "Deploy a static website (HTML+CSS+JS) from a directory in the sandbox to Cloudflare Pages with optional custom domain setup. Only use this tool when permanent deployment to a production environment is needed. The directory path must be relative to /workspace.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "name": {
                         "type": "string",
-                        "description": "Name for the deployment, will be used in the URL as {name}.kortix.cloud"
+                        "description": "Name for the deployment, will be used in the URL as {name}.mymachine.space"
                     },
                     "directory_path": {
                         "type": "string",
                         "description": "Path to the directory containing the static website files to deploy, relative to /workspace (e.g., 'build')"
+                    },
+                    "setup_custom_domain": {
+                        "type": "boolean",
+                        "description": "Whether to set up a custom domain on mymachine.space (requires Cloudflare credentials)",
+                        "default": True
                     }
                 },
                 "required": ["name", "directory_path"]
@@ -54,16 +259,17 @@ class SandboxDeployTool(SandboxToolsBase):
         <invoke name="deploy">
         <parameter name="name">my-site</parameter>
         <parameter name="directory_path">website</parameter>
+        <parameter name="setup_custom_domain">true</parameter>
         </invoke>
         </function_calls>
         ''')
-    async def deploy(self, name: str, directory_path: str) -> ToolResult:
+    async def deploy(self, name: str, directory_path: str, setup_custom_domain: bool = True) -> ToolResult:
         """
         Deploy a static website (HTML+CSS+JS) from the sandbox to Cloudflare Pages.
         Only use this tool when permanent deployment to a production environment is needed.
         
         Args:
-            name: Name for the deployment, will be used in the URL as {name}.kortix.cloud
+            name: Name for the deployment, will be used in the URL as {name}.mymachine.space
             directory_path: Path to the directory to deploy, relative to /workspace
             
         Returns:
@@ -86,32 +292,67 @@ class SandboxDeployTool(SandboxToolsBase):
             except Exception as e:
                 return self.fail_response(f"Directory '{directory_path}' does not exist: {str(e)}")
             
+            # Prepare the deployment directory to ensure an index.html exists
+            deploy_dir, files_count, _ = self.prepare_deployment_directory(full_path)
+            full_path = deploy_dir
+            # Clear Wrangler cache
+            self._clear_wrangler_cache(full_path)
+
             # Deploy to Cloudflare Pages directly from the container
             try:
                 # Get Cloudflare API token from environment
                 if not self.cloudflare_api_token:
                     return self.fail_response("CLOUDFLARE_API_TOKEN environment variable not set")
-                    
-                # Single command that creates the project if it doesn't exist and then deploys
-                project_name = f"{self.sandbox_id}-{name}"
-                deploy_cmd = f'''cd {self.workspace_path} && export CLOUDFLARE_API_TOKEN={self.cloudflare_api_token} && 
-                    (npx wrangler pages deploy {full_path} --project-name {project_name} || 
-                    (npx wrangler pages project create {project_name} --production-branch production && 
-                    npx wrangler pages deploy {full_path} --project-name {project_name}))'''
+                # Validate project name for Cloudflare Pages
+                if not name or not re.match(r'^[a-z0-9]([a-z0-9-]{0,56}[a-z0-9])?$', name):
+                    return self.fail_response("Invalid project name. Project names must be 1-58 lowercase characters or numbers with optional dashes, and cannot start or end with a dash.")
 
-                # Execute the command directly using the sandbox's process.exec method
-                response = await self.sandbox.process.exec(f"/bin/sh -c \"{deploy_cmd}\"",
-                                 timeout=300)
-                
-                print(f"Deployment command output: {response.result}")
-                
-                if response.exit_code == 0:
-                    return self.success_response({
-                        "message": f"Website deployed successfully",
-                        "output": response.result
-                    })
-                else:
+                # Add random prefix to avoid collisions
+                import random
+                random_digits = str(random.randint(10000, 99999))
+                project_name = f"{random_digits}-{name}"
+
+                # Ensure npm project exists and wrangler installed
+                init_cmd = "npm init -y"
+                await self.sandbox.process.exec(init_cmd, cwd=full_path, timeout=30)
+                install_cmd = "npm install wrangler --no-save"
+                await self.sandbox.process.exec(install_cmd, cwd=full_path, timeout=120)
+
+                env_vars = {"CLOUDFLARE_API_TOKEN": self.cloudflare_api_token}
+                # Create project then deploy (create may already exist)
+                create_cmd = f"./node_modules/.bin/wrangler pages project create {project_name} --production-branch production"
+                await self.sandbox.process.exec(create_cmd, cwd=full_path, env=env_vars, timeout=60)
+                deploy_cmd = f"./node_modules/.bin/wrangler pages deploy . --project-name {project_name} --commit-dirty=true"
+                response = await self.sandbox.process.exec(deploy_cmd, cwd=full_path, env=env_vars, timeout=300)
+
+                if response.exit_code != 0:
                     return self.fail_response(f"Deployment failed with exit code {response.exit_code}: {response.result}")
+
+                # Build URLs and optionally assign custom domain
+                default_url = f"https://{project_name}.pages.dev"
+                result = {
+                    "message": "✅ Website deployed successfully!",
+                    "urls": {"cloudflare": default_url},
+                    "output": f"Successfully deployed {files_count} files to {project_name}",
+                }
+
+                if setup_custom_domain:
+                    if not all([self.cloudflare_account_id, self.cloudflare_zone_id, self.cloudflare_api_token]):
+                        result["custom_domain_status"] = "❌ Missing Cloudflare credentials for custom domain setup"
+                    else:
+                        sub = self.format_subdomain(project_name)
+                        dns_created = self.create_dns_record(sub, f"{project_name}.pages.dev")
+                        if dns_created:
+                            assigned = self.assign_custom_domain_to_pages(project_name, sub)
+                            if assigned:
+                                result["custom_domain_status"] = "✅ Custom domain set up successfully"
+                                result["urls"]["custom_domain"] = f"https://{sub}.{self.custom_domain}"
+                            else:
+                                result["custom_domain_status"] = "⚠️ DNS record created but failed to assign custom domain to project"
+                        else:
+                            result["custom_domain_status"] = "❌ Failed to create DNS record for custom domain"
+
+                return self.success_response(result)
             except Exception as e:
                 return self.fail_response(f"Error during deployment: {str(e)}")
         except Exception as e:

@@ -201,7 +201,7 @@ Example configuration:
 ```sh
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-NEXT_PUBLIC_BACKEND_URL=http://localhost:8000/api
+NEXT_PUBLIC_BACKEND_URL=https://machinev9api.ngrok.io/api
 NEXT_PUBLIC_URL=https://machinev9.ngrok.io
 NEXT_PUBLIC_ENV_MODE=LOCAL
 ```

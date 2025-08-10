@@ -15,6 +15,7 @@ import { ConditionalStep } from '@/components/agents/workflows/conditional-workf
 import { getStepIconAndColor } from './workflow-definitions';
 
 import { ComposioRegistry } from '@/components/agents/composio/composio-registry';
+import { PipedreamRegistry } from '@/components/agents/pipedream/pipedream-registry';
 import { CustomMCPDialog } from '@/components/agents/mcp/custom-mcp-dialog';
 import { useAgent, useUpdateAgent } from '@/hooks/react-query/agents/use-agents';
 import { useQueryClient } from '@tanstack/react-query';
@@ -22,6 +23,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { composioApi } from '@/hooks/react-query/composio/utils';
 import { backendApi } from '@/lib/api-client';
+import { useUpdatePipedreamToolsForAgent } from '@/hooks/react-query/agents/use-pipedream-tools';
 
 interface StepType {
     id: string;
@@ -77,10 +79,12 @@ export function WorkflowSidePanel({
 
     const [showComposioRegistry, setShowComposioRegistry] = useState(false);
     const [showCustomMCPDialog, setShowCustomMCPDialog] = useState(false);
+    const [showPipedreamRegistry, setShowPipedreamRegistry] = useState(false);
     const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
     const queryClient = useQueryClient();
     const { data: agent } = useAgent(agentId || '');
     const updateAgentMutation = useUpdateAgent();
+    const updatePipedreamTools = useUpdatePipedreamToolsForAgent();
 
     const isMobile = useIsMobile();
 
@@ -88,11 +92,15 @@ export function WorkflowSidePanel({
         onClose();
     }, [onClose]);
 
-    // Filter step types based on search
-    const filteredStepTypes = availableStepTypes.filter(type =>
-        type.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        type.description.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // Filter step types based on search (guard undefined fields)
+    const safeSearch = (searchQuery || '').toLowerCase();
+    const filteredStepTypes = (availableStepTypes || [])
+        .filter((t): t is StepType => !!t)
+        .filter(type => {
+            const name = (type.name || '').toLowerCase();
+            const desc = (type.description || '').toLowerCase();
+            return name.includes(safeSearch) || desc.includes(safeSearch);
+        });
 
     React.useEffect(() => {
         if (!isOpen) return;
@@ -113,6 +121,12 @@ export function WorkflowSidePanel({
             setShowComposioRegistry(true);
         } else if (stepType.id === 'mcp_configuration') {
             setShowCustomMCPDialog(true);
+        } else if (stepType.id === 'pipedream_integration') {
+            if (showPipedreamUI) {
+                setShowPipedreamRegistry(true);
+            } else {
+                toast.info('Pipedream UI is disabled');
+            }
         } else {
             onCreateStep(stepType);
         }
@@ -132,6 +146,32 @@ export function WorkflowSidePanel({
         }
         
         toast.success(`Connected ${appName} integration!`);
+    };
+
+    const handlePipedreamToolsSelected = async (profileId: string, selectedTools: string[], appName: string, appSlug: string) => {
+        try {
+            if (!agentId) {
+                toast.error('No agent selected');
+                return;
+            }
+            await updatePipedreamTools.mutateAsync({
+                agentId,
+                profileId,
+                enabledTools: selectedTools,
+            });
+            toast.success(`Added ${selectedTools.length} tools from ${appName}!`);
+        } catch (e) {
+            console.error('Failed to update Pipedream tools', e);
+            toast.error('Failed to add tools to agent');
+        } finally {
+            setShowPipedreamRegistry(false);
+            queryClient.invalidateQueries({ queryKey: ['agents'] });
+            queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+            queryClient.invalidateQueries({ queryKey: ['agent', agentId, 'tools'] });
+            queryClient.invalidateQueries({ queryKey: ['pipedream', 'profiles'] });
+            queryClient.invalidateQueries({ queryKey: ['pipedream', 'apps'] });
+            if (onToolsUpdate) onToolsUpdate();
+        }
     };
 
     const handleCustomMCPSave = async (customConfig: any) => {
@@ -415,16 +455,16 @@ export function WorkflowSidePanel({
             </AnimatePresence>
             {showPipedreamUI && (
                 <Dialog open={showPipedreamRegistry} onOpenChange={setShowPipedreamRegistry}>
-                    <DialogContent className="max-w-4xl max-h-[80vh] flex flex-col">
-                        <DialogHeader>
-                            <DialogTitle>Pipedream Tools</DialogTitle>
+                    <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-hidden">
+                        <DialogHeader className="sr-only">
+                            <DialogTitle>Pipedream Integrations</DialogTitle>
                         </DialogHeader>
-                        <div className="flex-1 overflow-auto">
-                            <PipedreamRegistry 
-                                selectedAgentId={agentId} 
-                                onClose={() => setShowPipedreamRegistry(false)} 
-                            />
-                        </div>
+                        <PipedreamRegistry
+                            selectedAgentId={agentId}
+                            onClose={() => setShowPipedreamRegistry(false)}
+                            onToolsSelected={handlePipedreamToolsSelected}
+                            forceDirectSave
+                        />
                     </DialogContent>
                 </Dialog>
             )}

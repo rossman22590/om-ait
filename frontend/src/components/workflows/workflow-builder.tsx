@@ -14,6 +14,7 @@ interface WorkflowBuilderProps {
     agentTools?: {
         agentpress_tools: Array<{ name: string; description: string; icon?: string; enabled: boolean }>;
         mcp_tools: Array<{ name: string; description: string; icon?: string; server?: string }>;
+        pipedream_tools?: Array<{ name: string; description: string; icon?: string; server?: string }>;
     };
     isLoadingTools?: boolean;
     agentId?: string;

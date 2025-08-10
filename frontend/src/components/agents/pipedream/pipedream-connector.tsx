@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils';
 import { usePipedreamProfiles, useCreatePipedreamProfile, useConnectPipedreamProfile } from '@/hooks/react-query/pipedream/use-pipedream-profiles';
 import { useUpdatePipedreamToolsForAgent } from '@/hooks/react-query/agents/use-pipedream-tools';
 import { pipedreamApi } from '@/hooks/react-query/pipedream/utils';
+import { useQueryClient } from '@tanstack/react-query';
 import type { CreateProfileRequest } from '@/components/agents/pipedream/pipedream-types';
 import type { PipedreamApp } from '@/hooks/react-query/pipedream/utils';
 
@@ -78,6 +79,7 @@ export const PipedreamConnector: React.FC<PipedreamConnectorProps> = ({
   const [connectionSuccessProfileId, setConnectionSuccessProfileId] = useState<string | null>(null);
 
   const updatePipedreamTools = useUpdatePipedreamToolsForAgent();
+  const queryClient = useQueryClient();
 
   const { data: profiles, refetch: refetchProfiles } = usePipedreamProfiles({ app_slug: app.name_slug });
   const createProfile = useCreatePipedreamProfile();
@@ -219,6 +221,12 @@ export const PipedreamConnector: React.FC<PipedreamConnectorProps> = ({
           enabledTools: Array.from(selectedTools)
         });
         toast.success(`Added ${selectedTools.size} tools from ${app.name}!`);
+        // Invalidate caches so UI reflects newly added tools
+        queryClient.invalidateQueries({ queryKey: ['agents'] });
+        queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+        queryClient.invalidateQueries({ queryKey: ['agent', agentId, 'tools'] });
+        queryClient.invalidateQueries({ queryKey: ['pipedream', 'profiles'] });
+        queryClient.invalidateQueries({ queryKey: ['pipedream', 'apps'] });
         onOpenChange(false);
       } else {
         onComplete(selectedProfileId, Array.from(selectedTools), app.name, app.name_slug);
@@ -232,7 +240,7 @@ export const PipedreamConnector: React.FC<PipedreamConnectorProps> = ({
     } finally {
       setIsCompletingConnection(false);
     }
-  }, [selectedProfileId, selectedTools, saveMode, agentId, updatePipedreamTools, onComplete, app.name, app.name_slug, onOpenChange]);
+  }, [selectedProfileId, selectedTools, saveMode, agentId, updatePipedreamTools, onComplete, app.name, app.name_slug, onOpenChange, queryClient]);
 
   const handleProfileOnlyComplete = useCallback(async () => {
     if (!selectedProfileId) {

@@ -57,14 +57,18 @@ async def lifespan(app: FastAPI):
         
         sandbox_api.initialize(db)
         
-        # Initialize Redis connection
+        # Initialize Redis connection with retry
         from services import redis
+        from utils.retry import retry
         try:
-            await redis.initialize_async()
-            logger.info("Redis connection initialized successfully")
+            await retry(lambda: redis.initialize_async())
+            logger.info("Redis connection initialized successfully during startup")
         except Exception as e:
-            logger.error(f"Failed to initialize Redis connection: {e}")
-            # Continue without Redis - the application will handle Redis failures gracefully
+            logger.error(f"Failed to initialize Redis connection during startup: {e}")
+            # Reset Redis state to ensure clean initialization on first request
+            redis.client = None
+            redis._initialized = False
+            logger.warning("Redis will be initialized on first request")
         
         # Start background tasks
         # asyncio.create_task(agent_api.restore_running_agent_runs())
@@ -202,24 +206,29 @@ async def health_check():
     }
 
 @api_router.get("/health-docker")
-async def health_check():
+async def health_check_docker():
     logger.info("Health docker check endpoint called")
     try:
-        client = await redis.get_client()
+        # Test Redis connection with retry
+        from utils.retry import retry
+        client = await retry(lambda: redis.get_client())
         await client.ping()
-        db = DBConnection()
-        await db.initialize()
-        db_client = await db.client
+        
+        # Test database connection
+        db_instance = DBConnection()
+        await db_instance.initialize()
+        db_client = await db_instance.client
         await db_client.table("threads").select("thread_id").limit(1).execute()
+        
         logger.info("Health docker check complete")
         return {
-            "status": "ok", 
+            "status": "ok",
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "instance_id": instance_id
         }
     except Exception as e:
         logger.error(f"Failed health docker check: {e}")
-        raise HTTPException(status_code=500, detail="Health check failed")
+        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
 
 
 app.include_router(api_router, prefix="/api")

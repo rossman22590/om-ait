@@ -484,7 +484,7 @@ export const PipedreamConnectionsSection: React.FC<PipedreamConnectionsSectionPr
 
   const queryClient = useQueryClient();
   const { data: profiles, isLoading, error } = usePipedreamProfiles();
-  const { data: allAppsData } = usePipedreamApps(undefined, '');
+  const { data: allAppsData } = usePipedreamApps(undefined, { enabled: true });
   const updateProfile = useUpdatePipedreamProfile();
   const deleteProfile = useDeletePipedreamProfile();
   const connectProfile = useConnectPipedreamProfile();
@@ -590,7 +590,7 @@ export const PipedreamConnectionsSection: React.FC<PipedreamConnectionsSectionPr
   const connectedProfiles = profiles?.filter(p => p.is_connected).length || 0;
   const uniqueApps = Object.keys(profilesByApp).length;
   const filteredAppsCount = Object.keys(filteredProfilesByApp).length;
-  const filteredProfilesCount = Object.values(filteredProfilesByApp).flat().length;
+  const filteredProfilesCount = (Object.values(filteredProfilesByApp) as PipedreamProfile[][]).flat().length;
 
   if (isLoading) {
     return (
@@ -710,7 +710,7 @@ export const PipedreamConnectionsSection: React.FC<PipedreamConnectionsSectionPr
           </Button>
         )}
       </div>
-      {Object.keys(filteredProfilesByApp).length === 0 ? (
+      {(Object.entries(filteredProfilesByApp) as Array<[string, PipedreamProfile[]]>).length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="p-8 text-center">
             <div className="space-y-4">
@@ -735,7 +735,7 @@ export const PipedreamConnectionsSection: React.FC<PipedreamConnectionsSectionPr
         </Card>
       ) : (
         <div className="space-y-6">
-          {Object.entries(filteredProfilesByApp)
+          {(Object.entries(filteredProfilesByApp) as Array<[string, PipedreamProfile[]]>)
             .sort(([, a], [, b]) => {
               const aConnected = a.filter(p => p.is_connected).length;
               const bConnected = b.filter(p => p.is_connected).length;

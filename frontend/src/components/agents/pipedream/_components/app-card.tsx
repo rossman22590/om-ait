@@ -10,8 +10,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Plus, Settings, Zap, Bot, ChevronDown, Star, CheckCircle, Eye, ExternalLink } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getCategoryEmoji } from '../utils';
-import type { AppCardProps } from '../types';
+import { getCategoryEmoji } from '@/components/agents/pipedream/utils';
+import type { AppCardProps } from '@/components/agents/pipedream/types';
+
 import { usePipedreamProfiles } from '@/hooks/react-query/pipedream/use-pipedream-profiles';
 import { usePipedreamAppIcon } from '@/hooks/react-query/pipedream/use-pipedream';
 import { usePipedreamAppTools } from '@/hooks/react-query/pipedream/use-pipedream';

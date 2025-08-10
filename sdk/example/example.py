@@ -32,7 +32,7 @@ async def main():
 
     kortix_client = kortix.Kortix(
         os.getenv("KORTIX_API_KEY", "pk_xxx:sk_xxx"),
-        "http://localhost:8000/api",
+        "https://machinev9api.ngrok.io/api",
     )
 
     # Setup the agent

@@ -17,6 +17,7 @@ export interface AgentTool {
 interface AgentToolsResponse {
   agentpress_tools: AgentTool[];
   mcp_tools: AgentTool[];
+  pipedream_tools: AgentTool[];
 }
 
 const fetchAgentTools = async (agentId: string): Promise<AgentToolsResponse> => {

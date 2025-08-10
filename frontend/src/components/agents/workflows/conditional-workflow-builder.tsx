@@ -41,6 +41,7 @@ interface ConditionalWorkflowBuilderProps {
   agentTools?: {
     agentpress_tools: Array<{ name: string; description: string; icon?: string; enabled: boolean }>;
     mcp_tools: Array<{ name: string; description: string; icon?: string; server?: string }>;
+    pipedream_tools: Array<{ name: string; description: string; icon?: string; server?: string }>;
   };
   isLoadingTools?: boolean;
 }
@@ -518,6 +519,15 @@ export function ConditionalWorkflowBuilder({
                                 </>
                               );
                             }
+                            const pipedreamTool = agentTools?.pipedream_tools.find(t => `${t.server}:${t.name}` === step.config.tool_name);
+                            if (pipedreamTool) {
+                              return (
+                                <>
+                                  <span>{pipedreamTool.icon || '🔧'}</span>
+                                  <span>{normalizeToolName(pipedreamTool.name, 'mcp')}</span>
+                                </>
+                              );
+                            }
                             return step.config.tool_name;
                           })()}
                         </span>
@@ -564,6 +574,31 @@ export function ConditionalWorkflowBuilder({
                             {agentTools.mcp_tools.length > 0 && (
                               <CommandGroup heading="External Tools">
                                 {agentTools.mcp_tools.map((tool) => (
+                                  <CommandItem
+                                    key={`${tool.server || 'default'}-${tool.name}`}
+                                    value={`${normalizeToolName(tool.name, 'mcp')} ${tool.name} ${tool.server || ''}`}
+                                    onSelect={() => {
+                                      updateStep(step.id, { config: { ...step.config, tool_name: tool.server ? `${tool.server}:${tool.name}` : tool.name } });
+                                      setToolSearchOpen(prev => ({ ...prev, [step.id]: false }));
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span>{tool.icon || '🔧'}</span>
+                                      <span>{normalizeToolName(tool.name, 'mcp')}</span>
+                                    </div>
+                                    <Check
+                                      className={cn(
+                                        "ml-auto h-4 w-4",
+                                        step.config.tool_name === (tool.server ? `${tool.server}:${tool.name}` : tool.name) ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                            {agentTools.pipedream_tools.length > 0 && (
+                              <CommandGroup heading="Pipedream Tools">
+                                {agentTools.pipedream_tools.map((tool) => (
                                   <CommandItem
                                     key={`${tool.server || 'default'}-${tool.name}`}
                                     value={`${normalizeToolName(tool.name, 'mcp')} ${tool.name} ${tool.server || ''}`}

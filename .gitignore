@@ -204,3 +204,20 @@ dump.rdb
 
 # CodeWebChat state and logs (auto-added)
 .cwc/
+backend/test_dramatiq_broker.py
+backend/test_first_and_subsequent_chats.py
+backend/test_first_chat_fix.py
+backend/test_redis_broker_only.py
+backend/test_redis_concurrent.py
+backend/test_redis_connection.py
+backend/test_simple_connection.py
+backend/test_simple_redis.py
+backend/test_startup_redis_fix.py
+backend/test_subsequent_chats.py
+backend/test_updated_redis_service.py
+backend/test_upstash_correct.py
+backend/test_upstash_fix.py
+backend/test_upstash_only.py
+backend/upstash_redis_test.py
+backend/final_redis_test.py
+backend/simple_redis_test.py

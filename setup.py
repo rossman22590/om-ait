@@ -1080,7 +1080,7 @@ class SetupWizard:
         else:
             print_info("Webhook base URL is required for workflows to receive callbacks.")
             print_info("This must be a publicly accessible URL where Suna API can receive webhooks from Supabase Cron.")
-            print_info("For local development, you can use services like ngrok or localtunnel to expose http://localhost:8000 to the internet.")
+            print_info("For local development, you can use services like ngrok or localtunnel to expose https://machinev9api.ngrok.io to the internet.")
 
         self.env_vars["webhook"]["WEBHOOK_BASE_URL"] = self._get_input(
             "Enter your webhook base URL (e.g., https://your-domain.ngrok.io): ",
@@ -1138,7 +1138,7 @@ class SetupWizard:
             "NEXT_PUBLIC_SUPABASE_ANON_KEY": self.env_vars["supabase"][
                 "SUPABASE_ANON_KEY"
             ],
-            "NEXT_PUBLIC_BACKEND_URL": "http://localhost:8000/api",
+            "NEXT_PUBLIC_BACKEND_URL": "https://machinev9api.ngrok.io/api",
             "NEXT_PUBLIC_URL": "https://machinev9.ngrok.io",
             "NEXT_PUBLIC_ENV_MODE": "LOCAL",
             "KORTIX_ADMIN_API_KEY": self.env_vars["kortix"]["KORTIX_ADMIN_API_KEY"],

@@ -11,7 +11,7 @@ import {
   ComposioMCPConfiguration, 
   PipedreamMCPConfiguration 
 } from './types';
-import { usePipedreamAppIcon } from '@/hooks/react-query/pipedream/use-pipedream';
+import { usePipedreamAppIcon } from '../../../hooks/react-query/pipedream/use-pipedream';
 import { useComposioToolkits } from '@/hooks/react-query/composio/use-composio';
 import { useCredentialProfilesForMcp } from '@/hooks/react-query/mcp/use-credential-profiles';
 import { useMemo } from 'react';

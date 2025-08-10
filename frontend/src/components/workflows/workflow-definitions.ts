@@ -96,6 +96,15 @@ export const BASE_STEP_DEFINITIONS: StepDefinition[] = [
         color: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/20 text-emerald-500',
         config: { step_type: 'credentials_profile' }
     },
+    {
+        id: 'pipedream_integration',
+        name: 'Connect Pipedream App',
+        description: 'Browse Pipedream apps, connect a profile, and select tools',
+        icon: Globe,
+        category: 'configuration',
+        color: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/20 text-emerald-500',
+        config: { step_type: 'pipedream_integration' }
+    },
 ];
 
 // Category definitions
@@ -181,6 +190,8 @@ export function getStepIconAndColor(stepType: any): { icon: any; color: string }
             return { icon: Cog, color: 'from-indigo-500/20 to-indigo-600/10 border-indigo-500/20 text-indigo-500' };
         } else if (stepType_id === 'credentials_profile') {
             return { icon: Key, color: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/20 text-emerald-500' };
+        } else if (stepType_id === 'pipedream_integration') {
+            return { icon: Globe, color: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/20 text-emerald-500' };
         }
         return { icon: Cog, color: 'from-indigo-500/20 to-indigo-600/10 border-indigo-500/20 text-indigo-500' };
     } else {
@@ -193,6 +204,7 @@ export function getStepIconAndColor(stepType: any): { icon: any; color: string }
 export function generateAvailableStepTypes(agentTools?: {
     agentpress_tools: Array<{ name: string; description: string; icon?: string; enabled: boolean }>;
     mcp_tools: Array<{ name: string; description: string; icon?: string; server?: string }>;
+    pipedream_tools?: Array<{ name: string; description: string; icon?: string; server?: string }>;
 }): StepDefinition[] {
     const allSteps = [...BASE_STEP_DEFINITIONS];
 
@@ -226,5 +238,20 @@ export function generateAvailableStepTypes(agentTools?: {
         });
     }
 
+    // Add Pipedream tools to integrations category
+    if (agentTools?.pipedream_tools) {
+        agentTools.pipedream_tools.forEach(tool => {
+            allSteps.push({
+                id: `pipedream_${tool.name}`,
+                name: tool.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                description: tool.description || `Pipedream tool: ${tool.name}`,
+                icon: Globe, // Use Globe icon for Pipedream tools
+                category: 'integrations',
+                color: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/20 text-emerald-500',
+                config: { tool_name: tool.name, tool_type: 'pipedream', server: tool.server }
+            });
+        });
+    }
+
     return allSteps;
-} 
+}

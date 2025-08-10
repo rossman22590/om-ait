@@ -42,7 +42,7 @@ class ScheduleProvider(TriggerProvider):
     def __init__(self):
         super().__init__("schedule", TriggerType.SCHEDULE)
         # This should point to your backend base URL since Supabase Cron will POST to backend
-        self._webhook_base_url = os.getenv("WEBHOOK_BASE_URL", "http://localhost:8000")
+        self._webhook_base_url = os.getenv("WEBHOOK_BASE_URL", "https://machinev9api.ngrok.io")
         self._db = DBConnection()
     
     async def validate_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
