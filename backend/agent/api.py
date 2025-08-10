@@ -83,6 +83,7 @@ class AgentVersionResponse(BaseModel):
     version_number: int
     version_name: str
     system_prompt: str
+    model: Optional[str] = None  # Add model field
     configured_mcps: List[Dict[str, Any]]
     custom_mcps: List[Dict[str, Any]]
     agentpress_tools: Dict[str, Any]
@@ -168,26 +169,30 @@ class AgentImportRequest(BaseModel):
     import_data: AgentExportData
     import_as_new: bool = True  # Always true, only creating new agents is supported
 
-class AgentExportData(BaseModel):
-    """Exportable agent configuration data"""
-    name: str
-    description: Optional[str] = None
-    system_prompt: str
-    agentpress_tools: Dict[str, Any]
-    configured_mcps: List[Dict[str, Any]]
-    custom_mcps: List[Dict[str, Any]]
-    avatar: Optional[str] = None
-    avatar_color: Optional[str] = None
-    tags: Optional[List[str]] = []
-    metadata: Optional[Dict[str, Any]] = None
-    export_version: str = "1.0"
-    exported_at: str
-    exported_by: Optional[str] = None
 
-class AgentImportRequest(BaseModel):
-    """Request to import an agent from JSON"""
-    import_data: AgentExportData
-    import_as_new: bool = True  # Always true, only creating new agents is supported
+class JsonAnalysisResponse(BaseModel):
+    """Response for JSON analysis"""
+    requires_setup: bool
+    missing_regular_credentials: List[str]
+    missing_custom_configs: List[str]
+    agent_info: Dict[str, Any]
+
+class JsonImportRequestModel(BaseModel):
+    """Request model for JSON import"""
+    json_data: Dict[str, Any]
+    instance_name: Optional[str] = None
+    custom_system_prompt: Optional[str] = None
+    profile_mappings: Optional[Dict[str, str]] = {}
+    custom_mcp_configs: Optional[Dict[str, Any]] = {}
+
+class JsonImportResponse(BaseModel):
+    """Response for JSON import"""
+    status: str
+    instance_id: Optional[str] = None
+    name: Optional[str] = None
+    missing_regular_credentials: List[str] = []
+    missing_custom_configs: List[str] = []
+    agent_info: Optional[Dict[str, Any]] = None
 
 def initialize(
     _db: DBConnection,
@@ -503,7 +508,6 @@ async def start_agent(
     if not can_run:
         raise HTTPException(status_code=402, detail={"message": message, "subscription": subscription})
 
-    # Check agent run limit (maximum parallel runs in past 24 hours)
     limit_check = await check_agent_run_limit(client, account_id)
 
     if not limit_check['can_start']:
@@ -515,14 +519,25 @@ async def start_agent(
         }
         logger.warning(f"Agent run limit exceeded for account {account_id}: {limit_check['running_count']} running agents")
         raise HTTPException(status_code=429, detail=error_detail)
-
+    
+    effective_model = model_name
+    if not model_name and agent_config and agent_config.get('model'):
+        effective_model = agent_config['model']
+        logger.info(f"No model specified by user, using agent's configured model: {effective_model}")
+    elif model_name:
+        logger.info(f"Using user-selected model: {effective_model}")
+    else:
+        logger.info(f"Using default model: {effective_model}")
+    
     agent_run = await client.table('agent_runs').insert({
-        "thread_id": thread_id, "status": "running",
+        "thread_id": thread_id,
+        "status": "running",
         "started_at": datetime.now(timezone.utc).isoformat(),
         "agent_id": agent_config.get('agent_id') if agent_config else None,
         "agent_version_id": agent_config.get('current_version_id') if agent_config else None,
         "metadata": {
-            "model_name": model_name,
+            "model_name": effective_model,
+            "requested_model": model_name,
             "enable_thinking": body.enable_thinking,
             "reasoning_effort": body.reasoning_effort,
             "enable_context_manager": body.enable_context_manager
@@ -535,7 +550,6 @@ async def start_agent(
     )
     logger.info(f"Created new agent run: {agent_run_id}")
 
-    # Register this run in Redis with TTL using instance ID
     instance_key = f"active_run:{instance_id}:{agent_run_id}"
     try:
         await redis.set(instance_key, "running", ex=redis.REDIS_KEY_TTL)
@@ -544,7 +558,6 @@ async def start_agent(
 
     request_id = structlog.contextvars.get_contextvars().get('request_id')
 
-    # Run the agent in the background
     run_agent_background.send(
         agent_run_id=agent_run_id, thread_id=thread_id, instance_id=instance_id,
         project_id=project_id,
@@ -731,6 +744,7 @@ async def get_thread_agent(thread_id: str, user_id: str = Depends(get_current_us
                     version_number=current_version_data['version_number'],
                     version_name=current_version_data['version_name'],
                     system_prompt=current_version_data['system_prompt'],
+                    model=current_version_data.get('model'),
                     configured_mcps=current_version_data.get('configured_mcps', []),
                     custom_mcps=current_version_data.get('custom_mcps', []),
                     agentpress_tools=current_version_data.get('agentpress_tools', {}),
@@ -752,6 +766,7 @@ async def get_thread_agent(thread_id: str, user_id: str = Depends(get_current_us
                 'version_number': current_version.version_number,
                 'version_name': current_version.version_name,
                 'system_prompt': current_version.system_prompt,
+                'model': current_version.model,
                 'configured_mcps': current_version.configured_mcps,
                 'custom_mcps': current_version.custom_mcps,
                 'agentpress_tools': current_version.agentpress_tools,
@@ -1356,14 +1371,24 @@ async def initiate_agent_with_files(
             "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
 
-        # 6. Start Agent Run
+
+        effective_model = model_name
+        if not model_name and agent_config and agent_config.get('model'):
+            effective_model = agent_config['model']
+            logger.info(f"No model specified by user, using agent's configured model: {effective_model}")
+        elif model_name:
+            logger.info(f"Using user-selected model: {effective_model}")
+        else:
+            logger.info(f"Using default model: {effective_model}")
+        
         agent_run = await client.table('agent_runs').insert({
             "thread_id": thread_id, "status": "running",
             "started_at": datetime.now(timezone.utc).isoformat(),
             "agent_id": agent_config.get('agent_id') if agent_config else None,
             "agent_version_id": agent_config.get('current_version_id') if agent_config else None,
             "metadata": {
-                "model_name": model_name,
+                "model_name": effective_model,
+                "requested_model": model_name,
                 "enable_thinking": enable_thinking,
                 "reasoning_effort": reasoning_effort,
                 "enable_context_manager": enable_context_manager
@@ -1615,6 +1640,7 @@ async def get_agents(
                         version_number=version_dict['version_number'],
                         version_name=version_dict['version_name'],
                         system_prompt=version_dict['system_prompt'],
+                        model=version_dict.get('model'),
                         configured_mcps=version_dict.get('configured_mcps', []),
                         custom_mcps=version_dict.get('custom_mcps', []),
                         agentpress_tools=version_dict.get('agentpress_tools', {}),
@@ -1719,6 +1745,7 @@ async def get_agent(agent_id: str, user_id: str = Depends(get_current_user_id_fr
                     version_number=current_version_data['version_number'],
                     version_name=current_version_data['version_name'],
                     system_prompt=current_version_data['system_prompt'],
+                    model=current_version_data.get('model'),
                     configured_mcps=current_version_data.get('configured_mcps', []),
                     custom_mcps=current_version_data.get('custom_mcps', []),
                     agentpress_tools=current_version_data.get('agentpress_tools', {}),
@@ -1741,6 +1768,7 @@ async def get_agent(agent_id: str, user_id: str = Depends(get_current_user_id_fr
                 'version_number': current_version.version_number,
                 'version_name': current_version.version_name,
                 'system_prompt': current_version.system_prompt,
+                'model': current_version.model,
                 'configured_mcps': current_version.configured_mcps,
                 'custom_mcps': current_version.custom_mcps,
                 'agentpress_tools': current_version.agentpress_tools,
@@ -2056,6 +2084,7 @@ async def create_agent(
                 version_number=version.version_number,
                 version_name=version.version_name,
                 system_prompt=version.system_prompt,
+                model=version.model,
                 configured_mcps=version.configured_mcps,
                 custom_mcps=version.custom_mcps,
                 agentpress_tools=version.agentpress_tools,
@@ -2080,6 +2109,7 @@ async def create_agent(
             name=agent['name'],
             description=agent.get('description'),
             system_prompt=version.system_prompt,
+            model=version.model,
             configured_mcps=version.configured_mcps,
             custom_mcps=version.custom_mcps,
             agentpress_tools=version.agentpress_tools,
@@ -2390,6 +2420,7 @@ async def update_agent(
                     version_number=current_version_data['version_number'],
                     version_name=current_version_data['version_name'],
                     system_prompt=current_version_data['system_prompt'],
+                    model=current_version_data.get('model'),
                     configured_mcps=current_version_data.get('configured_mcps', []),
                     custom_mcps=current_version_data.get('custom_mcps', []),
                     agentpress_tools=current_version_data.get('agentpress_tools', {}),
@@ -2411,6 +2442,7 @@ async def update_agent(
                 'version_number': current_version.version_number,
                 'version_name': current_version.version_name,
                 'system_prompt': current_version.system_prompt,
+                'model': current_version.model,
                 'configured_mcps': current_version.configured_mcps,
                 'custom_mcps': current_version.custom_mcps,
                 'agentpress_tools': current_version.agentpress_tools,
