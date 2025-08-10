@@ -529,7 +529,7 @@ export function PricingSection({
       className={cn("flex flex-col items-center justify-center gap-10 w-full relative", noPadding ? "pb-0" : "pb-12")}
     >
       <div className="w-full max-w-6xl mx-auto px-6">
-        {showTitleAndTabs && (
+        {showTitleAndTabs && (<>
           <SectionHeader>
             <h2 className="text-3xl md:text-4xl font-medium tracking-tighter text-center text-balance">
               Choose the right plan for your needs
@@ -538,15 +538,6 @@ export function PricingSection({
               Start with our free plan or upgrade for more AI token credits
             </p>
           </SectionHeader>
-          <div className="relative w-full h-full">
-            <div className="absolute -top-14 left-1/2 -translate-x-1/2">
-              <PricingTabs
-                activeTab={deploymentType}
-                setActiveTab={setDeploymentType}
-                className="mx-auto"
-              />
-            </div>
-          </div>
         </>
       )}
 

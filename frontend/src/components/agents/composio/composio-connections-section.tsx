@@ -25,16 +25,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -54,10 +44,8 @@ import {
   CheckCircle2,
   XCircle,
   Trash2,
-  Loader2,
-  Trash2,
 } from 'lucide-react';
-import { useComposioCredentialsProfiles, useComposioMcpUrl, useDeleteComposioProfile } from '@/hooks/react-query/composio/use-composio-profiles';
+import { useComposioCredentialsProfiles, useComposioMcpUrl } from '@/hooks/react-query/composio/use-composio-profiles';
 import { useDeleteProfile, useBulkDeleteProfiles, useSetDefaultProfile } from '@/hooks/react-query/composio/use-composio-mutations';
 import { ComposioRegistry } from './composio-registry';
 import { cn } from '@/lib/utils';
@@ -279,16 +267,12 @@ const McpUrlDialog: React.FC<McpUrlDialogProps> = ({
   );
 };
 
-const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit, onConnect }) => {
+const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit }) => {
   const [selectedProfile, setSelectedProfile] = useState<{
     profileId: string;
     profileName: string;
     toolkitName: string;
   } | null>(null);
-  const [showDeleteDialog, setShowDeleteDialog] = useState<ComposioProfileSummary | null>(null);
-  const [isDeleting, setIsDeleting] = useState<string | null>(null);
-
-  const deleteProfile = useDeleteComposioProfile();
   const [selectedProfiles, setSelectedProfiles] = useState<ComposioProfileSummary[]>([]);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
@@ -298,20 +282,6 @@ const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit, onConnect }) => {
 
   const handleViewUrl = (profileId: string, profileName: string, toolkitName: string) => {
     setSelectedProfile({ profileId, profileName, toolkitName });
-  };
-
-  const handleDeleteProfile = async (profile: ComposioProfileSummary) => {
-    setIsDeleting(profile.profile_id);
-    try {
-      await deleteProfile.mutateAsync(profile.profile_id);
-      toast.success('Profile deleted successfully');
-      setShowDeleteDialog(null);
-    } catch (error) {
-      console.error('Error deleting profile:', error);
-      toast.error('Failed to delete profile');
-    } finally {
-      setIsDeleting(null);
-    }
   };
 
   const handleDeleteSelected = () => {
@@ -371,20 +341,7 @@ const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit, onConnect }) => {
               </code>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">No URL available</span>
-              <Button
-                variant="default"
-                size="sm"
-                className="h-6 px-2 text-xs bg-black hover:bg-gray-800"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onConnect(toolkit.toolkit_slug);
-                }}
-              >
-                Connect
-              </Button>
-            </div>
+            <span className="text-xs text-muted-foreground">No URL available</span>
           )}
         </div>
       ),
@@ -439,19 +396,6 @@ const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit, onConnect }) => {
               <DropdownMenuItem className="rounded-lg" onClick={() => handleSetDefault(profile.profile_id)} disabled={setDefaultProfile.isPending}>
                 <CheckCircle2 className="h-4 w-4" />
                 {profile.is_default ? 'Remove Default' : 'Set as Default'}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => setShowDeleteDialog(profile)}
-                className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                disabled={isDeleting === profile.profile_id}
-              >
-                {isDeleting === profile.profile_id ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-destructive" />
-                ) : (
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                )}
-                Delete
               </DropdownMenuItem>
               <DropdownMenuItem 
                 onClick={() => {
@@ -530,40 +474,6 @@ const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit, onConnect }) => {
           toolkitName={selectedProfile.toolkitName}
         />
       )}
-
-      <AlertDialog open={!!showDeleteDialog} onOpenChange={(open) => !open && setShowDeleteDialog(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Profile</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete "{showDeleteDialog?.profile_name}"? This action cannot be undone and will remove all associated configurations.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting === showDeleteDialog?.profile_id}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                if (showDeleteDialog) {
-                  handleDeleteProfile(showDeleteDialog);
-                }
-              }}
-              disabled={isDeleting === showDeleteDialog?.profile_id}
-              className="bg-destructive text-white hover:bg-destructive/90"
-            >
-              {isDeleting === showDeleteDialog?.profile_id ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Deleting...
-                </>
-              ) : (
-                'Delete'
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
       
       <DeleteConfirmationDialog
         open={showDeleteDialog}
@@ -625,10 +535,6 @@ export const ComposioConnectionsSection: React.FC<ComposioConnectionsSectionProp
     setShowRegistry(false);
     queryClient.invalidateQueries({ queryKey: ['composio', 'profiles'] });
     toast.success(`Successfully connected ${appName}!`);
-  };
-
-  const handleConnect = (toolkitSlug: string) => {
-    setShowRegistry(true);
   };
 
   if (isLoading) {
@@ -760,11 +666,7 @@ export const ComposioConnectionsSection: React.FC<ComposioConnectionsSectionProp
               return b.profiles.length - a.profiles.length;
             })
             .map((toolkit) => (
-              <ToolkitTable 
-                key={toolkit.toolkit_slug} 
-                toolkit={toolkit} 
-                onConnect={handleConnect} 
-              />
+              <ToolkitTable key={toolkit.toolkit_slug} toolkit={toolkit} />
             ))}
         </div>
       )}

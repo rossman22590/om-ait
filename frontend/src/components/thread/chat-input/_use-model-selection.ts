@@ -136,12 +136,6 @@ export const MODELS = {
     recommended: true,
     lowQuality: false
   },
-  'gpt-5-mini': { 
-    tier: 'premium', 
-    priority: 98,
-    recommended: false,
-    lowQuality: false
-  },
   'google/gemini-flash-2.5': {
     tier: 'premium',
     priority: 84,

@@ -194,17 +194,17 @@ class Configuration:
         'tier_125_800': 100,
         'tier_200_1000': 100,
         # Yearly plans have same limits as monthly
-        'tier_2_20_yearly': 5,
-        'tier_6_50_yearly': 20,
-        'tier_12_100_yearly': 20,
-        'tier_25_200_yearly': 100,
-        'tier_50_400_yearly': 100,
-        'tier_125_800_yearly': 100,
-        'tier_200_1000_yearly': 100,
-        # Yearly commitment plans
-        'tier_2_17_yearly_commitment': 5,
-        'tier_6_42_yearly_commitment': 20,
-        'tier_25_170_yearly_commitment': 100,
+        # 'tier_2_20_yearly': 5,
+        # 'tier_6_50_yearly': 20,
+        # 'tier_12_100_yearly': 20,
+        # 'tier_25_200_yearly': 100,
+        # 'tier_50_400_yearly': 100,
+        # 'tier_125_800_yearly': 100,
+        # 'tier_200_1000_yearly': 100,
+        # # Yearly commitment plans
+        # 'tier_2_17_yearly_commitment': 5,
+        # 'tier_6_42_yearly_commitment': 20,
+        # 'tier_25_170_yearly_commitment': 100,
     }
 
     @property

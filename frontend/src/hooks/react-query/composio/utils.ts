@@ -351,21 +351,6 @@ export const composioApi = {
     return result.data!;
   },
 
-  async deleteProfile(profileId: string): Promise<{ success: boolean; message: string }> {
-    const result = await backendApi.delete<{ success: boolean; message: string; profile_id: string }>(
-      `/composio/profiles/${profileId}`,
-      {
-        errorContext: { operation: 'delete profile', resource: 'Composio profile' },
-      }
-    );
-
-    if (!result.success) {
-      throw new Error(result.error?.message || 'Failed to delete profile');
-    }
-
-    return result.data!;
-  },
-
   async getTools(toolkitSlug: string, limit: number = 50): Promise<ComposioToolsResponse> {
     const result = await backendApi.post<ComposioToolsResponse>(
       `/composio/tools/list`,

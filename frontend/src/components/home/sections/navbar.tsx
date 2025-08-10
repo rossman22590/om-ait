@@ -64,7 +64,6 @@ export function Navbar() {
   const { theme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const { user } = useAuth();
-  const { formattedStars, loading: starsLoading } = useGitHubStars('kortix-ai', 'suna');
 
   useEffect(() => {
     setMounted(true);

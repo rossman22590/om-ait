@@ -64,7 +64,7 @@ export const siteConfig = {
   url: process.env.NEXT_PUBLIC_APP_URL || 'https://machine.myapps.ai',
   keywords: ['AI Agent', 'Generalist AI', 'Autonomous Agent'],
   links: {
-    email: 'support@kortix.ai',
+    email: 'support@myapps.ai',
     twitter: 'https://x.com/the_machine_ai',
     discord: '#',
     github: '#',
@@ -107,10 +107,10 @@ export const siteConfig = {
     ),
     badge: '100% OPEN SOURCE',
     githubUrl: 'https://github.com/kortix-ai/suna',
-    title: 'Kortix – Build, manage and train your AI Workforce.',
+    title: 'Machine – Build, manage and train your AI Workforce.',
     description:
       'Machine – is a generalist AI Agent that acts on your behalf.',
-    inputPlaceholder: 'Ask Suna to...',
+    inputPlaceholder: 'Ask Machine to...',
   },
   cloudPricingItems: [
     {
@@ -1205,11 +1205,11 @@ export const siteConfig = {
   },
   footerLinks: [
     {
-      title: 'Kortix',
+      title: 'Machine',
       links: [
-        { id: 1, title: 'About', url: 'https://kortix.ai' },
-        { id: 3, title: 'Contact', url: 'mailto:hey@kortix.ai' },
-        { id: 4, title: 'Careers', url: 'https://kortix.ai/careers' },
+        { id: 1, title: 'About', url: 'https://machine.myapps.ai' },
+        { id: 3, title: 'Contact', url: 'mailto:hey@machine.myapps.ai' },
+        { id: 4, title: 'Careers', url: 'https://machine.myapps.ai' },
       ],
     },
     {
