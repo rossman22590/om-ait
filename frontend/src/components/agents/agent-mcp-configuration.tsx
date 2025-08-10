@@ -57,7 +57,7 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
               profile_name: profile.profile_name,
               external_user_id: profile.external_user_id
             },
-            enabledTools: profile.enabled_tools || [],
+            enabledTools: (profile as any).enabledTools ?? (profile as any).enabled_tools ?? [],
             isCustom: true,
             customType: 'pipedream',
             isPipedream: true,
