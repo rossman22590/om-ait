@@ -34,11 +34,7 @@ type ButtonVariant =
   | 'link'
   | null;
 
-interface PricingTabsProps {
-  activeTab: 'cloud' | 'self-hosted';
-  setActiveTab: (tab: 'cloud' | 'self-hosted') => void;
-  className?: string;
-}
+
 
 interface PriceDisplayProps {
   price: string;
@@ -61,51 +57,6 @@ interface PricingTierProps {
 }
 
 // Components
-function PricingTabs({ activeTab, setActiveTab, className }: PricingTabsProps) {
-  return (
-    <div
-      className={cn(
-        'relative flex w-fit items-center rounded-full border p-0.5 backdrop-blur-sm cursor-pointer h-9 flex-row bg-muted',
-        className,
-      )}
-    >
-      {['cloud', 'self-hosted'].map((tab) => (
-        <button
-          key={tab}
-          onClick={() => setActiveTab(tab as 'cloud' | 'self-hosted')}
-          className={cn(
-            'relative z-[1] px-3 h-8 flex items-center justify-center cursor-pointer',
-            {
-              'z-0': activeTab === tab,
-            },
-          )}
-        >
-          {activeTab === tab && (
-            <motion.div
-              layoutId="active-tab"
-              className="absolute inset-0 rounded-full bg-white dark:bg-[#3F3F46] shadow-md border border-border"
-              transition={{
-                duration: 0.2,
-                type: 'spring',
-                stiffness: 300,
-                damping: 25,
-                velocity: 2,
-              }}
-            />
-          )}
-          <span
-            className={cn(
-              'relative block text-sm font-medium duration-200 shrink-0',
-              activeTab === tab ? 'text-primary' : 'text-muted-foreground',
-            )}
-          >
-            {tab === 'cloud' ? 'Cloud' : 'Self-hosted'}
-          </span>
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function PriceDisplay({ price, isCompact }: PriceDisplayProps) {
   return (
@@ -480,7 +431,7 @@ function PricingTier({
           variant={buttonVariant || 'default'}
           className={cn(
             'w-full font-medium transition-all duration-200',
-            isCompact || insideDialog ? 'h-8 rounded-md text-xs' : 'h-10 rounded-full text-sm',
+            isCompact || insideDialog ? 'h-8 text-xs' : 'h-10 rounded-full text-sm',
             buttonClassName,
             isPlanLoading && 'animate-pulse',
           )}
@@ -498,21 +449,22 @@ interface PricingSectionProps {
   showTitleAndTabs?: boolean;
   hideFree?: boolean;
   insideDialog?: boolean;
+  showInfo?: boolean;
+  noPadding?: boolean;
 }
 
 export function PricingSection({
   returnUrl = typeof window !== 'undefined' ? window.location.href : '/',
   showTitleAndTabs = true,
   hideFree = false,
-  insideDialog = false
+  insideDialog = false,
+  showInfo = true,
+  noPadding = false,
 }: PricingSectionProps) {
-  const [deploymentType, setDeploymentType] = useState<'cloud' | 'self-hosted'>(
-    'cloud',
-  );
+
   const { data: subscriptionData, isLoading: isFetchingPlan, error: subscriptionQueryError, refetch: refetchSubscription } = useSubscription();
 
 
-  // Derive authentication and subscription status from the hook data
   const isAuthenticated = !!subscriptionData && subscriptionQueryError === null;
   const currentSubscription = subscriptionData || null;
 
@@ -574,10 +526,10 @@ export function PricingSection({
   return (
     <section
       id="pricing"
-      className={cn("flex flex-col items-center justify-center gap-10 w-full relative pb-12")}
+      className={cn("flex flex-col items-center justify-center gap-10 w-full relative", noPadding ? "pb-0" : "pb-12")}
     >
-      {showTitleAndTabs && (
-        <>
+      <div className="w-full max-w-6xl mx-auto px-6">
+        {showTitleAndTabs && (
           <SectionHeader>
             <h2 className="text-3xl md:text-4xl font-medium tracking-tighter text-center text-balance">
               Choose the right plan for your needs
@@ -600,13 +552,8 @@ export function PricingSection({
 
 
 
-      {deploymentType === 'cloud' && (
         <div className={cn(
-          "grid gap-4 w-full mx-auto",
-          {
-            "px-6 max-w-7xl": !insideDialog,
-            "max-w-7xl": insideDialog
-          },
+          "grid gap-6 w-full",
           insideDialog
             ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 2xl:grid-cols-4"
             : "min-[650px]:grid-cols-2 lg:grid-cols-4",
@@ -630,16 +577,17 @@ export function PricingSection({
               />
             ))}
         </div>
+      </div>
+      {showInfo && (
+        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg max-w-2xl mx-auto">
+          <p className="text-sm text-blue-800 dark:text-blue-200 text-center">
+            <strong>What are AI tokens?</strong> Tokens are units of text that AI models process. 
+            Your plan includes credits to spend on various AI models - the more complex the task, 
+            the more tokens used.
+          </p>
+        </div>
       )}
-       <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg max-w-2xl mx-auto">
-                <p className="text-sm text-blue-800 dark:text-blue-200 text-center">
-                  <strong>What are AI tokens?</strong> Tokens are units of text that AI models process. 
-                  Your plan includes credits to spend on various AI models - the more complex the task, 
-                  the more tokens used.
-                </p>
-              </div>
-
     </section>
-
   );
 }
+

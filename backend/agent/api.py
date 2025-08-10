@@ -1859,6 +1859,71 @@ async def import_agent(
         client = await db.client
         import_data = import_request.import_data
         
+        analysis = await import_service.analyze_json(request.json_data, user_id)
+        
+        return JsonAnalysisResponse(
+            requires_setup=analysis.requires_setup,
+            missing_regular_credentials=analysis.missing_regular_credentials,
+            missing_custom_configs=analysis.missing_custom_configs,
+            agent_info=analysis.agent_info
+        )
+        
+    except Exception as e:
+        logger.error(f"Error analyzing JSON: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to analyze JSON: {str(e)}")
+
+@router.post("/agents/json/import", response_model=JsonImportResponse)
+async def import_agent_from_json(
+    request: JsonImportRequestModel,
+    user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    logger.info(f"Importing agent from JSON - user: {user_id}")
+    
+    if not await is_enabled("custom_agents"):
+        raise HTTPException(
+            status_code=403, 
+            detail="Custom agents currently disabled. This feature is not available at the moment."
+        )
+    
+    client = await db.client
+    from .utils import check_agent_count_limit
+    limit_check = await check_agent_count_limit(client, user_id)
+    
+    if not limit_check['can_create']:
+        error_detail = {
+            "message": f"Maximum of {limit_check['limit']} agents allowed for your current plan. You have {limit_check['current_count']} agents.",
+            "current_count": limit_check['current_count'],
+            "limit": limit_check['limit'],
+            "tier_name": limit_check['tier_name'],
+            "error_code": "AGENT_LIMIT_EXCEEDED"
+        }
+        logger.warning(f"Agent limit exceeded for account {user_id}: {limit_check['current_count']}/{limit_check['limit']} agents")
+        raise HTTPException(status_code=402, detail=error_detail)
+    
+    try:
+        from agent.json_import_service import JsonImportService, JsonImportRequest
+        import_service = JsonImportService(db)
+        
+        import_request = JsonImportRequest(
+            json_data=request.json_data,
+            account_id=user_id,
+            instance_name=request.instance_name,
+            custom_system_prompt=request.custom_system_prompt,
+            profile_mappings=request.profile_mappings,
+            custom_mcp_configs=request.custom_mcp_configs
+        )
+        
+        result = await import_service.import_json(import_request)
+        
+        return JsonImportResponse(
+            status=result.status,
+            instance_id=result.instance_id,
+            name=result.name,
+            missing_regular_credentials=result.missing_regular_credentials,
+            missing_custom_configs=result.missing_custom_configs,
+            agent_info=result.agent_info
+        )
+        
         # Validate import data
         if not import_data.name or not import_data.system_prompt:
             raise HTTPException(status_code=400, detail="Agent name and system prompt are required")
@@ -1933,6 +1998,20 @@ async def create_agent(
         )
     client = await db.client
     
+    from .utils import check_agent_count_limit
+    limit_check = await check_agent_count_limit(client, user_id)
+    
+    if not limit_check['can_create']:
+        error_detail = {
+            "message": f"Maximum of {limit_check['limit']} agents allowed for your current plan. You have {limit_check['current_count']} agents.",
+            "current_count": limit_check['current_count'],
+            "limit": limit_check['limit'],
+            "tier_name": limit_check['tier_name'],
+            "error_code": "AGENT_LIMIT_EXCEEDED"
+        }
+        logger.warning(f"Agent limit exceeded for account {user_id}: {limit_check['current_count']}/{limit_check['limit']} agents")
+        raise HTTPException(status_code=402, detail=error_detail)
+    
     try:
         if agent_data.is_default:
             await client.table('agents').update({"is_default": False}).eq("account_id", user_id).eq("is_default", True).execute()
@@ -1989,6 +2068,10 @@ async def create_agent(
             logger.error(f"Error creating initial version: {str(e)}")
             await client.table('agents').delete().eq('agent_id', agent['agent_id']).execute()
             raise HTTPException(status_code=500, detail="Failed to create initial version")
+        
+        # Invalidate agent count cache after successful creation
+        from utils.cache import Cache
+        await Cache.invalidate(f"agent_count_limit:{user_id}")
         
         logger.info(f"Created agent {agent['agent_id']} with v1 for user: {user_id}")
         return AgentResponse(
@@ -2392,7 +2475,20 @@ async def delete_agent(agent_id: str, user_id: str = Depends(get_current_user_id
         if agent['is_default']:
             raise HTTPException(status_code=400, detail="Cannot delete default agent")
         
-        await client.table('agents').delete().eq('agent_id', agent_id).execute()
+        if agent.get('metadata', {}).get('is_suna_default', False):
+            raise HTTPException(status_code=400, detail="Cannot delete Suna default agent")
+        
+        delete_result = await client.table('agents').delete().eq('agent_id', agent_id).execute()
+        
+        if not delete_result.data:
+            logger.warning(f"No agent was deleted for agent_id: {agent_id}, user_id: {user_id}")
+            raise HTTPException(status_code=403, detail="Unable to delete agent - permission denied or agent not found")
+        
+        try:
+            from utils.cache import Cache
+            await Cache.invalidate(f"agent_count_limit:{user_id}")
+        except Exception as cache_error:
+            logger.warning(f"Cache invalidation failed for user {user_id}: {str(cache_error)}")
         
         logger.info(f"Successfully deleted agent: {agent_id}")
         return {"message": "Agent deleted successfully"}

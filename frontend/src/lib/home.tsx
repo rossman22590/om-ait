@@ -107,7 +107,7 @@ export const siteConfig = {
     ),
     badge: '100% OPEN SOURCE',
     githubUrl: 'https://github.com/kortix-ai/suna',
-    title: 'Suna, the AI Employee.',
+    title: 'Kortix – Build, manage and train your AI Workforce.',
     description:
       'Machine – is a generalist AI Agent that acts on your behalf.',
     inputPlaceholder: 'Ask Suna to...',
@@ -124,6 +124,7 @@ export const siteConfig = {
       hours: '60 min',
       features: [
         '$5 free AI tokens included',
+        '2 custom agents',
         'Public projects',
         'Basic Models',
         'Community support',
@@ -145,6 +146,7 @@ export const siteConfig = {
       hours: '2 hours',
       features: [
         '$20 AI token credits/month',
+        '5 custom agents',
         'Private projects',
         'Premium AI Models',
         'Community support',
@@ -163,6 +165,7 @@ export const siteConfig = {
       hours: '6 hours',
       features: [
         '$50 AI token credits/month',
+        '20 custom agents',
         'Private projects',
         'Premium AI Models',
         'Community support',
@@ -183,6 +186,7 @@ export const siteConfig = {
       hours: '12 hours',
       features: [
         '$100 AI token credits/month',
+        '20 custom agents',
         'Private projects',
         'Premium AI Models',
         'Community support',
@@ -201,6 +205,7 @@ export const siteConfig = {
       hours: '25 hours',
       features: [
         '$200 AI token credits/month',
+        '100 custom agents',
         'Private projects',
         'Premium AI Models',
         'Priority support',
@@ -516,7 +521,7 @@ export const siteConfig = {
         content: <FirstBentoAnimation />,
         title: 'Autonomous Task Execution',
         description:
-          'Experience true automation with Suna. Ask your AI Agent to complete tasks, research information, and handle complex workflows with minimal supervision.',
+          'Experience true automation with Suna. Ask your AI Worker to complete tasks, research information, and handle complex workflows with minimal supervision.',
       },
       {
         id: 2,
@@ -1152,9 +1157,9 @@ export const siteConfig = {
     faQitems: [
       {
         id: 1,
-        question: 'What is an AI Agent?',
+        question: 'What is an AI Worker?',
         answer:
-          'An AI Agent is an intelligent software program that can perform tasks autonomously, learn from interactions, and make decisions to help achieve specific goals. It combines artificial intelligence and machine learning to provide personalized assistance and automation.',
+          'An AI Worker is an intelligent software program that can perform tasks autonomously, learn from interactions, and make decisions to help achieve specific goals. It combines artificial intelligence and machine learning to provide personalized assistance and automation.',
       },
       {
         id: 2,
@@ -1196,7 +1201,7 @@ export const siteConfig = {
       text: 'Get Started for free',
       href: '/auth',
     },
-    subtext: 'The generalist AI Agent that acts on your behalf',
+    subtext: 'Build, manage and train your AI Workforce',
   },
   footerLinks: [
     {

@@ -25,6 +25,16 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -45,8 +55,10 @@ import {
   XCircle,
   Trash2,
   Loader2,
+  Trash2,
 } from 'lucide-react';
 import { useComposioCredentialsProfiles, useComposioMcpUrl, useDeleteComposioProfile } from '@/hooks/react-query/composio/use-composio-profiles';
+import { useDeleteProfile, useBulkDeleteProfiles, useSetDefaultProfile } from '@/hooks/react-query/composio/use-composio-mutations';
 import { ComposioRegistry } from './composio-registry';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -67,8 +79,56 @@ interface McpUrlDialogProps {
 
 interface ToolkitTableProps {
   toolkit: ComposioToolkitGroup;
-  onConnect: (toolkitSlug: string) => void;
 }
+
+interface DeleteConfirmationDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  selectedProfiles: ComposioProfileSummary[];
+  onConfirm: () => void;
+  isDeleting: boolean;
+}
+
+const DeleteConfirmationDialog: React.FC<DeleteConfirmationDialogProps> = ({
+  open,
+  onOpenChange,
+  selectedProfiles,
+  onConfirm,
+  isDeleting,
+}) => {
+  const isSingle = selectedProfiles.length === 1;
+  
+  return (
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {isSingle ? 'Delete Profile' : `Delete ${selectedProfiles.length} Profiles`}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            {isSingle 
+              ? `Are you sure you want to delete "${selectedProfiles[0]?.profile_name}"? This action cannot be undone.`
+              : `Are you sure you want to delete ${selectedProfiles.length} profiles? This action cannot be undone.`
+            }
+            <div className="mt-2 text-amber-600 dark:text-amber-400">
+              <strong>Warning:</strong> This may affect existing integrations.
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction 
+            onClick={onConfirm}
+            disabled={isDeleting}
+            className="bg-destructive text-white hover:bg-destructive/90"
+          >
+            {isDeleting ? 'Deleting...' : 'Delete'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+};
 
 const McpUrlDialog: React.FC<McpUrlDialogProps> = ({
   open,
@@ -229,6 +289,12 @@ const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit, onConnect }) => {
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   const deleteProfile = useDeleteComposioProfile();
+  const [selectedProfiles, setSelectedProfiles] = useState<ComposioProfileSummary[]>([]);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  const deleteProfile = useDeleteProfile();
+  const bulkDeleteProfiles = useBulkDeleteProfiles();
+  const setDefaultProfile = useSetDefaultProfile();
 
   const handleViewUrl = (profileId: string, profileName: string, toolkitName: string) => {
     setSelectedProfile({ profileId, profileName, toolkitName });
@@ -247,6 +313,26 @@ const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit, onConnect }) => {
       setIsDeleting(null);
     }
   };
+
+  const handleDeleteSelected = () => {
+    setShowDeleteDialog(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (selectedProfiles.length === 1) {
+      await deleteProfile.mutateAsync(selectedProfiles[0].profile_id);
+    } else {
+      await bulkDeleteProfiles.mutateAsync(selectedProfiles.map(p => p.profile_id));
+    }
+    setSelectedProfiles([]);
+    setShowDeleteDialog(false);
+  };
+
+  const handleSetDefault = async (profileId: string) => {
+    await setDefaultProfile.mutateAsync(profileId);
+  };
+
+  const isDeleting = deleteProfile.isPending || bulkDeleteProfiles.isPending;
 
   const columns: DataTableColumn<ComposioProfileSummary>[] = [
     {
@@ -269,7 +355,6 @@ const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit, onConnect }) => {
       header: 'MCP URL',
       width: 'w-1/3',
       cell: (profile) => (
-        console.log('[DEBUG]: profile', profile),
         <div className="flex items-center gap-2">
           {profile.has_mcp_url ? (
             <div className="flex items-center gap-2">
@@ -345,14 +430,13 @@ const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit, onConnect }) => {
             <DropdownMenuContent align="end">
               {profile.has_mcp_url && (
                 <>
-                  <DropdownMenuItem onClick={() => handleViewUrl(profile.profile_id, profile.profile_name, toolkit.toolkit_name)}>
+                  <DropdownMenuItem className="rounded-lg" onClick={() => handleViewUrl(profile.profile_id, profile.profile_name, toolkit.toolkit_name)}>
                     <Eye className="h-4 w-4" />
                     View MCP URL
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator />
                 </>
               )}
-              <DropdownMenuItem>
+              <DropdownMenuItem className="rounded-lg" onClick={() => handleSetDefault(profile.profile_id)} disabled={setDefaultProfile.isPending}>
                 <CheckCircle2 className="h-4 w-4" />
                 {profile.is_default ? 'Remove Default' : 'Set as Default'}
               </DropdownMenuItem>
@@ -368,6 +452,17 @@ const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit, onConnect }) => {
                   <Trash2 className="h-4 w-4 text-destructive" />
                 )}
                 Delete
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => {
+                  setSelectedProfiles([profile]);
+                  setShowDeleteDialog(true);
+                }}
+                className="text-destructive rounded-lg focus:text-destructive focus:bg-destructive/10"
+                disabled={isDeleting}
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+                Delete Profile
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -407,7 +502,25 @@ const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit, onConnect }) => {
         data={toolkit.profiles}
         columns={columns}
         className="rounded-lg border"
+        selectable={true}
+        selectedItems={selectedProfiles}
+        onSelectionChange={setSelectedProfiles}
+        getItemId={(profile) => profile.profile_id}
+        headerActions={
+          selectedProfiles.length > 0 ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteSelected}
+              disabled={isDeleting}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete {selectedProfiles.length > 1 ? `${selectedProfiles.length} Profiles` : 'Profile'}
+            </Button>
+          ) : null
+        }
       />
+      
       {selectedProfile && (
         <McpUrlDialog
           open={!!selectedProfile}
@@ -451,6 +564,14 @@ const ToolkitTable: React.FC<ToolkitTableProps> = ({ toolkit, onConnect }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      <DeleteConfirmationDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        selectedProfiles={selectedProfiles}
+        onConfirm={handleConfirmDelete}
+        isDeleting={isDeleting}
+      />
     </div>
   );
 };

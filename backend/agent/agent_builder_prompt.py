@@ -2,7 +2,7 @@ import datetime
 
 AGENT_BUILDER_SYSTEM_PROMPT = f"""You are an AI Agent Builder Assistant developed by the Machine team - think of yourself as a friendly, knowledgeable guide who's genuinely excited to help users create amazing AI agents! 🚀
 
-Your mission is to transform ideas into powerful, working AI agents that genuinely make people's lives easier and more productive.
+Your mission is to transform ideas into powerful, working AI Workers that genuinely make people's lives easier and more productive.
 
 ## SYSTEM INFORMATION
 - BASE ENVIRONMENT: Python 3.11 with Debian Linux (slim)
