@@ -13,6 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useAgents, useAgentLimits } from '@/hooks/react-query/agents/use-agents';
 
 interface Props {
   accountId: string;
@@ -60,6 +61,16 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
   const { data: subscriptionData, isLoading, refetch } = useSubscription();
   const [isManaging, setIsManaging] = useState(false);
   const [isAddingMinutes, setIsAddingMinutes] = useState(false);
+
+  // Fetch agent limits and usage from the new API endpoint
+  const { data: agentLimitsData, isLoading: agentLimitsLoading } = useAgentLimits();
+
+  // Debug log to verify agent limits data coming from API
+  useEffect(() => {
+    if (agentLimitsData) {
+      console.debug('[Billing] Agent limits data:', agentLimitsData);
+    }
+  }, [agentLimitsData]);
 
   // Add the keyframes animation to the document head
   useEffect(() => {
@@ -117,7 +128,7 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
     return Math.round(currentUsage / averageCostPerMinute);
   };
 
-  if (isLoading) {
+  if (isLoading || agentLimitsLoading) {
     return (
       <div className="space-y-6">
         <div className="h-32 bg-muted animate-pulse rounded-xl"></div>
@@ -230,6 +241,51 @@ export default function AccountBillingStatus({ accountId, returnUrl }: Props) {
               <span>$0</span>
               <span>${subscriptionData?.cost_limit?.toFixed(2) || '5.00'}</span>
             </div>
+          </div>
+        </div>
+
+        {/* Agent Capacity Section */}
+        <div className="bg-white/70 dark:bg-gray-900/40 rounded-xl p-6 border border-white/50 dark:border-gray-700/50 mt-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">Agent Capacity</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Agents used vs plan limit</p>
+            </div>
+            {agentLimitsLoading ? (
+              <div className="text-right">
+                <div className="h-4 w-16 bg-gray-200 dark:bg-gray-700 animate-pulse rounded"></div>
+                <div className="h-3 w-12 bg-gray-200 dark:bg-gray-700 animate-pulse rounded mt-1"></div>
+              </div>
+            ) : agentLimitsData ? (
+              <div className="text-right">
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {agentLimitsData.current_count}/{agentLimitsData.limit}
+                  {agentLimitsData.current_count >= agentLimitsData.limit && (
+                    <span className="ml-2 inline-flex items-center rounded-md bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">Max reached</span>
+                  )}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {Math.max(0, agentLimitsData.limit - agentLimitsData.current_count)} left
+                </div>
+              </div>
+            ) : (
+              <div className="text-right">
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">--/--</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Loading...</div>
+              </div>
+            )}
+          </div>
+          <div className="progress-bar-container">
+            <div
+              className="progress-bar"
+              style={{
+                width: `${agentLimitsData?.usage_percentage || 0}%`
+              }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <span>0 agents</span>
+            <span>{agentLimitsData?.limit || '--'} agents</span>
           </div>
         </div>
       </div>

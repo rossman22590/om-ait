@@ -9,6 +9,7 @@ import { AgentTriggersConfiguration } from '../triggers/agent-triggers-configura
 import { AgentModelSelector } from './model-selector';
 import { toast } from 'sonner';
 import { KortixLogo } from '../../sidebar/kortix-logo';
+import { AgentWorkflowsConfiguration } from '../workflows/agent-workflows-configuration';
 
 interface ConfigurationTabProps {
   agentId: string;
@@ -69,11 +70,11 @@ export function ConfigurationTab({
 
   const mapAccordion = (val?: string) => {
     if (val === 'instructions') return isSunaAgent ? 'integrations' : 'system';
-    if (val === 'workflows') return 'playbooks';
+    if (val === 'workflows') return 'workflows';
     if (isSunaAgent && (val === 'system' || val === 'tools')) {
       return 'integrations';
     }
-    if (['system', 'tools', 'integrations', 'knowledge', 'playbooks', 'triggers'].includes(val || '')) {
+    if (['system', 'tools', 'integrations', 'knowledge', 'playbooks', 'workflows', 'triggers'].includes(val || '')) {
       return val!;
     }
     return isSunaAgent ? 'integrations' : 'system';
@@ -381,6 +382,41 @@ export function ConfigurationTab({
               <div className="px-6 pb-6 pt-2">
                 <div className="border-t border-border/30 pt-4">
                   <AgentPlaybooksConfiguration
+                    agentId={agentId}
+                    agentName={displayData.name || 'Agent'}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="group overflow-hidden rounded-2xl border border-border bg-card transition-all duration-300 hover:border-primary/10">
+            <button
+              className="w-full p-4 text-left group-hover:bg-muted/30 transition-all duration-300"
+              onClick={() => setOpenAccordion(openAccordion === 'workflows' ? '' : 'workflows')}
+            >
+              <div className="flex items-center gap-4 w-full">
+                <div className="relative">
+                  <div className="bg-muted rounded-xl h-10 w-10 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
+                    <Workflow className="h-5 w-5 text-muted-foreground" />
+                  </div>
+
+                </div>
+                <div className="text-left flex-1">
+                  <h4 className="text-sm font-semibold text-foreground mb-1 group-hover:text-primary transition-colors duration-300">Workflows</h4>
+                  <p className="text-xs text-muted-foreground group-hover:text-foreground/70 transition-colors duration-300">Conditional and multi-step flows</p>
+                </div>
+                <ChevronDown className={`h-4 w-4 transition-transform duration-300 ease-out ${openAccordion === 'workflows' ? 'rotate-180' : ''}`} />
+              </div>
+            </button>
+            <div
+              className={`overflow-hidden transition-all duration-300 ease-out ${openAccordion === 'workflows'
+                ? 'max-h-auto opacity-100'
+                : 'max-h-0 opacity-0'
+                }`}
+            >
+              <div className="px-6 pb-6 pt-2">
+                <div className="border-t border-border/30 pt-4">
+                  <AgentWorkflowsConfiguration
                     agentId={agentId}
                     agentName={displayData.name || 'Agent'}
                   />

@@ -1431,6 +1431,28 @@ async def initiate_agent_with_files(
 
 # Custom agents
 
+@router.get("/agents/limits")
+async def get_agent_limits(user_id: str = Depends(get_current_user_id_from_jwt)):
+    """Get agent count limits and current usage for the user's subscription tier."""
+    logger.info(f"Fetching agent limits for user: {user_id}")
+    client = await db.client
+    
+    try:
+        from .utils import check_agent_count_limit
+        limit_check = await check_agent_count_limit(client, user_id)
+        
+        return {
+            "current_count": limit_check['current_count'],
+            "limit": limit_check['limit'],
+            "tier_name": limit_check['tier_name'],
+            "can_create": limit_check['can_create'],
+            "usage_percentage": round((limit_check['current_count'] / limit_check['limit']) * 100, 1) if limit_check['limit'] > 0 else 0
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching agent limits for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch agent limits: {str(e)}")
+
 @router.get("/agents", response_model=AgentsResponse)
 async def get_agents(
     user_id: str = Depends(get_current_user_id_from_jwt),
@@ -3816,3 +3838,4 @@ async def update_pipedream_tools_for_agent_deprecated(
     except Exception as e:
         logger.error(f"Error in deprecated Pipedream tools handler for agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+

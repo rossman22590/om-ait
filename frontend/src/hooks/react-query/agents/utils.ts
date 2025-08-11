@@ -680,4 +680,42 @@ export const getAgentVersion = async (
     throw err;
   }
 };
-  
+
+export type AgentLimitsResponse = {
+  current_count: number;
+  limit: number;
+  tier_name: string;
+  can_create: boolean;
+  usage_percentage: number;
+};
+
+export const getAgentLimits = async (): Promise<AgentLimitsResponse> => {
+  try {
+    const supabase = createClient();
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      throw new Error('You must be logged in to get agent limits');
+    }
+
+    const response = await fetch(`${API_URL}/agents/limits`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    console.log('[API] Fetched agent limits:', result);
+    return result;
+  } catch (err) {
+    console.error('Error fetching agent limits:', err);
+    throw err;
+  }
+};

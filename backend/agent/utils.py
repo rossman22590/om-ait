@@ -6,6 +6,7 @@ from utils.logger import logger
 from utils.config import config
 from services import redis
 from run_agent_background import update_agent_run_status
+from services.billing import get_subscription_tier
 
 
 async def _cleanup_redis_response_list(agent_run_id: str):
@@ -163,7 +164,6 @@ async def check_agent_count_limit(client, account_id: str) -> Dict[str, Any]:
         logger.debug(f"Account {account_id} has {current_count} custom agents (excluding Suna defaults)")
         
         try:
-            from services.billing import get_subscription_tier
             tier_name = await get_subscription_tier(client, account_id)
             logger.debug(f"Account {account_id} subscription tier: {tier_name}")
         except Exception as billing_error:
@@ -178,7 +178,8 @@ async def check_agent_count_limit(client, account_id: str) -> Dict[str, Any]:
             'can_create': can_create,
             'current_count': current_count,
             'limit': agent_limit,
-            'tier_name': tier_name
+            'tier_name': tier_name,
+            'usage_percentage': round((current_count / agent_limit) * 100, 1) if agent_limit > 0 else 0
         }
         
         try:

@@ -2,7 +2,7 @@ import { createMutationHook, createQueryHook } from '@/hooks/use-query';
 import { useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { agentKeys } from './keys';
-import { Agent, AgentUpdateRequest, AgentsParams, createAgent, deleteAgent, getAgent, getAgents, getThreadAgent, updateAgent, AgentBuilderChatRequest, AgentBuilderStreamData, startAgentBuilderChat, getAgentBuilderChatHistory } from './utils';
+import { Agent, AgentUpdateRequest, AgentsParams, createAgent, deleteAgent, getAgent, getAgents, getThreadAgent, updateAgent, AgentBuilderChatRequest, AgentBuilderStreamData, startAgentBuilderChat, getAgentBuilderChatHistory, getAgentLimits, AgentLimitsResponse } from './utils';
 import { useRef, useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { generateRandomAvatar } from '@/lib/utils/_avatar-generator';
@@ -279,3 +279,14 @@ export const useAgentBuilderChatHistory = (agentId: string) =>
       retry: 1,
     }
   )();
+
+export const useAgentLimits = () => {
+ return createQueryHook(
+   agentKeys.limits(),
+   () => getAgentLimits(),
+   {
+     staleTime: 2 * 60 * 1000, // 2 minutes - limits don't change frequently
+     gcTime: 5 * 60 * 1000,    // 5 minutes
+   }
+ )();
+};
