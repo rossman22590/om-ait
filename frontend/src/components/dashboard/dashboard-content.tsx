@@ -306,7 +306,7 @@ export function DashboardContent() {
               />
             </div>
             <div className="w-full pt-4">
-              <Examples onSelectPrompt={setInputValue} count={5} />
+              <Examples onSelectPrompt={setInputValue} count={4} />
             </div>
           </div>
           

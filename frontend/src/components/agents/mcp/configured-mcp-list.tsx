@@ -1,8 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Settings, X, Sparkles, Key, AlertTriangle, Plus } from 'lucide-react';
+import { Settings, X, Sparkles, Key, AlertTriangle, Plus, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { 
   MCPConfiguration, 
@@ -11,16 +21,15 @@ import {
   ComposioMCPConfiguration, 
   PipedreamMCPConfiguration 
 } from './types';
-import { usePipedreamAppIcon } from '../../../hooks/react-query/pipedream/use-pipedream';
+import { usePipedreamAppIcon } from '@/hooks/react-query/pipedream/use-pipedream';
 import { useComposioToolkits } from '@/hooks/react-query/composio/use-composio';
 import { useCredentialProfilesForMcp } from '@/hooks/react-query/mcp/use-credential-profiles';
-import { useMemo } from 'react';
 
 // Helper type to handle different response formats
 type ToolkitResponse = {
-  toolkits?: Array<{ icon_url?: string; name?: string; slug?: string }>;
+  toolkits?: Array<{ icon_url?: string; logo?: string; name?: string; slug?: string }>;
   [key: string]: any;
-} | Array<{ icon_url?: string; name?: string; slug?: string }>;
+} | Array<{ icon_url?: string; logo?: string; name?: string; slug?: string }>;
 
 interface ConfiguredMcpListProps {
   configuredMCPs: MCPConfiguration[];
@@ -59,11 +68,12 @@ const MCPLogo: React.FC<{ mcp: MCPConfiguration }> = ({ mcp }) => {
 
   // For Composio, we need to get the toolkit info
   const { data: composioData } = useComposioToolkits(
-    isComposio && appInfo ? appInfo.slug : ''
+    isComposio && appInfo ? appInfo.slug : '',
+    undefined
   ) as { 
     data?: { 
-      toolkits?: Array<{ icon_url?: string; name?: string }> 
-    } | Array<{ icon_url?: string; name?: string }> 
+      toolkits?: Array<{ icon_url?: string; logo?: string; name?: string }> 
+    } | Array<{ icon_url?: string; logo?: string; name?: string }> 
   };
 
   const toolkit = useMemo(() => {
@@ -112,12 +122,13 @@ const MCPLogo: React.FC<{ mcp: MCPConfiguration }> = ({ mcp }) => {
   }
 
   // Handle Composio icon
-  if (isComposio && toolkit?.icon_url) {
+  if (isComposio && (toolkit?.icon_url || toolkit?.logo)) {
+    const logoUrl = toolkit.logo || toolkit.icon_url;
     return (
       <>
         <img
-          src={toolkit.icon_url}
-          alt={toolkit.name}
+          src={logoUrl}
+          alt={toolkit.name || mcp.name}
           className="h-8 w-8 rounded-md object-cover"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
@@ -156,7 +167,11 @@ const MCPConfigurationItem: React.FC<{
     ? mcp.mcp_qualified_name || mcp.config?.mcp_qualified_name || mcp.qualifiedName
     : mcp.qualifiedName;
 
-  const { data: credentialProfiles } = useCredentialProfilesForMcp(qualifiedNameForLookup);
+  const { data: credentialProfiles = [] } = useCredentialProfilesForMcp(qualifiedNameForLookup);
+  const profileId = mcp.selectedProfileId || mcp.config?.profile_id;
+  const selectedProfile = credentialProfiles.find(p => p.profile_id === profileId);
+  
+  const hasCredentialProfile = !!profileId && !!selectedProfile;
   const hasCredentialProfiles = credentialProfiles && credentialProfiles.length > 0;
   const isCustom = mcp.customType === 'composio' || mcp.customType === 'pipedream' || mcp.isCustom;
   
@@ -184,9 +199,23 @@ const MCPConfigurationItem: React.FC<{
                 </Badge>
               )}
             </div>
-            <p className="text-xs text-muted-foreground truncate">
-              {isAvailable ? 'Ready to connect to your agent' : mcp.qualifiedName}
-            </p>
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              {isAvailable ? (
+                <span>Ready to connect to your agent</span>
+              ) : (
+                <>
+                  <span>{mcp.enabledTools?.length || 0} tools enabled</span>
+                  {hasCredentialProfile && (
+                    <div className="flex items-center gap-1">
+                      <Key className="h-3 w-3 text-green-600" />
+                      <span className="text-green-600 font-medium truncate max-w-24">
+                        {selectedProfile.profile_name}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
             {mcp.enabledTools && mcp.enabledTools.length > 0 && !isAvailable && (
               <div className="flex items-center gap-1 mt-2">
                 <Sparkles className="h-3 w-3 text-primary" />
@@ -239,7 +268,7 @@ const MCPConfigurationItem: React.FC<{
                     onClick={() => onRemove(index)}
                     title="Remove integration"
                   >
-                    <X className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               )}
@@ -263,6 +292,8 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
   onRemove,
   onConfigureTools,
 }) => {
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
+  const [mcpToDelete, setMcpToDelete] = React.useState<{ mcp: MCPConfiguration; index: number } | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   
   // Function to safely get the qualified name for comparison
@@ -271,6 +302,19 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
   };
 
   const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
+
+  const handleDeleteClick = (mcp: MCPConfiguration, index: number) => {
+    setMcpToDelete({ mcp, index });
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (mcpToDelete) {
+      onRemove(mcpToDelete.index);
+      setMcpToDelete(null);
+      setDeleteDialogOpen(false);
+    }
+  };
 
   if (configuredMCPs.length === 0) {
     return (
@@ -312,7 +356,7 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
               mcp={mcp}
               index={globalIndex}
               onEdit={onEdit}
-              onRemove={onRemove}
+              onRemove={(idx) => handleDeleteClick(mcp, idx)}
               onConfigureTools={onConfigureTools}
             />
           );
@@ -322,25 +366,47 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
   };
 
   return (
-    <div className="space-y-8 w-full overflow-hidden">
-      {renderMCPs(composioMCPs, composioMCPs.length > 0 ? 'Composio Integrations' : undefined)}
-      {showPipedreamUI && renderMCPs(pipedreamMCPs, pipedreamMCPs.length > 0 ? 'Pipedream Integrations' : undefined)}
-      {renderMCPs(otherMCPs, otherMCPs.length > 0 ? 'Other MCP Servers' : undefined)}
-      
-      {/* Available integrations section */}
-      {availableMCPs.length > 0 && (
-        <div className="border-t border-border pt-6">
-          <div className="flex items-center gap-2 mb-4 bg-grey-50 dark:bg-grey-900/20 p-3 rounded-lg">
-            <div className="h-2 w-2 rounded-full bg-pink-500"></div>
-            <h3 className="text-sm font-semibold text-foreground">Available Integrations</h3>
-            <Badge variant="default" className="text-xs bg-pink-50 text-pink-700 border-pink-200">
-              {availableMCPs.length} ready to connect
-            </Badge>
+    <>
+      <div className="space-y-8 w-full overflow-hidden">
+        {renderMCPs(composioMCPs, composioMCPs.length > 0 ? 'Composio Integrations' : undefined)}
+        {showPipedreamUI && renderMCPs(pipedreamMCPs, pipedreamMCPs.length > 0 ? 'Pipedream Integrations' : undefined)}
+        {renderMCPs(otherMCPs, otherMCPs.length > 0 ? 'Other MCP Servers' : undefined)}
+        
+        {/* Available integrations section */}
+        {availableMCPs.length > 0 && (
+          <div className="border-t border-border pt-6">
+            <div className="flex items-center gap-2 mb-4 bg-grey-50 dark:bg-grey-900/20 p-3 rounded-lg">
+              <div className="h-2 w-2 rounded-full bg-pink-500"></div>
+              <h3 className="text-sm font-semibold text-foreground">Available Integrations</h3>
+              <Badge variant="default" className="text-xs bg-pink-50 text-pink-700 border-pink-200">
+                {availableMCPs.length} ready to connect
+              </Badge>
+            </div>
+            {renderMCPs(availableComposioMCPs, availableComposioMCPs.length > 0 ? 'Composio' : undefined)}
+            {showPipedreamUI && renderMCPs(availablePipedreamMCPs, availablePipedreamMCPs.length > 0 ? 'Pipedream' : undefined)}
           </div>
-          {renderMCPs(availableComposioMCPs, availableComposioMCPs.length > 0 ? 'Composio' : undefined)}
-          {showPipedreamUI && renderMCPs(availablePipedreamMCPs, availablePipedreamMCPs.length > 0 ? 'Pipedream' : undefined)}
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+      
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Integration</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove the "{mcpToDelete?.mcp.name}" integration? This will disconnect all associated tools and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Remove Integration
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };

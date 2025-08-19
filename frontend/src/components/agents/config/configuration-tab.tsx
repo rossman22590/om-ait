@@ -163,7 +163,6 @@ export function ConfigurationTab({
                     <div className="bg-muted rounded-xl h-10 w-10 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
                       <Settings className="h-5 w-5 text-muted-foreground" />
                     </div>
-
                   </div>
                   <div className="text-left flex-1">
                     <h4 className="text-sm font-semibold text-foreground mb-1 group-hover:text-primary transition-colors duration-300">System Prompt</h4>
@@ -174,7 +173,7 @@ export function ConfigurationTab({
               </button>
               <div
                 className={`overflow-hidden transition-all duration-300 ease-out ${openAccordion === 'system'
-                  ? 'max-h-96 opacity-100'
+                  ? 'max-h-auto opacity-100'
                   : 'max-h-0 opacity-0'
                   }`}
               >
@@ -213,7 +212,7 @@ export function ConfigurationTab({
               </button>
               <div
                 className={`overflow-hidden transition-all duration-300 ease-out ${openAccordion === 'model'
-                  ? 'max-h-96 opacity-100'
+                  ? 'max-h-auto opacity-100'
                   : 'max-h-0 opacity-0'
                   }`}
               >
@@ -246,7 +245,6 @@ export function ConfigurationTab({
                     <div className="bg-muted rounded-xl h-10 w-10 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
                       <Wrench className="h-5 w-5 text-muted-foreground" />
                     </div>
-
                   </div>
                   <div className="text-left flex-1">
                     <h4 className="text-sm font-semibold text-foreground mb-1 group-hover:text-primary transition-colors duration-300">Default Tools</h4>
@@ -284,7 +282,6 @@ export function ConfigurationTab({
                   <div className="bg-muted rounded-xl h-10 w-10 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
                     <Server className="h-5 w-5 text-muted-foreground" />
                   </div>
-
                 </div>
                 <div className="text-left flex-1">
                   <h4 className="text-sm font-semibold text-foreground mb-1 group-hover:text-primary transition-colors duration-300">Integrations</h4>
@@ -329,7 +326,6 @@ export function ConfigurationTab({
                   <div className="bg-muted rounded-xl h-10 w-10 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
                     <BookOpen className="h-5 w-5 text-muted-foreground" />
                   </div>
-
                 </div>
                 <div className="text-left flex-1">
                   <h4 className="text-sm font-semibold text-foreground mb-1 group-hover:text-primary transition-colors duration-300">Knowledge Base</h4>
@@ -364,7 +360,6 @@ export function ConfigurationTab({
                   <div className="bg-muted rounded-xl h-10 w-10 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
                     <Workflow className="h-5 w-5 text-muted-foreground" />
                   </div>
-
                 </div>
                 <div className="text-left flex-1">
                   <h4 className="text-sm font-semibold text-foreground mb-1 group-hover:text-primary transition-colors duration-300">Playbooks</h4>
@@ -434,7 +429,6 @@ export function ConfigurationTab({
                   <div className="bg-muted rounded-xl h-10 w-10 flex items-center justify-center transition-all duration-300 group-hover:scale-105">
                     <Zap className="h-5 w-5 text-muted-foreground" />
                   </div>
-
                 </div>
                 <div className="text-left flex-1">
                   <h4 className="text-sm font-semibold text-foreground mb-1 group-hover:text-primary transition-colors duration-300">Triggers</h4>

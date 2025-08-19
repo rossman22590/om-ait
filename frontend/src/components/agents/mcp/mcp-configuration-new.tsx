@@ -159,7 +159,6 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
     toast.success(`Connected ${appName} via Pipedream!`);
   };
 
-
   const handleCustomToolsUpdate = (enabledTools: string[]) => {
     if (!selectedMCPForTools) return;
     
@@ -181,6 +180,7 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
   );
 
   const [activeTab, setActiveTab] = useState('all');
+  const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
 
   const renderTabActions = (tab: string) => {
     switch (tab) {
@@ -198,7 +198,7 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
           </Button>
         );
       case 'pipedream':
-        return (
+        return showPipedreamUI ? (
           <Button
             onClick={() => setShowPipedreamRegistry(true)}
             variant="outline"
@@ -209,7 +209,7 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
             <span className="hidden sm:inline">Browse Pipedream</span>
             <span className="sm:hidden">Add App</span>
           </Button>
-        );
+        ) : null;
       case 'other':
         return (
           <Button
@@ -225,16 +225,26 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
         );
       default: // 'all' tab
         return (
-          <Button
-            onClick={() => setShowCustomDialog(true)}
-            variant="outline"
-            size="sm"
-            className="gap-1 h-9 px-3 text-xs sm:text-sm sm:gap-2 sm:px-4 flex-shrink-0"
-          >
-            <Server className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-            <span className="hidden sm:inline">Add Custom MCP</span>
-            <span className="sm:hidden">Add MCP</span>
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setShowRegistryDialog(true)}
+              size="sm"
+              variant="default"
+              className="gap-2"
+            >
+              <Store className="h-4 w-4" />
+              Browse Apps
+            </Button>
+            <Button
+              onClick={() => setShowCustomDialog(true)}
+              size="sm"
+              variant="outline"
+              className="gap-2"
+            >
+              <Server className="h-4 w-4" />
+              Custom MCP
+            </Button>
+          </div>
         );
     }
   };
@@ -249,7 +259,9 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
                 <TabsList className="h-10 p-1 bg-muted/50 flex-shrink-0 overflow-x-auto">
                   <TabsTrigger value="all" className="px-2 py-2 text-xs sm:text-sm sm:px-3 whitespace-nowrap">All</TabsTrigger>
                   <TabsTrigger value="composio" className="px-2 py-2 text-xs sm:text-sm sm:px-3 whitespace-nowrap">Composio</TabsTrigger>
-                  <TabsTrigger value="pipedream" className="px-2 py-2 text-xs sm:text-sm sm:px-3 whitespace-nowrap">Pipedream</TabsTrigger>
+                  {showPipedreamUI && (
+                    <TabsTrigger value="pipedream" className="px-2 py-2 text-xs sm:text-sm sm:px-3 whitespace-nowrap">Pipedream</TabsTrigger>
+                  )}
                   {otherMCPs.length > 0 && (
                     <TabsTrigger value="other" className="px-2 py-2 text-xs sm:text-sm sm:px-3 whitespace-nowrap">Other</TabsTrigger>
                   )}
@@ -280,13 +292,15 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
                   <Store className="h-4 w-4" />
                   Browse Composio Apps
                 </Button>
-                <Button
-                  onClick={() => setShowPipedreamRegistry(true)}
-                  className="gap-2 h-10 px-6"
-                >
-                  <Zap className="h-4 w-4" />
-                  Browse Pipedream Apps
-                </Button>
+                {showPipedreamUI && (
+                  <Button
+                    onClick={() => setShowPipedreamRegistry(true)}
+                    className="gap-2 h-10 px-6"
+                  >
+                    <Zap className="h-4 w-4" />
+                    Browse Pipedream Apps
+                  </Button>
+                )}
                 <Button
                   onClick={() => setShowCustomDialog(true)}
                   variant="outline"
@@ -337,34 +351,36 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
                 )}
               </TabsContent>
               
-              <TabsContent value="pipedream" className="space-y-6">
-                {pipedreamMCPs.length > 0 ? (
-                  <ConfiguredMcpList
-                    configuredMCPs={pipedreamMCPs}
-                    onEdit={handleEditMCP}
-                    onRemove={handleRemoveMCP}
-                    onConfigureTools={handleConfigureTools}
-                  />
-                ) : (
-                  <div className="text-center py-12">
-                    <div className="mx-auto w-12 h-12 bg-muted/50 rounded-xl flex items-center justify-center mb-4">
-                      <Zap className="h-6 w-6 text-muted-foreground" />
+              {showPipedreamUI && (
+                <TabsContent value="pipedream" className="space-y-6">
+                  {pipedreamMCPs.length > 0 ? (
+                    <ConfiguredMcpList
+                      configuredMCPs={pipedreamMCPs}
+                      onEdit={handleEditMCP}
+                      onRemove={handleRemoveMCP}
+                      onConfigureTools={handleConfigureTools}
+                    />
+                  ) : (
+                    <div className="text-center py-12">
+                      <div className="mx-auto w-12 h-12 bg-muted/50 rounded-xl flex items-center justify-center mb-4">
+                        <Zap className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        No Pipedream integrations configured
+                      </p>
+                      <Button
+                        onClick={() => setShowPipedreamRegistry(true)}
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <Zap className="h-4 w-4" />
+                        Browse Pipedream Apps
+                      </Button>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      No Pipedream integrations configured
-                    </p>
-                    <Button
-                      onClick={() => setShowPipedreamRegistry(true)}
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                    >
-                      <Zap className="h-4 w-4" />
-                      Browse Pipedream Apps
-                    </Button>
-                  </div>
-                )}
-              </TabsContent>
+                  )}
+                </TabsContent>
+              )}
               
               {otherMCPs.length > 0 && (
                 <TabsContent value="other" className="space-y-6">
@@ -399,11 +415,13 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
           />
         </DialogContent>
       </Dialog>
+      
       <CustomMCPDialog
         open={showCustomDialog}
         onOpenChange={setShowCustomDialog}
         onSave={handleSaveCustomMCP}
       />
+      
       {selectedMCPForTools && selectedMCPForTools.customType === 'composio' && (selectedMCPForTools.selectedProfileId || selectedMCPForTools.config?.profile_id) && (
         <ComposioToolsManager
           agentId={selectedAgentId || ''}
@@ -416,7 +434,32 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
           }}
         />
       )}
-      {selectedMCPForTools && selectedMCPForTools.customType === 'pipedream' && null}
+      
+      {selectedMCPForTools && selectedMCPForTools.customType === 'pipedream' && (
+        <ToolsManager
+          mode="custom"
+          agentId={selectedAgentId}
+          mcpConfig={{
+            ...selectedMCPForTools.config,
+            type: selectedMCPForTools.customType
+          }}
+          mcpName={selectedMCPForTools.name}
+          open={showCustomToolsManager}
+          onOpenChange={setShowCustomToolsManager}
+          onToolsUpdate={handleCustomToolsUpdate}
+          versionData={versionData}
+          saveMode={saveMode}
+          versionId={versionId}
+          initialEnabledTools={(() => {
+            console.log('[MCPConfiguration] Rendering Pipedream ToolsManager with:', {
+              selectedMCPForTools,
+              enabledTools: selectedMCPForTools.enabledTools,
+              customType: selectedMCPForTools.customType
+            });
+            return selectedMCPForTools.enabledTools;
+          })()}
+        />
+      )}
       
       {selectedMCPForTools && selectedMCPForTools.customType !== 'composio' && selectedMCPForTools.customType !== 'pipedream' && (
         <ToolsManager
@@ -444,7 +487,6 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
         />
       )}
 
-
       {selectedPipedreamApp && (
         <PipedreamConnector
           app={selectedPipedreamApp}
@@ -457,7 +499,7 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
         />
       )}
 
-      {showPipedreamRegistry && (
+      {showPipedreamUI && showPipedreamRegistry && (
         <Dialog open={showPipedreamRegistry} onOpenChange={setShowPipedreamRegistry}>
           <DialogContent className="p-0 max-w-6xl max-h-[90vh] overflow-y-auto">
             <DialogHeader className="sr-only">
