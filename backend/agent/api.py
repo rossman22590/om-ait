@@ -30,11 +30,12 @@ from .utils import check_agent_run_limit
 from .versioning.version_service import get_version_service
 from utils.suna_default_agent_service import SunaDefaultAgentService
 from .versioning.api import router as version_router, initialize as initialize_versioning
+from .tools.sb_presentation_tool import SandboxPresentationTool
 
 # Helper for version service
 async def _get_version_service():
     return await get_version_service()
-from .tools.sb_presentation_tool_v2 import SandboxPresentationToolV2
+
 
 router = APIRouter()
 router.include_router(version_router)
@@ -4262,7 +4263,7 @@ async def export_presentation(
         
         thread_manager = ThreadManager()
         
-        presentation_tool = SandboxPresentationToolV2(
+        presentation_tool = SandboxPresentationTool(
             project_id=project_id,
             thread_manager=thread_manager
         )

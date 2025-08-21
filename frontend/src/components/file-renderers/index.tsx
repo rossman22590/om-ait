@@ -10,7 +10,7 @@ import { BinaryRenderer } from './binary-renderer';
 import { HtmlRenderer } from './html-renderer';
 import { constructHtmlPreviewUrl } from '@/lib/utils/url';
 import { CsvRenderer } from './csv-renderer';
-import { SheetRenderer } from './sheet-renderer';
+import { XlsxRenderer } from './xlsx-renderer';
 
 export type FileType =
   | 'markdown'
@@ -20,15 +20,17 @@ export type FileType =
   | 'text'
   | 'binary'
   | 'csv'
-  | 'sheet';
+  | 'xlsx';
 
 interface FileRendererProps {
   content: string | null;
   binaryUrl: string | null;
   fileName: string;
+  filePath?: string;
   className?: string;
   project?: {
     sandbox?: {
+      id?: string;
       sandbox_url?: string;
       vnc_preview?: string;
       pass?: string;
@@ -93,7 +95,7 @@ export function getFileTypeFromExtension(fileName: string): FileType {
   ];
   const pdfExtensions = ['pdf'];
   const csvExtensions = ['csv', 'tsv'];
-  const sheetExtensions = ['xlsx', 'xls'];
+  const xlsxExtensions = ['xlsx', 'xls'];
   const textExtensions = ['txt', 'log', 'env', 'ini'];
 
   if (markdownExtensions.includes(extension)) {
@@ -106,8 +108,8 @@ export function getFileTypeFromExtension(fileName: string): FileType {
     return 'pdf';
   } else if (csvExtensions.includes(extension)) {
     return 'csv';
-  } else if (sheetExtensions.includes(extension)) {
-    return 'sheet';
+  } else if (xlsxExtensions.includes(extension)) {
+    return 'xlsx';
   } else if (textExtensions.includes(extension)) {
     return 'text';
   } else {
@@ -154,6 +156,7 @@ export function FileRenderer({
   content,
   binaryUrl,
   fileName,
+  filePath,
   className,
   project,
   markdownRef,
@@ -200,8 +203,15 @@ export function FileRenderer({
         <MarkdownRenderer content={content || ''} ref={markdownRef} />
       ) : fileType === 'csv' ? (
         <CsvRenderer content={content || ''} />
-      ) : fileType === 'sheet' && binaryUrl ? (
-        <SheetRenderer url={binaryUrl} fileName={fileName} />
+      ) : fileType === 'xlsx' ? (
+        <XlsxRenderer 
+          content={content}
+          filePath={filePath}
+          fileName={fileName}
+          project={project}
+          onDownload={onDownload}
+          isDownloading={isDownloading}
+        />
       ) : isHtmlFile ? (
         <HtmlRenderer
           content={content || ''}
