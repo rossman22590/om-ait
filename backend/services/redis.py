@@ -89,13 +89,13 @@ async def initialize_async():
 
     async with _init_lock:
         if not _initialized:
-            logger.debug("Initializing Redis connection")
+            logger.info("Initializing Redis connection")
             initialize()
 
         try:
             # Test connection with timeout
             await asyncio.wait_for(client.ping(), timeout=5.0)
-            logger.debug("Successfully connected to Redis")
+            logger.info("Successfully connected to Redis")
             _initialized = True
         except asyncio.TimeoutError:
             logger.error("Redis connection timeout during initialization")
@@ -115,7 +115,7 @@ async def close():
     """Close Redis connection and connection pool."""
     global client, pool, _initialized
     if client:
-        logger.debug("Closing Redis connection")
+        logger.info("Closing Redis connection")
         try:
             await asyncio.wait_for(client.aclose(), timeout=5.0)
         except asyncio.TimeoutError:
@@ -126,7 +126,7 @@ async def close():
             client = None
     
     if pool:
-        logger.debug("Closing Redis connection pool")
+        logger.info("Closing Redis connection pool")
         try:
             await asyncio.wait_for(pool.aclose(), timeout=5.0)
         except asyncio.TimeoutError:
@@ -137,7 +137,7 @@ async def close():
             pool = None
     
     _initialized = False
-    logger.debug("Redis connection and pool closed")
+    logger.info("Redis connection and pool closed")
 
 
 async def get_client():
