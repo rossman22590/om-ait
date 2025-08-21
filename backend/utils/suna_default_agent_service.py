@@ -121,7 +121,7 @@ class SunaDefaultAgentService:
             return {
                 "total_agents": total_count,
                 "recent_installs": recent_count,
-                "note": "Suna agents always use current central configuration"
+                "note": "Machine agents always use current central configuration"
             }
             
         except Exception as e:

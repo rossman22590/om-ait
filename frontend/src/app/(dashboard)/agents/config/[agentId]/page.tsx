@@ -107,19 +107,9 @@ export default function AgentConfigurationPage() {
   const handleSave = useCallback(async () => {
     if (!agent || isViewingOldVersion || isSaving) return;
     
-    const isSunaAgent = agent?.metadata?.is_suna_default || false;
-    const restrictions = agent?.metadata?.restrictions || {};
-    
-    if (isSunaAgent) {
-      if (restrictions.name_editable === false && formData.name !== originalData.name) {
-        toast.error("Machine's name cannot be modified.");
-        return;
-      }
-      if (restrictions.tools_editable === false && JSON.stringify(formData.agentpress_tools) !== JSON.stringify(originalData.agentpress_tools)) {
-        toast.error("Machine's default tools cannot be modified.");
-        return;
-      }
-    }
+    // All agents are now fully editable - removed Suna restrictions
+    // const isSunaAgent = false; // Disabled restrictions
+    // const restrictions = {}; // No restrictions
     
     const normalizedCustomMcps = (formData.custom_mcps || []).map(mcp => ({
       name: mcp.name || 'Unnamed MCP',

@@ -28,6 +28,7 @@ from flags.flags import is_enabled
 from .config_helper import extract_agent_config, build_unified_config
 from .utils import check_agent_run_limit
 from .versioning.version_service import get_version_service
+from utils.suna_default_agent_service import SunaDefaultAgentService
 from .versioning.api import router as version_router, initialize as initialize_versioning
 
 # Helper for version service
@@ -186,8 +187,8 @@ class AgentImportRequest(BaseModel):
 class JsonAnalysisResponse(BaseModel):
     """Response for JSON analysis"""
     requires_setup: bool
-    missing_regular_credentials: List[str]
-    missing_custom_configs: List[str]
+    missing_regular_credentials: List[Dict[str, Any]]
+    missing_custom_configs: List[Dict[str, Any]]
     agent_info: Dict[str, Any]
 
 class JsonImportRequestModel(BaseModel):
@@ -203,9 +204,13 @@ class JsonImportResponse(BaseModel):
     status: str
     instance_id: Optional[str] = None
     name: Optional[str] = None
-    missing_regular_credentials: List[str] = []
-    missing_custom_configs: List[str] = []
+    missing_regular_credentials: List[Dict[str, Any]] = []
+    missing_custom_configs: List[Dict[str, Any]] = []
     agent_info: Optional[Dict[str, Any]] = None
+
+class JsonAnalysisRequest(BaseModel):
+    """Request to analyze JSON for import requirements"""
+    json_data: Dict[str, Any]
 
 def initialize(
     _db: DBConnection,
@@ -1880,7 +1885,7 @@ async def get_agent(agent_id: str, user_id: str = Depends(get_current_user_id_fr
         logger.error(f"Error fetching agent {agent_id} for user {user_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch agent: {str(e)}")
 
-@router.get("/agents/{agent_id}/export", response_model=AgentExportData)
+@router.get("/agents/{agent_id}/export")
 async def export_agent(agent_id: str, user_id: str = Depends(get_current_user_id_from_jwt)):
     """Export an agent configuration as JSON"""
     logger.debug(f"Exporting agent {agent_id} for user: {user_id}")
@@ -1948,21 +1953,25 @@ async def export_agent(agent_id: str, user_id: str = Depends(get_current_user_id
             "export_metadata": export_metadata,
             "exported_at": datetime.now(timezone.utc).isoformat()
         }
-        # Create export data
-        export_data = AgentExportData(
-            name=config.get('name', ''),
-            description=config.get('description', ''),
-            system_prompt=config.get('system_prompt', ''),
-            agentpress_tools=config.get('agentpress_tools', {}),
-            configured_mcps=config.get('configured_mcps', []),
-            custom_mcps=config.get('custom_mcps', []),
-            avatar=config.get('avatar'),
-            avatar_color=config.get('avatar_color'),
-            tags=agent.get('tags', []),
-            metadata=export_metadata,
-            exported_at=datetime.utcnow().isoformat(),
-            exported_by=user_id
-        )
+        # Create export data in the format expected by import
+        export_data = {
+            "name": config.get('name', ''),
+            "description": config.get('description', ''),
+            "system_prompt": config.get('system_prompt', ''),
+            "tools": {
+                "agentpress": config.get('agentpress_tools', {}),
+                "mcp": config.get('configured_mcps', []),
+                "custom_mcp": config.get('custom_mcps', [])
+            },
+            "avatar": config.get('avatar'),
+            "avatar_color": config.get('avatar_color'),
+            "profile_image_url": agent.get('profile_image_url'),
+            "tags": agent.get('tags', []),
+            "metadata": export_metadata,
+            "export_version": "1.1",
+            "exported_at": datetime.utcnow().isoformat(),
+            "exported_by": user_id
+        }
         
         logger.debug(f"Successfully exported agent {agent_id}")
         return export_data
@@ -1976,9 +1985,7 @@ async def import_agent(
     import_request: AgentImportRequest,
     user_id: str = Depends(get_current_user_id_from_jwt)
 ):
-    """Analyze imported JSON to determine required credentials and configurations"""
-    logger.debug(f"Analyzing JSON for import - user: {user_id}")
-    """Import an agent from JSON configuration"""
+    """Import an agent from JSON configuration (AgentExportData format)"""
     logger.info(f"Importing agent for user: {user_id}")
     
     if not await is_enabled("custom_agents"):
@@ -1989,7 +1996,136 @@ async def import_agent(
     
     try:
         client = await db.client
+        
+        # Check agent count limit
+        from .utils import check_agent_count_limit
+        limit_check = await check_agent_count_limit(client, user_id)
+        
+        if not limit_check['can_create']:
+            error_detail = {
+                "message": f"Maximum of {limit_check['limit']} agents allowed for your current plan. You have {limit_check['current_count']} agents.",
+                "current_count": limit_check['current_count'],
+                "limit": limit_check['limit'],
+                "tier_name": limit_check['tier_name'],
+                "error_code": "AGENT_LIMIT_EXCEEDED"
+            }
+            logger.warning(f"Agent limit exceeded for account {user_id}: {limit_check['current_count']}/{limit_check['limit']} agents")
+            raise HTTPException(status_code=402, detail=error_detail)
+        
+        # Extract import data
         import_data = import_request.import_data
+        
+        # Create new agent
+        insert_data = {
+            "account_id": user_id,
+            "name": import_data.name,
+            "description": import_data.description,
+            "avatar": import_data.avatar,
+            "avatar_color": import_data.avatar_color,
+            "profile_image_url": import_data.profile_image_url,
+            "is_default": False,  # Never import as default
+            "tags": import_data.tags or [],
+            "metadata": import_data.metadata or {},
+            "version_count": 1
+        }
+        
+        new_agent = await client.table('agents').insert(insert_data).execute()
+        
+        if not new_agent.data:
+            raise HTTPException(status_code=500, detail="Failed to create agent")
+        
+        agent = new_agent.data[0]
+        
+        # Create initial version using the version service
+        try:
+            version_service = await _get_version_service()
+            
+            version = await version_service.create_version(
+                agent_id=agent['agent_id'],
+                user_id=user_id,
+                system_prompt=import_data.system_prompt,
+                configured_mcps=import_data.configured_mcps or [],
+                custom_mcps=import_data.custom_mcps or [],
+                agentpress_tools=import_data.agentpress_tools or {},
+                version_name="v1",
+                change_description="Imported from JSON"
+            )
+            
+            agent['current_version_id'] = version.version_id
+            agent['version_count'] = 1
+
+            current_version = AgentVersionResponse(
+                version_id=version.version_id,
+                agent_id=version.agent_id,
+                version_number=version.version_number,
+                version_name=version.version_name,
+                system_prompt=version.system_prompt,
+                model=version.model,
+                configured_mcps=version.configured_mcps,
+                custom_mcps=version.custom_mcps,
+                agentpress_tools=version.agentpress_tools,
+                is_active=version.is_active,
+                created_at=version.created_at.isoformat(),
+                updated_at=version.updated_at.isoformat(),
+                created_by=version.created_by
+            )
+        except Exception as e:
+            logger.error(f"Error creating initial version: {str(e)}")
+            await client.table('agents').delete().eq('agent_id', agent['agent_id']).execute()
+            raise HTTPException(status_code=500, detail="Failed to create initial version")
+        
+        # Invalidate cache
+        from utils.cache import Cache
+        await Cache.invalidate(f"agent_count_limit:{user_id}")
+        
+        logger.debug(f"Successfully imported agent {agent['agent_id']} for user: {user_id}")
+        
+        return AgentResponse(
+            agent_id=agent['agent_id'],
+            account_id=agent['account_id'],
+            name=agent['name'],
+            description=agent.get('description'),
+            system_prompt=version.system_prompt,
+            configured_mcps=version.configured_mcps,
+            custom_mcps=version.custom_mcps,
+            agentpress_tools=version.agentpress_tools,
+            is_default=agent.get('is_default', False),
+            is_public=agent.get('is_public', False),
+            tags=agent.get('tags', []),
+            avatar=agent.get('avatar'),
+            avatar_color=agent.get('avatar_color'),
+            profile_image_url=agent.get('profile_image_url'),
+            created_at=agent['created_at'],
+            updated_at=agent.get('updated_at', agent['created_at']),
+            current_version_id=agent.get('current_version_id'),
+            version_count=agent.get('version_count', 1),
+            current_version=current_version,
+            metadata=agent.get('metadata')
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error importing agent: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to import agent: {str(e)}")
+
+@router.post("/agents/json/analyze", response_model=JsonAnalysisResponse)
+async def analyze_json_for_import(
+    request: JsonAnalysisRequest,
+    user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    """Analyze imported JSON to determine required credentials and configurations"""
+    logger.debug(f"Analyzing JSON for import - user: {user_id}")
+    
+    if not await is_enabled("custom_agents"):
+        raise HTTPException(
+            status_code=403, 
+            detail="Custom agents currently disabled. This feature is not available at the moment."
+        )
+    
+    try:
+        from .json_import_service import JsonImportService
+        import_service = JsonImportService(db)
         
         analysis = await import_service.analyze_json(request.json_data, user_id)
         
@@ -2033,7 +2169,7 @@ async def import_agent_from_json(
         raise HTTPException(status_code=402, detail=error_detail)
     
     try:
-        from agent.json_import_service import JsonImportService, JsonImportRequest
+        from .json_import_service import JsonImportService, JsonImportRequest
         import_service = JsonImportService(db)
         
         import_request = JsonImportRequest(
@@ -2055,61 +2191,6 @@ async def import_agent_from_json(
             missing_custom_configs=result.missing_custom_configs,
             agent_info=result.agent_info
         )
-        
-        # Validate import data
-        if not import_data.name or not import_data.system_prompt:
-            raise HTTPException(status_code=400, detail="Agent name and system prompt are required")
-        
-        # Create new agent
-        logger.info(f"Creating new agent from import: {import_data.name}")
-        
-        # Check if user wants to set as default, and if so, unset other defaults
-        is_default = False  # Imported agents are not default by default
-        
-        insert_data = {
-            "account_id": user_id,
-            "name": import_data.name,
-            "description": import_data.description,
-            "avatar": import_data.avatar,
-            "avatar_color": import_data.avatar_color,
-            "is_default": is_default,
-            "tags": import_data.tags or [],
-            "version_count": 1,
-            "metadata": import_data.metadata or {}
-        }
-        
-        new_agent = await client.table('agents').insert(insert_data).execute()
-        
-        if not new_agent.data:
-            raise HTTPException(status_code=500, detail="Failed to create agent from import")
-        
-        agent = new_agent.data[0]
-        agent_id = agent['agent_id']
-        
-        # Create initial version
-        try:
-            version_service = await _get_version_service()
-            
-            version = await version_service.create_version(
-                agent_id=agent_id,
-                user_id=user_id,
-                system_prompt=import_data.system_prompt,
-                configured_mcps=import_data.configured_mcps,
-                custom_mcps=import_data.custom_mcps,
-                agentpress_tools=import_data.agentpress_tools,
-                version_name="v1",
-                change_description="Initial version from import"
-            )
-            
-            logger.info(f"Successfully imported agent {agent_id}")
-            return await get_agent(agent_id, user_id)
-                
-        except Exception as e:
-            # Clean up agent if anything goes wrong
-            await client.table('agents').delete().eq('agent_id', agent_id).execute()
-            raise e
-                
-
                 
     except HTTPException:
         raise
@@ -2170,8 +2251,14 @@ async def create_agent(
         
         try:
             version_service = await _get_version_service()
-            from agent.suna_config import SUNA_CONFIG
-            system_prompt = SUNA_CONFIG["system_prompt"]
+            
+            # Use user-provided system prompt or default for new custom agents
+            if agent_data.system_prompt:
+                system_prompt = agent_data.system_prompt
+            else:
+                # Default system prompt for new custom agents - use Machine's prompt as starting point
+                from agent.suna_config import SUNA_CONFIG
+                system_prompt = SUNA_CONFIG["system_prompt"]
             
             version = await version_service.create_version(
                 agent_id=agent['agent_id'],
@@ -2289,52 +2376,8 @@ async def update_agent(
         is_suna_agent = agent_metadata.get('is_suna_default', False)
         restrictions = agent_metadata.get('restrictions', {})
         
-        if is_suna_agent:
-            logger.warning(f"Update attempt on Suna default agent {agent_id} by user {user_id}")
-            
-            if (agent_data.name is not None and 
-                agent_data.name != existing_data.get('name') and 
-                restrictions.get('name_editable') == False):
-                logger.error(f"User {user_id} attempted to modify restricted name of Suna agent {agent_id}")
-                raise HTTPException(
-                    status_code=403, 
-                    detail="Suna's name cannot be modified. This restriction is managed centrally."
-                )
-            
-            if (agent_data.description is not None and
-                agent_data.description != existing_data.get('description') and 
-                restrictions.get('description_editable') == False):
-                logger.error(f"User {user_id} attempted to modify restricted description of Suna agent {agent_id}")
-                raise HTTPException(
-                    status_code=403, 
-                    detail="Suna's description cannot be modified."
-                )
-            
-            if (agent_data.system_prompt is not None and 
-                restrictions.get('system_prompt_editable') == False):
-                logger.error(f"User {user_id} attempted to modify restricted system prompt of Suna agent {agent_id}")
-                raise HTTPException(
-                    status_code=403, 
-                    detail="Suna's system prompt cannot be modified. This is managed centrally to ensure optimal performance."
-                )
-            
-            if (agent_data.agentpress_tools is not None and 
-                restrictions.get('tools_editable') == False):
-                logger.error(f"User {user_id} attempted to modify restricted tools of Suna agent {agent_id}")
-                raise HTTPException(
-                    status_code=403, 
-                    detail="Suna's default tools cannot be modified. These tools are optimized for Suna's capabilities."
-                )
-            
-            if ((agent_data.configured_mcps is not None or agent_data.custom_mcps is not None) and 
-                restrictions.get('mcps_editable') == False):
-                logger.error(f"User {user_id} attempted to modify restricted MCPs of Suna agent {agent_id}")
-                raise HTTPException(
-                    status_code=403, 
-                    detail="Suna's integrations cannot be modified."
-                )
-            
-            logger.debug(f"Suna agent update validation passed for agent {agent_id} by user {user_id}")
+        # Previous Suna agent restrictions have been removed - all agents can now be fully customized
+        logger.debug(f"Agent update validation for agent {agent_id} by user {user_id}")
 
         current_version_data = None
         if existing_data.get('current_version_id'):

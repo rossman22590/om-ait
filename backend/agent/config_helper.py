@@ -3,16 +3,12 @@ from utils.logger import logger
 
 
 def extract_agent_config(agent_data: Dict[str, Any], version_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Extract agent configuration with simplified logic for Suna vs custom agents."""
+    """Extract agent configuration - treat ALL agents as fully editable custom agents."""
     agent_id = agent_data.get('agent_id', 'Unknown')
     metadata = agent_data.get('metadata', {})
-    is_suna_default = metadata.get('is_suna_default', False)
     
-    # Handle Suna agents with special logic
-    if is_suna_default:
-        return _extract_suna_agent_config(agent_data, version_data)
-    
-    # Handle custom agents with versioning
+    # Always treat agents as custom agents (no more restrictions)
+    # This removes all Suna-specific restrictions and allows full editing
     return _extract_custom_agent_config(agent_data, version_data)
 
 
@@ -41,10 +37,10 @@ def _extract_suna_agent_config(agent_data: Dict[str, Any], version_data: Optiona
         'version_name': version_data.get('version_name', 'v1') if version_data else 'v1',
         'profile_image_url': agent_data.get('profile_image_url'),
         'restrictions': {
-            'system_prompt_editable': False,
-            'tools_editable': False,
-            'name_editable': False,
-            'description_editable': False,
+            'system_prompt_editable': True,
+            'tools_editable': True,
+            'name_editable': True,
+            'description_editable': True,
             'mcps_editable': True
         }
     }

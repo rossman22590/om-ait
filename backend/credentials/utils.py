@@ -5,8 +5,15 @@ from .credential_service import MCPRequirement, MCPCredential
 
 
 def validate_config_not_empty(config: Dict[str, Any]) -> Dict[str, Any]:
+    # Allow empty config for initial profile creation (especially for Pipedream OAuth flows)
+    # The actual validation will happen during the authentication/connection process
+    if config is None:
+        raise ValueError('Config cannot be None')
+    
+    # For safety: If config is empty dict, ensure it's at least a valid dict structure
     if not config:
-        raise ValueError('Config cannot be empty')
+        return {}
+    
     return config
 
 

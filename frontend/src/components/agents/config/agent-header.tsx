@@ -68,9 +68,10 @@ export function AgentHeader({
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(displayData.name);
   const inputRef = useRef<HTMLInputElement>(null);
-  const isSunaAgent = agentMetadata?.is_suna_default || false;
-  const restrictions = agentMetadata?.restrictions || {};
-  const isNameEditable = !isViewingOldVersion && (restrictions.name_editable !== false);
+  // All agents are now fully editable - no restrictions
+  const isSunaAgent = false; // Disabled Suna restrictions
+  const restrictions = {}; // No restrictions
+  const isNameEditable = !isViewingOldVersion; // Always editable if not viewing old version
   
   const startEditing = () => {
     setEditName(displayData.name);
