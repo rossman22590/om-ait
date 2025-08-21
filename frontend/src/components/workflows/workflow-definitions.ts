@@ -1,10 +1,9 @@
-import { FileText, Terminal, Rocket, Computer, Eye, Search, Globe, GitBranch, Settings, MonitorPlay, Cog, Key, Table2 } from 'lucide-react';
-
+import { FileText, Terminal, Rocket, Computer, Eye, Search, Globe, GitBranch, Settings, MonitorPlay, Cog, Key, Presentation, FileOutput, Table2 } from 'lucide-react';
 export interface StepDefinition {
     id: string;
     name: string;
     description: string;
-    icon: any; // Lucide icon component
+    icon: any;
     category: string;
     color: string;
     config?: Record<string, any>;
@@ -23,9 +22,11 @@ export const TOOL_ICONS: Record<string, any> = {
     'sb_deploy_tool': Rocket,
     'sb_expose_tool': Computer,
     'sb_vision_tool': Eye,
-    'sb_browser_tool': MonitorPlay,
+    'browser_tool': MonitorPlay,
     'web_search_tool': Search,
     'data_providers_tool': Globe,
+    'sb_presentation_outline_tool': FileOutput,
+    'sb_presentation_tool': Presentation,
     'sb_sheets_tool': Table2,
 };
 
@@ -36,9 +37,11 @@ export const TOOL_COLORS: Record<string, string> = {
     'sb_deploy_tool': 'from-orange-500/20 to-orange-600/10 border-orange-500/20 text-orange-500',
     'sb_expose_tool': 'from-green-500/20 to-green-600/10 border-green-500/20 text-green-500',
     'sb_vision_tool': 'from-blue-500/20 to-blue-600/10 border-blue-500/20 text-blue-500',
-    'sb_browser_tool': 'from-purple-500/20 to-purple-600/10 border-purple-500/20 text-purple-500',
+    'browser_tool': 'from-purple-500/20 to-purple-600/10 border-purple-500/20 text-purple-500',
     'web_search_tool': 'from-blue-500/20 to-blue-600/10 border-blue-500/20 text-blue-500',
     'data_providers_tool': 'from-blue-500/20 to-blue-600/10 border-blue-500/20 text-blue-500',
+    'sb_presentation_outline_tool': 'from-purple-500/20 to-purple-600/10 border-purple-500/20 text-purple-500',
+    'sb_presentation_tool': 'from-violet-500/20 to-violet-600/10 border-violet-500/20 text-violet-500',
     'sb_sheets_tool': 'from-purple-500/20 to-purple-600/10 border-purple-500/20 text-purple-500',
 };
 

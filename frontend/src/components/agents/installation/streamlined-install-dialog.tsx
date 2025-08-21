@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { 
   Dialog, 
   DialogContent, 
@@ -14,10 +15,10 @@ import {
   Shield, 
   Download,
   ArrowRight,
-  CheckCircle
+  CheckCircle,
+  Zap
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getAgentAvatar } from '@/lib/utils/get-agent-style';
 import { ProfileConnector } from './streamlined-profile-connector';
 import { CustomServerStep } from './custom-server-step';
 import type { MarketplaceTemplate, SetupStep } from './types';
@@ -53,40 +54,58 @@ export const StreamlinedInstallDialog: React.FC<StreamlinedInstallDialogProps> =
     if (!item?.mcp_requirements) return [];
     
     const steps: SetupStep[] = [];
+    
     item.mcp_requirements
-      .filter(req => req.custom_type === 'composio')
+      .filter(req => {
+        return req.custom_type === 'composio' || 
+               req.qualified_name?.startsWith('composio.') || 
+               req.qualified_name === 'composio';
+      })
       .forEach(req => {
-        let app_slug = req.qualified_name;
+        const app_slug = req.app_slug || (req.qualified_name?.startsWith('composio.') 
+          ? req.qualified_name.split('.')[1] 
+          : 'composio');
         
-        if (app_slug.startsWith('composio.')) {
-          app_slug = app_slug.substring('composio.'.length);
-        } else if (app_slug.includes('composio_')) {
-          const parts = app_slug.split('composio_');
-          app_slug = parts[parts.length - 1];
-        }
+        const stepId = req.source === 'trigger' && req.trigger_index !== undefined
+          ? `${req.qualified_name}_trigger_${req.trigger_index}`
+          : req.qualified_name;
         
         steps.push({
-          id: req.qualified_name,
-          title: `Connect ${req.display_name}`,
-          description: `Select an existing ${req.display_name} profile or create a new one`,
+          id: stepId,
+          title: req.source === 'trigger' ? req.display_name : `Connect ${req.display_name}`,
+          description: req.source === 'trigger' 
+            ? `Select a ${req.display_name.split(' (')[0]} profile for this trigger`
+            : `Select an existing ${req.display_name} profile or create a new one`,
           type: 'composio_profile',
           service_name: req.display_name,
           qualified_name: req.qualified_name,
-          app_slug: app_slug,
-          app_name: req.display_name
+          app_slug: app_slug === 'composio' ? 'composio' : app_slug,
+          app_name: req.display_name,
+          source: req.source
         });
       });
 
     item.mcp_requirements
-      .filter(req => !req.custom_type)
+      .filter(req => {
+        return !req.custom_type && 
+               !req.qualified_name?.startsWith('composio.') && 
+               req.qualified_name !== 'composio';
+      })
       .forEach(req => {
+        const stepId = req.source === 'trigger' && req.trigger_index !== undefined
+          ? `${req.qualified_name}_trigger_${req.trigger_index}`
+          : req.qualified_name;
+        
         steps.push({
-          id: req.qualified_name,
-          title: `Connect ${req.display_name}`,
-          description: `Select or create a credential profile for ${req.display_name}`,
+          id: stepId,
+          title: req.source === 'trigger' ? req.display_name : `Connect ${req.display_name}`,
+          description: req.source === 'trigger'
+            ? `Select a ${req.display_name} profile for this trigger`
+            : `Select or create a credential profile for ${req.display_name}`,
           type: 'credential_profile',
           service_name: req.display_name,
-          qualified_name: req.qualified_name
+          qualified_name: req.qualified_name,
+          source: req.source
         });
       });
 
@@ -114,7 +133,6 @@ export const StreamlinedInstallDialog: React.FC<StreamlinedInstallDialogProps> =
     return steps;
   }, [item]);
 
-  // Reset state when dialog opens
   useEffect(() => {
     if (open && item) {
       setCurrentStep(0);
@@ -186,7 +204,7 @@ export const StreamlinedInstallDialog: React.FC<StreamlinedInstallDialogProps> =
     
     setupSteps.forEach(step => {
       if (step.type === 'composio_profile') {
-        const profileId = profileMappings[step.qualified_name];
+        const profileId = profileMappings[step.id];
         if (profileId) {
           finalCustomConfigs[step.qualified_name] = {
             profile_id: profileId
@@ -202,12 +220,8 @@ export const StreamlinedInstallDialog: React.FC<StreamlinedInstallDialogProps> =
   const isOnFinalStep = currentStep >= setupSteps.length;
   
   const { avatar, color } = useMemo(() => {
-    if (!item) return { avatar: '🤖', color: '#000' };
-    if (item.avatar && item.avatar_color) {
-      return { avatar: item.avatar, color: item.avatar_color };
-    }
-    return getAgentAvatar(item.id);
-  }, [item]);
+    return { avatar: '🤖', color: '#6366f1' };
+  }, []);
 
   if (!item) return null;
 
@@ -256,21 +270,35 @@ export const StreamlinedInstallDialog: React.FC<StreamlinedInstallDialogProps> =
       <div className="space-y-6">
         <div className="space-y-2">
           <div className="flex items-center gap-2">
-            <div className="h-4 w-4 rounded-full bg-primary text-primary-foreground text-sm font-semibold flex items-center justify-center">
-              {currentStep + 1}
+            <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+              {currentStepData.source === 'trigger' ? (
+                <Zap className="h-4 w-4" />
+              ) : (
+                <Shield className="h-4 w-4" />
+              )}
             </div>
-            <h3 className="font-semibold">{currentStepData.title}</h3>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold">{currentStepData.title}</h3>
+                {currentStepData.source === 'trigger' && (
+                  <Badge variant="secondary" className="text-xs text-white">
+                    <Zap className="h-3 w-3" />
+                    For Triggers
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {currentStepData.description}
+              </p>
+            </div>
           </div>
-          <p className="text-sm text-muted-foreground">
-            {currentStepData.description}
-          </p>
         </div>
 
         <div>
           {(currentStepData.type === 'credential_profile' || currentStepData.type === 'composio_profile') && (
             <ProfileConnector
               step={currentStepData}
-              selectedProfileId={profileMappings[currentStepData.qualified_name]}
+              selectedProfileId={profileMappings[currentStepData.id]}
               onProfileSelect={handleProfileSelect}
               onComplete={() => {
                 if (currentStep < setupSteps.length - 1) {
@@ -316,15 +344,23 @@ export const StreamlinedInstallDialog: React.FC<StreamlinedInstallDialogProps> =
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader className="space-y-4">
           <div className="flex items-center gap-3">
-            <div 
-              className="h-12 w-12 flex-shrink-0 rounded-lg flex items-center justify-center"
-              style={{ 
-                backgroundColor: color,
-                boxShadow: `0 16px 48px -8px ${color}70, 0 8px 24px -4px ${color}50`
-              }}
-            >
-              <span className="text-lg">{avatar}</span>
-            </div>
+            {item.profile_image_url ? (
+              <img 
+                src={item.profile_image_url} 
+                alt={item.name}
+                className="h-12 w-12 flex-shrink-0 rounded-lg object-cover shadow-lg"
+              />
+            ) : (
+              <div 
+                className="h-12 w-12 flex-shrink-0 rounded-lg flex items-center justify-center"
+                style={{ 
+                  backgroundColor: color,
+                  boxShadow: `0 16px 48px -8px ${color}70, 0 8px 24px -4px ${color}50`
+                }}
+              >
+                <span className="text-lg">{avatar}</span>
+              </div>
+            )}
             <div>
               <DialogTitle className="text-left flex items-center gap-2">
                 Install {item.name}

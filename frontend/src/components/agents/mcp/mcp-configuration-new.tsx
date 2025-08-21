@@ -21,7 +21,8 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
   agentId,
   versionData,
   saveMode = 'direct',
-  versionId
+  versionId,
+  isLoading = false
 }) => {
   const [showCustomDialog, setShowCustomDialog] = useState(false);
   const [showRegistryDialog, setShowRegistryDialog] = useState(false);
@@ -73,12 +74,6 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
 
   const handleConfigureTools = (index: number) => {
     const mcp = configuredMCPs[index];
-    console.log('[MCPConfiguration] Configure tools clicked for MCP:', {
-      index,
-      mcp,
-      enabledTools: mcp.enabledTools,
-      customType: mcp.customType
-    });
     setSelectedMCPForTools(mcp);
     if (mcp.customType === 'composio') {
       const profileId = mcp.selectedProfileId || mcp.config?.profile_id;
@@ -117,7 +112,6 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
   };
 
   const handleToolsSelected = (profileId: string, selectedTools: string[], appName: string, appSlug: string) => {
-    console.log('Tools selected:', { profileId, selectedTools, appName, appSlug });
     setShowRegistryDialog(false);
     queryClient.invalidateQueries({ queryKey: ['agents'] });
     queryClient.invalidateQueries({ queryKey: ['agent', selectedAgentId] });

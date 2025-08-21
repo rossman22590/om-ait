@@ -27,8 +27,13 @@ import { ConfigureProfileForAgentToolView } from '../configure-profile-for-agent
 import { GetCredentialProfilesToolView } from '../get-credential-profiles/get-credential-profiles';
 import { GetCurrentAgentConfigToolView } from '../get-current-agent-config/get-current-agent-config';
 import { TaskListToolView } from '../task-list/TaskListToolView';
+import { PresentationOutlineToolView } from '../PresentationOutlineToolView';
+import { PresentationToolView } from '../PresentationToolView';
+import { PresentationToolV2View } from '../PresentationToolV2View';
+import { ListPresentationTemplatesToolView } from '../ListPresentationTemplatesToolView';
 import { SheetsToolView } from '../sheets-tools/sheets-tool-view';
 import { GetProjectStructureView } from '../web-dev/GetProjectStructureView';
+import { ImageEditGenerateToolView } from '../image-edit-generate-tool/ImageEditGenerateToolView';
 
 
 export type ToolViewComponent = React.ComponentType<ToolViewProps>;
@@ -37,20 +42,9 @@ type ToolViewRegistryType = Record<string, ToolViewComponent>;
 
 const defaultRegistry: ToolViewRegistryType = {
   'browser-navigate-to': BrowserToolView,
-  'browser-go-back': BrowserToolView,
-  'browser-wait': BrowserToolView,
-  'browser-click-element': BrowserToolView,
-  'browser-input-text': BrowserToolView,
-  'browser-send-keys': BrowserToolView,
-  'browser-switch-tab': BrowserToolView,
-  'browser-close-tab': BrowserToolView,
-  'browser-scroll-down': BrowserToolView,
-  'browser-scroll-up': BrowserToolView,
-  'browser-scroll-to-text': BrowserToolView,
-  'browser-get-dropdown-options': BrowserToolView,
-  'browser-select-dropdown-option': BrowserToolView,
-  'browser-drag-drop': BrowserToolView,
-  'browser-click-coordinates': BrowserToolView,
+  'browser-act': BrowserToolView,
+  'browser-extract-content': BrowserToolView,
+  'browser-screenshot': BrowserToolView,
 
   'execute-command': CommandToolView,
   'check-command-output': CheckCommandOutputToolView,
@@ -90,12 +84,18 @@ const defaultRegistry: ToolViewRegistryType = {
   'expose-port': ExposePortToolView,
 
   'see-image': SeeImageToolView,
+  'image-edit-or-generate': ImageEditGenerateToolView,
 
   'ask': AskToolView,
   'complete': CompleteToolView,
 
   'deploy': DeployToolView,
 
+  'create-presentation-outline': PresentationOutlineToolView,
+  'create-presentation': PresentationToolV2View,
+  'export-presentation': PresentationToolV2View,
+  'list-presentation-templates': ListPresentationTemplatesToolView,
+  
   'create-sheet': SheetsToolView,
   'update-sheet': SheetsToolView,
   'view-sheet': SheetsToolView,

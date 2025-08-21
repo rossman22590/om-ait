@@ -13,6 +13,7 @@ import {
 } from '@/components/thread/utils';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
 import { AgentLoader } from './loader';
+import { AgentAvatar, AgentName } from './agent-avatar';
 import { parseXmlToolCalls, isNewXmlFormat } from '@/components/thread/tool-views/xml-parser';
 import { ShowToolStream } from './ShowToolStream';
 import { ComposioUrlDetector } from './composio-url-detector';
@@ -281,6 +282,8 @@ export interface ThreadContentProps {
     emptyStateComponent?: React.ReactNode; // Add custom empty state component prop
     threadMetadata?: any; // Add thread metadata prop
     scrollContainerRef?: React.RefObject<HTMLDivElement>; // Add scroll container ref prop
+    agentMetadata?: any; // Add agent metadata prop
+    agentData?: any; // Add full agent data prop
 }
 
 export const ThreadContent: React.FC<ThreadContentProps> = ({
@@ -305,6 +308,8 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
     emptyStateComponent,
     threadMetadata,
     scrollContainerRef,
+    agentMetadata,
+    agentData,
 }) => {
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const latestMessageRef = useRef<HTMLDivElement>(null);
@@ -317,8 +322,8 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
     const { preloadFiles } = useFilePreloader();
 
     const containerClassName = isPreviewMode
-        ? "flex-1 overflow-y-auto scrollbar-thin scrollbar-track-secondary/0 scrollbar-thumb-primary/10 scrollbar-thumb-rounded-full hover:scrollbar-thumb-primary/10 px-6 py-4 pb-0"
-        : "flex-1 overflow-y-auto scrollbar-thin scrollbar-track-secondary/0 scrollbar-thumb-primary/10 scrollbar-thumb-rounded-full hover:scrollbar-thumb-primary/10 px-6 py-4 pb-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60";
+        ? "flex-1 overflow-y-auto scrollbar-thin scrollbar-track-secondary/0 scrollbar-thumb-primary/10 scrollbar-thumb-rounded-full hover:scrollbar-thumb-primary/10 py-4 pb-0"
+        : "flex-1 overflow-y-auto scrollbar-thin scrollbar-track-secondary/0 scrollbar-thumb-primary/10 scrollbar-thumb-rounded-full hover:scrollbar-thumb-primary/10 py-4 pb-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60";
 
     // In playback mode, we use visibleMessages instead of messages
     const displayMessages = readOnly && visibleMessages ? visibleMessages : messages;
@@ -337,9 +342,12 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
             };
         }
 
+        // Check if this is a Suna default agent from metadata
+        const isSunaDefaultAgent = agentMetadata?.is_suna_default || false;
+
         // Then check recent messages for agent info
         const recentAssistantWithAgent = [...displayMessages].reverse().find(msg =>
-            msg.type === 'assistant' && (msg.agents?.avatar || msg.agents?.avatar_color || msg.agents?.name)
+            msg.type === 'assistant' && msg.agents?.name
         );
 
         if (recentAssistantWithAgent?.agents?.name === 'Agent Builder') {
@@ -353,9 +361,32 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
             };
         }
 
+        if (agentData && !isSunaDefaultAgent) {
+            const profileUrl = agentData.profile_image_url;
+            const avatar = profileUrl ? (
+                <img src={profileUrl} alt={agentData.name || agentName} className="h-5 w-5 rounded object-cover" />
+            ) : agentData.avatar ? (
+                <div className="h-5 w-5 flex items-center justify-center rounded text-xs">
+                    <span className="text-lg">{agentData.avatar}</span>
+                </div>
+            ) : (
+                <div className="h-5 w-5 flex items-center justify-center rounded text-xs">
+                    <KortixLogo size={16} />
+                </div>
+            );
+            return {
+                name: agentData.name || agentName,
+                avatar
+            };
+        }
+
         if (recentAssistantWithAgent?.agents?.name) {
-            const isSunaAgent = recentAssistantWithAgent.agents.name === 'Machine';
-            const avatar = recentAssistantWithAgent.agents.avatar ? (
+            const isSunaAgent = recentAssistantWithAgent.agents.name === 'Machine' || isSunaDefaultAgent;
+            // Prefer profile image if available on the agent payload
+            const profileUrl = (recentAssistantWithAgent as any)?.agents?.profile_image_url;
+            const avatar = profileUrl && !isSunaDefaultAgent ? (
+                <img src={profileUrl} alt={recentAssistantWithAgent.agents.name} className="h-5 w-5 rounded object-cover" />
+            ) : !isSunaDefaultAgent ? (
                 <>
                     {isSunaAgent ? (
                         <div className="h-5 w-5 flex items-center justify-center rounded text-xs">
@@ -363,7 +394,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                         </div>
                     ) : (
                         <div className="h-5 w-5 flex items-center justify-center rounded text-xs">
-                            <span className="text-lg">{recentAssistantWithAgent.agents.avatar}</span>
+                            <span className="text-lg">{recentAssistantWithAgent.agents.name.charAt(0).toUpperCase()}</span>
                         </div>
                     )}
                 </>
@@ -377,11 +408,24 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                 avatar
             };
         }
+
+        // Fallback: if this is a Suna default agent, always show KortixLogo
+        if (isSunaDefaultAgent) {
+            return {
+                name: agentName || 'Suna',
+                avatar: (
+                    <div className="h-5 w-5 flex items-center justify-center rounded text-xs">
+                        <KortixLogo size={16} />
+                    </div>
+                )
+            };
+        }
+
         return {
             name: agentName || 'Machine',
             avatar: agentAvatar
         };
-    }, [threadMetadata, displayMessages, agentName, agentAvatar]);
+    }, [threadMetadata, displayMessages, agentName, agentAvatar, agentMetadata, agentData]);
 
     // Simplified scroll handler - flex-column-reverse handles positioning
     const handleScroll = useCallback(() => {
@@ -467,7 +511,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                     className={`${containerClassName} flex flex-col-reverse ${shouldJustifyToTop ? 'justify-end min-h-full' : ''}`}
                     onScroll={handleScroll}
                 >
-                    <div ref={contentRef} className="mx-auto max-w-4xl md:px-8 min-w-0 w-full">
+                    <div ref={contentRef} className="mx-auto min-w-0 w-full max-w-3xl px-4 md:px-6">
                         <div className="space-y-8 min-w-0">
                             {(() => {
 
@@ -684,15 +728,27 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                                             </div>
                                         );
                                     } else if (group.type === 'assistant_group') {
+                                        // Get agent_id from the first assistant message in this group
+                                        const firstAssistantMsg = group.messages.find(m => m.type === 'assistant');
+                                        const groupAgentId = firstAssistantMsg?.agent_id;
+                                        
                                         return (
                                             <div key={group.key} ref={groupIndex === groupedMessages.length - 1 ? latestMessageRef : null}>
                                                 <div className="flex flex-col gap-2">
                                                     <div className="flex items-center">
                                                         <div className="rounded-md flex items-center justify-center relative">
-                                                            {getAgentInfo().avatar}
+                                                            {groupAgentId ? (
+                                                                <AgentAvatar agentId={groupAgentId} size={20} className="h-5 w-5" />
+                                                            ) : (
+                                                                getAgentInfo().avatar
+                                                            )}
                                                         </div>
                                                         <p className='ml-2 text-sm text-muted-foreground'>
-                                                            {getAgentInfo().name}
+                                                            {groupAgentId ? (
+                                                                <AgentName agentId={groupAgentId} fallback={getAgentInfo().name} />
+                                                            ) : (
+                                                                getAgentInfo().name
+                                                            )}
                                                         </p>
                                                     </div>
 

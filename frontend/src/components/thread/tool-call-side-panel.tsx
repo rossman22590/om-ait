@@ -6,13 +6,23 @@ import React from 'react';
 import { Slider } from '@/components/ui/slider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiMessageType } from '@/components/thread/types';
-import { CircleDashed, X, ChevronLeft, ChevronRight, Computer, Radio, Maximize2, Minimize2, Copy, Check } from 'lucide-react';
+import { CircleDashed, X, ChevronLeft, ChevronRight, Computer, Radio, Maximize2, Minimize2, Copy, Check, Globe, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { ToolView } from './tool-views/wrapper';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { HealthCheckedVncIframe } from './HealthCheckedVncIframe';
+import { BrowserHeader } from './tool-views/BrowserToolView';
+
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from '@/components/ui/drawer';
 
 export interface ToolCallInput {
   assistantCall: {
@@ -62,6 +72,175 @@ interface ToolCallSnapshot {
 const FLOATING_LAYOUT_ID = 'tool-panel-float';
 const CONTENT_LAYOUT_ID = 'tool-panel-content';
 
+interface ViewToggleProps {
+  currentView: 'tools' | 'browser';
+  onViewChange: (view: 'tools' | 'browser') => void;
+}
+
+const ViewToggle: React.FC<ViewToggleProps> = ({ currentView, onViewChange }) => {
+  return (
+    <div className="relative flex items-center gap-1 bg-muted rounded-3xl px-1 py-1">
+      {/* Sliding background */}
+      <motion.div
+        className="absolute h-7 w-7 bg-white rounded-xl shadow-sm"
+        initial={false}
+        animate={{
+          x: currentView === 'tools' ? 0 : 32, // 28px button width + 4px gap
+        }}
+        transition={{
+          type: "spring",
+          stiffness: 300,
+          damping: 30
+        }}
+      />
+      
+      {/* Buttons */}
+      <Button
+        size="sm"
+        onClick={() => onViewChange('tools')}
+        className={`relative z-10 h-7 w-7 p-0 rounded-xl bg-transparent hover:bg-transparent shadow-none ${
+          currentView === 'tools'
+            ? 'text-black'
+            : 'text-gray-500 dark:text-gray-400'
+        }`}
+        title="Switch to Tool View"
+      >
+        <Wrench className="h-3.5 w-3.5" />
+      </Button>
+
+      <Button
+        size="sm"
+        onClick={() => onViewChange('browser')}
+        className={`relative z-10 h-7 w-7 p-0 rounded-xl bg-transparent hover:bg-transparent shadow-none ${
+          currentView === 'browser'
+            ? 'text-black'
+            : 'text-gray-500 dark:text-gray-400'
+        }`}
+        title="Switch to Browser View"
+      >
+        <Globe className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+};
+
+// Helper function to generate the computer title
+const getComputerTitle = (agentName?: string): string => {
+  return agentName ? `${agentName}'s Computer` : "Suna's Computer";
+};
+
+// Reusable header component for the tool panel
+interface PanelHeaderProps {
+  agentName?: string;
+  onClose: () => void;
+  isStreaming?: boolean;
+  variant?: 'drawer' | 'desktop' | 'motion';
+  showMinimize?: boolean;
+  hasToolResult?: boolean;
+  layoutId?: string;
+}
+
+const PanelHeader: React.FC<PanelHeaderProps> = ({
+  agentName,
+  onClose,
+  isStreaming = false,
+  variant = 'desktop',
+  showMinimize = false,
+  hasToolResult = false,
+  layoutId,
+}) => {
+  const title = getComputerTitle(agentName);
+  
+  if (variant === 'drawer') {
+    return (
+      <DrawerHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <DrawerTitle className="text-lg font-medium">
+            {title}
+          </DrawerTitle>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="h-8 w-8"
+            title="Minimize to floating preview"
+          >
+            <Minimize2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </DrawerHeader>
+    );
+  }
+
+  if (variant === 'motion') {
+    return (
+      <motion.div
+        layoutId={layoutId}
+        className="p-3"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <motion.div layoutId="tool-icon" className="ml-2">
+              <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
+                {title}
+              </h2>
+            </motion.div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isStreaming && (
+              <div className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 flex items-center gap-1.5">
+                <CircleDashed className="h-3 w-3 animate-spin" />
+                <span>Running</span>
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="h-8 w-8"
+              title="Minimize to floating preview"
+            >
+              <Minimize2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <div className="pt-4 pl-4 pr-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="ml-2">
+            <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
+              {title}
+            </h2>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {isStreaming && (
+            <Badge variant="outline" className="gap-1.5 p-2 rounded-3xl">
+              <CircleDashed className="h-3 w-3 animate-spin" />
+              <span>Running</span>
+            </Badge>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="h-8 w-8"
+            title={showMinimize ? "Minimize to floating preview" : "Close"}
+          >
+            {showMinimize ? <Minimize2 className="h-4 w-4" /> : <X className="h-4 w-4" />}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export function ToolCallSidePanel({
   isOpen,
   onClose,
@@ -82,11 +261,99 @@ export function ToolCallSidePanel({
   const [navigationMode, setNavigationMode] = React.useState<'live' | 'manual'>('live');
   const [toolCallSnapshots, setToolCallSnapshots] = React.useState<ToolCallSnapshot[]>([]);
   const [isInitialized, setIsInitialized] = React.useState(false);
+  const [showViewToggle, setShowViewToggle] = React.useState(false);
 
   // Add copy functionality state
   const [isCopyingContent, setIsCopyingContent] = React.useState(false);
+  // Add view toggle state  
+  const [currentView, setCurrentView] = React.useState<'tools' | 'browser'>('tools');
+  const currentViewRef = React.useRef(currentView);
+  
+  // Update ref when state changes
+  React.useEffect(() => {
+    currentViewRef.current = currentView;
+  }, [currentView]);
 
   const isMobile = useIsMobile();
+
+  const sandbox = project?.sandbox;
+  
+  // Add refresh key state for VNC iframe
+  const [vncRefreshKey, setVncRefreshKey] = React.useState(0);
+  
+  const handleVncRefresh = React.useCallback(() => {
+    setVncRefreshKey(prev => prev + 1);
+  }, []);
+
+  const persistentVncIframe = React.useMemo(() => {
+    if (!sandbox || !sandbox.vnc_preview || !sandbox.pass || !sandbox.id) return null;
+    
+    return (
+      <div>
+        <HealthCheckedVncIframe 
+          key={vncRefreshKey}
+          sandbox={{
+            id: sandbox.id,
+            vnc_preview: sandbox.vnc_preview,
+            pass: sandbox.pass
+          }}
+        />
+      </div>
+    );
+  }, [sandbox, vncRefreshKey]);
+
+  // Helper function to check if a tool is browser-related
+  const isBrowserTool = React.useCallback((toolName: string | undefined): boolean => {
+    if (!toolName) return false;
+    const lowerName = toolName.toLowerCase();
+    return [
+      'browser-navigate-to',
+      'browser-act', 
+      'browser-extract-content',
+      'browser-screenshot'
+    ].includes(lowerName);
+  }, []);
+
+  // Handle view toggle visibility and auto-switching logic
+  React.useEffect(() => {
+    const safeIndex = Math.min(internalIndex, Math.max(0, toolCallSnapshots.length - 1));
+    const currentSnapshot = toolCallSnapshots[safeIndex];
+    const isCurrentSnapshotBrowserTool = isBrowserTool(currentSnapshot?.toolCall.assistantCall?.name);
+    setShowViewToggle(isCurrentSnapshotBrowserTool);
+    
+    // Handle view switching based on agent status
+    if (agentStatus === 'idle') {
+      // Switch to tools view when navigating to a non-browser tool
+      if (!isCurrentSnapshotBrowserTool && currentViewRef.current === 'browser') {
+        setCurrentView('tools');
+      }
+      // Switch to browser view when navigating to the latest browser tool
+      if (isCurrentSnapshotBrowserTool && currentViewRef.current === 'tools' && safeIndex === toolCallSnapshots.length - 1) {
+        setCurrentView('browser');
+      }
+    } else if (agentStatus === 'running') {
+      // Auto-switch for streaming tools when agent is actively running
+      const streamingSnapshot = toolCallSnapshots.find(snapshot => 
+        snapshot.toolCall.toolResult?.content === 'STREAMING'
+      );
+      
+      if (streamingSnapshot) {
+        const streamingToolCall = streamingSnapshot.toolCall;
+        const toolName = streamingToolCall.assistantCall?.name;
+        const isStreamingBrowserTool = isBrowserTool(toolName);
+        
+        // Switch to browser view when a browser tool starts streaming and we're in tools view
+        if (isStreamingBrowserTool && currentViewRef.current === 'tools') {
+          setCurrentView('browser');
+        }
+        
+        // Switch to tools view when a non-browser tool starts streaming and we're in browser view
+        if (!isStreamingBrowserTool && currentViewRef.current === 'browser') {
+          setCurrentView('tools');
+        }
+      }
+    }
+  }, [toolCallSnapshots, internalIndex, isBrowserTool, agentStatus]);
 
   const handleClose = React.useCallback(() => {
     onClose();
@@ -270,9 +537,6 @@ export function ToolCallSidePanel({
     if (newIndex < 0 || newIndex >= totalCalls) return;
 
     const isNavigatingToLatest = newIndex === totalCalls - 1;
-
-    console.log(`[INTERNAL_NAV] ${source}: ${internalIndex} -> ${newIndex}, mode will be: ${isNavigatingToLatest ? 'live' : 'manual'}`);
-
     setInternalIndex(newIndex);
 
     if (isNavigatingToLatest) {
@@ -284,7 +548,7 @@ export function ToolCallSidePanel({
     if (source === 'user_explicit') {
       onNavigate(newIndex);
     }
-  }, [internalIndex, totalCalls, onNavigate]);
+  }, [totalCalls, onNavigate]);
 
   const isLiveMode = navigationMode === 'live';
   const showJumpToLive = navigationMode === 'manual' && agentStatus === 'running';
@@ -452,37 +716,40 @@ export function ToolCallSidePanel({
   }
 
   if (isLoading) {
+    if (isMobile) {
+      return (
+        <Drawer open={isOpen} onOpenChange={(open) => !open && onClose()}>
+          <DrawerContent className="h-[85vh]">
+            <PanelHeader 
+              agentName={agentName}
+              onClose={handleClose}
+              variant="drawer"
+            />
+            
+            <div className="flex-1 p-4 overflow-auto">
+              <div className="space-y-4">
+                <Skeleton className="h-8 w-32" />
+                <Skeleton className="h-20 w-full rounded-md" />
+                <Skeleton className="h-40 w-full rounded-md" />
+                <Skeleton className="h-20 w-full rounded-md" />
+              </div>
+            </div>
+          </DrawerContent>
+        </Drawer>
+      );
+    }
+
     return (
       <div className="fixed inset-0 z-30 pointer-events-none">
         <div className="p-4 h-full flex items-stretch justify-end pointer-events-auto">
-          <div
-            className={cn(
-              'border rounded-2xl flex flex-col shadow-2xl bg-background',
-              isMobile
-                ? 'w-full'
-                : 'w-[90%] sm:w-[450px] md:w-[500px] lg:w-[550px] xl:w-[650px]',
-            )}
-          >
+          <div className="border rounded-2xl flex flex-col shadow-2xl bg-background w-[90%] sm:w-[450px] md:w-[500px] lg:w-[550px] xl:w-[650px]">
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="flex flex-col h-full">
-                <div className="pt-4 pl-4 pr-4">
-                  <div className="flex items-center justify-between">
-                    <div className="ml-2 flex items-center gap-2">
-                      <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
-                        {agentName ? `${agentName}'s Computer` : 'Machine\'s Computer'}
-                      </h2>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={handleClose}
-                      className="h-8 w-8"
-                      title="Minimize to floating preview"
-                    >
-                      <Minimize2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+                <PanelHeader 
+                  agentName={agentName}
+                  onClose={handleClose}
+                  showMinimize={true}
+                />
                 <div className="flex-1 p-4 overflow-auto">
                   <div className="space-y-4">
                     <Skeleton className="h-8 w-32" />
@@ -503,23 +770,12 @@ export function ToolCallSidePanel({
     if (!displayToolCall && toolCallSnapshots.length === 0) {
       return (
         <div className="flex flex-col h-full">
-          <div className="pt-4 pl-4 pr-4">
-            <div className="flex items-center justify-between">
-              <div className="ml-2 flex items-center gap-2">
-                <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
-                  {agentName ? `${agentName}'s Computer` : 'Machine\'s Computer'}
-                </h2>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleClose}
-                className="h-8 w-8"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+          {!isMobile && (
+            <PanelHeader 
+              agentName={agentName}
+              onClose={handleClose}
+            />
+          )}
           <div className="flex flex-col items-center justify-center flex-1 p-8">
             <div className="flex flex-col items-center space-y-4 max-w-sm text-center">
               <div className="relative">
@@ -549,29 +805,23 @@ export function ToolCallSidePanel({
       if (firstStreamingTool && totalCompletedCalls === 0) {
         return (
           <div className="flex flex-col h-full">
-            <div className="pt-4 pl-4 pr-4">
-              <div className="flex items-center justify-between">
-                <div className="ml-2 flex items-center gap-2">
-                  <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
-                    {agentName ? `${agentName}'s Computer` : 'Machine\'s Computer'}
-                  </h2>
-                </div>
-                <div className="flex items-center gap-2">
+            {!isMobile && (
+              <PanelHeader 
+                agentName={agentName}
+                onClose={handleClose}
+                isStreaming={true}
+              />
+            )}
+            {isMobile && (
+              <div className="px-4 pb-2">
+                <div className="flex items-center justify-center">
                   <div className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 flex items-center gap-1.5">
                     <CircleDashed className="h-3 w-3 animate-spin" />
                     <span>Running</span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleClose}
-                    className="h-8 w-8 ml-1"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
                 </div>
               </div>
-            </div>
+            )}
             <div className="flex flex-col items-center justify-center flex-1 p-8">
               <div className="flex flex-col items-center space-y-4 max-w-sm text-center">
                 <div className="relative">
@@ -595,23 +845,12 @@ export function ToolCallSidePanel({
 
       return (
         <div className="flex flex-col h-full">
-          <div className="pt-4 pl-4 pr-4">
-            <div className="flex items-center justify-between">
-              <div className="ml-2 flex items-center gap-2">
-                <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
-                  {agentName ? `${agentName}'s Computer` : 'Machine\'s Computer'}
-                </h2>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleClose}
-                className="h-8 w-8"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+          {!isMobile && (
+            <PanelHeader 
+              agentName={agentName}
+              onClose={handleClose}
+            />
+          )}
           <div className="flex-1 p-4 overflow-auto">
             <div className="space-y-4">
               <Skeleton className="h-8 w-32" />
@@ -637,75 +876,121 @@ export function ToolCallSidePanel({
         currentIndex={displayIndex}
         totalCalls={displayTotalCalls}
         onFileClick={onFileClick}
+        viewToggle={<ViewToggle currentView={currentView} onViewChange={setCurrentView} />}  
       />
     );
 
     return (
       <div className="flex flex-col h-full">
-        <motion.div
-          layoutId={CONTENT_LAYOUT_ID}
-          className="p-3"
-        >
-          <div className="flex items-center justify-between">
-            <motion.div layoutId="tool-icon" className="ml-2 flex items-center gap-2">
-              <h2 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">
-                {agentName ? `${agentName}'s Computer` : 'Machine\'s Computer'}
-              </h2>
-            </motion.div>
+        {!isMobile && (
+          <PanelHeader 
+            agentName={agentName}
+            onClose={handleClose}
+            isStreaming={isStreaming}
+            variant="motion"
+            hasToolResult={!!displayToolCall.toolResult?.content}
+            layoutId={CONTENT_LAYOUT_ID}
+          />
+        )}
 
-            {displayToolCall.toolResult?.content && !isStreaming && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleClose}
-                  className="h-8 w-8 ml-1"
-                  title="Minimize to floating preview"
-                >
-                  <Minimize2 className="h-4 w-4" />
-                </Button>
+        <div className={`flex-1 ${currentView === 'browser' ? 'overflow-hidden' : 'overflow-auto'} scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700 scrollbar-track-transparent`}>
+          {/* Always render VNC iframe to maintain connection when available */}
+          {persistentVncIframe && (
+            <div className={`${currentView === 'browser' ? 'h-full flex flex-col' : 'hidden'}`}>
+              <BrowserHeader isConnected={true} onRefresh={handleVncRefresh} viewToggle={<ViewToggle currentView={currentView} onViewChange={setCurrentView} />} />
+              {/* VNC iframe container - unchanged */}
+              <div className="flex-1 overflow-hidden grid items-center">
+                {persistentVncIframe}
               </div>
-            )}
-
-            {isStreaming && (
-              <div className="flex items-center gap-2">
-                <div className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 flex items-center gap-1.5">
-                  <CircleDashed className="h-3 w-3 animate-spin" />
-                  <span>Running</span>
+            </div>
+          )}
+          
+          {/* Show browser not available message when no VNC and browser tab is selected */}
+          {!persistentVncIframe && currentView === 'browser' && (
+            <div className="h-full flex flex-col">
+              <BrowserHeader isConnected={false} viewToggle={<ViewToggle currentView={currentView} onViewChange={setCurrentView} />} />
+              
+              {/* Message content */}
+              <div className="flex-1 flex flex-col items-center justify-center p-8 bg-zinc-50 dark:bg-zinc-900/50">
+                <div className="flex flex-col items-center space-y-4 max-w-sm text-center">
+                  <div className="w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center border-2 border-zinc-200 dark:border-zinc-700">
+                    <Globe className="h-8 w-8 text-zinc-400 dark:text-zinc-500" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+                      Browser not available
+                    </h3>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                      No active browser session available. The browser will appear here when a sandbox is created and Browser tools are used.
+                    </p>
+                  </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleClose}
-                  className="h-8 w-8 ml-1"
-                  title="Minimize to floating preview"
-                >
-                  <Minimize2 className="h-4 w-4" />
-                </Button>
               </div>
-            )}
-
-            {!displayToolCall.toolResult?.content && !isStreaming && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleClose}
-                className="h-8 w-8"
-                title="Minimize to floating preview"
-              >
-                <Minimize2 className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-        </motion.div>
-
-        <div className="flex-1 overflow-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700 scrollbar-track-transparent">
-          {toolView}
+            </div>
+          )}
+          
+          {/* Render tool view when tools tab is selected */}
+          {currentView === 'tools' && toolView}
         </div>
       </div>
     );
   };
 
+  // Mobile version - use drawer
+  if (isMobile) {
+    return (
+      <Drawer open={isOpen} onOpenChange={(open) => !open && onClose()}>
+        <DrawerContent className="h-[85vh]">
+          <PanelHeader 
+            agentName={agentName}
+            onClose={handleClose}
+            variant="drawer"
+          />
+          
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {renderContent()}
+          </div>
+          
+          {(displayTotalCalls > 1 || (isCurrentToolStreaming && totalCompletedCalls > 0)) && (
+            <div className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 p-3">
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={navigateToPrevious}
+                  disabled={displayIndex <= 0}
+                  className="h-8 px-2.5 text-xs"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5 mr-1" />
+                  <span>Prev</span>
+                </Button>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-zinc-600 dark:text-zinc-400 font-medium tabular-nums min-w-[44px]">
+                    {displayIndex + 1}/{displayTotalCalls}
+                  </span>
+                  {renderStatusButton()}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={navigateToNext}
+                  disabled={displayIndex >= displayTotalCalls - 1}
+                  className="h-8 px-2.5 text-xs"
+                >
+                  <span>Next</span>
+                  <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  // Desktop version - use fixed panel
   return (
     <AnimatePresence mode="wait">
       {isOpen && (
@@ -723,99 +1008,56 @@ export function ToolCallSidePanel({
               damping: 35
             }
           }}
-          className={cn(
-            'fixed top-2 right-2 bottom-4 border rounded-3xl flex flex-col z-30',
-            isMobile
-              ? 'left-2'
-              : 'w-[50vw]',
-          )}
+          className="fixed top-2 right-2 bottom-4 border rounded-3xl flex flex-col z-30 w-[40vw] sm:w-[450px] md:w-[500px] lg:w-[550px] xl:w-[645px]"
           style={{
             overflow: 'hidden',
           }}
         >
-          <div className="flex-1 flex flex-col overflow-hidden bg-card">
+          <div className="flex-1 flex flex-col overflow-scroll bg-card">
             {renderContent()}
           </div>
           {(displayTotalCalls > 1 || (isCurrentToolStreaming && totalCompletedCalls > 0)) && (
-            <div
-              className={cn(
-                'border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900',
-                isMobile ? 'p-2' : 'px-4 py-2.5',
-              )}
-            >
-              {isMobile ? (
-                <div className="flex items-center justify-between">
+            <div className="border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-4 py-2.5">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="ghost"
+                    size="icon"
                     onClick={navigateToPrevious}
                     disabled={displayIndex <= 0}
-                    className="h-8 px-2.5 text-xs"
+                    className="h-7 w-7 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
                   >
-                    <ChevronLeft className="h-3.5 w-3.5 mr-1" />
-                    <span>Prev</span>
+                    <ChevronLeft className="h-4 w-4" />
                   </Button>
-
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-zinc-600 dark:text-zinc-400 font-medium tabular-nums min-w-[44px]">
-                      {displayIndex + 1}/{displayTotalCalls}
-                    </span>
-                    {renderStatusButton()}
-                  </div>
-
+                  <span className="text-xs text-zinc-600 dark:text-zinc-400 font-medium tabular-nums px-1 min-w-[44px] text-center">
+                    {displayIndex + 1}/{displayTotalCalls}
+                  </span>
                   <Button
-                    variant="outline"
-                    size="sm"
+                    variant="ghost"
+                    size="icon"
                     onClick={navigateToNext}
                     disabled={displayIndex >= displayTotalCalls - 1}
-                    className="h-8 px-2.5 text-xs"
+                    className="h-7 w-7 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
                   >
-                    <span>Next</span>
-                    <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                    <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={navigateToPrevious}
-                      disabled={displayIndex <= 0}
-                      className="h-7 w-7 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <span className="text-xs text-zinc-600 dark:text-zinc-400 font-medium tabular-nums px-1 min-w-[44px] text-center">
-                      {displayIndex + 1}/{displayTotalCalls}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={navigateToNext}
-                      disabled={displayIndex >= displayTotalCalls - 1}
-                      className="h-7 w-7 text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
 
-                  <div className="flex-1 relative">
-                    <Slider
-                      min={0}
-                      max={displayTotalCalls - 1}
-                      step={1}
-                      value={[displayIndex]}
-                      onValueChange={handleSliderChange}
-                      className="w-full [&>span:first-child]:h-1.5 [&>span:first-child]:bg-zinc-200 dark:[&>span:first-child]:bg-zinc-800 [&>span:first-child>span]:bg-zinc-500 dark:[&>span:first-child>span]:bg-zinc-400 [&>span:first-child>span]:h-1.5"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    {renderStatusButton()}
-                  </div>
+                <div className="flex-1 relative">
+                  <Slider
+                    min={0}
+                    max={displayTotalCalls - 1}
+                    step={1}
+                    value={[displayIndex]}
+                    onValueChange={handleSliderChange}
+                    className="w-full [&>span:first-child]:h-1.5 [&>span:first-child]:bg-zinc-200 dark:[&>span:first-child]:bg-zinc-800 [&>span:first-child>span]:bg-zinc-500 dark:[&>span:first-child>span]:bg-zinc-400 [&>span:first-child>span]:h-1.5"
+                  />
                 </div>
-              )}
+
+                <div className="flex items-center gap-1.5">
+                  {renderStatusButton()}
+                </div>
+              </div>
             </div>
           )}
         </motion.div>

@@ -53,23 +53,25 @@ export const MarketplaceTab = ({
 
   return (
     <div className="space-y-6 mt-8 flex flex-col min-h-full">
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
         <SearchBar
           placeholder="Search agents..."
           value={marketplaceSearchQuery}
           onChange={setMarketplaceSearchQuery}
         />
-        <Select value={marketplaceFilter} onValueChange={(value: 'all' | 'kortix' | 'community' | 'mine') => setMarketplaceFilter(value)}>
-          <SelectTrigger className="w-[180px] h-12 rounded-xl">
-            <SelectValue placeholder="Filter agents" />
-          </SelectTrigger>
-          <SelectContent className='rounded-xl'>
-            <SelectItem className='rounded-xl' value="all">All Agents</SelectItem>
-            <SelectItem className='rounded-xl' value="mine">Mine</SelectItem>
-            <SelectItem className='rounded-xl' value="kortix">Machine  Verified</SelectItem>
-            <SelectItem className='rounded-xl' value="community">Community</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3">
+          <Select value={marketplaceFilter} onValueChange={(value: 'all' | 'kortix' | 'community' | 'mine') => setMarketplaceFilter(value)}>
+            <SelectTrigger className="w-[180px] h-12 rounded-xl">
+              <SelectValue placeholder="Filter agents" />
+            </SelectTrigger>
+            <SelectContent className='rounded-xl'>
+              <SelectItem className='rounded-xl' value="all">All Agents</SelectItem>
+              <SelectItem className='rounded-xl' value="mine">Mine</SelectItem>
+              <SelectItem className='rounded-xl' value="kortix">Machine  Verified</SelectItem>
+              <SelectItem className='rounded-xl' value="community">Community</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="flex-1">
@@ -104,7 +106,7 @@ export const MarketplaceTab = ({
                 {kortixTeamItems.length > 0 && (
                   <div className="space-y-6">
                     <MarketplaceSectionHeader
-                      title="Verified by Machine"
+                      title="By team Machine"
                       subtitle="Official agents, maintained and supported"
                     />
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -126,6 +128,11 @@ export const MarketplaceTab = ({
                 )}
                 {communityItems.length > 0 && (
                   <div className="space-y-6">
+                    <MarketplaceSectionHeader
+                      title="From the community"
+                      subtitle="Agents created by our community"
+                      iconColor="bg-gradient-to-br from-green-500 to-green-600"
+                    />
                     <MarketplaceSectionHeader
                       title="Community Templates"
                       subtitle="Created and shared by the community"

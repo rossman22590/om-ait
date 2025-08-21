@@ -26,7 +26,7 @@ class AgentBuilderToolRegistry:
     def register_tool(self, name: str, tool_class: Type[AgentBuilderBaseTool]):
         """Register a new agent builder tool."""
         self.tools[name] = tool_class
-        logger.info(f"Registered agent builder tool: {name}")
+        logger.debug(f"Registered agent builder tool: {name}")
     
     def get_tool(self, name: str) -> Type[AgentBuilderBaseTool]:
         """Get a tool class by name."""
@@ -38,7 +38,7 @@ class AgentBuilderToolRegistry:
     
     def register_all_tools(self, thread_manager: ThreadManager, db_connection, agent_id: str):
         """Register all agent builder tools with the thread manager."""
-        logger.info(f"Registering {len(self.tools)} agent builder tools")
+        logger.debug(f"Registering {len(self.tools)} agent builder tools")
         
         for tool_name, tool_class in self.tools.items():
             try:
@@ -48,7 +48,7 @@ class AgentBuilderToolRegistry:
                     db_connection=db_connection,
                     agent_id=agent_id
                 )
-                logger.info(f"Successfully registered agent builder tool: {tool_name}")
+                logger.debug(f"Successfully registered agent builder tool: {tool_name}")
             except Exception as e:
                 logger.error(f"Failed to register agent builder tool {tool_name}: {e}")
     

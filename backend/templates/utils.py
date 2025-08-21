@@ -117,7 +117,7 @@ def is_suna_default_agent(agent_data: Dict[str, Any]) -> bool:
 
 
 def format_template_for_response(template: AgentTemplate) -> Dict[str, Any]:
-    return {
+    response = {
         'template_id': template.template_id,
         'creator_id': template.creator_id,
         'name': template.name,
@@ -128,20 +128,24 @@ def format_template_for_response(template: AgentTemplate) -> Dict[str, Any]:
         'agentpress_tools': template.agentpress_tools,
         'tags': template.tags,
         'is_public': template.is_public,
+        'is_kortix_team': template.is_kortix_team,
         'marketplace_published_at': template.marketplace_published_at.isoformat() if template.marketplace_published_at else None,
         'download_count': template.download_count,
         'created_at': template.created_at.isoformat(),
         'updated_at': template.updated_at.isoformat(),
         'avatar': template.avatar,
         'avatar_color': template.avatar_color,
+        'profile_image_url': template.profile_image_url,
         'metadata': template.metadata,
         'creator_name': template.creator_name
     }
+    return response
 
 
 def format_mcp_requirements_for_response(requirements: List[MCPRequirementValue]) -> List[Dict[str, Any]]:
-    return [
-        {
+    formatted = []
+    for req in requirements:
+        formatted.append({
             'qualified_name': req.qualified_name,
             'display_name': req.display_name,
             'enabled_tools': req.enabled_tools,
@@ -149,22 +153,18 @@ def format_mcp_requirements_for_response(requirements: List[MCPRequirementValue]
             'custom_type': req.custom_type,
             'toolkit_slug': req.toolkit_slug,
             'app_slug': req.app_slug,
-            'is_custom': req.is_custom()
-        }
-        for req in requirements
-    ]
+            'source': req.source,
+            'trigger_index': req.trigger_index
+        })
+    return formatted
 
 
 def filter_templates_by_tags(templates: List[AgentTemplate], tags: List[str]) -> List[AgentTemplate]:
     if not tags:
         return templates
     
-    filtered = []
-    for template in templates:
-        if any(tag in template.tags for tag in tags):
-            filtered.append(template)
-    
-    return filtered
+    tag_set = set(tags)
+    return [t for t in templates if tag_set.intersection(set(t.tags or []))]
 
 
 def search_templates_by_name(templates: List[AgentTemplate], query: str) -> List[AgentTemplate]:

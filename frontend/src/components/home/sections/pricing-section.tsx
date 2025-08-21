@@ -169,8 +169,6 @@ function PricingTier({
           commitment_type: commitmentType,
         });
 
-      console.log('Subscription action response:', response);
-
       switch (response.status) {
         case 'new':
         case 'checkout_created':

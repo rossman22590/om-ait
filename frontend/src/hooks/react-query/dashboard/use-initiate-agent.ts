@@ -5,7 +5,7 @@ import { createMutationHook } from "@/hooks/use-query";
 import { handleApiSuccess, handleApiError } from "@/lib/error-handler";
 import { dashboardKeys } from "./keys";
 import { useQueryClient } from "@tanstack/react-query";
-import { useModal } from "@/hooks/use-modal-store";
+
 import { projectKeys, threadKeys } from "../sidebar/keys";
 
 export const useInitiateAgentMutation = createMutationHook<
@@ -33,7 +33,6 @@ export const useInitiateAgentMutation = createMutationHook<
 
 export const useInitiateAgentWithInvalidation = () => {
   const queryClient = useQueryClient();
-  const { onOpen } = useModal();
   return useInitiateAgentMutation({
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: projectKeys.all });
@@ -41,19 +40,14 @@ export const useInitiateAgentWithInvalidation = () => {
       queryClient.invalidateQueries({ queryKey: dashboardKeys.agents });
     },
     onError: (error) => {
-      console.log('Mutation error:', error);
-      
-      // Let AgentRunLimitError bubble up to be handled by components
-      if (error instanceof AgentRunLimitError) {
+      if (error instanceof AgentRunLimitError || error instanceof BillingError) {
         throw error;
       }
-      
       if (error instanceof Error) {
         const errorMessage = error.message;
         if (errorMessage.toLowerCase().includes("payment required")) {
-          console.log('Opening payment required modal');
-          onOpen("paymentRequiredDialog");
-          return;
+          // Throw BillingError so components can handle it consistently
+          throw new BillingError(402, { message: "Payment required to continue" });
         }
       }
     }

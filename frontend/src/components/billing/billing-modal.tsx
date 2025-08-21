@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { PricingSection } from '@/components/home/sections/pricing-section';
+import { CreditBalanceDisplay, CreditPurchaseModal } from '@/components/billing/credit-purchase';
 import { isLocalMode } from '@/lib/config';
 import {
     getSubscription,
@@ -17,20 +18,22 @@ import {
 } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import { Skeleton } from '@/components/ui/skeleton';
-import { X } from 'lucide-react';
+import { X, Zap } from 'lucide-react';
 
 interface BillingModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     returnUrl?: string;
+    showUsageLimitAlert?: boolean;
 }
 
-export function BillingModal({ open, onOpenChange, returnUrl = typeof window !== 'undefined' ? window?.location?.href || '/' : '/' }: BillingModalProps) {
+export function BillingModal({ open, onOpenChange, returnUrl = typeof window !== 'undefined' ? window?.location?.href || '/' : '/', showUsageLimitAlert = false }: BillingModalProps) {
     const { session, isLoading: authLoading } = useAuth();
     const [subscriptionData, setSubscriptionData] = useState<SubscriptionStatus | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isManaging, setIsManaging] = useState(false);
+    const [showCreditPurchaseModal, setShowCreditPurchaseModal] = useState(false);
 
     useEffect(() => {
         async function fetchSubscription() {
@@ -105,6 +108,25 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                     </div>
                 ) : (
                     <>
+                        {/* Usage Limit Alert */}
+                        {showUsageLimitAlert && (
+                            <div className="mb-6">
+                                <div className="flex items-start p-3 sm:p-4 bg-destructive/5 border border-destructive/50 rounded-lg">
+                                    <div className="flex items-start space-x-3">
+                                        <div className="flex-shrink-0 mt-0.5">
+                                            <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-destructive" />
+                                        </div>
+                                        <div className="text-xs sm:text-sm min-w-0">
+                                            <p className="font-medium text-destructive">Usage Limit Reached</p>
+                                            <p className="text-destructive break-words">
+                                                Your current plan has been exhausted for this billing period.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {subscriptionData && (
                             <div className="mb-6">
                                 <div className="rounded-lg border bg-background p-4">
@@ -118,6 +140,17 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                                         </span>
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Credit Balance Display - Only show for users who can purchase credits */}
+                        {subscriptionData?.can_purchase_credits && (
+                            <div className="mb-6">
+                                <CreditBalanceDisplay 
+                                    balance={subscriptionData.credit_balance || 0}
+                                    canPurchase={subscriptionData.can_purchase_credits}
+                                    onPurchaseClick={() => setShowCreditPurchaseModal(true)}
+                                />
                             </div>
                         )}
 
@@ -135,6 +168,19 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                     </>
                 )}
             </DialogContent>
+            
+            {/* Credit Purchase Modal */}
+            <CreditPurchaseModal
+                open={showCreditPurchaseModal}
+                onOpenChange={setShowCreditPurchaseModal}
+                currentBalance={subscriptionData?.credit_balance || 0}
+                canPurchase={subscriptionData?.can_purchase_credits || false}
+                onPurchaseComplete={() => {
+                    // Refresh subscription data
+                    getSubscription().then(setSubscriptionData);
+                    setShowCreditPurchaseModal(false);
+                }}
+            />
         </Dialog>
     );
 } 

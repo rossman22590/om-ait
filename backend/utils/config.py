@@ -62,7 +62,7 @@ class Configuration:
     
     # Computed subscription tier IDs based on environment
     @property
-    def STRIPE_FREE_TIER_ID(self) -> str:
+    def STRIPE_FREE_TIER_ID(self) -> str:   
         if self.ENV_MODE == EnvMode.STAGING:
             return self.STRIPE_FREE_TIER_ID_STAGING
         return self.STRIPE_FREE_TIER_ID_PROD
@@ -126,8 +126,7 @@ class Configuration:
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
     AWS_REGION_NAME: Optional[str] = None
     
-    # Model configuration
-    MODEL_TO_USE: Optional[str] = "anthropic/claude-sonnet-4-20250514"
+
     
     # Supabase configuration
     SUPABASE_URL: str
@@ -164,8 +163,8 @@ class Configuration:
     
     
     # Sandbox configuration
-    SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3"
-    SANDBOX_SNAPSHOT_NAME = "kortix/suna:0.1.3"
+    SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3.5"
+    SANDBOX_SNAPSHOT_NAME = "kortix/suna:0.1.3.5"
     SANDBOX_ENTRYPOINT = "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
 
     # LangFuse configuration
@@ -184,6 +183,7 @@ class Configuration:
     _MAX_PARALLEL_AGENT_RUNS_ENV: Optional[str] = None
     
     # Agent limits per billing tier
+    # Note: These limits are bypassed in local mode (ENV_MODE=local) where unlimited agents are allowed
     AGENT_LIMITS = {
         'free': 2,
         'tier_2_20': 5,
@@ -250,7 +250,7 @@ class Configuration:
             logger.warning(f"Invalid ENV_MODE: {env_mode_str}, defaulting to LOCAL")
             self.ENV_MODE = EnvMode.LOCAL
             
-        logger.info(f"Environment mode: {self.ENV_MODE.value}")
+        logger.debug(f"Environment mode: {self.ENV_MODE.value}")
         
         # Load configuration from environment variables
         self._load_from_env()

@@ -22,10 +22,10 @@ import { ChatSnack } from './chat-snack';
 import { Brain, Zap, Workflow, Database, ArrowDown } from 'lucide-react';
 import { useComposioToolkitIcon } from '@/hooks/react-query/composio/use-composio';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AgentConfigModal } from '@/components/agents/agent-config-modal';
+
 import { IntegrationsRegistry } from '@/components/agents/integrations-registry';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useSubscriptionWithStreaming } from '@/hooks/react-query/subscriptions/use-subscriptions';
+import { useSubscriptionData } from '@/contexts/SubscriptionContext';
 import { isLocalMode } from '@/lib/config';
 import { BillingModal } from '@/components/billing/billing-modal';
 import { useRouter } from 'next/navigation';
@@ -39,7 +39,11 @@ export interface ChatInputHandles {
 export interface ChatInputProps {
   onSubmit: (
     message: string,
-    options?: { model_name?: string; enable_thinking?: boolean },
+    options?: {
+      model_name?: string;
+      enable_thinking?: boolean;
+      agent_id?: string;
+    },
   ) => void;
   placeholder?: string;
   loading?: boolean;
@@ -131,8 +135,7 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
-    const [configModalOpen, setConfigModalOpen] = useState(false);
-    const [configModalTab, setConfigModalTab] = useState('integrations');
+
     const [registryDialogOpen, setRegistryDialogOpen] = useState(false);
     const [showSnackbar, setShowSnackbar] = useState(defaultShowSnackbar);
     const [userDismissedUsage, setUserDismissedUsage] = useState(false);
@@ -148,14 +151,15 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
       refreshCustomModels,
     } = useModelSelection();
 
-    const { data: subscriptionData } = useSubscriptionWithStreaming(isAgentRunning);
+    const { data: subscriptionData } = useSubscriptionData();
     const deleteFileMutation = useFileDelete();
     const queryClient = useQueryClient();
 
-    // Fetch actual integration icons
-    const { data: googleDriveIcon } = useComposioToolkitIcon('googledrive', { enabled: true });
-    const { data: slackIcon } = useComposioToolkitIcon('slack', { enabled: true });
-    const { data: notionIcon } = useComposioToolkitIcon('notion', { enabled: true });
+    // Fetch integration icons only when logged in and advanced config UI is in use
+    const shouldFetchIcons = isLoggedIn && !!enableAdvancedConfig;
+    const { data: googleDriveIcon } = useComposioToolkitIcon('googledrive', { enabled: shouldFetchIcons });
+    const { data: slackIcon } = useComposioToolkitIcon('slack', { enabled: shouldFetchIcons });
+    const { data: notionIcon } = useComposioToolkitIcon('notion', { enabled: shouldFetchIcons });
 
     // Show usage preview logic:
     // - Always show to free users when showToLowCreditUsers is true
@@ -243,6 +247,7 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
       posthog.capture("task_prompt_submitted", { message });
 
       onSubmit(message, {
+        agent_id: selectedAgentId,
         model_name: baseModelName,
         enable_thinking: thinkingEnabled,
       });
@@ -274,7 +279,7 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
       }
     };
 
-    const removeUploadedFile = (index: number) => {
+    const removeUploadedFile = async (index: number) => {
       const fileToRemove = uploadedFiles[index];
 
       // Clean up local URL if it exists
@@ -304,8 +309,8 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
             console.error('Failed to delete file from server:', error);
           }
         });
-      } else if (isFileUsedInChat) {
-        console.log(`Skipping server deletion for ${fileToRemove.path} - file is referenced in chat history`);
+      } else {
+        // File exists in chat history, don't delete from server
       }
     };
 
@@ -491,13 +496,7 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
               </div>
             </div>
           )}
-          <AgentConfigModal
-            isOpen={configModalOpen}
-            onOpenChange={setConfigModalOpen}
-            selectedAgentId={selectedAgentId}
-            onAgentSelect={onAgentSelect}
-            initialTab={configModalTab}
-          />
+
           <Dialog open={registryDialogOpen} onOpenChange={setRegistryDialogOpen}>
             <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-hidden">
               <DialogHeader className="sr-only">
@@ -508,7 +507,7 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
                 selectedAgentId={selectedAgentId}
                 onAgentChange={onAgentSelect}
                 onToolsSelected={(profileId, selectedTools, appName, appSlug) => {
-                  console.log('Tools selected:', { profileId, selectedTools, appName, appSlug });
+                  // Save to workflow or perform other action here
                 }}
               />
             </DialogContent>

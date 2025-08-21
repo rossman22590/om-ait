@@ -53,7 +53,7 @@ import { projectKeys, threadKeys } from '@/hooks/react-query/sidebar/keys';
 import { useUpdateProject } from '@/hooks/react-query/sidebar/use-project-mutations';
 
 export function NavAgents() {
-  const { isMobile, state } = useSidebar()
+  const { isMobile, state, setOpenMobile } = useSidebar()
   const [loadingThreadId, setLoadingThreadId] = useState<string | null>(null)
   const [showShareModal, setShowShareModal] = useState(false)
   const [selectedItem, setSelectedItem] = useState<{ threadId: string, projectId: string } | null>(null)
@@ -140,7 +140,6 @@ export function NavAgents() {
 
   useEffect(() => {
     const handleNavigationComplete = () => {
-      console.log('NAVIGATION - Navigation event completed');
       document.body.style.pointerEvents = 'auto';
       isNavigatingRef.current = false;
     };
@@ -168,9 +167,15 @@ export function NavAgents() {
       return;
     }
 
-    e.preventDefault()
-    setLoadingThreadId(threadId)
-    router.push(url)
+    // Set loading state for normal clicks (not meta key)
+    if (!e.metaKey) {
+      setLoadingThreadId(threadId);
+    }
+
+    // Close mobile menu on navigation
+    if (isMobile) {
+      setOpenMobile(false);
+    }
   }
 
   // Toggle thread selection for multi-select
@@ -305,13 +310,6 @@ export function NavAgents() {
       const project = projects.find(p => p.id === thread?.projectId);
       const sandboxId = project?.sandbox?.id;
 
-      // Log operation start
-      console.log('DELETION - Starting thread deletion process', {
-        threadId: deletedThread.id,
-        isCurrentThread: isActive,
-        sandboxId
-      });
-
       // Use the centralized deletion system with completion callback
       await performDelete(
         threadId,
@@ -428,7 +426,7 @@ export function NavAgents() {
     <SidebarGroup>
       <div className="flex justify-between items-center">
         <SidebarGroupLabel>Tasks</SidebarGroupLabel>
-        {state !== 'collapsed' ? (
+        {(state !== 'collapsed' || isMobile) ? (
           <div className="flex items-center space-x-1">
             {selectedThreads.size > 0 ? (
               <>
@@ -477,7 +475,9 @@ export function NavAgents() {
       )}
 
       <SidebarMenu className="overflow-y-auto max-h-[calc(100vh-200px)] [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
-        {state !== 'collapsed' && (
+
+
+        {(state !== 'collapsed' || isMobile) && (
           <>
             {isLoading ? (
               // Show skeleton loaders while loading
@@ -510,131 +510,87 @@ export function NavAgents() {
                           }`}
                       >
                         <div className="flex items-center w-full">
-                          {renamingThreadId === thread.threadId ? (
-                            <div className="flex items-center flex-1 min-w-0 gap-1">
-                              <Input
-                                value={newThreadName}
-                                onChange={(e) => setNewThreadName(e.target.value)}
-                                onKeyDown={handleRenameKeyDown}
-                                onBlur={handleSaveRename}
-                                autoFocus
-                                className="h-6 text-sm px-1 bg-transparent border-primary/50 focus-visible:ring-1 focus-visible:ring-primary/50"
-                                onClick={(e) => e.stopPropagation()}
-                              />
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSaveRename();
-                                }}
-                              >
-                                <Check className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleCancelRename();
-                                }}
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </Button>
+                          <Link
+                            href={thread.url}
+                            onClick={(e) =>
+                              handleThreadClick(e, thread.threadId, thread.url)
+                            }
+                            prefetch={false}
+                            className="flex items-center flex-1 min-w-0 touch-manipulation"
+                          >
+                            {isThreadLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin mr-2 flex-shrink-0" />
+                            ) : null}
+                            <span className="truncate">{thread.projectName}</span>
+                          </Link>
+                          
+                          {/* Checkbox - only visible on hover of this specific area */}
+                          <div
+                            className="mr-1 flex-shrink-0 w-4 h-4 flex items-center justify-center group/checkbox"
+                            onClick={(e) => toggleThreadSelection(thread.threadId, e)}
+                          >
+                            <div
+                              className={`h-4 w-4 border rounded cursor-pointer transition-all duration-150 flex items-center justify-center ${isSelected
+                                ? 'opacity-100 bg-primary border-primary hover:bg-primary/90'
+                                : 'opacity-0 group-hover/checkbox:opacity-100 border-muted-foreground/30 bg-background hover:bg-muted/50'
+                                }`}
+                            >
+                              {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
                             </div>
-                          ) : (
-                            <>
-                              <Link
-                                href={thread.url}
-                                onClick={(e) =>
-                                  handleThreadClick(e, thread.threadId, thread.url)
-                                }
-                                prefetch={false}
-                            className="flex items-center flex-1 min-w-0"
-                              >
-                                {isThreadLoading ? (
-                                  <Loader2 className="h-4 w-4 animate-spin mr-2 flex-shrink-0" />
-                                ) : null}
-                                <span className="truncate">{thread.projectName}</span>
-                              </Link>
-                              
-                              {/* Checkbox - only visible on hover of this specific area */}
-                              <div
-                                className="mr-1 flex-shrink-0 w-4 h-4 flex items-center justify-center group/checkbox"
-                                onClick={(e) => toggleThreadSelection(thread.threadId, e)}
-                              >
-                                <div
-                                  className={`h-4 w-4 border rounded cursor-pointer transition-all duration-150 flex items-center justify-center ${isSelected
-                                    ? 'opacity-100 bg-primary border-primary hover:bg-primary/90'
-                                    : 'opacity-0 group-hover/checkbox:opacity-100 border-muted-foreground/30 bg-background hover:bg-muted/50'
-                                    }`}
-                                >
-                                  {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
-                                </div>
-                              </div>
+                          </div>
 
-                              {/* Dropdown Menu - inline with content */}
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button
-                                    className="flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-muted/50 rounded transition-all duration-150 text-muted-foreground hover:text-foreground opacity-0 group-hover/row:opacity-100"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      // Ensure pointer events are enabled when dropdown opens
-                                      document.body.style.pointerEvents = 'auto';
-                                    }}
-                                  >
-                                    <MoreHorizontal className="h-4 w-4" />
-                                    <span className="sr-only">More actions</span>
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent
-                                  className="w-56 rounded-lg"
-                                  side={isMobile ? 'bottom' : 'right'}
-                                  align={isMobile ? 'end' : 'start'}
+                          {/* Dropdown Menu - inline with content */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                className="cursor-pointer flex-shrink-0 w-4 h-4 flex items-center justify-center hover:bg-muted/50 rounded transition-all duration-150 text-muted-foreground hover:text-foreground opacity-0 group-hover/row:opacity-100"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  // Ensure pointer events are enabled when dropdown opens
+                                  document.body.style.pointerEvents = 'auto';
+                                }}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">More actions</span>
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              className="w-56 rounded-lg"
+                              side={isMobile ? 'bottom' : 'right'}
+                              align={isMobile ? 'end' : 'start'}
+                            >
+                              <DropdownMenuItem onClick={() => {
+                                setSelectedItem({ threadId: thread?.threadId, projectId: thread?.projectId })
+                                setShowShareModal(true)
+                              }}>
+                                <Share2 className="text-muted-foreground" />
+                                <span>Share Chat</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <a
+                                  href={thread.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
                                 >
-                                  <DropdownMenuItem
-                                    onClick={() => handleStartRename(thread)}
-                                  >
-                                    <Edit2 className="text-muted-foreground" />
-                                    <span>Rename</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => {
-                                    setSelectedItem({ threadId: thread?.threadId, projectId: thread?.projectId })
-                                    setShowShareModal(true)
-                                  }}>
-                                    <Share2 className="text-muted-foreground" />
-                                    <span>Share Chat</span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem asChild>
-                                    <a
-                                      href={thread.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                    >
-                                      <ArrowUpRight className="text-muted-foreground" />
-                                      <span>Open in New Tab</span>
-                                    </a>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      handleDeleteThread(
-                                        thread.threadId,
-                                        thread.projectName,
-                                      )
-                                    }
-                                  >
-                                    <Trash2 className="text-muted-foreground" />
-                                    <span>Delete</span>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </>
-                          )}
+                                  <ArrowUpRight className="text-muted-foreground" />
+                                  <span>Open in New Tab</span>
+                                </a>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  handleDeleteThread(
+                                    thread.threadId,
+                                    thread.projectName,
+                                  )
+                                }
+                              >
+                                <Trash2 className="text-muted-foreground" />
+                                <span>Delete</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

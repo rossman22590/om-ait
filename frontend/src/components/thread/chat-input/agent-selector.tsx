@@ -21,6 +21,7 @@ import { NewAgentDialog } from '@/components/agents/new-agent-dialog';
 import { useRouter } from 'next/navigation';
 import { cn, truncateString } from '@/lib/utils';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface AgentSelectorProps {
   selectedAgentId?: string;
@@ -58,7 +59,7 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
       ...agent,
       id: agent.agent_id,
       type: 'custom' as const,
-      icon: agent.avatar || <Bot className="h-4 w-4" />
+      icon: <Bot className="h-4 w-4" />
     }))
   ];
 
@@ -92,7 +93,6 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
   const getAgentDisplay = () => {
     const selectedAgent = allAgents.find(agent => agent.id === selectedAgentId);
     if (selectedAgent) {
-      console.log('Selected agent found:', selectedAgent.name, 'with ID:', selectedAgent.id);
       const isSelectedAgentSuna = selectedAgent.metadata?.is_suna_default || false;
       return {
         name: selectedAgent.name,
@@ -101,7 +101,6 @@ export const AgentSelector: React.FC<AgentSelectorProps> = ({
     }
     
     if (selectedAgentId !== undefined) {
-      console.warn('Agent with ID', selectedAgentId, 'not found, falling back to Suna');
     }
     
     const defaultAgent = allAgents[0];

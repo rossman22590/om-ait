@@ -26,24 +26,46 @@ stripe.api_key = config.STRIPE_SECRET_KEY
 # Token price multiplier
 TOKEN_PRICE_MULTIPLIER = 1.5
 
-# Initialize router
+# Minimum credits required to allow a new request when over subscription limit
+CREDIT_MIN_START_DOLLARS = 0.20
+
+# Credit packages with Stripe price IDs
+CREDIT_PACKAGES = {
+    'credits_10': {'amount': 10, 'price': 10, 'stripe_price_id': config.STRIPE_CREDITS_10_PRICE_ID},
+    'credits_25': {'amount': 25, 'price': 25, 'stripe_price_id': config.STRIPE_CREDITS_25_PRICE_ID},
+    # Uncomment these when you create the additional price IDs in Stripe:
+    # 'credits_50': {'amount': 50, 'price': 50, 'stripe_price_id': config.STRIPE_CREDITS_50_PRICE_ID},
+    # 'credits_100': {'amount': 100, 'price': 100, 'stripe_price_id': config.STRIPE_CREDITS_100_PRICE_ID},
+    # 'credits_250': {'amount': 250, 'price': 250, 'stripe_price_id': config.STRIPE_CREDITS_250_PRICE_ID},
+    # 'credits_500': {'amount': 500, 'price': 500, 'stripe_price_id': config.STRIPE_CREDITS_500_PRICE_ID},
+    # 'credits_1000': {'amount': 1000, 'price': 1000, 'stripe_price_id': config.STRIPE_CREDITS_1000_PRICE_ID},
+}
+
 router = APIRouter(prefix="/billing", tags=["billing"])
 
-# Plan validation functions
 def get_plan_info(price_id: str) -> dict:
-    """Get plan information including tier level and type."""
-    # Production plans mapping - using consistent names with SUBSCRIPTION_TIERS
     PLAN_TIERS = {
-        # Free tier
-        config.STRIPE_FREE_TIER_ID: {'tier': 0, 'type': 'free', 'name': 'free'},
-        # Monthly plans only
-        config.STRIPE_TIER_2_20_ID: {'tier': 1, 'type': 'monthly', 'name': 'tier_2_20'},
-        config.STRIPE_TIER_6_50_ID: {'tier': 2, 'type': 'monthly', 'name': 'tier_6_50'},
-        config.STRIPE_TIER_12_100_ID: {'tier': 3, 'type': 'monthly', 'name': 'tier_12_100'},
-        config.STRIPE_TIER_25_200_ID: {'tier': 4, 'type': 'monthly', 'name': 'tier_25_200'},
-        config.STRIPE_TIER_50_400_ID: {'tier': 5, 'type': 'monthly', 'name': 'tier_50_400'},
-        config.STRIPE_TIER_125_800_ID: {'tier': 6, 'type': 'monthly', 'name': 'tier_125_800'},
-        config.STRIPE_TIER_200_1000_ID: {'tier': 7, 'type': 'monthly', 'name': 'tier_200_1000'},
+        config.STRIPE_TIER_2_20_ID: {'tier': 1, 'type': 'monthly', 'name': '2h/$20'},
+        config.STRIPE_TIER_6_50_ID: {'tier': 2, 'type': 'monthly', 'name': '6h/$50'},
+        config.STRIPE_TIER_12_100_ID: {'tier': 3, 'type': 'monthly', 'name': '12h/$100'},
+        config.STRIPE_TIER_25_200_ID: {'tier': 4, 'type': 'monthly', 'name': '25h/$200'},
+        config.STRIPE_TIER_50_400_ID: {'tier': 5, 'type': 'monthly', 'name': '50h/$400'},
+        config.STRIPE_TIER_125_800_ID: {'tier': 6, 'type': 'monthly', 'name': '125h/$800'},
+        config.STRIPE_TIER_200_1000_ID: {'tier': 7, 'type': 'monthly', 'name': '200h/$1000'},
+        
+        # Yearly plans
+        config.STRIPE_TIER_2_20_YEARLY_ID: {'tier': 1, 'type': 'yearly', 'name': '2h/$204/year'},
+        config.STRIPE_TIER_6_50_YEARLY_ID: {'tier': 2, 'type': 'yearly', 'name': '6h/$510/year'},
+        config.STRIPE_TIER_12_100_YEARLY_ID: {'tier': 3, 'type': 'yearly', 'name': '12h/$1020/year'},
+        config.STRIPE_TIER_25_200_YEARLY_ID: {'tier': 4, 'type': 'yearly', 'name': '25h/$2040/year'},
+        config.STRIPE_TIER_50_400_YEARLY_ID: {'tier': 5, 'type': 'yearly', 'name': '50h/$4080/year'},
+        config.STRIPE_TIER_125_800_YEARLY_ID: {'tier': 6, 'type': 'yearly', 'name': '125h/$8160/year'},
+        config.STRIPE_TIER_200_1000_YEARLY_ID: {'tier': 7, 'type': 'yearly', 'name': '200h/$10200/year'},
+        
+        # Yearly commitment plans
+        config.STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID: {'tier': 1, 'type': 'yearly_commitment', 'name': '2h/$17/month'},
+        config.STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID: {'tier': 2, 'type': 'yearly_commitment', 'name': '6h/$42.50/month'},
+        config.STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID: {'tier': 4, 'type': 'yearly_commitment', 'name': '25h/$170/month'},
     }
     
     return PLAN_TIERS.get(price_id, {'tier': 0, 'type': 'unknown', 'name': 'Unknown'})
@@ -140,6 +162,37 @@ class SubscriptionStatus(BaseModel):
     # Subscription data for frontend components
     subscription_id: Optional[str] = None
     subscription: Optional[Dict] = None
+    # Credit information
+    credit_balance: Optional[float] = None
+    can_purchase_credits: bool = False
+
+class PurchaseCreditsRequest(BaseModel):
+    amount_dollars: float  # Amount of credits to purchase in dollars
+    success_url: str
+    cancel_url: str
+
+class CreditBalance(BaseModel):
+    balance_dollars: float
+    total_purchased: float
+    total_used: float
+    last_updated: Optional[datetime] = None
+    can_purchase_credits: bool = False  # True only for highest tier users
+
+class CreditPurchase(BaseModel):
+    id: str
+    amount_dollars: float
+    status: str
+    created_at: datetime
+    completed_at: Optional[datetime] = None
+    stripe_payment_intent_id: Optional[str] = None
+
+class CreditUsage(BaseModel):
+    id: str
+    amount_dollars: float
+    description: Optional[str] = None
+    created_at: datetime
+    thread_id: Optional[str] = None
+    message_id: Optional[str] = None
 
 # Helper functions
 async def get_stripe_customer_id(client: SupabaseClient, user_id: str) -> Optional[str]:
@@ -172,7 +225,7 @@ async def get_stripe_customer_id(client: SupabaseClient, user_id: str) -> Option
                     customer['id'],
                     metadata={**customer.get('metadata', {}), 'user_id': user_id}
                 )
-                logger.info(f"Added missing user_id metadata to Stripe customer {customer['id']}")
+                logger.debug(f"Added missing user_id metadata to Stripe customer {customer['id']}")
             except Exception as e:
                 logger.error(f"Failed to add user_id metadata to Stripe customer {customer['id']}: {str(e)}")
 
@@ -190,7 +243,7 @@ async def get_stripe_customer_id(client: SupabaseClient, user_id: str) -> Option
             'provider': 'stripe',
             'active': has_active
         }).execute()
-        logger.info(f"Updated billing_customers record for customer {customer['id']} and user {user_id}")
+        logger.debug(f"Updated billing_customers record for customer {customer['id']} and user {user_id}")
 
         return customer['id']
 
@@ -275,7 +328,7 @@ async def get_user_subscription(user_id: str) -> Optional[Dict]:
                             sub['id'],
                             cancel_at_period_end=True
                         )
-                        logger.info(f"Cancelled subscription {sub['id']} for user {user_id}")
+                        logger.debug(f"Cancelled subscription {sub['id']} for user {user_id}")
                     except Exception as e:
                         logger.error(f"Error cancelling subscription {sub['id']}: {str(e)}")
             
@@ -326,103 +379,173 @@ async def calculate_monthly_usage(client, user_id: str, page_size: int = 100) ->
     
     end_time = time.time()
     execution_time = end_time - start_time
-    logger.info(f"Calculate monthly usage took {execution_time:.3f} seconds, total cost: {total_cost}")
+    logger.debug(f"Calculate monthly usage took {execution_time:.3f} seconds, total cost: {total_cost}")
     
-    await Cache.set(f"monthly_usage:{user_id}", total_cost, ttl=2 * 60)
+    await Cache.set(f"monthly_usage:{user_id}", total_cost, ttl=5)
     return total_cost
 
-async def get_usage_logs(client, user_id: str, page: int = 0, items_per_page: int = 100) -> Dict:
-    """Get detailed usage logs for a user with pagination."""
-    try:
-        now = datetime.now(timezone.utc)
-        start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
-        cutoff_date = datetime(2025, 6, 30, 9, 0, 0, tzinfo=timezone.utc)
-        start_of_month = max(start_of_month, cutoff_date)
-        
-        offset = page * items_per_page
-        batch_size = min(20, items_per_page)  # Process in smaller batches
-        processed_logs = []
-        
-        # First, get the thread IDs for this user with pagination
-        thread_result = await client.table('threads') \
-            .select('thread_id, created_at, project_id') \
+
+async def get_usage_logs(client, user_id: str, page: int = 0, items_per_page: int = 1000) -> Dict:
+    """Get detailed usage logs for a user with pagination, including credit usage info."""
+    # Get start of current month in UTC
+    now = datetime.now(timezone.utc)
+    start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    
+    # Use fixed cutoff date: June 26, 2025 midnight UTC
+    # Ignore all token counts before this date
+    cutoff_date = datetime(2025, 6, 30, 9, 0, 0, tzinfo=timezone.utc)
+    
+    start_of_month = max(start_of_month, cutoff_date)
+    
+    # First get all threads for this user in batches
+    batch_size = 1000
+    offset = 0
+    all_threads = []
+    
+    while True:
+        threads_batch = await client.table('threads') \
+            .select('thread_id, agent_runs(thread_id)') \
             .eq('account_id', user_id) \
             .order('created_at', desc=True) \
             .range(offset, offset + items_per_page - 1) \
             .execute()
         
-        if not thread_result.data:
-            return {"logs": [], "has_more": False}
-        
-        thread_ids = [t['thread_id'] for t in thread_result.data]
-        
-        # Now get messages for these threads in batches to avoid large queries
-        for i in range(0, len(thread_ids), batch_size):
-            batch_threads = thread_ids[i:i + batch_size]
+        if not threads_batch.data:
+            break
             
-            # Get messages for these threads
-            messages_result = await client.table('messages') \
-                .select('message_id, thread_id, created_at, content, threads!inner(project_id)') \
-                .in_('thread_id', batch_threads) \
-                .eq('type', 'assistant_response_end') \
-                .gte('created_at', start_of_month.isoformat()) \
-                .execute()
+        all_threads.extend(threads_batch.data)
+        
+        # If we got less than batch_size, we've reached the end
+        if len(threads_batch.data) < batch_size:
+            break
             
-            # Process messages in this batch
-            for message in messages_result.data:
-                try:
-                    content = message.get('content', {})
-                    usage = content.get('usage', {})
-                    
-                    prompt_tokens = usage.get('prompt_tokens', 0)
-                    completion_tokens = usage.get('completion_tokens', 0)
-                    model = content.get('model', 'unknown')
-                    
-                    total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
-                    estimated_cost = calculate_token_cost(
-                        prompt_tokens,
-                        completion_tokens,
-                        model
-                    )
-                    
-                    # Get project_id from thread data
-                    project_id = 'unknown'
-                    if message.get('threads') and isinstance(message['threads'], list) and len(message['threads']) > 0:
-                        project_id = message['threads'][0].get('project_id', 'unknown')
-                    
-                    processed_logs.append({
-                        'message_id': message.get('message_id', 'unknown'),
-                        'thread_id': message.get('thread_id', 'unknown'),
-                        'created_at': message.get('created_at'),
-                        'content': {
-                            'usage': {
-                                'prompt_tokens': prompt_tokens,
-                                'completion_tokens': completion_tokens
-                            },
-                            'model': model
-                        },
-                        'total_tokens': total_tokens,
-                        'estimated_cost': estimated_cost,
-                        'project_id': project_id
-                    })
-                except Exception as e:
-                    logger.warning(f"Error processing message {message.get('message_id', 'unknown')}: {str(e)}")
-                    continue
-        
-        # Check if there are more results
-        has_more = len(thread_result.data) == items_per_page
-        
-        # Sort logs by created_at in descending order
-        processed_logs.sort(key=lambda x: x.get('created_at') or '', reverse=True)
-        
-        return {
-            "logs": processed_logs[:items_per_page],  # Ensure we don't return more than requested
-            "has_more": has_more
-        }
-        
-    except Exception as e:
-        logger.error(f"Error in get_usage_logs: {str(e)}", exc_info=True)
-        raise
+        offset += batch_size
+    
+    if not all_threads:
+        return {"logs": [], "has_more": False}
+    
+    thread_ids = [t['thread_id'] for t in all_threads]
+    
+    # Fetch usage messages with pagination, including thread project info
+    start_time = time.time()
+    messages_result = await client.table('messages') \
+        .select(
+            'message_id, thread_id, created_at, content, threads!inner(project_id)'
+        ) \
+        .in_('thread_id', thread_ids) \
+        .eq('type', 'assistant_response_end') \
+        .gte('created_at', start_of_month.isoformat()) \
+        .order('created_at', desc=True) \
+        .range(page * items_per_page, (page + 1) * items_per_page - 1) \
+        .execute()
+    
+    end_time = time.time()
+    execution_time = end_time - start_time
+    logger.debug(f"Database query for usage logs took {execution_time:.3f} seconds")
+
+    if not messages_result.data:
+        return {"logs": [], "has_more": False}
+
+    # Get the user's subscription tier info for credit checking
+    subscription = await get_user_subscription(user_id)
+    price_id = config.STRIPE_FREE_TIER_ID  # Default to free
+    if subscription and subscription.get('items'):
+        items = subscription['items'].get('data', [])
+        if items:
+            price_id = items[0]['price']['id']
+    
+    tier_info = SUBSCRIPTION_TIERS.get(price_id, SUBSCRIPTION_TIERS[config.STRIPE_FREE_TIER_ID])
+    subscription_limit = tier_info['cost']
+    
+    # Get credit usage records for this month to match with messages
+    credit_usage_result = await client.table('credit_usage') \
+        .select('message_id, amount_dollars, created_at') \
+        .eq('user_id', user_id) \
+        .gte('created_at', start_of_month.isoformat()) \
+        .execute()
+    
+    # Create a map of message_id to credit usage
+    credit_usage_map = {}
+    if credit_usage_result.data:
+        for usage in credit_usage_result.data:
+            if usage.get('message_id'):
+                credit_usage_map[usage['message_id']] = {
+                    'amount': float(usage['amount_dollars']),
+                    'created_at': usage['created_at']
+                }
+    
+    # Track cumulative usage to determine when credits started being used
+    cumulative_cost = 0.0
+    
+    # Process messages into usage log entries
+    processed_logs = []
+    
+    for message in messages_result.data:
+        try:
+            # Safely extract usage data with defaults
+            content = message.get('content', {})
+            usage = content.get('usage', {})
+            
+            # Ensure usage has required fields with safe defaults
+            prompt_tokens = usage.get('prompt_tokens', 0)
+            completion_tokens = usage.get('completion_tokens', 0)
+            model = content.get('model', 'unknown')
+            
+            # Safely calculate total tokens
+            total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
+            
+            # Calculate estimated cost using the same logic as calculate_monthly_usage
+            estimated_cost = calculate_token_cost(
+                prompt_tokens,
+                completion_tokens,
+                model
+            )
+            
+            cumulative_cost += estimated_cost
+            
+            # Safely extract project_id from threads relationship
+            project_id = 'unknown'
+            if message.get('threads') and isinstance(message['threads'], list) and len(message['threads']) > 0:
+                project_id = message['threads'][0].get('project_id', 'unknown')
+            
+            # Check if credits were used for this message
+            message_id = message.get('message_id')
+            credit_used = credit_usage_map.get(message_id, {})
+            
+            log_entry = {
+                'message_id': message_id or 'unknown',
+                'thread_id': message.get('thread_id', 'unknown'),
+                'created_at': message.get('created_at', None),
+                'content': {
+                    'usage': {
+                        'prompt_tokens': prompt_tokens,
+                        'completion_tokens': completion_tokens
+                    },
+                    'model': model
+                },
+                'total_tokens': total_tokens,
+                'estimated_cost': estimated_cost,
+                'project_id': project_id,
+                # Add credit usage info
+                'credit_used': credit_used.get('amount', 0) if credit_used else 0,
+                'payment_method': 'credits' if credit_used else 'subscription',
+                'was_over_limit': cumulative_cost > subscription_limit if not credit_used else True
+            }
+            
+            processed_logs.append(log_entry)
+        except Exception as e:
+            logger.warning(f"Error processing usage log entry for message {message.get('message_id', 'unknown')}: {str(e)}")
+            continue
+    
+    # Check if there are more results
+    has_more = len(processed_logs) == items_per_page
+    
+    return {
+        "logs": processed_logs,
+        "has_more": has_more,
+        "subscription_limit": subscription_limit,
+        "cumulative_cost": cumulative_cost
+    }
 
 
 def calculate_token_cost(prompt_tokens: int, completion_tokens: int, model: str) -> float:
@@ -549,7 +672,7 @@ async def get_allowed_models_for_user(client, user_id: str):
 
 async def can_use_model(client, user_id: str, model_name: str):
     if config.ENV_MODE == EnvMode.LOCAL:
-        logger.info("Running in local development mode - billing checks are disabled")
+        logger.debug("Running in local development mode - billing checks are disabled")
         return True, "Local development mode - billing disabled", {
             "price_id": "local_dev",
             "plan_name": "Local Development",
@@ -590,12 +713,13 @@ async def get_subscription_tier(client, user_id: str) -> str:
 async def check_billing_status(client, user_id: str) -> Tuple[bool, str, Optional[Dict]]:
     """
     Check if a user can run agents based on their subscription and usage.
+    Now also checks credit balance if subscription limit is exceeded.
     
     Returns:
         Tuple[bool, str, Optional[Dict]]: (can_run, message, subscription_info)
     """
     if config.ENV_MODE == EnvMode.LOCAL:
-        logger.info("Running in local development mode - billing checks are disabled")
+        logger.debug("Running in local development mode - billing checks are disabled")
         return True, "Local development mode - billing disabled", {
             "price_id": "local_dev",
             "plan_name": "Local Development",
@@ -626,11 +750,28 @@ async def check_billing_status(client, user_id: str) -> Tuple[bool, str, Optiona
         logger.warning(f"Unknown subscription tier: {price_id}, defaulting to free tier")
         tier_info = SUBSCRIPTION_TIERS[config.STRIPE_FREE_TIER_ID]
     
-    # Calculate current month's usage with smaller page size to prevent 414 errors
-    current_usage = await calculate_monthly_usage(client, user_id, page_size=100)
-
+    # Calculate current month's usage
+    current_usage = await calculate_monthly_usage(client, user_id)
+    
+    # Check if subscription limit is exceeded
     if current_usage >= tier_info['cost']:
-        return False, f"Monthly limit of {tier_info['cost']} dollars reached. Please upgrade your plan or wait until next month.", subscription
+        # Check if user has credits available
+        credit_balance = await get_user_credit_balance(client, user_id)
+        
+        if credit_balance.balance_dollars >= CREDIT_MIN_START_DOLLARS:
+            # User has enough credits cushion; they can continue
+            return True, f"Subscription limit reached, using credits. Balance: ${credit_balance.balance_dollars:.2f}", subscription
+        else:
+            # Not enough credits to safely start a new request
+            if credit_balance.can_purchase_credits:
+                return False, (
+                    f"Monthly limit of ${tier_info['cost']} reached. You need at least ${CREDIT_MIN_START_DOLLARS:.2f} in credits to continue. "
+                    f"Current balance: ${credit_balance.balance_dollars:.2f}."
+                ), subscription
+            else:
+                return False, (
+                    f"Monthly limit of ${tier_info['cost']} reached and credits are unavailable. Please upgrade your plan or wait until next month."
+                ), subscription
     
     return True, "OK", subscription
 
@@ -678,7 +819,7 @@ async def check_subscription_commitment(subscription_id: str) -> dict:
                     months_remaining -= 1
                 months_remaining = max(0, months_remaining)
                 
-                logger.info(f"Subscription {subscription_id} has active yearly commitment: {months_remaining} months remaining")
+                logger.debug(f"Subscription {subscription_id} has active yearly commitment: {months_remaining} months remaining")
                 
                 return {
                     'has_commitment': True,
@@ -691,7 +832,7 @@ async def check_subscription_commitment(subscription_id: str) -> dict:
                 }
             else:
                 # Commitment period has ended
-                logger.info(f"Subscription {subscription_id} yearly commitment period has ended")
+                logger.debug(f"Subscription {subscription_id} yearly commitment period has ended")
                 return {
                     'has_commitment': False,
                     'commitment_type': 'yearly_commitment',
@@ -714,6 +855,194 @@ async def check_subscription_commitment(subscription_id: str) -> dict:
             'has_commitment': False,
             'can_cancel': True
         }
+
+async def is_user_on_highest_tier(user_id: str) -> bool:
+    """Check if user is on the highest subscription tier (200h/$1000)."""
+    try:
+        subscription = await get_user_subscription(user_id)
+        if not subscription:
+            logger.debug(f"User {user_id} has no subscription")
+            return False
+        
+        # Extract price ID from subscription
+        price_id = None
+        if subscription.get('items') and subscription['items'].get('data') and len(subscription['items']['data']) > 0:
+            price_id = subscription['items']['data'][0]['price']['id']
+        
+        logger.info(f"User {user_id} subscription price_id: {price_id}")
+        
+        # Check if it's one of the highest tier price IDs (200h/$1000 only)
+        highest_tier_price_ids = [
+            config.STRIPE_TIER_200_1000_ID,  # Monthly highest tier
+            config.STRIPE_TIER_200_1000_YEARLY_ID,  # Yearly highest tier
+            config.STRIPE_TIER_25_200_ID_STAGING,
+            config.STRIPE_TIER_25_200_YEARLY_ID_STAGING,
+            config.STRIPE_TIER_2_20_ID_STAGING,
+            config.STRIPE_TIER_2_20_YEARLY_ID_STAGING,
+        ]
+        
+        is_highest = price_id in highest_tier_price_ids
+        logger.info(f"User {user_id} is_highest_tier: {is_highest}, price_id: {price_id}, checked against: {highest_tier_price_ids}")
+        
+        return is_highest
+        
+    except Exception as e:
+        logger.error(f"Error checking if user is on highest tier: {str(e)}")
+        return False
+
+async def get_user_credit_balance(client: SupabaseClient, user_id: str) -> CreditBalance:
+    """Get the credit balance for a user."""
+    try:
+        # Get balance from database - use execute() instead of single() to handle no records
+        result = await client.table('credit_balance') \
+            .select('*') \
+            .eq('user_id', user_id) \
+            .execute()
+        
+        if result.data and len(result.data) > 0:
+            data = result.data[0]
+            is_highest_tier = await is_user_on_highest_tier(user_id)
+            return CreditBalance(
+                balance_dollars=float(data.get('balance_dollars', 0)),
+                total_purchased=float(data.get('total_purchased', 0)),
+                total_used=float(data.get('total_used', 0)),
+                last_updated=data.get('last_updated'),
+                can_purchase_credits=is_highest_tier
+            )
+        else:
+            # No balance record exists yet - this is normal for users who haven't purchased credits
+            is_highest_tier = await is_user_on_highest_tier(user_id)
+            return CreditBalance(
+                balance_dollars=0.0,
+                total_purchased=0.0,
+                total_used=0.0,
+                can_purchase_credits=is_highest_tier
+            )
+    except Exception as e:
+        logger.error(f"Error getting credit balance for user {user_id}: {str(e)}")
+        return CreditBalance(
+            balance_dollars=0.0,
+            total_purchased=0.0,
+            total_used=0.0,
+            can_purchase_credits=False
+        )
+
+async def add_credits_to_balance(client: SupabaseClient, user_id: str, amount: float, purchase_id: str = None) -> float:
+    """Add credits to a user's balance."""
+    try:
+        # Use the database function to add credits
+        result = await client.rpc('add_credits', {
+            'p_user_id': user_id,
+            'p_amount': amount,
+            'p_purchase_id': purchase_id
+        }).execute()
+        
+        if result.data is not None:
+            return float(result.data)
+        return 0.0
+    except Exception as e:
+        logger.error(f"Error adding credits for user {user_id}: {str(e)}")
+        raise
+
+async def use_credits_from_balance(
+    client: SupabaseClient, 
+    user_id: str, 
+    amount: float, 
+    description: str = None,
+    thread_id: str = None,
+    message_id: str = None
+) -> bool:
+    """Deduct credits from a user's balance."""
+    try:
+        # Use the database function to use credits
+        result = await client.rpc('use_credits', {
+            'p_user_id': user_id,
+            'p_amount': amount,
+            'p_description': description,
+            'p_thread_id': thread_id,
+            'p_message_id': message_id
+        }).execute()
+        
+        if result.data is not None:
+            return bool(result.data)
+        return False
+    except Exception as e:
+        logger.error(f"Error using credits for user {user_id}: {str(e)}")
+        return False
+
+async def handle_usage_with_credits(
+    client: SupabaseClient,
+    user_id: str,
+    token_cost: float,
+    thread_id: str = None,
+    message_id: str = None,
+    model: str = None
+) -> Tuple[bool, str]:
+    """
+    Handle token usage that may require credits if subscription limit is exceeded.
+    This should be called after each agent response to track and deduct from credits if needed.
+    
+    Returns:
+        Tuple[bool, str]: (success, message)
+    """
+    try:
+        # Get current subscription tier and limits
+        subscription = await get_user_subscription(user_id)
+        
+        # Get tier info
+        price_id = config.STRIPE_FREE_TIER_ID  # Default to free
+        if subscription and subscription.get('items'):
+            items = subscription['items'].get('data', [])
+            if items:
+                price_id = items[0]['price']['id']
+        
+        tier_info = SUBSCRIPTION_TIERS.get(price_id, SUBSCRIPTION_TIERS[config.STRIPE_FREE_TIER_ID])
+        
+        # Get current month's usage
+        current_usage = await calculate_monthly_usage(client, user_id)
+        
+        # Check if this usage would exceed the subscription limit
+        new_total_usage = current_usage + token_cost
+        
+        if new_total_usage > tier_info['cost']:
+            # Calculate overage amount
+            overage_amount = token_cost  # The entire cost if already over limit
+            if current_usage < tier_info['cost']:
+                # If this is the transaction that pushes over the limit
+                overage_amount = new_total_usage - tier_info['cost']
+            
+            # Try to use credits for the overage
+            credit_balance = await get_user_credit_balance(client, user_id)
+            
+            if credit_balance.balance_dollars >= overage_amount:
+                # Deduct from credits
+                success = await use_credits_from_balance(
+                    client,
+                    user_id,
+                    overage_amount,
+                    description=f"Token overage for model {model or 'unknown'}",
+                    thread_id=thread_id,
+                    message_id=message_id
+                )
+                
+                if success:
+                    logger.debug(f"Used ${overage_amount:.4f} credits for user {user_id} overage")
+                    return True, f"Used ${overage_amount:.4f} from credits (Balance: ${credit_balance.balance_dollars - overage_amount:.2f})"
+                else:
+                    return False, "Failed to deduct credits"
+            else:
+                # Insufficient credits
+                if credit_balance.can_purchase_credits:
+                    return False, f"Insufficient credits. Balance: ${credit_balance.balance_dollars:.2f}, Required: ${overage_amount:.4f}. Purchase more credits to continue."
+                else:
+                    return False, f"Monthly limit exceeded and no credits available. Upgrade to the highest tier to purchase credits."
+        
+        # Within subscription limits, no credits needed
+        return True, "Within subscription limits"
+        
+    except Exception as e:
+        logger.error(f"Error handling usage with credits: {str(e)}")
+        return False, f"Error processing usage: {str(e)}"
 
 # API endpoints
 @router.post("/create-checkout-session")
@@ -797,14 +1126,14 @@ async def create_checkout_session(
                     (current_interval == 'month' and new_interval == 'year')    # Monthly to yearly upgrade
                 )
                 
-                logger.info(f"Price comparison: current={current_price['unit_amount']}, new={new_price['unit_amount']}, "
+                logger.debug(f"Price comparison: current={current_price['unit_amount']}, new={new_price['unit_amount']}, "
                            f"intervals: {current_interval}->{new_interval}, is_upgrade={is_upgrade}")
 
                 # For commitment subscriptions, handle differently
                 if commitment_info.get('has_commitment'):
                     if is_upgrade:
                         # Allow upgrades for commitment subscriptions immediately
-                        logger.info(f"Upgrading commitment subscription {subscription_id}")
+                        logger.debug(f"Upgrading commitment subscription {subscription_id}")
                         
                         # Regular subscription modification for upgrades
                         updated_subscription = await stripe.Subscription.modify_async(
@@ -825,7 +1154,7 @@ async def create_checkout_session(
                         await client.schema('basejump').from_('billing_customers').update(
                             {'active': True}
                         ).eq('id', customer_id).execute()
-                        logger.info(f"Updated customer {customer_id} active status to TRUE after subscription upgrade")
+                        logger.debug(f"Updated customer {customer_id} active status to TRUE after subscription upgrade")
                         
                         # Force immediate payment for upgrades
                         latest_invoice = None
@@ -834,26 +1163,26 @@ async def create_checkout_session(
                             latest_invoice = await stripe.Invoice.retrieve_async(latest_invoice_id)
                             
                             try:
-                                logger.info(f"Latest invoice {latest_invoice_id} status: {latest_invoice.status}")
+                                logger.debug(f"Latest invoice {latest_invoice_id} status: {latest_invoice.status}")
                                 
                                 # If invoice is in draft status, finalize it to trigger immediate payment
                                 if latest_invoice.status == 'draft':
                                     finalized_invoice = stripe.Invoice.finalize_invoice(latest_invoice_id)
-                                    logger.info(f"Finalized invoice {latest_invoice_id} for immediate payment")
+                                    logger.debug(f"Finalized invoice {latest_invoice_id} for immediate payment")
                                     latest_invoice = finalized_invoice
                                     
                                     # Pay the invoice immediately if it's still open
                                     if finalized_invoice.status == 'open':
                                         paid_invoice = stripe.Invoice.pay(latest_invoice_id)
-                                        logger.info(f"Paid invoice {latest_invoice_id} immediately, status: {paid_invoice.status}")
+                                        logger.debug(f"Paid invoice {latest_invoice_id} immediately, status: {paid_invoice.status}")
                                         latest_invoice = paid_invoice
                                 elif latest_invoice.status == 'open':
                                     # Invoice is already finalized but not paid, pay it
                                     paid_invoice = stripe.Invoice.pay(latest_invoice_id)
-                                    logger.info(f"Paid existing open invoice {latest_invoice_id}, status: {paid_invoice.status}")
+                                    logger.debug(f"Paid existing open invoice {latest_invoice_id}, status: {paid_invoice.status}")
                                     latest_invoice = paid_invoice
                                 else:
-                                    logger.info(f"Invoice {latest_invoice_id} is in status {latest_invoice.status}, no action needed")
+                                    logger.debug(f"Invoice {latest_invoice_id} is in status {latest_invoice.status}, no action needed")
                                     
                             except Exception as invoice_error:
                                 logger.error(f"Error processing invoice for immediate payment: {str(invoice_error)}")
@@ -913,7 +1242,7 @@ async def create_checkout_session(
                     await client.schema('basejump').from_('billing_customers').update(
                         {'active': True}
                     ).eq('id', customer_id).execute()
-                    logger.info(f"Updated customer {customer_id} active status to TRUE after subscription upgrade")
+                    logger.debug(f"Updated customer {customer_id} active status to TRUE after subscription upgrade")
                     
                     latest_invoice = None
                     if updated_subscription.latest_invoice:
@@ -922,26 +1251,26 @@ async def create_checkout_session(
                         
                         # Force immediate payment for upgrades
                         try:
-                            logger.info(f"Latest invoice {latest_invoice_id} status: {latest_invoice.status}")
+                            logger.debug(f"Latest invoice {latest_invoice_id} status: {latest_invoice.status}")
                             
                             # If invoice is in draft status, finalize it to trigger immediate payment
                             if latest_invoice.status == 'draft':
                                 finalized_invoice = stripe.Invoice.finalize_invoice(latest_invoice_id)
-                                logger.info(f"Finalized invoice {latest_invoice_id} for immediate payment")
+                                logger.debug(f"Finalized invoice {latest_invoice_id} for immediate payment")
                                 latest_invoice = finalized_invoice  # Update reference
                                 
                                 # Pay the invoice immediately if it's still open
                                 if finalized_invoice.status == 'open':
                                     paid_invoice = stripe.Invoice.pay(latest_invoice_id)
-                                    logger.info(f"Paid invoice {latest_invoice_id} immediately, status: {paid_invoice.status}")
+                                    logger.debug(f"Paid invoice {latest_invoice_id} immediately, status: {paid_invoice.status}")
                                     latest_invoice = paid_invoice  # Update reference
                             elif latest_invoice.status == 'open':
                                 # Invoice is already finalized but not paid, pay it
                                 paid_invoice = stripe.Invoice.pay(latest_invoice_id)
-                                logger.info(f"Paid existing open invoice {latest_invoice_id}, status: {paid_invoice.status}")
+                                logger.debug(f"Paid existing open invoice {latest_invoice_id}, status: {paid_invoice.status}")
                                 latest_invoice = paid_invoice  # Update reference
                             else:
-                                logger.info(f"Invoice {latest_invoice_id} is in status {latest_invoice.status}, no action needed")
+                                logger.debug(f"Invoice {latest_invoice_id} is in status {latest_invoice.status}, no action needed")
                                 
                         except Exception as invoice_error:
                             logger.error(f"Error processing invoice for immediate payment: {str(invoice_error)}")
@@ -980,7 +1309,7 @@ async def create_checkout_session(
                     await client.schema('basejump').from_('billing_customers').update(
                         {'active': True}
                     ).eq('id', customer_id).execute()
-                    logger.info(f"Updated customer {customer_id} active status to TRUE after subscription downgrade")
+                    logger.debug(f"Updated customer {customer_id} active status to TRUE after subscription downgrade")
                     
                     return {
                         "subscription_id": updated_subscription.id,
@@ -1024,7 +1353,7 @@ async def create_checkout_session(
             await client.schema('basejump').from_('billing_customers').update(
                 {'active': True}
             ).eq('id', customer_id).execute()
-            logger.info(f"Updated customer {customer_id} active status to TRUE after creating checkout session")
+            logger.debug(f"Updated customer {customer_id} active status to TRUE after creating checkout session")
             
             return {"session_id": session['id'], "url": session['url'], "status": "new"}
         
@@ -1065,7 +1394,7 @@ async def create_portal_session(
                 subscription_update = features.get('subscription_update', {})
                 if subscription_update.get('enabled', False):
                     active_config = config
-                    logger.info(f"Found existing portal configuration with subscription_update enabled: {config['id']}")
+                    logger.debug(f"Found existing portal configuration with subscription_update enabled: {config['id']}")
                     break
             
             # If no config with subscription_update found, create one or update the active one
@@ -1073,7 +1402,7 @@ async def create_portal_session(
                 # Find the active configuration or create a new one
                 if configurations.get('data', []):
                     default_config = configurations['data'][0]
-                    logger.info(f"Updating default portal configuration: {default_config['id']} to enable subscription_update")
+                    logger.debug(f"Updating default portal configuration: {default_config['id']} to enable subscription_update")
                     
                     active_config = await stripe.billing_portal.Configuration.update_async(
                         default_config['id'],
@@ -1091,7 +1420,7 @@ async def create_portal_session(
                     )
                 else:
                     # Create a new configuration with subscription_update enabled
-                    logger.info("Creating new portal configuration with subscription_update enabled")
+                    logger.debug("Creating new portal configuration with subscription_update enabled")
                     active_config = await stripe.billing_portal.Configuration.create_async(
                         business_profile={
                             'headline': 'Subscription Management',
@@ -1114,7 +1443,7 @@ async def create_portal_session(
                     )
             
             # Log the active configuration for debugging
-            logger.info(f"Using portal configuration: {active_config['id']} with subscription_update: {active_config.get('features', {}).get('subscription_update', {}).get('enabled', False)}")
+            logger.debug(f"Using portal configuration: {active_config['id']} with subscription_update: {active_config.get('features', {}).get('subscription_update', {}).get('enabled', False)}")
         
         except Exception as config_error:
             logger.warning(f"Error configuring portal: {config_error}. Continuing with default configuration.")
@@ -1142,7 +1471,7 @@ async def create_portal_session(
 async def get_subscription(
     current_user_id: str = Depends(get_current_user_id_from_jwt)
 ):
-    """Get the current subscription status for the current user, including scheduled changes."""
+    """Get the current subscription status for the current user, including scheduled changes and credit balance."""
     try:
         # Get subscription from Stripe (this helper already handles filtering/cleanup)
         subscription = await get_user_subscription(current_user_id)
@@ -1152,6 +1481,9 @@ async def get_subscription(
         db = DBConnection()
         client = await db.client
         current_usage = await calculate_monthly_usage(client, current_user_id)
+        
+        # Get credit balance
+        credit_balance_info = await get_user_credit_balance(client, current_user_id)
 
         if not subscription:
             # Default to free tier status if no active subscription for our product
@@ -1163,7 +1495,9 @@ async def get_subscription(
                 price_id=free_tier_id,
                 minutes_limit=free_tier_info.get('minutes') if free_tier_info else 0,
                 cost_limit=free_tier_info.get('cost') if free_tier_info else 0,
-                current_usage=current_usage
+                current_usage=current_usage,
+                credit_balance=credit_balance_info.balance_dollars,
+                can_purchase_credits=credit_balance_info.can_purchase_credits
             )
         
         # Extract current plan details
@@ -1193,7 +1527,9 @@ async def get_subscription(
                 'cancel_at_period_end': subscription['cancel_at_period_end'],
                 'cancel_at': subscription.get('cancel_at'),
                 'current_period_end': current_item['current_period_end']
-            }
+            },
+            credit_balance=credit_balance_info.balance_dollars,
+            can_purchase_credits=credit_balance_info.can_purchase_credits
         )
 
         # Check for an attached schedule (indicates pending downgrade)
@@ -1236,7 +1572,7 @@ async def get_subscription(
 async def check_status(
     current_user_id: str = Depends(get_current_user_id_from_jwt)
 ):
-    """Check if the user can run agents based on their subscription and usage."""
+    """Check if the user can run agents based on their subscription, usage, and credit balance."""
     try:
         # Get Supabase client
         db = DBConnection()
@@ -1244,10 +1580,15 @@ async def check_status(
         
         can_run, message, subscription = await check_billing_status(client, current_user_id)
         
+        # Get credit balance for additional info
+        credit_balance = await get_user_credit_balance(client, current_user_id)
+        
         return {
             "can_run": can_run,
             "message": message,
-            "subscription": subscription
+            "subscription": subscription,
+            "credit_balance": credit_balance.balance_dollars,
+            "can_purchase_credits": credit_balance.can_purchase_credits
         }
         
     except Exception as e:
@@ -1270,7 +1611,7 @@ async def stripe_webhook(request: Request):
             event = stripe.Webhook.construct_event(
                 payload, sig_header, webhook_secret
             )
-            logger.info(f"Received Stripe webhook: {event.type} - Event ID: {event.id}")
+            logger.debug(f"Received Stripe webhook: {event.type} - Event ID: {event.id}")
         except ValueError as e:
             logger.error(f"Invalid webhook payload: {str(e)}")
             raise HTTPException(status_code=400, detail="Invalid payload")
@@ -1278,7 +1619,77 @@ async def stripe_webhook(request: Request):
             logger.error(f"Invalid webhook signature: {str(e)}")
             raise HTTPException(status_code=400, detail="Invalid signature")
         
-        # Handle the event
+        # Get database connection
+        db = DBConnection()
+        client = await db.client
+        
+        # Handle credit purchase completion
+        if event.type == 'checkout.session.completed':
+            session = event.data.object
+            
+            # Check if this is a credit purchase
+            if session.get('metadata', {}).get('type') == 'credit_purchase':
+                user_id = session['metadata']['user_id']
+                credit_amount = float(session['metadata']['credit_amount'])
+                payment_intent_id = session.get('payment_intent')
+                
+                logger.debug(f"Processing credit purchase for user {user_id}: ${credit_amount}")
+                
+                try:
+                    # Update the purchase record status
+                    purchase_update = await client.table('credit_purchases') \
+                        .update({
+                            'status': 'completed',
+                            'completed_at': datetime.now(timezone.utc).isoformat(),
+                            'stripe_payment_intent_id': payment_intent_id
+                        }) \
+                        .eq('stripe_payment_intent_id', payment_intent_id) \
+                        .execute()
+                    
+                    if not purchase_update.data:
+                        # If no record found by payment_intent_id, try by session_id in metadata (PostgREST JSON operator requires filter)
+                        purchase_update = await client.table('credit_purchases') \
+                            .update({
+                                'status': 'completed',
+                                'completed_at': datetime.now(timezone.utc).isoformat(),
+                                'stripe_payment_intent_id': payment_intent_id
+                            }) \
+                            .filter('metadata->>session_id', 'eq', session['id']) \
+                            .execute()
+                    
+                    # Add credits to user's balance
+                    purchase_id = purchase_update.data[0]['id'] if purchase_update.data else None
+                    new_balance = await add_credits_to_balance(client, user_id, credit_amount, purchase_id)
+                    
+                    logger.info(f"Successfully added ${credit_amount} credits to user {user_id}. New balance: ${new_balance}")
+                    
+                    # Clear cache for this user
+                    await Cache.delete(f"monthly_usage:{user_id}")
+                    await Cache.delete(f"user_subscription:{user_id}")
+                    
+                except Exception as e:
+                    logger.error(f"Error processing credit purchase: {str(e)}")
+                    # Don't fail the webhook, but log the error
+                
+                return {"status": "success", "message": "Credit purchase processed"}
+        
+        # Handle payment failed for credit purchases
+        if event.type == 'payment_intent.payment_failed':
+            payment_intent = event.data.object
+            
+            # Check if this is related to a credit purchase
+            if payment_intent.get('metadata', {}).get('type') == 'credit_purchase':
+                user_id = payment_intent['metadata']['user_id']
+                
+                # Update purchase record to failed
+                await client.table('credit_purchases') \
+                    .update({'status': 'failed'}) \
+                    .eq('stripe_payment_intent_id', payment_intent['id']) \
+                    .execute()
+                
+                logger.debug(f"Credit purchase failed for user {user_id}")
+        
+        # Handle the existing subscription events
         if event.type in ['customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted']:
             # Extract the subscription and customer information
             subscription = event.data.object
@@ -1288,17 +1699,13 @@ async def stripe_webhook(request: Request):
                 logger.warning(f"No customer ID found in subscription event: {event.type}")
                 return {"status": "error", "message": "No customer ID found"}
             
-            # Get database connection
-            db = DBConnection()
-            client = await db.client
-            
             if event.type == 'customer.subscription.created':
                 # Update customer active status for new subscriptions
                 if subscription.get('status') in ['active', 'trialing']:
                     await client.schema('basejump').from_('billing_customers').update(
                         {'active': True}
                     ).eq('id', customer_id).execute()
-                    logger.info(f"Webhook: Updated customer {customer_id} active status to TRUE based on {event.type}")
+                    logger.debug(f"Webhook: Updated customer {customer_id} active status to TRUE based on {event.type}")
                     
             elif event.type == 'customer.subscription.updated':
                 # Check if subscription is active
@@ -1307,7 +1714,7 @@ async def stripe_webhook(request: Request):
                     await client.schema('basejump').from_('billing_customers').update(
                         {'active': True}
                     ).eq('id', customer_id).execute()
-                    logger.info(f"Webhook: Updated customer {customer_id} active status to TRUE based on {event.type}")
+                    logger.debug(f"Webhook: Updated customer {customer_id} active status to TRUE based on {event.type}")
                 else:
                     # Subscription is not active (e.g., past_due, canceled, etc.)
                     # Check if customer has any other active subscriptions before updating status
@@ -1321,7 +1728,7 @@ async def stripe_webhook(request: Request):
                         await client.schema('basejump').from_('billing_customers').update(
                             {'active': False}
                         ).eq('id', customer_id).execute()
-                        logger.info(f"Webhook: Updated customer {customer_id} active status to FALSE based on {event.type}")
+                        logger.debug(f"Webhook: Updated customer {customer_id} active status to FALSE based on {event.type}")
             
             elif event.type == 'customer.subscription.deleted':
                 # Check if customer has any other active subscriptions
@@ -1336,9 +1743,9 @@ async def stripe_webhook(request: Request):
                     await client.schema('basejump').from_('billing_customers').update(
                         {'active': False}
                     ).eq('id', customer_id).execute()
-                    logger.info(f"Webhook: Updated customer {customer_id} active status to FALSE after subscription deletion")
+                    logger.debug(f"Webhook: Updated customer {customer_id} active status to FALSE after subscription deletion")
             
-            logger.info(f"Processed {event.type} event for customer {customer_id}")
+            logger.debug(f"Processed {event.type} event for customer {customer_id}")
         
         return {"status": "success"}
         
@@ -1358,7 +1765,7 @@ async def get_available_models(
         
         # Check if we're in local development mode
         if config.ENV_MODE == EnvMode.LOCAL:
-            logger.info("Running in local development mode - billing checks are disabled")
+            logger.debug("Running in local development mode - billing checks are disabled")
             
             # In local mode, return all models from MODEL_NAME_ALIASES
             model_info = []
@@ -1559,7 +1966,7 @@ async def get_usage_logs_endpoint(
         
         # Check if we're in local development mode
         if config.ENV_MODE == EnvMode.LOCAL:
-            logger.info("Running in local development mode - usage logs are not available")
+            logger.debug("Running in local development mode - usage logs are not available")
             return {
                 "logs": [], 
                 "has_more": False,
@@ -1678,7 +2085,7 @@ async def cancel_subscription(
                 }
             )
             
-            logger.info(f"Subscription {subscription_id} scheduled for cancellation at commitment end: {commitment_end_date}")
+            logger.debug(f"Subscription {subscription_id} scheduled for cancellation at commitment end: {commitment_end_date}")
             
             return {
                 "success": True,
@@ -1704,7 +2111,7 @@ async def cancel_subscription(
             }
         )
 
-        logger.info(f"Subscription {subscription_id} marked for cancellation at period end")
+        logger.debug(f"Subscription {subscription_id} marked for cancellation at period end")
         
         # Calculate when the subscription will actually end
         current_period_end = updated_subscription.current_period_end or subscription.get('current_period_end')
@@ -1788,7 +2195,7 @@ async def reactivate_subscription(
             **modify_params
         )
         
-        logger.info(f"Subscription {subscription_id} reactivated by user")
+        logger.debug(f"Subscription {subscription_id} reactivated by user")
         
         # Get the current period end safely
         current_period_end = updated_subscription.current_period_end or subscription.get('current_period_end')
@@ -1824,3 +2231,219 @@ async def reactivate_subscription(
     except Exception as e:
         logger.error(f"Error reactivating subscription: {str(e)}")
         raise HTTPException(status_code=500, detail="Error processing reactivation request")
+
+@router.post("/purchase-credits")
+async def purchase_credits(
+    request: PurchaseCreditsRequest,
+    current_user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    """
+    Create a Stripe checkout session for purchasing credits.
+    Only available for users on the highest subscription tier.
+    """
+    try:
+        # Check if user is on the highest tier
+        is_highest_tier = await is_user_on_highest_tier(current_user_id)
+        if not is_highest_tier:
+            raise HTTPException(
+                status_code=403,
+                detail="Credit purchases are only available for users on the highest subscription tier ($1000/month)."
+            )
+        
+        # Validate amount
+        if request.amount_dollars < 10:
+            raise HTTPException(status_code=400, detail="Minimum credit purchase is $10")
+        
+        if request.amount_dollars > 5000:
+            raise HTTPException(status_code=400, detail="Maximum credit purchase is $5000")
+        
+        # Get Supabase client
+        db = DBConnection()
+        client = await db.client
+        
+        # Get user email
+        user_result = await client.auth.admin.get_user_by_id(current_user_id)
+        if not user_result:
+            raise HTTPException(status_code=404, detail="User not found")
+        email = user_result.user.email
+        
+        # Get or create Stripe customer
+        customer_id = await get_stripe_customer_id(client, current_user_id)
+        if not customer_id:
+            customer_id = await create_stripe_customer(client, current_user_id, email)
+        
+        # Check if we have a pre-configured price ID for this amount
+        matching_package = None
+        for package_key, package_info in CREDIT_PACKAGES.items():
+            if package_info['amount'] == request.amount_dollars and package_info.get('stripe_price_id'):
+                matching_package = package_info
+                break
+        
+        # Create a checkout session
+        if matching_package and matching_package['stripe_price_id']:
+            # Use pre-configured price ID
+            session = await stripe.checkout.Session.create_async(
+                customer=customer_id,
+                payment_method_types=['card'],
+                line_items=[{
+                    'price': matching_package['stripe_price_id'],
+                    'quantity': 1,
+                }],
+                mode='payment',
+                success_url=request.success_url,
+                cancel_url=request.cancel_url,
+                metadata={
+                    'user_id': current_user_id,
+                    'credit_amount': str(request.amount_dollars),
+                    'type': 'credit_purchase'
+                }
+            )
+        else:
+            session = await stripe.checkout.Session.create_async(
+                customer=customer_id,
+                payment_method_types=['card'],
+                line_items=[{
+                    'price_data': {
+                        'currency': 'usd',
+                        'product_data': {
+                            'name': f'Suna AI Credits',
+                            'description': f'${request.amount_dollars:.2f} in usage credits for Suna AI',
+                        },
+                        'unit_amount': int(request.amount_dollars * 100),
+                    },
+                    'quantity': 1,
+                }],
+                mode='payment',
+                success_url=request.success_url,
+                cancel_url=request.cancel_url,
+                metadata={
+                    'user_id': current_user_id,
+                    'credit_amount': str(request.amount_dollars),
+                    'type': 'credit_purchase'
+                }
+            )
+        
+        # Record the pending purchase in database
+        purchase_record = await client.table('credit_purchases').insert({
+            'user_id': current_user_id,
+            'amount_dollars': request.amount_dollars,
+            'status': 'pending',
+            'stripe_payment_intent_id': session.payment_intent,
+            'description': f'Credit purchase via Stripe Checkout',
+            'metadata': {
+                'session_id': session.id,
+                'checkout_url': session.url,
+                'success_url': request.success_url,
+                'cancel_url': request.cancel_url
+            }
+        }).execute()
+        
+        return {
+            "session_id": session.id,
+            "url": session.url,
+            "purchase_id": purchase_record.data[0]['id'] if purchase_record.data else None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating credit purchase session: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creating checkout session: {str(e)}")
+
+@router.get("/credit-balance")
+async def get_credit_balance_endpoint(
+    current_user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    """Get the current credit balance for the user."""
+    try:
+        db = DBConnection()
+        client = await db.client
+        
+        balance = await get_user_credit_balance(client, current_user_id)
+        
+        return balance
+        
+    except Exception as e:
+        logger.error(f"Error getting credit balance: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error retrieving credit balance")
+
+@router.get("/credit-history")
+async def get_credit_history(
+    page: int = 0,
+    items_per_page: int = 50,
+    current_user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    """Get credit purchase and usage history for the user."""
+    try:
+        db = DBConnection()
+        client = await db.client
+        
+        # Get purchases
+        purchases_result = await client.table('credit_purchases') \
+            .select('*') \
+            .eq('user_id', current_user_id) \
+            .eq('status', 'completed') \
+            .order('created_at', desc=True) \
+            .range(page * items_per_page, (page + 1) * items_per_page - 1) \
+            .execute()
+        
+        # Get usage
+        usage_result = await client.table('credit_usage') \
+            .select('*') \
+            .eq('user_id', current_user_id) \
+            .order('created_at', desc=True) \
+            .range(page * items_per_page, (page + 1) * items_per_page - 1) \
+            .execute()
+        
+        # Format response
+        purchases = [
+            CreditPurchase(
+                id=p['id'],
+                amount_dollars=float(p['amount_dollars']),
+                status=p['status'],
+                created_at=p['created_at'],
+                completed_at=p.get('completed_at'),
+                stripe_payment_intent_id=p.get('stripe_payment_intent_id')
+            )
+            for p in (purchases_result.data or [])
+        ]
+        
+        usage = [
+            CreditUsage(
+                id=u['id'],
+                amount_dollars=float(u['amount_dollars']),
+                description=u.get('description'),
+                created_at=u['created_at'],
+                thread_id=u.get('thread_id'),
+                message_id=u.get('message_id')
+            )
+            for u in (usage_result.data or [])
+        ]
+        
+        return {
+            "purchases": purchases,
+            "usage": usage,
+            "page": page,
+            "has_more": len(purchases) == items_per_page or len(usage) == items_per_page
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting credit history: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error retrieving credit history")
+
+@router.get("/can-purchase-credits")
+async def can_purchase_credits(
+    current_user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    """Check if the current user can purchase credits (must be on highest tier)."""
+    try:
+        is_highest_tier = await is_user_on_highest_tier(current_user_id)
+        
+        return {
+            "can_purchase": is_highest_tier,
+            "reason": "Credit purchases are available" if is_highest_tier else "Must be on the highest subscription tier ($1000/month) to purchase credits"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error checking credit purchase eligibility: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error checking eligibility")

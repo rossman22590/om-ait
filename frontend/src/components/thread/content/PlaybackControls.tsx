@@ -42,6 +42,7 @@ export interface PlaybackController {
   togglePlayback: () => void;
   resetPlayback: () => void;
   skipToEnd: () => void;
+  forward: (step?: number) => void;
 }
 
 export const PlaybackControls = ({
@@ -361,12 +362,6 @@ export const PlaybackControls = ({
       }
 
       const currentMessage = messages[currentMessageIndex];
-      console.log(
-        `Playing message ${currentMessageIndex}:`,
-        currentMessage.type,
-        currentMessage.message_id,
-      );
-
       // If it's an assistant message, stream it
       if (currentMessage.type === 'assistant') {
         try {
@@ -615,6 +610,7 @@ export const PlaybackControls = ({
     togglePlayback,
     resetPlayback,
     skipToEnd,
+    forward,
   };
 };
 

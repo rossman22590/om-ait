@@ -41,12 +41,10 @@ export const useAgentVersions = (agentId: string) => {
 
 export const useAgentVersion = (agentId: string, versionId: string | null | undefined) => {
   const { setCurrentVersion } = useVersionStore();
-  console.log('versionId', versionId);
   return useQuery({
     queryKey: versionKeys.detail(agentId, versionId!),
     queryFn: async () => {
       const version = await versionService.getVersion(agentId, versionId!);
-      console.log('version', version);
       setCurrentVersion(version);
       return version;
     },
@@ -65,7 +63,7 @@ export const useCreateAgentVersion = () => {
     onSuccess: (newVersion, { agentId }) => {
       // Invalidate both version list and agent data to update current version
       queryClient.invalidateQueries({ queryKey: versionKeys.list(agentId) });
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['agents', 'detail', agentId] });
       // Also invalidate the specific version query
       if (newVersion?.versionId?.value) {
         queryClient.invalidateQueries({ queryKey: versionKeys.detail(agentId, newVersion.versionId.value) });
@@ -86,7 +84,7 @@ export const useActivateAgentVersion = () => {
     },
     onSuccess: (_, { agentId }) => {
       queryClient.invalidateQueries({ queryKey: versionKeys.list(agentId) });
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['agents', 'detail', agentId] });
       queryClient.invalidateQueries({ queryKey: ['agents'] });
       toast.success('Version activated successfully');
     },
@@ -114,7 +112,7 @@ export const useUpdateVersionDetails = () => {
     onSuccess: (updatedVersion, { agentId, versionId }) => {
       queryClient.invalidateQueries({ queryKey: versionKeys.list(agentId) });
       queryClient.invalidateQueries({ queryKey: versionKeys.detail(agentId, versionId) });
-      queryClient.invalidateQueries({ queryKey: ['agent', agentId] });
+      queryClient.invalidateQueries({ queryKey: ['agents', 'detail', agentId] });
       queryClient.invalidateQueries({ queryKey: ['agents'] });
       toast.success('Version details updated successfully');
     },

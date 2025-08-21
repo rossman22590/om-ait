@@ -19,6 +19,7 @@ import {
   Sun,
   Moon,
   KeyRound,
+  Plug,
   BookOpen,
 } from 'lucide-react';
 import { useAccounts } from '@/hooks/use-accounts';
@@ -314,9 +315,17 @@ export function NavUserWithTeams({
                 </DropdownMenuItem>
                 {!flagLoading && customAgentsEnabled && (
                   <DropdownMenuItem asChild>
+                    <Link href="/settings/credentials">
+                      <Plug className="h-4 w-4" />
+                      Integrations
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+                {!flagLoading && customAgentsEnabled && (
+                  <DropdownMenuItem asChild>
                     <Link href="/settings/api-keys">
                       <Key className="h-4 w-4" />
-                      API Keys
+                      API Keys (Admin)
                     </Link>
                   </DropdownMenuItem>
                 )}

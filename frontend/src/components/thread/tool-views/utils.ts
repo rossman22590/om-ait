@@ -43,11 +43,10 @@ export function getToolTitle(toolName: string): string {
     'web-search': 'Web Search',
     'crawl-webpage': 'Web Crawl',
     'scrape-webpage': 'Web Scrape',
-    'browser-navigate': 'Browser Navigate',
-    'browser-click': 'Browser Click',
-    'browser-extract': 'Browser Extract',
-    'browser-fill': 'Browser Fill',
-    'browser-wait': 'Browser Wait',
+    'browser-navigate-to': 'Browser Navigate',
+    'browser-act': 'Browser Action',
+    'browser-extract-content': 'Browser Extract',
+    'browser-screenshot': 'Browser Screenshot',
     'see-image': 'View Image',
     'ask': 'Ask',
     'complete': 'Task Complete',
@@ -62,6 +61,10 @@ export function getToolTitle(toolName: string): string {
     'get-credential-profiles': 'Get Credential Profiles',
     'get-current-agent-config': 'Get Current Agent Config',
     'deploy': 'Deploy',
+    'create-presentation': 'Create Presentation',
+    'export-presentation': 'Export Presentation',
+    'create-presentation-outline': 'Create Presentation Outline',
+    'list-presentation-templates': 'List Presentation Templates',
 
     'generic-tool': 'Tool',
     'default': 'Tool',
@@ -73,8 +76,8 @@ export function getToolTitle(toolName: string): string {
   }
 
   // For browser tools not explicitly mapped
-  if (normalizedName.startsWith('browser-')) {
-    const operation = normalizedName.replace('browser-', '').replace(/-/g, ' ');
+  if (normalizedName.startsWith('browser_')) {
+    const operation = normalizedName.replace('browser_', '').replace(/_/g, ' ');
     return 'Browser ' + operation.charAt(0).toUpperCase() + operation.slice(1);
   }
 
@@ -132,8 +135,6 @@ export function extractCommand(content: string | object | undefined | null): str
       }
     }
   }
-  
-  console.log('extractCommand: Could not extract command from content:', contentStr.substring(0, 200));
   return null;
 }
 
@@ -593,7 +594,7 @@ export function extractBrowserUrl(content: string | object | undefined | null): 
 export function extractBrowserOperation(toolName: string | undefined): string {
   if (!toolName) return 'Browser Operation';
 
-  const operation = toolName.replace('browser-', '').replace(/-/g, ' ');
+  const operation = toolName.replace('browser_', '').replace(/_/g, ' ');
   return operation.charAt(0).toUpperCase() + operation.slice(1);
 }
 
@@ -1228,12 +1229,10 @@ export function getToolComponent(toolName: string): string {
   // Map specific tool names to their respective components
   switch (normalizedName) {
     // Browser tools
-    case 'browser-navigate':
-    case 'browser-click':
-    case 'browser-extract':
-    case 'browser-fill':
-    case 'browser-wait':
-    case 'browser-screenshot':
+    case 'browser_navigate_to':
+    case 'browser_act':
+    case 'browser_extract_content':
+    case 'browser_screenshot':
       return 'BrowserToolView';
 
     // Command execution
@@ -1286,6 +1285,10 @@ export function getToolComponent(toolName: string): string {
     //Deploy
     case 'deploy':
       return 'DeployToolView';
+
+    // Port operations
+    case 'expose-port':
+      return 'ExposePortToolView';
 
     // Default
     default:

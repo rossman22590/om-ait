@@ -51,12 +51,14 @@ const normalizeToolName = (toolName: string, toolType: 'agentpress' | 'mcp') => 
     const agentPressMapping: Record<string, string> = {
       'sb_shell_tool': 'Shell Tool',
       'sb_files_tool': 'Files Tool',
-      'sb_browser_tool': 'Browser Tool',
+      'browser_tool': 'Browser Tool',
       'sb_deploy_tool': 'Deploy Tool',
       'sb_expose_tool': 'Expose Tool',
       'web_search_tool': 'Web Search',
       'sb_vision_tool': 'Vision Tool',
       'data_providers_tool': 'Data Providers',
+      'sb_presentation_outline_tool': 'Presentation Outline',
+      'sb_presentation_tool': 'Presentation Tool',
       'sb_sheets_tool': 'Sheets Tool',
     };
     return agentPressMapping[toolName] || toolName;
@@ -76,16 +78,6 @@ export function ConditionalWorkflowBuilder({
 }: ConditionalWorkflowBuilderProps) {
   const [toolSearchOpen, setToolSearchOpen] = useState<{ [key: string]: boolean }>({});
   const [activeConditionTab, setActiveConditionTab] = useState<{ [key: string]: string }>({});
-
-  steps.forEach((step, index) => {
-    console.log(`Step ${index}:`, {
-      name: step.name,
-      type: step.type,
-      hasChildren: !!step.children,
-      childrenCount: step.children?.length || 0,
-      children: step.children?.map(child => ({ name: child.name, type: child.type }))
-    });
-  });
 
   const generateId = () => Math.random().toString(36).substr(2, 9);
 

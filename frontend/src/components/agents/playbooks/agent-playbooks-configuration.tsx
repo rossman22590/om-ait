@@ -58,11 +58,7 @@ export function AgentPlaybooksConfiguration({ agentId, agentName }: AgentPlayboo
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h3 className="text-sm font-medium text-foreground">Playbooks</h3>
-                    <p className="text-xs text-muted-foreground">Simple variable-driven runs</p>
-                </div>
+            <div className="flex items-center justify-start">
                 <Button onClick={() => { setEditing(null); setIsCreateOpen(true); }} size="sm" className="gap-2">
                     <Plus className="h-4 w-4" />
                     New Playbook
@@ -87,16 +83,16 @@ export function AgentPlaybooksConfiguration({ agentId, agentName }: AgentPlayboo
                 <div className="space-y-2">
                     {playbooks.map((pb) => (
                         <div key={pb.id} className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors group">
-                            <div className="flex items-center space-x-4 flex-1">
+                            <div className="flex items-center space-x-4 flex-1 min-w-0">
                                 <div className="p-2 rounded-lg bg-muted border">
                                     <BookOpen className="h-4 w-4" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center space-x-2 mb-1">
-                                        <h4 className="text-sm font-medium truncate">{pb.name}</h4>
+                                    <div className="flex items-center space-x-2 mb-1 min-w-0">
+                                        <h4 className="text-sm font-medium truncate w-full">{pb.name}</h4>
                                     </div>
                                     {pb.description && (
-                                        <p className="text-xs text-muted-foreground truncate">{pb.description}</p>
+                                        <p className="text-xs text-muted-foreground truncate w-full">{pb.description}</p>
                                     )}
                                 </div>
                             </div>

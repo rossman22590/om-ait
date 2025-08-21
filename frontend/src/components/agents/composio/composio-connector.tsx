@@ -5,11 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Check, AlertCircle, Plus, ExternalLink, ChevronRight, Search, Save, Loader2, User, Settings, Info, Eye, Zap } from 'lucide-react';
+import { ArrowLeft, Check, AlertCircle, Plus, ExternalLink, ChevronRight, Search, Save, Loader2, User, Settings, Info, Eye, Zap, Wrench } from 'lucide-react';
 import { useCreateComposioProfile, useComposioTools } from '@/hooks/react-query/composio/use-composio';
 import { useComposioProfiles } from '@/hooks/react-query/composio/use-composio-profiles';
 import { useComposioToolkitDetails } from '@/hooks/react-query/composio/use-composio';
-import { ComposioToolsManager } from './composio-tools-manager';
 import type { ComposioToolkit, ComposioProfile, AuthConfigField } from '@/hooks/react-query/composio/utils';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
@@ -22,6 +21,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { backendApi } from '@/lib/api-client';
 import { composioApi } from '@/hooks/react-query/composio/utils';
+import { ComposioToolsSelector } from './composio-tools-selector';
 
 interface ComposioConnectorProps {
   app: ComposioToolkit;
@@ -157,82 +157,7 @@ const StepIndicator = ({ currentStep, mode }: { currentStep: Step; mode: 'full' 
   );
 };
 
-interface Tool {
-  name: string;
-  description: string;
-  parameters: any;
-}
 
-const ToolCard = ({ tool, isSelected, onToggle, searchTerm }: {
-  tool: Tool;
-  isSelected: boolean;
-  onToggle: () => void;
-  searchTerm: string;
-}) => {
-  const highlightText = (text: string, term: string) => {
-    if (!term) return text;
-    const regex = new RegExp(`(${term})`, 'gi');
-    const parts = text.split(regex);
-    return parts.map((part, i) => 
-      regex.test(part) ? <mark key={i} className="bg-yellow-200 dark:bg-yellow-900/50">{part}</mark> : part
-    );
-  };
-
-  return (
-    <Card className={cn(
-      "group cursor-pointer transition-all p-0 shadow-none bg-card hover:bg-muted/50",
-      isSelected && "bg-primary/10 ring-1 ring-primary/20"
-    )}>
-      <CardContent className="p-4" onClick={onToggle}>
-        <div className="flex items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2">
-              <h3 className="font-medium text-sm truncate">
-                {highlightText(tool.name, searchTerm)}
-              </h3>
-            </div>
-            
-            <p className="text-xs text-muted-foreground line-clamp-2">
-              {highlightText(tool.description || 'No description available', searchTerm)}
-            </p>
-            
-            {tool.parameters?.properties && (
-              <div className="mt-2">
-                <Badge variant="outline" className="text-xs">
-                  {Object.keys(tool.parameters.properties).length} parameters
-                </Badge>
-              </div>
-            )}
-          </div>
-          
-          <div className="flex-shrink-0 ml-2">
-            <Switch
-              checked={isSelected}
-              onCheckedChange={() => {}}
-              onClick={(e) => e.stopPropagation()}
-              className="data-[state=checked]:bg-primary"
-            />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
-
-const ToolSkeleton = () => (
-  <Card className="shadow-none p-0 bg-muted/30">
-    <CardContent className="p-4">
-      <div className="flex items-start gap-3">
-        <div className="flex-1 space-y-2">
-          <Skeleton className="h-4 w-32" />
-          <Skeleton className="h-3 w-full" />
-          <Skeleton className="h-3 w-2/3" />
-        </div>
-        <Skeleton className="h-6 w-11 rounded-full flex-shrink-0" />
-      </div>
-    </CardContent>
-  </Card>
-);
 
 const InitiationFieldInput = ({ field, value, onChange, error }: {
   field: AuthConfigField;
@@ -329,29 +254,52 @@ const ToolPreviewCard = ({ tool, searchTerm }: {
     );
   };
   
+  // Generate icon based on tool name/category
+  const getToolIcon = (toolName: string) => {
+    const name = toolName.toLowerCase();
+    if (name.includes('create') || name.includes('add') || name.includes('new')) {
+      return <Plus className="w-3 h-3" />;
+    }
+    if (name.includes('get') || name.includes('fetch') || name.includes('read') || name.includes('view')) {
+      return <Eye className="w-3 h-3" />;
+    }
+    if (name.includes('update') || name.includes('edit') || name.includes('modify')) {
+      return <Settings className="w-3 h-3" />;
+    }
+    if (name.includes('send') || name.includes('post') || name.includes('message')) {
+      return <ChevronRight className="w-3 h-3" />;
+    }
+    if (name.includes('search') || name.includes('find')) {
+      return <Search className="w-3 h-3" />;
+    }
+    if (name.includes('user') || name.includes('profile') || name.includes('account')) {
+      return <User className="w-3 h-3" />;
+    }
+    // Default to first letter of tool name
+    return (
+      <div className="w-3 h-3 rounded-sm bg-primary/10 flex items-center justify-center text-[8px] font-semibold text-primary">
+        {toolName.charAt(0).toUpperCase()}
+      </div>
+    );
+  };
+  
   return (
-    <div className="border rounded-lg p-3 space-y-2 hover:bg-muted/30 transition-colors group">
-      <div className="space-y-1">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <h3 className="font-medium text-sm leading-tight">{highlightText(tool.name, searchTerm)}</h3>
-          </div>
+    <div 
+      className="border rounded-md p-2 hover:bg-muted/30 transition-colors group cursor-pointer"
+      title={tool.description} // Show full description on hover
+    >
+      <div className="flex items-center gap-2">
+        <div className="flex-shrink-0">
+          {getToolIcon(tool.name)}
         </div>
-        <p className="text-xs text-muted-foreground line-clamp-2">
-          {highlightText(tool.description, searchTerm)}
-        </p>
-        {tool.tags && tool.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {tool.tags.slice(0, 3).map((tag, index) => (
-              <span key={index} className="text-[10px] bg-muted/50 text-muted-foreground px-1.5 py-0.5 rounded-md">
-                {tag}
-              </span>
-            ))}
-            {tool.tags.length > 3 && (
-              <span className="text-[10px] text-muted-foreground">+{tool.tags.length - 3}</span>
-            )}
-          </div>
-        )}
+        <div className="min-w-0 flex-1">
+          <div className="text-xs font-medium truncate">{highlightText(tool.name, searchTerm)}</div>
+          {tool.tags && tool.tags.length > 0 && (
+            <div className="text-[10px] text-muted-foreground truncate">
+              {tool.tags[0]}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -373,16 +321,12 @@ export const ComposioConnector: React.FC<ComposioConnectorProps> = ({
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
   const [showToolsManager, setShowToolsManager] = useState(false);
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
+  const [selectedConnectionType, setSelectedConnectionType] = useState<'existing' | 'new' | null>(null);
   
   const [initiationFields, setInitiationFields] = useState<Record<string, string>>({});
   const [initiationFieldsErrors, setInitiationFieldsErrors] = useState<Record<string, string>>({});
 
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
-  const [availableTools, setAvailableTools] = useState<Tool[]>([]);
-  const [isLoadingTools, setIsLoadingTools] = useState(false);
-  const [isSavingTools, setIsSavingTools] = useState(false);
-  const [toolsError, setToolsError] = useState<string | null>(null);
 
   const { mutate: createProfile, isPending: isCreating } = useCreateComposioProfile();
   const { data: profiles, isLoading: isLoadingProfiles } = useComposioProfiles();
@@ -396,14 +340,7 @@ export const ComposioConnector: React.FC<ComposioConnectorProps> = ({
     p.toolkit_slug === app.slug && p.is_connected
   ) || [];
 
-  const filteredTools = useMemo(() => {
-    if (!searchTerm) return availableTools;
-    const term = searchTerm.toLowerCase();
-    return availableTools.filter(tool =>
-      tool.name.toLowerCase().includes(term) ||
-      (tool.description && tool.description.toLowerCase().includes(term))
-    );
-  }, [availableTools, searchTerm]);
+
 
   const [toolsPreviewSearchTerm, setToolsPreviewSearchTerm] = useState('');
   const { data: toolsResponse, isLoading: isLoadingToolsPreview } = useComposioTools(
@@ -426,68 +363,14 @@ export const ComposioConnector: React.FC<ComposioConnectorProps> = ({
       setRedirectUrl(null);
       setShowToolsManager(false);
       setDirection('forward');
-      setSearchTerm('');
+      setSelectedConnectionType(null);
       setSelectedTools([]);
-      setAvailableTools([]);
-      setToolsError(null);
       setInitiationFields({});
       setInitiationFieldsErrors({});
     }
   }, [open, app.name, mode]);
 
-  useEffect(() => {
-    if (currentStep === Step.ToolsSelection && selectedProfile) {
-      loadTools();
-      loadCurrentAgentTools();
-    }
-  }, [currentStep, selectedProfile?.profile_id]);
 
-  const loadTools = async () => {
-    if (!selectedProfile) return;
-    
-    setIsLoadingTools(true);
-    setToolsError(null);
-    
-    try {
-      const response = await composioApi.discoverTools(selectedProfile.profile_id);
-      if (response.success && response.tools) {
-        setAvailableTools(response.tools);
-      } else {
-        setToolsError('Failed to load available tools');
-      }
-    } catch (err: any) {
-      setToolsError(err.message || 'Failed to load tools');
-    } finally {
-      setIsLoadingTools(false);
-    }
-  };
-
-  const loadCurrentAgentTools = async () => {
-    if (!agentId || !selectedProfile) return;
-    
-    try {
-      const response = await backendApi.get(`/agents/${agentId}`);
-      if (response.success && response.data) {
-        const agent = response.data;
-        const composioMcps = agent.custom_mcps?.filter((mcp: any) => 
-          mcp.type === 'composio' && mcp.config?.profile_id === selectedProfile?.profile_id
-        ) || [];
-        
-        const enabledTools = composioMcps.flatMap((mcp: any) => mcp.enabledTools || []);
-        setSelectedTools(enabledTools);
-      }
-    } catch (err) {
-      console.error('Failed to load current agent tools:', err);
-    }
-  };
-
-  const handleToolToggle = (toolName: string) => {
-    setSelectedTools(prev => 
-      prev.includes(toolName)
-        ? prev.filter(t => t !== toolName)
-        : [...prev, toolName]
-    );
-  };
 
   const handleInitiationFieldChange = (fieldName: string, value: string) => {
     setInitiationFields(prev => ({ ...prev, [fieldName]: value }));
@@ -528,45 +411,20 @@ export const ComposioConnector: React.FC<ComposioConnectorProps> = ({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSelectAll = () => {
-    const allToolNames = filteredTools.map(tool => tool.name);
-    setSelectedTools(prev => {
-      const hasAll = allToolNames.every(name => prev.includes(name));
-      if (hasAll) {
-        return prev.filter(name => !allToolNames.includes(name));
-      } else {
-        const newSelected = [...prev];
-        allToolNames.forEach(name => {
-          if (!newSelected.includes(name)) {
-            newSelected.push(name);
-          }
-        });
-        return newSelected;
-      }
-    });
-  };
-
   const handleSaveTools = async () => {
     if (!selectedProfile || !agentId) return;
-    try {
-      setIsSavingTools(true);
-      const mcpConfigResponse = await composioApi.getMcpConfigForProfile(selectedProfile.profile_id);
-      const response = await backendApi.put(`/agents/${agentId}/custom-mcp-tools`, {
-        custom_mcps: [{
-          ...mcpConfigResponse.mcp_config,
-          enabledTools: selectedTools
-        }]
-      });
-      if (response.data.success) {
-        toast.success(`Added ${selectedTools.length} ${selectedProfile.toolkit_name} tools to your agent!`);
-        onComplete(selectedProfile.profile_id, app.name, app.slug);
-        onOpenChange(false);
-      }
-    } catch (error: any) {
-      console.error('Failed to save tools:', error);
-      toast.error(error.response?.data?.detail || 'Failed to save tools');
-    } finally {
-      setIsSavingTools(false);
+    
+    const mcpConfigResponse = await composioApi.getMcpConfigForProfile(selectedProfile.profile_id);
+    const response = await backendApi.put(`/agents/${agentId}/custom-mcp-tools`, {
+      custom_mcps: [{
+        ...mcpConfigResponse.mcp_config,
+        enabledTools: selectedTools
+      }]
+    });
+    if (response.data.success) {
+      toast.success(`Added ${selectedTools.length} ${selectedProfile.toolkit_name} tools to your agent!`);
+      onComplete(selectedProfile.profile_id, app.name, app.slug);
+      onOpenChange(false);
     }
   };
 
@@ -722,21 +580,38 @@ export const ComposioConnector: React.FC<ComposioConnectorProps> = ({
     })
   };
 
-  const selectedCount = selectedTools.length;
-  const filteredSelectedCount = filteredTools.filter(tool => selectedTools.includes(tool.name)).length;
-  const allFilteredSelected = filteredTools.length > 0 && filteredSelectedCount === filteredTools.length;
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn(
         "overflow-hidden gap-0",
         currentStep === Step.ToolsSelection ? "max-w-2xl h-[85vh] p-0 flex flex-col" : 
-        currentStep === Step.ProfileSelect ? "max-w-4xl h-[80vh] p-0 flex flex-col" : "max-w-lg p-0"
+        currentStep === Step.ProfileSelect ? "max-w-2xl p-0" : "max-w-lg p-0"
       )}>
         <StepIndicator currentStep={currentStep} mode={mode} />
         
         {currentStep !== Step.ToolsSelection ? (
           <>
+            <DialogHeader className="px-8 pb-2">
+              <div className="flex items-center gap-4">
+                {app.logo ? (
+                  <img src={app.logo} alt={app.name} className="w-14 h-14 rounded-xl object-contain bg-muted p-2 border" />
+                ) : (
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-primary font-semibold shadow-sm">
+                    {app.name.charAt(0)}
+                  </div>
+                )}
+                <div className="flex-1">
+                  <DialogTitle className="text-xl font-semibold">
+                    {stepConfigs.find(config => config.id === currentStep)?.title}
+                  </DialogTitle>
+                  <p className="text-sm text-muted-foreground">
+                    {stepConfigs.find(config => config.id === currentStep)?.description}
+                  </p>
+                </div>
+              </div>
+            </DialogHeader>
             <div className={cn(
               "flex-1 overflow-hidden",
               currentStep === Step.ProfileSelect ? "px-0 pb-0 pt-0" : "px-8 pb-8 pt-6"
@@ -751,198 +626,219 @@ export const ComposioConnector: React.FC<ComposioConnectorProps> = ({
                     animate="center"
                     exit="exit"
                     transition={{ duration: 0.3, ease: "easeInOut" }}
-                    className="flex flex-col h-full"
+                    className="flex flex-col h-full max-h-[500px]"
                   >
-                    <div className="px-8 py-6 border-b border-border/50">
-                      <div className="flex items-center gap-4">
-                        {app.logo ? (
-                          <img src={app.logo} alt={app.name} className="w-12 h-12 rounded-xl object-contain bg-muted p-2 border" />
-                        ) : (
-                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-primary font-semibold shadow-sm">
-                            {app.name.charAt(0)}
-                          </div>
-                        )}
-                        <div className="flex-1">
-                          <h3 className="text-xl font-semibold">Connect to {app.name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            Choose how you'd like to authenticate and preview available tools
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/30 px-3 py-1.5 rounded-lg ml-auto">
-                          <Eye className="w-4 h-4" />
-                          <span>{availableToolsPreview.length} tools available</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-1 min-h-0">
-                      {/* Left Panel - Connection Options */}
-                      <div className="w-1/2 flex flex-col space-y-6 p-8 pr-6 border-r border-border/50">
-                      <div>
-                        <h3 className="text-lg font-semibold">Connect to {app.name}</h3>
-                        <p className="text-xs text-muted-foreground">
-                          Choose how you'd like to authenticate with {app.name}
-                        </p>
-                      </div>
-                      {existingProfiles.length > 0 && (
-                        <div className="space-y-3">
-                          <Label className="text-sm font-medium">Use Existing Profile</Label>
-                        <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
-                          <SelectTrigger className="w-full h-12 text-base">
-                            <SelectValue placeholder="Select a profile...">
-                              {selectedProfileId && (() => {
-                                const selectedProfile = existingProfiles.find(p => p.profile_id === selectedProfileId);
-                                return selectedProfile ? (
-                                  <div className="flex items-center gap-3">
-                                    {app.logo ? (
-                                      <img src={app.logo} alt={app.name} className="h-5 w-5 rounded-lg object-contain flex-shrink-0" />
-                                    ) : (
-                                      <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-primary text-xs font-semibold flex-shrink-0">
-                                        {app.name.charAt(0)}
-                                      </div>
-                                    )}
-                                    <span className="text-sm font-medium truncate">{selectedProfile.profile_name}</span>
-                                  </div>
-                                ) : null;
-                              })()}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent className="w-full">
-                            {existingProfiles.map((profile) => (
-                              <SelectItem key={profile.profile_id} value={profile.profile_id}>
-                                <div className="flex items-center gap-3 w-full">
-                                  {app.logo ? (
-                                    <img src={app.logo} alt={app.name} className="h-5 w-5 rounded-lg object-contain flex-shrink-0" />
-                                  ) : (
-                                    <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-primary text-xs font-semibold flex-shrink-0">
-                                      {app.name.charAt(0)}
-                                    </div>
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-medium truncate">{profile.profile_name}</div>
-                                    <div className="text-xs text-muted-foreground">
-                                      Created {formatDistanceToNow(new Date(profile.created_at), { addSuffix: true })}
-                                    </div>
-                                  </div>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                          </div>
-                        )}
-                        
+                    <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
+                      <div className="p-6 space-y-6">
                         <div className="space-y-4">
-                          <div className="flex items-center gap-3">
-                            <div className="h-px bg-border flex-1" />
-                            <span className="text-xs text-muted-foreground px-2">
-                              {existingProfiles.length > 0 ? 'or' : ''}
-                            </span>
-                            <div className="h-px bg-border flex-1" />
-                          </div>
-                          <Button
-                            onClick={() => navigateToStep(Step.ProfileCreate)}
-                            variant={existingProfiles.length > 0 ? "outline" : "default"}
-                            className="w-full"
-                          >
+                          <div className="flex items-center gap-3 mb-4">
                             {app.logo ? (
-                              <img src={app.logo} alt={app.name} className="h-4 w-4 rounded-lg object-contain" />
+                              <img src={app.logo} alt={app.name} className="w-8 h-8 rounded-lg object-contain bg-muted p-1 border flex-shrink-0" />
                             ) : (
-                              <div className="w-4 h-4 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-primary text-xs font-semibold mr-2">
+                              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-primary font-semibold text-sm flex-shrink-0">
                                 {app.name.charAt(0)}
                               </div>
                             )}
-                            Connect New Account
-                            <Plus className="h-4 w-4" />
-                          </Button>
+                            <div className="flex-1">
+                              <h4 className="font-medium text-foreground">Connect to {app.name}</h4>
+                              <p className="text-xs text-muted-foreground">Choose an existing profile or create a new connection</p>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => setShowToolsManager(!showToolsManager)}>
+                              {showToolsManager ? 'Hide' : 'View'} Tools
+                            </Button>
+                          </div>
+                          
+                          <div className="grid gap-3">
+                            {existingProfiles.length > 0 && (
+                              <Card 
+                                className={cn(
+                                  "cursor-pointer p-0 transition-all",
+                                  selectedConnectionType === 'existing' ? "border-primary bg-primary/5" : "border-border hover:border-border/80"
+                                )}
+                                onClick={() => {
+                                  if (selectedConnectionType === 'existing') {
+                                    setSelectedConnectionType(null);
+                                    setSelectedProfileId('');
+                                  } else {
+                                    setSelectedConnectionType('existing');
+                                    setSelectedProfileId(existingProfiles[0]?.profile_id || '');
+                                  }
+                                }}
+                              >
+                                <CardContent className='p-2'>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-10 h-10 rounded-xl bg-green-200 dark:bg-green-900/20 flex items-center justify-center">
+                                        <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                      </div>
+                                      <div>
+                                        <h5 className="font-medium text-sm">Use Existing Connection</h5>
+                                        <p className="text-xs text-muted-foreground">{existingProfiles.length} profile{existingProfiles.length > 1 ? 's' : ''} already connected</p>
+                                      </div>
+                                    </div>
+                                    <ChevronRight className={cn("w-4 h-4 text-muted-foreground transition-transform", selectedConnectionType === 'existing' && "rotate-90")} />
+                                  </div>
+                                  <AnimatePresence>
+                                    {selectedConnectionType === 'existing' && (
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: "auto", opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                                        className="overflow-hidden"
+                                      >
+                                        <div className="mt-3 pt-3 border-t border-border/50">
+                                          <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
+                                            <SelectTrigger className="w-full h-10">
+                                              <SelectValue placeholder="Select a profile..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                                                          {existingProfiles.map((profile) => (
+                                              <SelectItem key={profile.profile_id} value={profile.profile_id}>
+                                                <div className="flex items-center gap-3">
+                                                  {app.logo ? (
+                                                    <img src={app.logo} alt={app.name} className="w-5 h-5 rounded-lg object-contain bg-muted p-0.5 border flex-shrink-0" />
+                                                  ) : (
+                                                    <div className="w-5 h-5 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-primary text-xs font-semibold flex-shrink-0">
+                                                      {app.name.charAt(0)}
+                                                    </div>
+                                                  )}
+                                                  <div>
+                                                    <div className="text-sm font-medium">{profile.profile_name}</div>
+                                                  </div>
+                                                </div>
+                                              </SelectItem>
+                                            ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </CardContent>
+                              </Card>
+                            )}
+                            
+                            <Card className={cn(
+                              "cursor-pointer p-0 transition-all",
+                              selectedConnectionType === 'new' ? "border-primary bg-primary/5" : "border-border hover:border-border/80"
+                            )} onClick={() => {
+                              if (selectedConnectionType === 'new') {
+                                setSelectedConnectionType(null);
+                                setSelectedProfileId('');
+                              } else {
+                                setSelectedConnectionType('new');
+                                setSelectedProfileId('new');
+                              }
+                            }}>
+                              <CardContent className='p-2'>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                                      <Plus className="w-5 h-5 text-primary" />
+                                    </div>
+                                    <div>
+                                      <h5 className="font-medium text-sm">Create New Connection</h5>
+                                      <p className="text-xs text-muted-foreground">Connect a new {app.name} account</p>
+                                    </div>
+                                  </div>
+                                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </div>
                         </div>
-                        
-                        <div className="flex gap-3 pt-4 mt-auto">
+                          <AnimatePresence>
+                            {showToolsManager && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.3, ease: "easeInOut" }}
+                                className="overflow-hidden"
+                              >
+                                <div className="space-y-3">
+                                  <ScrollArea className="h-[200px] border rounded-md bg-muted/10">
+                                    <div className="p-2">
+                                      {isLoadingToolsPreview ? (
+                                        <div className="grid grid-cols-2 gap-1">
+                                          {[...Array(8)].map((_, i) => (
+                                            <div key={i} className="border rounded-md p-2 animate-pulse bg-background/50">
+                                              <div className="h-2 bg-muted rounded w-3/4 mb-1"></div>
+                                              <div className="h-2 bg-muted rounded w-1/2"></div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      ) : filteredToolsPreview.length > 0 ? (
+                                        <div className="grid grid-cols-2 gap-1">
+                                          {filteredToolsPreview.map((tool) => (
+                                            <ToolPreviewCard
+                                              key={tool.slug}
+                                              tool={tool}
+                                              searchTerm={toolsPreviewSearchTerm}
+                                            />
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <div className="text-center py-6 text-muted-foreground">
+                                          <Search className="h-4 w-4 mx-auto mb-2" />
+                                          <p className="text-xs">
+                                            {toolsPreviewSearchTerm ? 'No matches' : 'No tools available'}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </ScrollArea>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                      </div>
+                    </div>
+
+                    {/* Action Bar */}
+                    <div className="px-6 py-4 border-t border-border/50 bg-muted/20 flex-shrink-0">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">
+                          {selectedConnectionType === 'new' ? 'Ready to create new connection' : 
+                           selectedConnectionType === 'existing' && selectedProfileId ? 'Profile selected' :
+                           selectedConnectionType === 'existing' ? 'Select a profile to continue' :
+                           'Choose how you want to connect'}
+                        </div>
+                        <div className="flex gap-3">
                           <Button
                             variant="outline"
                             onClick={() => onOpenChange(false)}
-                            className="flex-1"
+                            className="px-6"
                           >
                             Cancel
                           </Button>
-                          {existingProfiles.length > 0 && (
-                            <Button
-                              onClick={handleProfileSelect}
-                              disabled={!selectedProfileId}
-                              className="flex-1"
-                            >
-                              {mode === 'full' && agentId ? 'Configure Tools' : 'Use Profile'}
-                              <ChevronRight className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Right Panel - Tools Preview */}
-                      <div className="w-1/2 flex flex-col">
-                        <div className="px-6 py-4 border-b border-border/30">
-                          <div className="flex items-center gap-3">
-                            <h4 className="font-medium text-sm flex items-center gap-2">
-                              <Zap className="w-4 h-4 text-primary" />
-                              Available Tools
-                            </h4>
-                            <div className="relative flex-1">
-                              <Search className="absolute left-2.5 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                              <Input
-                                placeholder="Search tools..."
-                                value={toolsPreviewSearchTerm}
-                                onChange={(e) => setToolsPreviewSearchTerm(e.target.value)}
-                                className="pl-9 h-8 text-sm bg-muted/30 border-muted"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <ScrollArea className="flex-1">
-                          <div className="p-6 space-y-3">
-                            {isLoadingToolsPreview ? (
-                              <div className="space-y-3">
-                                {[...Array(6)].map((_, i) => (
-                                  <div key={i} className="border rounded-lg p-3 animate-pulse">
-                                    <div className="flex items-center gap-2.5">
-                                      <div className="h-4 w-4 bg-muted rounded" />
-                                      <div className="h-4 bg-muted rounded w-24" />
-                                    </div>
-                                    <div className="h-3 bg-muted rounded w-full mt-2" />
-                                    <div className="h-3 bg-muted rounded w-2/3 mt-1" />
-                                    <div className="flex gap-2 mt-2">
-                                      <div className="h-4 bg-muted rounded w-12" />
-                                      <div className="h-4 bg-muted rounded w-16" />
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
+                          <Button
+                            onClick={() => {
+                              if (selectedConnectionType === 'new') {
+                                navigateToStep(Step.ProfileCreate);
+                              } else {
+                                handleProfileSelect();
+                              }
+                            }}
+                            disabled={!selectedConnectionType || (selectedConnectionType === 'existing' && !selectedProfileId)}
+                            className="px-8 min-w-[120px]"
+                          >
+                            {selectedConnectionType === 'new' ? (
                               <>
-                                {filteredToolsPreview.length > 0 ? (
-                                  <div className="space-y-3">
-                                    {filteredToolsPreview.map((tool) => (
-                                      <ToolPreviewCard
-                                        key={tool.slug}
-                                        tool={tool}
-                                        searchTerm={toolsPreviewSearchTerm}
-                                      />
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="text-center py-12">
-                                    <div className="w-12 h-12 rounded-xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
-                                      <Search className="h-6 w-6 text-muted-foreground" />
-                                    </div>
-                                    <p className="text-sm text-muted-foreground">
-                                      {toolsPreviewSearchTerm ? `No tools found matching "${toolsPreviewSearchTerm}"` : 'No tools available'}
-                                    </p>
-                                  </div>
-                                )}
+                                Create Connection
+                                <ChevronRight className="h-4 w-4 ml-1" />
                               </>
+                            ) : selectedConnectionType === 'existing' && selectedProfileId ? (
+                              <>
+                                {mode === 'full' && agentId ? 'Configure Tools' : 'Use Profile'}
+                                <ChevronRight className="h-4 w-4 ml-1" />
+                              </>
+                            ) : (
+                              'Continue'
                             )}
-                          </div>
-                        </ScrollArea>
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </motion.div>
@@ -983,9 +879,11 @@ export const ComposioConnector: React.FC<ComposioConnectorProps> = ({
                     )}
                     {!isLoadingToolkitDetails && toolkitDetails?.toolkit.connected_account_initiation_fields && (
                       <div className="space-y-4">
-                        <div className="text-sm font-medium text-muted-foreground">
-                          Connection Requirements
-                        </div>
+                        {(toolkitDetails.toolkit.connected_account_initiation_fields.required?.length ?? 0) > 0 && (
+                          <div className="text-sm font-medium text-muted-foreground">
+                            Connection Requirements
+                          </div>
+                        )}
                         {(toolkitDetails.toolkit.connected_account_initiation_fields.required?.length ?? 0) > 0 && (
                           <div className="space-y-3">
                             {toolkitDetails.toolkit.connected_account_initiation_fields.required.map((field) => (
@@ -1120,6 +1018,29 @@ export const ComposioConnector: React.FC<ComposioConnectorProps> = ({
           </>
         ) : (
           <>
+            <DialogHeader className="px-8 border-border/50 flex-shrink-0 bg-muted/10">
+              <div className="flex items-center gap-4">
+                {app.logo ? (
+                  <img 
+                    src={app.logo} 
+                    alt={app.name} 
+                    className="w-14 h-14 rounded-xl object-contain bg-muted p-2 border"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-primary font-semibold shadow-sm">
+                    {app.name.charAt(0) || 'T'}
+                  </div>
+                )}
+                <div className="flex-1">
+                  <DialogTitle className="text-xl font-semibold">
+                    Configure {app.name} Tools
+                  </DialogTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Select tools to add to your agent
+                  </p>
+                </div>
+              </div>
+            </DialogHeader>
             <AnimatePresence mode="wait" custom={direction}>
               {currentStep === Step.ToolsSelection && (
                 <motion.div
@@ -1130,106 +1051,25 @@ export const ComposioConnector: React.FC<ComposioConnectorProps> = ({
                   animate="center"
                   exit="exit"
                   transition={{ duration: 0.3, ease: "easeInOut" }}
-                  className="flex-1 flex flex-col min-h-0 h-full"
+                  className="flex-1 flex flex-col min-h-0"
                 >
-                  <div className="px-8 py-6 border-b border-border/50 flex-shrink-0">
-                    <div className="flex items-center gap-4 mb-4">
-                      {app.logo ? (
-                        <img 
-                          src={app.logo} 
-                          alt={app.name} 
-                          className="w-12 h-12 rounded-xl object-contain bg-muted p-2 border"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-primary font-semibold shadow-sm">
-                          {app.name.charAt(0) || 'T'}
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <h3 className="text-xl font-semibold">
-                          Configure {app.name} Tools
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          Select tools to add to your agent
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search tools..."
-                          value={searchTerm}
-                          onChange={(e) => setSearchTerm(e.target.value)}
-                          className="pl-10 h-10 bg-background/50 border-input/50 focus:bg-background"
-                        />
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm text-muted-foreground whitespace-nowrap">
-                          {filteredTools.length} {searchTerm && `of ${availableTools.length}`} tools
-                        </span>
-                        
-                        {selectedCount > 0 && (
-                          <Badge variant="secondary" className="bg-primary/10 text-primary border-0 px-2.5 h-7">
-                            {selectedCount}
-                          </Badge>
-                        )}
-                        {filteredTools.length > 0 && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleSelectAll}
-                            className="h-9 px-4"
-                          >
-                            {allFilteredSelected ? 'Deselect' : 'Select'} All
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <ScrollArea className="flex-1 min-h-0 overflow-y-auto">
-                    <div className="p-8">
-                      {toolsError && (
-                        <Alert className="mb-6 bg-destructive/10 border-destructive/20">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>{toolsError}</AlertDescription>
-                        </Alert>
-                      )}
-                      {isLoadingTools ? (
-                        <div className="space-y-3">
-                          {Array.from({ length: 6 }).map((_, i) => (
-                            <ToolSkeleton key={i} />
-                          ))}
-                        </div>
-                      ) : filteredTools.length > 0 ? (
-                        <div className="space-y-3 -mt-6">
-                          {filteredTools.map((tool) => (
-                            <ToolCard
-                              key={tool.name}
-                              tool={tool}
-                              isSelected={selectedTools.includes(tool.name)}
-                              onToggle={() => handleToolToggle(tool.name)}
-                              searchTerm={searchTerm}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-16">
-                          <div className="w-16 h-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
-                            <Search className="h-8 w-8 text-muted-foreground" />
-                          </div>
-                          <p className="text-sm text-muted-foreground">
-                            {searchTerm ? `No tools found matching "${searchTerm}"` : 'No tools available'}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </ScrollArea>
-                  <div className="px-8 py-6 border-t border-border/50 flex-shrink-0">
+                  {selectedProfile && (
+                    <ComposioToolsSelector
+                      profileId={selectedProfile.profile_id}
+                      agentId={agentId}
+                      toolkitName={selectedProfile.toolkit_name || app.name}
+                      selectedTools={selectedTools}
+                      onToolsChange={setSelectedTools}
+                      onSave={handleSaveTools}
+                      showSaveButton={false}
+                      className="flex-1 min-h-0"
+                    />
+                  )}
+                  <div className="px-6 py-4 border-t bg-muted/20 flex-shrink-0">
                     <div className="flex items-center justify-between">
                       <div className="text-sm text-muted-foreground">
-                        {selectedCount > 0 ? (
-                          `${selectedCount} tool${selectedCount === 1 ? '' : 's'} will be added to your agent`
+                        {selectedTools.length > 0 ? (
+                          `${selectedTools.length} tool${selectedTools.length === 1 ? '' : 's'} will be added to your agent`
                         ) : (
                           'No tools selected'
                         )}
@@ -1238,28 +1078,16 @@ export const ComposioConnector: React.FC<ComposioConnectorProps> = ({
                         <Button
                           variant="outline"
                           onClick={handleBack}
-                          disabled={isSavingTools}
-                          className="px-6"
                         >
                           <ArrowLeft className="h-4 w-4" />
                           Back
                         </Button>
                         <Button
                           onClick={handleSaveTools}
-                          disabled={isSavingTools || isLoadingTools}
-                          className="px-8 min-w-[120px]"
+                          className="min-w-[80px]"
                         >
-                          {isSavingTools ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              Saving...
-                            </>
-                          ) : (
-                            <>
-                              <Save className="h-4 w-4" />
-                              Save Tools
-                            </>
-                          )}
+                          <Save className="h-4 w-4" />
+                          Save Tools
                         </Button>
                       </div>
                     </div>

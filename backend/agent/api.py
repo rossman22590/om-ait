@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 import asyncio
 import json
 import traceback
+import base64
 from datetime import datetime, timezone
 import uuid
 from typing import Optional, List, Dict, Any
@@ -24,7 +25,7 @@ from run_agent_background import run_agent_background, _cleanup_redis_response_l
 from utils.constants import MODEL_NAME_ALIASES
 from flags.flags import is_enabled
 
-from .config_helper import extract_agent_config, build_unified_config, extract_tools_for_agent_run, get_mcp_configs
+from .config_helper import extract_agent_config, build_unified_config
 from .utils import check_agent_run_limit
 from .versioning.version_service import get_version_service
 from .versioning.api import router as version_router, initialize as initialize_versioning
@@ -32,7 +33,7 @@ from .versioning.api import router as version_router, initialize as initialize_v
 # Helper for version service
 async def _get_version_service():
     return await get_version_service()
-from utils.suna_default_agent_service import SunaDefaultAgentService
+from .tools.sb_presentation_tool_v2 import SandboxPresentationToolV2
 
 router = APIRouter()
 router.include_router(version_router)
@@ -46,7 +47,7 @@ REDIS_RESPONSE_LIST_TTL = 3600 * 24
 
 
 class AgentStartRequest(BaseModel):
-    model_name: Optional[str] = None  # Will be set from config.MODEL_TO_USE in the endpoint
+    model_name: Optional[str] = None  # Will be set to default model in the endpoint
     enable_thinking: Optional[bool] = False
     reasoning_effort: Optional[str] = 'low'
     stream: Optional[bool] = True
@@ -69,13 +70,16 @@ class MessageCreateRequest(BaseModel):
 class AgentCreateRequest(BaseModel):
     name: str
     description: Optional[str] = None
-    system_prompt: str
+    system_prompt: Optional[str] = None  # Make optional to allow defaulting to Suna's system prompt
     configured_mcps: Optional[List[Dict[str, Any]]] = []
     custom_mcps: Optional[List[Dict[str, Any]]] = []
     agentpress_tools: Optional[Dict[str, Any]] = {}
     is_default: Optional[bool] = False
+    # Deprecated, kept for backward-compat
     avatar: Optional[str] = None
     avatar_color: Optional[str] = None
+    # New profile image url (can be external or Supabase storage URL)
+    profile_image_url: Optional[str] = None
 
 class AgentVersionResponse(BaseModel):
     version_id: str
@@ -108,8 +112,11 @@ class AgentUpdateRequest(BaseModel):
     custom_mcps: Optional[List[Dict[str, Any]]] = None
     agentpress_tools: Optional[Dict[str, Any]] = None
     is_default: Optional[bool] = None
+    # Deprecated, kept for backward-compat
     avatar: Optional[str] = None
     avatar_color: Optional[str] = None
+    # New profile image url
+    profile_image_url: Optional[str] = None
 
 class AgentResponse(BaseModel):
     agent_id: str
@@ -121,8 +128,11 @@ class AgentResponse(BaseModel):
     custom_mcps: List[Dict[str, Any]]
     agentpress_tools: Dict[str, Any]
     is_default: bool
+    # Deprecated
     avatar: Optional[str] = None
     avatar_color: Optional[str] = None
+    # New
+    profile_image_url: Optional[str] = None
     created_at: str
     updated_at: Optional[str] = None
     is_public: Optional[bool] = False
@@ -156,11 +166,14 @@ class AgentExportData(BaseModel):
     agentpress_tools: Dict[str, Any]
     configured_mcps: List[Dict[str, Any]]
     custom_mcps: List[Dict[str, Any]]
+    # Deprecated
     avatar: Optional[str] = None
     avatar_color: Optional[str] = None
+    # New
+    profile_image_url: Optional[str] = None
     tags: Optional[List[str]] = []
     metadata: Optional[Dict[str, Any]] = None
-    export_version: str = "1.0"
+    export_version: str = "1.1"
     exported_at: str
     exported_by: Optional[str] = None
 
@@ -212,17 +225,17 @@ def initialize(
         # Generate instance ID
         instance_id = str(uuid.uuid4())[:8]
 
-    logger.info(f"Initialized agent API with instance ID: {instance_id}")
+    logger.debug(f"Initialized agent API with instance ID: {instance_id}")
 
 async def cleanup():
     """Clean up resources and stop running agents on shutdown."""
-    logger.info("Starting cleanup of agent API resources")
+    logger.debug("Starting cleanup of agent API resources")
 
     # Use the instance_id to find and clean up this instance's keys
     try:
         if instance_id: # Ensure instance_id is set
             running_keys = await redis.keys(f"active_run:{instance_id}:*")
-            logger.info(f"Found {len(running_keys)} running agent runs for instance {instance_id} to clean up")
+            logger.debug(f"Found {len(running_keys)} running agent runs for instance {instance_id} to clean up")
 
             for key in running_keys:
                 # Key format: active_run:{instance_id}:{agent_run_id}
@@ -241,11 +254,11 @@ async def cleanup():
 
     # Close Redis connection
     await redis.close()
-    logger.info("Completed cleanup of agent API resources")
+    logger.debug("Completed cleanup of agent API resources")
 
 async def stop_agent_run(agent_run_id: str, error_message: Optional[str] = None):
     """Update database and publish stop signal to Redis."""
-    logger.info(f"Stopping agent run: {agent_run_id}")
+    logger.debug(f"Stopping agent run: {agent_run_id}")
     client = await db.client
     final_status = "failed" if error_message else "stopped"
 
@@ -255,7 +268,7 @@ async def stop_agent_run(agent_run_id: str, error_message: Optional[str] = None)
     try:
         all_responses_json = await redis.lrange(response_list_key, 0, -1)
         all_responses = [json.loads(r) for r in all_responses_json]
-        logger.info(f"Fetched {len(all_responses)} responses from Redis for DB update on stop/fail: {agent_run_id}")
+        logger.debug(f"Fetched {len(all_responses)} responses from Redis for DB update on stop/fail: {agent_run_id}")
     except Exception as e:
         logger.error(f"Failed to fetch responses from Redis for {agent_run_id} during stop/fail: {e}")
         # Try fetching from DB as a fallback? Or proceed without responses? Proceeding without for now.
@@ -303,15 +316,18 @@ async def stop_agent_run(agent_run_id: str, error_message: Optional[str] = None)
     except Exception as e:
         logger.error(f"Failed to find or signal active instances for {agent_run_id}: {str(e)}")
 
-    logger.info(f"Successfully initiated stop process for agent run: {agent_run_id}")
+    logger.debug(f"Successfully initiated stop process for agent run: {agent_run_id}")
 
 async def get_agent_run_with_access_check(client, agent_run_id: str, user_id: str):
-    agent_run = await client.table('agent_runs').select('*').eq('id', agent_run_id).execute()
+    agent_run = await client.table('agent_runs').select('*, threads(account_id)').eq('id', agent_run_id).execute()
     if not agent_run.data:
         raise HTTPException(status_code=404, detail="Agent run not found")
 
     agent_run_data = agent_run.data[0]
     thread_id = agent_run_data['thread_id']
+    account_id = agent_run_data['threads']['account_id']
+    if account_id == user_id:
+        return agent_run_data
     await verify_thread_access(client, thread_id, user_id)
     return agent_run_data
 
@@ -332,23 +348,22 @@ async def start_agent(
 
     # Use model from config if not specified in the request
     model_name = body.model_name
-    logger.info(f"Original model_name from request: {model_name}")
+    logger.debug(f"Original model_name from request: {model_name}")
 
-    if model_name is None:
-        model_name = config.MODEL_TO_USE
-        logger.info(f"Using model from config: {model_name}")
+    # if model_name is None:
+    #     model_name = "openrouter/moonshotai/kimi-k2"
+    #     logger.debug(f"Using default model: {model_name}")
 
     # Log the model name after alias resolution
     resolved_model = MODEL_NAME_ALIASES.get(model_name, model_name)
-    logger.info(f"Resolved model name: {resolved_model}")
+    logger.debug(f"Resolved model name: {resolved_model}")
 
     # Update model_name to use the resolved version
     model_name = resolved_model
 
-    logger.info(f"Starting new agent for thread: {thread_id} with config: model={model_name}, thinking={body.enable_thinking}, effort={body.reasoning_effort}, stream={body.stream}, context_manager={body.enable_context_manager} (Instance: {instance_id})")
+    logger.debug(f"Starting new agent for thread: {thread_id} with config: model={model_name}, thinking={body.enable_thinking}, effort={body.reasoning_effort}, stream={body.stream}, context_manager={body.enable_context_manager} (Instance: {instance_id})")
     client = await db.client
 
-    await verify_thread_access(client, thread_id, user_id)
 
     thread_result = await client.table('threads').select('project_id', 'account_id', 'metadata').eq('thread_id', thread_id).execute()
 
@@ -358,6 +373,9 @@ async def start_agent(
     project_id = thread_data.get('project_id')
     account_id = thread_data.get('account_id')
     thread_metadata = thread_data.get('metadata', {})
+
+    if account_id != user_id:
+        await verify_thread_access(client, thread_id, user_id)
 
     structlog.contextvars.bind_contextvars(
         project_id=project_id,
@@ -370,21 +388,21 @@ async def start_agent(
     target_agent_id = thread_metadata.get('target_agent_id')
     
     if is_agent_builder:
-        logger.info(f"Thread {thread_id} is in agent builder mode, target_agent_id: {target_agent_id}")
+        logger.debug(f"Thread {thread_id} is in agent builder mode, target_agent_id: {target_agent_id}")
     
     # Load agent configuration with version support
     agent_config = None
     effective_agent_id = body.agent_id  # Optional agent ID from request
     
-    logger.info(f"[AGENT LOAD] Agent loading flow:")
-    logger.info(f"  - body.agent_id: {body.agent_id}")
-    logger.info(f"  - effective_agent_id: {effective_agent_id}")
+    logger.debug(f"[AGENT LOAD] Agent loading flow:")
+    logger.debug(f"  - body.agent_id: {body.agent_id}")
+    logger.debug(f"  - effective_agent_id: {effective_agent_id}")
 
     if effective_agent_id:
-        logger.info(f"[AGENT LOAD] Querying for agent: {effective_agent_id}")
+        logger.debug(f"[AGENT LOAD] Querying for agent: {effective_agent_id}")
         # Get agent
         agent_result = await client.table('agents').select('*').eq('agent_id', effective_agent_id).eq('account_id', account_id).execute()
-        logger.info(f"[AGENT LOAD] Query result: found {len(agent_result.data) if agent_result.data else 0} agents")
+        logger.debug(f"[AGENT LOAD] Query result: found {len(agent_result.data) if agent_result.data else 0} agents")
         
         if not agent_result.data:
             if body.agent_id:
@@ -404,27 +422,27 @@ async def start_agent(
                         user_id=user_id
                     )
                     version_data = version_obj.to_dict()
-                    logger.info(f"[AGENT LOAD] Got version data from version manager: {version_data.get('version_name')}")
+                    logger.debug(f"[AGENT LOAD] Got version data from version manager: {version_data.get('version_name')}")
                 except Exception as e:
                     logger.warning(f"[AGENT LOAD] Failed to get version data: {e}")
             
-            logger.info(f"[AGENT LOAD] About to call extract_agent_config with agent_data keys: {list(agent_data.keys())}")
-            logger.info(f"[AGENT LOAD] version_data type: {type(version_data)}, has data: {version_data is not None}")
+            logger.debug(f"[AGENT LOAD] About to call extract_agent_config with agent_data keys: {list(agent_data.keys())}")
+            logger.debug(f"[AGENT LOAD] version_data type: {type(version_data)}, has data: {version_data is not None}")
             
             agent_config = extract_agent_config(agent_data, version_data)
             
             if version_data:
-                logger.info(f"Using agent {agent_config['name']} ({effective_agent_id}) version {agent_config.get('version_name', 'v1')}")
+                logger.debug(f"Using agent {agent_config['name']} ({effective_agent_id}) version {agent_config.get('version_name', 'v1')}")
             else:
-                logger.info(f"Using agent {agent_config['name']} ({effective_agent_id}) - no version data")
+                logger.debug(f"Using agent {agent_config['name']} ({effective_agent_id}) - no version data")
             source = "request" if body.agent_id else "fallback"
     else:
-        logger.info(f"[AGENT LOAD] No effective_agent_id, will try default agent")
+        logger.debug(f"[AGENT LOAD] No effective_agent_id, will try default agent")
 
     if not agent_config:
-        logger.info(f"[AGENT LOAD] No agent config yet, querying for default agent")
+        logger.debug(f"[AGENT LOAD] No agent config yet, querying for default agent")
         default_agent_result = await client.table('agents').select('*').eq('account_id', account_id).eq('is_default', True).execute()
-        logger.info(f"[AGENT LOAD] Default agent query result: found {len(default_agent_result.data) if default_agent_result.data else 0} default agents")
+        logger.debug(f"[AGENT LOAD] Default agent query result: found {len(default_agent_result.data) if default_agent_result.data else 0} default agents")
         
         if default_agent_result.data:
             agent_data = default_agent_result.data[0]
@@ -440,18 +458,18 @@ async def start_agent(
                         user_id=user_id
                     )
                     version_data = version_obj.to_dict()
-                    logger.info(f"[AGENT LOAD] Got default agent version from version manager: {version_data.get('version_name')}")
+                    logger.debug(f"[AGENT LOAD] Got default agent version from version manager: {version_data.get('version_name')}")
                 except Exception as e:
                     logger.warning(f"[AGENT LOAD] Failed to get default agent version data: {e}")
             
-            logger.info(f"[AGENT LOAD] About to call extract_agent_config for DEFAULT agent with version data: {version_data is not None}")
+            logger.debug(f"[AGENT LOAD] About to call extract_agent_config for DEFAULT agent with version data: {version_data is not None}")
             
             agent_config = extract_agent_config(agent_data, version_data)
             
             if version_data:
-                logger.info(f"Using default agent: {agent_config['name']} ({agent_config['agent_id']}) version {agent_config.get('version_name', 'v1')}")
+                logger.debug(f"Using default agent: {agent_config['name']} ({agent_config['agent_id']}) version {agent_config.get('version_name', 'v1')}")
             else:
-                logger.info(f"Using default agent: {agent_config['name']} ({agent_config['agent_id']}) - no version data")
+                logger.debug(f"Using default agent: {agent_config['name']} ({agent_config['agent_id']}) - no version data")
         else:
             logger.warning(f"[AGENT LOAD] No default agent found for account {account_id}")
             
@@ -494,21 +512,28 @@ async def start_agent(
                 logger.error(f"[AUTO-INSTALL] Error during auto-installation: {str(e)}")
                 # Continue with agent_config=None as fallback
     
-    logger.info(f"[AGENT LOAD] Final agent_config: {agent_config is not None}")
+    logger.debug(f"[AGENT LOAD] Final agent_config: {agent_config is not None}")
     if agent_config:
+        logger.debug(f"[AGENT LOAD] Agent config keys: {list(agent_config.keys())}")
+        logger.debug(f"Using agent {agent_config['agent_id']} for this agent run (thread remains agent-agnostic)")
         logger.info(f"[AGENT LOAD] Agent config keys: {list(agent_config.keys())}")
 
-    can_use, model_message, allowed_models = await can_use_model(client, account_id, model_name)
+    # Run all checks concurrently
+    model_check_task = asyncio.create_task(can_use_model(client, account_id, model_name))
+    billing_check_task = asyncio.create_task(check_billing_status(client, account_id))
+    limit_check_task = asyncio.create_task(check_agent_run_limit(client, account_id))
 
+    # Wait for all checks to complete
+    (can_use, model_message, allowed_models), (can_run, message, subscription), limit_check = await asyncio.gather(
+        model_check_task, billing_check_task, limit_check_task
+    )
+
+    # Check results and raise appropriate errors
     if not can_use:
         raise HTTPException(status_code=403, detail={"message": model_message, "allowed_models": allowed_models})
 
-    can_run, message, subscription = await check_billing_status(client, account_id)
-
     if not can_run:
         raise HTTPException(status_code=402, detail={"message": message, "subscription": subscription})
-
-    limit_check = await check_agent_run_limit(client, account_id)
 
     if not limit_check['can_start']:
         error_detail = {
@@ -519,15 +544,15 @@ async def start_agent(
         }
         logger.warning(f"Agent run limit exceeded for account {account_id}: {limit_check['running_count']} running agents")
         raise HTTPException(status_code=429, detail=error_detail)
-    
+
     effective_model = model_name
     if not model_name and agent_config and agent_config.get('model'):
         effective_model = agent_config['model']
-        logger.info(f"No model specified by user, using agent's configured model: {effective_model}")
+        logger.debug(f"No model specified by user, using agent's configured model: {effective_model}")
     elif model_name:
-        logger.info(f"Using user-selected model: {effective_model}")
+        logger.debug(f"Using user-selected model: {effective_model}")
     else:
-        logger.info(f"Using default model: {effective_model}")
+        logger.debug(f"Using default model: {effective_model}")
     
     agent_run = await client.table('agent_runs').insert({
         "thread_id": thread_id,
@@ -548,7 +573,7 @@ async def start_agent(
     structlog.contextvars.bind_contextvars(
         agent_run_id=agent_run_id,
     )
-    logger.info(f"Created new agent run: {agent_run_id}")
+    logger.debug(f"Created new agent run: {agent_run_id}")
 
     instance_key = f"active_run:{instance_id}:{agent_run_id}"
     try:
@@ -578,7 +603,7 @@ async def stop_agent(agent_run_id: str, user_id: str = Depends(get_current_user_
     structlog.contextvars.bind_contextvars(
         agent_run_id=agent_run_id,
     )
-    logger.info(f"Received request to stop agent run: {agent_run_id}")
+    logger.debug(f"Received request to stop agent run: {agent_run_id}")
     client = await db.client
     await get_agent_run_with_access_check(client, agent_run_id, user_id)
     await stop_agent_run(agent_run_id)
@@ -645,7 +670,7 @@ async def get_agent_runs(thread_id: str, user_id: str = Depends(get_current_user
     structlog.contextvars.bind_contextvars(
         thread_id=thread_id,
     )
-    logger.info(f"Fetching agent runs for thread: {thread_id}")
+    logger.debug(f"Fetching agent runs for thread: {thread_id}")
     client = await db.client
     await verify_thread_access(client, thread_id, user_id)
     agent_runs = await client.table('agent_runs').select('id, thread_id, status, started_at, completed_at, error, created_at, updated_at').eq("thread_id", thread_id).order('created_at', desc=True).execute()
@@ -658,7 +683,7 @@ async def get_agent_run(agent_run_id: str, user_id: str = Depends(get_current_us
     structlog.contextvars.bind_contextvars(
         agent_run_id=agent_run_id,
     )
-    logger.info(f"Fetching agent run details: {agent_run_id}")
+    logger.debug(f"Fetching agent run details: {agent_run_id}")
     client = await db.client
     agent_run_data = await get_agent_run_with_access_check(client, agent_run_id, user_id)
     # Note: Responses are not included here by default, they are in the stream or DB
@@ -678,7 +703,7 @@ async def get_thread_agent(thread_id: str, user_id: str = Depends(get_current_us
     structlog.contextvars.bind_contextvars(
         thread_id=thread_id,
     )
-    logger.info(f"Fetching agent details for thread: {thread_id}")
+    logger.debug(f"Fetching agent details for thread: {thread_id}")
     client = await db.client
     
     try:
@@ -701,7 +726,7 @@ async def get_thread_agent(thread_id: str, user_id: str = Depends(get_current_us
             effective_agent_id = recent_agent_result.data[0]['agent_id']
             recent_version_id = recent_agent_result.data[0].get('agent_version_id')
             agent_source = "recent"
-            logger.info(f"Found most recently used agent: {effective_agent_id} (version: {recent_version_id})")
+            logger.debug(f"Found most recently used agent: {effective_agent_id} (version: {recent_version_id})")
         
         # If no agent found in agent_runs
         if not effective_agent_id:
@@ -754,7 +779,7 @@ async def get_thread_agent(thread_id: str, user_id: str = Depends(get_current_us
                     created_by=current_version_data.get('created_by')
                 )
                 
-                logger.info(f"Using agent {agent_data['name']} version {current_version_data.get('version_name', 'v1')}")
+                logger.debug(f"Using agent {agent_data['name']} version {current_version_data.get('version_name', 'v1')}")
             except Exception as e:
                 logger.warning(f"Failed to get version data for agent {effective_agent_id}: {e}")
         
@@ -799,6 +824,7 @@ async def get_thread_agent(thread_id: str, user_id: str = Depends(get_current_us
                 tags=agent_data.get('tags', []),
                 avatar=agent_config.get('avatar'),
                 avatar_color=agent_config.get('avatar_color'),
+                profile_image_url=agent_config.get('profile_image_url'),
                 created_at=agent_data['created_at'],
                 updated_at=agent_data.get('updated_at', agent_data['created_at']),
                 current_version_id=agent_data.get('current_version_id'),
@@ -823,11 +849,11 @@ async def stream_agent_run(
     request: Request = None
 ):
     """Stream the responses of an agent run using Redis Lists and Pub/Sub."""
-    logger.info(f"Starting stream for agent run: {agent_run_id}")
+    logger.debug(f"Starting stream for agent run: {agent_run_id}")
     client = await db.client
 
-    user_id = await get_user_id_from_stream_auth(request, token)
-    agent_run_data = await get_agent_run_with_access_check(client, agent_run_id, user_id)
+    user_id = await get_user_id_from_stream_auth(request, token) # practically instant
+    agent_run_data = await get_agent_run_with_access_check(client, agent_run_id, user_id) # 1 db query
 
     structlog.contextvars.bind_contextvars(
         agent_run_id=agent_run_id,
@@ -838,7 +864,7 @@ async def stream_agent_run(
     response_channel = f"agent_run:{agent_run_id}:new_response"
     control_channel = f"agent_run:{agent_run_id}:control" # Global control channel
 
-    async def stream_generator():
+    async def stream_generator(agent_run_data):
         logger.debug(f"Streaming responses for {agent_run_id} using Redis list {response_list_key} and channel {response_channel}")
         last_processed_index = -1
         pubsub_response = None
@@ -859,26 +885,31 @@ async def stream_agent_run(
                 last_processed_index = len(initial_responses) - 1
             initial_yield_complete = True
 
-            # 2. Check run status *after* yielding initial data
-            run_status = await client.table('agent_runs').select('status', 'thread_id').eq("id", agent_run_id).maybe_single().execute()
-            current_status = run_status.data.get('status') if run_status.data else None
+            # 2. Check run status
+            current_status = agent_run_data.get('status') if agent_run_data else None
 
             if current_status != 'running':
-                logger.info(f"Agent run {agent_run_id} is not running (status: {current_status}). Ending stream.")
+                logger.debug(f"Agent run {agent_run_id} is not running (status: {current_status}). Ending stream.")
                 yield f"data: {json.dumps({'type': 'status', 'status': 'completed'})}\n\n"
                 return
           
             structlog.contextvars.bind_contextvars(
-                thread_id=run_status.data.get('thread_id'),
+                thread_id=agent_run_data.get('thread_id'),
             )
 
-            # 3. Set up Pub/Sub listeners for new responses and control signals
-            pubsub_response = await redis.create_pubsub()
-            await pubsub_response.subscribe(response_channel)
+            # 3. Set up Pub/Sub listeners for new responses and control signals concurrently
+            pubsub_response_task = asyncio.create_task(redis.create_pubsub())
+            pubsub_control_task = asyncio.create_task(redis.create_pubsub())
+            
+            pubsub_response, pubsub_control = await asyncio.gather(pubsub_response_task, pubsub_control_task)
+            
+            # Subscribe to channels concurrently
+            response_subscribe_task = asyncio.create_task(pubsub_response.subscribe(response_channel))
+            control_subscribe_task = asyncio.create_task(pubsub_control.subscribe(control_channel))
+            
+            await asyncio.gather(response_subscribe_task, control_subscribe_task)
+            
             logger.debug(f"Subscribed to response channel: {response_channel}")
-
-            pubsub_control = await redis.create_pubsub()
-            await pubsub_control.subscribe(control_channel)
             logger.debug(f"Subscribed to control channel: {control_channel}")
 
             # Queue to communicate between listeners and the main generator loop
@@ -902,7 +933,7 @@ async def stream_agent_run(
                                 if channel == response_channel and data == "new":
                                     await message_queue.put({"type": "new_response"})
                                 elif channel == control_channel and data in ["STOP", "END_STREAM", "ERROR"]:
-                                    logger.info(f"Received control signal '{data}' for {agent_run_id}")
+                                    logger.debug(f"Received control signal '{data}' for {agent_run_id}")
                                     await message_queue.put({"type": "control", "data": data})
                                     return # Stop listening on control signal
 
@@ -949,7 +980,7 @@ async def stream_agent_run(
                                 yield f"data: {json.dumps(response)}\n\n"
                                 # Check if this response signals completion
                                 if response.get('type') == 'status' and response.get('status') in ['completed', 'failed', 'stopped']:
-                                    logger.info(f"Detected run completion via status message in stream: {response.get('status')}")
+                                    logger.debug(f"Detected run completion via status message in stream: {response.get('status')}")
                                     terminate_stream = True
                                     break # Stop processing further new responses
                             last_processed_index += num_new
@@ -968,7 +999,7 @@ async def stream_agent_run(
                         break
 
                 except asyncio.CancelledError:
-                     logger.info(f"Stream generator main loop cancelled for {agent_run_id}")
+                     logger.debug(f"Stream generator main loop cancelled for {agent_run_id}")
                      terminate_stream = True
                      break
                 except Exception as loop_err:
@@ -1002,7 +1033,7 @@ async def stream_agent_run(
             await asyncio.sleep(0.1)
             logger.debug(f"Streaming cleanup complete for agent run: {agent_run_id}")
 
-    return StreamingResponse(stream_generator(), media_type="text/event-stream", headers={
+    return StreamingResponse(stream_generator(agent_run_data), media_type="text/event-stream", headers={
         "Cache-Control": "no-cache, no-transform", "Connection": "keep-alive",
         "X-Accel-Buffering": "no", "Content-Type": "text/event-stream",
         "Access-Control-Allow-Origin": "*"
@@ -1010,7 +1041,7 @@ async def stream_agent_run(
 
 async def generate_and_update_project_name(project_id: str, prompt: str):
     """Generates a project name using an LLM and updates the database."""
-    logger.info(f"Starting background task to generate name for project: {project_id}")
+    logger.debug(f"Starting background task to generate name for project: {project_id}")
     try:
         db_conn = DBConnection()
         client = await db_conn.client
@@ -1029,7 +1060,7 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
             cleaned_name = raw_name.strip('\'" \n\t')
             if cleaned_name:
                 generated_name = cleaned_name
-                logger.info(f"LLM generated name for project {project_id}: '{generated_name}'")
+                logger.debug(f"LLM generated name for project {project_id}: '{generated_name}'")
             else:
                 logger.warning(f"LLM returned an empty name for project {project_id}.")
         else:
@@ -1038,7 +1069,7 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
         if generated_name:
             update_result = await client.table('projects').update({"name": generated_name}).eq("project_id", project_id).execute()
             if hasattr(update_result, 'data') and update_result.data:
-                logger.info(f"Successfully updated project {project_id} name to '{generated_name}'")
+                logger.debug(f"Successfully updated project {project_id} name to '{generated_name}'")
             else:
                 logger.error(f"Failed to update project {project_id} name in database. Update result: {update_result}")
         else:
@@ -1048,12 +1079,12 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
         logger.error(f"Error in background naming task for project {project_id}: {str(e)}\n{traceback.format_exc()}")
     finally:
         # No need to disconnect DBConnection singleton instance here
-        logger.info(f"Finished background naming task for project: {project_id}")
+        logger.debug(f"Finished background naming task for project: {project_id}")
 
 @router.post("/agent/initiate", response_model=InitiateAgentResponse)
 async def initiate_agent_with_files(
     prompt: str = Form(...),
-    model_name: Optional[str] = Form(None),  # Default to None to use config.MODEL_TO_USE
+    model_name: Optional[str] = Form(None),  # Default to None to use default model
     enable_thinking: Optional[bool] = Form(False),
     reasoning_effort: Optional[str] = Form("low"),
     stream: Optional[bool] = Form(True),
@@ -1074,36 +1105,36 @@ async def initiate_agent_with_files(
         raise HTTPException(status_code=500, detail="Agent API not initialized with instance ID")
 
     # Use model from config if not specified in the request
-    logger.info(f"Original model_name from request: {model_name}")
+    logger.debug(f"Original model_name from request: {model_name}")
 
     if model_name is None:
-        model_name = config.MODEL_TO_USE
-        logger.info(f"Using model from config: {model_name}")
+        model_name = "openai/gpt-5-mini"
+        logger.debug(f"Using default model: {model_name}")
 
     # Log the model name after alias resolution
     resolved_model = MODEL_NAME_ALIASES.get(model_name, model_name)
-    logger.info(f"Resolved model name: {resolved_model}")
+    logger.debug(f"Resolved model name: {resolved_model}")
 
     # Update model_name to use the resolved version
     model_name = resolved_model
 
-    logger.info(f"Starting new agent in agent builder mode: {is_agent_builder}, target_agent_id: {target_agent_id}")
+    logger.debug(f"Starting new agent in agent builder mode: {is_agent_builder}, target_agent_id: {target_agent_id}")
 
-    logger.info(f"[\033[91mDEBUG\033[0m] Initiating new agent with prompt and {len(files)} files (Instance: {instance_id}), model: {model_name}, enable_thinking: {enable_thinking}")
+    logger.debug(f"[\033[91mDEBUG\033[0m] Initiating new agent with prompt and {len(files)} files (Instance: {instance_id}), model: {model_name}, enable_thinking: {enable_thinking}")
     client = await db.client
     account_id = user_id # In Basejump, personal account_id is the same as user_id
     
     # Load agent configuration with version support (same as start_agent endpoint)
     agent_config = None
     
-    logger.info(f"[AGENT INITIATE] Agent loading flow:")
-    logger.info(f"  - agent_id param: {agent_id}")
+    logger.debug(f"[AGENT INITIATE] Agent loading flow:")
+    logger.debug(f"  - agent_id param: {agent_id}")
     
     if agent_id:
-        logger.info(f"[AGENT INITIATE] Querying for specific agent: {agent_id}")
+        logger.debug(f"[AGENT INITIATE] Querying for specific agent: {agent_id}")
         # Get agent
         agent_result = await client.table('agents').select('*').eq('agent_id', agent_id).eq('account_id', account_id).execute()
-        logger.info(f"[AGENT INITIATE] Query result: found {len(agent_result.data) if agent_result.data else 0} agents")
+        logger.debug(f"[AGENT INITIATE] Query result: found {len(agent_result.data) if agent_result.data else 0} agents")
         
         if not agent_result.data:
             raise HTTPException(status_code=404, detail="Agent not found or access denied")
@@ -1121,24 +1152,24 @@ async def initiate_agent_with_files(
                     user_id=user_id
                 )
                 version_data = version_obj.to_dict()
-                logger.info(f"[AGENT INITIATE] Got version data from version manager: {version_data.get('version_name')}")
-                logger.info(f"[AGENT INITIATE] Version data: {version_data}")
+                logger.debug(f"[AGENT INITIATE] Got version data from version manager: {version_data.get('version_name')}")
+                logger.debug(f"[AGENT INITIATE] Version data: {version_data}")
             except Exception as e:
                 logger.warning(f"[AGENT INITIATE] Failed to get version data: {e}")
         
-        logger.info(f"[AGENT INITIATE] About to call extract_agent_config with version data: {version_data is not None}")
+        logger.debug(f"[AGENT INITIATE] About to call extract_agent_config with version data: {version_data is not None}")
         
         agent_config = extract_agent_config(agent_data, version_data)
         
         if version_data:
-            logger.info(f"Using custom agent: {agent_config['name']} ({agent_id}) version {agent_config.get('version_name', 'v1')}")
+            logger.debug(f"Using custom agent: {agent_config['name']} ({agent_id}) version {agent_config.get('version_name', 'v1')}")
         else:
-            logger.info(f"Using custom agent: {agent_config['name']} ({agent_id}) - no version data")
+            logger.debug(f"Using custom agent: {agent_config['name']} ({agent_id}) - no version data")
     else:
-        logger.info(f"[AGENT INITIATE] No agent_id provided, querying for default agent")
+        logger.debug(f"[AGENT INITIATE] No agent_id provided, querying for default agent")
         # Try to get default agent for the account
         default_agent_result = await client.table('agents').select('*').eq('account_id', account_id).eq('is_default', True).execute()
-        logger.info(f"[AGENT INITIATE] Default agent query result: found {len(default_agent_result.data) if default_agent_result.data else 0} default agents")
+        logger.debug(f"[AGENT INITIATE] Default agent query result: found {len(default_agent_result.data) if default_agent_result.data else 0} default agents")
         
         if default_agent_result.data:
             agent_data = default_agent_result.data[0]
@@ -1154,18 +1185,18 @@ async def initiate_agent_with_files(
                         user_id=user_id
                     )
                     version_data = version_obj.to_dict()
-                    logger.info(f"[AGENT INITIATE] Got default agent version from version manager: {version_data.get('version_name')}")
+                    logger.debug(f"[AGENT INITIATE] Got default agent version from version manager: {version_data.get('version_name')}")
                 except Exception as e:
                     logger.warning(f"[AGENT INITIATE] Failed to get default agent version data: {e}")
             
-            logger.info(f"[AGENT INITIATE] About to call extract_agent_config for DEFAULT agent with version data: {version_data is not None}")
+            logger.debug(f"[AGENT INITIATE] About to call extract_agent_config for DEFAULT agent with version data: {version_data is not None}")
             
             agent_config = extract_agent_config(agent_data, version_data)
             
             if version_data:
-                logger.info(f"Using default agent: {agent_config['name']} ({agent_config['agent_id']}) version {agent_config.get('version_name', 'v1')}")
+                logger.debug(f"Using default agent: {agent_config['name']} ({agent_config['agent_id']}) version {agent_config.get('version_name', 'v1')}")
             else:
-                logger.info(f"Using default agent: {agent_config['name']} ({agent_config['agent_id']}) - no version data")
+                logger.debug(f"Using default agent: {agent_config['name']} ({agent_config['agent_id']}) - no version data")
         else:
             logger.warning(f"[AGENT INITIATE] No default agent found for account {account_id}")
             # Auto-install Machine (Suna) agent for users who don't have a default agent
@@ -1184,11 +1215,21 @@ async def initiate_agent_with_files(
             except Exception as e:
                 logger.error(f"[AGENT INITIATE] Failed to auto-install Machine agent for account {account_id}: {str(e)}")
     
-    logger.info(f"[AGENT INITIATE] Final agent_config: {agent_config is not None}")
+    logger.debug(f"[AGENT INITIATE] Final agent_config: {agent_config is not None}")
     if agent_config:
-        logger.info(f"[AGENT INITIATE] Agent config keys: {list(agent_config.keys())}")
+        logger.debug(f"[AGENT INITIATE] Agent config keys: {list(agent_config.keys())}")
 
-    can_use, model_message, allowed_models = await can_use_model(client, account_id, model_name)
+    # Run all checks concurrently
+    model_check_task = asyncio.create_task(can_use_model(client, account_id, model_name))
+    billing_check_task = asyncio.create_task(check_billing_status(client, account_id))
+    limit_check_task = asyncio.create_task(check_agent_run_limit(client, account_id))
+
+    # Wait for all checks to complete
+    (can_use, model_message, allowed_models), (can_run, message, subscription), limit_check = await asyncio.gather(
+        model_check_task, billing_check_task, limit_check_task
+    )
+
+    # Check results and raise appropriate errors
     if not can_use:
         raise HTTPException(status_code=403, detail={"message": model_message, "allowed_models": allowed_models})
 
@@ -1229,6 +1270,7 @@ async def initiate_agent_with_files(
         token = None
 
         if files:
+            # 3. Create Sandbox (lazy): only create now if files were uploaded and need the
             try:
                 sandbox_pass = str(uuid.uuid4())
                 sandbox = await create_sandbox(sandbox_pass, project_id)
@@ -1286,7 +1328,7 @@ async def initiate_agent_with_files(
         # Don't store agent_id in thread since threads are now agent-agnostic
         # The agent selection will be handled per message/agent run
         if agent_config:
-            logger.info(f"Using agent {agent_config['agent_id']} for this conversation (thread remains agent-agnostic)")
+            logger.debug(f"Using agent {agent_config['agent_id']} for this conversation (thread remains agent-agnostic)")
             structlog.contextvars.bind_contextvars(
                 agent_id=agent_config['agent_id'],
             )
@@ -1297,14 +1339,14 @@ async def initiate_agent_with_files(
                 "is_agent_builder": True,
                 "target_agent_id": target_agent_id
             }
-            logger.info(f"Storing agent builder metadata in thread: target_agent_id={target_agent_id}")
+            logger.debug(f"Storing agent builder metadata in thread: target_agent_id={target_agent_id}")
             structlog.contextvars.bind_contextvars(
                 target_agent_id=target_agent_id,
             )
         
         thread = await client.table('threads').insert(thread_data).execute()
         thread_id = thread.data[0]['thread_id']
-        logger.info(f"Created new thread: {thread_id}")
+        logger.debug(f"Created new thread: {thread_id}")
 
         # Trigger Background Naming Task
         asyncio.create_task(generate_and_update_project_name(project_id=project_id, prompt=prompt))
@@ -1319,7 +1361,7 @@ async def initiate_agent_with_files(
                     try:
                         safe_filename = file.filename.replace('/', '_').replace('\\', '_')
                         target_path = f"/workspace/{safe_filename}"
-                        logger.info(f"Attempting to upload {safe_filename} to {target_path} in sandbox {sandbox_id}")
+                        logger.debug(f"Attempting to upload {safe_filename} to {target_path} in sandbox {sandbox_id}")
                         content = await file.read()
                         upload_successful = False
                         try:
@@ -1340,7 +1382,7 @@ async def initiate_agent_with_files(
                                 file_names_in_dir = [f.name for f in files_in_dir]
                                 if safe_filename in file_names_in_dir:
                                     successful_uploads.append(target_path)
-                                    logger.info(f"Successfully uploaded and verified file {safe_filename} to sandbox path {target_path}")
+                                    logger.debug(f"Successfully uploaded and verified file {safe_filename} to sandbox path {target_path}")
                                 else:
                                     logger.error(f"Verification failed for {safe_filename}: File not found in {parent_dir} after upload attempt.")
                                     failed_uploads.append(safe_filename)
@@ -1375,12 +1417,12 @@ async def initiate_agent_with_files(
         effective_model = model_name
         if not model_name and agent_config and agent_config.get('model'):
             effective_model = agent_config['model']
-            logger.info(f"No model specified by user, using agent's configured model: {effective_model}")
+            logger.debug(f"No model specified by user, using agent's configured model: {effective_model}")
         elif model_name:
-            logger.info(f"Using user-selected model: {effective_model}")
+            logger.debug(f"Using user-selected model: {effective_model}")
         else:
-            logger.info(f"Using default model: {effective_model}")
-        
+            logger.debug(f"Using default model: {effective_model}")
+
         agent_run = await client.table('agent_runs').insert({
             "thread_id": thread_id, "status": "running",
             "started_at": datetime.now(timezone.utc).isoformat(),
@@ -1395,7 +1437,7 @@ async def initiate_agent_with_files(
             }
         }).execute()
         agent_run_id = agent_run.data[0]['id']
-        logger.info(f"Created new agent run: {agent_run_id}")
+        logger.debug(f"Created new agent run: {agent_run_id}")
         structlog.contextvars.bind_contextvars(
             agent_run_id=agent_run_id,
         )
@@ -1472,7 +1514,7 @@ async def get_agents(
             status_code=403, 
             detail="Custom agents currently disabled. This feature is not available at the moment."
         )
-    logger.info(f"Fetching agents for user: {user_id} with page={page}, limit={limit}, search='{search}', sort_by={sort_by}, sort_order={sort_order}")
+    logger.debug(f"Fetching agents for user: {user_id} with page={page}, limit={limit}, search='{search}', sort_by={sort_by}, sort_order={sort_order}")
     client = await db.client
     
     try:
@@ -1511,7 +1553,7 @@ async def get_agents(
         total_count = agents_result.count if agents_result.count is not None else 0
         
         if not agents_result.data:
-            logger.info(f"No agents found for user: {user_id}")
+            logger.debug(f"No agents found for user: {user_id}")
             return {
                 "agents": [],
                 "pagination": {
@@ -1697,6 +1739,7 @@ async def get_agents(
                 tags=agent.get('tags', []),
                 avatar=agent_config.get('avatar'),
                 avatar_color=agent_config.get('avatar_color'),
+                profile_image_url=agent_config.get('profile_image_url'),
                 created_at=agent['created_at'],
                 updated_at=agent['updated_at'],
                 current_version_id=agent.get('current_version_id'),
@@ -1707,7 +1750,7 @@ async def get_agents(
         
         total_pages = (total_count + limit - 1) // limit
         
-        logger.info(f"Found {len(agent_list)} agents for user: {user_id} (page {page}/{total_pages})")
+        logger.debug(f"Found {len(agent_list)} agents for user: {user_id} (page {page}/{total_pages})")
         return {
             "agents": agent_list,
             "pagination": {
@@ -1731,7 +1774,7 @@ async def get_agent(agent_id: str, user_id: str = Depends(get_current_user_id_fr
             detail="Custom agents currently disabled. This feature is not available at the moment."
         )
     
-    logger.info(f"Fetching agent {agent_id} for user: {user_id}")
+    logger.debug(f"Fetching agent {agent_id} for user: {user_id}")
     client = await db.client
     
     try:
@@ -1777,7 +1820,7 @@ async def get_agent(agent_id: str, user_id: str = Depends(get_current_user_id_fr
                     created_by=current_version_data.get('created_by')
                 )
                 
-                logger.info(f"Using agent {agent_data['name']} version {current_version_data.get('version_name', 'v1')}")
+                logger.debug(f"Using agent {agent_data['name']} version {current_version_data.get('version_name', 'v1')}")
             except Exception as e:
                 logger.warning(f"Failed to get version data for agent {agent_id}: {e}")
         
@@ -1822,6 +1865,7 @@ async def get_agent(agent_id: str, user_id: str = Depends(get_current_user_id_fr
             tags=agent_data.get('tags', []),
             avatar=agent_config.get('avatar'),
             avatar_color=agent_config.get('avatar_color'),
+            profile_image_url=agent_config.get('profile_image_url'),
             created_at=agent_data['created_at'],
             updated_at=agent_data.get('updated_at', agent_data['created_at']),
             current_version_id=agent_data.get('current_version_id'),
@@ -1839,7 +1883,7 @@ async def get_agent(agent_id: str, user_id: str = Depends(get_current_user_id_fr
 @router.get("/agents/{agent_id}/export", response_model=AgentExportData)
 async def export_agent(agent_id: str, user_id: str = Depends(get_current_user_id_from_jwt)):
     """Export an agent configuration as JSON"""
-    logger.info(f"Exporting agent {agent_id} for user: {user_id}")
+    logger.debug(f"Exporting agent {agent_id} for user: {user_id}")
     
     try:
         client = await db.client
@@ -1862,12 +1906,48 @@ async def export_agent(agent_id: str, user_id: str = Depends(get_current_user_id
         from agent.config_helper import extract_agent_config
         config = extract_agent_config(agent, current_version)
         
+        from templates.template_service import TemplateService
+        template_service = TemplateService(db)
+        
+        full_config = {
+            'system_prompt': config.get('system_prompt', ''),
+            'tools': {
+                'agentpress': config.get('agentpress_tools', {}),
+                'mcp': config.get('configured_mcps', []),
+                'custom_mcp': config.get('custom_mcps', [])
+            },
+            'metadata': {
+                # keep backward compat metadata
+                'avatar': config.get('avatar'),
+                'avatar_color': config.get('avatar_color'),
+                # include profile image url in metadata for completeness
+                'profile_image_url': agent.get('profile_image_url')
+            }
+        }
+        
+        sanitized_config = template_service._fallback_sanitize_config(full_config)
+        
         # Clean metadata for export (remove instance-specific data)
         export_metadata = {}
         if agent.get('metadata'):
             export_metadata = {k: v for k, v in agent['metadata'].items() 
                              if k not in ['is_suna_default', 'centrally_managed', 'installation_date', 'last_central_update']}
         
+        export_data = {
+            "tools": sanitized_config['tools'],
+            "metadata": sanitized_config['metadata'],
+            "system_prompt": sanitized_config['system_prompt'],
+            "name": config.get('name', ''),
+            "description": config.get('description', ''),
+            # Deprecated
+            "avatar": config.get('avatar'),
+            "avatar_color": config.get('avatar_color'),
+            # New
+            "profile_image_url": agent.get('profile_image_url'),
+            "tags": agent.get('tags', []),
+            "export_metadata": export_metadata,
+            "exported_at": datetime.now(timezone.utc).isoformat()
+        }
         # Create export data
         export_data = AgentExportData(
             name=config.get('name', ''),
@@ -1884,7 +1964,7 @@ async def export_agent(agent_id: str, user_id: str = Depends(get_current_user_id
             exported_by=user_id
         )
         
-        logger.info(f"Successfully exported agent {agent_id}")
+        logger.debug(f"Successfully exported agent {agent_id}")
         return export_data
         
     except Exception as e:
@@ -1896,6 +1976,8 @@ async def import_agent(
     import_request: AgentImportRequest,
     user_id: str = Depends(get_current_user_id_from_jwt)
 ):
+    """Analyze imported JSON to determine required credentials and configurations"""
+    logger.debug(f"Analyzing JSON for import - user: {user_id}")
     """Import an agent from JSON configuration"""
     logger.info(f"Importing agent for user: {user_id}")
     
@@ -1927,7 +2009,7 @@ async def import_agent_from_json(
     request: JsonImportRequestModel,
     user_id: str = Depends(get_current_user_id_from_jwt)
 ):
-    logger.info(f"Importing agent from JSON - user: {user_id}")
+    logger.debug(f"Importing agent from JSON - user: {user_id}")
     
     if not await is_enabled("custom_agents"):
         raise HTTPException(
@@ -2040,7 +2122,7 @@ async def create_agent(
     agent_data: AgentCreateRequest,
     user_id: str = Depends(get_current_user_id_from_jwt)
 ):
-    logger.info(f"Creating new agent for user: {user_id}")
+    logger.debug(f"Creating new agent for user: {user_id}")
     if not await is_enabled("custom_agents"):
         raise HTTPException(
             status_code=403, 
@@ -2070,8 +2152,11 @@ async def create_agent(
             "account_id": user_id,
             "name": agent_data.name,
             "description": agent_data.description,
+            # Deprecated fields still populated if sent by older clients
             "avatar": agent_data.avatar,
             "avatar_color": agent_data.avatar_color,
+            # New profile image url field
+            "profile_image_url": agent_data.profile_image_url,
             "is_default": agent_data.is_default or False,
             "version_count": 1
         }
@@ -2085,11 +2170,13 @@ async def create_agent(
         
         try:
             version_service = await _get_version_service()
-
+            from agent.suna_config import SUNA_CONFIG
+            system_prompt = SUNA_CONFIG["system_prompt"]
+            
             version = await version_service.create_version(
                 agent_id=agent['agent_id'],
                 user_id=user_id,
-                system_prompt=agent_data.system_prompt,
+                system_prompt=system_prompt,
                 configured_mcps=agent_data.configured_mcps or [],
                 custom_mcps=agent_data.custom_mcps or [],
                 agentpress_tools=agent_data.agentpress_tools or {},
@@ -2120,11 +2207,10 @@ async def create_agent(
             await client.table('agents').delete().eq('agent_id', agent['agent_id']).execute()
             raise HTTPException(status_code=500, detail="Failed to create initial version")
         
-        # Invalidate agent count cache after successful creation
         from utils.cache import Cache
         await Cache.invalidate(f"agent_count_limit:{user_id}")
         
-        logger.info(f"Created agent {agent['agent_id']} with v1 for user: {user_id}")
+        logger.debug(f"Created agent {agent['agent_id']} with v1 for user: {user_id}")
         return AgentResponse(
             agent_id=agent['agent_id'],
             account_id=agent['account_id'],
@@ -2140,6 +2226,7 @@ async def create_agent(
             tags=agent.get('tags', []),
             avatar=agent.get('avatar'),
             avatar_color=agent.get('avatar_color'),
+            profile_image_url=agent.get('profile_image_url'),
             created_at=agent['created_at'],
             updated_at=agent.get('updated_at', agent['created_at']),
             current_version_id=agent.get('current_version_id'),
@@ -2187,7 +2274,7 @@ async def update_agent(
             status_code=403, 
             detail="Custom agent currently disabled. This feature is not available at the moment."
         )
-    logger.info(f"Updating agent {agent_id} for user: {user_id}")
+    logger.debug(f"Updating agent {agent_id} for user: {user_id}")
     client = await db.client
     
     try:
@@ -2247,7 +2334,7 @@ async def update_agent(
                     detail="Suna's integrations cannot be modified."
                 )
             
-            logger.info(f"Suna agent update validation passed for agent {agent_id} by user {user_id}")
+            logger.debug(f"Suna agent update validation passed for agent {agent_id} by user {user_id}")
 
         current_version_data = None
         if existing_data.get('current_version_id'):
@@ -2264,8 +2351,27 @@ async def update_agent(
                 logger.warning(f"Failed to get current version data for agent {agent_id}: {e}")
         
         if current_version_data is None:
-            logger.info(f"Agent {agent_id} has no version data, creating initial version")
+            logger.debug(f"Agent {agent_id} has no version data, creating initial version")
             try:
+                workflows_result = await client.table('agent_workflows').select('*').eq('agent_id', agent_id).execute()
+                workflows = workflows_result.data if workflows_result.data else []
+                
+                # Fetch triggers for the agent
+                triggers_result = await client.table('agent_triggers').select('*').eq('agent_id', agent_id).execute()
+                triggers = []
+                if triggers_result.data:
+                    import json
+                    for trigger in triggers_result.data:
+                        # Parse the config string if it's a string
+                        trigger_copy = trigger.copy()
+                        if 'config' in trigger_copy and isinstance(trigger_copy['config'], str):
+                            try:
+                                trigger_copy['config'] = json.loads(trigger_copy['config'])
+                            except json.JSONDecodeError:
+                                logger.warning(f"Failed to parse trigger config for {trigger_copy.get('trigger_id')}")
+                                trigger_copy['config'] = {}
+                        triggers.append(trigger_copy)
+                
                 initial_version_data = {
                     "agent_id": agent_id,
                     "version_number": 1,
@@ -2284,7 +2390,9 @@ async def update_agent(
                     configured_mcps=initial_version_data["configured_mcps"],
                     custom_mcps=initial_version_data["custom_mcps"],
                     avatar=None,
-                    avatar_color=None
+                    avatar_color=None,
+                    workflows=workflows,
+                    triggers=triggers
                 )
                 initial_version_data["config"] = initial_config
                 
@@ -2298,7 +2406,7 @@ async def update_agent(
                         'version_count': 1
                     }).eq('agent_id', agent_id).execute()
                     current_version_data = initial_version_data
-                    logger.info(f"Created initial version for agent {agent_id}")
+                    logger.debug(f"Created initial version for agent {agent_id}")
                 else:
                     current_version_data = {
                         'system_prompt': existing_data.get('system_prompt', ''),
@@ -2365,6 +2473,8 @@ async def update_agent(
             update_data["avatar"] = agent_data.avatar
         if agent_data.avatar_color is not None:
             update_data["avatar_color"] = agent_data.avatar_color
+        if agent_data.profile_image_url is not None:
+            update_data["profile_image_url"] = agent_data.profile_image_url
         
         current_system_prompt = agent_data.system_prompt if agent_data.system_prompt is not None else current_version_data.get('system_prompt', '')
         current_configured_mcps = agent_data.configured_mcps if agent_data.configured_mcps is not None else current_version_data.get('configured_mcps', [])
@@ -2399,7 +2509,7 @@ async def update_agent(
                 update_data['current_version_id'] = new_version_id
                 update_data['version_count'] = new_version.version_number
                 
-                logger.info(f"Created new version {new_version.version_name} for agent {agent_id}")
+                logger.debug(f"Created new version {new_version.version_name} for agent {agent_id}")
                 
             except HTTPException:
                 raise
@@ -2452,7 +2562,7 @@ async def update_agent(
                     created_by=current_version_data.get('created_by')
                 )
                 
-                logger.info(f"Using agent {agent['name']} version {current_version_data.get('version_name', 'v1')}")
+                logger.debug(f"Using agent {agent['name']} version {current_version_data.get('version_name', 'v1')}")
             except Exception as e:
                 logger.warning(f"Failed to get version data for updated agent {agent_id}: {e}")
         
@@ -2493,6 +2603,7 @@ async def update_agent(
             tags=agent.get('tags', []),
             avatar=agent_config.get('avatar'),
             avatar_color=agent_config.get('avatar_color'),
+            profile_image_url=agent_config.get('profile_image_url'),
             created_at=agent['created_at'],
             updated_at=agent.get('updated_at', agent['created_at']),
             current_version_id=agent.get('current_version_id'),
@@ -2514,7 +2625,7 @@ async def delete_agent(agent_id: str, user_id: str = Depends(get_current_user_id
             status_code=403, 
             detail="Custom agent currently disabled. This feature is not available at the moment."
         )
-    logger.info(f"Deleting agent: {agent_id}")
+    logger.debug(f"Deleting agent: {agent_id}")
     client = await db.client
     
     try:
@@ -2532,6 +2643,30 @@ async def delete_agent(agent_id: str, user_id: str = Depends(get_current_user_id
         if agent.get('metadata', {}).get('is_suna_default', False):
             raise HTTPException(status_code=400, detail="Cannot delete Suna default agent")
         
+        # Clean up triggers before deleting agent to ensure proper remote cleanup
+        try:
+            from triggers.trigger_service import get_trigger_service
+            trigger_service = get_trigger_service(db)
+            
+            # Get all triggers for this agent
+            triggers_result = await client.table('agent_triggers').select('trigger_id').eq('agent_id', agent_id).execute()
+            
+            if triggers_result.data:
+                logger.debug(f"Cleaning up {len(triggers_result.data)} triggers for agent {agent_id}")
+                
+                # Delete each trigger properly (this handles remote cleanup)
+                for trigger_record in triggers_result.data:
+                    trigger_id = trigger_record['trigger_id']
+                    try:
+                        await trigger_service.delete_trigger(trigger_id)
+                        logger.debug(f"Successfully cleaned up trigger {trigger_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to clean up trigger {trigger_id}: {str(e)}")
+                        # Continue with other triggers even if one fails
+        except Exception as e:
+            logger.warning(f"Failed to clean up triggers for agent {agent_id}: {str(e)}")
+            # Continue with agent deletion even if trigger cleanup fails
+        
         delete_result = await client.table('agents').delete().eq('agent_id', agent_id).execute()
         
         if not delete_result.data:
@@ -2544,7 +2679,7 @@ async def delete_agent(agent_id: str, user_id: str = Depends(get_current_user_id
         except Exception as cache_error:
             logger.warning(f"Cache invalidation failed for user {user_id}: {str(cache_error)}")
         
-        logger.info(f"Successfully deleted agent: {agent_id}")
+        logger.debug(f"Successfully deleted agent: {agent_id}")
         return {"message": "Agent deleted successfully"}
         
     except HTTPException:
@@ -2564,7 +2699,7 @@ async def get_agent_builder_chat_history(
             detail="Custom agents currently disabled. This feature is not available at the moment."
         )
     
-    logger.info(f"Fetching agent builder chat history for agent: {agent_id}")
+    logger.debug(f"Fetching agent builder chat history for agent: {agent_id}")
     client = await db.client
     
     try:
@@ -2586,14 +2721,14 @@ async def get_agent_builder_chat_history(
                 })
         
         if not agent_builder_threads:
-            logger.info(f"No agent builder threads found for agent {agent_id}")
+            logger.debug(f"No agent builder threads found for agent {agent_id}")
             return {"messages": [], "thread_id": None}
         
         latest_thread_id = agent_builder_threads[0]['thread_id']
-        logger.info(f"Found {len(agent_builder_threads)} agent builder threads, using latest: {latest_thread_id}")
+        logger.debug(f"Found {len(agent_builder_threads)} agent builder threads, using latest: {latest_thread_id}")
         messages_result = await client.table('messages').select('*').eq('thread_id', latest_thread_id).neq('type', 'status').neq('type', 'summary').order('created_at', desc=False).execute()
         
-        logger.info(f"Found {len(messages_result.data)} messages for agent builder chat history")
+        logger.debug(f"Found {len(messages_result.data)} messages for agent builder chat history")
         return {
             "messages": messages_result.data,
             "thread_id": latest_thread_id
@@ -2605,6 +2740,216 @@ async def get_agent_builder_chat_history(
         logger.error(f"Error fetching agent builder chat history for agent {agent_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch chat history: {str(e)}")
 
+@router.get("/agents/{agent_id}/pipedream-tools/{profile_id}")
+async def get_pipedream_tools_for_agent(
+    agent_id: str,
+    profile_id: str,
+    user_id: str = Depends(get_current_user_id_from_jwt),
+    version: Optional[str] = Query(None, description="Version ID to get tools from specific version")
+):
+    logger.debug(f"Getting tools for agent {agent_id}, profile {profile_id}, user {user_id}, version {version}")
+
+    try:
+        from pipedream import profile_service, mcp_service
+        from uuid import UUID
+
+        profile = await profile_service.get_profile(UUID(user_id), UUID(profile_id))
+        
+        if not profile:
+            logger.error(f"Profile {profile_id} not found for user {user_id}")
+            try:
+                all_profiles = await profile_service.get_profiles(UUID(user_id))
+                pipedream_profiles = [p for p in all_profiles if 'pipedream' in p.mcp_qualified_name]
+                logger.debug(f"User {user_id} has {len(pipedream_profiles)} pipedream profiles: {[p.profile_id for p in pipedream_profiles]}")
+            except Exception as debug_e:
+                logger.warning(f"Could not check user's profiles: {str(debug_e)}")
+            
+            raise HTTPException(status_code=404, detail=f"Profile {profile_id} not found or access denied")
+        
+        if not profile.is_connected:
+            raise HTTPException(status_code=400, detail="Profile is not connected")
+
+        enabled_tools = []
+        try:
+            client = await db.client
+            agent_row = await client.table('agents')\
+                .select('current_version_id')\
+                .eq('agent_id', agent_id)\
+                .eq('account_id', user_id)\
+                .maybe_single()\
+                .execute()
+            
+            if agent_row.data and agent_row.data.get('current_version_id'):
+                if version:
+                    version_result = await client.table('agent_versions')\
+                        .select('config')\
+                        .eq('version_id', version)\
+                        .maybe_single()\
+                        .execute()
+                else:
+                    version_result = await client.table('agent_versions')\
+                        .select('config')\
+                        .eq('version_id', agent_row.data['current_version_id'])\
+                        .maybe_single()\
+                        .execute()
+                
+                if version_result.data and version_result.data.get('config'):
+                    agent_config = version_result.data['config']
+                    tools = agent_config.get('tools', {})
+                    custom_mcps = tools.get('custom_mcp', []) or []
+                    
+                    for mcp in custom_mcps:
+                        mcp_profile_id = mcp.get('config', {}).get('profile_id')
+                        if mcp_profile_id == profile_id:
+                            enabled_tools = mcp.get('enabledTools', mcp.get('enabled_tools', []))
+                            logger.debug(f"Found enabled tools for profile {profile_id}: {enabled_tools}")
+                            break
+                    
+                    if not enabled_tools:
+                        logger.debug(f"No enabled tools found for profile {profile_id} in agent {agent_id}")
+            
+        except Exception as e:
+            logger.error(f"Error retrieving enabled tools for profile {profile_id}: {str(e)}")
+        
+        logger.debug(f"Using {len(enabled_tools)} enabled tools for profile {profile_id}: {enabled_tools}")
+        
+        try:
+            from pipedream.mcp_service import ExternalUserId, AppSlug
+            external_user_id = ExternalUserId(profile.external_user_id)
+            app_slug_obj = AppSlug(profile.app_slug)
+            
+            logger.debug(f"Discovering servers for user {external_user_id.value} and app {app_slug_obj.value}")
+            servers = await mcp_service.discover_servers_for_user(external_user_id, app_slug_obj)
+            logger.debug(f"Found {len(servers)} servers: {[s.app_slug for s in servers]}")
+            
+            server = servers[0] if servers else None
+            logger.debug(f"Selected server: {server.app_slug if server else 'None'} with {len(server.available_tools) if server else 0} tools")
+            
+            if not server:
+                return {
+                    'profile_id': profile_id,
+                    'app_name': profile.app_name,
+                    'profile_name': profile.profile_name,
+                    'tools': [],
+                    'has_mcp_config': len(enabled_tools) > 0
+                }
+            
+            available_tools = server.available_tools
+            
+            formatted_tools = []
+            def tools_match(api_tool_name, stored_tool_name):
+                api_normalized = api_tool_name.lower().replace('-', '_')
+                stored_normalized = stored_tool_name.lower().replace('-', '_')
+                return api_normalized == stored_normalized
+            
+            for tool in available_tools:
+                is_enabled = any(tools_match(tool.name, stored_tool) for stored_tool in enabled_tools)
+                formatted_tools.append({
+                    'name': tool.name,
+                    'description': tool.description or f"Tool from {profile.app_name}",
+                    'enabled': is_enabled
+                })
+            
+            return {
+                'profile_id': profile_id,
+                'app_name': profile.app_name,
+                'profile_name': profile.profile_name,
+                'tools': formatted_tools,
+                'has_mcp_config': len(enabled_tools) > 0
+            }
+            
+        except Exception as e:
+            logger.error(f"Error discovering tools: {e}", exc_info=True)
+            return {
+                'profile_id': profile_id,
+                'app_name': getattr(profile, 'app_name', 'Unknown'),
+                'profile_name': getattr(profile, 'profile_name', 'Unknown'),
+                'tools': [],
+                'has_mcp_config': len(enabled_tools) > 0,
+                'error': str(e)
+            }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting Pipedream tools for agent {agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.put("/agents/{agent_id}/pipedream-tools/{profile_id}")
+async def update_pipedream_tools_for_agent(
+    agent_id: str,
+    profile_id: str,
+    request: dict,
+    user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    try:
+        client = await db.client
+        agent_row = await client.table('agents')\
+            .select('current_version_id')\
+            .eq('agent_id', agent_id)\
+            .eq('account_id', user_id)\
+            .maybe_single()\
+            .execute()
+        if not agent_row.data:
+            raise HTTPException(status_code=404, detail="Agent not found")
+
+        agent_config = {}
+        if agent_row.data.get('current_version_id'):
+            version_result = await client.table('agent_versions')\
+                .select('config')\
+                .eq('version_id', agent_row.data['current_version_id'])\
+                .maybe_single()\
+                .execute()
+            if version_result.data and version_result.data.get('config'):
+                agent_config = version_result.data['config']
+
+        tools = agent_config.get('tools', {})
+        custom_mcps = tools.get('custom_mcp', []) or []
+
+        if any(mcp.get('config', {}).get('profile_id') == profile_id for mcp in custom_mcps):
+            raise HTTPException(status_code=400, detail="This profile is already added to this agent")
+
+        enabled_tools = request.get('enabled_tools', [])
+        
+        updated = False
+        for mcp in custom_mcps:
+            mcp_profile_id = mcp.get('config', {}).get('profile_id')
+            if mcp_profile_id == profile_id:
+                mcp['enabledTools'] = enabled_tools
+                mcp['enabled_tools'] = enabled_tools
+                updated = True
+                logger.debug(f"Updated enabled tools for profile {profile_id}: {enabled_tools}")
+                break
+        
+        if not updated:
+            logger.warning(f"Profile {profile_id} not found in agent {agent_id} custom_mcps configuration")
+            
+        if updated:
+            agent_config['tools']['custom_mcp'] = custom_mcps
+            
+            await client.table('agent_versions')\
+                .update({'config': agent_config})\
+                .eq('version_id', agent_row.data['current_version_id'])\
+                .execute()
+            
+            logger.debug(f"Successfully updated agent configuration for {agent_id}")
+        
+        result = {
+            'success': updated,
+            'enabled_tools': enabled_tools,
+            'total_tools': len(enabled_tools),
+            'profile_id': profile_id
+        }
+        logger.debug(f"Successfully updated Pipedream tools for agent {agent_id}, profile {profile_id}")
+        return result
+        
+    except ValueError as e:
+        logger.error(f"Validation error updating Pipedream tools: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating Pipedream tools for agent {agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 
@@ -2615,7 +2960,7 @@ async def get_custom_mcp_tools_for_agent(
     request: Request,
     user_id: str = Depends(get_current_user_id_from_jwt)
 ):
-    logger.info(f"Getting custom MCP tools for agent {agent_id}, user {user_id}")
+    logger.debug(f"Getting custom MCP tools for agent {agent_id}, user {user_id}")
     try:
         client = await db.client
         agent_result = await client.table('agents').select('current_version_id').eq('agent_id', agent_id).eq('account_id', user_id).execute()
@@ -2695,7 +3040,7 @@ async def update_custom_mcp_tools_for_agent(
     request: dict,
     user_id: str = Depends(get_current_user_id_from_jwt)
 ):
-    logger.info(f"Updating custom MCP tools for agent {agent_id}, user {user_id}")
+    logger.debug(f"Updating custom MCP tools for agent {agent_id}, user {user_id}")
     
     try:
         client = await db.client
@@ -2772,7 +3117,7 @@ async def update_custom_mcp_tools_for_agent(
                 agentpress_tools=agent_config.get('tools', {}).get('agentpress', {}),
                 change_description=f"Updated custom MCP tools for {mcp_type}"
             )
-            logger.info(f"Created version {new_version.version_id} for custom MCP tools update on agent {agent_id}")
+            logger.debug(f"Created version {new_version.version_id} for custom MCP tools update on agent {agent_id}")
         except Exception as e:
             logger.error(f"Failed to create version for custom MCP tools update: {e}")
             raise HTTPException(status_code=500, detail="Failed to save changes")
@@ -2797,7 +3142,7 @@ async def get_agent_tools(
     if not await is_enabled("custom_agents"):
         raise HTTPException(status_code=403, detail="Custom agents currently disabled")
         
-    logger.info(f"Fetching enabled tools for agent: {agent_id} by user: {user_id}")
+    logger.debug(f"Fetching enabled tools for agent: {agent_id} by user: {user_id}")
     client = await db.client
 
     agent_result = await client.table('agents').select('*').eq('agent_id', agent_id).execute()
@@ -2860,7 +3205,7 @@ async def get_user_threads(
     limit: Optional[int] = Query(1000, ge=1, le=1000, description="Number of items per page (max 1000)")
 ):
     """Get all threads for the current user with associated project data."""
-    logger.info(f"Fetching threads with project data for user: {user_id} (page={page}, limit={limit})")
+    logger.debug(f"Fetching threads with project data for user: {user_id} (page={page}, limit={limit})")
     client = await db.client
     try:
         offset = (page - 1) * limit
@@ -2869,7 +3214,7 @@ async def get_user_threads(
         threads_result = await client.table('threads').select('*').eq('account_id', user_id).order('created_at', desc=True).execute()
         
         if not threads_result.data:
-            logger.info(f"No threads found for user: {user_id}")
+            logger.debug(f"No threads found for user: {user_id}")
             return {
                 "threads": [],
                 "pagination": {
@@ -2898,7 +3243,7 @@ async def get_user_threads(
             projects_result = await client.table('projects').select('*').in_('project_id', unique_project_ids).execute()
             
             if projects_result.data:
-                logger.info(f"[API] Raw projects from DB: {len(projects_result.data)}")
+                logger.debug(f"[API] Raw projects from DB: {len(projects_result.data)}")
                 # Create a lookup map of projects by ID
                 projects_by_id = {
                     project['project_id']: project 
@@ -2936,7 +3281,7 @@ async def get_user_threads(
         
         total_pages = (total_count + limit - 1) // limit if total_count else 0
         
-        logger.info(f"[API] Mapped threads for frontend: {len(mapped_threads)} threads, {len(projects_by_id)} unique projects")
+        logger.debug(f"[API] Mapped threads for frontend: {len(mapped_threads)} threads, {len(projects_by_id)} unique projects")
         
         return {
             "threads": mapped_threads,
@@ -2958,7 +3303,7 @@ async def get_thread(
     user_id: str = Depends(get_current_user_id_from_jwt)
 ):
     """Get a specific thread by ID with complete related data."""
-    logger.info(f"Fetching thread: {thread_id}")
+    logger.debug(f"Fetching thread: {thread_id}")
     client = await db.client
     
     try:
@@ -2979,7 +3324,7 @@ async def get_thread(
             
             if project_result.data:
                 project = project_result.data[0]
-                logger.info(f"[API] Raw project from DB for thread {thread_id}")
+                logger.debug(f"[API] Raw project from DB for thread {thread_id}")
                 project_data = {
                     "project_id": project['project_id'],
                     "name": project.get('name', ''),
@@ -3024,7 +3369,7 @@ async def get_thread(
             "recent_agent_runs": agent_runs_data
         }
         
-        logger.info(f"[API] Mapped thread for frontend: {thread_id} with {message_count} messages and {len(agent_runs_data)} recent runs")
+        logger.debug(f"[API] Mapped thread for frontend: {thread_id} with {message_count} messages and {len(agent_runs_data)} recent runs")
         return mapped_thread
         
     except HTTPException:
@@ -3045,7 +3390,7 @@ async def create_thread(
     """
     if not name:
         name = "New Project"
-    logger.info(f"Creating new thread with name: {name}")
+    logger.debug(f"Creating new thread with name: {name}")
     client = await db.client
     account_id = user_id  # In Basejump, personal account_id is the same as user_id
     
@@ -3059,7 +3404,7 @@ async def create_thread(
             "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
         project_id = project.data[0]['project_id']
-        logger.info(f"Created new project: {project_id}")
+        logger.debug(f"Created new project: {project_id}")
 
         # 2. Create Sandbox
         sandbox_id = None
@@ -3067,7 +3412,7 @@ async def create_thread(
             sandbox_pass = str(uuid.uuid4())
             sandbox = await create_sandbox(sandbox_pass, project_id)
             sandbox_id = sandbox.id
-            logger.info(f"Created new sandbox {sandbox_id} for project {project_id}")
+            logger.debug(f"Created new sandbox {sandbox_id} for project {project_id}")
             
             # Get preview links
             vnc_link = await sandbox.get_preview_link(6080)
@@ -3121,9 +3466,9 @@ async def create_thread(
         
         thread = await client.table('threads').insert(thread_data).execute()
         thread_id = thread.data[0]['thread_id']
-        logger.info(f"Created new thread: {thread_id}")
+        logger.debug(f"Created new thread: {thread_id}")
 
-        logger.info(f"Successfully created thread {thread_id} with project {project_id}")
+        logger.debug(f"Successfully created thread {thread_id} with project {project_id}")
         return {"thread_id": thread_id, "project_id": project_id}
 
     except Exception as e:
@@ -3139,7 +3484,7 @@ async def get_thread_messages(
     order: str = Query("desc", description="Order by created_at: 'asc' or 'desc'")
 ):
     """Get all messages for a thread, fetching in batches of 1000 from the DB to avoid large queries."""
-    logger.info(f"Fetching all messages for thread: {thread_id}, order={order}")
+    logger.debug(f"Fetching all messages for thread: {thread_id}, order={order}")
     client = await db.client
     await verify_thread_access(client, thread_id, user_id)
     try:
@@ -3192,7 +3537,7 @@ async def add_message_to_thread(
     user_id: str = Depends(get_current_user_id_from_jwt)
 ):
     """Add a message to a thread"""
-    logger.info(f"Adding message to thread: {thread_id}")
+    logger.debug(f"Adding message to thread: {thread_id}")
     client = await db.client
     await verify_thread_access(client, thread_id, user_id)
     try:
@@ -3218,7 +3563,7 @@ async def create_message(
     user_id: str = Depends(get_current_user_id_from_jwt)
 ):
     """Create a new message in a thread."""
-    logger.info(f"Creating message in thread: {thread_id}")
+    logger.debug(f"Creating message in thread: {thread_id}")
     client = await db.client
     
     try:
@@ -3243,7 +3588,7 @@ async def create_message(
         if not message_result.data:
             raise HTTPException(status_code=500, detail="Failed to create message")
         
-        logger.info(f"Created message: {message_result.data[0]['message_id']}")
+        logger.debug(f"Created message: {message_result.data[0]['message_id']}")
         return message_result.data[0]
         
     except HTTPException:
@@ -3260,7 +3605,7 @@ async def delete_message(
     user_id: str = Depends(get_current_user_id_from_jwt)
 ):
     """Delete a message from a thread."""
-    logger.info(f"Deleting message from thread: {thread_id}")
+    logger.debug(f"Deleting message from thread: {thread_id}")
     client = await db.client
     await verify_thread_access(client, thread_id, user_id)
     try:
@@ -3277,7 +3622,7 @@ async def update_agent_custom_mcps(
     request: dict,
     user_id: str = Depends(get_current_user_id_from_jwt)
 ):
-    logger.info(f"Updating agent {agent_id} custom MCPs for user {user_id}")
+    logger.debug(f"Updating agent {agent_id} custom MCPs for user {user_id}")
     
     try:
         client = await db.client
@@ -3676,7 +4021,7 @@ async def update_custom_mcp_tools_for_agent(
                 agentpress_tools=agent_config.get('tools', {}).get('agentpress', {}),
                 change_description=f"Updated custom MCP tools for {mcp_type}"
             )
-            logger.info(f"Created version {new_version.version_id} for custom MCP tools update on agent {agent_id}")
+            logger.debug(f"Created version {new_version.version_id} for custom MCP tools update on agent {agent_id}")
         except Exception as e:
             logger.error(f"Failed to create version for custom MCP tools update: {e}")
             raise HTTPException(status_code=500, detail="Failed to save changes")
@@ -3839,3 +4184,114 @@ async def update_pipedream_tools_for_agent_deprecated(
         logger.error(f"Error in deprecated Pipedream tools handler for agent {agent_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
+@router.post("/tools/export-presentation")
+async def export_presentation(
+    request: Dict[str, Any] = Body(...),
+    user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    try:
+        presentation_name = request.get("presentation_name")
+        export_format = request.get("format", "pptx")
+        project_id = request.get("project_id")
+        
+        if not presentation_name:
+            raise HTTPException(status_code=400, detail="presentation_name is required")
+        
+        if not project_id:
+            raise HTTPException(status_code=400, detail="project_id is required")
+        
+        if db is None:
+            db_conn = DBConnection()
+            client = await db_conn.client
+        else:
+            client = await db.client
+            
+        project_result = await client.table('projects').select('sandbox').eq('project_id', project_id).execute()
+        if not project_result.data:
+            raise HTTPException(status_code=404, detail="Project not found")
+        
+        sandbox_data = project_result.data[0].get('sandbox', {})
+        sandbox_id = sandbox_data.get('id')
+        
+        if not sandbox_id:
+            raise HTTPException(status_code=400, detail="No sandbox found for this project")
+        
+        thread_manager = ThreadManager()
+        
+        presentation_tool = SandboxPresentationToolV2(
+            project_id=project_id,
+            thread_manager=thread_manager
+        )
+        
+        result = await presentation_tool.export_presentation(
+            presentation_name=presentation_name,
+            format=export_format
+        )
+        
+        if result.success:
+            import json
+            import urllib.parse
+            data = json.loads(result.output)
+            
+            export_file = data.get("export_file")
+            logger.debug(f"Export file from tool: {export_file}")
+            logger.debug(f"Sandbox ID: {sandbox_id}")
+            
+            if export_file:
+                from fastapi.responses import Response
+                from sandbox.api import get_sandbox_by_id_safely, verify_sandbox_access
+                
+                try:
+                    file_path = export_file.replace("/workspace/", "").lstrip("/")
+                    full_path = f"/workspace/{file_path}"
+                    
+                    sandbox = await get_sandbox_by_id_safely(client, sandbox_id)
+                    file_content = await sandbox.fs.download_file(full_path)
+                    
+                    return {
+                        "success": True,
+                        "message": data.get("message"),
+                        "file_content": base64.b64encode(file_content).decode('utf-8'),
+                        "filename": export_file.split('/')[-1],
+                        "export_file": data.get("export_file"),
+                        "format": data.get("format"),
+                        "file_size": data.get("file_size")
+                    }
+                except Exception as e:
+                    logger.error(f"Failed to read exported file: {str(e)}")
+                    return {
+                        "success": False,
+                        "error": f"Failed to read exported file: {str(e)}"
+                    }
+            else:
+                return {
+                    "success": True,
+                    "message": data.get("message"),
+                    "download_url": data.get("download_url"),
+                    "export_file": data.get("export_file"),
+                    "format": data.get("format"),
+                    "file_size": data.get("file_size")
+                }
+        else:
+            raise HTTPException(status_code=400, detail=result.output or "Export failed")
+            
+    except Exception as e:
+        logger.error(f"Export presentation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to export presentation: {str(e)}")
+
+        
+@router.post("/agents/profile-image/upload")
+async def upload_agent_profile_image(
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user_id_from_jwt)
+):
+    try:
+        content_type = file.content_type or "image/png"
+        image_bytes = await file.read()
+        from utils.s3_upload_utils import upload_image_bytes
+        public_url = await upload_image_bytes(image_bytes=image_bytes, content_type=content_type, bucket_name="agent-profile-images")
+        return {"url": public_url}
+    except Exception as e:
+        logger.error(f"Failed to upload agent profile image for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload profile image")

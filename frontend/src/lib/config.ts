@@ -27,6 +27,7 @@ export interface SubscriptionTiers {
 interface Config {
   ENV_MODE: EnvMode;
   IS_LOCAL: boolean;
+  IS_STAGING: boolean;
   SUBSCRIPTION_TIERS: SubscriptionTiers;
 }
 
@@ -102,47 +103,34 @@ const STAGING_TIERS: SubscriptionTiers = {
   },
 } as const;
 
-// Determine the environment mode from environment variables
-const getEnvironmentMode = (): EnvMode => {
-  // Get the environment mode from the environment variable, if set
-  const envMode = process.env.NEXT_PUBLIC_ENV_MODE?.toLowerCase();
-
-  // First check if the environment variable is explicitly set
-  if (envMode) {
-    if (envMode === EnvMode.LOCAL) {
-      console.log('Using explicitly set LOCAL environment mode');
+function getEnvironmentMode(): EnvMode {
+  const envMode = process.env.NEXT_PUBLIC_ENV_MODE.toUpperCase();
+  switch (envMode) {
+    case 'LOCAL':
       return EnvMode.LOCAL;
-    } else if (envMode === EnvMode.STAGING) {
-      console.log('Using explicitly set STAGING environment mode');
+    case 'STAGING':
       return EnvMode.STAGING;
-    } else if (envMode === EnvMode.PRODUCTION) {
-      console.log('Using explicitly set PRODUCTION environment mode');
+    case 'PRODUCTION':
       return EnvMode.PRODUCTION;
-    }
+  //   default:
+  //     if (process.env.NODE_ENV === 'development') {
+  //       return EnvMode.LOCAL;
+  //     } else {
+  //       return EnvMode.PRODUCTION;
+  //     }
   }
+}
 
-  // If no valid environment mode is set, fall back to defaults based on NODE_ENV
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Defaulting to LOCAL environment mode in development');
-    return EnvMode.LOCAL;
-  } else {
-    console.log('Defaulting to PRODUCTION environment mode');
-    return EnvMode.PRODUCTION;
-  }
-};
-
-// Get the environment mode once to ensure consistency
 const currentEnvMode = getEnvironmentMode();
 
-// Create the config object
 export const config: Config = {
   ENV_MODE: currentEnvMode,
   IS_LOCAL: currentEnvMode === EnvMode.LOCAL,
+  IS_STAGING: currentEnvMode === EnvMode.STAGING,
   SUBSCRIPTION_TIERS:
     currentEnvMode === EnvMode.STAGING ? STAGING_TIERS : PROD_TIERS,
 };
 
-// Helper function to check if we're in local mode (for component conditionals)
 export const isLocalMode = (): boolean => {
   return config.IS_LOCAL;
 };
