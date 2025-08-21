@@ -58,7 +58,7 @@ export const PipedreamConnectButton: React.FC<PipedreamConnectButtonProps> = ({
                 await new Promise(r => setTimeout(r, 800));
                 const connections = await pipedreamApi.getConnections();
                 const target = app?.replace(/^pipedream:/, '');
-                const isConnected = connections.connections?.some(c => (c.name_slug === target || c.app === target) && c.is_active !== false);
+                const isConnected = connections.connections?.some(c => (c.name_slug === target || c.app === target) && c.status === 'connected');
                 if (isConnected) {
                   setIsConnecting(false);
                   onConnect?.();

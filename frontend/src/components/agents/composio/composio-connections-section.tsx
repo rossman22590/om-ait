@@ -668,7 +668,7 @@ export const ComposioConnectionsSection: React.FC<ComposioConnectionsSectionProp
       )}
 
       <Dialog open={showRegistry} onOpenChange={setShowRegistry}>
-        <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-hidden">
+        <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-auto">
           <DialogHeader className="sr-only">
             <DialogTitle>Connect New App</DialogTitle>
           </DialogHeader>

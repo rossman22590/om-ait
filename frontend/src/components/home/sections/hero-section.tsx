@@ -27,11 +27,11 @@ import {
   DialogOverlay,
 } from '@/components/ui/dialog';
 import { BillingErrorAlert } from '@/components/billing/usage-limit-alert';
+import { BillingModal } from '@/components/billing/billing-modal';
 import { useBillingError } from '@/hooks/useBillingError';
 import { useAccounts } from '@/hooks/use-accounts';
 import { isLocalMode, config } from '@/lib/config';
 import { toast } from 'sonner';
-import { useModal } from '@/hooks/use-modal-store';
 
 import { ChatInput, ChatInputHandles } from '@/components/thread/chat-input/chat-input';
 import { normalizeFilenameToNFC } from '@/lib/utils/unicode';
@@ -329,7 +329,7 @@ export function HeroSection() {
               <span className="text-primary">, your AI Employee.</span>
             </h1>
             <p className="text-base md:text-lg text-center text-muted-foreground font-medium text-balance leading-relaxed tracking-tight max-w-2xl px-2">
-            Kortix – the simplest way to migrate from human to AI.
+            Machine – the simplest way to migrate from human to AI.
             </p>
           </div>
 

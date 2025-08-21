@@ -22,7 +22,7 @@ import {
   PipedreamMCPConfiguration 
 } from './types';
 import { usePipedreamAppIcon } from '@/hooks/react-query/pipedream/use-pipedream';
-import { useComposioToolkits } from '@/hooks/react-query/composio/use-composio';
+import { useComposioToolkitIcon } from '@/hooks/react-query/composio/use-composio';
 import { useCredentialProfilesForMcp } from '@/hooks/react-query/mcp/use-credential-profiles';
 
 // Helper type to handle different response formats
@@ -66,28 +66,11 @@ const MCPLogo: React.FC<{ mcp: MCPConfiguration }> = ({ mcp }) => {
     isPipedream && appInfo ? appInfo.slug : ''
   ) as { data?: { icon_url: string } | string };
 
-  // For Composio, we need to get the toolkit info
-  const { data: composioData } = useComposioToolkits(
+  // For Composio, we can fetch the toolkit icon directly
+  const { data: composioIconData } = useComposioToolkitIcon(
     isComposio && appInfo ? appInfo.slug : '',
-    undefined
-  ) as { 
-    data?: { 
-      toolkits?: Array<{ icon_url?: string; logo?: string; name?: string }> 
-    } | Array<{ icon_url?: string; logo?: string; name?: string }> 
-  };
-
-  const toolkit = useMemo(() => {
-    if (!isComposio) return null;
-    
-    // Handle different response formats
-    if (Array.isArray(composioData)) {
-      return composioData[0] || null;
-    } else if (composioData && 'toolkits' in composioData) {
-      return Array.isArray(composioData.toolkits) ? composioData.toolkits[0] || null : null;
-    }
-    
-    return null;
-  }, [isComposio, composioData]);
+    { enabled: isComposio && !!appInfo?.slug }
+  );
 
   // Fallback for when we don't have app info
   if (!appInfo) {
@@ -122,13 +105,12 @@ const MCPLogo: React.FC<{ mcp: MCPConfiguration }> = ({ mcp }) => {
   }
 
   // Handle Composio icon
-  if (isComposio && (toolkit?.icon_url || toolkit?.logo)) {
-    const logoUrl = toolkit.logo || toolkit.icon_url;
+  if (isComposio && composioIconData?.success && composioIconData?.icon_url) {
     return (
       <>
         <img
-          src={logoUrl}
-          alt={toolkit.name || mcp.name}
+          src={composioIconData.icon_url}
+          alt={mcp.name}
           className="h-8 w-8 rounded-md object-cover"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
@@ -138,7 +120,7 @@ const MCPLogo: React.FC<{ mcp: MCPConfiguration }> = ({ mcp }) => {
         />
         <div className="hidden h-8 w-8 rounded-full bg-muted items-center justify-center">
           <span className="text-xs font-medium">
-            {toolkit.name?.charAt(0).toUpperCase() || 'C'}
+            {mcp.name?.charAt(0).toUpperCase() || 'C'}
           </span>
         </div>
       </>
@@ -204,7 +186,17 @@ const MCPConfigurationItem: React.FC<{
                 <span>Ready to connect to your agent</span>
               ) : (
                 <>
-                  <span>{mcp.enabledTools?.length || 0} tools enabled</span>
+                  <span>
+                    {(() => {
+                      const toolCount = mcp.enabledTools?.length || 0;
+                      console.log(`[ConfiguredMcpList] ${mcp.name} enabledTools:`, {
+                        enabledTools: mcp.enabledTools,
+                        length: toolCount,
+                        mcpType: mcp.customType
+                      });
+                      return `${toolCount} tools enabled`;
+                    })()}
+                  </span>
                   {hasCredentialProfile && (
                     <div className="flex items-center gap-1">
                       <Key className="h-3 w-3 text-green-600" />
@@ -348,19 +340,19 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
             <div className="h-px bg-border flex-1"></div>
           </div>
         )}
-        {mcps.map((mcp, index) => {
-          const globalIndex = configuredMCPs.findIndex(m => getQualifiedName(m) === getQualifiedName(mcp));
-          return (
-            <MCPConfigurationItem
-              key={`${mcp.qualifiedName}-${index}`}
-              mcp={mcp}
-              index={globalIndex}
-              onEdit={onEdit}
-              onRemove={(idx) => handleDeleteClick(mcp, idx)}
-              onConfigureTools={onConfigureTools}
-            />
-          );
-        })}
+                 {mcps.map((mcp, index) => {
+           const globalIndex = configuredMCPs.findIndex(m => getQualifiedName(m) === getQualifiedName(mcp));
+           return (
+             <MCPConfigurationItem
+               key={`${mcp.qualifiedName}-${index}-${mcp.enabledTools?.length || 0}`}
+               mcp={mcp}
+               index={globalIndex}
+               onEdit={onEdit}
+               onRemove={(idx) => handleDeleteClick(mcp, idx)}
+               onConfigureTools={onConfigureTools}
+             />
+           );
+         })}
       </div>
     );
   };

@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Search, Zap, X, Settings, ChevronDown, ChevronUp, Loader2, Server } from 'lucide-react';
 import { useComposioCategories, useComposioToolkitsInfinite } from '@/hooks/react-query/composio/use-composio';
 import { useComposioProfiles } from '@/hooks/react-query/composio/use-composio-profiles';
@@ -197,13 +198,15 @@ const AppCard = ({ app, profiles, onConnect, onConfigure, isConnectedToAgent, cu
 }) => {
   const connectedProfiles = profiles.filter(p => p.is_connected);
   const canConnect = mode === 'profile-only' ? true : (!isConnectedToAgent && currentAgentId);
-  const hasConnectedProfile = connectedProfiles.length > 0;
   
   return (
-    <div className={cn(
-      "group border bg-card rounded-2xl p-4 transition-all duration-200",
-      canConnect ? "hover:bg-muted" : "opacity-60"
-    )}>
+    <div 
+      onClick={canConnect ? (connectedProfiles.length > 0 ? () => onConfigure(connectedProfiles[0]) : onConnect) : undefined}
+      className={cn(
+        "group border bg-card rounded-2xl p-4 transition-all duration-200",
+        canConnect ? "hover:bg-muted cursor-pointer" : "opacity-60 cursor-not-allowed"
+      )}
+    >
       <div className="flex items-start gap-3 mb-3">
         {app.logo ? (
           <img src={app.logo} alt={app.name} className="w-10 h-10 rounded-lg object-cover p-2 bg-muted rounded-xl border" />
@@ -240,7 +243,7 @@ const AppCard = ({ app, profiles, onConnect, onConfigure, isConnectedToAgent, cu
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50" />
-              {hasConnectedProfile ? `${connectedProfiles.length} existing profile${connectedProfiles.length !== 1 ? 's' : ''}` : 'Click to connect'}
+              {connectedProfiles.length > 0 ? `${connectedProfiles.length} existing profile${connectedProfiles.length !== 1 ? 's' : ''}` : 'Click to connect'}
             </div>
           </div>
         ) : isConnectedToAgent ? (
@@ -250,7 +253,7 @@ const AppCard = ({ app, profiles, onConnect, onConfigure, isConnectedToAgent, cu
               Connected to this agent
             </div>
           </div>
-        ) : hasConnectedProfile ? (
+        ) : connectedProfiles.length > 0 ? (
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
               <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
@@ -264,24 +267,6 @@ const AppCard = ({ app, profiles, onConnect, onConfigure, isConnectedToAgent, cu
               Not connected
             </div>
           </div>
-        )}
-        
-        {!isConnectedToAgent && canConnect && (
-          <Button 
-            variant="default" 
-            size="sm" 
-            className="bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (hasConnectedProfile) {
-                onConfigure(connectedProfiles[0]);
-              } else {
-                onConnect();
-              }
-            }}
-          >
-            {hasConnectedProfile ? 'Add to Agent' : 'Connect'}
-          </Button>
         )}
       </div>
     </div>

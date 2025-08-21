@@ -128,11 +128,11 @@ export const MarketplaceTab = ({
                 )}
                 {communityItems.length > 0 && (
                   <div className="space-y-6">
-                    <MarketplaceSectionHeader
+                    {/* <MarketplaceSectionHeader
                       title="From the community"
                       subtitle="Agents created by our community"
                       iconColor="bg-gradient-to-br from-green-500 to-green-600"
-                    />
+                    /> */}
                     <MarketplaceSectionHeader
                       title="Community Templates"
                       subtitle="Created and shared by the community"

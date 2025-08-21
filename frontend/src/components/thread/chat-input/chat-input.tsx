@@ -498,7 +498,7 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
           )}
 
           <Dialog open={registryDialogOpen} onOpenChange={setRegistryDialogOpen}>
-            <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-hidden">
+            <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-auto">
               <DialogHeader className="sr-only">
                 <DialogTitle>Integrations</DialogTitle>
               </DialogHeader>

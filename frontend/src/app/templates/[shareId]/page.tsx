@@ -241,7 +241,7 @@ const Navbar: React.FC<{ template: MarketplaceTemplate | undefined }> = ({ templ
             <div className="flex items-center">
               <Link href="/" className="flex items-center space-x-2">
                 <KortixLogo size={20} />
-                <span className="font-semibold">Kortix</span>
+                <span className="font-semibold">Machine</span>
               </Link>
             </div>
             {template && (

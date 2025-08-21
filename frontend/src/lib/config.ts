@@ -104,20 +104,35 @@ const STAGING_TIERS: SubscriptionTiers = {
 } as const;
 
 function getEnvironmentMode(): EnvMode {
-  const envMode = process.env.NEXT_PUBLIC_ENV_MODE.toUpperCase();
-  switch (envMode) {
+  const envMode = process.env.NEXT_PUBLIC_ENV_MODE;
+  
+  // If environment variable is not set, fall back to NODE_ENV
+  if (!envMode) {
+    if (process.env.NODE_ENV === 'development') {
+      return EnvMode.LOCAL;
+    } else if (process.env.NODE_ENV === 'production') {
+      return EnvMode.PRODUCTION;
+    } else {
+      // Default fallback
+      return EnvMode.LOCAL;
+    }
+  }
+  
+  const upperEnvMode = envMode.toUpperCase();
+  switch (upperEnvMode) {
     case 'LOCAL':
       return EnvMode.LOCAL;
     case 'STAGING':
       return EnvMode.STAGING;
     case 'PRODUCTION':
       return EnvMode.PRODUCTION;
-  //   default:
-  //     if (process.env.NODE_ENV === 'development') {
-  //       return EnvMode.LOCAL;
-  //     } else {
-  //       return EnvMode.PRODUCTION;
-  //     }
+    default:
+      // Fallback based on NODE_ENV if invalid value
+      if (process.env.NODE_ENV === 'development') {
+        return EnvMode.LOCAL;
+      } else {
+        return EnvMode.PRODUCTION;
+      }
   }
 }
 
@@ -133,6 +148,10 @@ export const config: Config = {
 
 export const isLocalMode = (): boolean => {
   return config.IS_LOCAL;
+};
+
+export const isStagingMode = (): boolean => {
+  return config.IS_STAGING;
 };
 
 

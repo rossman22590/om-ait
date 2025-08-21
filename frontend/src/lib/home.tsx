@@ -135,9 +135,6 @@ export const siteConfig = {
     {
       name: 'Plus',
       price: '$20',
-      yearlyPrice: '$204',
-      originalYearlyPrice: '$240',
-      discountPercentage: 15,
       description: 'Best for individuals and small teams',
       buttonText: 'Start Free',
       buttonColor: 'bg-primary text-white dark:text-black',
@@ -176,9 +173,6 @@ export const siteConfig = {
     {
       name: 'Business',
       price: '$100',
-      yearlyPrice: '$1020',
-      originalYearlyPrice: '$1200',
-      discountPercentage: 15,
       description: 'For established businesses',
       buttonText: 'Start Free',
       buttonColor: 'bg-secondary text-white',

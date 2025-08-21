@@ -143,7 +143,7 @@ export function PipedreamConnectButton({
           const connections = await pipedreamApi.getConnections();
           const targetSlug = appSlugToUse || extractAppSlug(url) || '';
           const isConnected = !!connections.connections.find(
-            (c) => c.app === targetSlug && c.status === 'connected'
+            (c) => (c.app === targetSlug || c.name_slug === targetSlug) && c.status === 'connected'
           );
 
           if (isConnected) {

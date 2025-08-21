@@ -143,13 +143,35 @@ async def check_agent_run_limit(client, account_id: str) -> Dict[str, Any]:
 
 async def check_agent_count_limit(client, account_id: str) -> Dict[str, Any]:
     try:
-        # In local mode, allow practically unlimited custom agents
+        # In local mode, show real agent count and subscription tier but allow unlimited creation
         if config.ENV_MODE.value == "local":
+            # Get real agent count even in local mode
+            agents_result = await client.table('agents').select('agent_id, metadata').eq('account_id', account_id).execute()
+            
+            non_suna_agents = []
+            for agent in agents_result.data or []:
+                metadata = agent.get('metadata', {}) or {}
+                is_suna_default = metadata.get('is_suna_default', False)
+                if not is_suna_default:
+                    non_suna_agents.append(agent)
+                    
+            current_count = len(non_suna_agents)
+            
+            # Get real subscription tier in local mode
+            try:
+                tier_name = await get_subscription_tier(client, account_id)
+                agent_limit = config.AGENT_LIMITS.get(tier_name, config.AGENT_LIMITS['free'])
+                logger.debug(f"Local mode: Account {account_id} has {current_count} custom agents, tier: {tier_name}, limit: {agent_limit}")
+            except Exception as billing_error:
+                logger.warning(f"Could not get subscription tier for {account_id} in local mode: {str(billing_error)}, defaulting to free")
+                tier_name = 'free'
+                agent_limit = config.AGENT_LIMITS['free']
+            
             return {
-                'can_create': True,
-                'current_count': 0,  # Return 0 to avoid showing any limit warnings
-                'limit': 999999,     # Practically unlimited
-                'tier_name': 'local'
+                'can_create': True,  # Always allow creation in local mode
+                'current_count': current_count,  # Show real count
+                'limit': agent_limit,  # Show real limit based on subscription
+                'tier_name': tier_name  # Show real tier
             }
         
         try:

@@ -114,16 +114,45 @@ export function PresentationToolV2View({
     if (presentationResult?.json_file && project?.sandbox?.sandbox_url) {
       const loadPresentationData = async () => {
         try {
-          const url = `${project.sandbox.sandbox_url}/workspace/${presentationResult.json_file}`;
+          // Clean up the URL construction
+          let baseUrl = project.sandbox.sandbox_url.replace(/\/$/, ''); // Remove trailing slash
+          let jsonFile = presentationResult.json_file;
+          
+          // Remove leading slash if present
+          if (jsonFile.startsWith('/')) {
+            jsonFile = jsonFile.substring(1);
+          }
+          
+          const url = `${baseUrl}/${jsonFile}`;
+          console.log('Loading presentation data from:', url);
+          
           const response = await fetch(url);
-          if (!response.ok) throw new Error('Failed to load presentation data');
+          
+          if (!response.ok) {
+            console.error(`Failed to fetch presentation data: ${response.status} ${response.statusText}`);
+            throw new Error(`Failed to load presentation data: ${response.status} ${response.statusText}`);
+          }
+          
           const data = await response.json();
+          console.log('Presentation data loaded successfully:', data);
           setPresentationData(data);
         } catch (err: any) {
-          console.error('Error loading presentation:', err);
+          console.error('Error loading presentation:', {
+            error: err.message,
+            jsonFile: presentationResult?.json_file,
+            sandboxUrl: project?.sandbox?.sandbox_url,
+            fullError: err
+          });
         }
       };
       loadPresentationData();
+    } else {
+      console.log('Missing required data for loading presentation:', {
+        hasJsonFile: !!presentationResult?.json_file,
+        hasSandboxUrl: !!project?.sandbox?.sandbox_url,
+        jsonFile: presentationResult?.json_file,
+        sandboxUrl: project?.sandbox?.sandbox_url
+      });
     }
   }, [presentationResult, project]);
 
@@ -394,7 +423,7 @@ export function PresentationToolV2View({
                 {toolTitle}
               </CardTitle>
             </div>
-            <Badge variant="secondary" className="ml-2">{presentationData?.metadata.theme || presentationResult.theme}</Badge>
+                         <Badge variant="secondary" className="ml-2 bg-pink-500 hover:bg-pink-600 text-white">{presentationData?.metadata.theme || presentationResult.theme}</Badge>
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -411,10 +440,17 @@ export function PresentationToolV2View({
               variant="outline"
               onClick={() => {
                 if (presentationResult?.preview_url && project?.sandbox?.sandbox_url) {
-                  window.open(
-                    `${project.sandbox.sandbox_url}${presentationResult.preview_url}`,
-                    '_blank'
-                  );
+                  // Remove /workspace/ if it exists and construct the correct URL
+                  const baseUrl = project.sandbox.sandbox_url;
+                  let previewPath = presentationResult.preview_url;
+                  
+                  // Remove /workspace/ if it exists in the preview_url
+                  if (previewPath.includes('/workspace/')) {
+                    previewPath = previewPath.replace('/workspace/', '/');
+                  }
+                  
+                  const correctUrl = `${baseUrl}${previewPath}`;
+                  window.open(correctUrl, '_blank');
                 }
               }}
               className="h-8 text-xs bg-white dark:bg-muted/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 shadow-none"
@@ -426,7 +462,7 @@ export function PresentationToolV2View({
               size="sm"
               onClick={() => exportMutation.mutate()}
               disabled={exportMutation.isPending}
-              className="h-8 text-xs bg-white dark:bg-muted/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 shadow-none"
+              className="h-8 text-xs bg-pink-500 text-white hover:bg-pink-600 dark:bg-pink-500 dark:hover:bg-pink-600 shadow-none"
             >
               {exportMutation.isPending ? (
                 <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />

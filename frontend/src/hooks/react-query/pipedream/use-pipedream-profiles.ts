@@ -156,7 +156,7 @@ export const useConnectPipedreamProfile = () => {
                   const targetApp = variables.app;
                   const isConnected = Array.isArray(connections?.connections)
                     ? connections.connections.some((c: any) =>
-                        (targetApp ? c.app === targetApp : true) && c.status === 'connected'
+                        (targetApp ? (c.app === targetApp || c.name_slug === targetApp) : true) && c.status === 'connected'
                       )
                     : false;
 

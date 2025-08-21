@@ -18,6 +18,7 @@ SUNA_CONFIG = {
         "web_search_tool": True,
         "sb_vision_tool": True,
         "sb_image_edit_tool": True,
+        "sb_avatar_tool": True,
         "sb_presentation_outline_tool": False,
         "sb_presentation_tool": False,
         "sb_presentation_tool_v2": False,

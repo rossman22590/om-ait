@@ -34,6 +34,7 @@ import { ListPresentationTemplatesToolView } from '../ListPresentationTemplatesT
 import { SheetsToolView } from '../sheets-tools/sheets-tool-view';
 import { GetProjectStructureView } from '../web-dev/GetProjectStructureView';
 import { ImageEditGenerateToolView } from '../image-edit-generate-tool/ImageEditGenerateToolView';
+import { AvatarToolView } from '../AvatarToolView';
 
 
 export type ToolViewComponent = React.ComponentType<ToolViewProps>;
@@ -85,6 +86,16 @@ const defaultRegistry: ToolViewRegistryType = {
 
   'see-image': SeeImageToolView,
   'image-edit-or-generate': ImageEditGenerateToolView,
+
+  // Avatar tools
+  'list-argil-avatars': AvatarToolView,
+  'list_argil_avatars': AvatarToolView,
+  'list-argil-voices': AvatarToolView,
+  'list_argil_voices': AvatarToolView,
+  'generate-argil-video': AvatarToolView,
+  'generate_argil_video': AvatarToolView,
+  'check-argil-video-status': AvatarToolView,
+  'check_argil_video_status': AvatarToolView,
 
   'ask': AskToolView,
   'complete': CompleteToolView,

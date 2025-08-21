@@ -520,8 +520,7 @@ async def get_agent_knowledge_base_context(
         await verify_agent_access(client, agent_id, user_id)
         
         result = await client.rpc('get_agent_knowledge_base_context', {
-            'p_agent_id': agent_id,
-            'p_max_tokens': max_tokens
+            'p_agent_id': agent_id
         }).execute()
         
         context = result.data if result.data else None
@@ -537,4 +536,3 @@ async def get_agent_knowledge_base_context(
     except Exception as e:
         logger.error(f"Error getting knowledge base context for agent {agent_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to retrieve agent knowledge base context")
-

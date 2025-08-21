@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Bot, Menu, Store, Plus, Zap, ChevronRight, Loader2, Puzzle, CodeSquare, StopCircle } from 'lucide-react';
+import { Bot, Plug,Menu, Store, Plus, Zap, ChevronRight, Loader2, Puzzle, CodeSquare, StopCircle } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
@@ -45,7 +45,6 @@ import { useFeatureFlags } from '@/lib/feature-flags';
 import posthog from '@/lib/posthog';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
 import { stopAllAgents } from '@/lib/api';
 // Floating mobile menu button component
 function FloatingMobileMenuButton() {

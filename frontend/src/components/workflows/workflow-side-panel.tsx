@@ -452,7 +452,7 @@ export function WorkflowSidePanel({
             </AnimatePresence>
             {showPipedreamUI && (
                 <Dialog open={showPipedreamRegistry} onOpenChange={setShowPipedreamRegistry}>
-                    <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-hidden">
+                    <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-auto">
                         <DialogHeader className="sr-only">
                             <DialogTitle>Pipedream Integrations</DialogTitle>
                         </DialogHeader>
@@ -466,7 +466,7 @@ export function WorkflowSidePanel({
                 </Dialog>
             )}
             <Dialog open={showComposioRegistry} onOpenChange={setShowComposioRegistry}>
-                <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-hidden">
+                <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-auto">
                     <DialogHeader className="sr-only">
                         <DialogTitle>App Integrations</DialogTitle>
                     </DialogHeader>

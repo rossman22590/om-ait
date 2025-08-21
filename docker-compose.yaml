@@ -14,7 +14,6 @@ services:
       retries: 3
 
   backend:
-    image: ghcr.io/suna-ai/suna-backend:latest
     platform: linux/amd64
     build:
       context: ./backend
@@ -25,19 +24,10 @@ services:
       - ./backend/.env:/app/.env
     env_file:
       - ./backend/.env
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
-      - REDIS_SSL=False
-    depends_on:
-      redis:
-        condition: service_healthy
-      worker:
-        condition: service_started
+
+    # Remove circular dependency - backend doesn't need to wait for worker
 
   worker:
-    image: ghcr.io/suna-ai/suna-backend:latest
     platform: linux/amd64
     build:
       context: ./backend
@@ -47,14 +37,8 @@ services:
       - ./backend/.env:/app/.env:ro
     env_file:
       - ./backend/.env
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=
-      - REDIS_SSL=False
-    depends_on:
-      redis:
-        condition: service_healthy
+    # Remove Redis environment overrides to use Upstash from .env
+    # Worker doesn't need to depend on backend, just needs Redis connection
 
   frontend:
     init: true

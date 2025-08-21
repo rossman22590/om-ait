@@ -262,7 +262,8 @@ async def get_user_connections(
                 "verified": connection.app.is_verified,
                 "url": connection.app.url,
                 "tags": connection.app.tags,
-                "is_active": connection.is_active
+                "is_active": connection.is_active,
+                "status": "connected" if connection.is_active else "disconnected"
             })
         
         return ConnectionResponse(
@@ -767,7 +768,8 @@ async def get_profile_connections(
                 "verified": connection.app.is_verified,
                 "url": connection.app.url,
                 "tags": connection.app.tags,
-                "is_active": connection.is_active
+                "is_active": connection.is_active,
+                "status": "connected" if connection.is_active else "disconnected"
             })
         
         return {

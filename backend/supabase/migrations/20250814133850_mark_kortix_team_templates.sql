@@ -43,4 +43,3 @@ BEGIN
     GET DIAGNOSTICS updated_count = ROW_COUNT;
     RAISE NOTICE 'Marked % templates as Kortix team templates', updated_count;
 END $$;
-

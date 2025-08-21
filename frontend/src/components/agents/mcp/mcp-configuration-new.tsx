@@ -10,6 +10,7 @@ import { ComposioToolsManager } from '../composio/composio-tools-manager';
 import { PipedreamConnector } from '../pipedream/pipedream-connector';
 import { PipedreamRegistry } from '../pipedream/pipedream-registry';
 import { ToolsManager } from './tools-manager';
+import { PipedreamToolsManager } from './pipedream-tools-manager';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -62,14 +63,16 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
       return;
     }
     
-    // Otherwise, edit as normal
-    if (mcp.customType === 'composio') {
-      setEditingIndex(index);
-      setShowCustomDialog(true);
-    } else {
-      setEditingIndex(index);
-      setShowCustomDialog(true);
+    // For configured MCPs, open the tools manager instead of the custom dialog
+    // This allows users to configure which tools are enabled
+    if (mcp.customType === 'composio' || mcp.customType === 'pipedream') {
+      handleConfigureTools(index);
+      return;
     }
+    
+    // For other custom MCPs, edit as normal
+    setEditingIndex(index);
+    setShowCustomDialog(true);
   };
 
   const handleConfigureTools = (index: number) => {
@@ -83,9 +86,7 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
         console.warn('Composio MCP has no profile_id:', mcp);
       }
     } else if (mcp.customType === 'pipedream') {
-      // For Pipedream, we need to use the Pipedream-specific tools manager
-      // But since we don't have a separate Pipedream tools manager dialog in this component,
-      // we'll use the custom tools manager but ensure it gets the right data
+      // For Pipedream, use the Pipedream-specific tools manager
       setShowCustomToolsManager(true);
     } else {
       setShowCustomToolsManager(true);
@@ -154,16 +155,38 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
   };
 
   const handleCustomToolsUpdate = (enabledTools: string[]) => {
-    if (!selectedMCPForTools) return;
+    console.log('[MCPConfiguration] handleCustomToolsUpdate called with:', {
+      enabledTools,
+      selectedMCPForTools: selectedMCPForTools?.name,
+      configuredMCPsCount: configuredMCPs.length
+    });
     
-    const updatedMCPs = configuredMCPs.map(mcp => 
-      mcp === selectedMCPForTools 
-        ? { ...mcp, enabledTools }
-        : mcp
-    );
+    if (!selectedMCPForTools) {
+      console.warn('[MCPConfiguration] No selectedMCPForTools');
+      return;
+    }
+    
+    // Find the MCP by qualified name to ensure reliable matching
+    const updatedMCPs = configuredMCPs.map(mcp => {
+      if (mcp.qualifiedName === selectedMCPForTools.qualifiedName) {
+        console.log('[MCPConfiguration] Updating MCP tools:', {
+          mcpName: mcp.name,
+          qualifiedName: mcp.qualifiedName,
+          oldTools: mcp.enabledTools,
+          newTools: enabledTools
+        });
+        return { ...mcp, enabledTools };
+      }
+      return mcp;
+    });
+    
+    console.log('[MCPConfiguration] Calling onConfigurationChange with updated MCPs');
     onConfigurationChange(updatedMCPs);
     setShowCustomToolsManager(false);
     setSelectedMCPForTools(null);
+    
+    // Show success message
+    toast.success(`Updated ${enabledTools.length} tools for ${selectedMCPForTools.name}`);
   };
 
   // Categorize MCPs by type
@@ -430,28 +453,16 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
       )}
       
       {selectedMCPForTools && selectedMCPForTools.customType === 'pipedream' && (
-        <ToolsManager
-          mode="custom"
+        <PipedreamToolsManager
           agentId={selectedAgentId}
-          mcpConfig={{
-            ...selectedMCPForTools.config,
-            type: selectedMCPForTools.customType
-          }}
-          mcpName={selectedMCPForTools.name}
+          mcpConfig={selectedMCPForTools}
           open={showCustomToolsManager}
           onOpenChange={setShowCustomToolsManager}
           onToolsUpdate={handleCustomToolsUpdate}
           versionData={versionData}
           saveMode={saveMode}
           versionId={versionId}
-          initialEnabledTools={(() => {
-            console.log('[MCPConfiguration] Rendering Pipedream ToolsManager with:', {
-              selectedMCPForTools,
-              enabledTools: selectedMCPForTools.enabledTools,
-              customType: selectedMCPForTools.customType
-            });
-            return selectedMCPForTools.enabledTools;
-          })()}
+          initialEnabledTools={selectedMCPForTools.enabledTools}
         />
       )}
       

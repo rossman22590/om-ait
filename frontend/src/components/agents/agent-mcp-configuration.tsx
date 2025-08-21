@@ -147,10 +147,27 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
   ];
 
   const handleConfigurationChange = (mcps: any[]) => {
+    console.log('[AgentMCPConfiguration] handleConfigurationChange called with:', {
+      mcpsCount: mcps.length,
+      mcps: mcps.map(mcp => ({
+        name: mcp.name,
+        customType: mcp.customType,
+        isCustom: mcp.isCustom,
+        isAvailable: mcp.isAvailable,
+        enabledTools: mcp.enabledTools
+      }))
+    });
+    
     const configured = mcps.filter(mcp => !mcp.isCustom);
     const custom = mcps
       .filter(mcp => mcp.isCustom && !mcp.isAvailable) // Only include actually configured MCPs, not just available ones
       .map(mcp => {
+        console.log('[AgentMCPConfiguration] Processing MCP:', {
+          name: mcp.name,
+          customType: mcp.customType,
+          enabledTools: mcp.enabledTools
+        });
+        
         if (mcp.customType === 'composio' || mcp.isComposio) {
           return {
             name: mcp.name,
@@ -179,6 +196,16 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
           enabledTools: mcp.enabledTools
         };
       });
+
+    console.log('[AgentMCPConfiguration] Final result:', {
+      configured: configured.length,
+      custom: custom.length,
+      customMcps: custom.map(mcp => ({
+        name: mcp.name,
+        type: mcp.type,
+        enabledTools: mcp.enabledTools
+      }))
+    });
 
     onMCPChange({
       configured_mcps: configured,

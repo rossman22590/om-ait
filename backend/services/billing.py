@@ -52,20 +52,6 @@ def get_plan_info(price_id: str) -> dict:
         config.STRIPE_TIER_50_400_ID: {'tier': 5, 'type': 'monthly', 'name': '50h/$400'},
         config.STRIPE_TIER_125_800_ID: {'tier': 6, 'type': 'monthly', 'name': '125h/$800'},
         config.STRIPE_TIER_200_1000_ID: {'tier': 7, 'type': 'monthly', 'name': '200h/$1000'},
-        
-        # Yearly plans
-        config.STRIPE_TIER_2_20_YEARLY_ID: {'tier': 1, 'type': 'yearly', 'name': '2h/$204/year'},
-        config.STRIPE_TIER_6_50_YEARLY_ID: {'tier': 2, 'type': 'yearly', 'name': '6h/$510/year'},
-        config.STRIPE_TIER_12_100_YEARLY_ID: {'tier': 3, 'type': 'yearly', 'name': '12h/$1020/year'},
-        config.STRIPE_TIER_25_200_YEARLY_ID: {'tier': 4, 'type': 'yearly', 'name': '25h/$2040/year'},
-        config.STRIPE_TIER_50_400_YEARLY_ID: {'tier': 5, 'type': 'yearly', 'name': '50h/$4080/year'},
-        config.STRIPE_TIER_125_800_YEARLY_ID: {'tier': 6, 'type': 'yearly', 'name': '125h/$8160/year'},
-        config.STRIPE_TIER_200_1000_YEARLY_ID: {'tier': 7, 'type': 'yearly', 'name': '200h/$10200/year'},
-        
-        # Yearly commitment plans
-        config.STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID: {'tier': 1, 'type': 'yearly_commitment', 'name': '2h/$17/month'},
-        config.STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID: {'tier': 2, 'type': 'yearly_commitment', 'name': '6h/$42.50/month'},
-        config.STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID: {'tier': 4, 'type': 'yearly_commitment', 'name': '25h/$170/month'},
     }
     
     return PLAN_TIERS.get(price_id, {'tier': 0, 'type': 'unknown', 'name': 'Unknown'})
@@ -84,23 +70,11 @@ def is_plan_change_allowed(current_price_id: str, new_price_id: str) -> tuple[bo
     if current_price_id == new_price_id:
         return True, ""
     
-    # Restriction 1: Don't allow downgrade from monthly to lower monthly
+    # Restriction: Don't allow downgrade from monthly to lower monthly
     if current_plan['type'] == 'monthly' and new_plan['type'] == 'monthly' and new_plan['tier'] < current_plan['tier']:
-        return False, "Downgrading to a lower monthly plan is not allowed. You can only upgrade to a higher tier or switch to yearly billing."
+        return False, "Downgrading to a lower monthly plan is not allowed. You can only upgrade to a higher tier."
     
-    # Restriction 2: Don't allow downgrade from yearly commitment to monthly
-    if current_plan['type'] == 'yearly_commitment' and new_plan['type'] == 'monthly':
-        return False, "Downgrading from yearly commitment to monthly is not allowed. You can only upgrade within yearly commitment plans."
-    
-    # Restriction 2b: Don't allow downgrade within yearly commitment plans
-    if current_plan['type'] == 'yearly_commitment' and new_plan['type'] == 'yearly_commitment' and new_plan['tier'] < current_plan['tier']:
-        return False, "Downgrading to a lower yearly commitment plan is not allowed. You can only upgrade to higher commitment tiers."
-    
-    # Restriction 3: Only allow upgrade from monthly to yearly commitment on same level or above
-    if current_plan['type'] == 'monthly' and new_plan['type'] == 'yearly_commitment' and new_plan['tier'] < current_plan['tier']:
-        return False, "You can only upgrade to yearly commitment plans at the same tier level or higher."
-    
-    # Allow all other changes (upgrades, yearly to yearly, yearly commitment upgrades, etc.)
+    # Allow all other changes (upgrades)
     return True, ""
 
 # Simplified yearly commitment logic - no subscription schedules needed
@@ -2239,16 +2213,11 @@ async def purchase_credits(
 ):
     """
     Create a Stripe checkout session for purchasing credits.
-    Only available for users on the highest subscription tier.
+    Available for all authenticated users.
     """
     try:
-        # Check if user is on the highest tier
-        is_highest_tier = await is_user_on_highest_tier(current_user_id)
-        if not is_highest_tier:
-            raise HTTPException(
-                status_code=403,
-                detail="Credit purchases are only available for users on the highest subscription tier ($1000/month)."
-            )
+        # Allow all users to purchase credits
+        # Note: Removed tier restriction to allow broader access to credit purchases
         
         # Validate amount
         if request.amount_dollars < 10:
@@ -2274,10 +2243,18 @@ async def purchase_credits(
         
         # Check if we have a pre-configured price ID for this amount
         matching_package = None
+        logger.debug(f"Looking for credit package for amount: ${request.amount_dollars}")
+        logger.debug(f"Available credit packages: {CREDIT_PACKAGES}")
+        
         for package_key, package_info in CREDIT_PACKAGES.items():
+            logger.debug(f"Checking package {package_key}: {package_info}")
             if package_info['amount'] == request.amount_dollars and package_info.get('stripe_price_id'):
                 matching_package = package_info
+                logger.debug(f"Found matching package: {matching_package}")
                 break
+        
+        if not matching_package:
+            logger.debug(f"No pre-configured package found for ${request.amount_dollars}, will use dynamic pricing")
         
         # Create a checkout session
         if matching_package and matching_package['stripe_price_id']:

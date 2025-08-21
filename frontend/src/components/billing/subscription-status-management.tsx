@@ -205,7 +205,7 @@ export default function SubscriptionStatusManagement({
             <Shield className="h-4 w-4" />
             <AlertDescription className="text-sm">
               You have {commitmentInfo?.months_remaining} months remaining in
-              your yearly commitment. If you cancel, your subscription will end
+              your commitment period. If you cancel, your subscription will end
               on{' '}
               {commitmentInfo?.commitment_end_date
                 ? formatEndDate(commitmentInfo.commitment_end_date)
@@ -274,7 +274,7 @@ export default function SubscriptionStatusManagement({
                     {hasCommitment ? (
                       <>
                         Are you sure you want to schedule your subscription for cancellation? 
-                        Since you have a yearly commitment, your subscription will be
+                        Since you have a commitment period, your subscription will be
                         scheduled to end on{' '}
                         {commitmentInfo?.commitment_end_date
                           ? formatEndDate(commitmentInfo.commitment_end_date)

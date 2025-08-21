@@ -39,7 +39,7 @@ class Configuration:
     # Environment mode
     ENV_MODE: EnvMode = EnvMode.LOCAL
     
-   # Subscription tier IDs - Production
+    # Subscription tier IDs - Production
     STRIPE_FREE_TIER_ID_PROD: str = 'price_1RLwBMG23sSyONuFrhkNh9fe'
     STRIPE_TIER_2_20_ID_PROD: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'
     STRIPE_TIER_6_50_ID_PROD: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'
@@ -59,10 +59,9 @@ class Configuration:
     STRIPE_TIER_125_800_ID_STAGING: str = 'price_1RLyEnG23sSyONuFE9wBSfvN'
     STRIPE_TIER_200_1000_ID_STAGING: str = 'price_1RLyErG23sSyONuFjGphWKjB'
     
-    
-    # Computed subscription tier IDs based on environment
+    # Environment-dependent Stripe tier ID properties
     @property
-    def STRIPE_FREE_TIER_ID(self) -> str:   
+    def STRIPE_FREE_TIER_ID(self) -> str:
         if self.ENV_MODE == EnvMode.STAGING:
             return self.STRIPE_FREE_TIER_ID_STAGING
         return self.STRIPE_FREE_TIER_ID_PROD
@@ -109,8 +108,71 @@ class Configuration:
             return self.STRIPE_TIER_200_1000_ID_STAGING
         return self.STRIPE_TIER_200_1000_ID_PROD
     
+    # Environment-dependent Stripe yearly tier ID properties
+    @property
+    def STRIPE_TIER_2_20_YEARLY_ID(self) -> str:
+        if self.ENV_MODE == EnvMode.STAGING:
+            return self.STRIPE_TIER_2_20_YEARLY_ID_STAGING
+        return self.STRIPE_TIER_2_20_YEARLY_ID_PROD
+    
+    @property
+    def STRIPE_TIER_6_50_YEARLY_ID(self) -> str:
+        if self.ENV_MODE == EnvMode.STAGING:
+            return self.STRIPE_TIER_6_50_YEARLY_ID_STAGING
+        return self.STRIPE_TIER_6_50_YEARLY_ID_PROD
+    
+    @property
+    def STRIPE_TIER_12_100_YEARLY_ID(self) -> str:
+        if self.ENV_MODE == EnvMode.STAGING:
+            return self.STRIPE_TIER_12_100_YEARLY_ID_STAGING
+        return self.STRIPE_TIER_12_100_YEARLY_ID_PROD
+    
+    @property
+    def STRIPE_TIER_25_200_YEARLY_ID(self) -> str:
+        if self.ENV_MODE == EnvMode.STAGING:
+            return self.STRIPE_TIER_25_200_YEARLY_ID_STAGING
+        return self.STRIPE_TIER_25_200_YEARLY_ID_PROD
+    
+    @property
+    def STRIPE_TIER_50_400_YEARLY_ID(self) -> str:
+        if self.ENV_MODE == EnvMode.STAGING:
+            return self.STRIPE_TIER_50_400_YEARLY_ID_STAGING
+        return self.STRIPE_TIER_50_400_YEARLY_ID_PROD
+    
+    @property
+    def STRIPE_TIER_125_800_YEARLY_ID(self) -> str:
+        if self.ENV_MODE == EnvMode.STAGING:
+            return self.STRIPE_TIER_125_800_YEARLY_ID_STAGING
+        return self.STRIPE_TIER_125_800_YEARLY_ID_PROD
+    
+    @property
+    def STRIPE_TIER_200_1000_YEARLY_ID(self) -> str:
+        if self.ENV_MODE == EnvMode.STAGING:
+            return self.STRIPE_TIER_200_1000_YEARLY_ID_STAGING
+        return self.STRIPE_TIER_200_1000_YEARLY_ID_PROD
+    
+    # Environment-dependent Stripe yearly commitment ID properties
+    @property
+    def STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID(self) -> str:
+        if self.ENV_MODE == EnvMode.STAGING:
+            return self.STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID_STAGING
+        return self.STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID_PROD
+    
+    @property
+    def STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID(self) -> str:
+        if self.ENV_MODE == EnvMode.STAGING:
+            return self.STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID_STAGING
+        return self.STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID_PROD
+    
+    @property
+    def STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID(self) -> str:
+        if self.ENV_MODE == EnvMode.STAGING:
+            return self.STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID_STAGING
+        return self.STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID_PROD
+    
     # LLM API keys
     ANTHROPIC_API_KEY: Optional[str] = None
+    ARGIL_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     GROQ_API_KEY: Optional[str] = None
     OPENROUTER_API_KEY: Optional[str] = None
@@ -161,6 +223,45 @@ class Configuration:
     STRIPE_PRODUCT_ID_PROD: str = 'prod_SGT7srmz5hB2qo'
     STRIPE_PRODUCT_ID_STAGING: str = 'prod_SGT7srmz5hB2qo'
     
+    # Stripe Credit Price IDs
+    STRIPE_CREDITS_10_PRICE_ID: str = 'price_1RPBFIG23sSyONuFtIj1Imaf'
+    STRIPE_CREDITS_25_PRICE_ID: str = 'price_1RPBFIG23sSyONuFtIj1Imaf'  # Update with actual price ID when available
+    STRIPE_CREDITS_50_PRICE_ID: str = 'price_1RPBFIG23sSyONuFtIj1Imaf'  # Update with actual price ID when available
+    STRIPE_CREDITS_100_PRICE_ID: str = 'price_1RPBFIG23sSyONuFtIj1Imaf'  # Update with actual price ID when available
+    STRIPE_CREDITS_250_PRICE_ID: str = 'price_1RPBFIG23sSyONuFtIj1Imaf'  # Update with actual price ID when available
+    STRIPE_CREDITS_500_PRICE_ID: str = 'price_1RPBFIG23sSyONuFtIj1Imaf'  # Update with actual price ID when available
+    STRIPE_CREDITS_1000_PRICE_ID: str = 'price_1RPBFIG23sSyONuFtIj1Imaf'  # Update with actual price ID when available
+    
+    # Stripe Yearly Tier IDs - Production
+    STRIPE_TIER_2_20_YEARLY_ID_PROD: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'  # Update with actual yearly price ID
+    STRIPE_TIER_6_50_YEARLY_ID_PROD: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'  # Update with actual yearly price ID
+    STRIPE_TIER_12_100_YEARLY_ID_PROD: str = 'price_1RLyE5G23sSyONuFHJiqvoLo'  # Update with actual yearly price ID
+    STRIPE_TIER_25_200_YEARLY_ID_PROD: str = 'price_1RLwBgG23sSyONuFCzzo83e6'  # Update with actual yearly price ID
+    STRIPE_TIER_50_400_YEARLY_ID_PROD: str = 'price_1RLyEhG23sSyONuFioU064nT'  # Update with actual yearly price ID
+    STRIPE_TIER_125_800_YEARLY_ID_PROD: str = 'price_1RLyEnG23sSyONuFE9wBSfvN'  # Update with actual yearly price ID
+    STRIPE_TIER_200_1000_YEARLY_ID_PROD: str = 'price_1RLyErG23sSyONuFjGphWKjB'  # Update with actual yearly price ID
+    
+    # Stripe Yearly Tier IDs - Staging
+    STRIPE_TIER_2_20_YEARLY_ID_STAGING: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'  # Update with actual yearly price ID
+    STRIPE_TIER_6_50_YEARLY_ID_STAGING: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'  # Update with actual yearly price ID
+    STRIPE_TIER_12_100_YEARLY_ID_STAGING: str = 'price_1RLyE5G23sSyONuFHJiqvoLo'  # Update with actual yearly price ID
+    STRIPE_TIER_25_200_YEARLY_ID_STAGING: str = 'price_1RLwBgG23sSyONuFCzzo83e6'  # Update with actual yearly price ID
+    STRIPE_TIER_50_400_YEARLY_ID_STAGING: str = 'price_1RLyEhG23sSyONuFioU064nT'  # Update with actual yearly price ID
+    STRIPE_TIER_125_800_YEARLY_ID_STAGING: str = 'price_1RLyEnG23sSyONuFE9wBSfvN'  # Update with actual yearly price ID
+    STRIPE_TIER_200_1000_YEARLY_ID_STAGING: str = 'price_1RLyErG23sSyONuFjGphWKjB'  # Update with actual yearly price ID
+    
+    # Stripe Yearly Commitment IDs - Production
+    STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'  # Update with actual commitment price ID
+    STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'  # Update with actual commitment price ID
+    STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID: str = 'price_1RLwBgG23sSyONuFCzzo83e6'  # Update with actual commitment price ID
+    
+    # Stripe Yearly Commitment IDs - Staging
+    STRIPE_TIER_2_17_YEARLY_COMMITMENT_ID_STAGING: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'  # Update with actual commitment price ID
+    STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID_STAGING: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'  # Update with actual commitment price ID
+    STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID_STAGING: str = 'price_1RLwBgG23sSyONuFCzzo83e6'  # Update with actual commitment price ID
+    
+    # Frontend URL configuration
+    FRONTEND_URL: str = "http://localhost:3000"  # Default for local development
     
     # Sandbox configuration
     SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3.5"

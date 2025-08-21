@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -23,6 +23,7 @@ interface CreditPurchaseProps {
     currentBalance?: number;
     canPurchase: boolean;
     onPurchaseComplete?: () => void;
+    onUpgradeClick?: () => void;
 }
 
 interface CreditPackage {
@@ -45,12 +46,23 @@ export function CreditPurchaseModal({
     onOpenChange, 
     currentBalance = 0,
     canPurchase,
-    onPurchaseComplete 
+    onPurchaseComplete,
+    onUpgradeClick
 }: CreditPurchaseProps) {
     const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
     const [customAmount, setCustomAmount] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Auto-select popular package when modal opens
+    useEffect(() => {
+        if (open) {
+            const popularPackage = CREDIT_PACKAGES.find(pkg => pkg.popular);
+            setSelectedPackage(popularPackage || CREDIT_PACKAGES[0]);
+            setCustomAmount('');
+            setError(null);
+        }
+    }, [open]);
 
     const handlePurchase = async (amount: number) => {
         if (amount < 10) {
@@ -64,19 +76,35 @@ export function CreditPurchaseModal({
         setIsProcessing(true);
         setError(null);
         try {
+            console.log('Purchasing credits:', { amount });
             const response = await backendApi.post('/billing/purchase-credits', {
                 amount_dollars: amount,
                 success_url: `${window.location.origin}/dashboard?credit_purchase=success`,
                 cancel_url: `${window.location.origin}/dashboard?credit_purchase=cancelled`
             });
-            if (response.data.url) {
+            
+            console.log('API Response:', response.data);
+            
+            if (response.data && response.data.url) {
                 window.location.href = response.data.url;
             } else {
-                throw new Error('No checkout URL received');
+                console.error('Invalid response structure:', response.data);
+                throw new Error('No checkout URL received from server');
             }
         } catch (err: any) {
             console.error('Credit purchase error:', err);
-            const errorMessage = err.response?.data?.detail || err.message || 'Failed to create checkout session';
+            console.error('Error response:', err.response?.data);
+            
+            let errorMessage = 'Failed to create checkout session';
+            
+            if (err.response?.status === 403) {
+                errorMessage = 'Credit purchases are currently restricted. Please contact support.';
+            } else if (err.response?.data?.detail) {
+                errorMessage = err.response.data.detail;
+            } else if (err.message) {
+                errorMessage = err.message;
+            }
+            
             setError(errorMessage);
             toast.error(errorMessage);
         } finally {
@@ -110,20 +138,34 @@ export function CreditPurchaseModal({
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Credits Not Available</DialogTitle>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertCircle className="h-5 w-5 text-amber-500" />
+                            Credits Not Available
+                        </DialogTitle>
                         <DialogDescription>
-                            Credit purchases are only available for users on the highest subscription tier ($1000/month).
+                            Credit purchases are only available for users on the highest subscription tier.
                         </DialogDescription>
                     </DialogHeader>
-                    <Alert>
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                            Please upgrade your subscription to the highest tier to unlock credit purchases for unlimited usage.
+                    <Alert className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 dark:from-amber-950/20 dark:to-orange-950/20 dark:border-amber-800">
+                        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                        <AlertDescription className="text-amber-800 dark:text-amber-200">
+                            <strong>Upgrade Required:</strong> Please upgrade to the Premium tier ($1000/month) to unlock credit purchases for unlimited usage beyond your subscription limit.
                         </AlertDescription>
                     </Alert>
-                    <div className="flex justify-end">
+                    <div className="flex justify-between gap-3">
                         <Button variant="outline" onClick={() => onOpenChange(false)}>
                             Close
+                        </Button>
+                        <Button 
+                            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                            onClick={() => {
+                                onOpenChange(false);
+                                if (onUpgradeClick) {
+                                    onUpgradeClick();
+                                }
+                            }}
+                        >
+                            Upgrade Plan
                         </Button>
                     </div>
                 </DialogContent>
@@ -140,45 +182,70 @@ export function CreditPurchaseModal({
                         Purchase Credits
                     </DialogTitle>
                     <DialogDescription>
-                        Add credits to your account for usage beyond your subscription limit.
+                        Add credits to your account for usage beyond your subscription limit. Credits never expire and are used automatically when you exceed your monthly allowance.
                     </DialogDescription>
                 </DialogHeader>
 
                 {currentBalance > 0 && (
-                    <Alert className="text-purple-600 dark:text-purple-400 bg-purple-50 border-purple-200 dark:bg-purple-950 dark:border-purple-800">
-                        <AlertCircleIcon className="h-4 w-4" />
-                        <AlertDescription className="text-purple-600 dark:text-purple-400">
-                            Current balance: <strong>${currentBalance.toFixed(2)}</strong>
+                    <Alert className="bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200 dark:from-emerald-950/20 dark:to-green-950/20 dark:border-emerald-800">
+                        <AlertCircleIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                        <AlertDescription className="text-emerald-700 dark:text-emerald-300">
+                            <strong>Current balance:</strong> ${currentBalance.toFixed(2)} in credits available
                         </AlertDescription>
                     </Alert>
                 )}
 
-                <div className="space-y-4">
+                <div className="space-y-6">
                     <div>
-                        <Label className="text-base font-semibold mb-3 block">Select a Package</Label>
+                        <div className="flex items-center justify-between mb-3">
+                            <Label className="text-base font-semibold">Select a Credit Package</Label>
+                            {selectedPackage?.popular && (
+                                <span className="text-sm text-green-600 dark:text-green-400 font-medium">
+                                    ✅ Popular choice selected
+                                </span>
+                            )}
+                        </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             {CREDIT_PACKAGES.map((pkg) => (
                                 <Card
                                     key={pkg.amount}
-                                    className={`cursor-pointer transition-all ${
+                                    className={`cursor-pointer transition-all duration-200 ${
                                         selectedPackage?.amount === pkg.amount
-                                            ? 'ring-2 ring-primary'
-                                            : 'hover:shadow-md'
+                                            ? 'ring-2 ring-purple-500 ring-offset-2 shadow-lg transform scale-105'
+                                            : pkg.popular
+                                            ? 'ring-2 ring-amber-300 hover:shadow-lg hover:transform hover:scale-[1.02] dark:ring-amber-600'
+                                            : 'hover:shadow-md hover:transform hover:scale-[1.02]'
                                     }`}
                                     onClick={() => handlePackageSelect(pkg)}
                                 >
                                     <CardContent className="p-4 text-center relative">
                                         {pkg.popular && (
-                                            <Badge className="absolute -top-2 -right-2" variant="default">
+                                            <Badge className="absolute -top-2 -right-2 bg-gradient-to-r from-purple-600 to-pink-600" variant="default">
                                                 Popular
                                             </Badge>
                                         )}
-                                        <div className="text-2xl font-bold">${pkg.amount}</div>
+                                        <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                                            ${pkg.amount}
+                                        </div>
                                         <div className="text-sm text-muted-foreground">credits</div>
+                                        <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                                            ≈ {Math.round(pkg.amount / 0.15)} minutes
+                                        </div>
                                     </CardContent>
                                 </Card>
                             ))}
                         </div>
+                    </div>
+
+                    {/* Information Section */}
+                    <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                        <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">How Credits Work</h4>
+                        <ul className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
+                            <li>• Credits are used automatically when you exceed your monthly subscription limit</li>
+                            <li>• 1 credit = $1 of AI usage (approximately 6-7 minutes of agent time)</li>
+                            <li>• Credits never expire and roll over month to month</li>
+                            <li>• Credits are deducted in real-time as you use agents</li>
+                        </ul>
                     </div>
                     {error && (
                         <Alert variant="destructive">
@@ -187,7 +254,7 @@ export function CreditPurchaseModal({
                         </Alert>
                     )}
                 </div>
-                <div className="flex justify-end gap-3 mt-6">
+                <div className="flex justify-between gap-3 mt-6 pt-4 border-t">
                     <Button
                         variant="outline"
                         onClick={() => onOpenChange(false)}
@@ -197,17 +264,21 @@ export function CreditPurchaseModal({
                     </Button>
                     <Button
                         onClick={handleConfirmPurchase}
-                        disabled={isProcessing || (!selectedPackage && !customAmount)}
+                        disabled={isProcessing || (!selectedPackage && (!customAmount || customAmount.trim() === ''))}
+                        className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isProcessing ? (
                             <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
                                 Processing...
                             </>
                         ) : (
                             <>
-                                <CreditCard className="h-4 w-4" />
-                                Purchase Credits
+                                <CreditCard className="h-4 w-4 mr-2" />
+                                {selectedPackage || customAmount 
+                                    ? `Purchase $${selectedPackage ? selectedPackage.amount : customAmount} Credits`
+                                    : 'Select Package to Continue'
+                                }
                             </>
                         )}
                     </Button>

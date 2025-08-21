@@ -80,15 +80,15 @@ function BillingPeriodToggle({
   billingPeriod,
   setBillingPeriod
 }: {
-  billingPeriod: 'monthly' | 'yearly' | 'yearly_commitment';
-  setBillingPeriod: (period: 'monthly' | 'yearly' | 'yearly_commitment') => void;
+  billingPeriod: 'monthly';
+  setBillingPeriod: (period: 'monthly') => void;
 }) {
   return (
     <div className="flex items-center justify-center gap-3">
       <div className="relative bg-muted rounded-full p-1">
         <div className="flex">
           <div 
-            className={cn("px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer",
+            className={cn("px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 cursor-pointer bg-background text-foreground shadow-sm",
               billingPeriod === 'monthly'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
@@ -96,19 +96,6 @@ function BillingPeriodToggle({
             onClick={() => setBillingPeriod('monthly')}
           >
             Monthly
-          </div>
-          <div 
-            className={cn("px-3 py-1 rounded-full text-xs font-medium transition-all duration-200 flex items-center gap-1 cursor-pointer",
-              billingPeriod === 'yearly_commitment'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-            onClick={() => setBillingPeriod('yearly_commitment')}
-          >
-            Yearly
-            <span className="bg-green-600 text-green-50 dark:bg-green-500 dark:text-green-50 text-[10px] px-1.5 py-0.5 rounded-full font-semibold whitespace-nowrap">
-              15% off
-            </span>
           </div>
         </div>
       </div>
