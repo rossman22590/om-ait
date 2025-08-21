@@ -157,46 +157,23 @@ const IntegrationIcon: React.FC<{
   );
 };
 
-const Navbar: React.FC<{ template: MarketplaceTemplate | undefined }> = ({ template }) => {
-  const { theme, resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+
+
+export default function TemplateSharePage() {
+  const params = useParams();
+  const shareId = params.shareId as string;
   const router = useRouter();
+  const { user } = useAuth();
+  const { theme, resolvedTheme, setTheme } = useTheme();
+  const [colorPalette, setColorPalette] = useState<string[]>([]);
+  const imageRef = useRef<HTMLImageElement>(null);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [isPromptExpanded, setIsPromptExpanded] = useState(false);
+  const [activeSection, setActiveSection] = useState('');
   const { scrollY } = useScroll();
   const [hasScrolled, setHasScrolled] = useState(false);
-  const [activeSection, setActiveSection] = useState('');
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = scrollY.on('change', (latest) => {
-      setHasScrolled(latest > 10);
-    });
-    return unsubscribe;
-  }, [scrollY]);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const sections = ['system-prompt', 'integrations', 'triggers', 'tools'];
-      
-      for (const section of sections) {
-        const element = document.getElementById(section);
-        if (element) {
-          const rect = element.getBoundingClientRect();
-          if (rect.top <= 150 && rect.bottom >= 150) {
-            setActiveSection(section);
-            break;
-          }
-        }
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll);
-    handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
+  // Helper functions and variables for navigation
   const scrollToSection = (sectionId: string) => {
     const element = document.getElementById(sectionId);
     if (element) {
@@ -206,143 +183,57 @@ const Navbar: React.FC<{ template: MarketplaceTemplate | undefined }> = ({ templ
     }
   };
 
-  const logoSrc = !mounted
-    ? '/kortix-logo.svg'
-    : resolvedTheme === 'dark'
-      ? '/kortix-logo-white.svg'
-      : '/kortix-logo.svg';
+  // Scroll detection for navbar
+  useEffect(() => {
+    const unsubscribe = scrollY.on('change', (latest) => {
+      setHasScrolled(latest > 10);
+    });
+    return unsubscribe;
+  }, [scrollY]);
 
-  const hasIntegrations = template && template.mcp_requirements?.filter((req: any) => req.source === 'tool' && (!req.custom_type || req.custom_type !== 'sse')).length > 0;
-  const hasTriggers = template && template.mcp_requirements?.filter((req: any) => req.source === 'trigger').length > 0;
-  const hasTools = template && template.mcp_requirements?.filter((req: any) => req.source === 'tool' && req.custom_type === 'sse').length > 0;
+  // Navigation state management
+  useEffect(() => {
+    const handleScroll = () => {
+      const sections = ['system-prompt', 'integrations', 'triggers', 'tools'];
+      let currentSection = '';
+      
+      // Find the section that's currently in view
+      for (const section of sections) {
+        const element = document.getElementById(section);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          // Use a smaller offset for better responsiveness
+          if (rect.top <= 200 && rect.bottom >= 100) {
+            currentSection = section;
+          }
+        }
+      }
+      
+      // If no section is in the main view area, find the closest one
+      if (!currentSection) {
+        let minDistance = Infinity;
+        for (const section of sections) {
+          const element = document.getElementById(section);
+          if (element) {
+            const rect = element.getBoundingClientRect();
+            const distance = Math.abs(rect.top - 150);
+            if (distance < minDistance) {
+              minDistance = distance;
+              currentSection = section;
+            }
+          }
+        }
+      }
+      
+      if (currentSection && currentSection !== activeSection) {
+        setActiveSection(currentSection);
+      }
+    };
 
-  return (
-    <header
-      className={cn(
-        'sticky z-50 flex justify-center transition-all duration-300',
-        hasScrolled ? 'top-6 mx-4 md:mx-0' : 'top-4 mx-2 md:mx-0',
-      )}
-    >
-      <motion.div
-        initial={{ width: '100%' }}
-        animate={{ width: hasScrolled ? '1000px' : '100%' }}
-        transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
-        className="w-full max-w-7xl"
-      >
-        <div
-          className={cn(
-            'mx-auto rounded-2xl transition-all duration-300',
-            hasScrolled
-              ? 'px-2 md:px-4 border border-border backdrop-blur-lg bg-background/75'
-              : 'shadow-none px-3 md:px-6',
-          )}
-        >
-          <div className="flex h-14 items-center">
-            <div className="flex items-center">
-              <Link href="/" className="flex items-center space-x-2">
-                <KortixLogo size={20} />
-                <span className="font-semibold">Machine</span>
-              </Link>
-            </div>
-            {template && (
-              <nav className="hidden md:flex items-center space-x-1 ml-8">
-                <button
-                  onClick={() => scrollToSection('system-prompt')}
-                  className={cn(
-                    "px-3 py-1.5 text-sm rounded-lg transition-colors",
-                    activeSection === 'system-prompt' 
-                      ? "bg-muted text-foreground" 
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                  )}
-                >
-                  <FileText className="w-4 h-4 inline mr-1.5" />
-                  System Prompt
-                </button>
-                {hasIntegrations && (
-                  <button
-                    onClick={() => scrollToSection('integrations')}
-                    className={cn(
-                      "px-3 py-1.5 text-sm rounded-lg transition-colors",
-                      activeSection === 'integrations' 
-                        ? "bg-muted text-foreground" 
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                    )}
-                  >
-                    <Plug className="w-4 h-4 inline mr-1.5" />
-                    Integrations
-                  </button>
-                )}
-                {hasTriggers && (
-                  <button
-                    onClick={() => scrollToSection('triggers')}
-                    className={cn(
-                      "px-3 py-1.5 text-sm rounded-lg transition-colors",
-                      activeSection === 'triggers' 
-                        ? "bg-muted text-foreground" 
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                    )}
-                  >
-                    <Zap className="w-4 h-4 inline mr-1.5" />
-                    Triggers
-                  </button>
-                )}
-                {hasTools && (
-                  <button
-                    onClick={() => scrollToSection('tools')}
-                    className={cn(
-                      "px-3 py-1.5 text-sm rounded-lg transition-colors",
-                      activeSection === 'tools' 
-                        ? "bg-muted text-foreground" 
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                    )}
-                  >
-                    <Wrench className="w-4 h-4 inline" />
-                    Tools
-                  </button>
-                )}
-              </nav>
-            )}
-            <div className="flex items-center space-x-4 ml-auto">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                className="h-8 w-8"
-              >
-                <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                <span className="sr-only">Toggle theme</span>
-              </Button>
-              
-              <Button 
-                size="sm" 
-                onClick={() => {
-                  if (template) {
-                    router.push(`/agents?tab=marketplace&agent=${template.template_id}`);
-                  }
-                }}
-              >
-                <Sparkles className="h-3 w-3" />
-                Install Agent
-              </Button>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-    </header>
-  );
-};
-
-export default function TemplateSharePage() {
-  const params = useParams();
-  const shareId = params.shareId as string;
-  const router = useRouter();
-  const { user } = useAuth();
-  const { theme, resolvedTheme } = useTheme();
-  const [colorPalette, setColorPalette] = useState<string[]>([]);
-  const imageRef = useRef<HTMLImageElement>(null);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [isPromptExpanded, setIsPromptExpanded] = useState(false);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [activeSection]);
 
   const { data: template, isLoading, error } = useQuery({
     queryKey: ['template-share', shareId],
@@ -413,8 +304,7 @@ export default function TemplateSharePage() {
   if (isLoading) {
     return (
       <div className="min-h-screen">
-        <Navbar template={undefined} />
-        <div className="flex items-center justify-center h-[calc(100vh-3.5rem)]">
+        <div className="flex items-center justify-center h-screen">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       </div>
@@ -424,12 +314,11 @@ export default function TemplateSharePage() {
   if (error || !template) {
     return (
       <div className="min-h-screen">
-        <Navbar template={undefined} />
-        <div className="flex items-center justify-center h-[calc(100vh-3.5rem)]">
+        <div className="flex items-center justify-center h-screen">
           <div className="text-center">
             <h2 className="text-2xl font-semibold mb-2">Template not found</h2>
             <p className="text-muted-foreground mb-4">The template you're looking for doesn't exist or has been removed.</p>
-            <Button onClick={() => router.push('/agents?tab=marketplace')}>
+            <Button onClick={() => router.push('/agents?tab=marketplace')} className="rounded-lg">
               Browse Marketplace
             </Button>
           </div>
@@ -446,6 +335,11 @@ export default function TemplateSharePage() {
   const agentpressTools = Object.entries(template.agentpress_tools || {})
     .filter(([_, enabled]) => enabled)
     .map(([toolName]) => toolName);
+
+  // Navigation helper variables
+  const hasIntegrations = integrations.length > 0;
+  const hasTriggers = triggerRequirements.length > 0;
+  const hasTools = customTools.length > 0 || agentpressTools.length > 0;
 
   const getDefaultAvatar = () => {
     const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
@@ -477,20 +371,77 @@ export default function TemplateSharePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navbar template={template} />
-      
-      <div className="container mx-auto px-4 py-8 mt-8">
-        <Link 
-          href="/agents?tab=marketplace" 
-          className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground mb-8 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back to Marketplace
-        </Link>
+      {/* Top Navigation Bar */}
+      <header
+        className={cn(
+          'sticky z-50 flex justify-center transition-all duration-300',
+          hasScrolled ? 'top-6 mx-4 md:mx-0' : 'top-4 mx-2 md:mx-0',
+        )}
+      >
+        <div className="w-full max-w-7xl">
+          <div
+            className={cn(
+              'mx-auto rounded-2xl transition-all duration-300',
+              hasScrolled
+                ? 'px-2 md:px-4 border border-border backdrop-blur-lg bg-background/75'
+                : 'shadow-none px-3 md:px-6',
+            )}
+          >
+            <div className="flex h-14 items-center">
+              <div className="flex items-center">
+                <Link href="/" className="flex items-center">
+                  <img 
+                    src={resolvedTheme === 'dark' ? '/kortix-logo-white.svg' : '/kortix-logo.svg'} 
+                    alt="Kortix" 
+                    className="h-6 opacity-70"
+                  />
+                </Link>
+              </div>
+              <div className="flex items-center space-x-3 ml-auto">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                  className="h-8 w-8 rounded-md"
+                >
+                  <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                  <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                  <span className="sr-only">Toggle theme</span>
+                </Button>
+                <Button 
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleShare}
+                  className="h-8 w-8 rounded-md"
+                >
+                  <Share2 className="h-4 w-4" />
+                  <span className="sr-only">Share</span>
+                </Button>
+                <Button 
+                  onClick={handleInstall}
+                  className="bg-secondary h-8 flex items-center justify-center text-sm font-normal tracking-wide rounded-full text-primary-foreground dark:text-secondary-foreground w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-white/[0.12]"
+                >
+                  <Sparkles className="h-3 w-3 mr-2" />
+                  Install Agent
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
 
+      {/* Main Content */}
+      <div className="w-full max-w-7xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-4">
-            <div className="lg:sticky lg:top-32 space-y-6">
+            <div className="lg:sticky lg:top-24 space-y-6">
+              <Link 
+                href="/agents?tab=marketplace" 
+                className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Marketplace
+              </Link>
               <div className="relative">
                 {colorPalette.length > 0 && (
                   <div 
@@ -519,7 +470,7 @@ export default function TemplateSharePage() {
                 <div>
                   <h1 className="text-3xl font-bold tracking-tight">{template.name}</h1>
                   {template.is_kortix_team && (
-                    <Badge variant="secondary" className="mt-2">
+                    <Badge variant="secondary" className="mt-2 bg-primary/10 text-primary">
                       <Sparkles className="w-3 h-3 mr-1" />
                       Official Template
                     </Badge>
@@ -552,22 +503,40 @@ export default function TemplateSharePage() {
                     ))}
                   </div>
                 )}
-                <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                  <Button 
-                    className="flex-1"
-                    onClick={handleInstall}
+
+              </div>
+
+              {/* Content Navigation */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium text-muted-foreground mb-3">Sections</h3>
+                <nav className="space-y-1">
+                  <button
+                    onClick={() => scrollToSection('system-prompt')}
+                    className="w-full px-3 py-2 text-sm rounded-lg transition-colors text-left flex items-center gap-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   >
-                    <Sparkles className="h-4 w-4" />
-                    Install Agent
-                  </Button>
-                  <Button 
-                    variant="outline"
-                    onClick={handleShare}
-                  >
-                    <Share2 className="h-4 w-4" />
-                    Share
-                  </Button>
-                </div>
+                    <FileText className="w-4 h-4" />
+                    System Prompt
+                  </button>
+                  {hasIntegrations && (
+                    <button
+                      onClick={() => scrollToSection('integrations')}
+                      className="w-full px-3 py-2 text-sm rounded-lg transition-colors text-left flex items-center gap-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    >
+                      <Plug className="w-4 h-4" />
+                      Integrations
+                    </button>
+                  )}
+                  {hasTriggers && (
+                    <button
+                      onClick={() => scrollToSection('triggers')}
+                      className="w-full px-3 py-2 text-sm rounded-lg transition-colors text-left flex items-center gap-2 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    >
+                      <Zap className="w-4 h-4" />
+                      Triggers
+                    </button>
+                  )}
+
+                </nav>
               </div>
             </div>
           </div>
@@ -745,7 +714,7 @@ export default function TemplateSharePage() {
                 </CardContent>
               </Card>
             )}
-            <Card className="bg-muted/30 border-muted/50">
+            {/* <Card className="bg-muted/30 border-muted/50">
               <CardContent className="p-8 text-center">
                 <h3 className="text-2xl font-bold mb-4">Ready to get started?</h3>
                 <p className="text-muted-foreground mb-6">
@@ -768,7 +737,7 @@ export default function TemplateSharePage() {
                   </Button>
                 </div>
               </CardContent>
-            </Card>
+            </Card> */}
           </div>
         </div>
       </div>
