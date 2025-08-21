@@ -237,6 +237,26 @@
   }
 }
 
+.intercom-lightweight-app-launcher {
+  position: fixed;
+  z-index: 2147483003;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none;
+  bottom: 155px !important;
+  right: 20px;
+  max-width: 48px;
+  width: 48px;
+  max-height: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: #420b52;
+  cursor: pointer;
+  box-shadow: 0 1px 6px 0 rgba(0, 0, 0, 0.06), 0 2px 32px 0 rgba(0, 0, 0, 0.16);
+  transition: transform 167ms cubic-bezier(0.33, 0.00, 0.00, 1.00);
+  box-sizing: content-box;
+}
+
 :root {
   --background: oklch(0.9741 0 129.63);
   --foreground: oklch(0.2277 0.0034 67.65);
@@ -287,8 +307,8 @@
   --muted: oklch(0.31 0 0);
   --muted-foreground: oklch(0.708 0 0);
   --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground: oklch(98.46% 0.002 247.84)
-    --destructive: oklch(0.396 0.141 25.723);
+  --accent-foreground: oklch(98.46% 0.002 247.84);
+  --destructive: oklch(0.396 0.141 25.723);
   --destructive-foreground: oklch(0.637 0.237 25.331);
   --border: oklch(0.9911 0 0 / 6%);
   --input: oklch(0.28 0 0);
@@ -642,7 +662,7 @@
   content: '';
   @apply absolute top-0 left-0 w-full h-full;
   background: linear-gradient(
-    140deg
+    140deg,
     rgba(255, 255, 255, 0) 0%,
     rgba(255, 255, 255, 0.8) 50%,
     rgba(255, 255, 255, 0) 100%
