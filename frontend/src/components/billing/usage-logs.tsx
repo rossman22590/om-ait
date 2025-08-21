@@ -294,7 +294,7 @@ export default function UsageLogs({ accountId }: Props) {
                                   {new Date(log.created_at).toLocaleTimeString()}
                                 </TableCell>
                                 <TableCell className="text-xs">
-                                  <Badge variant="secondary" className="font-mono text-xs">
+                                  <Badge className="font-mono text-xs bg-pink-500 text-white hover:bg-pink-600">
                                     {log.content.model.replace('openrouter/', '').replace('anthropic/', '')}
                                   </Badge>
                                 </TableCell>
@@ -313,7 +313,7 @@ export default function UsageLogs({ accountId }: Props) {
                                 <TableCell className="text-right text-xs">
                                   {log.payment_method === 'credits' ? (
                                     <div className="flex items-center justify-end gap-2">
-                                      <Badge variant="outline" className="text-xs">
+                                      <Badge className="text-xs bg-pink-500 text-white hover:bg-pink-600">
                                         Credits
                                       </Badge>
                                       {log.credit_used && log.credit_used > 0 && (
@@ -323,7 +323,7 @@ export default function UsageLogs({ accountId }: Props) {
                                       )}
                                     </div>
                                   ) : (
-                                    <Badge variant="secondary" className="text-xs">
+                                    <Badge className="text-xs bg-pink-500 text-white hover:bg-pink-600">
                                       Subscription
                                     </Badge>
                                   )}

@@ -339,7 +339,7 @@ export function Navbar() {
 //   const logoSrc = !mounted
 //     ? '/logo.png'
 //     : resolvedTheme === 'dark'
-//       ? '/kortix-logo-white.svg'
+//       ? '/logo.png'
 //       : '/logo.png';
 
 //   return (
@@ -630,7 +630,7 @@ export function Navbar() {
 //   const logoSrc = !mounted
 //     ? '/logo.png'
 //     : resolvedTheme === 'dark'
-//       ? '/kortix-logo-white.svg'
+//       ? '/logo.png'
 //       : '/logo.png';
 
 //   return (
@@ -920,7 +920,7 @@ export function Navbar() {
 //   const logoSrc = !mounted
 //     ? '/logo.png'
 //     : resolvedTheme === 'dark'
-//       ? '/kortix-logo-white.svg'
+//       ? '/logo.png'
 //       : '/logo.png';
 
 //   return (
@@ -1211,7 +1211,7 @@ export function Navbar() {
 //   const logoSrc = !mounted
 //     ? '/logo.png'
 //     : resolvedTheme === 'dark'
-//       ? '/kortix-logo-white.svg'
+//       ? '/logo.png'
 //       : '/logo.png';
 
 //   return (
@@ -1502,7 +1502,7 @@ export function Navbar() {
 //   const logoSrc = !mounted
 //     ? '/logo.png'
 //     : resolvedTheme === 'dark'
-//       ? '/kortix-logo-white.svg'
+//       ? '/logo.png'
 //       : '/logo.png';
 
 //   return (
