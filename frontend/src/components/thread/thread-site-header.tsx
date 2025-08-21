@@ -189,6 +189,12 @@ export function SiteHeader({
               </TooltipContent>
             </Tooltip>
 
+{/* Thread Usage next to "View Files in Task" */}
+            <UsageDisplay
+              threadId={threadId}
+              projectId={projectId}
+              className="ml-1"
+            />
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
