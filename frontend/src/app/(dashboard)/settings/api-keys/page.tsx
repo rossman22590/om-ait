@@ -262,7 +262,7 @@ export default function APIKeysPage() {
               <div className="flex-1 space-y-3">
                 <div>
                   <h3 className="text-base font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                    Suna SDK & API
+                    Machine SDK & API
                   </h3>
                   <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
                     Our SDK and API are currently in beta. Use these API keys to integrate with our 
@@ -271,7 +271,7 @@ export default function APIKeysPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <a 
-                    href="https://github.com/kortix-ai/suna/tree/main/sdk" 
+                    href="#" 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
