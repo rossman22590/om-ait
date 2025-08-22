@@ -2273,7 +2273,8 @@ async def purchase_credits(
                     'user_id': current_user_id,
                     'credit_amount': str(request.amount_dollars),
                     'type': 'credit_purchase'
-                }
+                },
+                allow_promotion_codes=True
             )
         else:
             session = await stripe.checkout.Session.create_async(
@@ -2283,8 +2284,8 @@ async def purchase_credits(
                     'price_data': {
                         'currency': 'usd',
                         'product_data': {
-                            'name': f'Suna AI Credits',
-                            'description': f'${request.amount_dollars:.2f} in usage credits for Suna AI',
+                            'name': f'Machine AI Credits',
+                            'description': f'${request.amount_dollars:.2f} in usage credits for Machine AI',
                         },
                         'unit_amount': int(request.amount_dollars * 100),
                     },
@@ -2297,7 +2298,8 @@ async def purchase_credits(
                     'user_id': current_user_id,
                     'credit_amount': str(request.amount_dollars),
                     'type': 'credit_purchase'
-                }
+                },
+                allow_promotion_codes=True
             )
         
         # Record the pending purchase in database
