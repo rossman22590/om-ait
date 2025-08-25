@@ -17,7 +17,7 @@ from utils.config import config, EnvMode
 from services.supabase import DBConnection
 from utils.auth_utils import get_current_user_id_from_jwt
 from pydantic import BaseModel
-from utils.constants import MODEL_ACCESS_TIERS, MODEL_NAME_ALIASES, HARDCODED_MODEL_PRICES
+from models import model_manager
 from litellm.cost_calculator import cost_per_token
 import time
 import json
@@ -36,11 +36,10 @@ CREDIT_PACKAGES = {
     'credits_10': {'amount': 10, 'price': 10, 'stripe_price_id': config.STRIPE_CREDITS_10_PRICE_ID},
     'credits_25': {'amount': 25, 'price': 25, 'stripe_price_id': config.STRIPE_CREDITS_25_PRICE_ID},
     # Uncomment these when you create the additional price IDs in Stripe:
-    # 'credits_50': {'amount': 50, 'price': 50, 'stripe_price_id': config.STRIPE_CREDITS_50_PRICE_ID},
-    # 'credits_100': {'amount': 100, 'price': 100, 'stripe_price_id': config.STRIPE_CREDITS_100_PRICE_ID},
-    # 'credits_250': {'amount': 250, 'price': 250, 'stripe_price_id': config.STRIPE_CREDITS_250_PRICE_ID},
-    # 'credits_500': {'amount': 500, 'price': 500, 'stripe_price_id': config.STRIPE_CREDITS_500_PRICE_ID},
-    # 'credits_1000': {'amount': 1000, 'price': 1000, 'stripe_price_id': config.STRIPE_CREDITS_1000_PRICE_ID},
+    'credits_50': {'amount': 50, 'price': 50, 'stripe_price_id': config.STRIPE_CREDITS_50_PRICE_ID},
+    'credits_100': {'amount': 100, 'price': 100, 'stripe_price_id': config.STRIPE_CREDITS_100_PRICE_ID},
+    'credits_250': {'amount': 250, 'price': 250, 'stripe_price_id': config.STRIPE_CREDITS_250_PRICE_ID},
+    'credits_500': {'amount': 500, 'price': 500, 'stripe_price_id': config.STRIPE_CREDITS_500_PRICE_ID}
 }
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -91,17 +90,20 @@ def get_model_pricing(model: str) -> tuple[float, float] | None:
     Returns:
         Tuple of (input_cost_per_million_tokens, output_cost_per_million_tokens) or None if not found
     """
-    # Try direct lookup first
-    if model in HARDCODED_MODEL_PRICES:
-        pricing = HARDCODED_MODEL_PRICES[model]
-        return pricing["input_cost_per_million_tokens"], pricing["output_cost_per_million_tokens"]
-    
-    from models import model_manager
+    # First try to resolve the model ID to handle aliases
     resolved_model = model_manager.resolve_model_id(model)
-    if resolved_model != model and resolved_model in HARDCODED_MODEL_PRICES:
-        pricing = HARDCODED_MODEL_PRICES[resolved_model]
-        return pricing["input_cost_per_million_tokens"], pricing["output_cost_per_million_tokens"]
+    logger.debug(f"Resolving model '{model}' -> '{resolved_model}'")
     
+    # Try the resolved model first, then fallback to original
+    for model_to_try in [resolved_model, model]:
+        model_obj = model_manager.get_model(model_to_try)
+        if model_obj and model_obj.pricing:
+            logger.debug(f"Found pricing for model {model_to_try}: input=${model_obj.pricing.input_cost_per_million_tokens}/M, output=${model_obj.pricing.output_cost_per_million_tokens}/M")
+            return model_obj.pricing.input_cost_per_million_tokens, model_obj.pricing.output_cost_per_million_tokens
+        else:
+            logger.debug(f"No pricing for model_to_try='{model_to_try}' (model_obj: {model_obj is not None}, has_pricing: {model_obj.pricing is not None if model_obj else False})")
+    
+    logger.warning(f"No pricing found for model '{model}' (resolved: '{resolved_model}')")
     return None
 
 
@@ -425,15 +427,19 @@ async def get_usage_logs(client, user_id: str, page: int = 0, items_per_page: in
         logger.debug(f"[USAGE_LOGS] user_id={user_id} - Thread IDs: {thread_ids[:5]}..." if len(thread_ids) > 5 else f"[USAGE_LOGS] user_id={user_id} - Thread IDs: {thread_ids}")
         
         # Fetch usage messages with pagination, including thread project info
+        # Use a more efficient approach to avoid URI length limits with many threads
         start_time = time.time()
         logger.debug(f"[USAGE_LOGS] user_id={user_id} - Starting messages query")
         
         try:
+            # Instead of using .in_() with all thread IDs (which can cause URI too large errors),
+            # we'll use a join-based approach by querying messages directly for the user's account
+            # and filtering by date and type, then joining with threads for project info
             messages_result = await client.table('messages') \
                 .select(
-                    'message_id, thread_id, created_at, content, threads!inner(project_id)'
+                    'message_id, thread_id, created_at, content, threads!inner(project_id, account_id)'
                 ) \
-                .in_('thread_id', thread_ids) \
+                .eq('threads.account_id', user_id) \
                 .eq('type', 'assistant_response_end') \
                 .gte('created_at', start_of_month.isoformat()) \
                 .order('created_at', desc=True) \
@@ -442,7 +448,49 @@ async def get_usage_logs(client, user_id: str, page: int = 0, items_per_page: in
         except Exception as query_error:
             logger.error(f"[USAGE_LOGS] user_id={user_id} - Database query failed: {str(query_error)}")
             logger.error(f"[USAGE_LOGS] user_id={user_id} - Query details: page={page}, items_per_page={items_per_page}, thread_count={len(thread_ids)}")
-            raise
+            
+            # Fallback: If the join approach fails, try batching the thread IDs
+            logger.debug(f"[USAGE_LOGS] user_id={user_id} - Attempting fallback with batched thread ID queries")
+            try:
+                all_messages = []
+                batch_size = 100  # Process threads in smaller batches to avoid URI limits
+                
+                for i in range(0, len(thread_ids), batch_size):
+                    batch_thread_ids = thread_ids[i:i + batch_size]
+                    logger.debug(f"[USAGE_LOGS] user_id={user_id} - Processing thread batch {i//batch_size + 1}/{(len(thread_ids) + batch_size - 1)//batch_size}")
+                    
+                    batch_result = await client.table('messages') \
+                        .select(
+                            'message_id, thread_id, created_at, content, threads!inner(project_id)'
+                        ) \
+                        .in_('thread_id', batch_thread_ids) \
+                        .eq('type', 'assistant_response_end') \
+                        .gte('created_at', start_of_month.isoformat()) \
+                        .order('created_at', desc=True) \
+                        .execute()
+                    
+                    if batch_result.data:
+                        all_messages.extend(batch_result.data)
+                
+                # Sort all messages by created_at descending and apply pagination
+                all_messages.sort(key=lambda x: x['created_at'], reverse=True)
+                
+                # Apply pagination to the combined results
+                start_idx = page * items_per_page
+                end_idx = start_idx + items_per_page
+                paginated_messages = all_messages[start_idx:end_idx]
+                
+                # Create a mock result object similar to what Supabase returns
+                class MockResult:
+                    def __init__(self, data):
+                        self.data = data
+                
+                messages_result = MockResult(paginated_messages)
+                logger.debug(f"[USAGE_LOGS] user_id={user_id} - Fallback successful, found {len(all_messages)} total messages, returning {len(paginated_messages)} for page {page}")
+                
+            except Exception as fallback_error:
+                logger.error(f"[USAGE_LOGS] user_id={user_id} - Fallback query also failed: {str(fallback_error)}")
+                raise query_error  # Raise the original error
         
         end_time = time.time()
         execution_time = end_time - start_time
@@ -645,9 +693,12 @@ def calculate_token_cost(prompt_tokens: int, completion_tokens: int, model: str)
         prompt_tokens = int(prompt_tokens) if prompt_tokens is not None else 0
         completion_tokens = int(completion_tokens) if completion_tokens is not None else 0
         
+        logger.debug(f"Calculating token cost for model '{model}' with {prompt_tokens} input tokens and {completion_tokens} output tokens")
+        
         # Try to resolve the model name using new model manager first
         from models import model_manager
         resolved_model = model_manager.resolve_model_id(model)
+        logger.debug(f"Model '{model}' resolved to '{resolved_model}'")
 
         # Check if we have hardcoded pricing for this model (use cleaned and resolved models)
         hardcoded_pricing = get_model_pricing(cleaned_model) or get_model_pricing(resolved_model)
@@ -746,8 +797,13 @@ async def get_allowed_models_for_user(client, user_id: str):
         if tier_info:
             tier_name = tier_info['name']
     
-    # Return allowed models for this tier
-    result = MODEL_ACCESS_TIERS.get(tier_name, MODEL_ACCESS_TIERS['free'])  # Default to free tier if unknown
+    # Return allowed models for this tier using model manager
+    if tier_name == 'free':
+        result = model_manager.get_models_for_tier('free')
+        result = [model.id for model in result]  # Convert to list of IDs
+    else:
+        result = model_manager.get_models_for_tier('paid')  
+        result = [model.id for model in result]  # Convert to list of IDs
     await Cache.set(f"allowed_models_for_user:{user_id}", result, ttl=1 * 60)
     return result
 
