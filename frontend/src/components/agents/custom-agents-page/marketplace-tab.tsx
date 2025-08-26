@@ -7,6 +7,7 @@ import { Users } from 'lucide-react';
 import { SearchBar } from './search-bar';
 import { MarketplaceSectionHeader } from './marketplace-section-header';
 import { AgentCard } from './agent-card';
+import { Pagination } from '../pagination';
 
 import type { MarketplaceTemplate } from '@/components/agents/installation/types';
 
@@ -24,6 +25,19 @@ interface MarketplaceTabProps {
   getItemStyling: (item: MarketplaceTemplate) => { avatar: string; color: string };
   currentUserId?: string;
   onAgentPreview?: (agent: MarketplaceTemplate) => void;
+  
+  marketplacePage: number;
+  setMarketplacePage: (page: number) => void;
+  marketplacePageSize: number;
+  onMarketplacePageSizeChange: (pageSize: number) => void;
+  marketplacePagination?: {
+    current_page: number;
+    page_size: number;
+    total_items: number;
+    total_pages: number;
+    has_next: boolean;
+    has_previous: boolean;
+  };
 }
 
 export const MarketplaceTab = ({
@@ -39,7 +53,12 @@ export const MarketplaceTab = ({
   onDeleteTemplate,
   getItemStyling,
   currentUserId,
-  onAgentPreview
+  onAgentPreview,
+  marketplacePage,
+  setMarketplacePage,
+  marketplacePageSize,
+  onMarketplacePageSizeChange,
+  marketplacePagination
 }: MarketplaceTabProps) => {
   const handleAgentClick = (item: MarketplaceTemplate) => {
     if (onAgentPreview) {
@@ -135,6 +154,20 @@ export const MarketplaceTab = ({
                   />
                 ))}
               </div>
+            )}
+            {marketplacePagination && (
+              <Pagination
+                currentPage={marketplacePagination.current_page}
+                totalPages={marketplacePagination.total_pages}
+                totalItems={marketplacePagination.total_items}
+                pageSize={marketplacePagination.page_size}
+                onPageChange={setMarketplacePage}
+                onPageSizeChange={onMarketplacePageSizeChange}
+                isLoading={marketplaceLoading}
+                showPageSizeSelector={true}
+                showJumpToPage={true}
+                showResultsInfo={true}
+              />
             )}
           </div>
         )}

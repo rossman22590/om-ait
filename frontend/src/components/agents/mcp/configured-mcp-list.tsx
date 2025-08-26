@@ -249,6 +249,7 @@ const MCPConfigurationItem: React.FC<{
                       className="h-8 w-8 p-0 hover:bg-muted"
                       onClick={() => onConfigureTools(index)}
                       title="Configure tools"
+            type="button"
                     >
                       <Sparkles className="h-4 w-4" />
                     </Button>
@@ -259,6 +260,7 @@ const MCPConfigurationItem: React.FC<{
                     className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                     onClick={() => onRemove(index)}
                     title="Remove integration"
+          type="button"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -392,7 +394,7 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
-              className="bg-destructive hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90 text-white"
             >
               Remove Integration
             </AlertDialogAction>

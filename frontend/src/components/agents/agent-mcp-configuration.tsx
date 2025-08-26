@@ -119,6 +119,9 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
           toolkit_slug: customMcp.toolkit_slug || customMcp.config?.toolkit_slug  // Add for logo system
         };
       }
+      
+      // Map 'sse' backend type to 'http' for frontend display
+      const displayType = customMcp.type === 'sse' ? 'http' : (customMcp.type || customMcp.customType);
 
       if (customMcp.type === 'pipedream' || customMcp.customType === 'pipedream') {
         return {
@@ -135,11 +138,11 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
       
       return {
         name: customMcp.name,
-        qualifiedName: customMcp.qualifiedName || `custom_${customMcp.type || customMcp.customType}_${customMcp.name.replace(' ', '_').toLowerCase()}`,
+        qualifiedName: customMcp.qualifiedName || `custom_${displayType}_${customMcp.name.replace(' ', '_').toLowerCase()}`,
         config: customMcp.config,
         enabledTools: customMcp.enabledTools,
         isCustom: true,
-        customType: customMcp.type || customMcp.customType
+        customType: displayType
       };
     }),
     // Add available integrations that aren't configured yet
@@ -157,6 +160,8 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
         enabledTools: mcp.enabledTools
       }))
     });
+    
+    console.log('[AgentMCPConfiguration] Configuration changed:', mcps);
     
     const configured = mcps.filter(mcp => !mcp.isCustom);
     const custom = mcps
@@ -177,6 +182,9 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
             enabledTools: mcp.enabledTools
           };
         }
+        
+        // Map 'http' to 'sse' for backend compatibility
+        const backendType = mcp.customType === 'http' ? 'sse' : mcp.customType;
 
         if (mcp.customType === 'pipedream' || mcp.isPipedream) {
           return {
@@ -190,7 +198,7 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
         
         return {
           name: mcp.name,
-          type: mcp.customType,
+          type: backendType,
           customType: mcp.customType,
           config: mcp.config,
           enabledTools: mcp.enabledTools
@@ -207,6 +215,8 @@ export const AgentMCPConfiguration: React.FC<AgentMCPConfigurationProps> = ({
       }))
     });
 
+    console.log('[AgentMCPConfiguration] Sending to parent - configured:', configured, 'custom:', custom);
+    
     onMCPChange({
       configured_mcps: configured,
       custom_mcps: custom

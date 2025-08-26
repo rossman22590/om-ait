@@ -408,15 +408,16 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
         <DialogFooter>
           {step === 'tools' ? (
             <>
-              <Button variant="outline" onClick={handleBack} disabled={isSaving}>
+              <Button variant="outline" onClick={handleBack} disabled={isSaving} type="button">
                 Back
               </Button>
-              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+              <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving} type="button">
                 Cancel
               </Button>
               <Button 
-                onClick={handleSave}
-                disabled={selectedTools.size === 0}
+                onClick={handleToolsNext}
+                disabled={selectedTools.size === 0 || isSaving}
+                type="button"
               >
                 {isSaving ? (
                   <>
@@ -430,16 +431,13 @@ export const CustomMCPDialog: React.FC<CustomMCPDialogProps> = ({
             </>
           ) : (
             <>
-              <Button 
-                variant="outline" 
-                onClick={() => onOpenChange(false)} 
-                disabled={isSubmitting}
-              >
+              <Button variant="outline" onClick={() => onOpenChange(false)} type="button">
                 Cancel
               </Button>
               <Button
                 onClick={validateAndDiscoverTools}
                 disabled={!configText.trim() || !manualServerName.trim() || isValidating}
+                type="button"
               >
                 {isValidating ? (
                   <>
