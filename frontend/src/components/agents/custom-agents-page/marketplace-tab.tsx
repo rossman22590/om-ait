@@ -17,8 +17,6 @@ interface MarketplaceTabProps {
   setMarketplaceFilter: (value: 'all' | 'kortix' | 'community' | 'mine') => void;
   marketplaceLoading: boolean;
   allMarketplaceItems: MarketplaceTemplate[];
-  kortixTeamItems: MarketplaceTemplate[];
-  communityItems: MarketplaceTemplate[];
   mineItems: MarketplaceTemplate[];
   installingItemId: string | null;
   onInstallClick: (item: MarketplaceTemplate, e?: React.MouseEvent) => void;
@@ -35,8 +33,6 @@ export const MarketplaceTab = ({
   setMarketplaceFilter,
   marketplaceLoading,
   allMarketplaceItems,
-  kortixTeamItems,
-  communityItems,
   mineItems,
   installingItemId,
   onInstallClick,
@@ -67,7 +63,7 @@ export const MarketplaceTab = ({
             <SelectContent className='rounded-xl'>
               <SelectItem className='rounded-xl' value="all">All Agents</SelectItem>
               <SelectItem className='rounded-xl' value="mine">Mine</SelectItem>
-              <SelectItem className='rounded-xl' value="kortix">Machine  Verified</SelectItem>
+              <SelectItem className='rounded-xl' value="kortix">Machine Verified</SelectItem>
               <SelectItem className='rounded-xl' value="community">Community</SelectItem>
             </SelectContent>
           </Select>
@@ -102,60 +98,27 @@ export const MarketplaceTab = ({
         ) : (
           <div className="space-y-12">
             {marketplaceFilter === 'all' ? (
-              <>
-                {kortixTeamItems.length > 0 && (
-                  <div className="space-y-6">
-                    <MarketplaceSectionHeader
-                      title="By team Machine"
-                      subtitle="Official agents, maintained and supported"
+              <div className="space-y-6">
+                {/* <MarketplaceSectionHeader
+                  title="Popular Agents"
+                  subtitle="Sorted by popularity - most downloads first"
+                /> */}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {allMarketplaceItems.map((item) => (
+                    <AgentCard
+                      key={item.id}
+                      mode="marketplace"
+                      data={item}
+                      styling={getItemStyling(item)}
+                      isActioning={installingItemId === item.id}
+                      onPrimaryAction={onInstallClick}
+                      onDeleteAction={onDeleteTemplate}
+                      onClick={() => handleAgentClick(item)}
+                      currentUserId={currentUserId}
                     />
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                      {kortixTeamItems.map((item) => (
-                        <AgentCard
-                          key={item.id}
-                          mode="marketplace"
-                          data={item}
-                          styling={getItemStyling(item)}
-                          isActioning={installingItemId === item.id}
-                          onPrimaryAction={onInstallClick}
-                          onDeleteAction={onDeleteTemplate}
-                          onClick={() => handleAgentClick(item)}
-                          currentUserId={currentUserId}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {communityItems.length > 0 && (
-                  <div className="space-y-6">
-                    {/* <MarketplaceSectionHeader
-                      title="From the community"
-                      subtitle="Agents created by our community"
-                      iconColor="bg-gradient-to-br from-green-500 to-green-600"
-                    /> */}
-                    <MarketplaceSectionHeader
-                      title="Community Templates"
-                      subtitle="Created and shared by the community"
-                      icon={<Users className="h-5 w-5 text-white" />}
-                    />
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                      {communityItems.map((item) => (
-                        <AgentCard
-                          key={item.id}
-                          mode="marketplace"
-                          data={item}
-                          styling={getItemStyling(item)}
-                          isActioning={installingItemId === item.id}
-                          onPrimaryAction={onInstallClick}
-                          onDeleteAction={onDeleteTemplate}
-                          onClick={() => handleAgentClick(item)}
-                          currentUserId={currentUserId}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
+                  ))}
+                </div>
+              </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {allMarketplaceItems.map((item) => (
