@@ -272,7 +272,7 @@ export function ConfigurationTab({
               {openAccordion === 'integrations' && (
                 <div className="border-t border-border bg-muted/10 overflow-y-auto max-h-96">
                   <div className="p-4">
-                                         <AgentMCPConfiguration
+                    <AgentMCPConfiguration
                        configuredMCPs={displayData.configured_mcps}
                        customMCPs={displayData.custom_mcps}
                        onMCPChange={onMCPChange}
@@ -430,7 +430,7 @@ export function ConfigurationTab({
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>
