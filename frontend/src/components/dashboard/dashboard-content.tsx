@@ -76,6 +76,7 @@ const dashboardTourSteps: Step[] = [
 export function DashboardContent() {
   const [inputValue, setInputValue] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [autoSubmit, setAutoSubmit] = useState(false);
   const { 
     selectedAgentId, 
@@ -158,6 +159,7 @@ export function DashboardContent() {
   React.useEffect(() => {
     if (threadQuery.data && initiatedThreadId) {
       const thread = threadQuery.data;
+      setIsRedirecting(true);
       if (thread.project_id) {
         router.push(`/projects/${thread.project_id}/thread/${initiatedThreadId}`);
       } else {
@@ -189,7 +191,8 @@ export function DashboardContent() {
   ) => {
     if (
       (!message.trim() && !chatInputRef.current?.getPendingFiles().length) ||
-      isSubmitting
+      isSubmitting ||
+      isRedirecting
     )
       return;
 
@@ -222,6 +225,7 @@ export function DashboardContent() {
 
       if (result.thread_id) {
         setInitiatedThreadId(result.thread_id);
+        // Don't reset isSubmitting here - keep loading until redirect happens
       } else {
         throw new Error('Agent initiation did not return a thread_id.');
       }
@@ -241,7 +245,7 @@ export function DashboardContent() {
         const errorMessage = error instanceof Error ? error.message : 'Operation failed';
         toast.error(errorMessage);
       }
-    } finally {
+      // Only reset loading state if there was an error or no thread_id was returned
       setIsSubmitting(false);
     }
   };
@@ -260,7 +264,7 @@ export function DashboardContent() {
   }, []);
 
   React.useEffect(() => {
-    if (autoSubmit && inputValue && !isSubmitting) {
+    if (autoSubmit && inputValue && !isSubmitting && !isRedirecting) {
       const timer = setTimeout(() => {
         handleSubmit(inputValue);
         setAutoSubmit(false);
@@ -268,7 +272,7 @@ export function DashboardContent() {
 
       return () => clearTimeout(timer);
     }
-  }, [autoSubmit, inputValue, isSubmitting]);
+  }, [autoSubmit, inputValue, isSubmitting, isRedirecting]);
 
   return (
     <>
@@ -373,7 +377,7 @@ export function DashboardContent() {
                   <ChatInput
                     ref={chatInputRef}
                     onSubmit={handleSubmit}
-                    loading={isSubmitting}
+                    loading={isSubmitting || isRedirecting}
                     placeholder="Describe what you need help with..."
                     value={inputValue}
                     onChange={setInputValue}
