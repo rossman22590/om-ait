@@ -38,10 +38,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { usePathname, useSearchParams } from 'next/navigation';
 import posthog from 'posthog-js';
+import { stopAllAgents } from '@/lib/api';
+import { toast } from 'sonner';
 // Floating mobile menu button component
 function FloatingMobileMenuButton() {
   const { setOpenMobile, openMobile } = useSidebar();
@@ -297,59 +300,55 @@ export function SidebarLeft({
               </Collapsible>
             </SidebarMenu>
           )}
-          {!flagsLoading && customAgentsEnabled && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Link href="/settings/credentials">
-                  <SidebarMenuButton className={cn({
-                    'bg-accent text-accent-foreground font-medium': pathname === '/settings/credentials',
-                  }, 'cursor-pointer')}>
-                    <Plug className="h-4 w-4 mr-1" />
-                    <span className="flex items-center justify-between w-full">
-                      Integrations
-                    </span>
-                  </SidebarMenuButton>
-                </Link>
-              </TooltipTrigger>
-              <TooltipContent side="right">Manage API keys & integrations</TooltipContent>
-            </Tooltip>
-          )}
-          {!flagsLoading && customAgentsEnabled && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <SidebarMenuButton 
-                    className={cn({
-                      'opacity-50 cursor-not-allowed': !hasFragmentsAccess,
-                      'cursor-pointer hover:bg-accent': hasFragmentsAccess,
-                      'bg-accent text-accent-foreground font-medium': pathname?.includes('/fragments'),
-                    })}
-                    onClick={() => {
-                      if (hasFragmentsAccess) {
-                        window.open('https://machine-fragments.up.railway.app/', '_blank');
-                      }
-                    }}
-                  >
-                    <Puzzle className="h-4 w-4 mr-1" />
-                    <span className="flex items-center justify-between w-full">
-                      Fragments
-                      {!hasFragmentsAccess && (
-                        <Badge variant="secondary" className="ml-2 text-xs bg-pink-500 text-white border-pink-500">
-                          Pro+
-                        </Badge>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href="/settings/credentials">
+                <SidebarMenuButton className={cn({
+                  'bg-accent text-accent-foreground font-medium': pathname === '/settings/credentials',
+                }, 'cursor-pointer')}>
+                  <Plug className="h-4 w-4 mr-1" />
+                  <span className="flex items-center justify-between w-full">
+                    Integrations
+                  </span>
+                </SidebarMenuButton>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">Manage API keys & integrations</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <SidebarMenuButton 
+                  className={cn({
+                    'opacity-50 cursor-not-allowed': !hasFragmentsAccess,
+                    'cursor-pointer hover:bg-accent': hasFragmentsAccess,
+                    'bg-accent text-accent-foreground font-medium': pathname?.includes('/fragments'),
+                  })}
+                  onClick={() => {
+                    if (hasFragmentsAccess) {
+                      window.open('https://machine-fragments.up.railway.app/', '_blank');
+                    }
+                  }}
+                >
+                  <Puzzle className="h-4 w-4 mr-1" />
+                  <span className="flex items-center justify-between w-full">
+                    Fragments
+                    {!hasFragmentsAccess && (
+                      <Badge variant="secondary" className="ml-2 text-xs bg-pink-500 text-white border-pink-500">
+                        Pro+
+                      </Badge>
                       )}
-                    </span>
-                  </SidebarMenuButton>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                {hasFragmentsAccess 
-                  ? 'Access Machine Fragments - Advanced workflow automation' 
-                  : 'Upgrade to Ultra, Enterprise, Scale, or Premium plan to access Fragments'
-                }
-              </TooltipContent>
-            </Tooltip>
-          )}
+                  </span>
+                </SidebarMenuButton>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {hasFragmentsAccess 
+                ? 'Access Machine Fragments - Advanced workflow automation' 
+                : 'Upgrade to Ultra, Enterprise, Scale, or Premium plan to access Fragments'
+              }
+            </TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Link href="/machine-code">

@@ -18,7 +18,6 @@ import { PricingSection } from '@/components/home/sections/pricing-section';
 
 import { isLocalMode } from '@/lib/config';
 import {
-    getSubscription,
     createPortalSession,
     cancelSubscription,
     reactivateSubscription,
@@ -26,6 +25,7 @@ import {
 } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import { useSubscriptionCommitment } from '@/hooks/react-query';
+import { useSubscription } from '@/hooks/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { subscriptionKeys } from '@/hooks/react-query/subscriptions/keys';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -50,9 +50,14 @@ interface BillingModalProps {
 export function BillingModal({ open, onOpenChange, returnUrl = typeof window !== 'undefined' ? window?.location?.href || '/' : '/', showUsageLimitAlert = false }: BillingModalProps) {
     const { session, isLoading: authLoading } = useAuth();
     const queryClient = useQueryClient();
-    const [subscriptionData, setSubscriptionData] = useState<SubscriptionStatus | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    
+    // Use the same hook as the dashboard for consistent data
+    const { 
+        data: subscriptionData, 
+        isLoading, 
+        error 
+    } = useSubscription();
+    
     const [isManaging, setIsManaging] = useState(false);
     const [showCreditPurchaseModal, setShowCreditPurchaseModal] = useState(false);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -66,28 +71,10 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
         refetch: refetchCommitment
     } = useSubscriptionCommitment(subscriptionData?.subscription?.id || null);
 
-    // Simple function to fetch subscription data
-    const fetchSubscriptionData = async () => {
-        if (!session) return;
+    // Remove the manual fetchSubscriptionData function since useSubscription handles it
 
-        try {
-            setIsLoading(true);
-            const data = await getSubscription();
-            setSubscriptionData(data);
-            setError(null);
-            return data;
-        } catch (err) {
-            console.error('Failed to get subscription:', err);
-            setError(err instanceof Error ? err.message : 'Failed to load subscription data');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (!open || authLoading || !session) return;
-        fetchSubscriptionData();
-    }, [open, session, authLoading]);
+    // The useSubscription hook automatically fetches data when the component mounts and when session changes.
+    // No need for manual useEffect here.
 
     const formatDate = (timestamp: number) => {
         return new Date(timestamp * 1000).toLocaleDateString('en-US', {
@@ -126,7 +113,7 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
             window.location.href = url;
         } catch (err) {
             console.error('Failed to create portal session:', err);
-            setError(err instanceof Error ? err.message : 'Failed to create portal session');
+            // setError(err instanceof Error ? err.message : 'Failed to create portal session');
         } finally {
             setIsManaging(false);
         }
@@ -140,32 +127,20 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
             console.log('Cancelling subscription...');
             setShowCancelDialog(false);
 
-            // Optimistic update - show cancelled state immediately
-            if (subscriptionData?.subscription) {
-                const optimisticState = {
-                    ...subscriptionData,
-                    subscription: {
-                        ...subscriptionData.subscription,
-                        cancel_at_period_end: true,
-                        ...(commitmentInfo?.has_commitment && commitmentInfo.commitment_end_date ? {
-                            cancel_at: Math.floor(new Date(commitmentInfo.commitment_end_date).getTime() / 1000)
-                        } : {})
-                    }
-                };
-                setSubscriptionData(optimisticState);
-            }
+            // Note: We can't do optimistic updates with useSubscription hook
+            // The hook will automatically refetch and update the UI
 
             const response = await cancelSubscription();
 
             if (response.success) {
                 toast.success(response.message);
+                // Invalidate the subscription query to refetch data
+                queryClient.invalidateQueries({ queryKey: subscriptionKeys.details() });
             } else {
-                setSubscriptionData(originalState);
                 toast.error(response.message);
             }
         } catch (error: any) {
             console.error('Error cancelling subscription:', error);
-            setSubscriptionData(originalState);
             toast.error(error.message || 'Failed to cancel subscription');
         } finally {
             setIsCancelling(false);
@@ -174,35 +149,24 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
 
     const handleReactivate = async () => {
         setIsCancelling(true);
-        const originalState = subscriptionData;
         
         try {
             console.log('Reactivating subscription...');
 
-            // Optimistic update - show active state immediately
-            if (subscriptionData?.subscription) {
-                const optimisticState = {
-                    ...subscriptionData,
-                    subscription: {
-                        ...subscriptionData.subscription,
-                        cancel_at_period_end: false,
-                        cancel_at: undefined
-                    }
-                };
-                setSubscriptionData(optimisticState);
-            }
+            // Note: We can't do optimistic updates with useSubscription hook
+            // The hook will automatically refetch and update the UI
 
             const response = await reactivateSubscription();
 
             if (response.success) {
                 toast.success(response.message);
+                // Invalidate the subscription query to refetch data
+                queryClient.invalidateQueries({ queryKey: subscriptionKeys.details() });
             } else {
-                setSubscriptionData(originalState);
                 toast.error(response.message);
             }
         } catch (error: any) {
             console.error('Error reactivating subscription:', error);
-            setSubscriptionData(originalState);
             toast.error(error.message || 'Failed to reactivate subscription');
         } finally {
             setIsCancelling(false);
@@ -275,10 +239,27 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                                         Agent Usage This Month
                                     </span>
                                     <span className="text-sm font-medium">
-                                        ${subscriptionData.current_usage?.toFixed(2) || '0'} /{' '}
-                                        ${subscriptionData.cost_limit || '0'}
+                                        ${(subscriptionData.current_usage || 0).toFixed(2)} /{' '}
+                                        ${subscriptionData.cost_limit || 0}
                                     </span>
                                 </div>
+                                {/* Add progress bar like in dashboard */}
+                                {subscriptionData.current_usage !== undefined && subscriptionData.cost_limit && (
+                                    <div className="mt-2">
+                                        <div className="w-full bg-muted rounded-full h-2">
+                                            <div 
+                                                className="bg-primary h-2 rounded-full transition-all duration-300"
+                                                style={{ 
+                                                    width: `${Math.min((subscriptionData.current_usage / subscriptionData.cost_limit) * 100, 100)}%` 
+                                                }}
+                                            />
+                                        </div>
+                                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                                            <span>${(subscriptionData.current_usage || 0).toFixed(2)}</span>
+                                            <span>${(subscriptionData.cost_limit - (subscriptionData.current_usage || 0)).toFixed(2)} remaining</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
@@ -290,7 +271,7 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                     {error ? (
                         <div className="mt-6 pt-4 border-t border-border">
                             <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-center">
-                                <p className="text-sm text-destructive">Error loading billing status: {error}</p>
+                                <p className="text-sm text-destructive">Error loading billing status: {error.message || 'Unknown error'}</p>
                             </div>
                         </div>
                     ) : subscriptionData?.subscription && (

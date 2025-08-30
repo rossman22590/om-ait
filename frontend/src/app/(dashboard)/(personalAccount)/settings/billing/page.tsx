@@ -73,15 +73,21 @@ export default function PersonalAccountBillingPage() {
   // Fetch agent limits and usage
   const { data: agentLimitsData, isLoading: agentLimitsLoading, error: agentLimitsError } = useAgentLimits();
 
-  // Debug log for agent limits
+  // Debug log for subscription and agent limits
   useEffect(() => {
+    if (subscriptionData) {
+      console.log('[Billing] Subscription data loaded:', subscriptionData);
+    }
+    if (subscriptionError) {
+      console.error('[Billing] Subscription error:', subscriptionError);
+    }
     if (agentLimitsData) {
       console.log('[Billing] Agent limits data loaded:', agentLimitsData);
     }
     if (agentLimitsError) {
       console.error('[Billing] Agent limits error:', agentLimitsError);
     }
-  }, [agentLimitsData, agentLimitsError]);
+  }, [subscriptionData, subscriptionError, agentLimitsData, agentLimitsError]);
 
   const personalAccount = useMemo(
     () => accounts?.find((account) => account.personal_account),
@@ -117,12 +123,7 @@ export default function PersonalAccountBillingPage() {
     return planMap[planName] || planName.charAt(0).toUpperCase() + planName.slice(1);
   };
 
-  // Function to estimate minutes used based on cost
-  const getEstimatedMinutes = (currentUsage?: number) => {
-    if (!currentUsage || currentUsage === 0) return 0;
-    const averageCostPerMinute = 0.15; // Rough estimate
-    return Math.round(currentUsage / averageCostPerMinute);
-  };
+
 
   if (error) {
     return (
@@ -236,9 +237,9 @@ export default function PersonalAccountBillingPage() {
                       Current Plan: <span className="font-medium">{getPlanDisplayName(subscriptionData?.plan_name)}</span>
                     </p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Estimated: <span className="font-medium text-purple-600 dark:text-purple-400">
-                        ~{getEstimatedMinutes(subscriptionData?.current_usage)} minutes
-                      </span> used this month
+                      Current Usage: <span className="font-medium text-purple-600 dark:text-purple-400">
+                        ${subscriptionData?.current_usage?.toFixed(2) || '0.00'}
+                      </span> this month
                     </p>
                   </div>
                 </div>

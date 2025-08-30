@@ -569,6 +569,31 @@ async def get_agents(
         logger.error(f"Error fetching agents for user {user_id}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch agents: {str(e)}")
 
+@router.get("/agents/limits")
+async def get_agent_limits(user_id: str = Depends(get_current_user_id_from_jwt)):
+    """Get agent count limits for the current user."""
+    logger.debug(f"Fetching agent limits for user: {user_id}")
+    
+    client = await utils.db.client
+    
+    try:
+        from ..utils import check_agent_count_limit
+        limit_check = await check_agent_count_limit(client, user_id)
+        
+        usage_percentage = (limit_check['current_count'] / limit_check['limit']) * 100 if limit_check['limit'] > 0 else 0
+        
+        return {
+            "current_count": limit_check['current_count'],
+            "limit": limit_check['limit'],
+            "tier_name": limit_check['tier_name'],
+            "can_create": limit_check['can_create'],
+            "usage_percentage": usage_percentage
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching agent limits for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch agent limits: {str(e)}")
+
 @router.get("/agents/{agent_id}", response_model=AgentResponse)
 async def get_agent(agent_id: str, user_id: str = Depends(get_current_user_id_from_jwt)):
     

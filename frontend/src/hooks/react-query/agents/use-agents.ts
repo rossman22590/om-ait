@@ -2,7 +2,7 @@ import { createMutationHook, createQueryHook } from '@/hooks/use-query';
 import { useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { agentKeys } from './keys';
-import { Agent, AgentUpdateRequest, AgentsParams, createAgent, deleteAgent, getAgent, getAgents, getThreadAgent, updateAgent } from './utils';
+import { Agent, AgentUpdateRequest, AgentsParams, createAgent, deleteAgent, getAgent, getAgents, getThreadAgent, updateAgent, getAgentLimits } from './utils';
 import { useRef, useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { DEFAULT_AGENTPRESS_TOOLS } from '@/components/agents/tools';
@@ -214,6 +214,18 @@ export const useThreadAgent = (threadId: string) => {
       enabled: !!threadId,
       staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
+    }
+  )();
+};
+
+export const useAgentLimits = () => {
+  return createQueryHook(
+    agentKeys.limits(),
+    getAgentLimits,
+    {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes
+      refetchOnWindowFocus: false,
     }
   )();
 };

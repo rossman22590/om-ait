@@ -155,9 +155,8 @@ class ToolManager:
         for tool_name, tool_class in agent_builder_tools:
             if tool_name not in disabled_tools:
                 try:
-                    try:
                     self.thread_manager.add_tool(tool_class, thread_manager=self.thread_manager, db_connection=db, agent_id=agent_id)
-                        logger.info(f"✅ Successfully registered {tool_name}")
+                    logger.info(f"✅ Successfully registered {tool_name}")
                     
                     # Special verification for critical Pipedream tools
                     if tool_name == 'pipedream_mcp_tool':
@@ -170,8 +169,10 @@ class ToolManager:
                             
                 except Exception as e:
                     logger.error(f"❌ Failed to register {tool_name}: {e}")
-                except Exception as e:
-                    logger.warning(f"❌ Failed to register {tool_name}: {e}")
+                    # For Pipedream specifically, this is critical
+                    if tool_name == 'pipedream_mcp_tool':
+                        logger.error(f"❌ CRITICAL: Pipedream tool registration failed - agent builder will not have dual platform support!")
+                    # Continue with other tools instead of failing completely
             else:
                 logger.debug(f"⏭️ Skipping {tool_name} - disabled")
     
@@ -188,10 +189,6 @@ class ToolManager:
                 logger.debug("Registered agent_creation_tool for Suna")
             else:
                 logger.warning("Could not register agent_creation_tool: account_id not available")
-                    # For Pipedream specifically, this is critical
-                    if tool_name == 'pipedream_mcp_tool':
-                        logger.error(f"❌ CRITICAL: Pipedream tool registration failed - agent builder will not have dual platform support!")
-                    # Continue with other tools instead of failing completely
     
     def _register_browser_tool(self, disabled_tools: List[str]):
         """Register browser tool."""

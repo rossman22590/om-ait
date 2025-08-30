@@ -26,7 +26,8 @@ def test_model_limits():
         'grok-4', 
         'unknown-model',
         'anthropic/claude-sonnet-4-20250514',
-        'openai/gpt-5-mini'
+        'openai/gpt-5-mini',
+        'openai/gpt-4o-mini'
     ]
     
     for model in test_models:
@@ -34,7 +35,7 @@ def test_model_limits():
         print(f'{model}: {window:,} tokens')
 
     print("\n=== Context Manager Logic Simulation ===")
-    for model in ['gpt-5', 'anthropic/claude-sonnet-4', 'gemini/gemini-2.5-pro', 'unknown-model']:
+    for model in ['gpt-5', 'anthropic/claude-sonnet-4', 'gemini/gemini-2.5-pro', 'gemini/gemini-2.5-flash', 'unknown-model']:
         context_window = model_manager.get_context_window(model)
         
         # Simulate the logic from context manager

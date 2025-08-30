@@ -33,14 +33,25 @@ import { toast } from 'sonner';
 import { ReleaseBadge } from '../auth/release-badge';
 import { useDashboardTour } from '@/hooks/use-dashboard-tour';
 import { TourConfirmationDialog } from '@/components/tour/TourConfirmationDialog';
-import { Calendar, MessageSquare, Plus, Sparkles, Zap } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
+import { NewAgentDialog } from '@/components/agents/new-agent-dialog';
+import { Calendar, MessageSquare, Plus, Sparkles, Zap, Puzzle } from 'lucide-react';
 
 const PENDING_PROMPT_KEY = 'pendingAgentPrompt';
 
 const dashboardTourSteps: Step[] = [
   {
     target: '[data-tour="chat-input"]',
-    content: 'Type your questions or tasks here. Suna can help with research, analysis, automation, and much more.',
+    content: 'Type your questions or tasks here. Machine can help with research, analysis, automation, and much more.',
     title: 'Start a Conversation',
     placement: 'top',
     disableBeacon: true,
@@ -118,7 +129,7 @@ export function DashboardContent() {
     : null;
   const displayName = selectedAgent?.name || 'Machine';
   const agentAvatar = undefined;
-  const isSunaAgent = selectedAgent?.metadata?.is_suna_default || false;
+  const isMachineAgent = selectedAgent?.metadata?.is_suna_default || false;
 
   // Determine if the currently selected agent is the default Machine/General
   const currentAgentIsDefault = !selectedAgent || !!selectedAgent?.metadata?.is_suna_default;

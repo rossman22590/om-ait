@@ -86,6 +86,19 @@ export default function TeamBillingPage({
   // Fetch agent limits and usage
   const { data: agentLimitsData, isLoading: agentLimitsLoading } = useAgentLimits();
 
+  // Debug log for subscription and agent limits
+  useEffect(() => {
+    if (subscriptionData) {
+      console.log('[Team Billing] Subscription data loaded:', subscriptionData);
+    }
+    if (subscriptionError) {
+      console.error('[Team Billing] Subscription error:', subscriptionError);
+    }
+    if (agentLimitsData) {
+      console.log('[Team Billing] Agent limits data loaded:', agentLimitsData);
+    }
+  }, [subscriptionData, subscriptionError, agentLimitsData]);
+
   // Add the keyframes animation to the document head
   useEffect(() => {
     const style = document.createElement('style');
@@ -115,12 +128,7 @@ export default function TeamBillingPage({
     return planMap[planName] || planName.charAt(0).toUpperCase() + planName.slice(1);
   };
 
-  // Function to estimate minutes used based on cost
-  const getEstimatedMinutes = (currentUsage?: number) => {
-    if (!currentUsage || currentUsage === 0) return 0;
-    const averageCostPerMinute = 0.15; // Rough estimate
-    return Math.round(currentUsage / averageCostPerMinute);
-  };
+
 
   if (error) {
     return (
@@ -248,9 +256,9 @@ export default function TeamBillingPage({
                       Current Plan: <span className="font-medium">{getPlanDisplayName(subscriptionData?.plan_name)}</span>
                     </p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Estimated: <span className="font-medium text-purple-600 dark:text-purple-400">
-                        ~{getEstimatedMinutes(subscriptionData?.current_usage)} minutes
-                      </span> used this month
+                      Current Usage: <span className="font-medium text-purple-600 dark:text-purple-400">
+                        ${subscriptionData?.current_usage?.toFixed(2) || '0.00'}
+                      </span> this month
                     </p>
                   </div>
                 </div>
@@ -258,12 +266,12 @@ export default function TeamBillingPage({
 
               {/* Usage Stats with Progress Bar */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
                       ${subscriptionData?.current_usage?.toFixed(2) || '0.00'}
                     </span>
-                    <span className="text-sm text-gray-500 dark:text-gray-400">of</span>
+                    <span className="text-400">of</span>
                     <span className="text-xl font-semibold text-gray-700 dark:text-gray-300">
                       ${subscriptionData?.cost_limit?.toFixed(2) || '5.00'}
                     </span>
@@ -272,7 +280,7 @@ export default function TeamBillingPage({
                   <div className="text-sm font-medium text-purple-600 dark:text-purple-400">
                     {subscriptionData?.cost_limit && subscriptionData?.current_usage 
                       ? `$${Math.max(0, (subscriptionData.cost_limit - subscriptionData.current_usage)).toFixed(2)} remaining`
-                      : `$${subscriptionData?.cost_limit?.toFixed(2) || '5.00'} remaining`}
+                      : `$${subscriptionData?.cost_limit?.toFixed(2)} remaining`}
                   </div>
                 </div>
                 

@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { AgentVersionSwitcher } from '../agent-version-switcher';
 import { UpcomingRunsDropdown } from '../upcoming-runs-dropdown';
+import { useSubscriptionData } from '@/contexts/SubscriptionContext';
 
 interface AgentHeaderProps {
   agentId: string;
@@ -69,6 +70,8 @@ export function AgentHeader({
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(displayData.name);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { data: subscriptionData } = useSubscriptionData();
+  
   // All agents are now fully editable - no restrictions
   const isSunaAgent = false; // Disabled Suna restrictions
   const restrictions = {}; // No restrictions
@@ -98,7 +101,7 @@ export function AgentHeader({
     if (editName !== displayData.name) {
       if (!isNameEditable && isSunaAgent) {
         toast.error("Name cannot be edited", {
-          description: "Suna's name is managed centrally and cannot be changed.",
+          description: "Machine's name is managed centrally and cannot be changed.",
         });
         setEditName(displayData.name);
         setIsEditing(false);
@@ -187,14 +190,51 @@ export function AgentHeader({
             <Skeleton className="h-5 w-32" />
           ) : (
             <div
-              className={cn(
-                "text-base font-medium text-muted-foreground hover:text-foreground cursor-pointer flex items-center truncate max-w-[300px]",
-                !isNameEditable && isSunaAgent && "cursor-not-allowed opacity-75"
-              )}
-              onClick={isNameEditable ? startEditing : undefined}
-              title={isNameEditable ? `Click to rename agent: ${displayData.name}` : `Name cannot be edited: ${displayData.name}`}
+              className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-1 py-0.5 transition-colors"
+              onClick={startEditing}
             >
-              {displayData.name}
+              <span className="text-base font-medium text-foreground truncate">
+                {displayData.name}
+              </span>
+              {!isViewingOldVersion && (
+                <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                  Click to edit
+                </span>
+              )}
+            </div>
+          )}
+          
+          {/* Current Plan Display */}
+          {subscriptionData?.subscription && (
+            <div className="mt-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  Current Plan:
+                </span>
+                <span className="text-xs font-medium text-foreground">
+                  {subscriptionData.subscription.cancel_at_period_end || subscriptionData.subscription.cancel_at 
+                    ? 'Ending Soon'
+                    : subscriptionData.subscription.status === 'trialing' 
+                      ? 'Trial'
+                      : subscriptionData.subscription.status === 'active'
+                        ? 'Active'
+                        : subscriptionData.subscription.status || 'Unknown'
+                  }
+                </span>
+                {subscriptionData.subscription.cancel_at_period_end && (
+                  <span className="text-xs text-muted-foreground">
+                    • Ends {new Date(subscriptionData.subscription.current_period_end * 1000).toLocaleDateString()}
+                  </span>
+                )}
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="text-xs h-auto p-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => window.location.href = '/settings/billing'}
+                >
+                  Manage
+                </Button>
+              </div>
             </div>
           )}
         </div>

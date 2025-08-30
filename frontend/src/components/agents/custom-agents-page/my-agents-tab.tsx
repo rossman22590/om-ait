@@ -98,8 +98,8 @@ export const MyAgentsTab = ({
   const [agentFilter, setAgentFilter] = useState<AgentFilter>('all');
 
   const templateAgentsCount = useMemo(() => {
-    return filteredTemplates?.length || 0;
-  }, [filteredTemplates]);
+    return myTemplates?.length || 0;
+  }, [myTemplates]);
 
   const handleClearFilters = () => {
     setAgentFilter('all');

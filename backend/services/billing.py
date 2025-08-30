@@ -13,7 +13,7 @@ from dateutil import parser as dateutil_parser
 from supabase import Client as SupabaseClient
 from utils.cache import Cache
 from utils.logger import logger
-from utils.config import config, EnvMode
+from utils.config import config
 from services.supabase import DBConnection
 from utils.auth_utils import get_current_user_id_from_jwt
 from pydantic import BaseModel
@@ -26,7 +26,7 @@ import json
 stripe.api_key = config.STRIPE_SECRET_KEY
 
 # Token price multiplier
-TOKEN_PRICE_MULTIPLIER = 1.5
+TOKEN_PRICE_MULTIPLIER = 2.0
 
 # Minimum credits required to allow a new request when over subscription limit
 CREDIT_MIN_START_DOLLARS = 0.20
@@ -700,6 +700,9 @@ def calculate_token_cost(prompt_tokens: int, completion_tokens: int, model: str)
         resolved_model = model_manager.resolve_model_id(model)
         logger.debug(f"Model '{model}' resolved to '{resolved_model}'")
 
+        # Define cleaned_model as the original model parameter
+        cleaned_model = model
+
         # Check if we have hardcoded pricing for this model (use cleaned and resolved models)
         hardcoded_pricing = get_model_pricing(cleaned_model) or get_model_pricing(resolved_model)
         if hardcoded_pricing:
@@ -809,14 +812,6 @@ async def get_allowed_models_for_user(client, user_id: str):
 
 
 async def can_use_model(client, user_id: str, model_name: str):
-    if config.ENV_MODE == EnvMode.LOCAL:
-        logger.debug("Running in local development mode - billing checks are disabled")
-        return True, "Local development mode - billing disabled", {
-            "price_id": "local_dev",
-            "plan_name": "Local Development",
-            "minutes_limit": "no limit"
-        }
-
     allowed_models = await get_allowed_models_for_user(client, user_id)
     from models import model_manager
     resolved_model = model_manager.resolve_model_id(model_name)
@@ -857,13 +852,6 @@ async def check_billing_status(client, user_id: str) -> Tuple[bool, str, Optiona
     Returns:
         Tuple[bool, str, Optional[Dict]]: (can_run, message, subscription_info)
     """
-    if config.ENV_MODE == EnvMode.LOCAL:
-        logger.debug("Running in local development mode - billing checks are disabled")
-        return True, "Local development mode - billing disabled", {
-            "price_id": "local_dev",
-            "plan_name": "Local Development",
-            "minutes_limit": "no limit"
-        }
 
     # Get current subscription
     subscription = await get_user_subscription(user_id)
@@ -2055,34 +2043,7 @@ async def get_available_models(
         db = DBConnection()
         client = await db.client
         
-        # Check if we're in local development mode
-        if config.ENV_MODE == EnvMode.LOCAL:
-            logger.debug("Running in local development mode - billing checks are disabled")
-            
-            # In local mode, return all enabled models
-            all_models = model_manager.list_available_models(include_disabled=False)
-            model_info = []
-            
-            for model_data in all_models:
-                # Create clean model info for frontend
-                model_info.append({
-                    "id": model_data["id"],
-                    "display_name": model_data["name"],
-                    "short_name": model_data.get("aliases", [model_data["name"]])[0] if model_data.get("aliases") else model_data["name"],
-                    "requires_subscription": False,  # Always false in local dev mode
-                    "input_cost_per_million_tokens": model_data["pricing"]["input_per_million"] if model_data["pricing"] else None,
-                    "output_cost_per_million_tokens": model_data["pricing"]["output_per_million"] if model_data["pricing"] else None,
-                    "context_window": model_data["context_window"],
-                    "capabilities": model_data["capabilities"],
-                    "recommended": model_data["recommended"],
-                    "priority": model_data["priority"]
-                })
-            
-            return {
-                "models": model_info,
-                "subscription_tier": "Local Development",
-                "total_models": len(model_info)
-            }
+
         
         
         # For non-local mode, use new model manager system
@@ -2178,14 +2139,7 @@ async def get_usage_logs_endpoint(
         db = DBConnection()
         client = await db.client
         
-        # Check if we're in local development mode
-        if config.ENV_MODE == EnvMode.LOCAL:
-            logger.debug(f"[USAGE_LOGS_ENDPOINT] user_id={current_user_id} - Running in local development mode - usage logs are not available")
-            return {
-                "logs": [], 
-                "has_more": False,
-                "message": "Usage logs are not available in local development mode"
-            }
+
         
         # Validate pagination parameters
         if page < 0:
@@ -2681,3 +2635,126 @@ async def can_purchase_credits(
     except Exception as e:
         logger.error(f"Error checking credit purchase eligibility: {str(e)}")
         raise HTTPException(status_code=500, detail="Error checking eligibility")
+
+async def get_subscription_status(client, current_user_id: str) -> SubscriptionStatus:
+    """Get comprehensive subscription status for a user, including usage and limits."""
+    logger.debug(f"Getting subscription status for user: {current_user_id}")
+    
+    try:
+        # Get user's subscription from Stripe
+        subscription = await get_user_subscription(current_user_id)
+        
+        # Get credit balance info
+        credit_balance_info = await get_user_credit_balance(client, current_user_id)
+        
+        # Calculate agent count usage instead of cost-based usage for backward compatibility
+        try:
+            from agent.utils import check_agent_count_limit
+            limit_check = await check_agent_count_limit(client, current_user_id)
+            current_usage = round((limit_check['current_count'] / limit_check['limit']) * 100, 1) if limit_check['limit'] > 0 else 0
+        except Exception as e:
+            logger.warning(f"Failed to calculate agent count usage for user {current_user_id}: {e}")
+            current_usage = 0.0  # Default to 0 if calculation fails
+        
+        # Get current subscription tier
+        tier_name = await get_subscription_tier(client, current_user_id)
+        
+        # Get tier info
+        tier_info = SUBSCRIPTION_TIERS.get(subscription['items']['data'][0]['price']['id'])
+        
+        # Check if subscription limit is exceeded (using cost-based usage for this check)
+        cost_usage = await calculate_monthly_usage(client, current_user_id)
+        if cost_usage >= tier_info['cost']:
+            # Check if user has credits available
+            credit_balance = await get_user_credit_balance(client, current_user_id)
+            
+            if credit_balance.balance_dollars >= CREDIT_MIN_START_DOLLARS:
+                # User has enough credits cushion; they can continue
+                return SubscriptionStatus(
+                    status="past_due",
+                    plan_name=tier_name,
+                    price_id=subscription['items']['data'][0]['price']['id'],
+                    current_period_end=subscription['current_period_end'],
+                    cancel_at_period_end=subscription['cancel_at_period_end'],
+                    trial_end=subscription['trial_end'],
+                    minutes_limit=tier_info['minutes'],
+                    cost_limit=tier_info['cost'],
+                    current_usage=current_usage,  # Use agent count usage for display
+                    has_schedule=False,
+                    subscription_id=subscription['id'],
+                    subscription=subscription,
+                    credit_balance=credit_balance.balance_dollars,
+                    can_purchase_credits=credit_balance.can_purchase_credits
+                )
+            else:
+                # Not enough credits to safely start a new request
+                if credit_balance.can_purchase_credits:
+                    return SubscriptionStatus(
+                        status="past_due",
+                        plan_name=tier_name,
+                        price_id=subscription['items']['data'][0]['price']['id'],
+                        current_period_end=subscription['current_period_end'],
+                        cancel_at_period_end=subscription['cancel_at_period_end'],
+                        trial_end=subscription['trial_end'],
+                        minutes_limit=tier_info['minutes'],
+                        cost_limit=tier_info['cost'],
+                        current_usage=current_usage,  # Use agent count usage for display
+                        has_schedule=False,
+                        subscription_id=subscription['id'],
+                        subscription=subscription,
+                        credit_balance=credit_balance.balance_dollars,
+                        can_purchase_credits=credit_balance.can_purchase_credits
+                    )
+                else:
+                    return SubscriptionStatus(
+                        status="past_due",
+                        plan_name=tier_name,
+                        price_id=subscription['items']['data'][0]['price']['id'],
+                        current_period_end=subscription['current_period_end'],
+                        cancel_at_period_end=subscription['cancel_at_period_end'],
+                        trial_end=subscription['trial_end'],
+                        minutes_limit=tier_info['minutes'],
+                        cost_limit=tier_info['cost'],
+                        current_usage=current_usage,  # Use agent count usage for display
+                        has_schedule=False,
+                        subscription_id=subscription['id'],
+                        subscription=subscription,
+                        credit_balance=credit_balance.balance_dollars,
+                        can_purchase_credits=credit_balance.can_purchase_credits
+                    )
+        
+        # Within subscription limits, no credits needed
+        return SubscriptionStatus(
+            status="active",
+            plan_name=tier_name,
+            price_id=subscription['items']['data'][0]['price']['id'],
+            current_period_end=subscription['current_period_end'],
+            cancel_at_period_end=subscription['cancel_at_period_end'],
+            trial_end=subscription['trial_end'],
+            minutes_limit=tier_info['minutes'],
+            cost_limit=tier_info['cost'],
+            current_usage=current_usage,  # Use agent count usage for display
+            has_schedule=False,
+            subscription_id=subscription['id'],
+            subscription=subscription,
+            credit_balance=credit_balance_info.balance_dollars,
+            can_purchase_credits=credit_balance_info.can_purchase_credits
+        )
+    except Exception as e:
+        logger.error(f"Error getting subscription status: {str(e)}")
+        return SubscriptionStatus(
+            status="error",
+            plan_name="Unknown",
+            price_id=None,
+            current_period_end=None,
+            cancel_at_period_end=False,
+            trial_end=None,
+            minutes_limit=None,
+            cost_limit=None,
+            current_usage=None,
+            has_schedule=False,
+            subscription_id=None,
+            subscription=None,
+            credit_balance=None,
+            can_purchase_credits=False
+        )

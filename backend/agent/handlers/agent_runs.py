@@ -252,6 +252,60 @@ async def stop_agent(agent_run_id: str, user_id: str = Depends(get_current_user_
     await stop_agent_run(agent_run_id)
     return {"status": "stopped"}
 
+@router.post("/agent-runs/stop-all")
+async def stop_all_agents(user_id: str = Depends(get_current_user_id_from_jwt)):
+    """Stop all running agents for the current user."""
+    logger.debug(f"Received request to stop all agents for user: {user_id}")
+    client = await utils.db.client
+    
+    try:
+        # Get all threads for this user
+        threads_result = await client.table('threads').select('thread_id').eq('account_id', user_id).execute()
+        
+        if not threads_result.data:
+            logger.debug(f"No threads found for user {user_id}")
+            return {"stopped_count": 0, "message": "No running agents found"}
+        
+        thread_ids = [thread['thread_id'] for thread in threads_result.data]
+        logger.debug(f"Found {len(thread_ids)} threads for user {user_id}")
+        
+        # Get all running agent runs for these threads
+        from utils.query_utils import batch_query_in
+        
+        running_runs = await batch_query_in(
+            client=client,
+            table_name='agent_runs',
+            select_fields='id, thread_id',
+            in_field='thread_id',
+            in_values=thread_ids,
+            additional_filters={'status': 'running'}
+        )
+        
+        if not running_runs:
+            logger.debug(f"No running agents found for user {user_id}")
+            return {"stopped_count": 0, "message": "No running agents found"}
+        
+        stopped_count = 0
+        for run in running_runs:
+            try:
+                agent_run_id = run['id']
+                # Verify access and stop the agent
+                await get_agent_run_with_access_check(client, agent_run_id, user_id)
+                await stop_agent_run(agent_run_id)
+                stopped_count += 1
+                logger.debug(f"Stopped agent run: {agent_run_id}")
+            except Exception as e:
+                logger.warning(f"Failed to stop agent run {run['id']}: {str(e)}")
+                continue
+        
+        message = f"Stopped {stopped_count} running agent(s)"
+        logger.debug(f"Stop all agents completed for user {user_id}: {message}")
+        return {"stopped_count": stopped_count, "message": message}
+        
+    except Exception as e:
+        logger.error(f"Error stopping all agents for user {user_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to stop all agents: {str(e)}")
+
 @router.get("/thread/{thread_id}/agent-runs")
 async def get_agent_runs(thread_id: str, user_id: str = Depends(get_current_user_id_from_jwt)):
     """Get all agent runs for a thread."""

@@ -189,10 +189,6 @@ class ModelManager:
     
     async def get_default_model_for_user(self, client, user_id: str) -> str:
         try:
-            from utils.config import config, EnvMode
-            if config.ENV_MODE == EnvMode.LOCAL:
-                return DEFAULT_PREMIUM_MODEL
-                
             from services.billing import get_user_subscription, SUBSCRIPTION_TIERS
             
             subscription = await get_user_subscription(user_id)

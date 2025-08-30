@@ -234,7 +234,17 @@ export function NavAgents() {
     !isProjectsLoading && !isThreadsLoading ?
       processThreadsWithProjects(threads, projects) : [];
 
-  const groupedThreads: GroupedThreads = groupThreadsByDate(combinedThreads);
+  // Filter threads based on search query
+  const filteredThreads = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return combinedThreads;
+    }
+    return combinedThreads.filter(thread =>
+      thread.projectName.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [combinedThreads, searchQuery]);
+
+  const groupedThreads: GroupedThreads = groupThreadsByDate(filteredThreads);
 
   const handleDeletionProgress = (completed: number, total: number) => {
     const percentage = (completed / total) * 100;

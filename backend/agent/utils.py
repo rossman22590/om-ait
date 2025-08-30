@@ -11,6 +11,7 @@ from utils.auth_utils import verify_thread_access
 from services import redis
 from services.supabase import DBConnection
 from services.llm import make_llm_api_call
+from services.billing import get_subscription_tier
 from run_agent_background import update_agent_run_status, _cleanup_redis_response_list
 
 # Global variables (will be set by initialize function)
@@ -131,7 +132,7 @@ async def generate_and_update_project_name(project_id: str, prompt: str):
         db_conn = DBConnection()
         client = await db_conn.client
 
-        model_name = "openai/gpt-5-nano"
+        model_name = "openai/gpt-5-mini"
         system_prompt = "You are a helpful assistant that generates extremely concise titles (2-4 words maximum) for chat threads based on the user's message. Respond with only the title, no other text or punctuation."
         user_message = f"Generate an extremely brief title (2-4 words only) for a chat thread that starts with this message: \"{prompt}\""
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_message}]

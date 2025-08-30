@@ -1,7 +1,7 @@
 export const siteConfig = {
-  name: "Suna",
-  url: "https://suna.so",
-  description: "Suna is a fully open source AI assistant that helps you accomplish real-world tasks with ease. Through natural conversation, Suna becomes your digital companion for research, data analysis, and everyday challenges.",
+  name: "Machine",
+  url: "https://machine.myapps.ai",
+  description: "Machine is an AI assistant that helps you accomplish real-world tasks with ease. Through natural conversation, Machine becomes your digital companion for research, data analysis, and everyday challenges.",
   keywords: [
     'AI',
     'artificial intelligence',
@@ -13,18 +13,18 @@ export const siteConfig = {
     'research',
     'data analysis',
   ],
-  authors: [{ name: 'Kortix Team', url: 'https://suna.so' }],
-  creator: 'Kortix Team - Adam Cohen Hillel, Marko Kraemer, Domenico Gagliardi, and Quoc Dat Le',
-  publisher: 'Kortix Team - Adam Cohen Hillel, Marko Kraemer, Domenico Gagliardi, and Quoc Dat Le',
+  authors: [{ name: 'Machine Team', url: 'https://machine.myapps.ai' }],
+  creator: 'Machine Team',
+  publisher: 'Machine Team',
   category: 'Technology',
-  applicationName: 'Suna',
-  twitterHandle: '@kortixai',
-  githubUrl: 'https://github.com/kortix-ai/suna',
+  applicationName: 'Machine',
+  twitterHandle: '@the_machine_ai',
+  githubUrl: '#',
   
   // Mobile-specific configurations
   bundleId: {
-    ios: 'com.kortix.suna',
-    android: 'com.kortix.suna'
+    ios: 'com.machine.myapps',
+    android: 'com.machine.myapps'
   },
   
   // Theme colors
@@ -54,7 +54,7 @@ export const mobileMetadata = {
     address: false,
   },
   openGraph: {
-    title: 'Suna - Open Source Generalist AI Agent',
+    title: 'Machine - AI Agent',
     description: siteConfig.description,
     url: siteConfig.url,
     siteName: siteConfig.name,
@@ -63,7 +63,7 @@ export const mobileMetadata = {
         url: '/banner.png',
         width: 1200,
         height: 630,
-        alt: 'Suna - Open Source Generalist AI Agent',
+        alt: 'Machine - Open Source Generalist AI Agent',
         type: 'image/png',
       },
     ],
@@ -72,7 +72,7 @@ export const mobileMetadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Suna - Open Source Generalist AI Agent',
+    title: 'Machine - AI Agent',
     description: siteConfig.description,
     creator: siteConfig.twitterHandle,
     site: siteConfig.twitterHandle,
@@ -81,7 +81,7 @@ export const mobileMetadata = {
         url: '/banner.png',
         width: 1200,
         height: 630,
-        alt: 'Suna - Open Source Generalist AI Agent',
+        alt: 'Machine - AI Agent',
       },
     ],
   },

@@ -61,6 +61,12 @@ export const MODELS = {
     recommended: false,
     lowQuality: false
   },
+  'google/gemini-2.5-flash': { 
+    tier: 'premium', 
+    priority: 95,
+    recommended: false,
+    lowQuality: false
+  },
   'grok-4': { 
     tier: 'premium', 
     priority: 94,
@@ -101,6 +107,12 @@ export const MODELS = {
   'gpt-5-mini': { 
     tier: 'free', 
     priority: 85,
+    recommended: false,
+    lowQuality: false
+  },
+  'openai/gpt-4o-mini': { 
+    tier: 'free', 
+    priority: 80,
     recommended: false,
     lowQuality: false
   },

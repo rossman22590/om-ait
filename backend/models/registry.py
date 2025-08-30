@@ -115,6 +115,26 @@ class ModelRegistry:
         ))
         
         self.register(Model(
+            id="openai/gpt-4o-mini",
+            name="GPT-4o Mini",
+            provider=ModelProvider.OPENAI,
+            aliases=["gpt-4o-mini", "GPT-4o Mini", "gpt-4o-mini-2024-07-18"],
+            context_window=128_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.VISION,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=0.15,
+                output_cost_per_million_tokens=0.60
+            ),
+            tier_availability=["free", "paid"],
+            priority=80,
+            enabled=True
+        ))
+        
+        self.register(Model(
             id="gemini/gemini-2.5-pro",
             name="Gemini 2.5 Pro",
             provider=ModelProvider.GOOGLE,
@@ -132,6 +152,26 @@ class ModelRegistry:
             ),
             tier_availability=["paid"],
             priority=96,
+            enabled=True
+        ))
+        
+        self.register(Model(
+            id="gemini/gemini-2.5-flash",
+            name="Gemini 2.5 Flash",
+            provider=ModelProvider.GOOGLE,
+            aliases=["google/gemini-2.5-flash", "gemini-2.5-flash", "Gemini 2.5 Flash"],
+            context_window=1_000_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.VISION,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=0.75,
+                output_cost_per_million_tokens=5.00
+            ),
+            tier_availability=["paid"],
+            priority=95,
             enabled=True
         ))
         
