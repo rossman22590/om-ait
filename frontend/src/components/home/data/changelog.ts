@@ -2,7 +2,7 @@ import { ChangelogData } from "../sections/changelog";
 
 export const changeLogData: ChangelogData[] = [
     {
-      version: "Version 10.0.0",
+      version: "Version 10.2.0",
       date: "Aug 2025",
       title: "Introducing Custom Agents, Agent Marketplace, and much more!",
       description:

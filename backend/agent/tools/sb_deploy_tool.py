@@ -126,41 +126,80 @@ class SandboxDeployTool(SandboxToolsBase):
 
     def create_dns_record(self, subdomain: str, target: str) -> bool:
         if not all([self.cloudflare_api_token, self.cloudflare_zone_id]):
+            print(f"Missing DNS credentials: token={bool(self.cloudflare_api_token)}, zone_id={bool(self.cloudflare_zone_id)}")
             return False
+        
+        full_domain = f"{subdomain}.{self.custom_domain}"
         if self.check_dns_record_exists(subdomain):
+            print(f"DNS record for {full_domain} already exists")
             return True
+            
         url = f"https://api.cloudflare.com/client/v4/zones/{self.cloudflare_zone_id}/dns_records"
         payload = {"type": "CNAME", "name": subdomain, "content": target, "ttl": 1, "proxied": True}
+        
         try:
             response = requests.post(url, headers=self.cf_headers, json=payload)
-            return response.status_code == 200
-        except Exception:
+            print(f"DNS record creation response: {response.status_code} - {response.text}")
+            
+            if response.status_code == 200:
+                response_data = response.json()
+                if response_data.get("success", False):
+                    print(f"Successfully created DNS record for {full_domain} -> {target}")
+                    return True
+                else:
+                    print(f"DNS creation failed: {response_data.get('errors', 'Unknown error')}")
+                    return False
+            else:
+                print(f"HTTP error during DNS creation: {response.status_code}")
+                return False
+        except Exception as e:
+            print(f"Exception during DNS record creation: {str(e)}")
             return False
 
     def assign_custom_domain_to_pages(self, project_name: str, subdomain: str) -> bool:
         if not all([self.cloudflare_api_token, self.cloudflare_account_id]):
+            print(f"Missing credentials: token={bool(self.cloudflare_api_token)}, account={bool(self.cloudflare_account_id)}")
             return False
+        
+        full_domain = f"{subdomain}.{self.custom_domain}"
         check_url = f"https://api.cloudflare.com/client/v4/accounts/{self.cloudflare_account_id}/pages/projects/{project_name}/domains"
+        
         try:
+            # Check if domain already exists
             check_response = requests.get(check_url, headers=self.cf_headers)
             if check_response.status_code == 200:
                 existing = check_response.json().get("result", [])
                 names = [d.get("name") for d in existing]
-                full = f"{subdomain}.{self.custom_domain}"
-                if full in names:
+                if full_domain in names:
+                    print(f"Custom domain {full_domain} already exists for project {project_name}")
                     return True
-        except Exception:
-            pass
+            else:
+                print(f"Failed to check existing domains: {check_response.status_code} - {check_response.text}")
+        except Exception as e:
+            print(f"Error checking existing domains: {str(e)}")
 
+        # Add custom domain to project
         url = f"https://api.cloudflare.com/client/v4/accounts/{self.cloudflare_account_id}/pages/projects/{project_name}/domains"
-        payload = {"name": f"{subdomain}.{self.custom_domain}"}
+        payload = {"name": full_domain}
+        
         try:
             response = requests.post(url, headers=self.cf_headers, json=payload)
+            print(f"Custom domain assignment response: {response.status_code} - {response.text}")
+            
             if response.status_code == 200:
-                time.sleep(2)
-                return True
-            return False
-        except Exception:
+                response_data = response.json()
+                if response_data.get("success", False):
+                    print(f"Successfully assigned custom domain {full_domain} to project {project_name}")
+                    time.sleep(2)  # Allow time for propagation
+                    return True
+                else:
+                    print(f"Domain assignment failed: {response_data.get('errors', 'Unknown error')}")
+                    return False
+            else:
+                print(f"HTTP error during domain assignment: {response.status_code}")
+                return False
+        except Exception as e:
+            print(f"Exception during custom domain assignment: {str(e)}")
             return False
 
     def prepare_deployment_directory(self, source_path: str) -> tuple:
@@ -328,12 +367,21 @@ class SandboxDeployTool(SandboxToolsBase):
                 if response.exit_code != 0:
                     return self.fail_response(f"Deployment failed with exit code {response.exit_code}: {response.result}")
 
+                # Extract deployment URL from wrangler output
+                deployment_url = None
+                if "https://" in response.result:
+                    # Extract URL from wrangler output
+                    import re
+                    url_match = re.search(r'https://[^\s]+\.pages\.dev', response.result)
+                    if url_match:
+                        deployment_url = url_match.group(0)
+                
                 # Build URLs and optionally assign custom domain
-                default_url = f"https://{project_name}.pages.dev"
+                default_url = deployment_url or f"https://{project_name}.pages.dev"
                 result = {
                     "message": "✅ Website deployed successfully!",
                     "urls": {"cloudflare": default_url},
-                    "output": f"Successfully deployed {files_count} files to {project_name}",
+                    "output": f"Successfully deployed website to {project_name}\n\n🌐 **Deployment URL:** {default_url}\n📁 **Files processed:** {files_count}",
                 }
 
                 if setup_custom_domain:
@@ -341,16 +389,16 @@ class SandboxDeployTool(SandboxToolsBase):
                         result["custom_domain_status"] = "❌ Missing Cloudflare credentials for custom domain setup"
                     else:
                         sub = self.format_subdomain(project_name)
-                        dns_created = self.create_dns_record(sub, f"{project_name}.pages.dev")
-                        if dns_created:
-                            assigned = self.assign_custom_domain_to_pages(project_name, sub)
-                            if assigned:
-                                result["custom_domain_status"] = "✅ Custom domain set up successfully"
-                                result["urls"]["custom_domain"] = f"https://{sub}.{self.custom_domain}"
-                            else:
-                                result["custom_domain_status"] = "⚠️ DNS record created but failed to assign custom domain to project"
+                        # Correct order: assign domain to Pages first, then Cloudflare creates CNAME automatically
+                        assigned = self.assign_custom_domain_to_pages(project_name, sub)
+                        if assigned:
+                            custom_url = f"https://{sub}.{self.custom_domain}"
+                            result["custom_domain_status"] = "✅ Custom domain set up successfully"
+                            result["urls"]["custom_domain"] = custom_url
+                            result["output"] += f"\n🔗 **Custom Domain:** {custom_url}"
                         else:
-                            result["custom_domain_status"] = "❌ Failed to create DNS record for custom domain"
+                            result["custom_domain_status"] = "❌ Failed to assign custom domain to Pages project"
+                            result["output"] += f"\n❌ Custom DNS failed - using Cloudflare URL"
 
                 return self.success_response(result)
             except Exception as e:

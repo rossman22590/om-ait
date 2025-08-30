@@ -237,6 +237,9 @@ class Configuration:
     TAVILY_API_KEY: str
     RAPID_API_KEY: str
     CLOUDFLARE_API_TOKEN: Optional[str] = None
+    CLOUDFLARE_ACCOUNT_ID: Optional[str] = None
+    CLOUDFLARE_ZONE_ID: Optional[str] = None
+    CUSTOM_DOMAIN: str = "mymachine.space"
     FIRECRAWL_API_KEY: str
     FIRECRAWL_URL: Optional[str] = "https://api.firecrawl.dev"
     
