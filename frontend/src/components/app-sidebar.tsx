@@ -26,22 +26,21 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { ThemeToggle } from "./home/theme-toggle"
-import { KortixLogo } from "./sidebar/kortix-logo"
 import Image from "next/image"
 import { useEffect } from "react"
 import { useTheme } from "next-themes"
 
 const data = {
   user: {
-    name: "Kortix User",
-    email: "docs@kortix.ai",
+    name: "Machine User",
+    email: "docs@machine.ai",
     avatar: "/favicon.png",
   },
   teams: [
     {
-      name: "Kortix AI",
+      name: "Machine AI",
       logo: GalleryVerticalEnd,
-      plan: "Open Source",
+      plan: "AI Platform",
     },
   ],
   navMain: [
@@ -49,45 +48,8 @@ const data = {
       title: "Getting Started",
       items: [
         {
-          title: "What is Kortix?",
+          title: "What is Machine?",
           url: "/docs/introduction",
-        },
-        {
-          title: "Self Hosting",
-          url: "/docs/self-hosting",
-        },
-        {
-          title: "Agent Examples",
-          url: "/docs/agent-examples",
-          comingSoon: true,
-        },
-      ],
-    },
-    {
-      title: "Contributing",
-      items: [
-        {
-          title: "Contributing Guide",
-          url: "/docs/contributing",
-        },
-        {
-          title: "License",
-          url: "/docs/license",
-        },
-      ],
-    },
-    {
-      title: "Quick Links",
-      items: [
-        {
-          title: "GitHub Repository",
-          url: "https://github.com/kortix-ai/suna",
-          external: true,
-        },
-        {
-          title: "Discord Community",
-          url: "https://discord.gg/Py6pCBUUPw",
-          external: true,
         },
       ],
     },
@@ -104,10 +66,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, []);
 
   const logoSrc = !mounted
-    ? '/kortix-logo.svg'
+    ? '/logo.png'
     : resolvedTheme === 'dark'
-      ? '/kortix-logo-white.svg'
-      : '/kortix-logo.svg';
+      ? '/logo.png'
+      : '/logo.png';
   
 
   const isActive = (url: string) => {
@@ -119,10 +81,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarHeader className="bg-transparent p-6 px-2">
         <Image
           src={logoSrc}
-          alt="Kortix Logo"
-          width={80}
-          height={14}
-          className="md:w-[100px] md:h-[18px]"
+          alt="Machine Logo"
+          width={40}
+          height={30}
+          className="w-[40px] h-[30px]"
           priority
         /> 
       </SidebarHeader>
@@ -135,27 +97,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 {section.items.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton 
-                      className={`font-semibold ${item.comingSoon ? 'opacity-70 cursor-not-allowed' : ''}`}
-                      asChild={!item.comingSoon}
+                      className="font-semibold"
+                      asChild
                       isActive={isActive(item.url)}
-                      disabled={item.comingSoon}
                     >
-                      {item.comingSoon ? (
-                        <div className="flex items-center justify-between w-full">
-                          <span>{item.title}</span>
-                          <Badge className="ml-auto text-xs bg-amber-500/20 border-amber-500/60 text-white text-amber-500">
-                            Coming Soon
-                          </Badge>
-                        </div>
-                      ) : item.external ? (
-                        <a href={item.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between w-full">
-                          <span>{item.title}</span>
-                        </a>
-                      ) : (
-                        <Link href={item.url} className="flex items-center justify-between w-full">
-                          <span>{item.title}</span>
-                        </Link>
-                      )}
+                      <Link href={item.url} className="flex items-center justify-between w-full">
+                        <span>{item.title}</span>
+                      </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -165,7 +113,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         ))}
       </SidebarContent>
       <SidebarFooter className="bg-transparent p-4 flex flex-row justify-between items-center">
-        <div className="text-muted-foreground text-xs">Version 0.1.0</div>
+        <div className="text-muted-foreground text-xs">Version 10.2.0</div>
         <ThemeToggle/>
       </SidebarFooter>
       <SidebarRail />

@@ -34,32 +34,24 @@ export default function IntroductionPage() {
   return (
     <>
       <DocsHeader
-        title="What is Kortix?"
-        subtitle="An open source platform for building AI agents that actually get things done"
+        title="What is Machine?"
+        subtitle="An AI platform for building agents that actually get things done"
         breadcrumbs={breadcrumbs}
         lastUpdated="August 2025"
         showSeparator
         size="lg"
         className="mb-8 sm:mb-12"
       />
-
-      <DocsImage
-        src={imageSrc}
-        alt="Kortix Platform Interface"
-        size="full"
-        aspect="video"
-        className="mb-12"
-      />
     
       <DocsBody className="mb-8">
-        <h2 id="overview">What is Kortix?</h2>
+        <h2 id="overview">What is Machine?</h2>
         <p className="text-lg mb-6">
-          Kortix is an open source platform where you can build AI agents that handle real work. Think of it as the infrastructure and tools you need to create agents that can browse the web, manage files, analyze data, and automate workflows.
+          Machine is an AI platform where you can build agents that handle real work. Think of it as the infrastructure and tools you need to create agents that can browse the web, manage files, analyze data, and automate workflows.
         </p>
         
-        <h3 id="meet-suna">Suna - Our Flagship Agent</h3>
+        <h3 id="meet-machine">Machine - Our Flagship Agent</h3>
         <p className="mb-4">
-          Suna is our showcase agent that demonstrates what's possible with Kortix. It's a generalist AI worker that can:
+          Machine is our showcase agent that demonstrates what's possible with the platform. It's a generalist AI worker that can:
         </p>
         <ul className="list-disc pl-6 mb-6 space-y-1">
           <li>Research topics and gather information from across the web</li>
@@ -69,16 +61,16 @@ export default function IntroductionPage() {
           <li>Execute complex multi-step workflows</li>
         </ul>
         <p className="mb-6">
-          Suna is completely open source and shows you what you can build with the Kortix platform.
+          Machine shows you what you can build with our powerful AI platform.
         </p>
   
         <h3 id="build-your-own" className="mb-4">Build Your Own Agents</h3>
         <p className="mb-6">
-          The real power comes when you create agents for your specific needs. Maybe you need an agent that monitors customer support tickets, or one that processes invoices, or handles your social media posting schedule. With Kortix, you get the building blocks to create agents that work exactly how you want them to.
+          The real power comes when you create agents for your specific needs. Maybe you need an agent that monitors customer support tickets, or one that processes invoices, or handles your social media posting schedule. With Machine, you get the building blocks to create agents that work exactly how you want them to.
         </p>
 
         <h3 id="how-it-works" className="mb-4">How It Works</h3>
-        <p className="mb-4">Kortix gives you four main pieces:</p>
+        <p className="mb-4">Machine gives you four main pieces:</p>
         <ul className="list-disc pl-6 mb-6 space-y-2">
           <li><strong>Backend API</strong> - Handles the heavy lifting: talking to AI models, managing tasks, storing data</li>
           <li><strong>Web Dashboard</strong> - Where you build, test, and monitor your agents</li>
@@ -86,9 +78,9 @@ export default function IntroductionPage() {
           <li><strong>Database</strong> - Stores your agent configs, conversation history, and results</li>
         </ul>
         
-        <h3 id="why-open-source" className="mb-4">Why Open Source?</h3>
+        <h3 id="getting-started" className="mb-4">Getting Started</h3>
         <p className="mb-6">
-          We believe you should own your agents and your data. No vendor lock-in, no usage limits based on monthly fees, no mysterious black boxes. You can see exactly how everything works, modify it for your needs, and run it wherever you want.
+          Start building with Machine today. Create your first agent, customize it for your needs, and watch it handle tasks automatically. Our platform makes it easy to go from idea to working agent.
         </p>
       </DocsBody>
       <Separator className="my-6 w-full" />
@@ -99,7 +91,7 @@ export default function IntroductionPage() {
               <div className="flex items-center justify-center gap-2 bg-primary/10 w-12 h-12 rounded-xl">
                 <Lightbulb className="w-6 h-6 text-primary" />
               </div>
-              <h3 className="text-lg font-semibold">Self-Hosting Guide</h3>
+              <h3 className="text-lg font-semibold">Quick Start Guide</h3>
             </div>
             <ArrowRight className="w-4 h-4 mr-2 group-hover:translate-x-1 transition-transform" />
           </div>
