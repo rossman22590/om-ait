@@ -135,9 +135,9 @@ class ModelRegistry:
         ))
         
         self.register(Model(
-            id="gemini/gemini-2.5-pro",
+            id="openrouter/google/gemini-2.5-pro",
             name="Gemini 2.5 Pro",
-            provider=ModelProvider.GOOGLE,
+            provider=ModelProvider.OPENROUTER,
             aliases=["google/gemini-2.5-pro", "gemini-2.5-pro", "Gemini 2.5 Pro"],
             context_window=2_000_000,
             capabilities=[
@@ -156,9 +156,9 @@ class ModelRegistry:
         ))
         
         self.register(Model(
-            id="gemini/gemini-2.5-flash",
+            id="openrouter/google/gemini-2.5-flash",
             name="Gemini 2.5 Flash",
-            provider=ModelProvider.GOOGLE,
+            provider=ModelProvider.OPENROUTER,
             aliases=["google/gemini-2.5-flash", "gemini-2.5-flash", "Gemini 2.5 Flash"],
             context_window=1_000_000,
             capabilities=[

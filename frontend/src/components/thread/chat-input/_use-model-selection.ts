@@ -55,9 +55,21 @@ export const MODELS = {
     recommended: false,
     lowQuality: false
   },
+  'openrouter/google/gemini-2.5-pro': { 
+    tier: 'premium', 
+    priority: 96,
+    recommended: false,
+    lowQuality: false
+  },
   'google/gemini-2.5-pro': { 
     tier: 'premium', 
     priority: 96,
+    recommended: false,
+    lowQuality: false
+  },
+  'openrouter/google/gemini-2.5-flash': { 
+    tier: 'premium', 
+    priority: 95,
     recommended: false,
     lowQuality: false
   },
