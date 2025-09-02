@@ -29,6 +29,10 @@ def _redis_broker_url() -> str:
 
     Prefer REDIS_URL; otherwise use split vars and construct
     redis:// or rediss:// with password when provided.
+    
+    Auto-detects provider format:
+    - Upstash: rediss://:password@host:port
+    - Railway: redis://default:password@host:port
     """
     url = os.getenv('REDIS_URL')
     if url:
@@ -39,7 +43,17 @@ def _redis_broker_url() -> str:
     password = os.getenv('REDIS_PASSWORD', '')
     use_ssl = os.getenv('REDIS_SSL', 'false').lower() == 'true'
     scheme = 'rediss' if use_ssl else 'redis'
-    auth = f":{password}@" if password else ''
+    
+    # Auto-detect provider format
+    provider = os.getenv('REDIS_PROVIDER', '').lower()
+    
+    if provider == 'upstash' or 'upstash.io' in host:
+        # Upstash format: rediss://:password@host:port
+        auth = f":{password}@" if password else ''
+    else:
+        # Railway format (default): redis://default:password@host:port
+        auth = f"default:{password}@" if password else ''
+    
     return f"{scheme}://{auth}{host}:{port}"
 
 # Configure Dramatiq Redis broker using URL (supports TLS via rediss://)
