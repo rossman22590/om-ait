@@ -7,7 +7,7 @@ import React, {
   useState,
 } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { BillingError, AgentRunLimitError } from '@/lib/api';
+import { BillingError, AgentRunLimitError, ProjectLimitError } from '@/lib/api';
 import { toast } from 'sonner';
 import { ChatInput } from '@/components/thread/chat-input/chat-input';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -48,6 +48,7 @@ import { useAgentSelection } from '@/lib/stores/agent-selection-store';
 import { useQueryClient } from '@tanstack/react-query';
 import { threadKeys } from '@/hooks/react-query/threads/keys';
 import { useProjectRealtime } from '@/hooks/useProjectRealtime';
+import { handleGoogleSlidesUpload } from './tool-views/utils/presentation-utils';
 
 interface ThreadComponentProps {
   projectId: string;
@@ -97,6 +98,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   const latestMessageRef = useRef<HTMLDivElement>(null);
   const initialLayoutAppliedRef = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const lastStreamStartedRef = useRef<string | null>(null); // Track last runId we started streaming for
 
   // Sidebar
   const { state: leftSidebarState, setOpen: setLeftSidebarOpen } = useSidebar();
@@ -171,6 +173,60 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     queryClient.invalidateQueries({ queryKey: threadKeys.agentRuns(threadId) });
     queryClient.invalidateQueries({ queryKey: threadKeys.messages(threadId) });
   }, [threadId, queryClient]);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    if (urlParams.get('google_auth') === 'success') {
+      // Clean up the URL parameters first
+      window.history.replaceState({}, '', window.location.pathname);
+      
+      // Check if there was an intent to upload to Google Slides
+      const uploadIntent = sessionStorage.getItem('google_slides_upload_intent');
+      if (uploadIntent) {
+        sessionStorage.removeItem('google_slides_upload_intent');
+        
+        try {
+          const uploadData = JSON.parse(uploadIntent);
+          const { presentation_path, sandbox_url } = uploadData;
+          
+          if (presentation_path && sandbox_url) {
+            // Handle upload in async function
+            (async () => {
+              const uploadPromise = handleGoogleSlidesUpload(
+                sandbox_url,
+                presentation_path
+              );
+              
+              // Show loading toast and handle upload
+              const loadingToast = toast.loading('Google authentication successful! Uploading presentation...');
+              
+              try {
+                await uploadPromise;
+                // Success toast is now handled universally by handleGoogleSlidesUpload
+              } catch (error) {
+                console.error('Upload failed:', error);
+                // Error toast is also handled universally by handleGoogleSlidesUpload
+              } finally {
+                // Always dismiss loading toast
+                toast.dismiss(loadingToast);
+              }
+            })();
+          }
+        } catch (error) {
+          console.error('Error processing Google Slides upload from session:', error);
+          // Error toast is handled universally by handleGoogleSlidesUpload, no need to duplicate
+        }
+      } else {
+        toast.success('Google authentication successful!');
+      }
+    } else if (urlParams.get('google_auth') === 'error') {
+      const error = urlParams.get('error');
+      sessionStorage.removeItem('google_slides_upload_intent');
+      window.history.replaceState({}, '', window.location.pathname);
+      toast.error(`Google authentication failed: ${error || 'Unknown error'}`);
+    }
+  }, []);
 
   useEffect(() => {
     if (agents.length > 0) {
@@ -265,6 +321,13 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
       if (message.type === 'tool') {
         setAutoOpenedPanel(false);
       }
+
+      // Auto-scroll to bottom (top: 0 in flex-col-reverse) when new messages arrive
+      setTimeout(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 100);
     },
     [setMessages, setAutoOpenedPanel],
   );
@@ -354,6 +417,13 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
       setMessages((prev) => [...prev, optimisticUserMessage]);
       setNewMessage('');
 
+      // Auto-scroll to bottom when user sends a message
+      setTimeout(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }, 100);
+
       try {
         const messagePromise = addUserMessageMutation.mutateAsync({
           threadId,
@@ -412,6 +482,25 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
               runningThreadIds: running_thread_ids,
             });
             setShowAgentLimitDialog(true);
+
+            setMessages((prev) =>
+              prev.filter(
+                (m) => m.message_id !== optimisticUserMessage.message_id,
+              ),
+            );
+            return;
+          }
+
+          if (error instanceof ProjectLimitError) {
+            setBillingData({
+              currentUsage: error.detail.current_count as number,
+              limit: error.detail.limit as number,
+              message:
+                error.detail.message ||
+                `You've reached your project limit (${error.detail.current_count}/${error.detail.limit}). Please upgrade to create more projects.`,
+              accountId: null,
+            });
+            setShowBillingAlert(true);
 
             setMessages((prev) =>
               prev.filter(
@@ -568,9 +657,16 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   ]);
 
   useEffect(() => {
+    // Prevent duplicate streaming calls for the same runId
+    if (agentRunId && lastStreamStartedRef.current === agentRunId) {
+      return;
+    }
+
     // Start streaming if user initiated a run (don't wait for initialLoadCompleted for first-time users)
     if (agentRunId && agentRunId !== currentHookRunId && userInitiatedRun) {
+      console.log(`[ThreadComponent] Starting user-initiated stream for runId: ${agentRunId}`);
       startStreaming(agentRunId);
+      lastStreamStartedRef.current = agentRunId; // Track that we started this runId
       setUserInitiatedRun(false); // Reset flag after starting
       return;
     }
@@ -583,7 +679,9 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
       !userInitiatedRun &&
       agentStatus === 'running'
     ) {
+      console.log(`[ThreadComponent] Starting auto stream for runId: ${agentRunId}`);
       startStreaming(agentRunId);
+      lastStreamStartedRef.current = agentRunId; // Track that we started this runId
     }
   }, [
     agentRunId,
@@ -604,8 +702,15 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     ) {
       setAgentStatus('idle');
       setAgentRunId(null);
+      // Reset the stream tracking ref when stream completes
+      lastStreamStartedRef.current = null;
     }
   }, [streamHookStatus, agentStatus, setAgentStatus, setAgentRunId]);
+
+  // Reset stream tracking ref when threadId changes  
+  useEffect(() => {
+    lastStreamStartedRef.current = null;
+  }, [threadId]);
 
   // SEO title update
   useEffect(() => {
@@ -819,7 +924,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
                 agentAvatar={undefined}
                 agentMetadata={agent?.metadata}
                 agentData={agent}
-                scrollContainerRef={null}
+                scrollContainerRef={scrollContainerRef}
                 isPreviewMode={true}
               />
             </div>

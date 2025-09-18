@@ -44,7 +44,7 @@ export interface CustomModel {
 
 export const MODELS = {
   'claude-sonnet-4': { 
-    tier: 'premium',
+    tier: 'none',
     priority: 100, 
     recommended: true,
     lowQuality: false
@@ -99,25 +99,25 @@ export const MODELS = {
   },
 
   'moonshotai/kimi-k2': { 
-    tier: 'free', 
+    tier: 'none', 
     priority: 100,
     recommended: true,
     lowQuality: false
   },
   'deepseek': { 
-    tier: 'free', 
+    tier: 'none', 
     priority: 95,
     recommended: false,
     lowQuality: false
   },
   'qwen3': { 
-    tier: 'free', 
+    tier: 'none', 
     priority: 90,
     recommended: false,
     lowQuality: false
   },
   'gpt-5-mini': { 
-    tier: 'free', 
+    tier: 'none', 
     priority: 85,
     recommended: false,
     lowQuality: false
@@ -130,7 +130,6 @@ export const MODELS = {
   },
 };
 
-// Helper to check if a user can access a model based on subscription status
 export const canAccessModel = (
   subscriptionStatus: SubscriptionStatus,
   requiresSubscription: boolean,

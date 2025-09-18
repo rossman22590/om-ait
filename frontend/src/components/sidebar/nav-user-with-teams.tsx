@@ -8,6 +8,7 @@ import {
   Bell,
   ChevronDown,
   ChevronsUpDown,
+  ChevronRight,
   Command,
   CreditCard,
   Key,
@@ -20,6 +21,12 @@ import {
   Moon,
   KeyRound,
   Plug,
+  Zap,
+  Shield,
+  DollarSign,
+  Users,
+  BarChart3,
+  FileText,
   BookOpen,
 } from 'lucide-react';
 import { useAccounts } from '@/hooks/use-accounts';
@@ -35,6 +42,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
 } from '@/components/ui/dropdown-menu';
 import {
   SidebarMenu,
@@ -54,6 +65,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useTheme } from 'next-themes';
 import { isLocalMode } from '@/lib/config';
 import { clearUserLocalStorage } from '@/lib/utils/clear-local-storage';
+import { BillingModal } from '@/components/billing/billing-modal';
 
 export function NavUserWithTeams({
   user,
@@ -62,12 +74,14 @@ export function NavUserWithTeams({
     name: string;
     email: string;
     avatar: string;
+    isAdmin?: boolean;
   };
 }) {
   const router = useRouter();
   const { isMobile } = useSidebar();
   const { data: accounts } = useAccounts();
   const [showNewTeamDialog, setShowNewTeamDialog] = React.useState(false);
+  const [showBillingModal, setShowBillingModal] = React.useState(false);
   const { theme, setTheme } = useTheme();
 
   // Prepare personal account and team accounts
@@ -288,6 +302,29 @@ export function NavUserWithTeams({
 
               {/* User Settings Section */}
               <DropdownMenuGroup>
+                {user.isAdmin && (
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <Shield className="h-4 w-4 mr-2" />
+                      <span>Admin</span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuPortal>
+                      <DropdownMenuSubContent>
+                        <DropdownMenuItem asChild>
+                          <Link href="/admin/billing">
+                            <DollarSign className="h-4 w-4" />
+                            Billing Management
+                          </Link>
+                        </DropdownMenuItem>
+                      </DropdownMenuSubContent>
+                    </DropdownMenuPortal>
+                  </DropdownMenuSub>
+                )}
+                
+                <DropdownMenuItem onClick={() => setShowBillingModal(true)}>
+                  <Zap className="h-4 w-4" />
+                  Upgrade
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <a
                     href="https://support.myapps.ai/introduction"
@@ -373,6 +410,13 @@ export function NavUserWithTeams({
         </DialogHeader>
         <NewTeamForm />
       </DialogContent>
+
+      {/* Billing Modal */}
+      <BillingModal
+        open={showBillingModal}
+        onOpenChange={setShowBillingModal}
+        returnUrl={typeof window !== 'undefined' ? window?.location?.href || '/' : '/'}
+      />
     </Dialog>
   );
 }

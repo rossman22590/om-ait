@@ -190,51 +190,14 @@ export function AgentHeader({
             <Skeleton className="h-5 w-32" />
           ) : (
             <div
-              className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded px-1 py-0.5 transition-colors"
-              onClick={startEditing}
-            >
-              <span className="text-base font-medium text-foreground truncate">
-                {displayData.name}
-              </span>
-              {!isViewingOldVersion && (
-                <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                  Click to edit
-                </span>
+              className={cn(
+                "text-base font-medium text-muted-foreground hover:text-foreground cursor-pointer flex items-center truncate max-w-[400px]",
+                !isNameEditable && isSunaAgent && "cursor-not-allowed opacity-75"
               )}
-            </div>
-          )}
-          
-          {/* Current Plan Display */}
-          {subscriptionData?.subscription && (
-            <div className="mt-1">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">
-                  Current Plan:
-                </span>
-                <span className="text-xs font-medium text-foreground">
-                  {subscriptionData.subscription.cancel_at_period_end || subscriptionData.subscription.cancel_at 
-                    ? 'Ending Soon'
-                    : subscriptionData.subscription.status === 'trialing' 
-                      ? 'Trial'
-                      : subscriptionData.subscription.status === 'active'
-                        ? 'Active'
-                        : subscriptionData.subscription.status || 'Unknown'
-                  }
-                </span>
-                {subscriptionData.subscription.cancel_at_period_end && (
-                  <span className="text-xs text-muted-foreground">
-                    • Ends {new Date(subscriptionData.subscription.current_period_end * 1000).toLocaleDateString()}
-                  </span>
-                )}
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="text-xs h-auto p-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => window.location.href = '/settings/billing'}
-                >
-                  Manage
-                </Button>
-              </div>
+              onClick={isNameEditable ? startEditing : undefined}
+              title={isNameEditable ? `Click to rename agent: ${displayData.name}` : `Name cannot be edited: ${displayData.name}`}
+            >
+              {displayData.name}
             </div>
           )}
         </div>

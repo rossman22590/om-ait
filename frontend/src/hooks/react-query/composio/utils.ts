@@ -129,6 +129,8 @@ export interface CreateComposioProfileRequest {
   mcp_server_name?: string;
   is_default?: boolean;
   initiation_fields?: Record<string, string>;
+  custom_auth_config?: Record<string, string>;
+  use_custom_auth?: boolean;
 }
 
 export interface CreateComposioProfileResponse {
@@ -417,4 +419,31 @@ export const composioApi = {
 
     return result.data!;
   },
-};
+
+  async checkProfileNameAvailability(
+    toolkitSlug: string, 
+    profileName: string
+  ): Promise<{ available: boolean; message: string; suggestions: string[] }> {
+    const params = new URLSearchParams({
+      toolkit_slug: toolkitSlug,
+      profile_name: profileName
+    });
+    
+    const result = await backendApi.get<{ 
+      available: boolean; 
+      message: string; 
+      suggestions: string[] 
+    }>(
+      `/composio/profiles/check-name-availability?${params.toString()}`,
+      {
+        errorContext: { operation: 'check profile name', resource: 'Composio profile' },
+      }
+    );
+
+    if (!result.success) {
+      throw new Error(result.error?.message || 'Failed to check profile name availability');
+    }
+
+    return result.data!;
+  },
+}; 

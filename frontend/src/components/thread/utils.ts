@@ -310,6 +310,12 @@ const TOOL_DISPLAY_NAMES = new Map([
   ['edit-file', 'Editing File'],
   ['upload-file', 'Uploading File'],
 
+  ['create-document', 'Creating Document'],
+  ['update-document', 'Updating Document'],
+  ['read-document', 'Reading Document'],
+  ['list-documents', 'Listing Documents'],
+  ['delete-document', 'Deleting Document'],
+
   ['create-tasks', 'Creating Tasks'],
   ['update-tasks', 'Updating Tasks'],
   
@@ -331,9 +337,12 @@ const TOOL_DISPLAY_NAMES = new Map([
   ['expose-port', 'Exposing Port'],
   ['scrape-webpage', 'Scraping Website'],
   ['web-search', 'Searching Web'],
-  ['see-image', 'Viewing Image'],
+  ['load-image', 'Loading Image'],
   ['create-presentation-outline', 'Creating Presentation Outline'],
   ['create-presentation', 'Creating Presentation'],
+  ['present-presentation', 'Presenting'],
+  ['clear-images-from-context', 'Clearing Images from context'],
+  ['load-image', 'Loading Image'],
 
   ['create-sheet', 'Creating Sheet'],
   ['update-sheet', 'Updating Sheet'],
@@ -382,7 +391,7 @@ const TOOL_DISPLAY_NAMES = new Map([
   ['expose_port', 'Exposing Port'],
   ['scrape_webpage', 'Scraping Website'],
   ['web_search', 'Searching Web'],
-  ['see_image', 'Viewing Image'],
+  ['load_image', 'Loading Image'],
   
   ['update_agent', 'Updating Agent'],
   ['get_current_agent_config', 'Getting Agent Config'],
@@ -508,7 +517,7 @@ export const HIDE_STREAMING_XML_TAGS = new Set([
   'complete',
   'crawl-webpage',
   'web-search',
-  'see-image',
+  'load-image',
   'execute_data_provider_call',
   'execute_data_provider_endpoint',
 

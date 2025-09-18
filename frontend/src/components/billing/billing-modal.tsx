@@ -24,8 +24,12 @@ import {
     SubscriptionStatus,
 } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
+<<<<<<< HEAD
 import { useSubscriptionCommitment } from '@/hooks/react-query';
 import { useSubscription } from '@/hooks/react-query';
+=======
+import { useSubscriptionCommitment } from '@/hooks/react-query/subscriptions/use-subscriptions';
+>>>>>>> v10-2025-NEW-BILLING
 import { useQueryClient } from '@tanstack/react-query';
 import { subscriptionKeys } from '@/hooks/react-query/subscriptions/keys';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -63,7 +67,6 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
 
-    // Get commitment info for the subscription (only if we have a valid ID)
     const {
         data: commitmentInfo,
         isLoading: commitmentLoading,
@@ -71,7 +74,12 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
         refetch: refetchCommitment
     } = useSubscriptionCommitment(subscriptionData?.subscription?.id || null);
 
+<<<<<<< HEAD
     // Remove the manual fetchSubscriptionData function since useSubscription handles it
+=======
+    const fetchSubscriptionData = async () => {
+        if (!session) return;
+>>>>>>> v10-2025-NEW-BILLING
 
     // The useSubscription hook automatically fetches data when the component mounts and when session changes.
     // No need for manual useEffect here.
@@ -202,6 +210,7 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                 </DialogHeader>
 
                 <>
+<<<<<<< HEAD
                     {/* Usage Limit Alert */}
                     {showUsageLimitAlert && (
                         <div className="mb-6">
@@ -268,6 +277,17 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                     <PricingSection returnUrl={returnUrl} showTitleAndTabs={false} />
 
                     {/* Subscription Management Section - only show if there's actual subscription data */}
+=======
+                    <PricingSection 
+                        returnUrl={returnUrl} 
+                        showTitleAndTabs={false}
+                        onSubscriptionUpdate={() => {
+                            setTimeout(() => {
+                                fetchSubscriptionData();
+                            }, 500);
+                        }}
+                    />
+>>>>>>> v10-2025-NEW-BILLING
                     {error ? (
                         <div className="mt-6 pt-4 border-t border-border">
                             <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-center">
@@ -276,7 +296,6 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                         </div>
                     ) : subscriptionData?.subscription && (
                         <div className="mt-6 pt-4 border-t border-border">
-                            {/* Subscription Status Info Box */}
                             <div className="bg-muted/30 border border-border rounded-lg p-3 mb-3">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
@@ -316,9 +335,7 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                                 )}
                             </div>
 
-                            {/* Action Buttons underneath */}
                             <div className="flex gap-2 justify-center">
-                                {/* Cancel/Reactivate Button */}
                                 {!(subscriptionData.subscription.cancel_at_period_end || subscriptionData.subscription.cancel_at) ? (
                                     <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
                                         <DialogTrigger asChild>
