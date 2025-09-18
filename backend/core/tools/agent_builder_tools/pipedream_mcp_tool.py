@@ -1,8 +1,8 @@
 from typing import Optional, List, Dict, Any
-from agentpress.tool import ToolResult, openapi_schema, usage_example
-from agentpress.thread_manager import ThreadManager
+from core.agentpress.tool import ToolResult, openapi_schema, usage_example
+from core.agentpress.thread_manager import ThreadManager
 from .base_tool import AgentBuilderBaseTool
-from utils.logger import logger
+from core.utils.logger import logger
 
 # NOTE: We avoid importing pipedream modules at top-level to prevent
 # environment-specific import issues from blocking tool registration.

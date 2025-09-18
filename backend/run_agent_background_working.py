@@ -12,7 +12,7 @@ from agent.run import run_agent
 from utils.logger import logger, structlog
 import dramatiq
 import uuid
-from agentpress.thread_manager import ThreadManager
+from core.agentpress.thread_manager import ThreadManager
 from services.supabase import DBConnection
 from dramatiq.brokers.redis import RedisBroker
 import os
