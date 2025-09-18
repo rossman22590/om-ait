@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Bot, Plug,Menu, Plus, Zap, ChevronRight, Puzzle, CodeSquare, StopCircle } from 'lucide-react';
+import { Bot, Plug,Menu, Plus, Zap, ChevronRight, Puzzle, CodeSquare, StopCircle, Loader2 } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
