@@ -28,19 +28,35 @@ export default function ActivateTrialPage() {
   useEffect(() => {
     if (!isLoadingSubscription && !isLoadingTrial && subscription && trialStatus) {
       const hasActiveTrial = trialStatus.has_trial && trialStatus.trial_status === 'active';
-      const hasUsedTrial = trialStatus.trial_status === 'used' || 
-                           trialStatus.trial_status === 'expired' || 
-                           trialStatus.trial_status === 'cancelled' ||
-                           trialStatus.trial_status === 'converted';
       const hasActiveSubscription = subscription.tier && 
                                    subscription.tier.name !== 'none' && 
                                    subscription.tier.name !== 'free';
+      const hasUsedTrialWithoutSubscription = (trialStatus.trial_status === 'used' || 
+                                              trialStatus.trial_status === 'expired' || 
+                                              trialStatus.trial_status === 'cancelled') &&
+                                              !hasActiveSubscription;
       
+      // Debug logging
+      console.log('[ActivateTrialPage] Redirect logic:', {
+        hasActiveTrial,
+        hasActiveSubscription,
+        hasUsedTrialWithoutSubscription,
+        trialStatus: trialStatus.trial_status,
+        tierName: subscription.tier?.name,
+        subscription: subscription
+      });
+      
+      // Priority: Active subscription or trial -> dashboard
       if (hasActiveTrial || hasActiveSubscription) {
+        console.log('[ActivateTrialPage] Redirecting to /dashboard - user has active subscription or trial');
         router.push('/dashboard');
-      } else if (hasUsedTrial) {
+      } 
+      // Only redirect to subscription if trial was used AND no active subscription
+      else if (hasUsedTrialWithoutSubscription) {
+        console.log('[ActivateTrialPage] Redirecting to /subscription - trial used without active subscription');
         router.push('/subscription');
       }
+      // Note: 'converted' trial status with active subscription goes to dashboard (first condition)
     }
   }, [subscription, trialStatus, isLoadingSubscription, isLoadingTrial, router]);
 
