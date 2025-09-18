@@ -18,6 +18,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useAgents } from '@/hooks/react-query/agents/use-agents';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
 import { MaintenanceAlert } from '../maintenance-alert';
+import { PlanMigrationBanner } from './plan-migration-banner';
 
 interface DashboardLayoutContentProps {
   children: React.ReactNode;
@@ -109,6 +110,7 @@ export default function DashboardLayoutContent({
         <SidebarProvider>
           <SidebarLeft />
           <SidebarInset>
+            <PlanMigrationBanner />
             {mantenanceBanner}
             <div className="bg-background">{children}</div>
           </SidebarInset>
