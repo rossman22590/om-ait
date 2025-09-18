@@ -130,7 +130,7 @@ async def log_requests_middleware(request: Request, call_next):
         raise
 
 # Define allowed origins based on environment
-allowed_origins = ["https://beta.machine.myapps.ai", "https://machinev9.ngrok.io" , "https://beta-machinev5.vercel.app" , "https://machine.myapps.ai"]
+allowed_origins = ["https://beta.machine.myapps.ai", "https://machinev9.ngrok.io" , "https://v10-alpha-machine.vercel.app/" , "https://machine.myapps.ai"]
 allow_origin_regex = None
 
 # Add staging-specific origins
