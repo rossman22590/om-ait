@@ -272,7 +272,7 @@ function PricingTier({
 
   // Find the current tier (moved outside conditional for JSX access)
   const currentTier = siteConfig.cloudPricingItems.find(
-    (p) => p.stripePriceId === currentSubscription?.price_id || p.yearlyStripePriceId === currentSubscription?.price_id,
+    (p) => currentSubscription && (p.stripePriceId === currentSubscription.price_id || p.yearlyStripePriceId === currentSubscription.price_id),
   );
 
   const userPlanName = currentSubscription?.plan_name || 'none';
@@ -638,4 +638,3 @@ export function PricingSection({
     </section>
   );
 }
-
