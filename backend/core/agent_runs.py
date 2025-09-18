@@ -270,7 +270,7 @@ async def stop_agent(agent_run_id: str, user_id: str = Depends(verify_and_get_us
     return {"status": "stopped"}
 
 @router.post("/agent-runs/stop-all")
-async def stop_all_agents(user_id: str = Depends(get_current_user_id_from_jwt)):
+async def stop_all_agents(user_id: str = Depends(verify_and_get_user_id_from_jwt)):
     """Stop all running agents for the current user."""
     logger.debug(f"Received request to stop all agents for user: {user_id}")
     client = await utils.db.client

@@ -26,6 +26,7 @@ from core.utils.llm_cache_utils import format_message_with_cache
 from billing.billing_integration import billing_integration
 from core.tools.sb_vision_tool import SandboxVisionTool
 from core.tools.sb_image_edit_tool import SandboxImageEditTool
+from core.tools.sb_avatar_tool import SandboxAvatarTool
 from core.tools.sb_presentation_outline_tool import SandboxPresentationOutlineTool
 from core.tools.sb_presentation_tool import SandboxPresentationTool
 

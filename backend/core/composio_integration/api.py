@@ -586,7 +586,7 @@ async def get_toolkit_icon(
 @router.delete("/profiles/{profile_id}")
 async def delete_profile(
     profile_id: str,
-    current_user_id: str = Depends(get_current_user_id_from_jwt)
+    current_user_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict[str, Any]:
     try:
         profile_service = ComposioProfileService(db)

@@ -147,9 +147,6 @@ async def calculate_credit_breakdown(account_id: str, client) -> Dict:
 async def check_billing_status(
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
-    if config.ENV_MODE == EnvMode.LOCAL:
-        return {'can_run': True, 'message': 'Local mode', 'balance': 999999}
-    
     balance = await credit_service.get_balance(account_id)
     tier = await get_user_subscription_tier(account_id)
     
@@ -165,17 +162,17 @@ async def check_status(
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
     try:
-        if config.ENV_MODE == EnvMode.LOCAL:
-            return {
-                "can_run": True,
-                "message": "Local development mode",
-                "subscription": {
-                    "price_id": "local_dev",
-                    "plan_name": "Local Development"
-                },
-                "credit_balance": 999999,
-                "can_purchase_credits": False
-            }
+        # if config.ENV_MODE == EnvMode.LOCAL:
+        #     return {
+        #         "can_run": True,
+        #         "message": "Local development mode",
+        #         "subscription": {
+        #             "price_id": "local_dev",
+        #             "plan_name": "Local Development"
+        #         },
+        #         "credit_balance": 999999,
+        #         "can_purchase_credits": False
+        #     }
         
         balance = await credit_service.get_balance(account_id)
         summary = await credit_service.get_account_summary(account_id)
@@ -273,8 +270,8 @@ async def deduct_token_usage(
     usage: TokenUsageRequest,
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
-    if config.ENV_MODE == EnvMode.LOCAL:
-        return {'success': True, 'cost': 0, 'new_balance': 999999}
+    # if config.ENV_MODE == EnvMode.LOCAL:
+    #     return {'success': True, 'cost': 0, 'new_balance': 999999}
     
     cost = calculate_token_cost(usage.prompt_tokens, usage.completion_tokens, usage.model)
     
@@ -726,6 +723,58 @@ async def get_credit_breakdown(
         'message': f"Your ${total:.2f} balance includes ${expiring:.2f} expiring (plan) credits and ${non_expiring:.2f} non-expiring (purchased) credits"
     }
 
+@router.get("/usage-logs")
+async def get_usage_logs(
+    page: int = Query(0, ge=0, description="Page number for pagination"),
+    items_per_page: int = Query(1000, ge=1, le=10000, description="Items per page"),
+    account_id: str = Depends(verify_and_get_user_id_from_jwt)
+) -> Dict:
+    """Get usage logs with pagination, matching frontend expectations."""
+    try:
+        db = DBConnection()
+        client = await db.client
+
+        # Calculate offset
+        offset = page * items_per_page
+
+        # Get total count
+        count_result = await client.from_('credit_ledger').select('*', count='exact').eq('account_id', account_id).execute()
+        total_count = count_result.count or 0
+
+        # Get paginated results
+        result = await client.from_('credit_ledger')\
+            .select('created_at, amount, type, description, balance_after, metadata')\
+            .eq('account_id', account_id)\
+            .order('created_at', desc=True)\
+            .range(offset, offset + items_per_page - 1)\
+            .execute()
+
+        usage_logs = []
+        for entry in result.data or []:
+            usage_logs.append({
+                'timestamp': entry['created_at'],
+                'amount': float(entry['amount']),
+                'balance_after': float(entry.get('balance_after', 0)),
+                'type': entry['type'],
+                'description': entry['description'],
+                'metadata': entry.get('metadata', {})
+            })
+
+        return {
+            'usage_logs': usage_logs,
+            'pagination': {
+                'page': page,
+                'items_per_page': items_per_page,
+                'total_items': total_count,
+                'total_pages': (total_count + items_per_page - 1) // items_per_page if items_per_page > 0 else 0
+            },
+            'total_usage': sum(abs(float(entry.get('amount', 0))) for entry in result.data or [] if entry.get('type') == 'debit')
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting usage logs: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/usage-history")
 async def get_usage_history(
     days: int = 30,
@@ -734,30 +783,30 @@ async def get_usage_history(
     try:
         db = DBConnection()
         client = await db.client
-        
+
         start_date = datetime.now(timezone.utc) - timedelta(days=days)
-        
+
         result = await client.from_('credit_ledger').select('created_at, amount, type, description').eq('account_id', account_id).gte('created_at', start_date.isoformat()).order('created_at', desc=True).execute()
-        
+
         daily_usage = {}
         for entry in result.data:
             date_key = entry['created_at'][:10]
             if date_key not in daily_usage:
                 daily_usage[date_key] = {'credits': 0, 'debits': 0, 'count': 0}
-            
+
             amount = float(entry['amount'])
             if entry['type'] == 'debit':
                 daily_usage[date_key]['debits'] += amount
                 daily_usage[date_key]['count'] += 1
             else:
                 daily_usage[date_key]['credits'] += amount
-        
+
         return {
             'daily_usage': daily_usage,
             'total_period_usage': sum(day['debits'] for day in daily_usage.values()),
             'total_period_credits': sum(day['credits'] for day in daily_usage.values())
         }
-        
+
     except Exception as e:
         logger.error(f"Error getting usage history: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e)) 

@@ -24,12 +24,7 @@ import {
     SubscriptionStatus,
 } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
-<<<<<<< HEAD
-import { useSubscriptionCommitment } from '@/hooks/react-query';
-import { useSubscription } from '@/hooks/react-query';
-=======
-import { useSubscriptionCommitment } from '@/hooks/react-query/subscriptions/use-subscriptions';
->>>>>>> v10-2025-NEW-BILLING
+import { useSubscriptionCommitment, useSubscription } from '@/hooks/react-query/subscriptions/use-subscriptions';
 import { useQueryClient } from '@tanstack/react-query';
 import { subscriptionKeys } from '@/hooks/react-query/subscriptions/keys';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -74,12 +69,7 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
         refetch: refetchCommitment
     } = useSubscriptionCommitment(subscriptionData?.subscription?.id || null);
 
-<<<<<<< HEAD
     // Remove the manual fetchSubscriptionData function since useSubscription handles it
-=======
-    const fetchSubscriptionData = async () => {
-        if (!session) return;
->>>>>>> v10-2025-NEW-BILLING
 
     // The useSubscription hook automatically fetches data when the component mounts and when session changes.
     // No need for manual useEffect here.
@@ -210,7 +200,6 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                 </DialogHeader>
 
                 <>
-<<<<<<< HEAD
                     {/* Usage Limit Alert */}
                     {showUsageLimitAlert && (
                         <div className="mb-6">
@@ -277,17 +266,6 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                     <PricingSection returnUrl={returnUrl} showTitleAndTabs={false} />
 
                     {/* Subscription Management Section - only show if there's actual subscription data */}
-=======
-                    <PricingSection 
-                        returnUrl={returnUrl} 
-                        showTitleAndTabs={false}
-                        onSubscriptionUpdate={() => {
-                            setTimeout(() => {
-                                fetchSubscriptionData();
-                            }, 500);
-                        }}
-                    />
->>>>>>> v10-2025-NEW-BILLING
                     {error ? (
                         <div className="mt-6 pt-4 border-t border-border">
                             <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-center">

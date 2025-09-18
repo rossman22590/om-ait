@@ -565,7 +565,7 @@ async def get_agents(
         raise HTTPException(status_code=500, detail=f"Failed to fetch agents: {str(e)}")
 
 @router.get("/agents/limits")
-async def get_agent_limits(user_id: str = Depends(get_current_user_id_from_jwt)):
+async def get_agent_limits(user_id: str = Depends(verify_and_get_user_id_from_jwt)):
     """Get agent count limits for the current user."""
     logger.debug(f"Fetching agent limits for user: {user_id}")
     
