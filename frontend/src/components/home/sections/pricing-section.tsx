@@ -272,7 +272,10 @@ function PricingTier({
 
   // Find the current tier (moved outside conditional for JSX access)
   const currentTier = siteConfig.cloudPricingItems.find(
-    (p) => currentSubscription && (p.stripePriceId === currentSubscription.price_id || p.yearlyStripePriceId === currentSubscription.price_id),
+    (p) => currentSubscription && (
+      p.stripePriceId === currentSubscription.price_id || 
+      (p as any).yearlyStripePriceId === currentSubscription.price_id
+    ),
   );
 
   const userPlanName = currentSubscription?.plan_name || 'none';
@@ -528,24 +531,24 @@ export function PricingSection({
 
     const currentTier = siteConfig.cloudPricingItems.find(
       (p) => p.stripePriceId === currentSubscription.price_id || 
-             p.yearlyStripePriceId === currentSubscription.price_id ||
-             p.monthlyCommitmentStripePriceId === currentSubscription.price_id,
+             (p as any).yearlyStripePriceId === currentSubscription.price_id ||
+             (p as any).monthlyCommitmentStripePriceId === currentSubscription.price_id,
     );
 
     if (currentTier) {
-      if (currentTier.monthlyCommitmentStripePriceId === currentSubscription.price_id) {
+      if ((currentTier as any).monthlyCommitmentStripePriceId === currentSubscription.price_id) {
         return 'yearly_commitment';
-      } else if (currentTier.yearlyStripePriceId === currentSubscription.price_id) {
+      } else if ((currentTier as any).yearlyStripePriceId === currentSubscription.price_id) {
         return 'yearly';
       } else if (currentTier.stripePriceId === currentSubscription.price_id) {
         return 'monthly';
       }
     }
 
-    return 'yearly_commitment';
+    return 'monthly';
   }, [isAuthenticated, currentSubscription]);
 
-  const [billingPeriod, setBillingPeriod] = useState<'monthly'>(getDefaultBillingPeriod());
+  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly' | 'yearly_commitment'>('monthly');
   const [planLoadingStates, setPlanLoadingStates] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
