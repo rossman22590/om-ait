@@ -71,14 +71,26 @@ export function AdminUserTable({ onUserSelect }: AdminUserTableProps) {
 
   const tierName = (tier: string) => {
     switch (tier) {
+      case 'none':
+        return 'No Plan';
+      case 'free':
+        return 'Free Tier (Discontinued)';
       case 'tier_2_20':
-        return '20 Dollar';
+        return 'Starter';
       case 'tier_6_50':
-        return '50 Dollar';
+        return 'Professional';
+      case 'tier_12_100':
+        return 'Team';
       case 'tier_25_200':
-        return '200 Dollar';
+        return 'Business';
+      case 'tier_50_400':
+        return 'Enterprise';
+      case 'tier_125_800':
+        return 'Enterprise Plus';
+      case 'tier_200_1000':
+        return 'Ultimate';
       default:
-        return 'Unknown';
+        return tier || 'Unknown';
     }
   };
 

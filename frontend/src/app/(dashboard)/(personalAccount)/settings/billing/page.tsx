@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { TrialManagement } from '@/components/dashboard/trial-management';
 import { useTransactions } from '@/hooks/react-query/billing/use-transactions';
 import { Clock, Infinity, TrendingUp, TrendingDown, RefreshCw, DollarSign } from 'lucide-react';
+import { CreditTransferButton } from '@/components/billing/credit-transfer-button';
 
 const returnUrl = process.env.NEXT_PUBLIC_URL as string;
 
@@ -111,8 +112,7 @@ export default function PersonalAccountBillingPage() {
             <div className="mb-6">
               <CreditBalanceCard 
                 showPurchaseButton={
-                  (subscriptionData?.credits?.can_purchase_credits || false) && 
-                  subscriptionData?.tier?.name === 'tier_25_200'
+                  subscriptionData?.credits?.can_purchase_credits || false
                 }
                 tierCredits={subscriptionData?.credits?.tier_credits || subscriptionData?.tier?.credits}
               />
@@ -154,6 +154,12 @@ export default function PersonalAccountBillingPage() {
                   View Model Pricing
                 </Link>
               </Button>
+              <CreditTransferButton
+                variant="outline"
+                className="border-border hover:bg-muted/50 shadow-sm hover:shadow-md transition-all"
+              >
+                Transfer to Machine
+              </CreditTransferButton>
               <Button
                 onClick={() => setShowBillingModal(true)}
                 className="bg-primary hover:bg-primary/90 shadow-md hover:shadow-lg transition-all"

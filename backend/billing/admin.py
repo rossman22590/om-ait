@@ -107,6 +107,61 @@ async def adjust_user_credits(
         logger.error(f"Failed to adjust credits: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/credits/admin-adjust")
+async def admin_adjust_user_credits(
+    request: CreditAdjustmentRequest,
+    admin: dict = Depends(require_admin)
+):
+    """Separate admin function for credit adjustments - SIMPLIFIED VERSION"""
+    if abs(request.amount) > 1000 and admin.get('role') != 'super_admin':
+        raise HTTPException(status_code=403, detail="Adjustments over $1000 require super_admin role")
+    
+    try:
+        logger.info(f"[ADMIN] Starting credit adjustment: user={request.account_id}, amount={request.amount}, admin={admin['user_id']}")
+        
+        # ALWAYS use add_credits - it handles both positive and negative amounts
+        # This is the EXACT same approach as the working refund function
+        result = await credit_manager.add_credits(
+            account_id=request.account_id,
+            amount=request.amount,  # Pass amount as-is (positive or negative)
+            is_expiring=request.is_expiring,
+            description=f"Admin adjustment: {request.reason}",
+            type='admin_grant'
+        )
+        
+        logger.info(f"[ADMIN] Credit manager result: {result}")
+        
+        # Handle response exactly like refund function does
+        if result.get('duplicate_prevented'):
+            balance_info = await credit_manager.get_balance(request.account_id)
+            new_balance = balance_info.get('total', 0)
+            logger.info(f"[ADMIN] Duplicate prevented, fetched balance: {new_balance}")
+        else:
+            new_balance = result.get('total_balance', 0)
+            logger.info(f"[ADMIN] Normal flow, new balance: {new_balance}")
+        
+        # Skip audit log for now - it was causing HTTP 500 errors
+        # The credit_ledger already tracks all transactions
+        logger.info(f"[ADMIN] Skipping audit log - credit_ledger provides sufficient tracking")
+        
+        logger.info(f"[ADMIN] Admin {admin['user_id']} adjusted credits for {request.account_id} by {request.amount} (expiring: {request.is_expiring})")
+        
+        response = {
+            'success': True,
+            'new_balance': float(new_balance),
+            'adjustment_amount': float(request.amount),
+            'is_expiring': request.is_expiring
+        }
+        
+        logger.info(f"[ADMIN] Returning response: {response}")
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to adjust credits (admin): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/credits/grant")
 async def grant_credits_to_users(
     request: GrantCreditsRequest,

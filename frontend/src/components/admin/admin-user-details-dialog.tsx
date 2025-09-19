@@ -41,7 +41,7 @@ import {
 import { useAdminUserDetails } from '@/hooks/react-query/admin/use-admin-users';
 import {
   useUserBillingSummary,
-  useAdjustCredits,
+  useAdminAdjustCredits,
   useProcessRefund,
 } from '@/hooks/react-query/admin/use-admin-billing';
 import type { UserSummary } from '@/hooks/react-query/admin/use-admin-users';
@@ -68,7 +68,7 @@ export function AdminUserDetailsDialog({
 
   const { data: userDetails, isLoading } = useAdminUserDetails(user?.id || null);
   const { data: billingSummary, refetch: refetchBilling } = useUserBillingSummary(user?.id || null);
-  const adjustCreditsMutation = useAdjustCredits();
+  const adminAdjustCreditsMutation = useAdminAdjustCredits();
   const processRefundMutation = useProcessRefund();
 
   const formatDate = (dateString: string) => {
@@ -92,7 +92,7 @@ export function AdminUserDetailsDialog({
     }
 
     try {
-      const result = await adjustCreditsMutation.mutateAsync({
+      const result = await adminAdjustCreditsMutation.mutateAsync({
         account_id: user.id,
         amount: parseFloat(adjustAmount),
         reason: adjustReason,
@@ -217,231 +217,315 @@ export function AdminUserDetailsDialog({
                 <TabsTrigger value="actions">Admin Actions</TabsTrigger>
               </TabsList>
 
-            <TabsContent value="overview" className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TabsContent value="overview" className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        Account Info
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Email</p>
+                        <p className="font-mono text-sm">{user.email}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">User ID</p>
+                        <p className="font-mono text-xs">{user.id}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Joined</p>
+                        <p className="text-sm">{formatDate(user.created_at)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Tier</p>
+                        <Badge variant={getTierBadgeVariant(user.tier)} className="capitalize">
+                          {user.tier}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4" />
+                        Credit Summary
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Current Balance</p>
+                        <p className="text-2xl font-bold text-green-600">
+                          {formatCurrency(user.credit_balance)}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-muted-foreground">Purchased</p>
+                          <p className="font-medium">{formatCurrency(user.total_purchased)}</p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Used</p>
+                          <p className="font-medium">{formatCurrency(user.total_used)}</p>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Subscription</p>
+                        <Badge
+                          variant={getSubscriptionBadgeVariant(user.subscription_status)}
+                          className="capitalize"
+                        >
+                          {user.subscription_status || 'None'}
+                        </Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="transactions" className="space-y-4">
+                {billingSummary && (
+                  <Card className='border-0 shadow-none bg-transparent'>
+                    <CardContent className='p-0'>
+                      <div className="space-y-2">
+                        {billingSummary.recent_transactions?.length > 0 ? (
+                          billingSummary.recent_transactions.map((transaction: any) => (
+                            <div
+                              key={transaction.id}
+                              className="flex items-center justify-between p-3 border rounded-lg"
+                            >
+                              <div>
+                                <p className="text-sm font-medium">{transaction.description}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {formatDate(transaction.created_at)}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className={`font-semibold ${getTransactionColor(transaction.type)}`}>
+                                  {transaction.amount > 0 ? '+' : ''}
+                                  {formatCurrency(Math.abs(transaction.amount))}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Balance: {formatCurrency(transaction.balance_after)}
+                                </p>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-muted-foreground">No recent transactions</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              <TabsContent value="activity" className="space-y-4">
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <User className="h-4 w-4" />
-                      Account Info
+                      <Activity className="h-4 w-4" />
+                      Recent Activity
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Email</p>
-                      <p className="font-mono text-sm">{user.email}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">User ID</p>
-                      <p className="font-mono text-xs">{user.id}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Joined</p>
-                      <p className="text-sm">{formatDate(user.created_at)}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Tier</p>
-                      <Badge variant={getTierBadgeVariant(user.tier)} className="capitalize">
-                        {user.tier}
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <CreditCard className="h-4 w-4" />
-                      Credit Summary
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Current Balance</p>
-                      <p className="text-2xl font-bold text-green-600">
-                        {formatCurrency(user.credit_balance)}
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <p className="text-muted-foreground">Purchased</p>
-                        <p className="font-medium">{formatCurrency(user.total_purchased)}</p>
-                      </div>
-                      <div>
-                        <p className="text-muted-foreground">Used</p>
-                        <p className="font-medium">{formatCurrency(user.total_used)}</p>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Subscription</p>
-                      <Badge
-                        variant={getSubscriptionBadgeVariant(user.subscription_status)}
-                        className="capitalize"
-                      >
-                        {user.subscription_status || 'None'}
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="transactions" className="space-y-4">
-              {billingSummary && (
-                <Card className='border-0 shadow-none bg-transparent'>
-                  <CardContent className='p-0'>
-                    <div className="space-y-2">
-                      {billingSummary.recent_transactions?.length > 0 ? (
-                        billingSummary.recent_transactions.map((transaction: any) => (
+                  <CardContent>
+                    {userDetails?.recent_activity?.length > 0 ? (
+                      <div className="space-y-2">
+                        {userDetails.recent_activity.map((activity) => (
                           <div
-                            key={transaction.id}
+                            key={activity.id}
                             className="flex items-center justify-between p-3 border rounded-lg"
                           >
                             <div>
-                              <p className="text-sm font-medium">{transaction.description}</p>
+                              <p className="text-sm font-medium">Agent Run</p>
                               <p className="text-xs text-muted-foreground">
-                                {formatDate(transaction.created_at)}
+                                {formatDate(activity.created_at)} • Thread {activity.thread_id.slice(-8)}
                               </p>
                             </div>
-                            <div className="text-right">
-                              <p className={`font-semibold ${getTransactionColor(transaction.type)}`}>
-                                {transaction.amount > 0 ? '+' : ''}
-                                {formatCurrency(Math.abs(transaction.amount))}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Balance: {formatCurrency(transaction.balance_after)}
-                              </p>
-                            </div>
+                            <Badge
+                              variant={activity.status === 'completed' ? 'default' : 'secondary'}
+                            >
+                              {activity.status}
+                            </Badge>
                           </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-muted-foreground">No recent transactions</p>
-                      )}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No recent activity</p>
+                    )}
                   </CardContent>
                 </Card>
-              )}
-            </TabsContent>
+              </TabsContent>
 
-            <TabsContent value="activity" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Activity className="h-4 w-4" />
-                    Recent Activity
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {userDetails?.recent_activity?.length > 0 ? (
-                    <div className="space-y-2">
-                      {userDetails.recent_activity.map((activity) => (
-                        <div
-                          key={activity.id}
-                          className="flex items-center justify-between p-3 border rounded-lg"
-                        >
-                          <div>
-                            <p className="text-sm font-medium">Agent Run</p>
-                            <p className="text-xs text-muted-foreground">
-                              {formatDate(activity.created_at)} • Thread {activity.thread_id.slice(-8)}
-                            </p>
-                          </div>
-                          <Badge
-                            variant={activity.status === 'completed' ? 'default' : 'secondary'}
-                          >
-                            {activity.status}
-                          </Badge>
+              <TabsContent value="actions" className="space-y-4">
+                <div className="grid grid-cols-1 gap-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <DollarSign className="h-4 w-4" />
+                        Adjust Credits
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="p-3 border border-blue-200 dark:border-blue-950 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
+                          <p className="text-sm text-blue-700">
+                            Add or remove credits from the user's account. Use negative values to remove credits.
+                          </p>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">No recent activity</p>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-            <TabsContent value="actions" className="space-y-4">
-              <div className="grid grid-cols-1 gap-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <CreditCard className="h-4 w-4" />
-                      Process Refund
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="p-3 border border-red-200 dark:border-red-950 bg-red-50 dark:bg-red-950/20 rounded-lg">
-                      <div className="flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
-                        <p className="text-sm text-red-700">
-                          Refunds assigns credits back to the user's account.
+                      </div>
+                      <div>
+                        <Label htmlFor="adjust-amount">Credit Amount (USD)</Label>
+                        <Input
+                          id="adjust-amount"
+                          type="number"
+                          step="0.01"
+                          placeholder="50.00 (positive to add, negative to remove)"
+                          value={adjustAmount}
+                          onChange={(e) => setAdjustAmount(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Examples: 50.00 (adds $50), -25.00 (removes $25)
                         </p>
                       </div>
-                    </div>
-                    <div>
-                      <Label htmlFor="refund-amount">Refund Amount (USD)</Label>
-                      <Input
-                        id="refund-amount"
-                        type="number"
-                        step="0.01"
-                        placeholder="50.00"
-                        value={refundAmount}
-                        onChange={(e) => setRefundAmount(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="refund-reason mb-2">Refund Reason</Label>
-                      <Textarea
-                        id="refund-reason"
-                        placeholder="Service outage compensation"
-                        value={refundReason}
-                        onChange={(e) => setRefundReason(e.target.value)}
-                        rows={3}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
-                      <div className="flex items-center gap-2">
-                        <Label htmlFor="refund-expiring" className="cursor-pointer flex items-center gap-2">
-                          {refundIsExpiring ? (
-                            <Clock className="h-4 w-4 text-orange-500" />
-                          ) : (
-                            <Infinity className="h-4 w-4 text-blue-500" />
-                          )}
-                          <span className="font-medium">
-                            {refundIsExpiring ? 'Expiring Credits' : 'Non-Expiring Credits'}
-                          </span>
-                        </Label>
+                      <div>
+                        <Label htmlFor="adjust-reason">Reason</Label>
+                        <Textarea
+                          id="adjust-reason"
+                          placeholder="Admin credit adjustment - specify reason"
+                          value={adjustReason}
+                          onChange={(e) => setAdjustReason(e.target.value)}
+                          rows={3}
+                        />
                       </div>
-                      <Switch
-                        id="refund-expiring"
-                        checked={!refundIsExpiring}
-                        onCheckedChange={(checked) => setRefundIsExpiring(!checked)}
-                      />
-                    </div>
-                    <p className="text-xs text-muted-foreground -mt-2">
-                      {refundIsExpiring 
-                        ? 'Credits will expire at the end of the billing cycle'
-                        : 'Refunds typically use non-expiring credits (recommended)'}
-                    </p>
-                    <Button
-                      onClick={handleProcessRefund}
-                      disabled={processRefundMutation.isPending}
-                      variant="destructive"
-                      className="w-full"
-                    >
-                      {processRefundMutation.isPending ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        'Process Refund'
-                      )}
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            </TabsContent>
-          </Tabs>
+                      <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="adjust-expiring" className="cursor-pointer flex items-center gap-2">
+                            {adjustIsExpiring ? (
+                              <Clock className="h-4 w-4 text-orange-500" />
+                            ) : (
+                              <Infinity className="h-4 w-4 text-blue-500" />
+                            )}
+                            <span className="font-medium">
+                              {adjustIsExpiring ? 'Expiring Credits' : 'Non-Expiring Credits'}
+                            </span>
+                          </Label>
+                        </div>
+                        <Switch
+                          id="adjust-expiring"
+                          checked={!adjustIsExpiring}
+                          onCheckedChange={(checked) => setAdjustIsExpiring(!checked)}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground -mt-2">
+                        {adjustIsExpiring 
+                          ? 'Credits will expire at the end of the billing cycle'
+                          : 'Non-expiring credits never expire (recommended for adjustments)'}
+                      </p>
+                      <Button
+                        onClick={handleAdjustCredits}
+                        disabled={adminAdjustCreditsMutation.isPending}
+                        className="w-full"
+                        variant={parseFloat(adjustAmount) < 0 ? "destructive" : "default"}
+                      >
+                        {adminAdjustCreditsMutation.isPending ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            {parseFloat(adjustAmount) < 0 ? 'Remove Credits' : 'Add Credits'}
+                          </>
+                        )}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4" />
+                        Process Refund
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="p-3 border border-red-200 dark:border-red-950 bg-red-50 dark:bg-red-950/20 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
+                          <p className="text-sm text-red-700">
+                            Refunds assigns credits back to the user's account.
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="refund-amount">Refund Amount (USD)</Label>
+                        <Input
+                          id="refund-amount"
+                          type="number"
+                          step="0.01"
+                          placeholder="50.00"
+                          value={refundAmount}
+                          onChange={(e) => setRefundAmount(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="refund-reason mb-2">Refund Reason</Label>
+                        <Textarea
+                          id="refund-reason"
+                          placeholder="Service outage compensation"
+                          value={refundReason}
+                          onChange={(e) => setRefundReason(e.target.value)}
+                          rows={3}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="refund-expiring" className="cursor-pointer flex items-center gap-2">
+                            {refundIsExpiring ? (
+                              <Clock className="h-4 w-4 text-orange-500" />
+                            ) : (
+                              <Infinity className="h-4 w-4 text-blue-500" />
+                            )}
+                            <span className="font-medium">
+                              {refundIsExpiring ? 'Expiring Credits' : 'Non-Expiring Credits'}
+                            </span>
+                          </Label>
+                        </div>
+                        <Switch
+                          id="refund-expiring"
+                          checked={!refundIsExpiring}
+                          onCheckedChange={(checked) => setRefundIsExpiring(!checked)}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground -mt-2">
+                        {refundIsExpiring 
+                          ? 'Credits will expire at the end of the billing cycle'
+                          : 'Refunds typically use non-expiring credits (recommended)'}
+                      </p>
+                      <Button
+                        onClick={handleProcessRefund}
+                        disabled={processRefundMutation.isPending}
+                        variant="destructive"
+                        className="w-full"
+                      >
+                        {processRefundMutation.isPending ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          'Process Refund'
+                        )}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              </TabsContent>
+            </Tabs>
           )}
         </div>
 

@@ -91,6 +91,18 @@ export function useAdjustCredits() {
   });
 }
 
+export function useAdminAdjustCredits() {
+  return useMutation({
+    mutationFn: async (request: CreditAdjustmentRequest) => {
+      const response = await backendApi.post('/admin/billing/credits/admin-adjust', request);
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+      return response.data;
+    },
+  });
+}
+
 export function useProcessRefund() {
   return useMutation({
     mutationFn: async (request: RefundRequest) => {

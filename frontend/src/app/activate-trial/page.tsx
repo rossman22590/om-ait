@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, CreditCard, Zap, Shield, ArrowRight, CheckCircle, Loader2, Clock, XCircle, LogOut } from 'lucide-react';
+import { Sparkles, CreditCard, Zap, Shield, ArrowRight, CheckCircle, Loader2, Clock, XCircle, LogOut, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -167,6 +167,29 @@ export default function ActivateTrialPage() {
                   You can cancel anytime from your billing settings.
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* Calendly Booking Section */}
+          <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6 space-y-4">
+            <h3 className="font-semibold text-lg flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-blue-600" />
+              Want a personalized walkthrough?
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Book a 15-minute demo with our team to see Machine in action and get your questions answered.
+            </p>
+            
+            {/* Calendly Iframe */}
+            <div className="w-full h-[500px] rounded-lg overflow-hidden border border-border">
+              <iframe
+                src="https://calendly.com/techinschools/machine-walkthrough"
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                title="Schedule a Machine Walkthrough"
+                className="rounded-lg"
+              />
             </div>
           </div>
 

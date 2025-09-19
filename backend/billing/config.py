@@ -30,18 +30,18 @@ TIERS: Dict[str, Tier] = {
         price_ids=[],
         monthly_credits=Decimal('0.00'),
         display_name='No Plan',
-        can_purchase_credits=False,
+        can_purchase_credits=True,
         models=[],
-        project_limit=0
+        project_limit=3
     ),
     'free': Tier(
         name='free',
         price_ids=[],
         monthly_credits=Decimal('0.00'),
         display_name='Free Tier (Discontinued)',
-        can_purchase_credits=False,
+        can_purchase_credits=True,
         models=[],
-        project_limit=0
+        project_limit=3
     ),
     'tier_2_20': Tier(
         name='tier_2_20',
