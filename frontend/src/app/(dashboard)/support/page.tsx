@@ -1,9 +1,11 @@
 "use client";
 
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { IntercomLoader } from "@/components/intercom";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { 
   MessageCircle, 
   HelpCircle, 
@@ -14,7 +16,8 @@ import {
   Bot,
   Settings,
   Mail,
-  ExternalLink
+  ExternalLink,
+  Calendar
 } from "lucide-react";
 
 export default function SupportPage() {
@@ -91,10 +94,66 @@ export default function SupportPage() {
     }
   };
 
+  const [isCalendlyOpen, setIsCalendlyOpen] = useState(false);
+
+  useEffect(() => {
+    // Load Calendly script
+    const script = document.createElement('script');
+    script.src = 'https://assets.calendly.com/assets/external/widget.js';
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
+  // Handle Calendly close event
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data.event === 'calendly.event_type_viewed' || 
+          e.data.event === 'calendly.event_scheduled') {
+        // Handle events if needed
+      } else if (e.data.event === 'calendly.profile_page_viewed') {
+        // Handle profile view
+      } else if (e.data.event === 'calendly.date_and_time_selected') {
+        // Handle date selection
+      } else if (e.data.event === 'calendly.event_type_viewed') {
+        // Handle event type view
+      } else if (e.data.event === 'calendly.profile_page_viewed') {
+        // Handle profile page view
+      } else if (e.data.event === 'calendly.event_scheduled') {
+        // Handle successful scheduling
+        setIsCalendlyOpen(false);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       {/* Load Intercom only on this page */}
       <IntercomLoader />
+      
+      {/* Calendly Modal */}
+      <Dialog open={isCalendlyOpen} onOpenChange={setIsCalendlyOpen}>
+        <DialogContent className="max-w-4xl h-[700px] p-0 overflow-hidden">
+          <DialogTitle className="sr-only">Schedule a Demo</DialogTitle>
+          <div className="h-full w-full">
+            <iframe 
+              src="https://calendly.com/techinschools/machine-walkthrough?embed_domain=myapps.ai&embed_type=Inline"
+              width="100%" 
+              height="100%" 
+              frameBorder="0"
+              className="border-0"
+              title="Schedule a demo with our team"
+              aria-label="Calendar for scheduling a demo"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
       
       {/* Header */}
       <div className="text-center mb-12">
@@ -116,6 +175,15 @@ export default function SupportPage() {
           >
             <MessageCircle className="mr-2 h-5 w-5" />
             Chat with Support
+          </Button>
+          <Button 
+            variant="outline" 
+            size="lg" 
+            className="border-purple-600 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+            onClick={() => setIsCalendlyOpen(true)}
+          >
+            <Calendar className="mr-2 h-5 w-5" />
+            Book a Demo
           </Button>
           <Button variant="outline" size="lg" asChild>
             <a href="mailto:support@myapps.ai">
