@@ -239,6 +239,7 @@ class Configuration:
     # Search and other API keys
     TAVILY_API_KEY: str
     RAPID_API_KEY: str
+    SERPER_API_KEY: Optional[str] = None
     CLOUDFLARE_API_TOKEN: Optional[str] = None
     CLOUDFLARE_ACCOUNT_ID: Optional[str] = None
     CLOUDFLARE_ZONE_ID: Optional[str] = None

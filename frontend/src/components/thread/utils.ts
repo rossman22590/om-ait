@@ -265,6 +265,7 @@ export const extractPrimaryParam = (
 
       // Web search
       case 'web-search':
+      case 'image-search':
         match = content.match(/query=(?:"|')([^"|']+)(?:"|')/);
         return match
           ? match[1].length > 30
@@ -330,6 +331,7 @@ const TOOL_DISPLAY_NAMES = new Map([
   
   ['deploy', 'Deploying'],
   ['ask', 'Ask'],
+  ['wait', 'Wait'],
   ['create-tasks', 'Creating Tasks'],
   ['update-tasks', 'Updating Tasks'],
   ['complete', 'Completing Task'],
@@ -343,6 +345,7 @@ const TOOL_DISPLAY_NAMES = new Map([
   ['present-presentation', 'Presenting'],
   ['clear-images-from-context', 'Clearing Images from context'],
   ['load-image', 'Loading Image'],
+  ['image-search', 'Searching Image'],
 
   ['create-sheet', 'Creating Sheet'],
   ['update-sheet', 'Updating Sheet'],
