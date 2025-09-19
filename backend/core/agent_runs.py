@@ -26,6 +26,7 @@ from .core_utils import (
 )
 from .config_helper import extract_agent_config
 from .core_utils import check_agent_run_limit, check_project_count_limit
+from core.utils.query_utils import batch_query_in
 
 router = APIRouter()
 
@@ -287,8 +288,6 @@ async def stop_all_agents(user_id: str = Depends(verify_and_get_user_id_from_jwt
         logger.debug(f"Found {len(thread_ids)} threads for user {user_id}")
         
         # Get all running agent runs for these threads
-        from utils.query_utils import batch_query_in
-        
         running_runs = await batch_query_in(
             client=client,
             table_name='agent_runs',
