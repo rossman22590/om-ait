@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 30px;">
           <h1 style="color: white; margin: 0; font-size: 28px;">💳 Credit Transfer Request</h1>
-          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">New transfer to Machine</p>
+          <p style="color: rgba(255,255,255,0.9); margin: 10px 0 0 0; font-size: 16px;">New Transfer to Machine Code</p>
         </div>
         
         <div style="background: #f8f9fa; padding: 25px; border-radius: 8px; margin-bottom: 20px;">
