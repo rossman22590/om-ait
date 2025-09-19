@@ -60,12 +60,15 @@ def _redis_broker_url() -> str:
 # Configure Dramatiq Redis broker for Railway Redis
 redis_broker = RedisBroker(
     url=_redis_broker_url(),
-    middleware=[dramatiq.middleware.AsyncIO()],
+    middleware=[
+        dramatiq.middleware.AsyncIO(),
+        dramatiq.middleware.Retries(max_retries=3, min_backoff=1000, max_backoff=60000),
+    ],
 )
 
 dramatiq.set_broker(redis_broker)
 
-@dramatiq.actor(max_retries=3, min_backoff=1000, max_backoff=60000)
+@dramatiq.actor
 async def run_agent_background(
     agent_run_id: str,
     thread_id: str,
