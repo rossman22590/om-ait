@@ -158,7 +158,7 @@ export default function PersonalAccountBillingPage() {
                 variant="outline"
                 className="border-border hover:bg-muted/50 shadow-sm hover:shadow-md transition-all"
               >
-                Transfer to Machine
+                Transfer to Machine Code
               </CreditTransferButton>
               <Button
                 onClick={() => setShowBillingModal(true)}

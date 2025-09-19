@@ -115,7 +115,7 @@ export function CreditTransferButton({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-5 w-5" />
-              Transfer Credits to Machine
+              Transfer Credits to Machine Code
             </DialogTitle>
             <DialogDescription>
               Send a credit transfer request. You'll be notified when the transfer is processed.
