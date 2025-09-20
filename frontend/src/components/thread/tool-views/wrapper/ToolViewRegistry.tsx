@@ -39,6 +39,7 @@ import { PresentPresentationToolView } from '../presentation-tools/PresentPresen
 import { SheetsToolView } from '../sheets-tools/sheets-tool-view';
 import { GetProjectStructureView } from '../web-dev/GetProjectStructureView';
 import { ImageEditGenerateToolView } from '../image-edit-generate-tool/ImageEditGenerateToolView';
+import { DesignerToolView } from '../designer-tool/DesignerToolView';
 import { AvatarToolView } from '../AvatarToolView';
 import { UploadFileToolView } from '../UploadFileToolView';
 import { DocsToolView, ListDocumentsToolView, DeleteDocumentToolView } from '../docs-tool';
@@ -106,6 +107,8 @@ const defaultRegistry: ToolViewRegistryType = {
   'load-image': SeeImageToolView,
   'clear-images-from-context': SeeImageToolView,
   'image-edit-or-generate': ImageEditGenerateToolView,
+  'designer-create-or-edit': DesignerToolView,
+  'designer_create_or_edit': DesignerToolView,
 
   // Avatar tools
   'list-argil-avatars': AvatarToolView,

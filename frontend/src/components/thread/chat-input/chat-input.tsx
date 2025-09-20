@@ -28,8 +28,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useSubscriptionData } from '@/contexts/SubscriptionContext';
 import { isLocalMode } from '@/lib/config';
 import { BillingModal } from '@/components/billing/billing-modal';
-import { useRouter } from 'next/navigation';
-import posthog from '@/lib/posthog';
+import { AgentConfigurationDialog } from '@/components/agents/agent-configuration-dialog';
+import posthog from 'posthog-js';
 
 export interface ChatInputHandles {
   getPendingFiles: () => File[];
@@ -124,7 +124,6 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
   ) => {
     const isControlled =
       controlledValue !== undefined && controlledOnChange !== undefined;
-    const router = useRouter();
 
     const [uncontrolledValue, setUncontrolledValue] = useState('');
     const value = isControlled ? controlledValue : uncontrolledValue;
@@ -140,6 +139,7 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
     const [showSnackbar, setShowSnackbar] = useState(defaultShowSnackbar);
     const [userDismissedUsage, setUserDismissedUsage] = useState(false);
     const [billingModalOpen, setBillingModalOpen] = useState(false);
+    const [agentConfigDialog, setAgentConfigDialog] = useState<{ open: boolean; tab: 'general' | 'instructions' | 'knowledge' | 'triggers' | 'playbooks' | 'tools' | 'integrations' }>({ open: false, tab: 'general' });
 
     const {
       selectedModel,
@@ -465,28 +465,28 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
                     <span className="text-xs font-medium">Integrations</span>
                   </button>
                   <button
-                    onClick={() => router.push(`/agents/config/${selectedAgentId}?tab=configuration&accordion=instructions`)}
+                    onClick={() => setAgentConfigDialog({ open: true, tab: 'instructions' })}
                     className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-all duration-200 px-2.5 py-1.5 rounded-lg hover:bg-muted/50 border border-transparent hover:border-border/30 flex-shrink-0 cursor-pointer relative pointer-events-auto"
                   >
                     <Brain className="h-3.5 w-3.5 flex-shrink-0" />
                     <span className="text-xs font-medium">Instructions</span>
                   </button>
                   <button
-                    onClick={() => router.push(`/agents/config/${selectedAgentId}?tab=configuration&accordion=knowledge`)}
+                    onClick={() => setAgentConfigDialog({ open: true, tab: 'knowledge' })}
                     className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-all duration-200 px-2.5 py-1.5 rounded-lg hover:bg-muted/50 border border-transparent hover:border-border/30 flex-shrink-0 cursor-pointer relative pointer-events-auto"
                   >
                     <Database className="h-3.5 w-3.5 flex-shrink-0" />
                     <span className="text-xs font-medium">Knowledge</span>
                   </button>
                   <button
-                    onClick={() => router.push(`/agents/config/${selectedAgentId}?tab=configuration&accordion=triggers`)}
+                    onClick={() => setAgentConfigDialog({ open: true, tab: 'triggers' })}
                     className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-all duration-200 px-2.5 py-1.5 rounded-lg hover:bg-muted/50 border border-transparent hover:border-border/30 flex-shrink-0 cursor-pointer relative pointer-events-auto"
                   >
                     <Zap className="h-3.5 w-3.5 flex-shrink-0" />
                     <span className="text-xs font-medium">Triggers</span>
                   </button>
                   <button
-                    onClick={() => router.push(`/agents/config/${selectedAgentId}?tab=configuration&accordion=workflows`)}
+                    onClick={() => setAgentConfigDialog({ open: true, tab: 'playbooks' })}
                     className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-all duration-200 px-2.5 py-1.5 rounded-lg hover:bg-muted/50 border border-transparent hover:border-border/30 flex-shrink-0 cursor-pointer relative pointer-events-auto"
                   >
                     <Workflow className="h-3.5 w-3.5 flex-shrink-0" />
@@ -507,7 +507,6 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
                 selectedAgentId={selectedAgentId}
                 onAgentChange={onAgentSelect}
                 onToolsSelected={(profileId, selectedTools, appName, appSlug) => {
-                  // Save to workflow or perform other action here
                 }}
               />
             </DialogContent>
@@ -516,6 +515,14 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
             open={billingModalOpen}
             onOpenChange={setBillingModalOpen}
           />
+          {selectedAgentId && (
+            <AgentConfigurationDialog
+              open={agentConfigDialog.open}
+              onOpenChange={(open) => setAgentConfigDialog({ ...agentConfigDialog, open })}
+              agentId={selectedAgentId}
+              initialTab={agentConfigDialog.tab}
+            />
+          )}
         </div>
       </div>
     );

@@ -277,7 +277,7 @@ export function SidebarLeft({
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
-                      <SidebarMenuSubItem>
+                      {/* <SidebarMenuSubItem>
                         <SidebarMenuSubButton className={cn('pl-3 touch-manipulation', {
                           'bg-accent text-accent-foreground font-medium': pathname === '/agents' && searchParams.get('tab') === 'marketplace',
                         })} asChild>
@@ -285,7 +285,7 @@ export function SidebarLeft({
                             <span>Explore</span>
                           </Link>
                         </SidebarMenuSubButton>
-                      </SidebarMenuSubItem>
+                      </SidebarMenuSubItem> */}
                       <SidebarMenuSubItem data-tour="my-agents">
                         <SidebarMenuSubButton className={cn('pl-3 touch-manipulation', {
                           'bg-accent text-accent-foreground font-medium': pathname === '/agents' && (searchParams.get('tab') === 'my-agents' || searchParams.get('tab') === null),
