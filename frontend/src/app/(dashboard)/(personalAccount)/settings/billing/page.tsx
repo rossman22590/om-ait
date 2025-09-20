@@ -156,9 +156,8 @@ export default function PersonalAccountBillingPage() {
               </Button>
               <CreditTransferButton
                 variant="outline"
-                disabled
+                disabled={true}
                 className="border-border bg-muted/50 text-muted-foreground shadow-sm opacity-70 cursor-not-allowed"
-                onClick={(e) => e.preventDefault()}
               >
                 Transfer to Machine Code
               </CreditTransferButton>

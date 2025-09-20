@@ -24,6 +24,7 @@ interface CreditTransferButtonProps {
   className?: string;
   children?: React.ReactNode;
   showIcon?: boolean;
+  disabled?: boolean;
 }
 
 export function CreditTransferButton({ 
@@ -31,7 +32,8 @@ export function CreditTransferButton({
   size = 'default',
   className = '',
   children,
-  showIcon = true
+  showIcon = true,
+  disabled = false
 }: CreditTransferButtonProps) {
   const [showModal, setShowModal] = useState(false);
   const [amount, setAmount] = useState('');
@@ -104,13 +106,14 @@ export function CreditTransferButton({
         variant={variant}
         size={size}
         className={className}
-        onClick={() => setShowModal(true)}
+        onClick={() => !disabled && setShowModal(true)}
       >
         {showIcon && <Gift className="h-4 w-4 mr-2" />}
         {children || 'Transfer Credits'}
       </Button>
 
-      <Dialog open={showModal} onOpenChange={setShowModal}>
+      {!disabled && (
+        <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -188,6 +191,7 @@ export function CreditTransferButton({
           </div>
         </DialogContent>
       </Dialog>
+      )}
     </>
   );
 }
