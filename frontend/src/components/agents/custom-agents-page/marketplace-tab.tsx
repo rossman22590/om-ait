@@ -118,10 +118,10 @@ export const MarketplaceTab = ({
           <div className="space-y-12">
             {marketplaceFilter === 'all' ? (
               <div className="space-y-6">
-                {/* <MarketplaceSectionHeader
+                <MarketplaceSectionHeader
                   title="Popular Agents"
                   subtitle="Sorted by popularity - most downloads first"
-                /> */}
+                />
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {allMarketplaceItems.map((item) => (
                     <AgentCard

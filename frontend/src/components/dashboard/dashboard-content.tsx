@@ -78,9 +78,6 @@ export function DashboardContent() {
     getCurrentAgent
   } = useAgentSelection();
   const [initiatedThreadId, setInitiatedThreadId] = useState<string | null>(null);
-  const [showAgentNudge, setShowAgentNudge] = useState(false);
-  const [showCreateAgentDialog, setShowCreateAgentDialog] = useState(false);
-
   const { billingError, handleBillingError, clearBillingError } =
     useBillingError();
   const [showAgentLimitDialog, setShowAgentLimitDialog] = useState(false);
@@ -123,10 +120,7 @@ export function DashboardContent() {
     : null;
   const displayName = selectedAgent?.name || 'Machine';
   const agentAvatar = undefined;
-  const isMachineAgent = selectedAgent?.metadata?.is_suna_default || false;
-
-  // Determine if the currently selected agent is the default Machine/General
-  const currentAgentIsDefault = !selectedAgent || !!selectedAgent?.metadata?.is_suna_default;
+  const isSunaAgent = selectedAgent?.metadata?.is_suna_default || false;
 
   const threadQuery = useThreadQuery(initiatedThreadId || '');
 
@@ -358,9 +352,9 @@ export function DashboardContent() {
                 <ReleaseBadge className='hover:cursor-pointer' text="Custom Agents, Playbooks, and more!" link="/agents?tab=my-agents" />
               </div>
             )}
-            <div className="flex-1 flex items-center justify-center px-4 py-8">
-              <div className="w-full max-w-[650px] flex flex-col items-center justify-center space-y-4 md:space-y-6">
-                <div className="flex flex-col items-center text-center w-full">
+            <div className="flex-1 flex items-center justify-center px-4 py-4">
+              <div className="w-full max-w-[650px] mx-auto flex flex-col items-center">
+                <div className="w-full flex flex-col items-center text-center mb-6">
                   <p 
                     className="tracking-tight text-2xl md:text-3xl font-normal text-foreground/90"
                     data-tour="dashboard-title"
@@ -368,7 +362,7 @@ export function DashboardContent() {
                     What would you like to do today?
                   </p>
                 </div>
-                <div className="w-full" data-tour="chat-input">
+                <div className="w-full mb-6" data-tour="chat-input">
                   <ChatInput
                     ref={chatInputRef}
                     onSubmit={handleSubmit}
@@ -386,15 +380,13 @@ export function DashboardContent() {
                     }}
                   />
                 </div>
-              </div>
-            </div>
-            <div className="w-full" data-tour="examples">
-              <div className="max-w-7xl mx-auto">
-                <AgentExamples 
-                  selectedAgentId={selectedAgentId}
-                  onSelectPrompt={setInputValue} 
-                  count={isMobile ? 4 : 8} 
-                />
+                <div className="w-full max-w-[600px]" data-tour="examples">
+                  <AgentExamples 
+                    selectedAgentId={selectedAgentId}
+                    onSelectPrompt={setInputValue} 
+                    count={isMobile ? 4 : 8} 
+                  />
+                </div>
               </div>
             </div>
             {enabledEnvironment && (
@@ -425,7 +417,7 @@ export function DashboardContent() {
           onOpenChange={setShowAgentLimitDialog}
           runningCount={agentLimitData.runningCount}
           runningThreadIds={agentLimitData.runningThreadIds}
-          projectId={undefined} // Dashboard doesn't have a specific project context
+          projectId={undefined}
         />
       )}
       

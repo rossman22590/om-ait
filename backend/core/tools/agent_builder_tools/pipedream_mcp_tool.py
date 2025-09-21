@@ -10,7 +10,7 @@ from core.utils.logger import logger
 try:
     from typing import TYPE_CHECKING
     if TYPE_CHECKING:
-        from pipedream.profile_service import Profile  # type: ignore
+        from core.pipedream.profile_service import Profile  # type: ignore
 except Exception:
     pass
 
@@ -22,7 +22,7 @@ class PipedreamMCPTool(AgentBuilderBaseTool):
     async def _load_profile_for_account(self, profile_id: str) -> Optional["Profile"]:
         account_id = await self._get_current_account_id()
         try:
-            from pipedream.profile_service import get_profile_service  # type: ignore
+            from core.pipedream.profile_service import get_profile_service  # type: ignore
         except Exception as e:
             logger.error(f"Pipedream profile service not available: {e}")
             return None
@@ -58,7 +58,7 @@ class PipedreamMCPTool(AgentBuilderBaseTool):
         try:
             account_id = await self._get_current_account_id()
             try:
-                from pipedream.profile_service import get_profile_service  # type: ignore
+                from core.pipedream.profile_service import get_profile_service  # type: ignore
             except Exception as e:
                 return self.fail_response("Pipedream profile service not available in this environment")
             profile_service = get_profile_service()
@@ -138,8 +138,8 @@ class PipedreamMCPTool(AgentBuilderBaseTool):
         try:
             account_id = await self._get_current_account_id()
             try:
-                from pipedream.profile_service import get_profile_service  # type: ignore
-                from pipedream.app_service import get_app_service  # type: ignore
+                from core.pipedream.profile_service import get_profile_service  # type: ignore
+                from core.pipedream.app_service import get_app_service  # type: ignore
             except Exception:
                 return self.fail_response("Pipedream services not available in this environment")
             profile_service = get_profile_service()
@@ -210,7 +210,7 @@ class PipedreamMCPTool(AgentBuilderBaseTool):
                 return self.fail_response("Pipedream profile not found for this account")
 
             try:
-                from pipedream.mcp_service import get_mcp_service, ExternalUserId, AppSlug  # type: ignore
+                from core.pipedream.mcp_service import get_mcp_service, ExternalUserId, AppSlug  # type: ignore
             except Exception:
                 return self.fail_response("Pipedream MCP service not available in this environment")
             mcp_service = get_mcp_service()
@@ -280,7 +280,7 @@ class PipedreamMCPTool(AgentBuilderBaseTool):
                 return self.fail_response("Pipedream profile not found for this account")
 
             try:
-                from pipedream.connection_token_service import get_connection_token_service, ExternalUserId, AppSlug  # type: ignore
+                from core.pipedream.connection_token_service import get_connection_token_service, ExternalUserId, AppSlug  # type: ignore
             except Exception:
                 return self.fail_response("Pipedream connection service not available in this environment")
             token_service = get_connection_token_service()
@@ -340,7 +340,7 @@ class PipedreamMCPTool(AgentBuilderBaseTool):
                 return self.fail_response("Pipedream profile not found for this account")
 
             try:
-                from pipedream.mcp_service import get_mcp_service, ExternalUserId, AppSlug  # type: ignore
+                from core.pipedream.mcp_service import get_mcp_service, ExternalUserId, AppSlug  # type: ignore
             except Exception:
                 return self.fail_response("Pipedream MCP service not available in this environment")
             mcp_service = get_mcp_service()

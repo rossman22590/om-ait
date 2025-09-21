@@ -155,11 +155,12 @@ export function ThreadLayout({
         </div>
       )}
 
-      <div
-        className={`flex flex-col flex-1 overflow-hidden transition-all duration-200 ease-in-out ${(!initialLoadCompleted || (isSidePanelOpen && !isActuallyMobile))
-          ? 'mr-[90%] sm:mr-[450px] md:mr-[500px] lg:mr-[550px] xl:mr-[650px]'
-          : ''
-          }`}
+      <div 
+        className={`flex flex-col h-full transition-all duration-200 ease-in-out ${
+          !initialLoadCompleted || (isSidePanelOpen && !isActuallyMobile)
+            ? 'mr-[90%] sm:mr-[450px] md:mr-[500px] lg:mr-[550px] xl:mr-[650px]'
+            : ''
+        }`}
       >
         <SiteHeader
           threadId={threadId}
@@ -172,7 +173,9 @@ export function ThreadLayout({
           debugMode={debugMode}
         />
 
-        {children}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {children}
+        </div>
       </div>
 
       <ToolCallSidePanel

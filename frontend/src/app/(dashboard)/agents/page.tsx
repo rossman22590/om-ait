@@ -90,18 +90,13 @@ export default function AgentsPage() {
 
   const activeTab = useMemo(() => {
     const tab = searchParams.get('tab');
-    if (tab === 'marketplace') {
-      return 'my-agents';
-    }
     return tab || 'my-agents';
   }, [searchParams]);
 
-  useEffect(() => {
-    if (searchParams.get('tab') === 'marketplace') {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set('tab', 'my-agents');
-      router.replace(`${pathname}?${params.toString()}`);
-    }
+  const handleTabChange = useCallback((newTab: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', newTab);
+    router.replace(`${pathname}?${params.toString()}`);
   }, [searchParams, pathname, router]);
 
   const agentsQueryParams: AgentsParams = useMemo(() => {
@@ -218,47 +213,6 @@ export default function AgentsPage() {
 
     return items;
   }, [marketplaceTemplates]);
-
-  const handleTabChange = (newTab: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set('tab', newTab);
-    router.replace(`${pathname}?${params.toString()}`);
-  };
-
-
-  const clearAgentsFilters = () => {
-    setAgentsSearchQuery('');
-    setAgentsFilters({
-      hasDefaultAgent: false,
-      hasMcpTools: false,
-      hasAgentpressTools: false,
-      selectedTools: []
-    });
-    setAgentsPage(1);
-  };
-
-  useEffect(() => {
-    setAgentsPage(1);
-  }, [agentsSearchQuery, agentsSortBy, agentsSortOrder, agentsFilters]);
-
-  useEffect(() => {
-    setMarketplacePage(1);
-  }, [marketplaceSearchQuery, marketplaceSelectedTags, marketplaceSortBy]);
-
-  useEffect(() => {
-    setTemplatesPage(1);
-  }, [templatesSearchQuery, templatesSortBy, templatesSortOrder]);
-
-  useEffect(() => {
-    const agentId = searchParams.get('agent');
-    if (agentId && allMarketplaceItems.length > 0) {
-      const sharedAgent = allMarketplaceItems.find(agent => agent.id === agentId);
-      if (sharedAgent) {
-        setSelectedItem(sharedAgent);
-        setShowPreviewDialog(true);
-      }
-    }
-  }, [searchParams, allMarketplaceItems]);
 
   const handleDeleteAgent = async (agentId: string) => {
     try {
@@ -549,6 +503,40 @@ export default function AgentsPage() {
     };
   };
 
+  useEffect(() => {
+    setAgentsPage(1);
+  }, [agentsSearchQuery, agentsSortBy, agentsSortOrder, agentsFilters]);
+
+  useEffect(() => {
+    setMarketplacePage(1);
+  }, [marketplaceSearchQuery, marketplaceSelectedTags, marketplaceSortBy]);
+
+  useEffect(() => {
+    setTemplatesPage(1);
+  }, [templatesSearchQuery, templatesSortBy, templatesSortOrder]);
+
+  useEffect(() => {
+    const agentId = searchParams.get('agent');
+    if (agentId && allMarketplaceItems.length > 0) {
+      const sharedAgent = allMarketplaceItems.find(agent => agent.id === agentId);
+      if (sharedAgent) {
+        setSelectedItem(sharedAgent);
+        setShowPreviewDialog(true);
+      }
+    }
+  }, [searchParams, allMarketplaceItems]);
+
+  const clearAgentsFilters = () => {
+    setAgentsSearchQuery('');
+    setAgentsFilters({
+      hasDefaultAgent: false,
+      hasMcpTools: false,
+      hasAgentpressTools: false,
+      selectedTools: []
+    });
+    setAgentsPage(1);
+  };
+
   return (
     <div className="min-h-screen">
       <div className="container mx-auto max-w-7xl px-4 py-8">
@@ -602,8 +590,6 @@ export default function AgentsPage() {
               publishingAgentId={publishingAgentId}
             />
           )}
-
-          {/* Marketplace tab is disabled
           {activeTab === "marketplace" && (
             <MarketplaceTab
               marketplaceSearchQuery={marketplaceSearchQuery}
@@ -625,7 +611,7 @@ export default function AgentsPage() {
               onMarketplacePageSizeChange={handleMarketplacePageSizeChange}
               marketplacePagination={marketplaceTemplates?.pagination}
             />
-          )} */}
+          )}
         </div>
 
         <PublishDialog

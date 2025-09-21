@@ -7,7 +7,7 @@ import { useAvailableModels } from '@/hooks/react-query/subscriptions/use-model'
 
 export const STORAGE_KEY_MODEL = 'suna-preferred-model-v3';
 export const STORAGE_KEY_CUSTOM_MODELS = 'customModels';
-export const DEFAULT_PREMIUM_MODEL_ID = 'claude-sonnet-4';
+export const DEFAULT_PREMIUM_MODEL_ID = 'google/gemini-2.5-flash';
 export const DEFAULT_FREE_MODEL_ID = 'moonshotai/kimi-k2';
 
 export const testLocalStorage = (): boolean => {
@@ -43,6 +43,18 @@ export interface CustomModel {
 }
 
 export const MODELS = {
+  'openai/codex-mini-latest': { 
+    tier: 'premium', 
+    priority: 97,
+    recommended: true,
+    lowQuality: false,
+    contextWindow: 200000,
+    pricing: {
+      input: 1.50,  // $1.50 per 1M tokens
+      output: 6.00  // $6.00 per 1M tokens
+    },
+    description: 'OpenAI Codex Mini with 200K context window. Fast and efficient for code generation and understanding.'
+  },
   'claude-sonnet-4': { 
     tier: 'none',
     priority: 100, 
@@ -83,6 +95,12 @@ export const MODELS = {
     tier: 'premium', 
     priority: 94,
     recommended: false,
+    lowQuality: false
+  },
+  'grok-4-fast': { 
+    tier: 'premium', 
+    priority: 96,  
+    recommended: true,  
     lowQuality: false
   },
   'sonnet-3.7': { 
@@ -141,10 +159,28 @@ export const canAccessModel = (
 };
 
 export const formatModelName = (name: string): string => {
+  // Special case handling for known model names
+  const modelDisplayNames: Record<string, string> = {
+    'google/gemini-2.5-flash': 'Gemini Flash 2.5',
+    'google/gemini-2.5-pro': 'Gemini 2.5 Pro',
+    'claude-sonnet-4': 'Claude Sonnet 4',
+    'grok-4': 'Grok 4',
+    'grok-4-fast': 'Grok 4 Fast',
+    'moonshotai/kimi-k2': 'Kimi K2',
+    // Add more mappings as needed
+  };
+
+  // Return the mapped name if it exists
+  if (modelDisplayNames[name]) {
+    return modelDisplayNames[name];
+  }
+
+  // Default formatting for other model names
   return name
-    .split('-')
+    .split(/[\/-]/) // Split by slash or hyphen
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+    .join(' ')
+    .replace(/\./g, ' '); // Replace dots with spaces
 };
 
 export const getPrefixedModelId = (modelId: string, isCustom: boolean): string => {
@@ -180,9 +216,9 @@ export const getCustomModels = (): CustomModel[] => {
 const saveModelPreference = (modelId: string): void => {
   try {
     localStorage.setItem(STORAGE_KEY_MODEL, modelId);
-    console.log('✅ useModelSelection: Saved model preference to localStorage:', modelId);
+    console.log(' useModelSelection: Saved model preference to localStorage:', modelId);
   } catch (error) {
-    console.warn('❌ useModelSelection: Failed to save model preference to localStorage:', error);
+    console.warn(' useModelSelection: Failed to save model preference to localStorage:', error);
   }
 };
 
@@ -222,14 +258,14 @@ export const useModelSelectionOld = () => {
       models = [
         { 
           id: DEFAULT_FREE_MODEL_ID, 
-          label: 'KIMI K2', 
+          label: formatModelName(DEFAULT_FREE_MODEL_ID), 
           requiresSubscription: false,
           priority: 100,
           recommended: true
         },
         { 
           id: DEFAULT_PREMIUM_MODEL_ID, 
-          label: 'Claude Sonnet 4', 
+          label: formatModelName(DEFAULT_PREMIUM_MODEL_ID), 
           requiresSubscription: true, 
           priority: 100,
           recommended: true
@@ -322,53 +358,53 @@ export const useModelSelectionOld = () => {
   useEffect(() => {
     if (typeof window === 'undefined' || hasInitialized) return;
     
-    console.log('🔧 useModelSelection: Initializing model selection...');
-    console.log('🔧 useModelSelection: isLoadingModels:', isLoadingModels);
-    console.log('🔧 useModelSelection: subscriptionStatus:', subscriptionStatus);
-    console.log('🔧 useModelSelection: localStorage test passed:', testLocalStorage());
+    console.log(' useModelSelection: Initializing model selection...');
+    console.log(' useModelSelection: isLoadingModels:', isLoadingModels);
+    console.log(' useModelSelection: subscriptionStatus:', subscriptionStatus);
+    console.log(' useModelSelection: localStorage test passed:', testLocalStorage());
     
     try {
       const savedModel = localStorage.getItem(STORAGE_KEY_MODEL);
-      console.log('🔧 useModelSelection: Saved model from localStorage:', savedModel);
+      console.log(' useModelSelection: Saved model from localStorage:', savedModel);
       
       // If we have a saved model, validate it's still available and accessible
       if (savedModel) {
         // Wait for models to load before validating
         if (isLoadingModels) {
-          console.log('🔧 useModelSelection: Models still loading, using saved model temporarily:', savedModel);
+          console.log(' useModelSelection: Models still loading, using saved model temporarily:', savedModel);
           // Use saved model immediately while waiting for validation
           setSelectedModel(savedModel);
           setHasInitialized(true);
           return;
         }
         
-        console.log('🔧 useModelSelection: Available MODEL_OPTIONS:', MODEL_OPTIONS.map(m => ({ id: m.id, requiresSubscription: m.requiresSubscription })));
+        console.log(' useModelSelection: Available MODEL_OPTIONS:', MODEL_OPTIONS.map(m => ({ id: m.id, requiresSubscription: m.requiresSubscription })));
         
         const modelOption = MODEL_OPTIONS.find(option => option.id === savedModel);
         const isCustomModel = isLocalMode() && customModels.some(model => model.id === savedModel);
         
-        console.log('🔧 useModelSelection: modelOption found:', modelOption);
-        console.log('🔧 useModelSelection: isCustomModel:', isCustomModel);
+        console.log(' useModelSelection: modelOption found:', modelOption);
+        console.log(' useModelSelection: isCustomModel:', isCustomModel);
         
         // Check if saved model is still valid and accessible
         if (modelOption || isCustomModel) {
           const isAccessible = isLocalMode() || 
             canAccessModel(subscriptionStatus, modelOption?.requiresSubscription ?? false);
           
-          console.log('🔧 useModelSelection: isAccessible:', isAccessible);
+          console.log(' useModelSelection: isAccessible:', isAccessible);
           
           if (isAccessible) {
-            console.log('✅ useModelSelection: Using saved model:', savedModel);
+            console.log(' useModelSelection: Using saved model:', savedModel);
             setSelectedModel(savedModel);
             setHasInitialized(true);
             return;
           } else {
-            console.warn('⚠️ useModelSelection: Saved model not accessible with current subscription');
+            console.warn(' useModelSelection: Saved model not accessible with current subscription');
           }
         } else {
           // Model not found in current options, but preserve it anyway in case it's valid
           // This can happen during loading or if the API returns different models
-          console.warn('⚠️ useModelSelection: Saved model not found in available options, but preserving:', savedModel);
+          console.warn(' useModelSelection: Saved model not found in available options, but preserving:', savedModel);
           setSelectedModel(savedModel);
           setHasInitialized(true);
           return;
@@ -377,17 +413,17 @@ export const useModelSelectionOld = () => {
       
       // Fallback to default model
       const defaultModel = subscriptionStatus === 'active' ? DEFAULT_PREMIUM_MODEL_ID : DEFAULT_FREE_MODEL_ID;
-      console.log('🔧 useModelSelection: Using default model:', defaultModel);
-      console.log('🔧 useModelSelection: Subscription status:', subscriptionStatus, '-> Default:', subscriptionStatus === 'active' ? 'PREMIUM (Claude Sonnet 4)' : 'FREE (KIMi K2)');
+      console.log(' useModelSelection: Using default model:', defaultModel);
+      console.log(' useModelSelection: Subscription status:', subscriptionStatus, '-> Default:', subscriptionStatus === 'active' ? 'PREMIUM (Gemini 2.5 Flash)' : 'FREE (KIMi K2)');
       setSelectedModel(defaultModel);
       saveModelPreference(defaultModel);
       setHasInitialized(true);
       
     } catch (error) {
-      console.warn('❌ useModelSelection: Failed to load preferences from localStorage:', error);
+      console.warn(' useModelSelection: Failed to load preferences from localStorage:', error);
       const defaultModel = subscriptionStatus === 'active' ? DEFAULT_PREMIUM_MODEL_ID : DEFAULT_FREE_MODEL_ID;
-      console.log('🔧 useModelSelection: Using fallback default model:', defaultModel);
-      console.log('🔧 useModelSelection: Subscription status:', subscriptionStatus, '-> Fallback:', subscriptionStatus === 'active' ? 'PREMIUM (Claude Sonnet 4)' : 'FREE (KIMi K2)');
+      console.log(' useModelSelection: Using fallback default model:', defaultModel);
+      console.log(' useModelSelection: Subscription status:', subscriptionStatus, '-> Fallback:', subscriptionStatus === 'active' ? 'PREMIUM (Gemini 2.5 Flash)' : 'FREE (KIMi K2)');
       setSelectedModel(defaultModel);
       saveModelPreference(defaultModel);
       setHasInitialized(true);
@@ -401,23 +437,23 @@ export const useModelSelectionOld = () => {
     const savedModel = localStorage.getItem(STORAGE_KEY_MODEL);
     if (!savedModel || savedModel === selectedModel) return;
     
-    console.log('🔧 useModelSelection: Re-validating saved model after loading:', savedModel);
+    console.log(' useModelSelection: Re-validating saved model after loading:', savedModel);
     
     const modelOption = MODEL_OPTIONS.find(option => option.id === savedModel);
     const isCustomModel = isLocalMode() && customModels.some(model => model.id === savedModel);
     
     // If the saved model is now invalid, switch to default
     if (!modelOption && !isCustomModel) {
-      console.warn('⚠️ useModelSelection: Saved model is invalid after loading, switching to default');
-      const defaultModel = subscriptionStatus === 'active' ? DEFAULT_PREMIUM_MODEL_ID : DEFAULT_FREE_MODEL_ID;
+      console.warn(' useModelSelection: Saved model is invalid after loading, switching to default');
+      const defaultModel = isLocalMode() ? DEFAULT_PREMIUM_MODEL_ID : DEFAULT_FREE_MODEL_ID;
       setSelectedModel(defaultModel);
       saveModelPreference(defaultModel);
     } else if (modelOption && !isLocalMode()) {
       // Check subscription access for non-custom models
       const isAccessible = canAccessModel(subscriptionStatus, modelOption.requiresSubscription);
       if (!isAccessible) {
-        console.warn('⚠️ useModelSelection: Saved model not accessible after subscription check, switching to default');
-        const defaultModel = subscriptionStatus === 'active' ? DEFAULT_PREMIUM_MODEL_ID : DEFAULT_FREE_MODEL_ID;
+        console.warn(' useModelSelection: Saved model not accessible after subscription check, switching to default');
+        const defaultModel = isLocalMode() ? DEFAULT_PREMIUM_MODEL_ID : DEFAULT_FREE_MODEL_ID;
         setSelectedModel(defaultModel);
         saveModelPreference(defaultModel);
       }
@@ -428,9 +464,9 @@ export const useModelSelectionOld = () => {
   useEffect(() => {
     if (!hasInitialized || typeof window === 'undefined') return;
     
-    console.log('🔧 useModelSelection: Subscription status changed, re-validating current model...');
-    console.log('🔧 useModelSelection: Current selected model:', selectedModel);
-    console.log('🔧 useModelSelection: New subscription status:', subscriptionStatus);
+    console.log(' useModelSelection: Subscription status changed, re-validating current model...');
+    console.log(' useModelSelection: Current selected model:', selectedModel);
+    console.log(' useModelSelection: New subscription status:', subscriptionStatus);
     
     // Skip validation if models are still loading
     if (isLoadingModels) return;
@@ -443,21 +479,21 @@ export const useModelSelectionOld = () => {
       const isAccessible = canAccessModel(subscriptionStatus, modelOption.requiresSubscription);
       
       if (!isAccessible) {
-        console.warn('⚠️ useModelSelection: Current model no longer accessible, switching to default');
+        console.warn(' useModelSelection: Current model no longer accessible, switching to default');
         const defaultModel = subscriptionStatus === 'active' ? DEFAULT_PREMIUM_MODEL_ID : DEFAULT_FREE_MODEL_ID;
-        console.log('🔧 useModelSelection: Subscription-based default switch:', subscriptionStatus === 'active' ? 'PREMIUM (Claude Sonnet 4)' : 'FREE (KIMi K2)');
+        console.log(' useModelSelection: Subscription-based default switch:', subscriptionStatus === 'active' ? 'PREMIUM (Gemini 2.5 Flash)' : 'FREE (KIMi K2)');
         setSelectedModel(defaultModel);
         saveModelPreference(defaultModel);
       } else {
-        console.log('✅ useModelSelection: Current model still accessible');
+        console.log(' useModelSelection: Current model still accessible');
       }
     }
   }, [subscriptionStatus, selectedModel, hasInitialized, isLoadingModels]);
 
   // Handle model selection change
   const handleModelChange = (modelId: string) => {
-    console.log('🔧 useModelSelection: handleModelChange called with:', modelId);
-    console.log('🔧 useModelSelection: Available MODEL_OPTIONS:', MODEL_OPTIONS.map(m => m.id));
+    console.log(' useModelSelection: handleModelChange called with:', modelId);
+    console.log(' useModelSelection: Available MODEL_OPTIONS:', MODEL_OPTIONS.map(m => m.id));
     
     // Refresh custom models from localStorage to ensure we have the latest
     if (isLocalMode()) {
@@ -470,16 +506,16 @@ export const useModelSelectionOld = () => {
     // Then check if it's in standard MODEL_OPTIONS
     const modelOption = MODEL_OPTIONS.find(option => option.id === modelId);
     
-    console.log('🔧 useModelSelection: modelOption found:', modelOption);
-    console.log('🔧 useModelSelection: isCustomModel:', isCustomModel);
+    console.log(' useModelSelection: modelOption found:', modelOption);
+    console.log(' useModelSelection: isCustomModel:', isCustomModel);
     
     // Check if model exists in either custom models or standard options
     if (!modelOption && !isCustomModel) {
-      console.warn('🔧 useModelSelection: Model not found in options:', modelId, MODEL_OPTIONS, isCustomModel, customModels);
+      console.warn(' useModelSelection: Model not found in options:', modelId, MODEL_OPTIONS, isCustomModel, customModels);
       
       // Reset to default model when the selected model is not found
       const defaultModel = isLocalMode() ? DEFAULT_PREMIUM_MODEL_ID : DEFAULT_FREE_MODEL_ID;
-      console.log('🔧 useModelSelection: Resetting to default model:', defaultModel);
+      console.log(' useModelSelection: Resetting to default model:', defaultModel);
       setSelectedModel(defaultModel);
       saveModelPreference(defaultModel);
       return;
@@ -488,14 +524,14 @@ export const useModelSelectionOld = () => {
     // Check access permissions (except for custom models in local mode)
     if (!isCustomModel && !isLocalMode() && 
         !canAccessModel(subscriptionStatus, modelOption?.requiresSubscription ?? false)) {
-      console.warn('🔧 useModelSelection: Model not accessible:', modelId);
+      console.warn(' useModelSelection: Model not accessible:', modelId);
       return;
     }
     
-    console.log('✅ useModelSelection: Setting model to:', modelId);
+    console.log(' useModelSelection: Setting model to:', modelId);
     setSelectedModel(modelId);
     saveModelPreference(modelId);
-    console.log('✅ useModelSelection: Model change completed successfully');
+    console.log(' useModelSelection: Model change completed successfully');
   };
 
   // Get the actual model ID to send to the backend
@@ -525,14 +561,14 @@ export const useModelSelectionOld = () => {
     },
     // Debug utility to check current state
     debugState: () => {
-      console.log('🔧 useModelSelection Debug State:');
+      console.log(' useModelSelection Debug State:');
       console.log('  selectedModel:', selectedModel);
       console.log('  hasInitialized:', hasInitialized);
       console.log('  subscriptionStatus:', subscriptionStatus);
       console.log('  isLoadingModels:', isLoadingModels);
       console.log('  localStorage value:', localStorage.getItem(STORAGE_KEY_MODEL));
       console.log('  localStorage test passes:', testLocalStorage());
-      console.log('  defaultModel would be:', subscriptionStatus === 'active' ? `${DEFAULT_PREMIUM_MODEL_ID} (Claude Sonnet 4)` : `${DEFAULT_FREE_MODEL_ID} (KIMi K2)`);
+      console.log('  defaultModel would be:', subscriptionStatus === 'active' ? `${DEFAULT_PREMIUM_MODEL_ID} (Gemini 2.5 Flash)` : `${DEFAULT_FREE_MODEL_ID} (KIMi K2)`);
       console.log('  availableModels:', availableModels.map(m => ({ id: m.id, requiresSubscription: m.requiresSubscription })));
     }
   };

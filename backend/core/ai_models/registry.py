@@ -194,6 +194,34 @@ class ModelRegistry:
             enabled=True
         ))
         
+        # xAI - Grok 4 Fast (Reasoning)
+        self.register(Model(
+            id="xai/grok-4-fast-reasoning",
+            name="Grok 4 Fast",
+            provider=ModelProvider.XAI,
+            aliases=[
+                "grok-4-fast-reasoning",
+                "grok-4-fast",
+                "x-ai/grok-4-fast-reasoning",
+                "openrouter/x-ai/grok-4-fast-reasoning",
+                "Grok 4 Fast"
+            ],
+            context_window=2_000_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.STRUCTURED_OUTPUT,
+                ModelCapability.THINKING,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=0.20,
+                output_cost_per_million_tokens=0.50
+            ),
+            tier_availability=["paid"],
+            priority=95,
+            enabled=True
+        ))
+        
         self.register(Model(
             id="openrouter/moonshotai/kimi-k2",
             name="Kimi K2",
@@ -212,6 +240,49 @@ class ModelRegistry:
             priority=100,
             enabled=True
         ))
+
+        # OpenAI Codex Mini (via OpenRouter)
+        self.register(Model(
+            id="openrouter/openai/codex-mini",
+            name="Codex Mini",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["codex-mini", "Codex Mini", "openai/codex-mini"],
+            context_window=128_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.CODE_INTERPRETER,
+                ModelCapability.STRUCTURED_OUTPUT,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=1.50,
+                output_cost_per_million_tokens=6.00
+            ),
+            tier_availability=["paid"],
+            priority=95,
+            enabled=True
+        ))
+
+        # Add OpenAI Codex Mini model configuration through OpenRouter
+        # self.register(Model(
+        #     id="openrouter/openai/codex-mini-latest",
+        #     name="OpenAI Codex Mini",
+        #     provider=ModelProvider.OPENROUTER,
+        #     aliases=["codex-mini", "openai/codex-mini", "OpenAI Codex Mini"],
+        #     context_window=200_000,
+        #     capabilities=[
+        #         ModelCapability.CHAT,
+        #         ModelCapability.FUNCTION_CALLING,
+        #     ],
+        #     pricing=ModelPricing(
+        #         input_cost_per_million_tokens=1.50,
+        #         output_cost_per_million_tokens=6.00
+        #     ),
+        #     tier_availability=["paid"],
+        #     priority=97,
+        #     recommended=True,
+        #     enabled=True
+        # ))
 
         """
         # DeepSeek Models

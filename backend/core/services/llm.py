@@ -104,6 +104,7 @@ def get_openrouter_fallback(model_name: str) -> Optional[str]:
         "anthropic/claude-3-7-sonnet-latest": "openrouter/anthropic/claude-3.7-sonnet",
         "anthropic/claude-sonnet-4-20250514": "openrouter/anthropic/claude-sonnet-4",
         "xai/grok-4": "openrouter/x-ai/grok-4",
+        "xai/grok-4-fast-reasoning": "openrouter/x-ai/grok-4-fast-reasoning",
         "gemini/gemini-2.5-pro": "openrouter/google/gemini-2.5-pro",
         "gemini/gemini-2.5-flash": "openrouter/google/gemini-2.5-flash",
     }
@@ -120,6 +121,8 @@ def get_openrouter_fallback(model_name: str) -> Optional[str]:
     # Default fallbacks by provider
     if "claude" in model_name.lower() or "anthropic" in model_name.lower():
         return "openrouter/anthropic/claude-sonnet-4"
+    elif "grok-4-fast" in model_name.lower() or "grok4-fast" in model_name.lower():
+        return "openrouter/x-ai/grok-4-fast-reasoning"
     elif "xai" in model_name.lower() or "grok" in model_name.lower():
         return "openrouter/x-ai/grok-4"
     
@@ -231,6 +234,38 @@ def _configure_thinking(params: Dict[str, Any], model_name: str, enable_thinking
         params["reasoning_effort"] = effort_level
         logger.info(f"xAI thinking enabled with reasoning_effort='{effort_level}'")
 
+def _configure_openai_codex_mini(params: Dict[str, Any], model_name: str) -> None:
+    """Configure OpenAI Codex Mini specific parameters."""
+    if "codex-mini" in model_name.lower():
+        # Set default temperature if not provided
+        if 'temperature' not in params or params['temperature'] is None:
+            params['temperature'] = 0.7
+        
+        # Set max tokens to fit within context window
+        if 'max_tokens' not in params or params['max_tokens'] is None:
+            params['max_tokens'] = 200000  # Full context window
+        
+        # Ensure proper model name format
+        if not model_name.startswith('openai/'):
+            model_name = f'openai/{model_name}'
+        
+        # Set model-specific parameters
+        params['model'] = model_name
+        
+        # Add usage tracking metadata
+        if 'metadata' not in params:
+            params['metadata'] = {}
+        params['metadata'].update({
+            'model_type': 'codex-mini',
+            'context_window': 200000,
+            'pricing': {
+                'input_price_per_token': 0.000001875,  # $1.50 per 1M tokens
+                'output_price_per_token': 0.0000075,   # $6.00 per 1M tokens
+                'input_price_per_1k': 0.001875,       # $1.50 per 1M tokens
+                'output_price_per_1k': 0.0075         # $6.00 per 1M tokens
+            }
+        })
+
 def _add_fallback_model(params: Dict[str, Any], model_name: str, messages: List[Dict[str, Any]]) -> None:
     """Add fallback model to the parameters."""
     fallback_model = get_openrouter_fallback(model_name)
@@ -275,18 +310,25 @@ def prepare_params(
     params = {
         "model": resolved_model_name,
         "messages": messages,
-        "temperature": temperature,
-        "response_format": response_format,
-        "top_p": top_p,
         "stream": stream,
-        "num_retries": MAX_RETRIES,
     }
 
-    if api_key:
+    if temperature is not None:
+        params["temperature"] = temperature
+    if max_tokens is not None:
+        params["max_tokens"] = max_tokens
+    if response_format is not None:
+        params["response_format"] = response_format
+    if tools is not None:
+        params["tools"] = tools
+        params["tool_choice"] = tool_choice
+    if api_key is not None:
         params["api_key"] = api_key
-    if api_base:
+    if api_base is not None:
         params["api_base"] = api_base
-    if model_id:
+    if top_p is not None:
+        params["top_p"] = top_p
+    if model_id is not None:
         params["model_id"] = model_id
 
     if model_name.startswith("openai-compatible/"):
@@ -311,13 +353,21 @@ def prepare_params(
     # Add Bedrock-specific parameters
     _configure_bedrock(params, resolved_model_name, model_id)
     
-    _add_fallback_model(params, resolved_model_name, messages)
-    # Add OpenAI GPT-5 specific parameters
-    _configure_openai_gpt5(params, resolved_model_name)
-    # Add Kimi K2-specific parameters
-    _configure_kimi_k2(params, resolved_model_name)
+    # Configure model-specific parameters
+    model_lower = resolved_model_name.lower()
+    if 'codex-mini' in model_lower:
+        _configure_openai_codex_mini(params, resolved_model_name)
+    elif 'gpt-5' in model_lower:
+        _configure_openai_gpt5(params, resolved_model_name)
+    elif 'kimi-k2' in model_lower:
+        _configure_kimi_k2(params, resolved_model_name)
+    
+    # Configure thinking/chain-of-thought if enabled
     _configure_thinking(params, resolved_model_name, enable_thinking, reasoning_effort)
-
+    
+    # Add fallback model if needed
+    _add_fallback_model(params, resolved_model_name, messages)
+    
     return params
 
 async def make_llm_api_call(
