@@ -55,14 +55,28 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
       messageCount
     });
     
-    if (!usageLogsData?.logs) {
+    if (!usageLogsData?.usage_logs) {
       console.log(`[UsageDisplay] No usage logs data available`);
       // Still continue to check messages for fallback
     }
     
-    // Filter logs for the current thread
-    const threadLogs = usageLogsData?.logs?.filter(
-      log => log.thread_id === threadId
+    // In billing-v2, we may not have thread_id in the logs
+    // Instead, we'll use the reference_type field if it contains the thread ID
+    // or we'll show all logs if we can't filter by thread
+    const threadLogs = usageLogsData?.usage_logs?.filter(
+      log => {
+        // If we can't filter by thread, show all logs
+        if (!log.reference_type) return true;
+        
+        // If reference_type is in format 'thread:thread-id', check if it matches
+        if (log.reference_type.startsWith('thread:')) {
+          const logThreadId = log.reference_type.split(':')[1];
+          return logThreadId === threadId;
+        }
+        
+        // Fallback: if reference_type is the thread ID itself
+        return log.reference_type === threadId;
+      }
     ) || [];
     
     // Debug: Log what we found
@@ -73,27 +87,12 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
     let totalCost = 0;
     
     threadLogs.forEach(log => {
-      // Calculate tokens
-      const tokens = log.total_tokens || 0;
-      totalSeconds += tokens / 4000 * 60;
-      
-      // Handle estimated_cost (can be number or string)
-      let cost = 0;
-      if (typeof log.estimated_cost === 'number') {
-        cost = log.estimated_cost;
-      } else if (typeof log.estimated_cost === 'string') {
-        cost = parseFloat(log.estimated_cost) || 0;
-      }
-      
-      // Also try credit_used field as fallback
-      if (cost === 0 && log.credit_used) {
-        cost = typeof log.credit_used === 'number' ? log.credit_used : parseFloat(log.credit_used) || 0;
-      }
-      
-      totalCost += cost;
+      // For billing-v2, we use the 'amount' field instead of calculating from tokens
+      const amount = log.amount || 0;
+      totalCost += amount;
       
       // Debug individual log
-      console.log(`[UsageDisplay] Log ${log.message_id}: tokens=${tokens}, estimated_cost=${log.estimated_cost}, credit_used=${log.credit_used}, calculated_cost=${cost}`);
+      console.log(`[UsageDisplay] Log ${log.timestamp}: amount=${amount}, balance_after=${log.balance_after}`);
     });
     
     console.log(`[UsageDisplay] Thread ${threadId} total cost from logs: ${totalCost}`);
@@ -105,7 +104,7 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
     if (totalCost === 0 && actualMessageCount > 0) {
       // Rough estimate: $0.01-0.05 per message depending on length
       // Assistant messages typically cost more than user messages
-      const assistantMessages = messagesData?.filter(m => m.role === 'assistant')?.length || Math.ceil(actualMessageCount / 2);
+      const assistantMessages = messagesData?.filter((m: any) => m.role === 'assistant')?.length || Math.ceil(actualMessageCount / 2);
       const estimatedCost = assistantMessages * 0.025; // $0.025 per assistant message average
       console.log(`[UsageDisplay] Using fallback estimation: ${assistantMessages} assistant messages from ${actualMessageCount} total = $${estimatedCost}`);
       totalCost = estimatedCost;

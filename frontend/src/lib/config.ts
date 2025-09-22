@@ -205,5 +205,11 @@ export const isPlanChangeAllowed = (currentPriceId: string, newPriceId: string):
   return { allowed: true };
 };
 
+// Add this function (but keep it simple since you don't use annual plans)
+export const isYearlyCommitmentDowngrade = (currentPriceId: string, newPriceId: string): boolean => {
+  // Always return false since you don't use annual plans
+  return false;
+};
+
 // Export subscription tier type for typing elsewhere
 export type SubscriptionTier = keyof typeof PROD_TIERS;
