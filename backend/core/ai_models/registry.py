@@ -16,7 +16,7 @@ class ModelRegistry:
             name="Claude Sonnet 4",
             provider=ModelProvider.ANTHROPIC,
             aliases=["claude-sonnet-4", "anthropic/claude-sonnet-4", "Claude Sonnet 4", "claude-sonnet-4-20250514"],
-            context_window=200_000,
+            context_window=1_000_000,
             capabilities=[
                 ModelCapability.CHAT,
                 ModelCapability.FUNCTION_CALLING,
@@ -35,9 +35,9 @@ class ModelRegistry:
         
         self.register(Model(
             id="anthropic/claude-3-7-sonnet-latest",
-            name="Claude 3.7 Sonnet",
+            name="Claude Sonnet 3.7",
             provider=ModelProvider.ANTHROPIC,
-            aliases=["sonnet-3.7", "claude-3.7", "Claude 3.7 Sonnet", "claude-3-7-sonnet-latest"],
+            aliases=["sonnet-3.7", "claude-3.7", "Claude 3.7 Sonnet", "claude-3-7-sonnet-latest", "Claude 3.7 Sonnet"],
             context_window=200_000,
             capabilities=[
                 ModelCapability.CHAT,
@@ -49,29 +49,48 @@ class ModelRegistry:
                 output_cost_per_million_tokens=15.00
             ),
             tier_availability=["paid"],
-            priority=93,
+            priority=99,
             enabled=True
         ))
-        
+
         self.register(Model(
-            id="anthropic/claude-3-5-sonnet-latest",
-            name="Claude 3.5 Sonnet",
-            provider=ModelProvider.ANTHROPIC,
-            aliases=["sonnet-3.5", "claude-3.5", "Claude 3.5 Sonnet", "claude-3-5-sonnet-latest"],
-            context_window=200_000,
+            id="xai/grok-4-fast-non-reasoning",
+            name="Grok 4 Fast",
+            provider=ModelProvider.XAI,
+            aliases=["grok-4-fast-non-reasoning", "x-ai/grok-4-fast-non-reasoning", "openrouter/x-ai/grok-4-fast-non-reasoning", "Grok 4 Fast"],
+            context_window=2_000_000,
             capabilities=[
                 ModelCapability.CHAT,
                 ModelCapability.FUNCTION_CALLING,
-                ModelCapability.VISION,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=3.00,
-                output_cost_per_million_tokens=15.00
+                input_cost_per_million_tokens=0.20,
+                output_cost_per_million_tokens=0.50
             ),
             tier_availability=["paid"],
-            priority=90,
+            priority=98,
             enabled=True
-        ))
+        ))        
+        
+        # self.register(Model(
+        #     id="anthropic/claude-3-5-sonnet-latest",
+        #     name="Claude 3.5 Sonnet",
+        #     provider=ModelProvider.ANTHROPIC,
+        #     aliases=["sonnet-3.5", "claude-3.5", "Claude 3.5 Sonnet", "claude-3-5-sonnet-latest"],
+        #     context_window=200_000,
+        #     capabilities=[
+        #         ModelCapability.CHAT,
+        #         ModelCapability.FUNCTION_CALLING,
+        #         ModelCapability.VISION,
+        #     ],
+        #     pricing=ModelPricing(
+        #         input_cost_per_million_tokens=3.00,
+        #         output_cost_per_million_tokens=15.00
+        #     ),
+        #     tier_availability=["paid"],
+        #     priority=90,
+        #     enabled=True
+        # ))
         
         self.register(Model(
             id="openai/gpt-5",
@@ -90,7 +109,7 @@ class ModelRegistry:
                 output_cost_per_million_tokens=10.00
             ),
             tier_availability=["paid"],
-            priority=99,
+            priority=97,
             enabled=True
         ))
         
@@ -110,32 +129,12 @@ class ModelRegistry:
                 output_cost_per_million_tokens=2.00
             ),
             tier_availability=["free", "paid"],
-            priority=85,
+            priority=96,
             enabled=True
         ))
         
         self.register(Model(
-            id="openai/gpt-4o-mini",
-            name="GPT-4o Mini",
-            provider=ModelProvider.OPENAI,
-            aliases=["gpt-4o-mini", "GPT-4o Mini", "gpt-4o-mini-2024-07-18"],
-            context_window=128_000,
-            capabilities=[
-                ModelCapability.CHAT,
-                ModelCapability.FUNCTION_CALLING,
-                ModelCapability.VISION,
-            ],
-            pricing=ModelPricing(
-                input_cost_per_million_tokens=0.15,
-                output_cost_per_million_tokens=0.60
-            ),
-            tier_availability=["free", "paid"],
-            priority=80,
-            enabled=True
-        ))
-        
-        self.register(Model(
-            id="openrouter/google/gemini-2.5-pro",
+            id="gemini/gemini-2.5-pro",
             name="Gemini 2.5 Pro",
             provider=ModelProvider.OPENROUTER,
             aliases=["google/gemini-2.5-pro", "gemini-2.5-pro", "Gemini 2.5 Pro"],
@@ -151,76 +150,10 @@ class ModelRegistry:
                 output_cost_per_million_tokens=10.00
             ),
             tier_availability=["paid"],
-            priority=96,
-            enabled=True
-        ))
-        
-        self.register(Model(
-            id="openrouter/google/gemini-2.5-flash",
-            name="Gemini 2.5 Flash",
-            provider=ModelProvider.OPENROUTER,
-            aliases=["google/gemini-2.5-flash", "gemini-2.5-flash", "Gemini 2.5 Flash"],
-            context_window=1_000_000,
-            capabilities=[
-                ModelCapability.CHAT,
-                ModelCapability.FUNCTION_CALLING,
-                ModelCapability.VISION,
-            ],
-            pricing=ModelPricing(
-                input_cost_per_million_tokens=0.75,
-                output_cost_per_million_tokens=5.00
-            ),
-            tier_availability=["paid"],
             priority=95,
             enabled=True
         ))
         
-        self.register(Model(
-            id="xai/grok-4",
-            name="Grok 4",
-            provider=ModelProvider.XAI,
-            aliases=["grok-4", "x-ai/grok-4", "openrouter/x-ai/grok-4", "Grok 4"],
-            context_window=128_000,
-            capabilities=[
-                ModelCapability.CHAT,
-                ModelCapability.FUNCTION_CALLING,
-            ],
-            pricing=ModelPricing(
-                input_cost_per_million_tokens=5.00,
-                output_cost_per_million_tokens=15.00
-            ),
-            tier_availability=["paid"],
-            priority=94,
-            enabled=True
-        ))
-        
-        # xAI - Grok 4 Fast (Reasoning)
-        self.register(Model(
-            id="xai/grok-4-fast-reasoning",
-            name="Grok 4 Fast",
-            provider=ModelProvider.XAI,
-            aliases=[
-                "grok-4-fast-reasoning",
-                "grok-4-fast",
-                "x-ai/grok-4-fast-reasoning",
-                "openrouter/x-ai/grok-4-fast-reasoning",
-                "Grok 4 Fast"
-            ],
-            context_window=2_000_000,
-            capabilities=[
-                ModelCapability.CHAT,
-                ModelCapability.FUNCTION_CALLING,
-                ModelCapability.STRUCTURED_OUTPUT,
-                ModelCapability.THINKING,
-            ],
-            pricing=ModelPricing(
-                input_cost_per_million_tokens=0.20,
-                output_cost_per_million_tokens=0.50
-            ),
-            tier_availability=["paid"],
-            priority=95,
-            enabled=True
-        ))
         
         self.register(Model(
             id="openrouter/moonshotai/kimi-k2",
@@ -237,52 +170,9 @@ class ModelRegistry:
                 output_cost_per_million_tokens=3.00
             ),
             tier_availability=["free", "paid"],
-            priority=100,
+            priority=94,
             enabled=True
         ))
-
-        # OpenAI Codex Mini (via OpenRouter)
-        self.register(Model(
-            id="openrouter/openai/codex-mini",
-            name="Codex Mini",
-            provider=ModelProvider.OPENROUTER,
-            aliases=["codex-mini", "Codex Mini", "openai/codex-mini"],
-            context_window=128_000,
-            capabilities=[
-                ModelCapability.CHAT,
-                ModelCapability.FUNCTION_CALLING,
-                ModelCapability.CODE_INTERPRETER,
-                ModelCapability.STRUCTURED_OUTPUT,
-            ],
-            pricing=ModelPricing(
-                input_cost_per_million_tokens=1.50,
-                output_cost_per_million_tokens=6.00
-            ),
-            tier_availability=["paid"],
-            priority=95,
-            enabled=True
-        ))
-
-        # Add OpenAI Codex Mini model configuration through OpenRouter
-        # self.register(Model(
-        #     id="openrouter/openai/codex-mini-latest",
-        #     name="OpenAI Codex Mini",
-        #     provider=ModelProvider.OPENROUTER,
-        #     aliases=["codex-mini", "openai/codex-mini", "OpenAI Codex Mini"],
-        #     context_window=200_000,
-        #     capabilities=[
-        #         ModelCapability.CHAT,
-        #         ModelCapability.FUNCTION_CALLING,
-        #     ],
-        #     pricing=ModelPricing(
-        #         input_cost_per_million_tokens=1.50,
-        #         output_cost_per_million_tokens=6.00
-        #     ),
-        #     tier_availability=["paid"],
-        #     priority=97,
-        #     recommended=True,
-        #     enabled=True
-        # ))
 
         """
         # DeepSeek Models

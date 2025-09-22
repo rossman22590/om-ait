@@ -246,6 +246,7 @@ export function AgentHeader({
       currentIconColor={displayData.icon_color}
       currentBackgroundColor={displayData.icon_background}
       agentName={displayData.name}
+      agentDescription={displayData.description}
       onImageUpdate={handleImageUpdate}
       onIconUpdate={handleIconUpdate}
     />

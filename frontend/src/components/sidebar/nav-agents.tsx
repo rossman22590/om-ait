@@ -668,7 +668,7 @@ export function NavAgents() {
             ) : (
               <SidebarMenuItem>
                 <SidebarMenuButton className="text-sidebar-foreground/70">
-                  <span>{searchQuery ? 'No results found' : 'No tasks yet'}</span>
+                  <span>No triggers yet</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}

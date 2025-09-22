@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Bot, Plug,Menu, Plus, Zap, ChevronRight, Puzzle, CodeSquare, StopCircle, Loader2, HelpCircle } from 'lucide-react';
+import { Bot, Plug,Menu, Plus, Zap, ChevronRight, BookOpen, Puzzle, CodeSquare, StopCircle, Loader2, HelpCircle } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
@@ -116,7 +116,7 @@ export function SidebarLeft({
           .eq('user_id', data.user.id)
           .in('role', ['admin', 'super_admin']);
         const isAdmin = roleData && roleData.length > 0;
-        
+
         setUser({
           name:
             data.user.user_metadata?.name ||
@@ -135,7 +135,7 @@ export function SidebarLeft({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (isDocumentModalOpen) return;
-      
+
       if ((event.metaKey || event.ctrlKey) && event.key === 'b') {
         event.preventDefault();
         setOpen(!state.startsWith('expanded'));
@@ -223,10 +223,10 @@ export function SidebarLeft({
         </div>
         <SidebarGroup>
           <Link href="/dashboard">
-            <SidebarMenuButton 
+            <SidebarMenuButton
               className={cn('touch-manipulation', {
                 'bg-accent text-accent-foreground font-medium': pathname === '/dashboard',
-              }, 'cursor-pointer')} 
+              }, 'cursor-pointer')}
               onClick={() => {
                 posthog.capture('new_task_clicked');
                 if (isMobile) setOpenMobile(false);
@@ -238,18 +238,33 @@ export function SidebarLeft({
               </span>
             </SidebarMenuButton>
           </Link>
-          <Link href="/tasks">
-            <SidebarMenuButton 
+          <Link href="/triggers">
+            <SidebarMenuButton
               className={cn('touch-manipulation mt-1', {
-                'bg-accent text-accent-foreground font-medium': pathname === '/tasks',
-              })} 
+                'bg-accent text-accent-foreground font-medium': pathname === '/triggers',
+              })}
               onClick={() => {
                 if (isMobile) setOpenMobile(false);
               }}
             >
               <Zap className="h-4 w-4 mr-1" />
               <span className="flex items-center justify-between w-full">
-                Tasks
+                Triggers
+              </span>
+            </SidebarMenuButton>
+          </Link>
+          <Link href="/knowledge">
+            <SidebarMenuButton
+              className={cn('touch-manipulation mt-1', {
+                'bg-accent text-accent-foreground font-medium': pathname === '/knowledge',
+              })}
+              onClick={() => {
+                if (isMobile) setOpenMobile(false);
+              }}
+            >
+              <BookOpen className="h-4 w-4 mr-1" />
+              <span className="flex items-center justify-between w-full">
+                Knowledge Base
               </span>
             </SidebarMenuButton>
           </Link>
@@ -296,7 +311,7 @@ export function SidebarLeft({
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                       <SidebarMenuSubItem data-tour="new-agent">
-                        <SidebarMenuSubButton 
+                        <SidebarMenuSubButton
                           onClick={() => {
                             setShowNewAgentDialog(true);
                             if (isMobile) setOpenMobile(false);
@@ -413,8 +428,8 @@ export function SidebarLeft({
         <NavUserWithTeams user={user} />
       </SidebarFooter>
       <SidebarRail />
-      <NewAgentDialog 
-        open={showNewAgentDialog} 
+      <NewAgentDialog
+        open={showNewAgentDialog}
         onOpenChange={setShowNewAgentDialog}
       />
     </Sidebar>

@@ -298,8 +298,8 @@ class Configuration:
     FRONTEND_URL: str = "http://localhost:3000"  # Default for local development
     
     # Sandbox configuration
-    SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3.16"
-    SANDBOX_SNAPSHOT_NAME = "kortix/suna:0.1.3.16"
+    SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3.19"
+    SANDBOX_SNAPSHOT_NAME = "kortix/suna:0.1.3.19"
     SANDBOX_ENTRYPOINT = "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
 
     # LangFuse configuration

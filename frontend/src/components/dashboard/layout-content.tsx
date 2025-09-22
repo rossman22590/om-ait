@@ -27,9 +27,9 @@ interface DashboardLayoutContentProps {
 export default function DashboardLayoutContent({
   children,
 }: DashboardLayoutContentProps) {
-  const { data: accounts } = useAccounts();
-  const personalAccount = accounts?.find((account) => account.personal_account);
   const { user, isLoading } = useAuth();
+  const { data: accounts } = useAccounts({ enabled: !!user });
+  const personalAccount = accounts?.find((account) => account.personal_account);
   const router = useRouter();
   const isMobile = useIsMobile();
   const { data: maintenanceNotice, isLoading: maintenanceLoading } = useMaintenanceNoticeQuery();
