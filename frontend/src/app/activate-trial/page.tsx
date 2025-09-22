@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { PlanMigrationBanner } from '@/components/dashboard/plan-migration-banner';
 import { Sparkles, CreditCard, Zap, Shield, ArrowRight, CheckCircle, Loader2, Clock, XCircle, LogOut, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -103,15 +104,18 @@ export default function ActivateTrialPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/20">
+      <div className="flex min-h-screen w-full flex-col items-center bg-background p-4 md:p-8">
+        <PlanMigrationBanner />
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex items-center justify-center p-4">
-      <div className="absolute top-4 right-4">
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex flex-col">
+      <PlanMigrationBanner />
+      <div className="flex-1 flex items-center justify-center p-4">
+        <div className="absolute top-4 right-4">
         <Button
           variant="outline"
           size="sm"
@@ -217,16 +221,17 @@ export default function ActivateTrialPage() {
           </div>
           <div className="text-center text-sm text-muted-foreground">
             By starting your trial, you agree to our{' '}
-            <Link href="/legal?tab=terms" className="underline hover:text-primary">
+            <Link href="https://account.myapps.ai/terms" className="underline hover:text-primary">
               Terms of Service
             </Link>{' '}
             and{' '}
-            <Link href="/legal?tab=privacy" className="underline hover:text-primary">
+            <Link href="https://account.myapps.ai/terms" className="underline hover:text-primary">
               Privacy Policy
             </Link>
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 } 
