@@ -222,3 +222,5 @@ apps/mobile/*.pem
 apps/mobile/.env
 apps/mobile/.env*.local
 apps/mobile/app-example
+/backend/supabase/fix-subs
+/backend/supabase/debug

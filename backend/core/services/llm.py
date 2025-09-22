@@ -233,6 +233,9 @@ def prepare_params(
     params = {
         "model": resolved_model_name,
         "messages": messages,
+        "temperature": temperature,
+        "response_format": response_format,
+        "top_p": top_p,
         "stream": stream,
         "num_retries": MAX_RETRIES,
     }
@@ -244,11 +247,9 @@ def prepare_params(
 
     if api_key:
         params["api_key"] = api_key
-    if api_base is not None:
+    if api_base:
         params["api_base"] = api_base
-    if top_p is not None:
-        params["top_p"] = top_p
-    if model_id is not None:
+    if model_id:
         params["model_id"] = model_id
 
     if model_name.startswith("openai-compatible/"):
@@ -278,10 +279,7 @@ def prepare_params(
     # Add Kimi K2-specific parameters
     _configure_kimi_k2(params, resolved_model_name)
     _configure_thinking(params, resolved_model_name, enable_thinking, reasoning_effort)
-    
-    # Add fallback model if needed
-    _add_fallback_model(params, resolved_model_name, messages)
-    
+
     return params
 
 async def make_llm_api_call(

@@ -17,6 +17,8 @@ export const billingKeys = {
     [...billingKeys.all, 'transactions', { limit, offset }] as const,
   usageHistory: (days?: number) => 
     [...billingKeys.all, 'usage-history', { days }] as const,
+  usageLogs: (page?: number, itemsPerPage?: number) => 
+    [...billingKeys.all, 'usage-logs', { page, itemsPerPage }] as const,
 };
 
 export const useSubscription = (enabled = true) => {
@@ -58,6 +60,14 @@ export const useUsageHistory = (days = 30) => {
     queryKey: billingKeys.usageHistory(days),
     queryFn: () => billingApiV2.getUsageHistory(days),
     staleTime: 1000 * 60 * 10,
+  });
+};
+
+export const useUsageLogs = (page = 0, itemsPerPage = 1000) => {
+  return useQuery({
+    queryKey: billingKeys.usageLogs(page, itemsPerPage),
+    queryFn: () => billingApiV2.getUsageLogs(page, itemsPerPage),
+    staleTime: 1000 * 60 * 5,
   });
 };
 

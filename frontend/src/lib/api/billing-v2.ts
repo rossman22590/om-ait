@@ -86,6 +86,24 @@ export interface UsageHistory {
   total_period_credits: number;
 }
 
+export interface UsageLogEntry {
+  timestamp: string;
+  amount: number;
+  balance_after: number;
+  description: string;
+  reference_type?: string;
+}
+
+export interface UsageLogsResponse {
+  usage_logs: UsageLogEntry[];
+  pagination: {
+    page: number;
+    items_per_page: number;
+    total_count: number;
+    has_more: boolean;
+  };
+}
+
 export interface CreateCheckoutSessionRequest {
   price_id: string;
   success_url: string;
@@ -262,6 +280,14 @@ export const billingApiV2 = {
     return response.data!;
   },
 
+  async getUsageLogs(page = 0, itemsPerPage = 1000) {
+    const response = await backendApi.get<UsageLogsResponse>(
+      `/billing/usage-logs?page=${page}&items_per_page=${itemsPerPage}`
+    );
+    if (response.error) throw response.error;
+    return response.data!;
+  },
+
   async triggerTestRenewal() {
     const response = await backendApi.post<TestRenewalResponse>('/billing/test/trigger-renewal');
     if (response.error) throw response.error;
@@ -315,6 +341,8 @@ export const purchaseCredits = (request: PurchaseCreditsRequest) =>
 export const getTransactions = (limit?: number, offset?: number) => 
   billingApiV2.getTransactions(limit, offset);
 export const getUsageHistory = (days?: number) => billingApiV2.getUsageHistory(days);
+export const getUsageLogs = (page?: number, itemsPerPage?: number) => 
+  billingApiV2.getUsageLogs(page, itemsPerPage);
 export const triggerTestRenewal = () => billingApiV2.triggerTestRenewal();
 export const getTrialStatus = () => billingApiV2.getTrialStatus();
 export const startTrial = (request: TrialStartRequest) => billingApiV2.startTrial(request);

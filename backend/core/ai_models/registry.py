@@ -69,6 +69,7 @@ class ModelRegistry:
             ),
             tier_availability=["paid"],
             priority=98,
+            recommended=True,
             enabled=True
         ))        
         
@@ -130,11 +131,12 @@ class ModelRegistry:
             ),
             tier_availability=["free", "paid"],
             priority=96,
+            recommended=True,
             enabled=True
         ))
         
         self.register(Model(
-            id="gemini/gemini-2.5-pro",
+            id="openrouter/google/gemini-2.5-pro",
             name="Gemini 2.5 Pro",
             provider=ModelProvider.OPENROUTER,
             aliases=["google/gemini-2.5-pro", "gemini-2.5-pro", "Gemini 2.5 Pro"],
@@ -151,6 +153,49 @@ class ModelRegistry:
             ),
             tier_availability=["paid"],
             priority=95,
+            recommended=True,
+            enabled=True
+        ))
+        
+        self.register(Model(
+            id="openrouter/google/gemini-2.5-flash",
+            name="Gemini 2.5 Flash",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["google/gemini-2.5-flash", "gemini-2.5-flash", "Gemini 2.5 Flash"],
+            context_window=1_050_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.VISION,
+                ModelCapability.STRUCTURED_OUTPUT,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=0.30,
+                output_cost_per_million_tokens=2.50
+            ),
+            tier_availability=["free", "paid"],
+            priority=93,
+            recommended=True,
+            enabled=True
+        ))
+        
+        self.register(Model(
+            id="openrouter/meta-llama/llama-4-scout",
+            name="Auto",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["meta-llama/llama-4-scout", "llama-4-scout", "Auto"],
+            context_window=128_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=0.50,
+                output_cost_per_million_tokens=1.50
+            ),
+            tier_availability=["free", "paid"],
+            priority=92,
+            recommended=True,
             enabled=True
         ))
         
@@ -158,7 +203,7 @@ class ModelRegistry:
         self.register(Model(
             id="openrouter/moonshotai/kimi-k2",
             name="Kimi K2",
-            provider=ModelProvider.MOONSHOTAI,
+            provider=ModelProvider.OPENROUTER,
             aliases=["moonshotai/kimi-k2", "kimi-k2", "Kimi K2"],
             context_window=200_000,
             capabilities=[
@@ -171,6 +216,7 @@ class ModelRegistry:
             ),
             tier_availability=["free", "paid"],
             priority=94,
+            # recommended=True,
             enabled=True
         ))
 

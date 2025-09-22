@@ -4,6 +4,7 @@ from decimal import Decimal
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 import stripe
+import json
 from core.credits import credit_service
 from core.services.supabase import DBConnection
 from core.utils.auth_utils import verify_and_get_user_id_from_jwt
@@ -53,80 +54,29 @@ class TokenUsageRequest(BaseModel):
 class CancelSubscriptionRequest(BaseModel):
     feedback: Optional[str] = None
 
-def normalize_model_name(model: str) -> str:
-    """
-    Bulletproof model name normalization with comprehensive fallbacks.
-    Ensures billing never fails by providing multiple fallback layers.
-    """
-    if not model:
-        logger.warning("[BILLING] Empty model name, using fallback")
-        return "openai/gpt-4o-mini"
-    
-    # First try exact resolution
-    try:
-        resolved = model_manager.resolve_model_id(model)
-        if resolved and model_manager.get_model(resolved):
-            return resolved
-    except Exception as e:
-        logger.debug(f"[BILLING] Model resolution failed for '{model}': {e}")
-    
-    # Pattern matching fallbacks for common models
-    model_lower = model.lower().strip()
-    
-    # GPT-5 patterns
-    if any(pattern in model_lower for pattern in ['gpt-5-mini', 'gpt5mini', 'gpt5-mini']):
-        return "openai/gpt-5-mini"
-    if any(pattern in model_lower for pattern in ['gpt-5', 'gpt5']):
-        return "openai/gpt-5"
-    
-    # GPT-4o patterns  
-    if any(pattern in model_lower for pattern in ['gpt-4o-mini', 'gpt4omini']):
-        return "openai/gpt-4o-mini"
-    if any(pattern in model_lower for pattern in ['gpt-4o', 'gpt4o']):
-        return "openai/gpt-4o"
-    
-    # Claude patterns
-    if any(pattern in model_lower for pattern in ['claude-3.5-sonnet', 'claude-3-5-sonnet', 'sonnet']):
-        return "anthropic/claude-3-5-sonnet-20241022"
-    if any(pattern in model_lower for pattern in ['claude-3-haiku', 'haiku']):
-        return "anthropic/claude-3-haiku-20240307"
-    
-    # Gemini patterns
-    if any(pattern in model_lower for pattern in ['gemini-1.5-pro', 'gemini-pro']):
-        return "google/gemini-1.5-pro"
-    if any(pattern in model_lower for pattern in ['gemini-1.5-flash', 'gemini-flash']):
-        return "google/gemini-1.5-flash"
-    
-    # Ultimate fallback - always bill something
-    logger.warning(f"[BILLING] Unknown model '{model}', using fallback billing")
-    return "openai/gpt-4o-mini"
-
 def calculate_token_cost(prompt_tokens: int, completion_tokens: int, model: str) -> Decimal:
     try:
         logger.debug(f"[COST_CALC] Calculating cost for model '{model}' with {prompt_tokens} prompt + {completion_tokens} completion tokens")
         
-        # Use bulletproof normalization
-        normalized_model = normalize_model_name(model)
-        logger.debug(f"[COST_CALC] Model '{model}' normalized to '{normalized_model}'")
+        resolved_model = model_manager.resolve_model_id(model)
+        logger.debug(f"[COST_CALC] Model '{model}' resolved to '{resolved_model}'")
         
-        model_obj = model_manager.get_model(normalized_model)
+        model_obj = model_manager.get_model(resolved_model)
         
         if model_obj and model_obj.pricing:
             input_cost = Decimal(prompt_tokens) / Decimal('1000000') * Decimal(str(model_obj.pricing.input_cost_per_million_tokens))
             output_cost = Decimal(completion_tokens) / Decimal('1000000') * Decimal(str(model_obj.pricing.output_cost_per_million_tokens))
             total_cost = (input_cost + output_cost) * TOKEN_PRICE_MULTIPLIER
             
-            logger.debug(f"[COST_CALC] Model '{normalized_model}' pricing: input=${model_obj.pricing.input_cost_per_million_tokens}/M, output=${model_obj.pricing.output_cost_per_million_tokens}/M")
+            logger.debug(f"[COST_CALC] Model '{model}' pricing: input=${model_obj.pricing.input_cost_per_million_tokens}/M, output=${model_obj.pricing.output_cost_per_million_tokens}/M")
             logger.debug(f"[COST_CALC] Calculated: input=${input_cost:.6f}, output=${output_cost:.6f}, total with {TOKEN_PRICE_MULTIPLIER}x markup=${total_cost:.6f}")
             
             return total_cost
         
-        # Minimum billing guarantee - never return 0
-        logger.warning(f"[COST_CALC] No pricing found for normalized model '{normalized_model}', using minimum billing")
+        logger.warning(f"[COST_CALC] No pricing found for model '{model}' (resolved: '{resolved_model}'), using default $0.01")
         return Decimal('0.01')
     except Exception as e:
         logger.error(f"[COST_CALC] Error calculating token cost for model '{model}': {e}")
-        # Never fail billing - always charge something
         return Decimal('0.01')
 
 
@@ -164,8 +114,8 @@ async def calculate_credit_breakdown(account_id: str, client) -> Dict:
 async def check_billing_status(
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
-    # if config.ENV_MODE == EnvMode.LOCAL:
-    #     return {'can_run': True, 'message': 'Local mode', 'balance': 999999}
+    if config.ENV_MODE == EnvMode.LOCAL:
+        return {'can_run': True, 'message': 'Local mode', 'balance': 999999}
     
     from .subscription_service import subscription_service
     balance = await credit_service.get_balance(account_id)
@@ -183,17 +133,17 @@ async def check_status(
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
     try:
-        # if config.ENV_MODE == EnvMode.LOCAL:
-        #     return {
-        #         "can_run": True,
-        #         "message": "Local development mode",
-        #         "subscription": {
-        #             "price_id": "local_dev",
-        #             "plan_name": "Local Development"
-        #         },
-        #         "credit_balance": 999999,
-        #         "can_purchase_credits": False
-        #     }
+        if config.ENV_MODE == EnvMode.LOCAL:
+            return {
+                "can_run": True,
+                "message": "Local development mode",
+                "subscription": {
+                    "price_id": "local_dev",
+                    "plan_name": "Local Development"
+                },
+                "credit_balance": 999999,
+                "can_purchase_credits": False
+            }
         
         from .subscription_service import subscription_service
         balance = await credit_service.get_balance(account_id)
@@ -251,7 +201,7 @@ async def check_status(
         }
         
     except Exception as e:
-        logger.error(f"Error checking billing status: {e}", exc_info=True)
+        logger.error(f"Error checking billing status: {e}", )
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/project-limits")
@@ -292,8 +242,8 @@ async def deduct_token_usage(
     usage: TokenUsageRequest,
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
-    # if config.ENV_MODE == EnvMode.LOCAL:
-    #     return {'success': True, 'cost': 0, 'new_balance': 999999}
+    if config.ENV_MODE == EnvMode.LOCAL:
+        return {'success': True, 'cost': 0, 'new_balance': 999999}
     
     cost = calculate_token_cost(usage.prompt_tokens, usage.completion_tokens, usage.model)
     
@@ -453,7 +403,7 @@ async def get_subscription(
         }
         
     except Exception as e:
-        logger.error(f"Error getting subscription: {e}", exc_info=True)
+        logger.error(f"Error getting subscription: {e}", )
         no_tier = TIERS['none']
         tier_info = {
             'name': no_tier.name,
@@ -500,7 +450,7 @@ async def create_checkout_session(
         return result
             
     except Exception as e:
-        logger.error(f"Error creating checkout session: {e}", exc_info=True)
+        logger.error(f"Error creating checkout session: {e}", )
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/create-portal-session")
@@ -515,7 +465,7 @@ async def create_portal_session(
         )
         return result
     except Exception as e:
-        logger.error(f"Error creating portal session: {e}", exc_info=True)
+        logger.error(f"Error creating portal session: {e}", )
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/sync-subscription")
@@ -536,7 +486,7 @@ async def sync_subscription(
         return result
         
     except Exception as e:
-        logger.error(f"Error syncing subscription: {e}", exc_info=True)
+        logger.error(f"Error syncing subscription: {e}", )
         return {
             'success': False,
             'message': f'Failed to sync subscription: {str(e)}'
@@ -557,7 +507,7 @@ async def cancel_subscription(
         return result
         
     except Exception as e:
-        logger.error(f"Error canceling subscription: {e}", exc_info=True)
+        logger.error(f"Error canceling subscription: {e}", )
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/reactivate-subscription")
@@ -570,7 +520,7 @@ async def reactivate_subscription(
         return result
         
     except Exception as e:
-        logger.error(f"Error reactivating subscription: {e}", exc_info=True)
+        logger.error(f"Error reactivating subscription: {e}", )
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/transactions")
@@ -630,7 +580,7 @@ async def get_my_transactions(
         }
         
     except Exception as e:
-        logger.error(f"Failed to get transactions for account {account_id}: {e}", exc_info=True)
+        logger.error(f"Failed to get transactions for account {account_id}: {e}", )
         raise HTTPException(status_code=500, detail="Failed to retrieve transactions")
 
 @router.get("/transactions/summary")
@@ -642,31 +592,53 @@ async def get_transactions_summary(
         db = DBConnection()
         client = await db.client
         
-        since_date = datetime.now(timezone.utc) - timedelta(days=days)
-
-        result = await client.from_('credit_ledger').select('created_at, amount, type, description').eq('account_id', account_id).gte('created_at', since_date.isoformat()).order('created_at', desc=True).execute()
-
-        daily_usage = {}
-        for entry in result.data:
-            date_key = entry['created_at'][:10]
-            if date_key not in daily_usage:
-                daily_usage[date_key] = {'credits': 0, 'debits': 0, 'count': 0}
-
-            amount = float(entry['amount'])
-            if entry['type'] == 'debit':
-                daily_usage[date_key]['debits'] += amount
-                daily_usage[date_key]['count'] += 1
+        since_date = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        
+        result = await client.from_('credit_ledger').select('*').eq('account_id', account_id).gte('created_at', since_date).execute()
+        
+        total_added = Decimal('0')
+        total_used = Decimal('0')
+        total_refunded = Decimal('0')
+        total_expired = Decimal('0')
+        
+        transaction_counts = {}
+        
+        for tx in result.data or []:
+            amount = Decimal(str(tx.get('amount', 0)))
+            tx_type = tx.get('type', 'unknown')
+            
+            transaction_counts[tx_type] = transaction_counts.get(tx_type, 0) + 1
+            
+            if amount > 0:
+                if tx_type == 'refund':
+                    total_refunded += amount
+                else:
+                    total_added += amount
             else:
-                daily_usage[date_key]['credits'] += amount
-
+                if tx_type == 'expired':
+                    total_expired += abs(amount)
+                else:
+                    total_used += abs(amount)
+        
+        balance_info = await credit_manager.get_balance(account_id)
+        
         return {
-            'daily_usage': daily_usage,
-            'total_period_usage': sum(day['debits'] for day in daily_usage.values()),
-            'total_period_credits': sum(day['credits'] for day in daily_usage.values())
+            'period_days': days,
+            'since_date': since_date,
+            'current_balance': balance_info,
+            'summary': {
+                'total_added': float(total_added),
+                'total_used': float(total_used),
+                'total_refunded': float(total_refunded),
+                'total_expired': float(total_expired),
+                'net_change': float(total_added - total_used - total_expired)
+            },
+            'transaction_counts': transaction_counts,
+            'total_transactions': len(result.data or [])
         }
-
+        
     except Exception as e:
-        logger.error(f"Failed to get transaction summary for account {account_id}: {e}", exc_info=True)
+        logger.error(f"Failed to get transaction summary for account {account_id}: {e}", )
         raise HTTPException(status_code=500, detail="Failed to retrieve transaction summary")
 
 @router.get("/credit-breakdown")
@@ -723,58 +695,6 @@ async def get_credit_breakdown(
         'message': f"Your ${total:.2f} balance includes ${expiring:.2f} expiring (plan) credits and ${non_expiring:.2f} non-expiring (purchased) credits"
     }
 
-@router.get("/usage-logs")
-async def get_usage_logs(
-    page: int = Query(0, ge=0, description="Page number for pagination"),
-    items_per_page: int = Query(1000, ge=1, le=10000, description="Items per page"),
-    account_id: str = Depends(verify_and_get_user_id_from_jwt)
-) -> Dict:
-    """Get usage logs with pagination, matching frontend expectations."""
-    try:
-        db = DBConnection()
-        client = await db.client
-
-        # Calculate offset
-        offset = page * items_per_page
-
-        # Get total count
-        count_result = await client.from_('credit_ledger').select('*', count='exact').eq('account_id', account_id).execute()
-        total_count = count_result.count or 0
-
-        # Get paginated results
-        result = await client.from_('credit_ledger')\
-            .select('created_at, amount, type, description, balance_after, metadata')\
-            .eq('account_id', account_id)\
-            .order('created_at', desc=True)\
-            .range(offset, offset + items_per_page - 1)\
-            .execute()
-
-        usage_logs = []
-        for entry in result.data or []:
-            usage_logs.append({
-                'timestamp': entry['created_at'],
-                'amount': float(entry['amount']),
-                'balance_after': float(entry.get('balance_after', 0)),
-                'type': entry['type'],
-                'description': entry['description'],
-                'metadata': entry.get('metadata', {})
-            })
-
-        return {
-            'usage_logs': usage_logs,
-            'pagination': {
-                'page': page,
-                'items_per_page': items_per_page,
-                'total_items': total_count,
-                'total_pages': (total_count + items_per_page - 1) // items_per_page if items_per_page > 0 else 0
-            },
-            'total_usage': sum(abs(float(entry.get('amount', 0))) for entry in result.data or [] if entry.get('type') == 'debit')
-        }
-
-    except Exception as e:
-        logger.error(f"Error getting usage logs: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
 @router.get("/usage-history")
 async def get_usage_history(
     days: int = 30,
@@ -783,32 +703,32 @@ async def get_usage_history(
     try:
         db = DBConnection()
         client = await db.client
-
+        
         start_date = datetime.now(timezone.utc) - timedelta(days=days)
-
+        
         result = await client.from_('credit_ledger').select('created_at, amount, type, description').eq('account_id', account_id).gte('created_at', start_date.isoformat()).order('created_at', desc=True).execute()
-
+        
         daily_usage = {}
         for entry in result.data:
             date_key = entry['created_at'][:10]
             if date_key not in daily_usage:
                 daily_usage[date_key] = {'credits': 0, 'debits': 0, 'count': 0}
-
+            
             amount = float(entry['amount'])
             if entry['type'] == 'debit':
                 daily_usage[date_key]['debits'] += amount
                 daily_usage[date_key]['count'] += 1
             else:
                 daily_usage[date_key]['credits'] += amount
-
+        
         return {
             'daily_usage': daily_usage,
             'total_period_usage': sum(day['debits'] for day in daily_usage.values()),
             'total_period_credits': sum(day['credits'] for day in daily_usage.values())
         }
-
+        
     except Exception as e:
-        logger.error(f"Error getting usage history: {e}", exc_info=True)
+        logger.error(f"Error getting usage history: {e}", )
         raise HTTPException(status_code=500, detail=str(e)) 
 
 
@@ -895,7 +815,7 @@ async def get_available_models(
         }
         
     except Exception as e:
-        logger.error(f"Error getting available models: {e}", exc_info=True)
+        logger.error(f"Error getting available models: {e}", )
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/subscription-commitment/{subscription_id}")
@@ -920,7 +840,7 @@ async def get_trial_status(
         return result
         
     except Exception as e:
-        logger.error(f"Error checking trial status: {e}", exc_info=True)
+        logger.error(f"Error checking trial status: {e}", )
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/trial/cancel")
@@ -934,7 +854,7 @@ async def cancel_trial(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error cancelling trial for account {account_id}: {e}", exc_info=True)
+        logger.error(f"Error cancelling trial for account {account_id}: {e}", )
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/trial/start")
@@ -972,7 +892,7 @@ async def start_trial(
             logger.info(f"[TRIAL API] Trial start failed for account {account_id}: {e.detail}")
         raise
     except Exception as e:
-        logger.error(f"[TRIAL API ERROR] Unexpected error creating trial for account {account_id}: {e}", exc_info=True)
+        logger.error(f"[TRIAL API ERROR] Unexpected error creating trial for account {account_id}: {e}", )
         # Don't expose internal errors to the client
         raise HTTPException(status_code=500, detail="An error occurred while processing your request")
 
@@ -1005,5 +925,81 @@ async def create_trial_checkout(
             logger.info(f"[TRIAL API] Trial checkout failed for account {account_id}: {e.detail}")
         raise
     except Exception as e:
-        logger.error(f"[TRIAL API ERROR] Unexpected error in trial checkout for account {account_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="An error occurred while processing your request") 
+        logger.error(f"[TRIAL API ERROR] Unexpected error in trial checkout for account {account_id}: {e}", )
+        raise HTTPException(status_code=500, detail="An error occurred while processing your request")
+
+@router.get("/usage-logs")
+async def get_usage_logs(
+    page: int = Query(0, ge=0),
+    items_per_page: int = Query(100, ge=1, le=1000),
+    account_id: str = Depends(verify_and_get_user_id_from_jwt)
+) -> Dict:
+    """
+    Get usage logs for the authenticated user.
+    Returns billing transactions and usage history.
+    """
+    try:
+        db = DBConnection()
+        await db.initialize()
+        client = await db.client
+        
+        # Calculate offset
+        offset = page * items_per_page
+        
+        # Query credit ledger for usage history (using existing schema)
+        query = client.table('credit_ledger') \
+            .select('*') \
+            .eq('account_id', account_id) \
+            .eq('type', 'debit') \
+            .order('created_at', desc=True) \
+            .range(offset, offset + items_per_page - 1)
+        
+        result = await query.execute()
+        
+        # Get total count for pagination
+        count_result = await client.table('credit_ledger') \
+            .select('id', count='exact') \
+            .eq('account_id', account_id) \
+            .eq('type', 'debit') \
+            .execute()
+        
+        total_count = count_result.count if count_result.count else 0
+        
+        # Format the response using credit_ledger data
+        usage_logs = []
+        if result.data:
+            for transaction in result.data:
+                # Parse metadata if it exists
+                metadata = transaction.get('metadata', {})
+                if isinstance(metadata, str):
+                    try:
+                        metadata = json.loads(metadata)
+                    except:
+                        metadata = {}
+                
+                usage_logs.append({
+                    'id': transaction.get('id'),
+                    'created_at': transaction.get('created_at'),
+                    'model': metadata.get('model', 'unknown'),
+                    'prompt_tokens': metadata.get('prompt_tokens', 0),
+                    'completion_tokens': metadata.get('completion_tokens', 0),
+                    'total_tokens': metadata.get('total_tokens', 0),
+                    'cost': float(transaction.get('amount', 0)),
+                    'description': transaction.get('description', ''),
+                    'thread_id': metadata.get('thread_id'),
+                    'message_id': metadata.get('message_id')
+                })
+        
+        return {
+            'usage_logs': usage_logs,
+            'pagination': {
+                'page': page,
+                'items_per_page': items_per_page,
+                'total_count': total_count,
+                'total_pages': (total_count + items_per_page - 1) // items_per_page
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error fetching usage logs for account {account_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch usage logs")

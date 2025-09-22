@@ -7,6 +7,9 @@ import {
   CreateCheckoutSessionRequest
 } from '@/lib/api';
 
+// Re-export useUsageLogs from the billing-v2 hooks
+export { useUsageLogs } from '@/hooks/react-query/use-billing-v2';
+
 // useAvailableModels has been moved to use-model-selection.ts for better consolidation
 
 export const useBillingStatus = createQueryHook(
@@ -35,15 +38,3 @@ export const useCreateCheckoutSession = createMutationHook(
     }
   }
 );
-
-export const useUsageLogs = (page: number = 0, itemsPerPage: number = 1000) => 
-  createQueryHook(
-    usageKeys.logs(page, itemsPerPage),
-    () => billingApi.getUsageLogs(page, itemsPerPage),
-    {
-      staleTime: 30 * 1000, // 30 seconds
-      refetchOnMount: true,
-      refetchOnWindowFocus: true,
-      refetchInterval: 5 * 1000, // poll every 5s for near-real-time updates
-    }
-  )();
