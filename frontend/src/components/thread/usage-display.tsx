@@ -34,7 +34,7 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
 }) => {
   // Fetch usage logs for the account (could filter by thread if needed)
   // For per-thread usage, filter logs for this threadId
-  const { data: usageLogsData, isLoading } = useUsageLogs(0, 1000);
+  const { data: usageLogsData, isLoading } = useUsageLogs(0, 1000, threadId);
   
   // Fetch account balance
   const { data: balanceData, isLoading: isBalanceLoading } = useCreditBalance();

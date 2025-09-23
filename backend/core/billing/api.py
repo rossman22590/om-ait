@@ -932,6 +932,7 @@ async def create_trial_checkout(
 async def get_usage_logs(
     page: int = Query(0, ge=0),
     items_per_page: int = Query(100, ge=1, le=1000),
+    thread_id: Optional[str] = Query(None),
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
     """
@@ -977,17 +978,20 @@ async def get_usage_logs(
                     except:
                         metadata = {}
                 
+                # Extract thread_id from metadata
+                transaction_thread_id = metadata.get('thread_id')
+                
+                # Skip if filtering by thread and this doesn't match
+                if thread_id and transaction_thread_id != thread_id:
+                    continue
+                
+                # Format according to frontend expectations (UsageLogEntry interface)
                 usage_logs.append({
-                    'id': transaction.get('id'),
-                    'created_at': transaction.get('created_at'),
-                    'model': metadata.get('model', 'unknown'),
-                    'prompt_tokens': metadata.get('prompt_tokens', 0),
-                    'completion_tokens': metadata.get('completion_tokens', 0),
-                    'total_tokens': metadata.get('total_tokens', 0),
-                    'cost': float(transaction.get('amount', 0)),
+                    'timestamp': transaction.get('created_at'),  # Frontend expects 'timestamp'
+                    'amount': float(transaction.get('amount', 0)),  # Frontend expects 'amount'
+                    'balance_after': float(transaction.get('balance_after', 0)),  # Frontend expects 'balance_after'
                     'description': transaction.get('description', ''),
-                    'thread_id': metadata.get('thread_id'),
-                    'message_id': metadata.get('message_id')
+                    'reference_type': f"thread:{transaction_thread_id}" if transaction_thread_id else None,  # Frontend expects 'reference_type'
                 })
         
         return {
@@ -996,7 +1000,7 @@ async def get_usage_logs(
                 'page': page,
                 'items_per_page': items_per_page,
                 'total_count': total_count,
-                'total_pages': (total_count + items_per_page - 1) // items_per_page
+                'has_more': (offset + len(usage_logs)) < total_count
             }
         }
         

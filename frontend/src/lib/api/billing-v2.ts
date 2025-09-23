@@ -280,10 +280,12 @@ export const billingApiV2 = {
     return response.data!;
   },
 
-  async getUsageLogs(page = 0, itemsPerPage = 1000) {
-    const response = await backendApi.get<UsageLogsResponse>(
-      `/billing/usage-logs?page=${page}&items_per_page=${itemsPerPage}`
-    );
+  async getUsageLogs(page = 0, itemsPerPage = 1000, threadId?: string) {
+    let url = `/billing/usage-logs?page=${page}&items_per_page=${itemsPerPage}`;
+    if (threadId) {
+      url += `&thread_id=${encodeURIComponent(threadId)}`;
+    }
+    const response = await backendApi.get<UsageLogsResponse>(url);
     if (response.error) throw response.error;
     return response.data!;
   },
@@ -341,8 +343,8 @@ export const purchaseCredits = (request: PurchaseCreditsRequest) =>
 export const getTransactions = (limit?: number, offset?: number) => 
   billingApiV2.getTransactions(limit, offset);
 export const getUsageHistory = (days?: number) => billingApiV2.getUsageHistory(days);
-export const getUsageLogs = (page?: number, itemsPerPage?: number) => 
-  billingApiV2.getUsageLogs(page, itemsPerPage);
+export const getUsageLogs = (page?: number, itemsPerPage?: number, threadId?: string) => 
+  billingApiV2.getUsageLogs(page, itemsPerPage, threadId);
 export const triggerTestRenewal = () => billingApiV2.triggerTestRenewal();
 export const getTrialStatus = () => billingApiV2.getTrialStatus();
 export const startTrial = (request: TrialStartRequest) => billingApiV2.startTrial(request);
