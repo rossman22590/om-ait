@@ -190,17 +190,18 @@ export function CreditBalanceCard({
           <DialogHeader>
             <DialogTitle>Purchase Credits</DialogTitle>
             <DialogDescription>
-              <Alert className='mt-2 border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'>
-                <Infinity className="h-4 w-4 text-green-600" />
-                <AlertDescription>
-                  <span className="text-green-700 dark:text-green-300">
-                    Purchased credits never expire and are used only after your plan credits are exhausted.
-                  </span>
-                </AlertDescription>
-              </Alert>
+              Add credits to your account that never expire and are used after your plan credits are exhausted.
             </DialogDescription>
           </DialogHeader>
           
+          <Alert className='border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'>
+            <Infinity className="h-4 w-4 text-green-600" />
+            <AlertDescription>
+              <span className="text-green-700 dark:text-green-300">
+                Purchased credits never expire and are used only after your plan credits are exhausted.
+              </span>
+            </AlertDescription>
+          </Alert>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="amount">Credit Amount (USD)</Label>
