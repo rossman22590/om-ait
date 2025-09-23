@@ -336,7 +336,7 @@ async def purchase_credits_checkout(
         amount=request.amount,
         success_url=request.success_url,
         cancel_url=request.cancel_url,
-        get_user_subscription_tier_func=None  # Will be imported in payment service
+        get_user_subscription_tier_func=subscription_service.get_user_subscription_tier
     )
     return result
 
