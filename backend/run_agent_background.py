@@ -47,8 +47,8 @@ logger.info(f"[WORKER] Connecting to Redis broker at: {redis_url.split('@')[-1] 
 redis_broker = RedisBroker(
     url=redis_url,
     middleware=[
-        dramatiq.middleware.AsyncIO(),
-        dramatiq.middleware.Retries(max_retries=3, min_backoff=1000, max_backoff=30000),
+        dramatiq.middleware.AsyncIO(),  # Required for async functions
+        dramatiq.middleware.Retries(max_retries=10, min_backoff=2000, max_backoff=120000),
     ],
     # Railway Redis connection settings
     socket_connect_timeout=10,
@@ -105,11 +105,18 @@ async def run_agent_background(
         request_id=request_id,
     )
 
-    try:
-        await initialize()
-    except Exception as e:
-        logger.critical(f"Failed to initialize Redis connection: {e}")
-        raise e
+    # Retry Redis initialization
+    for attempt in range(3):
+        try:
+            await initialize()
+            break
+        except Exception as e:
+            if attempt == 2:
+                logger.critical(f"Redis failed after 3 attempts: {e}")
+                # Continue anyway - don't kill the agent
+                break
+            await asyncio.sleep(2 ** attempt)
+            logger.warning(f"Redis retry {attempt + 1}: {e}")
 
     # Idempotency check: prevent duplicate runs
     run_lock_key = f"agent_run_lock:{agent_run_id}"
@@ -187,10 +194,15 @@ async def run_agent_background(
             await retry(lambda: pubsub.subscribe(instance_control_channel, global_control_channel))
         except Exception as e:
             logger.error(f"Redis failed to subscribe to control channels: {e}", exc_info=True)
-            raise e
+            # Don't kill the agent - continue without pubsub
+            pubsub = None
 
-        logger.info(f"Subscribed to control channels: {instance_control_channel}, {global_control_channel}")
-        stop_checker = asyncio.create_task(check_for_stop_signal())
+        if pubsub:
+            logger.info(f"Subscribed to control channels: {instance_control_channel}, {global_control_channel}")
+            stop_checker = asyncio.create_task(check_for_stop_signal())
+        else:
+            logger.warning("Running without pubsub - no stop signal checker")
+            stop_checker = None
 
         # Ensure active run key exists and has TTL
         await redis.set(instance_active_key, "running", ex=redis.REDIS_KEY_TTL)
@@ -409,7 +421,3 @@ async def update_agent_run_status(
     except Exception as e:
         logger.error(f"Unexpected error updating agent run status for {agent_run_id}: {str(e)}", exc_info=True)
         return False
-
-    return False
-
-    return False
