@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Bot, Plug,Menu, Plus, Zap, ChevronRight, BookOpen, Puzzle, CodeSquare, StopCircle, Loader2, HelpCircle } from 'lucide-react';
+import { Bot, Plug,Menu, Plus, Zap, ChevronRight, BookOpen, Puzzle, CodeSquare, StopCircle, Loader2, HelpCircle, User, Users } from 'lucide-react';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
@@ -390,6 +390,36 @@ export function SidebarLeft({
               </Link>
             </TooltipTrigger>
             <TooltipContent side="right">Full IDE-like code editor for building and editing Machine projects</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href="/my-avatars">
+                <SidebarMenuButton className={cn({
+                  'bg-accent text-accent-foreground font-medium': pathname === '/my-avatars',
+                }, 'cursor-pointer')} onClick={() => isMobile && setOpenMobile(false)}>
+                  <User className="h-4 w-4 mr-1" />
+                  <span className="flex items-center justify-between w-full">
+                    My Avatars
+                  </span>
+                </SidebarMenuButton>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">View avatars and voices associated with your subscription</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Link href="/all-avatars">
+                <SidebarMenuButton className={cn({
+                  'bg-accent text-accent-foreground font-medium': pathname === '/all-avatars',
+                }, 'cursor-pointer')} onClick={() => isMobile && setOpenMobile(false)}>
+                  <Users className="h-4 w-4 mr-1" />
+                  <span className="flex items-center justify-between w-full">
+                    All Avatars
+                  </span>
+                </SidebarMenuButton>
+              </Link>
+            </TooltipTrigger>
+            <TooltipContent side="right">Browse all available avatars and voices from Argil AI</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>

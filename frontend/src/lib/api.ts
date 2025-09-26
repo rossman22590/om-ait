@@ -2387,3 +2387,124 @@ export const transcribeAudio = async (audioFile: File): Promise<TranscriptionRes
     throw error;
   }
 };
+
+// Avatar API Functions
+export interface Avatar {
+  avatar_id: string;
+  voice_id: string;
+  avatar_name: string;
+  avatar_thumbnail?: string;
+  voice_name: string;
+  voice_sample?: string;
+  voice_status?: string;
+  subscription_id: string;
+  tier: string;
+  balance: string;
+}
+
+export interface AvatarsResponse {
+  success: boolean;
+  message: string;
+  avatars: Avatar[];
+  subscription_id?: string;
+}
+
+export const fetchUserAvatars = async (): Promise<AvatarsResponse> => {
+  try {
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new NoAccessTokenAvailableError();
+    }
+
+    const response = await fetch(`${API_URL}/avatars/my-avatars`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response
+        .text()
+        .catch(() => 'No error details available');
+      console.error(
+        `Error fetching avatars: ${response.status} ${response.statusText}`,
+      );
+      throw new Error(
+        `Error fetching avatars: ${response.statusText} (${response.status})`,
+      );
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Failed to fetch avatars:', error);
+    throw new Error('Failed to fetch user avatars');
+  }
+};
+
+export interface AllAvatarsItem {
+  avatar_id: string | null;
+  avatar_name: string | null;
+  avatar_thumbnail: string | null;
+  avatar_status: string | null;
+  voice_id: string | null;
+  voice_name: string | null;
+  voice_sample: string | null;
+  voice_status: string | null;
+  has_voice: boolean;
+}
+
+export interface AllAvatarsResponse {
+  success: boolean;
+  message: string;
+  items: AllAvatarsItem[];
+  total_count: number;
+  excluded_owned?: boolean;
+}
+
+export const fetchAllAvatars = async (): Promise<AllAvatarsResponse> => {
+  try {
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new NoAccessTokenAvailableError();
+    }
+
+    const response = await fetch(`${API_URL}/avatars/all`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response
+        .text()
+        .catch(() => 'No error details available');
+      console.error(
+        `Error fetching all avatars: ${response.status} ${response.statusText}`,
+      );
+      throw new Error(
+        `Error fetching all avatars: ${response.statusText} (${response.status})`,
+      );
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof NoAccessTokenAvailableError) {
+      throw error;
+    }
+
+    console.error('Failed to fetch all avatars:', error);
+    throw new Error('Failed to fetch all avatars');
+  }
+};

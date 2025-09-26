@@ -31,7 +31,6 @@ from core.services import email_api
 from core.triggers import api as triggers_api
 from core.services import api_keys_api
 
-
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
@@ -62,11 +61,8 @@ async def lifespan(app: FastAPI):
             await redis.initialize_async()
             logger.debug("Redis connection initialized successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize Redis connection during startup: {e}")
-            # Reset Redis state to ensure clean initialization on first request
-            redis.client = None
-            redis._initialized = False
-            logger.warning("Redis will be initialized on first request")
+            logger.error(f"Failed to initialize Redis connection: {e}")
+            # Continue without Redis - the application will handle Redis failures gracefully
         
         # Start background tasks
         # asyncio.create_task(core_api.restore_running_agent_runs())
@@ -197,6 +193,9 @@ api_router.include_router(google_slides_router)
 from core.google.google_docs_api import router as google_docs_router
 api_router.include_router(google_docs_router)
 
+from core.avatars.api import router as avatars_router
+api_router.include_router(avatars_router)
+
 @api_router.get("/health")
 async def health_check():
     logger.debug("Health check endpoint called")
@@ -210,31 +209,26 @@ async def health_check():
 async def health_check():
     logger.debug("Health docker check endpoint called")
     try:
-        # Test Redis connection with retry
-        from utils.retry import retry
-        client = await retry(lambda: redis.get_client())
+        client = await redis.get_client()
         await client.ping()
-        
-        # Test database connection
-        db_instance = DBConnection()
-        await db_instance.initialize()
-        db_client = await db_instance.client
+        db = DBConnection()
+        await db.initialize()
+        db_client = await db.client
         await db_client.table("threads").select("thread_id").limit(1).execute()
         logger.debug("Health docker check complete")
         return {
-            "status": "ok",
+            "status": "ok", 
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "instance_id": instance_id
         }
     except Exception as e:
         logger.error(f"Failed health docker check: {e}")
-        raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Health check failed")
 
 
 app.include_router(api_router, prefix="/api")
 app.include_router(billing_router)
 app.include_router(transcription_api.router)
-
 
 if __name__ == "__main__":
     import uvicorn

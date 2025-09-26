@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import Script from "next/script";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,8 @@ import {
   Settings,
   Mail,
   ExternalLink,
-  Calendar
+  Calendar,
+  Lightbulb
 } from "lucide-react";
 
 export default function SupportPage() {
@@ -132,6 +134,7 @@ export default function SupportPage() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
       {/* Load Intercom only on this page */}
@@ -154,6 +157,7 @@ export default function SupportPage() {
           </div>
         </DialogContent>
       </Dialog>
+
       
       {/* Header */}
       <div className="text-center mb-12">
@@ -176,25 +180,21 @@ export default function SupportPage() {
             <MessageCircle className="mr-2 h-5 w-5" />
             Chat with Support
           </Button>
-          <Button 
-            variant="outline" 
-            size="lg" 
-            className="border-purple-600 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20"
-            onClick={() => setIsCalendlyOpen(true)}
-          >
-            <Calendar className="mr-2 h-5 w-5" />
-            Book a Demo
-          </Button>
-          <Button variant="outline" size="lg" asChild>
-            <a href="mailto:support@myapps.ai">
-              <Mail className="mr-2 h-5 w-5" />
-              Email Support
-            </a>
-          </Button>
           <Button variant="outline" size="lg" asChild>
             <a href="https://ai-tutor-x-pixio.instatus.com" target="_blank" rel="noopener noreferrer">
               <ExternalLink className="mr-2 h-5 w-5" />
               Status Page
+            </a>
+          </Button>
+          <Button 
+            variant="outline" 
+            size="lg" 
+            className="border-green-600 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+            asChild
+          >
+            <a href="https://aitutorxpixio.featurebase.app/" target="_blank" rel="noopener noreferrer">
+              <Lightbulb className="mr-2 h-5 w-5" />
+              Feedback
             </a>
           </Button>
         </div>
@@ -311,6 +311,7 @@ export default function SupportPage() {
           </div>
         </CardContent>
       </Card>
+
 
       {/* Footer Note */}
       <div className="text-center mt-8 text-sm text-muted-foreground">

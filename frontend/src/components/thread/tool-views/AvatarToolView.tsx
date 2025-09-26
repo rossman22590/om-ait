@@ -74,11 +74,19 @@ export function AvatarToolView({
     if (toolResult && toolResult.toolOutput) {
       const output = toolResult.toolOutput;
       if (typeof output === 'string') {
-        try {
-          dataToRender = JSON.parse(output);
-        } catch (e: any) {
-          console.error('Failed to parse tool output:', e);
-          error = e?.message || 'Failed to parse tool data';
+        // Check if output is a streaming status or non-JSON content
+        if (output.trim() === 'STREAMING' || output.includes('STREAMING')) {
+          // Handle streaming status - don't try to parse as JSON
+          dataToRender = null;
+          error = null; // This is expected during streaming
+        } else {
+          try {
+            dataToRender = JSON.parse(output);
+          } catch (e: any) {
+            console.error('Failed to parse tool output:', e);
+            console.error('Raw output:', output);
+            error = `Failed to parse tool data: ${e?.message || 'Invalid JSON'}`;
+          }
         }
       } else {
         dataToRender = output as unknown as ParsedToolContent;
@@ -197,60 +205,62 @@ export function AvatarToolView({
                 {searchTerm ? 'No avatars match your search.' : 'No avatars found.'}
               </p>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {filteredAvatars.map((avatar, index) => {
-                  const avatarId = avatar.avatar_id && avatar.avatar_id.trim() !== '' ? avatar.avatar_id : `${avatar.name}-${index}`;
-                  const avatarDimensions = imageDimensions[avatarId];
-                  
-                  return (
-                    <Card key={avatarId} className="overflow-hidden hover:shadow-lg transition-shadow">
-                      <div className="relative aspect-square">
-                        <img
-                          src={avatar.thumbnailUrl}
-                          alt={avatar.name}
-                          className="w-full h-full object-cover"
-                          onLoad={(e) => {
-                            const img = e.target as HTMLImageElement;
-                            const aspectRatio = img.naturalWidth / img.naturalHeight;
-                            let orientation: 'portrait' | 'landscape' | 'square' = 'square';
-                            
-                            if (aspectRatio > 1.1) orientation = 'landscape';
-                            else if (aspectRatio < 0.9) orientation = 'portrait';
-                            
-                            setImageDimensions(prev => ({
-                              ...prev,
-                              [avatarId]: { aspectRatio, orientation }
-                            }));
-                          }}
-                          onError={(e) => {
-                            console.error('Failed to load avatar image:', avatar.thumbnailUrl);
-                            const img = e.target as HTMLImageElement;
-                            img.src = 'data:image/svg+xml;base64,' + btoa(`
-                              <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
-                                <rect width="100%" height="100%" fill="#f3f4f6"/>
-                                <text x="50%" y="50%" font-family="Arial" font-size="14" fill="#9ca3af" text-anchor="middle" dy=".3em">
-                                  ${avatar.name}
-                                </text>
-                              </svg>
-                            `);
-                          }}
-                        />
-                        {avatarDimensions && (
-                          <Badge 
-                            variant="secondary"
-                            className="absolute bottom-2 left-2 text-xs"
-                          >
-                            {avatarDimensions.orientation} ({avatarDimensions.aspectRatio.toFixed(1)})
-                          </Badge>
-                        )}
-                      </div>
-                      <CardContent className="p-3">
-                        <h3 className="font-medium text-sm truncate">{avatar.name}</h3>
-                        <p className="text-xs text-muted-foreground truncate">ID: {avatar.avatar_id}</p>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+              <div className="max-h-[600px] overflow-y-auto">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {filteredAvatars.map((avatar, index) => {
+                    const avatarId = avatar.avatar_id && avatar.avatar_id.trim() !== '' ? avatar.avatar_id : `${avatar.name}-${index}`;
+                    const avatarDimensions = imageDimensions[avatarId];
+                    
+                    return (
+                      <Card key={avatarId} className="overflow-hidden hover:shadow-lg transition-shadow">
+                        <div className="relative aspect-square">
+                          <img
+                            src={avatar.thumbnailUrl}
+                            alt={avatar.name}
+                            className="w-full h-full object-cover"
+                            onLoad={(e) => {
+                              const img = e.target as HTMLImageElement;
+                              const aspectRatio = img.naturalWidth / img.naturalHeight;
+                              let orientation: 'portrait' | 'landscape' | 'square' = 'square';
+                              
+                              if (aspectRatio > 1.1) orientation = 'landscape';
+                              else if (aspectRatio < 0.9) orientation = 'portrait';
+                              
+                              setImageDimensions(prev => ({
+                                ...prev,
+                                [avatarId]: { aspectRatio, orientation }
+                              }));
+                            }}
+                            onError={(e) => {
+                              console.error('Failed to load avatar image:', avatar.thumbnailUrl);
+                              const img = e.target as HTMLImageElement;
+                              img.src = 'data:image/svg+xml;base64,' + btoa(`
+                                <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+                                  <rect width="100%" height="100%" fill="#f3f4f6"/>
+                                  <text x="50%" y="50%" font-family="Arial" font-size="14" fill="#9ca3af" text-anchor="middle" dy=".3em">
+                                    ${avatar.name}
+                                  </text>
+                                </svg>
+                              `);
+                            }}
+                          />
+                          {avatarDimensions && (
+                            <Badge 
+                              variant="secondary"
+                              className="absolute bottom-2 left-2 text-xs"
+                            >
+                              {avatarDimensions.orientation} ({avatarDimensions.aspectRatio.toFixed(1)})
+                            </Badge>
+                          )}
+                        </div>
+                        <CardContent className="p-3">
+                          <h3 className="font-medium text-sm truncate">{avatar.name}</h3>
+                          <p className="text-xs text-muted-foreground truncate">ID: {avatar.avatar_id}</p>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </CardContent>

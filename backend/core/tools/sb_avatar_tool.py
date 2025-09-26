@@ -15,6 +15,22 @@ from core.utils.logger import logger
 
 ARGIL_API_BASE_URL = "https://api.argil.ai/v1"
 
+# Import subscription mappings to filter out assigned avatars/voices
+SUBSCRIPTION_AVATAR_MAPPING = {
+    "sub_1RPIrBG23sSyONuFPBbXYR75": {
+        "avatar_id": "agril_avatar_1",
+        "voice_id": "voice_sarah_professional"
+    },
+    "sub_1RLyW4G23sSyONuFK0bSqhxK": {
+        "avatar_id": "764a8a66-8798-47e0-a5f1-edec1ac6f612",
+        "voice_id": "a986becb-be3f-47da-865e-bbccffc08f87"
+    },
+}
+
+# Get all assigned avatar and voice IDs to filter them out
+ASSIGNED_AVATAR_IDS = {mapping["avatar_id"] for mapping in SUBSCRIPTION_AVATAR_MAPPING.values()}
+ASSIGNED_VOICE_IDS = {mapping["voice_id"] for mapping in SUBSCRIPTION_AVATAR_MAPPING.values()}
+
 class SandboxAvatarTool(SandboxToolsBase):
     """Tool for interacting with the Argil AI Avatar API to list avatars, voices, and generate videos."""
 
@@ -100,6 +116,9 @@ class SandboxAvatarTool(SandboxToolsBase):
                 if not isinstance(avatar_data, dict):
                     logger.warning(f"Skipping non-dict item in avatar list: {avatar_data}")
                     continue
+                if avatar_data.get("id") in ASSIGNED_AVATAR_IDS:
+                    logger.info(f"Skipping assigned avatar: {avatar_data.get('name')}")
+                    continue
                 simplified_avatars.append({
                     "avatar_id": avatar_data.get("id"),
                     "name": avatar_data.get("name"),
@@ -158,6 +177,9 @@ class SandboxAvatarTool(SandboxToolsBase):
             for voice_data in actual_list:
                 if not isinstance(voice_data, dict):
                     logger.warning(f"Skipping non-dict item in voice list: {voice_data}")
+                    continue
+                if voice_data.get("id") in ASSIGNED_VOICE_IDS:
+                    logger.info(f"Skipping assigned voice: {voice_data.get('name')}")
                     continue
                 simplified_voices.append({
                     "id": voice_data.get("id"),
