@@ -9,7 +9,9 @@ import {
   Check,
   MoreHorizontal
 } from 'lucide-react';
+import { icons } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { AGENTPRESS_TOOL_DEFINITIONS } from '../tools';
 
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -76,6 +78,15 @@ export function ConditionalWorkflowBuilder({
   agentTools,
   isLoadingTools
 }: ConditionalWorkflowBuilderProps) {
+  
+  const getIconComponent = (iconName: string) => {
+    const IconComponent = (icons as any)[iconName];
+    return IconComponent || icons.Wrench;
+  };
+
+  const isCoreTool = (toolName: string): boolean => {
+    return AGENTPRESS_TOOL_DEFINITIONS[toolName]?.isCore === true;
+  };
   const [toolSearchOpen, setToolSearchOpen] = useState<{ [key: string]: boolean }>({});
   const [activeConditionTab, setActiveConditionTab] = useState<{ [key: string]: string }>({});
 
@@ -497,8 +508,13 @@ export function ConditionalWorkflowBuilder({
                             if (agentpressTool) {
                               return (
                                 <>
-                                  <span>{agentpressTool.icon || '🔧'}</span>
+                                  {React.createElement(getIconComponent(agentpressTool.icon || 'Wrench'), { className: "h-4 w-4" })}
                                   <span>{normalizeToolName(agentpressTool.name, 'agentpress')}</span>
+                                  {isCoreTool(agentpressTool.name) && (
+                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                      Core
+                                    </span>
+                                  )}
                                 </>
                               );
                             }
@@ -506,7 +522,7 @@ export function ConditionalWorkflowBuilder({
                             if (mcpTool) {
                               return (
                                 <>
-                                  <span>{mcpTool.icon || '🔧'}</span>
+                                  {React.createElement(getIconComponent(mcpTool.icon || 'Wrench'), { className: "h-4 w-4" })}
                                   <span>{normalizeToolName(mcpTool.name, 'mcp')}</span>
                                 </>
                               );
@@ -550,8 +566,13 @@ export function ConditionalWorkflowBuilder({
                                     }}
                                   >
                                     <div className="flex items-center gap-2">
-                                      <span>{tool.icon || '🔧'}</span>
+                                      {React.createElement(getIconComponent(tool.icon || 'Wrench'), { className: "h-4 w-4" })}
                                       <span>{normalizeToolName(tool.name, 'agentpress')}</span>
+                                      {isCoreTool(tool.name) && (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                                          Core
+                                        </span>
+                                      )}
                                     </div>
                                     <Check
                                       className={cn(
@@ -575,7 +596,7 @@ export function ConditionalWorkflowBuilder({
                                     }}
                                   >
                                     <div className="flex items-center gap-2">
-                                      <span>{tool.icon || '🔧'}</span>
+                                      {React.createElement(getIconComponent(tool.icon || 'Wrench'), { className: "h-4 w-4" })}
                                       <span>{normalizeToolName(tool.name, 'mcp')}</span>
                                     </div>
                                     <Check
