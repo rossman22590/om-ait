@@ -6,8 +6,6 @@ from core.utils.logger import logger
 from typing import List, Any
 from core.utils.retry import retry
 
-# Standard Redis only
-
 # Redis client and connection pool
 client: redis.Redis | None = None
 pool: redis.ConnectionPool | None = None
@@ -31,41 +29,50 @@ def _build_redis_url() -> tuple[str, bool]:
     url = os.getenv("REDIS_URL")
     if url:
         ssl_on = url.startswith("rediss://")
-        provider_name = "Railway" if "railway" in url.lower() else "Generic"
+        provider = os.getenv("REDIS_PROVIDER", "generic")
+        provider_name = provider.title() if provider else "Generic"
         logger.info(f"Using {provider_name} REDIS_URL: {url.split('@')[-1] if '@' in url else url}")
         return url, ssl_on
 
     host = os.getenv("REDIS_HOST", "redis")
     port = os.getenv("REDIS_PORT", "6379")
     password = os.getenv("REDIS_PASSWORD", "")
-    use_ssl = os.getenv("REDIS_SSL", "true").lower() == "true"
+    use_ssl = os.getenv("REDIS_SSL", "false").lower() == "true"
+    provider = os.getenv("REDIS_PROVIDER", "generic").lower()
     scheme = "rediss" if use_ssl else "redis"
 
-    # Railway format: default:password@host
-    auth = f"default:{password}@" if password else ""
+    # Provider-specific auth formats
+    if provider == "railway":
+        # Railway format: default:password@host
+        auth = f"default:{password}@" if password else ""
+    else:
+        # Upstash/Generic format: :password@host
+        auth = f":{password}@" if password else ""
+    
     built = f"{scheme}://{auth}{host}:{port}"
+    logger.info(f"Built {provider.title()} Redis URL: {built.split('@')[-1] if '@' in built else built}")
     return built, use_ssl
 
 
 def initialize():
-    """Initialize Redis client using Redis protocol."""
+    """Initialize Redis connection pool and client using environment variables."""
     global client, pool
 
-    # Load environment variables
+    # Load environment variables if not already loaded
     load_dotenv()
     
-    # Connection options - optimized for production
-    max_connections = int(os.getenv("REDIS_MAX_CONNECTIONS", "512"))
-    socket_timeout = 15.0
-    connect_timeout = 10.0
+    # Connection options - optimized for Railway Redis
+    max_connections = int(os.getenv("REDIS_MAX_CONNECTIONS", "128"))
+    socket_timeout = 10.0  # Railway timeout
+    connect_timeout = 5.0  # Railway connect timeout
     retry_on_timeout = not (os.getenv("REDIS_RETRY_ON_TIMEOUT", "True").lower() != "true")
 
     redis_url, ssl_on = _build_redis_url()
+    provider = os.getenv("REDIS_PROVIDER", "generic")
 
     try:
         # Standard Redis protocol
-        provider_name = "Railway" if "railway" in redis_url.lower() else "Generic"
-        logger.info(f"Initializing {provider_name} Redis client via URL ssl={ssl_on} max={max_connections}")
+        logger.info(f"Initializing {provider.title()} Redis client via URL ssl={ssl_on} max={max_connections}")
         
         client_kwargs = dict(
             decode_responses=True,
@@ -96,20 +103,21 @@ async def initialize_async():
 
     async with _init_lock:
         if not _initialized:
+            # logger.debug("Initializing Redis connection")
             initialize()
 
         try:
-            if client:
-                # Test Redis protocol connection
-                await asyncio.wait_for(client.ping(), timeout=5.0)
-                logger.info("Successfully connected to Redis protocol")
-                _initialized = True
-                return client
-            else:
-                raise ConnectionError("No Redis client available")
+            # Test connection with timeout
+            await asyncio.wait_for(client.ping(), timeout=5.0)
+            logger.info("Successfully connected to Redis")
+            _initialized = True
+        except asyncio.TimeoutError:
+            logger.error("Redis connection timeout during initialization")
+            client = None
+            _initialized = False
+            raise ConnectionError("Redis connection timeout")
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
-            # Reset clients on failure
             client = None
             _initialized = False
             raise
@@ -149,13 +157,9 @@ async def close():
 async def get_client():
     """Get the Redis client, initializing if necessary."""
     global client, _initialized
-    if not _initialized:
+    if client is None or not _initialized:
         await retry(lambda: initialize_async())
-    
-    if client:
-        return client
-    else:
-        raise ConnectionError("No Redis client available")
+    return client
 
 
 # Basic Redis operations
@@ -204,6 +208,8 @@ async def lrange(key: str, start: int, end: int) -> List[str]:
 
 
 # Key management
+
+
 async def keys(pattern: str) -> List[str]:
     redis_client = await get_client()
     return await redis_client.keys(pattern)

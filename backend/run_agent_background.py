@@ -22,7 +22,8 @@ from core.utils.retry import retry
 
 import sentry_sdk
 from typing import Dict, Any
-def _redis_broker_url() -> str:
+
+def _build_redis_broker_url() -> str:
     """Build a Redis URL for Dramatiq RedisBroker.
 
     Prefer REDIS_URL; otherwise use split vars and construct
@@ -36,19 +37,30 @@ def _redis_broker_url() -> str:
     port = os.getenv('REDIS_PORT', '6379')
     password = os.getenv('REDIS_PASSWORD', '')
     use_ssl = os.getenv('REDIS_SSL', 'false').lower() == 'true'
+    provider = os.getenv('REDIS_PROVIDER', 'generic').lower()
     scheme = 'rediss' if use_ssl else 'redis'
-    auth = f":{password}@" if password else ''
+    
+    # Provider-specific auth formats
+    if provider == 'railway':
+        # Railway format: default:password@host
+        auth = f"default:{password}@" if password else ''
+    else:
+        # Upstash/Generic format: :password@host
+        auth = f":{password}@" if password else ''
+    
     return f"{scheme}://{auth}{host}:{port}"
 
-# Configure Dramatiq Redis broker using URL (supports TLS via rediss://)
-redis_url = _redis_broker_url()
-logger.info(f"[WORKER] Connecting to Redis broker at: {redis_url.split('@')[-1] if '@' in redis_url else redis_url}")
+# Configure Dramatiq Redis broker using URL (supports Railway Redis)
+redis_url = _build_redis_broker_url()
+provider = os.getenv('REDIS_PROVIDER', 'generic')
+logger.info(f"[WORKER] Connecting to {provider.title()} Redis broker at: {redis_url.split('@')[-1] if '@' in redis_url else redis_url}")
 
 redis_broker = RedisBroker(
     url=redis_url,
     middleware=[
         dramatiq.middleware.AsyncIO(),  # Required for async functions
-        dramatiq.middleware.Retries(max_retries=10, min_backoff=2000, max_backoff=120000),
+        dramatiq.middleware.Retries(max_retries=3, min_backoff=1000, max_backoff=30000),
+        dramatiq.middleware.TimeLimit(),  # Required for time_limit option
     ],
     # Railway Redis connection settings
     socket_connect_timeout=10,
@@ -58,6 +70,7 @@ redis_broker = RedisBroker(
 )
 
 dramatiq.set_broker(redis_broker)
+logger.info("🚀 Dramatiq broker configured and worker starting...")
 
 
 _initialized = False
@@ -105,18 +118,11 @@ async def run_agent_background(
         request_id=request_id,
     )
 
-    # Retry Redis initialization
-    for attempt in range(3):
-        try:
-            await initialize()
-            break
-        except Exception as e:
-            if attempt == 2:
-                logger.critical(f"Redis failed after 3 attempts: {e}")
-                # Continue anyway - don't kill the agent
-                break
-            await asyncio.sleep(2 ** attempt)
-            logger.warning(f"Redis retry {attempt + 1}: {e}")
+    try:
+        await initialize()
+    except Exception as e:
+        logger.critical(f"Failed to initialize Redis connection: {e}")
+        raise e
 
     # Idempotency check: prevent duplicate runs
     run_lock_key = f"agent_run_lock:{agent_run_id}"
@@ -194,15 +200,10 @@ async def run_agent_background(
             await retry(lambda: pubsub.subscribe(instance_control_channel, global_control_channel))
         except Exception as e:
             logger.error(f"Redis failed to subscribe to control channels: {e}", exc_info=True)
-            # Don't kill the agent - continue without pubsub
-            pubsub = None
+            raise e
 
-        if pubsub:
-            logger.info(f"Subscribed to control channels: {instance_control_channel}, {global_control_channel}")
-            stop_checker = asyncio.create_task(check_for_stop_signal())
-        else:
-            logger.warning("Running without pubsub - no stop signal checker")
-            stop_checker = None
+        logger.info(f"Subscribed to control channels: {instance_control_channel}, {global_control_channel}")
+        stop_checker = asyncio.create_task(check_for_stop_signal())
 
         # Ensure active run key exists and has TTL
         await redis.set(instance_active_key, "running", ex=redis.REDIS_KEY_TTL)
@@ -421,3 +422,112 @@ async def update_agent_run_status(
     except Exception as e:
         logger.error(f"Unexpected error updating agent run status for {agent_run_id}: {str(e)}", exc_info=True)
         return False
+
+    return False
+#                 logger.debug(f"Closed pubsub connection for {agent_run_id}")
+#             except Exception as e:
+#                 logger.warning(f"Error closing pubsub for {agent_run_id}: {str(e)}")
+
+#         # Set TTL on the response list in Redis
+#         await _cleanup_redis_response_list(agent_run_id)
+
+#         # Remove the instance-specific active run key
+#         await _cleanup_redis_instance_key(agent_run_id)
+
+#         # Clean up the run lock
+#         await _cleanup_redis_run_lock(agent_run_id)
+
+#         # Wait for all pending redis operations to complete, with timeout
+#         try:
+#             await asyncio.wait_for(asyncio.gather(*pending_redis_operations), timeout=30.0)
+#         except asyncio.TimeoutError:
+#             logger.warning(f"Timeout waiting for pending Redis operations for {agent_run_id}")
+
+#         logger.debug(f"Agent run background task fully completed for: {agent_run_id} (Instance: {instance_id}) with final status: {final_status}")
+
+# async def _cleanup_redis_instance_key(agent_run_id: str):
+#     """Clean up the instance-specific Redis key for an agent run."""
+#     if not instance_id:
+#         logger.warning("Instance ID not set, cannot clean up instance key.")
+#         return
+#     key = f"active_run:{instance_id}:{agent_run_id}"
+#     # logger.debug(f"Cleaning up Redis instance key: {key}")
+#     try:
+#         await redis.delete(key)
+#         # logger.debug(f"Successfully cleaned up Redis key: {key}")
+#     except Exception as e:
+#         logger.warning(f"Failed to clean up Redis key {key}: {str(e)}")
+
+# async def _cleanup_redis_run_lock(agent_run_id: str):
+#     """Clean up the run lock Redis key for an agent run."""
+#     run_lock_key = f"agent_run_lock:{agent_run_id}"
+#     # logger.debug(f"Cleaning up Redis run lock key: {run_lock_key}")
+#     try:
+#         await redis.delete(run_lock_key)
+#         # logger.debug(f"Successfully cleaned up Redis run lock key: {run_lock_key}")
+#     except Exception as e:
+#         logger.warning(f"Failed to clean up Redis run lock key {run_lock_key}: {str(e)}")
+
+# # TTL for Redis response lists (24 hours)
+# REDIS_RESPONSE_LIST_TTL = 3600 * 24
+
+# async def _cleanup_redis_response_list(agent_run_id: str):
+#     """Set TTL on the Redis response list."""
+#     response_list_key = f"agent_run:{agent_run_id}:responses"
+#     try:
+#         await redis.expire(response_list_key, REDIS_RESPONSE_LIST_TTL)
+#         # logger.debug(f"Set TTL ({REDIS_RESPONSE_LIST_TTL}s) on response list: {response_list_key}")
+#     except Exception as e:
+#         logger.warning(f"Failed to set TTL on response list {response_list_key}: {str(e)}")
+
+# async def update_agent_run_status(
+#     client,
+#     agent_run_id: str,
+#     status: str,
+#     error: Optional[str] = None,
+# ) -> bool:
+#     """
+#     Centralized function to update agent run status.
+#     Returns True if update was successful.
+#     """
+#     try:
+#         update_data = {
+#             "status": status,
+#             "completed_at": datetime.now(timezone.utc).isoformat()
+#         }
+
+#         if error:
+#             update_data["error"] = error
+
+
+
+#         # Retry up to 3 times
+#         for retry in range(3):
+#             try:
+#                 update_result = await client.table('agent_runs').update(update_data).eq("id", agent_run_id).execute()
+
+#                 if hasattr(update_result, 'data') and update_result.data:
+#                     # logger.debug(f"Successfully updated agent run {agent_run_id} status to '{status}' (retry {retry})")
+
+#                     # Verify the update
+#                     verify_result = await client.table('agent_runs').select('status', 'completed_at').eq("id", agent_run_id).execute()
+#                     if verify_result.data:
+#                         actual_status = verify_result.data[0].get('status')
+#                         completed_at = verify_result.data[0].get('completed_at')
+#                         # logger.debug(f"Verified agent run update: status={actual_status}, completed_at={completed_at}")
+#                     return True
+#                 else:
+#                     logger.warning(f"Database update returned no data for agent run {agent_run_id} on retry {retry}: {update_result}")
+#                     if retry == 2:  # Last retry
+#                         logger.error(f"Failed to update agent run status after all retries: {agent_run_id}")
+#                         return False
+#             except Exception as db_error:
+#                 logger.error(f"Database error on retry {retry} updating status for {agent_run_id}: {str(db_error)}")
+#                 if retry < 2:  # Not the last retry yet
+#                     await asyncio.sleep(0.5 * (2 ** retry))  # Exponential backoff
+#                 else:
+#                     logger.error(f"Failed to update agent run status after all retries: {agent_run_id}", exc_info=True)
+#                     return False
+#     except Exception as e:
+#         logger.error(f"Unexpected error updating agent run status for {agent_run_id}: {str(e)}", exc_info=True)
+#         return False
