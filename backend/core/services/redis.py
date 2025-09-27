@@ -3,8 +3,11 @@ import os
 from dotenv import load_dotenv
 import asyncio
 from core.utils.logger import logger
-from typing import List, Any
+from typing import List, Any, Optional
 from core.utils.retry import retry
+
+# Using redis-py only for Upstash compatibility
+UPSTASH_AVAILABLE = False
 
 # Redis client and connection pool
 client: redis.Redis | None = None
@@ -16,43 +19,47 @@ _init_lock = asyncio.Lock()
 REDIS_KEY_TTL = 3600 * 24  # 24 hour TTL as safety mechanism
 
 
-def _build_redis_url() -> tuple[str, bool]:
-    """Build a Redis URL from environment variables and return (url, ssl_on).
-
-    Priority:
-    1) REDIS_URL if provided
-    2) REDIS_HOST/REDIS_PASSWORD/REDIS_PORT with REDIS_SSL
-    """
-    # Load environment variables if not already loaded
-    load_dotenv()
-
-    url = os.getenv("REDIS_URL")
-    if url:
-        ssl_on = url.startswith("rediss://")
-        provider = os.getenv("REDIS_PROVIDER", "generic")
-        provider_name = provider.title() if provider else "Generic"
-        logger.info(f"Using {provider_name} REDIS_URL: {url.split('@')[-1] if '@' in url else url}")
-        return url, ssl_on
-
-    host = os.getenv("REDIS_HOST", "redis")
-    port = os.getenv("REDIS_PORT", "6379")
-    password = os.getenv("REDIS_PASSWORD", "")
-    use_ssl = os.getenv("REDIS_SSL", "false").lower() == "true"
-    provider = os.getenv("REDIS_PROVIDER", "generic").lower()
-    scheme = "rediss" if use_ssl else "redis"
-
-    # Provider-specific auth formats
-    if provider == "railway":
-        # Railway format: default:password@host
-        auth = f"default:{password}@" if password else ""
-    else:
-        # Upstash/Generic format: :password@host
-        auth = f":{password}@" if password else ""
+def _detect_upstash() -> bool:
+    """Detect if we're using Upstash Redis based on environment variables."""
+    redis_url = os.getenv('REDIS_URL', '')
+    redis_host = os.getenv('REDIS_HOST', '')
     
-    built = f"{scheme}://{auth}{host}:{port}"
-    logger.info(f"Built {provider.title()} Redis URL: {built.split('@')[-1] if '@' in built else built}")
-    return built, use_ssl
+    # Check for Upstash indicators
+    is_upstash = (
+        'upstash.io' in redis_url or 
+        'upstash.io' in redis_host
+    )
+    
+    return is_upstash
 
+def _build_redis_url() -> str:
+    """Build Redis URL for redis-py client."""
+    # First try to get the full URL
+    url = os.getenv('REDIS_URL')
+    if url:
+        # For Upstash, ensure we use rediss:// and proper auth format
+        if 'upstash.io' in url:
+            if url.startswith('redis://'):
+                url = url.replace('redis://', 'rediss://', 1)
+            # Ensure proper auth format for Upstash (no username)
+            if 'default:' in url:
+                url = url.replace('default:', '', 1)
+        return url
+
+    # Fallback to environment variables
+    host = os.getenv('REDIS_HOST', 'redis')
+    port = os.getenv('REDIS_PORT', '6379')
+    password = os.getenv('REDIS_PASSWORD', '')
+    use_ssl = os.getenv('REDIS_SSL', 'false').lower() == 'true'
+    
+    # For Upstash, use rediss:// and no username
+    if 'upstash.io' in host or use_ssl:
+        auth = f":{password}@" if password else ''
+        return f"rediss://{auth}{host}:{port}"
+    else:
+        # For local/Railway Redis, use default username if needed
+        auth = f"default:{password}@" if password else ''
+        return f"redis://{auth}{host}:{port}"
 
 def initialize():
     """Initialize Redis connection pool and client using environment variables."""
@@ -60,38 +67,45 @@ def initialize():
 
     # Load environment variables if not already loaded
     load_dotenv()
+
+    # Detect if we're using Upstash
+    is_upstash = _detect_upstash()
     
-    # Connection options - optimized for Railway Redis
-    max_connections = int(os.getenv("REDIS_MAX_CONNECTIONS", "128"))
-    socket_timeout = 10.0  # Railway timeout
-    connect_timeout = 5.0  # Railway connect timeout
+    # Use redis-py client (works great with Upstash)
+    _initialize_redis_py_client(is_upstash)
+
+    return client
+
+def _initialize_redis_py_client(is_upstash: bool = False):
+    """Initialize the standard redis-py client."""
+    global client, pool
+    
+    redis_url = _build_redis_url()
+    
+    # Connection pool configuration - optimized for production
+    max_connections = 512 if is_upstash else 128  # Higher for Upstash
+    socket_timeout = 30.0 if is_upstash else 15.0  # Longer for Upstash
+    connect_timeout = 10.0
     retry_on_timeout = not (os.getenv("REDIS_RETRY_ON_TIMEOUT", "True").lower() != "true")
 
-    redis_url, ssl_on = _build_redis_url()
-    provider = os.getenv("REDIS_PROVIDER", "generic")
+    logger.info(f"Initializing redis-py client to {redis_url.split('@')[-1] if '@' in redis_url else redis_url} with max {max_connections} connections")
 
     try:
-        # Standard Redis protocol
-        logger.info(f"Initializing {provider.title()} Redis client via URL ssl={ssl_on} max={max_connections}")
-        
-        client_kwargs = dict(
+        # Create Redis client from URL (handles SSL automatically)
+        client = redis.from_url(
+            redis_url,
             decode_responses=True,
             socket_timeout=socket_timeout,
             socket_connect_timeout=connect_timeout,
             socket_keepalive=True,
-            health_check_interval=30,
             retry_on_timeout=retry_on_timeout,
+            health_check_interval=30,
             max_connections=max_connections,
         )
-
-        # Use a connection pool under the hood via from_url
-        pool_obj = redis.ConnectionPool.from_url(redis_url, **client_kwargs)
-        client_obj = redis.Redis(connection_pool=pool_obj)
-
-        # Assign to globals
-        client = client_obj
-        pool = pool_obj
-        return client
+        
+        # Store the connection pool reference
+        pool = client.connection_pool
+        
     except Exception as e:
         logger.error(f"Failed to initialize Redis client: {e}")
         raise
@@ -108,8 +122,10 @@ async def initialize_async():
 
         try:
             # Test connection with timeout
-            await asyncio.wait_for(client.ping(), timeout=5.0)
-            logger.info("Successfully connected to Redis")
+            if client:
+                await asyncio.wait_for(client.ping(), timeout=10.0)
+                logger.info("Successfully connected to Redis via redis-py")
+            
             _initialized = True
         except asyncio.TimeoutError:
             logger.error("Redis connection timeout during initialization")
@@ -128,6 +144,7 @@ async def initialize_async():
 async def close():
     """Close Redis connection and connection pool."""
     global client, pool, _initialized
+    
     if client:
         # logger.debug("Closing Redis connection")
         try:
@@ -160,6 +177,7 @@ async def get_client():
     if client is None or not _initialized:
         await retry(lambda: initialize_async())
     return client
+
 
 
 # Basic Redis operations
@@ -208,13 +226,12 @@ async def lrange(key: str, start: int, end: int) -> List[str]:
 
 
 # Key management
-
-
 async def keys(pattern: str) -> List[str]:
+    """Get keys matching a pattern."""
     redis_client = await get_client()
     return await redis_client.keys(pattern)
 
-
 async def expire(key: str, seconds: int):
+    """Set expiration time for a key."""
     redis_client = await get_client()
     return await redis_client.expire(key, seconds)
