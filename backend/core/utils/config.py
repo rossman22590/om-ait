@@ -246,6 +246,7 @@ class Configuration:
     CUSTOM_DOMAIN: str = "mymachine.space"
     FIRECRAWL_API_KEY: str
     FIRECRAWL_URL: Optional[str] = "https://api.firecrawl.dev"
+    EXA_API_KEY: Optional[str] = None
     
     # Stripe configuration
     STRIPE_SECRET_KEY: Optional[str] = None
@@ -298,8 +299,8 @@ class Configuration:
     FRONTEND_URL: str = "http://localhost:3000"  # Default for local development
     
     # Sandbox configuration
-    SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3.19"
-    SANDBOX_SNAPSHOT_NAME = "kortix/suna:0.1.3.19"
+    SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3.20"
+    SANDBOX_SNAPSHOT_NAME = "kortix/suna:0.1.3.20"
     SANDBOX_ENTRYPOINT = "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
 
     # LangFuse configuration

@@ -13,6 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
     git \
+    pkg-config \
+    libcairo2-dev \
+    libgirepository1.0-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and set up directories
