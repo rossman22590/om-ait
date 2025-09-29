@@ -2,7 +2,7 @@ from typing import Dict, List, Optional, Set
 from .ai_models import Model, ModelProvider, ModelCapability, ModelPricing
 
 DEFAULT_FREE_MODEL = "Kimi K2"
-DEFAULT_PREMIUM_MODEL = "Claude Sonnet 4"
+DEFAULT_PREMIUM_MODEL = "Claude Sonnet 4.5"
 
 class ModelRegistry:
     def __init__(self):
@@ -12,10 +12,10 @@ class ModelRegistry:
     
     def _initialize_models(self):
         self.register(Model(
-            id="anthropic/claude-sonnet-4-20250514",
-            name="Claude Sonnet 4",
+            id="openrouter/anthropic/claude-sonnet-4.5",
+            name="Claude Sonnet 4.5",
             provider=ModelProvider.ANTHROPIC,
-            aliases=["claude-sonnet-4", "anthropic/claude-sonnet-4", "Claude Sonnet 4", "claude-sonnet-4-20250514"],
+            aliases=["claude-sonnet-4.5", "anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5", "claude-sonnet-4.5"],
             context_window=1_000_000,
             capabilities=[
                 ModelCapability.CHAT,
@@ -33,25 +33,25 @@ class ModelRegistry:
             enabled=True
         ))
         
-        self.register(Model(
-            id="anthropic/claude-3-7-sonnet-latest",
-            name="Claude Sonnet 3.7",
-            provider=ModelProvider.ANTHROPIC,
-            aliases=["sonnet-3.7", "claude-3.7", "Claude 3.7 Sonnet", "claude-3-7-sonnet-latest", "Claude 3.7 Sonnet"],
-            context_window=200_000,
-            capabilities=[
-                ModelCapability.CHAT,
-                ModelCapability.FUNCTION_CALLING,
-                ModelCapability.VISION,
-            ],
-            pricing=ModelPricing(
-                input_cost_per_million_tokens=3.00,
-                output_cost_per_million_tokens=15.00
-            ),
-            tier_availability=["paid"],
-            priority=99,
-            enabled=True
-        ))
+        # self.register(Model(
+        #     id="openrouter/anthropic/claude-3-7-sonnet-latest",
+        #     name="Claude Sonnet 3.7",
+        #     provider=ModelProvider.ANTHROPIC,
+        #     aliases=["sonnet-3.7", "claude-3.7", "Claude 3.7 Sonnet", "claude-3-7-sonnet-latest", "Claude 3.7 Sonnet"],
+        #     context_window=200_000,
+        #     capabilities=[
+        #         ModelCapability.CHAT,
+        #         ModelCapability.FUNCTION_CALLING,
+        #         ModelCapability.VISION,
+        #     ],
+        #     pricing=ModelPricing(
+        #         input_cost_per_million_tokens=3.00,
+        #         output_cost_per_million_tokens=15.00
+        #     ),
+        #     tier_availability=["paid"],
+        #     priority=99,
+        #     enabled=True
+        # ))
 
         self.register(Model(
             id="xai/grok-4-fast-non-reasoning",
