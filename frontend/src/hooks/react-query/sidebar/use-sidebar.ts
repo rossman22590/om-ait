@@ -19,17 +19,21 @@ export const useProjects = createQueryHook(
   }
 );
 
-export const useThreads = createQueryHook(
-  threadKeys.lists(),
+export const useThreads = (searchQuery?: string) => createQueryHook(
+  threadKeys.lists(searchQuery),
   async () => {
-    const data = await getThreads();
+    // Start with 100 most recent threads to prevent performance issues
+    // Can be increased if needed for power users
+    // If searching, increase limit to 500 to find older matches
+    const limit = searchQuery?.trim() ? 500 : 100;
+    const data = await getThreads(undefined, limit, searchQuery);
     return data as Thread[];
   },
   {
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   }
-);
+)();
 
 interface DeleteThreadVariables {
   threadId: string;
@@ -153,25 +157,38 @@ export const groupThreadsByDate = (
   const grouped: GroupedThreads = {};
   const now = new Date();
   
+  // Get today's date at midnight for proper comparison
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
   sortedThreads.forEach(thread => {
     const threadDate = new Date(thread.updatedAt);
-    const diffInMs = now.getTime() - threadDate.getTime();
-    const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+    
+    // Get thread date at midnight
+    const threadDateOnly = new Date(threadDate.getFullYear(), threadDate.getMonth(), threadDate.getDate());
     
     let dateGroup: string;
     
-    if (diffInDays === 0) {
+    // Compare dates properly using date-only comparison
+    if (threadDateOnly.getTime() === today.getTime()) {
       dateGroup = 'Today';
-    } else if (diffInDays === 1) {
+    } else if (threadDateOnly.getTime() === yesterday.getTime()) {
       dateGroup = 'Yesterday';
-    } else if (diffInDays <= 7) {
-      dateGroup = 'This Week';
-    } else if (diffInDays <= 30) {
-      dateGroup = 'This Month';
-    } else if (diffInDays <= 90) {
-      dateGroup = 'Last 3 Months';
     } else {
-      dateGroup = 'Older';
+      // For older dates, calculate difference in days from today
+      const diffInMs = today.getTime() - threadDateOnly.getTime();
+      const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+      
+      if (diffInDays <= 7) {
+        dateGroup = 'This Week';
+      } else if (diffInDays <= 30) {
+        dateGroup = 'This Month';
+      } else if (diffInDays <= 90) {
+        dateGroup = 'Last 3 Months';
+      } else {
+        dateGroup = 'Older';
+      }
     }
     
     if (!grouped[dateGroup]) {

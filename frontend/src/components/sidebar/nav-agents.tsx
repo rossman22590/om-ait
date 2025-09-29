@@ -229,7 +229,7 @@ export function NavAgents() {
     data: threads = [],
     isLoading: isThreadsLoading,
     error: threadsError
-  } = useThreads();
+  } = useThreads(searchQuery);
 
   const { mutate: deleteThreadMutation, isPending: isDeletingSingle } = useDeleteThread();
   const {
@@ -241,17 +241,9 @@ export function NavAgents() {
     !isProjectsLoading && !isThreadsLoading ?
       processThreadsWithProjects(threads, projects) : [];
 
-  // Filter threads based on search query
-  const filteredThreads = useMemo(() => {
-    if (!searchQuery.trim()) {
-      return combinedThreads;
-    }
-    return combinedThreads.filter(thread =>
-      thread.projectName.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [combinedThreads, searchQuery]);
-
-  const groupedThreads: GroupedThreads = groupThreadsByDate(filteredThreads);
+  // Server-side search is now handled in useThreads hook
+  // No need for client-side filtering anymore
+  const groupedThreads: GroupedThreads = groupThreadsByDate(combinedThreads);
 
   const handleDeletionProgress = (completed: number, total: number) => {
     const percentage = (completed / total) * 100;
@@ -341,7 +333,7 @@ export function NavAgents() {
 
   // Select all threads
   const selectAllThreads = () => {
-    const allThreadIds = filteredThreads.map(thread => thread.threadId);
+    const allThreadIds = combinedThreads.map(thread => thread.threadId);
     setSelectedThreads(new Set(allThreadIds));
   };
 
@@ -585,7 +577,7 @@ export function NavAgents() {
                   variant="ghost"
                   size="icon"
                   onClick={selectAllThreads}
-                  disabled={selectedThreads.size === filteredThreads.length}
+                  disabled={selectedThreads.size === combinedThreads.length}
                   className="h-7 w-7"
                 >
                   <Check className="h-4 w-4" />

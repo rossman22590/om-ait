@@ -1,6 +1,5 @@
 import { toast } from 'sonner';
 import { saveAs } from 'file-saver';
-import html2pdf from 'html2pdf.js';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 
@@ -21,6 +20,14 @@ export async function exportDocument({ content, fileName, format }: DocumentExpo
   try {
     switch (format) {
       case 'pdf': {
+        // Check if we're in a browser environment
+        if (typeof window === 'undefined') {
+          throw new Error('PDF export is only available in browser environment');
+        }
+
+        // Dynamically import html2pdf to avoid SSR issues
+        const html2pdf = (await import('html2pdf.js')).default;
+        
         const element = document.createElement('div');
         element.innerHTML = `
           <style>

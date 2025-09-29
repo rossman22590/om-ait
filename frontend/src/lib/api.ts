@@ -573,7 +573,7 @@ export const deleteProject = async (projectId: string): Promise<void> => {
 };
 
 // Thread APIs
-export const getThreads = async (projectId?: string): Promise<Thread[]> => {
+export const getThreads = async (projectId?: string, limit: number = 100, searchQuery?: string): Promise<Thread[]> => {
   const supabase = createClient();
 
   // Get the current user's ID to filter threads
@@ -597,6 +597,30 @@ export const getThreads = async (projectId?: string): Promise<Thread[]> => {
     query = query.eq('project_id', projectId);
   }
 
+  // If searching, join with projects table to search project names
+  if (searchQuery && searchQuery.trim()) {
+    // Search in project names by joining with projects table
+    query = supabase
+      .from('threads')
+      .select(`
+        *,
+        projects!inner(name)
+      `)
+      .eq('account_id', userData.user.id)
+      .ilike('projects.name', `%${searchQuery.trim()}%`);
+    
+    if (projectId) {
+      query = query.eq('project_id', projectId);
+    }
+    
+    // Increase limit for search results to find older matches
+    query = query.order('updated_at', { ascending: false }).limit(500);
+  } else {
+    // Order by updated_at descending to get most recent threads first
+    // Limit to prevent performance issues with users who have thousands of threads
+    query = query.order('updated_at', { ascending: false }).limit(limit);
+  }
+
   const { data, error } = await query;
 
   if (error) {
@@ -612,6 +636,10 @@ export const getThreads = async (projectId?: string): Promise<Thread[]> => {
       updated_at: thread.updated_at,
       metadata: thread.metadata,
     }));
+  
+  // Debug logging for performance monitoring
+  console.log(`Loaded ${mappedThreads.length} threads (limit: ${limit}) for user ${userData.user.id}`);
+  
   return mappedThreads;
 };
 
