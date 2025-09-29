@@ -30,6 +30,10 @@ def _detect_upstash() -> bool:
     upstash_url = os.getenv('UPSTASH_REDIS_REST_URL', '')
     upstash_token = os.getenv('UPSTASH_REDIS_REST_TOKEN', '')
     
+    # Check for DigitalOcean Valkey first
+    if 'db.ondigitalocean.com' in redis_url or 'db.ondigitalocean.com' in redis_host:
+        return False
+        
     # Check for Upstash indicators
     is_upstash = (
         'upstash.io' in redis_url or 
@@ -44,8 +48,19 @@ def _redis_broker_url() -> str:
     # First try to get the full URL
     url = os.getenv('REDIS_URL')
     if url:
+        # For DigitalOcean, ensure we use rediss://
+        if 'db.ondigitalocean.com' in url or 'db.ondigitalocean.com' in os.getenv('REDIS_HOST', ''):
+            if url.startswith('redis://'):
+                url = url.replace('redis://', 'rediss://', 1)
+            # Ensure proper auth format for DigitalOcean (keep default:username)
+            if '@' not in url and 'default:' not in url:
+                # If URL doesn't have auth, add it from environment variables
+                password = os.getenv('REDIS_PASSWORD')
+                if password:
+                    host_part = url.split('://')[-1]
+                    url = f'rediss://default:{password}@{host_part}'
         # For Upstash, ensure we use rediss:// and proper auth format
-        if 'upstash.io' in url:
+        elif 'upstash.io' in url:
             if url.startswith('redis://'):
                 url = url.replace('redis://', 'rediss://', 1)
             # Ensure proper auth format for Upstash (no username)

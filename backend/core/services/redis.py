@@ -37,8 +37,12 @@ def _build_redis_url() -> str:
     # First try to get the full URL
     url = os.getenv('REDIS_URL')
     if url:
+        # For DigitalOcean, ensure we use rediss://
+        if 'db.ondigitalocean.com' in url or 'db.ondigitalocean.com' in os.getenv('REDIS_HOST', ''):
+            if url.startswith('redis://'):
+                url = url.replace('redis://', 'rediss://', 1)
         # For Upstash, ensure we use rediss:// and proper auth format
-        if 'upstash.io' in url:
+        elif 'upstash.io' in url:
             if url.startswith('redis://'):
                 url = url.replace('redis://', 'rediss://', 1)
             # Ensure proper auth format for Upstash (no username)
