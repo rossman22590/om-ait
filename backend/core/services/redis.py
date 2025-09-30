@@ -24,6 +24,10 @@ def _detect_upstash() -> bool:
     redis_url = os.getenv('REDIS_URL', '')
     redis_host = os.getenv('REDIS_HOST', '')
     
+    # Check for DigitalOcean Valkey first
+    if 'db.ondigitalocean.com' in redis_url or 'db.ondigitalocean.com' in redis_host:
+        return False
+        
     # Check for Upstash indicators
     is_upstash = (
         'upstash.io' in redis_url or 
@@ -38,9 +42,16 @@ def _build_redis_url() -> str:
     url = os.getenv('REDIS_URL')
     if url:
         # For DigitalOcean, ensure we use rediss://
-        if 'db.ondigitalocean.com' in url or 'db.ondigitalocean.com' in os.getenv('REDIS_HOST', ''):
+        if 'db.ondigitalocean.com' in url:
             if url.startswith('redis://'):
                 url = url.replace('redis://', 'rediss://', 1)
+            # Ensure proper auth format for DigitalOcean (keep default:username)
+            if '@' not in url and 'default:' not in url:
+                # If URL doesn't have auth, add it from environment variables
+                password = os.getenv('REDIS_PASSWORD')
+                if password:
+                    host_part = url.split('://')[-1]
+                    url = f'rediss://default:{password}@{host_part}'
         # For Upstash, ensure we use rediss:// and proper auth format
         elif 'upstash.io' in url:
             if url.startswith('redis://'):
@@ -56,8 +67,12 @@ def _build_redis_url() -> str:
     password = os.getenv('REDIS_PASSWORD', '')
     use_ssl = os.getenv('REDIS_SSL', 'false').lower() == 'true'
     
+    # For DigitalOcean or SSL, use rediss:// with default username
+    if 'db.ondigitalocean.com' in host or use_ssl:
+        auth = f"default:{password}@" if password else ''
+        return f"rediss://{auth}{host}:{port}"
     # For Upstash, use rediss:// and no username
-    if 'upstash.io' in host or use_ssl:
+    elif 'upstash.io' in host:
         auth = f":{password}@" if password else ''
         return f"rediss://{auth}{host}:{port}"
     else:
@@ -204,10 +219,20 @@ async def delete(key: str):
     return await redis_client.delete(key)
 
 
-async def publish(channel: str, message: str):
-    """Publish a message to a Redis channel."""
-    redis_client = await get_client()
-    return await redis_client.publish(channel, message)
+async def publish(channel: str, message: str, max_retries: int = 2):
+    """Publish a message to a Redis channel with retry logic."""
+    for attempt in range(max_retries + 1):
+        try:
+            redis_client = await get_client()
+            return await redis_client.publish(channel, str(message))
+        except (ConnectionError, TimeoutError, redis.ConnectionError) as e:
+            if attempt == max_retries:
+                logger.warning(f"Failed to publish to Redis after {max_retries} attempts: {e}")
+                raise
+            await asyncio.sleep(0.5 * (attempt + 1))  # Exponential backoff
+        except Exception as e:
+            logger.error(f"Unexpected error publishing to Redis: {e}")
+            raise
 
 
 async def create_pubsub():

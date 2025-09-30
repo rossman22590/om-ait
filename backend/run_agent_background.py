@@ -74,8 +74,12 @@ def _redis_broker_url() -> str:
     password = os.getenv('REDIS_PASSWORD', '')
     use_ssl = os.getenv('REDIS_SSL', 'false').lower() == 'true'
     
+    # For DigitalOcean or SSL, use rediss:// with default username
+    if 'db.ondigitalocean.com' in host or use_ssl:
+        auth = f"default:{password}@" if password else ''
+        return f"rediss://{auth}{host}:{port}"
     # For Upstash, use rediss:// and no username
-    if 'upstash.io' in host or use_ssl:
+    elif 'upstash.io' in host:
         auth = f":{password}@" if password else ''
         return f"rediss://{auth}{host}:{port}"
     else:
@@ -380,10 +384,21 @@ async def run_agent_background(
         await _cleanup_redis_run_lock(agent_run_id)
 
         # Wait for all pending redis operations to complete, with timeout
-        try:
-            await asyncio.wait_for(asyncio.gather(*pending_redis_operations), timeout=30.0)
-        except asyncio.TimeoutError:
-            logger.warning(f"Timeout waiting for pending Redis operations for {agent_run_id}")
+        if pending_redis_operations:
+            try:
+                # Use return_exceptions=True to prevent one failure from stopping others
+                results = await asyncio.wait_for(
+                    asyncio.gather(*pending_redis_operations, return_exceptions=True), 
+                    timeout=10.0  # Reduced timeout for cleanup
+                )
+                # Log any failures
+                for i, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        logger.warning(f"Redis operation {i} failed during cleanup: {str(result)}")
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout waiting for pending Redis operations for {agent_run_id}")
+            except Exception as e:
+                logger.warning(f"Error during Redis cleanup operations: {str(e)}")
 
         logger.debug(f"Agent run background task fully completed for: {agent_run_id} (Instance: {instance_id}) with final status: {final_status}")
 
@@ -475,4 +490,3 @@ async def update_agent_run_status(
         return False
 
     return False
-
