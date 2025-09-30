@@ -212,12 +212,8 @@ class Configuration:
     OR_SITE_URL: Optional[str] = "https://machine.myapps.ai"
     OR_APP_NAME: Optional[str] = "Machine"    
     
-    # AWS Bedrock credentials
-    AWS_ACCESS_KEY_ID: Optional[str] = None
-    AWS_SECRET_ACCESS_KEY: Optional[str] = None
-    AWS_REGION_NAME: Optional[str] = None
-    
-
+    # AWS Bedrock authentication
+    AWS_BEARER_TOKEN_BEDROCK: Optional[str] = None
     
     # Supabase configuration
     SUPABASE_URL: str

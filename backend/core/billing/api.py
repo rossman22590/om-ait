@@ -31,6 +31,7 @@ class CreateCheckoutSessionRequest(BaseModel):
     price_id: str
     success_url: str
     cancel_url: str
+    commitment_type: Optional[str] = None
 
 class CreatePortalSessionRequest(BaseModel):
     return_url: str
@@ -78,8 +79,6 @@ def calculate_token_cost(prompt_tokens: int, completion_tokens: int, model: str)
     except Exception as e:
         logger.error(f"[COST_CALC] Error calculating token cost for model '{model}': {e}")
         return Decimal('0.01')
-
-
 
 async def calculate_credit_breakdown(account_id: str, client) -> Dict:
     current_balance = await credit_service.get_balance(account_id)
@@ -444,8 +443,9 @@ async def create_checkout_session(
         result = await subscription_service.create_checkout_session(
             account_id=account_id,
             price_id=request.price_id,
-                success_url=request.success_url,
-            cancel_url=request.cancel_url
+            success_url=request.success_url,
+            cancel_url=request.cancel_url,
+            commitment_type=request.commitment_type
         )
         return result
             

@@ -6,7 +6,7 @@ SUNA_CONFIG = {
     "description": "Machine is your AI assistant with access to various tools and integrations to help you with tasks across domains.",
     "avatar": "🌞",
     "avatar_color": "#F59E0B",
-    "model": "openai/gpt-5-mini",
+    "model": "anthropic/claude-sonnet-4-20250514",
     "system_prompt": SYSTEM_PROMPT,
     "configured_mcps": [],
     "custom_mcps": [],
@@ -33,7 +33,7 @@ SUNA_CONFIG = {
         "sb_avatar_tool": True,
         "sb_presentation_outline_tool": False,
         "sb_presentation_tool": True,
-        "sb_sheets_tool": True,
+        "sb_sheets_tool": False,
         "sb_kb_tool": True,
 
         # search tools

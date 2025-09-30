@@ -197,7 +197,6 @@ export default function AgentsPage() {
           creator_name: template.creator_name || 'Anonymous',
           created_at: template.created_at,
           marketplace_published_at: template.marketplace_published_at,
-          profile_image_url: template.profile_image_url,
           icon_name: template.icon_name,
           icon_color: template.icon_color,
           icon_background: template.icon_background,
@@ -400,7 +399,6 @@ export default function AgentsPage() {
 
   const getItemStyling = (item: MarketplaceTemplate) => {
     return {
-      avatar: '🤖',
       color: '#6366f1',
     };
   };
@@ -498,7 +496,6 @@ export default function AgentsPage() {
 
   const getTemplateStyling = (template: any) => {
     return {
-      avatar: '🤖',
       color: '#6366f1',
     };
   };

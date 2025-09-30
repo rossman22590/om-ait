@@ -55,7 +55,7 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
       {
         name: 'execute_command',
         displayName: 'Execute Command',
-        description: 'Execute shell commands in tmux sessions',
+        description: 'Execute shell commands in terminal',
         enabled: true,
       },
       {
@@ -91,13 +91,13 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
       {
         name: 'web_search',
         displayName: 'Web Search',
-        description: 'Search the web using Tavily API',
+        description: 'Search the web for information',
         enabled: true,
       },
       {
         name: 'scrape_webpage',
         displayName: 'Scrape Webpage',
-        description: 'Scrape webpage content using Firecrawl',
+        description: 'Extract content from web pages',
         enabled: true,
       },
     ],
@@ -105,9 +105,9 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
 
   people_search_tool: {
     name: 'people_search_tool',
-    displayName: 'Web Search',
-    description: 'Search for people using LinkedIn',
-    icon: 'Globe',
+    displayName: 'People Search',
+    description: 'Search for people and their professional profiles',
+    icon: 'Users',
     color: 'bg-indigo-100 dark:bg-indigo-800/50',
     toolClass: 'PeopleSearchTool',
     enabled: true,
@@ -115,7 +115,25 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
       {
         name: 'people_search',
         displayName: 'People Search',
-        description: 'Search for people using LinkedIn',
+        description: 'Search for people and their professional profiles',
+        enabled: true,
+      },
+    ],
+  },
+
+  company_search_tool: {
+    name: 'company_search_tool',
+    displayName: 'Company Search',
+    description: 'Search for companies and business information',
+    icon: 'Building2',
+    color: 'bg-blue-100 dark:bg-blue-800/50',
+    toolClass: 'CompanySearchTool',
+    enabled: true,
+    methods: [
+      {
+        name: 'company_search',
+        displayName: 'Company Search',
+        description: 'Search for companies and business information',
         enabled: true,
       },
     ],
@@ -304,7 +322,7 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
   sb_web_dev_tool: {
     name: 'sb_web_dev_tool',
     displayName: 'Web Development',
-    description: 'Create and manage web development projects with Vite and React',
+    description: 'Create and manage web development projects',
     icon: 'Code',
     color: 'bg-emerald-100 dark:bg-emerald-800/50',
     toolClass: 'SandboxWebDevTool',
@@ -312,8 +330,8 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
     methods: [
       {
         name: 'create_vite_react_project',
-        displayName: 'Create Vite React Project',
-        description: 'Create a new Vite React project',
+        displayName: 'Create React Project',
+        description: 'Create a new React web application',
         enabled: true,
       },
       {
@@ -434,12 +452,6 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
         name: 'delete_slide',
         displayName: 'Delete Slide',
         description: 'Delete slides from presentations',
-        enabled: true,
-      },
-      {
-        name: 'presentation_styles',
-        displayName: 'Presentation Styles',
-        description: 'Get available presentation styles',
         enabled: true,
       },
       {
@@ -593,7 +605,7 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
   data_providers_tool: {
     name: 'data_providers_tool',
     displayName: 'Data Providers',
-    description: 'Access to data providers and external APIs',
+    description: 'Access external data sources and services',
     icon: 'Link',
     color: 'bg-cyan-100 dark:bg-cyan-800/50',
     toolClass: 'DataProvidersTool',
@@ -941,7 +953,7 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
   image_search_tool: {
     name: 'image_search_tool',
     displayName: 'Image Search',
-    description: 'Search for images using SERPER API',
+    description: 'Search for images on the web',
     icon: 'Image',
     color: 'bg-indigo-100 dark:bg-indigo-800/50',
     toolClass: 'SandboxImageSearchTool',
@@ -966,9 +978,63 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
     enabled: true,
     methods: [
       {
-        name: 'query_knowledge_base',
-        displayName: 'Query Knowledge Base',
-        description: 'Search and query knowledge base',
+        name: 'init_kb',
+        displayName: 'Initialize Knowledge Base',
+        description: 'Initialize the kb-fusion binary and optionally sync knowledge base',
+        enabled: true,
+      },
+      {
+        name: 'search_files',
+        displayName: 'Search Files',
+        description: 'Perform semantic search on files using kb-fusion',
+        enabled: true,
+      },
+      {
+        name: 'cleanup_kb',
+        displayName: 'Cleanup Knowledge Base',
+        description: 'Perform maintenance and cleanup operations',
+        enabled: true,
+      },
+      {
+        name: 'ls_kb',
+        displayName: 'List Knowledge Base Files',
+        description: 'List indexed files in the knowledge base',
+        enabled: true,
+      },
+      {
+        name: 'global_kb_sync',
+        displayName: 'Sync Global Knowledge Base',
+        description: 'Sync agent\'s knowledge base files to sandbox',
+        enabled: true,
+      },
+      {
+        name: 'global_kb_create_folder',
+        displayName: 'Create Knowledge Base Folder',
+        description: 'Create a new folder in the global knowledge base',
+        enabled: true,
+      },
+      {
+        name: 'global_kb_upload_file',
+        displayName: 'Upload File to Knowledge Base',
+        description: 'Upload a file from sandbox to the global knowledge base',
+        enabled: true,
+      },
+      {
+        name: 'global_kb_delete_item',
+        displayName: 'Delete Knowledge Base Item',
+        description: 'Delete a file or folder from the global knowledge base',
+        enabled: true,
+      },
+      {
+        name: 'global_kb_enable_item',
+        displayName: 'Enable/Disable Knowledge Base Item',
+        description: 'Enable or disable a knowledge base file for this agent',
+        enabled: true,
+      },
+      {
+        name: 'global_kb_list_contents',
+        displayName: 'List Knowledge Base Contents',
+        description: 'List all folders and files in the global knowledge base',
         enabled: true,
       },
     ],
@@ -1031,7 +1097,7 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
   sb_docs_tool: {
     name: 'sb_docs_tool',
     displayName: 'Document Editor',
-    description: 'Create and edit documents with TipTap',
+    description: 'Create and edit rich text documents',
     icon: 'FileText',
     color: 'bg-gray-100 dark:bg-gray-800/50',
     toolClass: 'SandboxDocsTool',
@@ -1040,7 +1106,31 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
       {
         name: 'create_document',
         displayName: 'Create Document',
-        description: 'Create and edit documents',
+        description: 'Create new documents with rich text content',
+        enabled: true,
+      },
+      {
+        name: 'read_document',
+        displayName: 'Read Document',
+        description: 'Read the content of a document',
+        enabled: true,
+      },
+      {
+        name: 'list_documents',
+        displayName: 'List Documents',
+        description: 'List all documents in the workspace',
+        enabled: true,
+      },
+      {
+        name: 'delete_document',
+        displayName: 'Delete Document',
+        description: 'Delete a document from the workspace',
+        enabled: true,
+      },
+      {
+        name: 'get_format_guide',
+        displayName: 'Get Format Guide',
+        description: 'Get TipTap-compatible HTML format guide',
         enabled: true,
       },
     ],
