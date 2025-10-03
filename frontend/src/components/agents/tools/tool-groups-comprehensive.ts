@@ -110,7 +110,7 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
     icon: 'Users',
     color: 'bg-indigo-100 dark:bg-indigo-800/50',
     toolClass: 'PeopleSearchTool',
-    enabled: true,
+    enabled: false,
     methods: [
       {
         name: 'people_search',
@@ -128,7 +128,7 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
     icon: 'Building2',
     color: 'bg-blue-100 dark:bg-blue-800/50',
     toolClass: 'CompanySearchTool',
-    enabled: true,
+    enabled: false,
     methods: [
       {
         name: 'company_search',
@@ -146,7 +146,7 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
     icon: 'Book',
     color: 'bg-blue-100 dark:bg-blue-800/50',
     toolClass: 'PaperSearchTool',
-    enabled: true,
+    enabled: false,
     methods: [
       {
         name: 'paper_search',
