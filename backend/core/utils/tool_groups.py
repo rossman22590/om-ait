@@ -938,7 +938,7 @@ TOOL_GROUPS: Dict[str, ToolGroup] = {
                 name="people_search",
                 display_name="People Search",
                 description="Search for people using LinkedIn",
-                enabled=True
+                enabled=False
             ),
         ]
     ),
@@ -953,7 +953,7 @@ TOOL_GROUPS: Dict[str, ToolGroup] = {
                 name="company_search",
                 display_name="Company Search",
                 description="Search for companies using natural language queries",
-                enabled=True
+                enabled=False
             ),
         ]
     ),
@@ -968,7 +968,7 @@ TOOL_GROUPS: Dict[str, ToolGroup] = {
                 name="paper_search",
                 display_name="Paper Search",
                 description="Search for papers using natural language queries",
-                enabled=True
+                enabled=False
             ),
         ]
     ),
