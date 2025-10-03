@@ -11,7 +11,7 @@ import { PipedreamConnector } from './pipedream-connector';
 import { toast } from 'sonner';
 // import { cn } from '@/lib/utils';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import { AgentSelector } from '../../thread/chat-input/agent-selector';
+import { AgentSelector } from '../agent-selector';
 import type { PipedreamApp } from '@/hooks/react-query/pipedream/utils';
 import { pipedreamApi } from '@/hooks/react-query/pipedream/utils';
 import { AppCard } from './_components/app-card';

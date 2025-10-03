@@ -6,15 +6,14 @@ import { NavMenu } from "@/components/home/nav-menu";
 import { ThemeToggle } from "@/components/home/theme-toggle";
 import { siteConfig } from "@/lib/home";
 import { cn } from "@/lib/utils";
-import { Menu, X, Github } from "lucide-react";
+import { Menu, X, Github, ChevronRight } from "lucide-react";
 import { AnimatePresence, motion, useScroll } from "framer-motion";
-import Link from "next/link";
-import Image from "next/image";
-import { usePathname } from "next/navigation";
+import Link from 'next/link';
+import Image from 'next/image';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/components/AuthProvider";
-import { ChevronRight } from "lucide-react";
 
 const INITIAL_WIDTH = "70rem";
 const MAX_WIDTH = "800px";
@@ -64,6 +63,8 @@ export function Navbar() {
   const { theme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const { user } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     setMounted(true);
@@ -199,11 +200,24 @@ export function Navbar() {
                   <Link
                     key={item.id}
                     href={item.href}
+                    target={item.href.startsWith('http') ? '_blank' : undefined}
+                    rel={item.href.startsWith('http') ? 'noopener noreferrer' : undefined}
                     onClick={(e) => {
                       // Only prevent default for hash links to handle in-page navigation
                       if (item.href.startsWith('#')) {
                         e.preventDefault();
                         toggleDrawer();
+                        
+                        // If we're not on the homepage, redirect to homepage with the section
+                        if (pathname !== '/') {
+                          if (item.href === '#hero') {
+                            router.push('/');
+                          } else {
+                            router.push(`/${item.href}`);
+                          }
+                          return;
+                        }
+                        
                         // Smooth scroll to the section
                         const targetId = item.href.substring(1);
                         const element = document.getElementById(targetId);

@@ -41,6 +41,10 @@ class ToolResult:
     """
     success: bool
     output: str
+    
+    def __str__(self) -> str:
+        """Return the output field when stringified (defensive measure)."""
+        return self.output
 
 class Tool(ABC):
     """Abstract base class for all tools.

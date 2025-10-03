@@ -149,6 +149,39 @@ TOOL_GROUPS: Dict[str, ToolGroup] = {
         ]
     ),
     
+    "sb_avatar_tool": ToolGroup(
+        name="sb_avatar_tool",
+        display_name="Avatar Video Generator",
+        description="Generate AI avatar videos with customizable avatars and voices using Argil AI",
+        tool_class="SandboxAvatarTool",
+        methods=[
+            ToolMethod(
+                name="list_argil_avatars",
+                display_name="List Avatars",
+                description="List available AI avatars for video generation",
+                enabled=True
+            ),
+            ToolMethod(
+                name="list_argil_voices",
+                display_name="List Voices",
+                description="List available AI voices for video narration",
+                enabled=True
+            ),
+            ToolMethod(
+                name="generate_argil_video",
+                display_name="Generate Video",
+                description="Generate AI avatar video with specified avatar, voice, and script",
+                enabled=True
+            ),
+            ToolMethod(
+                name="check_argil_video_status",
+                display_name="Check Video Status",
+                description="Check the status and download completed avatar videos",
+                enabled=True
+            ),
+        ]
+    ),
+    
     "browser_tool": ToolGroup(
         name="browser_tool",
         display_name="Browser Automation",
@@ -1074,14 +1107,29 @@ def get_enabled_methods_for_tool(tool_name: str, config: Dict[str, Any]) -> List
     
     tool_config = config.get(tool_name, True)
     
+    # Debug logging for avatar tool
+    if tool_name == 'sb_avatar_tool':
+        from core.utils.logger import logger
+        logger.info(f"🎬 GET_ENABLED_METHODS: sb_avatar_tool config type={type(tool_config)}, value={tool_config}")
+    
     if isinstance(tool_config, bool) and not tool_config:
+        if tool_name == 'sb_avatar_tool':
+            from core.utils.logger import logger
+            logger.error(f"🎬 GET_ENABLED_METHODS: sb_avatar_tool is FALSE - returning empty list!")
         return []
     
     if tool_config is True:
-        return [method.name for method in tool_group.methods if method.enabled]
+        result = [method.name for method in tool_group.methods if method.enabled]
+        if tool_name == 'sb_avatar_tool':
+            from core.utils.logger import logger
+            logger.info(f"🎬 GET_ENABLED_METHODS: sb_avatar_tool is TRUE - returning: {result}")
+        return result
     
     if isinstance(tool_config, dict):
         if not tool_config.get('enabled', True):
+            if tool_name == 'sb_avatar_tool':
+                from core.utils.logger import logger
+                logger.error(f"🎬 GET_ENABLED_METHODS: sb_avatar_tool dict has enabled=False - returning empty list!")
             return []
         
         methods_config = tool_config.get('methods', {})
@@ -1100,9 +1148,16 @@ def get_enabled_methods_for_tool(tool_name: str, config: Dict[str, Any]) -> List
             if method_enabled:
                 enabled_methods.append(method.name)
         
+        if tool_name == 'sb_avatar_tool':
+            from core.utils.logger import logger
+            logger.info(f"🎬 GET_ENABLED_METHODS: sb_avatar_tool dict - returning: {enabled_methods}")
         return enabled_methods
     
-    return [method.name for method in tool_group.methods if method.enabled]
+    result = [method.name for method in tool_group.methods if method.enabled]
+    if tool_name == 'sb_avatar_tool':
+        from core.utils.logger import logger
+        logger.info(f"🎬 GET_ENABLED_METHODS: sb_avatar_tool fallback - returning: {result}")
+    return result
 
 def validate_tool_config(config: Dict[str, Any]) -> Dict[str, Any]:
     normalized_config = {}

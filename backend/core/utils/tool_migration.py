@@ -20,6 +20,9 @@ def migrate_legacy_tool_config(legacy_config: Dict[str, Any]) -> Dict[str, Any]:
                         method.name: tool_value for method in tool_group.methods
                     }
                 }
+                # Debug logging for avatar tool
+                if tool_name == 'sb_avatar_tool':
+                    logger.info(f"🎬 MIGRATION: sb_avatar_tool (bool={tool_value}) → {migrated_config[tool_name]}")
             else:
                 migrated_config[tool_name] = tool_value
                 
@@ -40,6 +43,9 @@ def migrate_legacy_tool_config(legacy_config: Dict[str, Any]) -> Dict[str, Any]:
                     'enabled': enabled,
                     'methods': complete_methods
                 }
+                # Debug logging for avatar tool
+                if tool_name == 'sb_avatar_tool':
+                    logger.info(f"🎬 MIGRATION: sb_avatar_tool (dict) → enabled={enabled}, methods={complete_methods}")
             else:
                 migrated_config[tool_name] = enabled
         else:

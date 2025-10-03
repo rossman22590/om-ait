@@ -181,6 +181,42 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
     ],
   },
 
+  sb_avatar_tool: {
+    name: 'sb_avatar_tool',
+    displayName: 'Avatar Video Generator',
+    description: 'Generate AI avatar videos with customizable avatars and voices using Argil AI',
+    icon: 'Video',
+    color: 'bg-rose-100 dark:bg-rose-800/50',
+    toolClass: 'SandboxAvatarTool',
+    enabled: true,
+    methods: [
+      {
+        name: 'list_argil_avatars',
+        displayName: 'List Avatars',
+        description: 'List available AI avatars for video generation',
+        enabled: true,
+      },
+      {
+        name: 'list_argil_voices',
+        displayName: 'List Voices',
+        description: 'List available AI voices for video narration',
+        enabled: true,
+      },
+      {
+        name: 'generate_argil_video',
+        displayName: 'Generate Video',
+        description: 'Generate AI avatar video with specified avatar, voice, and script',
+        enabled: true,
+      },
+      {
+        name: 'check_argil_video_status',
+        displayName: 'Check Video Status',
+        description: 'Check the status and download completed avatar videos',
+        enabled: true,
+      },
+    ],
+  },
+
   browser_tool: {
     name: 'browser_tool',
     displayName: 'Browser Automation',
@@ -814,7 +850,7 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
 
   agent_creation_tool: {
     name: 'agent_creation_tool',
-    displayName: 'Agent Creation (Suna)',
+    displayName: 'Agent Creation (Machine)',
     description: 'Comprehensive agent creation and management (Suna only)',
     icon: 'Plus',
     color: 'bg-indigo-100 dark:bg-indigo-800/50',

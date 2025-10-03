@@ -15,6 +15,7 @@ import {
   CardTitle 
 } from "@/components/ui/card";
 import { FlickeringGrid } from "@/components/home/ui/flickering-grid";
+import { IntercomLoader } from "@/components/intercom";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState(0);
@@ -167,6 +168,9 @@ export default function Home() {
 
   return (
     <main className="flex flex-col items-center min-h-screen w-full overflow-x-hidden bg-white dark:bg-black">
+      {/* Load Intercom chatbot */}
+      <IntercomLoader />
+      
       {/* Registration Disabled Popup */}
       <AnimatePresence>
         {showRegistrationPopup && (

@@ -6,7 +6,7 @@ FREE_MODEL_ID = "moonshotai/kimi-k2"
 
 # Set premium model ID based on environment
 if config.ENV_MODE == EnvMode.LOCAL:
-    PREMIUM_MODEL_ID = "anthropic/claude-sonnet-4-20250514"
+    PREMIUM_MODEL_ID = "openrouter/anthropic/claude-sonnet-4.5"
 else:  # STAGING or PRODUCTION
     PREMIUM_MODEL_ID = "bedrock/anthropic.claude-sonnet-4-20250514-v1:0"
 
@@ -21,10 +21,10 @@ class ModelRegistry:
     def _initialize_models(self):
         
         self.register(Model(
-            id="anthropic/claude-sonnet-4-20250514" if is_local else "bedrock/anthropic.claude-sonnet-4-20250514-v1:0",
-            name="Sonnet 4",
-            provider=ModelProvider.ANTHROPIC,
-            aliases=["claude-sonnet-4", "anthropic/claude-sonnet-4", "Claude Sonnet 4", "claude-sonnet-4-20250514", "bedrock-claude-sonnet-4", "bedrock/claude-sonnet-4", "anthropic.claude-sonnet-4-20250514-v1:0"],
+            id="openrouter/anthropic/claude-sonnet-4.5",
+            name="Sonnet 4.5",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["claude-sonnet-4.5", "anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5", "claude-sonnet-4-20250514", "bedrock-claude-sonnet-4", "bedrock/claude-sonnet-4", "anthropic.claude-sonnet-4-20250514-v1:0"],
             context_window=1_000_000,
             capabilities=[
                 ModelCapability.CHAT,
@@ -43,9 +43,9 @@ class ModelRegistry:
         ))
         
         self.register(Model(
-            id="anthropic/claude-3-7-sonnet-latest" if is_local else "bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0",
+            id="openrouter/anthropic/claude-3.7-sonnet" if is_local else "bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0",
             name="Sonnet 3.7",
-            provider=ModelProvider.ANTHROPIC,
+            provider=ModelProvider.OPENROUTER,
             aliases=["sonnet-3.7", "claude-3.7", "Claude 3.7 Sonnet", "claude-3-7-sonnet-latest", "bedrock-claude-3.7", "bedrock/claude-3.7", "anthropic.claude-3-7-sonnet-20250219-v1:0"],
             context_window=200_000,
             capabilities=[

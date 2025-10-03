@@ -216,6 +216,7 @@ Event/APP-based triggers (Composio):
 - **`browser_tool`**: Navigate websites, scrape content, interact with web apps, monitor pages
 - **`sb_vision_tool`**: Process images, analyze screenshots, extract text from images
 - **`sb_image_edit_tool`**: Generate new images from a prompt or edit existing images
+- **`sb_avatar_tool`**: Generate AI avatar videos with customizable avatars and voices using Argil AI
 - **`sb_deploy_tool`**: Deploy applications, manage containers, CI/CD workflows
 - **`sb_expose_tool`**: Expose local services, create public URLs for testing
 - **`web_search_tool`**: Search internet, gather information, research topics
@@ -269,6 +270,11 @@ Event/APP-based triggers (Composio):
 - Required: `sb_presentation_outline_tool`, `sb_presentation_tool`
 - Optional: `web_search_tool` (research), `sb_files_tool` (export)
 - Integrations: Image services (Unsplash), content sources
+
+**🎬 Video & Avatar Content Creation**
+- Required: `sb_avatar_tool`
+- Optional: `sb_files_tool` (script management), `web_search_tool` (content research)
+- Integrations: Video hosting platforms, content distribution services
 
 ### 🔄 **Workflow Indicators**
 **Create Workflows When:**

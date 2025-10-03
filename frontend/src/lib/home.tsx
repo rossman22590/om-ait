@@ -73,9 +73,11 @@ export const siteConfig = {
   nav: {
     links: [
       { id: 1, name: 'Home', href: '#hero' },
-      { id: 2, name: 'Use Cases', href: '#use-cases' },
-      // { id: 3, name: 'Status', href: 'https://ai-tutor-x-pixio.instatus.com/' },
-      // { id: 4, name: 'Pricing', href: '#pricing' },
+      { id: 2, name: 'About', href: '/about' },
+      { id: 3, name: 'Use Cases', href: '#use-cases' },
+      { id: 4, name: 'Pricing', href: '/pricing' },
+      { id: 5, name: 'Docs', href: 'https://support.myapps.ai/machine/the-machine' },
+      { id: 6, name: 'Status', href: 'https://ai-tutor-x-pixio.instatus.com/' },
     ],
   },
   hero: {
@@ -1193,48 +1195,7 @@ export const siteConfig = {
     },
     subtext: 'Build, manage and train your AI Workforce',
   },
-  footerLinks: [
-    {
-      title: 'Machine',
-      links: [
-        { id: 1, title: 'About', url: 'https://machine.myapps.ai' },
-        { id: 3, title: 'Contact', url: 'mailto:support@mytsi.orgi' },
-        { id: 4, title: 'Careers', url: 'https://machine.myapps.ai' },
-      ],
-    },
-    {
-      title: 'Resources',
-      links: [
-        {
-          id: 5,
-          title: 'Documentation',
-          url: '#',
-        },
-        { id: 7, title: 'Discord', url: '#' },
-        { id: 8, title: 'GitHub', url: '#' },
-      ],
-    },
-    {
-      title: 'Legal',
-      links: [
-        {
-          id: 9,
-          title: 'Privacy Policy',
-          url: 'https://myapps.ai/privacy',
-        },
-        {
-          id: 10,
-          title: 'Terms of Service',
-          url: 'https://myapps.ai/terms',
-        },
-        {
-          id: 11,
-          title: 'License Apache 2.0',
-          url: '#',
-        },
-      ],
-    },
-  ],
+  footerLinks: [],
   useCases: [
     {
       id: 'competitor-analysis',

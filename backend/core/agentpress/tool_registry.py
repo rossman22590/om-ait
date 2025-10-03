@@ -36,13 +36,22 @@ class ToolRegistry:
             - If function_names is None, all functions are registered
             - Handles OpenAPI schema registration
         """
-        # logger.debug(f"Registering tool class: {tool_class.__name__}")
+        from core.utils.logger import logger
+        
+        # Debug logging for avatar tool
+        if tool_class.__name__ == 'SandboxAvatarTool':
+            logger.info(f"🎬 REGISTRY: Registering {tool_class.__name__}")
+            logger.info(f"🎬 REGISTRY: function_names filter: {function_names}")
+        
         tool_instance = tool_class(**kwargs)
         schemas = tool_instance.get_schemas()
         
-        # logger.debug(f"Available schemas for {tool_class.__name__}: {list(schemas.keys())}")
+        # Debug logging for avatar tool
+        if tool_class.__name__ == 'SandboxAvatarTool':
+            logger.info(f"🎬 REGISTRY: Available schemas in tool: {list(schemas.keys())}")
         
         registered_openapi = 0
+        registered_names = []
         
         for func_name, schema_list in schemas.items():
             if function_names is None or func_name in function_names:
@@ -53,9 +62,17 @@ class ToolRegistry:
                             "schema": schema
                         }
                         registered_openapi += 1
+                        registered_names.append(func_name)
                         # logger.debug(f"Registered OpenAPI function {func_name} from {tool_class.__name__}")
+            else:
+                # Debug: Log filtered out methods for avatar tool
+                if tool_class.__name__ == 'SandboxAvatarTool':
+                    logger.error(f"🎬 REGISTRY: FILTERED OUT {func_name} (not in function_names list)")
         
-        # logger.debug(f"Tool registration complete for {tool_class.__name__}: {registered_openapi} OpenAPI functions")
+        # Debug logging for avatar tool
+        if tool_class.__name__ == 'SandboxAvatarTool':
+            logger.info(f"🎬 REGISTRY: Registered {registered_openapi} methods: {registered_names}")
+            logger.info(f"🎬 REGISTRY: Total tools in registry: {len(self.tools)}")
 
     def get_available_functions(self) -> Dict[str, Callable]:
         """Get all available tool functions.
@@ -63,7 +80,10 @@ class ToolRegistry:
         Returns:
             Dict mapping function names to their implementations
         """
+        from core.utils.logger import logger
+        
         available_functions = {}
+        avatar_functions = []
         
         # Get OpenAPI tool functions
         for tool_name, tool_info in self.tools.items():
@@ -72,7 +92,16 @@ class ToolRegistry:
             function = getattr(tool_instance, function_name)
             available_functions[function_name] = function
             
-        # logger.debug(f"Retrieved {len(available_functions)} available functions")
+            # Track avatar tool functions
+            if tool_instance.__class__.__name__ == 'SandboxAvatarTool':
+                avatar_functions.append(function_name)
+        
+        # Debug logging for avatar tool
+        if avatar_functions:
+            logger.info(f"🎬 GET_AVAILABLE_FUNCTIONS: Avatar tool methods available: {avatar_functions}")
+        else:
+            logger.error(f"🎬 GET_AVAILABLE_FUNCTIONS: NO avatar tool methods found!")
+            
         return available_functions
 
     def get_tool(self, tool_name: str) -> Dict[str, Any]:

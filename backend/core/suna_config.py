@@ -6,7 +6,7 @@ SUNA_CONFIG = {
     "description": "Machine is your AI assistant with access to various tools and integrations to help you with tasks across domains.",
     "avatar": "🌞",
     "avatar_color": "#F59E0B",
-    "model": "anthropic/claude-sonnet-4-20250514",
+    "model": "openrouter/anthropic/claude-sonnet-4.5",
     "system_prompt": SYSTEM_PROMPT,
     "configured_mcps": [],
     "custom_mcps": [],

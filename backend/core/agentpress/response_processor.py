@@ -1390,6 +1390,13 @@ class ResponseProcessor:
             # Get available functions from tool registry
             logger.debug(f"🔍 Looking up tool function: {function_name}")
             available_functions = self.tool_registry.get_available_functions()
+            
+            # Debug for avatar tool methods
+            if 'argil' in function_name:
+                logger.info(f"🎬 EXECUTE_TOOL: Trying to execute {function_name}")
+                logger.info(f"🎬 EXECUTE_TOOL: Is it in available_functions? {function_name in available_functions}")
+                avatar_methods = [f for f in available_functions.keys() if 'argil' in f]
+                logger.info(f"🎬 EXECUTE_TOOL: All argil methods in registry: {avatar_methods}")
             # logger.debug(f"📋 Available functions: {list(available_functions.keys())}")
 
             # Look up the function by name

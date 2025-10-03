@@ -31,8 +31,9 @@ SUBSCRIPTION_AVATAR_MAPPING = {
 ASSIGNED_AVATAR_IDS = {mapping["avatar_id"] for mapping in SUBSCRIPTION_AVATAR_MAPPING.values()}
 ASSIGNED_VOICE_IDS = {mapping["voice_id"] for mapping in SUBSCRIPTION_AVATAR_MAPPING.values()}
 
+
 class SandboxAvatarTool(SandboxToolsBase):
-    """Tool for interacting with the Argil AI Avatar API to list avatars, voices, and generate videos."""
+    """Tool for generating AI avatar videos using Argil AI API."""
 
     def __init__(self, project_id: str, thread_id: str, thread_manager: ThreadManager):
         super().__init__(project_id, thread_manager)
@@ -40,9 +41,10 @@ class SandboxAvatarTool(SandboxToolsBase):
         self.thread_manager = thread_manager
         self.api_key = getattr(config, 'ARGIL_API_KEY', None)
         if not self.api_key:
-            logger.error("⚠️ ARGIL_API_KEY not found in configuration.")
+            logger.warning("⚠️ ARGIL_API_KEY not found in configuration. Avatar tool will be registered but API calls will fail.")
 
     async def _make_argil_request(self, method: str, endpoint: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Make HTTP request to Argil API."""
         if not self.api_key:
             return {"error": "ARGIL_API_KEY not configured."}
         
@@ -51,6 +53,7 @@ class SandboxAvatarTool(SandboxToolsBase):
             "x-api-key": self.api_key,
             "Content-Type": "application/json"
         }
+        
         async with httpx.AsyncClient(timeout=60.0) as client:
             try:
                 if method == "GET":
@@ -76,7 +79,7 @@ class SandboxAvatarTool(SandboxToolsBase):
         "type": "function",
         "function": {
             "name": "list_argil_avatars",
-            "description": "Lists available avatars from Argil AI, returning a simplified list",
+            "description": "Lists available avatars from Argil AI for video generation",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -89,7 +92,7 @@ class SandboxAvatarTool(SandboxToolsBase):
     list_argil_avatars()
     """)
     async def list_argil_avatars(self) -> ToolResult:
-        """Lists available avatars from Argil AI, returning a simplified list."""
+        """Lists available avatars from Argil AI for video generation."""
         try:
             logger.info("Listing Argil avatars...")
             api_response = await self._make_argil_request("GET", "/avatars")
@@ -97,6 +100,7 @@ class SandboxAvatarTool(SandboxToolsBase):
             if "error" in api_response:
                 return self.fail_response(f"Failed to fetch avatars: {api_response}")
 
+            # Handle different response formats
             if not isinstance(api_response, list):
                 possible_keys = ["avatars", "data", "results", "items"]
                 actual_list = None
@@ -111,6 +115,7 @@ class SandboxAvatarTool(SandboxToolsBase):
             else:
                 actual_list = api_response
 
+            # Simplify avatar data and filter out assigned avatars
             simplified_avatars = []
             for avatar_data in actual_list:
                 if not isinstance(avatar_data, dict):
@@ -138,7 +143,7 @@ class SandboxAvatarTool(SandboxToolsBase):
         "type": "function",
         "function": {
             "name": "list_argil_voices",
-            "description": "Lists available voices from Argil AI, returning a simplified list",
+            "description": "Lists available voices from Argil AI for video narration",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -151,7 +156,7 @@ class SandboxAvatarTool(SandboxToolsBase):
     list_argil_voices()
     """)
     async def list_argil_voices(self) -> ToolResult:
-        """Lists available voices from Argil AI, returning a simplified list."""
+        """Lists available voices from Argil AI for video narration."""
         try:
             logger.info("Listing Argil voices...")
             api_response = await self._make_argil_request("GET", "/voices")
@@ -159,6 +164,7 @@ class SandboxAvatarTool(SandboxToolsBase):
             if "error" in api_response:
                 return self.fail_response(f"Failed to fetch voices: {api_response}")
 
+            # Handle different response formats
             if not isinstance(api_response, list):
                 possible_keys = ["voices", "data", "results", "items"]
                 actual_list = None
@@ -173,6 +179,7 @@ class SandboxAvatarTool(SandboxToolsBase):
             else:
                 actual_list = api_response
                 
+            # Simplify voice data and filter out assigned voices
             simplified_voices = []
             for voice_data in actual_list:
                 if not isinstance(voice_data, dict):
@@ -201,7 +208,7 @@ class SandboxAvatarTool(SandboxToolsBase):
         "type": "function",
         "function": {
             "name": "generate_argil_video",
-            "description": "Generates a video using Argil AI with the given text, avatar, and voice",
+            "description": "Generates an AI avatar video using Argil AI with the given text, avatar, and voice",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -209,7 +216,7 @@ class SandboxAvatarTool(SandboxToolsBase):
                         "type": "string",
                         "description": "Name of the avatar to use for video generation"
                     },
-                    "text": {
+                    "text_script": {
                         "type": "string",
                         "description": "Script content for the video"
                     },
@@ -222,43 +229,43 @@ class SandboxAvatarTool(SandboxToolsBase):
                         "description": "Custom name for the generated video (optional)"
                     }
                 },
-                "required": ["avatar_name", "text"]
+                "required": ["avatar_name", "text_script"]
             }
         }
     })
     @usage_example("""
     # Generate a video with specific avatar and voice
     generate_argil_video(
-        avatar_name="Pipo",
-        text="Hello, this is a test video generated by Argil AI!",
-        voice_name="Pipo US Male",
+        avatar_name="John Podcast",
+        text_script="Hello, this is a test video generated by Argil AI!",
+        voice_name="John Podcast",
         video_name="My First Video"
     )
     
     # Generate a video with auto-matched voice
     generate_argil_video(
         avatar_name="Sarah",
-        text="Welcome to our product demonstration!"
+        text_script="Welcome to our product demonstration!"
     )
     """)
     async def generate_argil_video(
         self,
         avatar_name: str,
-        text: str,
+        text_script: str,
         voice_name: Optional[str] = None,
         video_name: Optional[str] = None
     ) -> ToolResult:
-        """Generates a video using Argil AI with the given text, avatar, and voice."""
+        """Generates an AI avatar video using Argil AI with the given text, avatar, and voice."""
         try:
-            if not text:
+            if not text_script:
                 return self.fail_response("Video script content is required")
             
-            logger.info(f"Generating Argil video with script: '{text[:50]}...', avatar: {avatar_name}, voice: {voice_name}")
+            logger.info(f"Generating Argil video with script: '{text_script[:50]}...', avatar: {avatar_name}, voice: {voice_name}")
             
             if not self.api_key:
                 return self.fail_response("ARGIL_API_KEY not configured")
 
-            # Get Avatars and Voices to find IDs
+            # Fetch avatars and voices to find IDs
             avatars_data = await self._make_argil_request("GET", "/avatars")
             if "error" in avatars_data or not isinstance(avatars_data, list):
                 return self.fail_response(f"Failed to fetch avatars list: {avatars_data}")
@@ -269,25 +276,33 @@ class SandboxAvatarTool(SandboxToolsBase):
 
             # Find avatar ID
             target_avatar_id = None
+            logger.info(f"Looking for avatar: '{avatar_name}'")
+            logger.info(f"Available avatars: {[avatar.get('name') for avatar in avatars_data]}")
+            
             for avatar in avatars_data:
                 if avatar.get("name") == avatar_name:
                     target_avatar_id = avatar.get("id")
+                    logger.info(f"Found avatar ID: {target_avatar_id}")
                     break
             if not target_avatar_id:
-                return self.fail_response(f"Avatar '{avatar_name}' not found")
+                return self.fail_response(f"Avatar '{avatar_name}' not found. Available avatars: {[avatar.get('name') for avatar in avatars_data]}")
 
             # Find voice ID
             target_voice_id = None
+            logger.info(f"Looking for voice: '{voice_name}'")
+            logger.info(f"Available voices: {[voice.get('name') for voice in voices_data]}")
+            
             if voice_name:
                 for voice in voices_data:
                     if voice.get("name") == voice_name:
                         target_voice_id = voice.get("id")
+                        logger.info(f"Found voice ID: {target_voice_id}")
                         break
                 if not target_voice_id:
                     logger.warning(f"Specified voice '{voice_name}' not found. Attempting to match with avatar name")
             
+            # Auto-match voice if not found
             if not target_voice_id:
-                # Try to match voice name containing avatar name
                 for voice in voices_data:
                     if avatar_name.lower() in voice.get("name", "").lower():
                         target_voice_id = voice.get("id")
@@ -301,12 +316,26 @@ class SandboxAvatarTool(SandboxToolsBase):
             if not target_voice_id:
                 return self.fail_response(f"Could not find a suitable voice for avatar '{avatar_name}'")
 
-            # Create Video
+            # Validate that we have valid UUIDs
+            import re
+            uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            
+            if not re.match(uuid_pattern, target_avatar_id, re.IGNORECASE):
+                logger.error(f"Invalid avatar ID format: {target_avatar_id}")
+                return self.fail_response(f"Invalid avatar ID format: {target_avatar_id}")
+                
+            if not re.match(uuid_pattern, target_voice_id, re.IGNORECASE):
+                logger.error(f"Invalid voice ID format: {target_voice_id}")
+                return self.fail_response(f"Invalid voice ID format: {target_voice_id}")
+
+            logger.info(f"Using avatar ID: {target_avatar_id}, voice ID: {target_voice_id}")
+
+            # Create video
             video_payload = {
-                "name": video_name or f"Video for {avatar_name} - {text[:20]}",
+                "name": video_name or f"Video for {avatar_name} - {text_script[:20]}",
                 "moments": [
                     {
-                        "transcript": text,
+                        "transcript": text_script,
                         "avatarId": target_avatar_id,
                         "voiceId": target_voice_id
                     }
@@ -315,6 +344,7 @@ class SandboxAvatarTool(SandboxToolsBase):
             
             creation_response = await self._make_argil_request("POST", "/videos", payload=video_payload)
             if "error" in creation_response or not creation_response.get("id"):
+                logger.error(f"Video creation failed. Response: {creation_response}")
                 return self.fail_response(f"Failed to create video: {creation_response}")
 
             video_id = creation_response["id"]
@@ -345,7 +375,7 @@ class SandboxAvatarTool(SandboxToolsBase):
         "type": "function",
         "function": {
             "name": "check_argil_video_status",
-            "description": "Check the status of a video that is being generated",
+            "description": "Check the status of a video that is being generated and download when complete",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -363,7 +393,7 @@ class SandboxAvatarTool(SandboxToolsBase):
     check_argil_video_status(video_id="3c90c3cc-0d44-4b50-8888-8dd25736052a")
     """)
     async def check_argil_video_status(self, video_id: str) -> ToolResult:
-        """Check the status of a video that is being generated."""
+        """Check the status of a video that is being generated and download when complete."""
         try:
             if not self.api_key:
                 return self.fail_response("ARGIL_API_KEY not configured")
@@ -383,6 +413,7 @@ class SandboxAvatarTool(SandboxToolsBase):
                 "updated_at": status_response.get("updatedAt")
             }
             
+            # If video is done, download and save to workspace
             if status == "DONE":
                 argil_video_url = status_response.get("videoUrl")
                 result["video_url"] = argil_video_url
@@ -394,21 +425,25 @@ class SandboxAvatarTool(SandboxToolsBase):
                     if argil_video_url:
                         await self._ensure_sandbox()
                         
+                        # Create videos directory
                         videos_dir = f"{self.workspace_path}/videos"
                         logger.info(f"Creating videos directory: {videos_dir}")
                         await self.sandbox.fs.create_folder(videos_dir, "755")
                     
+                        # Download video
                         logger.info(f"Downloading video from Argil URL: {argil_video_url}")
                         async with httpx.AsyncClient() as client:
                             video_response = await client.get(argil_video_url, timeout=60)
                             video_response.raise_for_status()
                             video_bytes = video_response.content
                         
+                        # Generate filename
                         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
                         video_name = result["name"] or "argil_video"
                         safe_name = re.sub(r'[^\w\s-]', '', video_name).strip().replace(' ', '_')
                         filename = f"{safe_name}_{video_id[:8]}_{timestamp}.mp4"
                         
+                        # Save to workspace
                         video_path = f"{videos_dir}/{filename}"
                         await self.sandbox.fs.upload_file(video_bytes, video_path)
                         
@@ -433,15 +468,24 @@ class SandboxAvatarTool(SandboxToolsBase):
                             result["upload_error"] = f"Could not upload to Pixiomedia: {str(upload_error)}"
                 
                 except Exception as e:
-                    logger.error(f"Error processing video: {e}", exc_info=True)
-                    result["processing_error"] = f"Could not process video: {str(e)}"
+                    logger.warning(f"Error downloading/uploading video (video still available at Argil): {e}")
+                    result["download_note"] = f"Video available at Argil URL. Optional download/upload skipped: {str(e)}"
             
-            message = {
-                "DONE": "Video generation completed successfully!",
-                "FAILED": "Video generation failed.",
-                "PROCESSING": f"Video is currently processing. Check again later.",
-                "UNKNOWN": f"Video status is unknown: {status}"
-            }.get(status, f"Video is in '{status}' status.")
+            # Set appropriate message based on status
+            if status == "DONE":
+                # For completed videos, emphasize success even if optional upload failed
+                if "video_url" in result:
+                    message = f"✅ Video generation completed successfully! Video URL: {result['video_url']}"
+                else:
+                    message = "Video generation completed successfully!"
+            else:
+                message = {
+                    "FAILED": "Video generation failed.",
+                    "IDLE": "Video is ready for rendering.",
+                    "GENERATING_AUDIO": "Video is currently generating audio. Please wait...",
+                    "GENERATING_VIDEO": "Video is currently generating video. Please wait...",
+                    "UNKNOWN": f"Video status is unknown: {status}"
+                }.get(status, f"Video is in '{status}' status.")
             
             result["message"] = message
             return self.success_response(result)

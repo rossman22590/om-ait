@@ -61,17 +61,30 @@ function parseStringToolResult(content: string): ParsedToolResult | null {
 
   // Check for success in ToolResult format
   let isSuccess = true;
+  let actualOutput = content;
+  
   if (content.includes('ToolResult')) {
     const successMatch = content.match(/success\s*=\s*(True|False|true|false)/i);
     if (successMatch) {
       isSuccess = successMatch[1].toLowerCase() === 'true';
+    }
+    
+    // Extract the actual output from ToolResult(success=True, output='...')
+    // Handle both single and double quotes, and handle escaped content
+    const outputMatch = content.match(/output\s*=\s*['"]([\s\S]*?)['"]\s*\)/);
+    if (outputMatch && outputMatch[1]) {
+      actualOutput = outputMatch[1]
+        .replace(/\\n/g, '\n')  // Unescape newlines
+        .replace(/\\"/g, '"')   // Unescape quotes
+        .replace(/\\'/g, "'")   // Unescape single quotes
+        .replace(/\\\\/g, '\\'); // Unescape backslashes
     }
   }
 
   return {
     toolName: toolName.replace(/_/g, '-'),
     functionName: toolName.replace(/-/g, '_'),
-    toolOutput: content,
+    toolOutput: actualOutput,
     isSuccess,
   };
 }

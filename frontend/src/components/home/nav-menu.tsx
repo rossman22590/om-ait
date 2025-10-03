@@ -111,7 +111,11 @@ export function NavMenu() {
     
     // If we're not on the homepage, redirect to homepage with the section
     if (pathname !== '/') {
-      router.push(`/${item.href}`);
+      if (item.href === '#hero') {
+        router.push('/');
+      } else {
+        router.push(`/${item.href}`);
+      }
       return;
     }
     
@@ -162,7 +166,12 @@ export function NavMenu() {
                 : 'text-primary/60 hover:text-primary'
             } tracking-tight`}
           >
-            <a href={item.href} onClick={(e) => handleClick(e, item)}>
+            <a 
+              href={item.href} 
+              onClick={(e) => handleClick(e, item)}
+              target={item.href.startsWith('http') ? '_blank' : undefined}
+              rel={item.href.startsWith('http') ? 'noopener noreferrer' : undefined}
+            >
               {item.name}
             </a>
           </li>

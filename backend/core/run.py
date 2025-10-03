@@ -126,16 +126,26 @@ class ToolManager:
         
         for tool_name, tool_class, kwargs in sandbox_tools:
             if tool_name not in disabled_tools:
-                # Check for granular method control
-                enabled_methods = self._get_enabled_methods_for_tool(tool_name)
-                if enabled_methods is not None:
-                    # Register only enabled methods
-                    self.thread_manager.add_tool(tool_class, function_names=enabled_methods, **kwargs)
-                    logger.debug(f"Registered {tool_name} with methods: {enabled_methods}")
-                else:
-                    # Register all methods (backward compatibility)
-                    self.thread_manager.add_tool(tool_class, **kwargs)
-                    # logger.debug(f"Registered {tool_name} (all methods)")
+                try:
+                    # Check for granular method control
+                    enabled_methods = self._get_enabled_methods_for_tool(tool_name)
+                    if enabled_methods is not None:
+                        # Register only enabled methods
+                        if tool_name == 'sb_avatar_tool':
+                            logger.info(f"🎬 AVATAR TOOL: Registering with methods: {enabled_methods}")
+                        self.thread_manager.add_tool(tool_class, function_names=enabled_methods, **kwargs)
+                        logger.debug(f"Registered {tool_name} with methods: {enabled_methods}")
+                    else:
+                        # Register all methods (backward compatibility)
+                        if tool_name == 'sb_avatar_tool':
+                            logger.info(f"🎬 AVATAR TOOL: Registering ALL methods (no filtering)")
+                        self.thread_manager.add_tool(tool_class, **kwargs)
+                        logger.debug(f"Registered {tool_name} (all methods)")
+                except Exception as e:
+                    logger.error(f"Failed to register {tool_name}: {e}")
+            else:
+                if tool_name == 'sb_avatar_tool':
+                    logger.error(f"❌ AVATAR TOOL is in disabled_tools list! Will NOT be registered!")
     
     def _register_utility_tools(self, disabled_tools: List[str]):
         if config.RAPID_API_KEY and 'data_providers_tool' not in disabled_tools:
@@ -194,8 +204,13 @@ class ToolManager:
         for tool_name, tool_class in agent_builder_tools:
             if tool_name not in disabled_tools:
                 try:
-                    self.thread_manager.add_tool(tool_class, thread_manager=self.thread_manager, db_connection=db, agent_id=agent_id)
-                    # logger.info(f"✅ Successfully registered {tool_name}")
+                    enabled_methods = self._get_enabled_methods_for_tool(tool_name)
+                    if enabled_methods is not None:
+                        self.thread_manager.add_tool(tool_class, function_names=enabled_methods, thread_manager=self.thread_manager, db_connection=db, agent_id=agent_id)
+                        logger.debug(f"✅ Registered {tool_name} with methods: {enabled_methods}")
+                    else:
+                        self.thread_manager.add_tool(tool_class, thread_manager=self.thread_manager, db_connection=db, agent_id=agent_id)
+                        logger.debug(f"✅ Registered {tool_name} (all methods)")
                     
                     # Special verification for critical Pipedream tools
                     if tool_name == 'pipedream_mcp_tool':
@@ -205,14 +220,6 @@ class ToolManager:
                             logger.info(f"✅ ✅ Pipedream functions registered: {pipedream_functions}")
                         else:
                             logger.error(f"❌ Pipedream tool registered but no functions found!")
-                            
-                    pass
-                    enabled_methods = self._get_enabled_methods_for_tool(tool_name)
-                    if enabled_methods is not None:
-                        self.thread_manager.add_tool(tool_class, function_names=enabled_methods, thread_manager=self.thread_manager, db_connection=db, agent_id=agent_id)
-                        logger.debug(f"✅ Registered {tool_name} with methods: {enabled_methods}")
-                    else:
-                        self.thread_manager.add_tool(tool_class, thread_manager=self.thread_manager, db_connection=db, agent_id=agent_id)
                 except Exception as e:
                     logger.error(f"❌ Failed to register {tool_name}: {e}")
                     # For Pipedream specifically, this is critical
@@ -266,6 +273,25 @@ class ToolManager:
             return None
         
         migrated_tools = migrate_legacy_tool_config(raw_tools)
+        
+        # SAFEGUARD: Always get all methods for avatar tool if it's enabled
+        if tool_name == 'sb_avatar_tool':
+            avatar_config = migrated_tools.get('sb_avatar_tool')
+            logger.info(f"🎬 SAFEGUARD: Avatar tool config before get_enabled_methods: {avatar_config}")
+            
+            # If avatar tool is enabled in any way, force all methods
+            # None = not in config (default enabled), True = explicit, dict with enabled=True
+            if avatar_config is None or avatar_config is True or (isinstance(avatar_config, dict) and avatar_config.get('enabled', True)):
+                from core.utils.tool_groups import get_tool_group
+                tool_group = get_tool_group('sb_avatar_tool')
+                if tool_group:
+                    all_methods = [method.name for method in tool_group.methods if method.enabled]
+                    logger.info(f"🎬 SAFEGUARD: Forcing ALL avatar tool methods: {all_methods}")
+                    return all_methods
+                else:
+                    logger.error(f"🎬 SAFEGUARD: Could not get tool_group for sb_avatar_tool!")
+            else:
+                logger.info(f"🎬 SAFEGUARD: Avatar tool explicitly DISABLED in config")
         
         return get_enabled_methods_for_tool(tool_name, migrated_tools)
 
@@ -642,6 +668,25 @@ class AgentRunner:
         
         migrated_tools = migrate_legacy_tool_config(raw_tools)
         
+        # SAFEGUARD: Always get all methods for avatar tool if it's enabled
+        if tool_name == 'sb_avatar_tool':
+            avatar_config = migrated_tools.get('sb_avatar_tool')
+            logger.info(f"🎬 SAFEGUARD (AgentRunner): Avatar tool config: {avatar_config}")
+            
+            # If avatar tool is enabled in any way, force all methods
+            # None = not in config (default enabled), True = explicit, dict with enabled=True
+            if avatar_config is None or avatar_config is True or (isinstance(avatar_config, dict) and avatar_config.get('enabled', True)):
+                from core.utils.tool_groups import get_tool_group
+                tool_group = get_tool_group('sb_avatar_tool')
+                if tool_group:
+                    all_methods = [method.name for method in tool_group.methods if method.enabled]
+                    logger.info(f"🎬 SAFEGUARD (AgentRunner): Forcing ALL avatar methods: {all_methods}")
+                    return all_methods
+                else:
+                    logger.error(f"🎬 SAFEGUARD (AgentRunner): Could not get tool_group for sb_avatar_tool!")
+            else:
+                logger.info(f"🎬 SAFEGUARD (AgentRunner): Avatar tool explicitly DISABLED in config")
+        
         return get_enabled_methods_for_tool(tool_name, migrated_tools)
     
     def _register_suna_specific_tools(self, disabled_tools: List[str]):
@@ -673,6 +718,10 @@ class AgentRunner:
         
         raw_tools = self.config.agent_config['agentpress_tools']
         
+        # DEBUG: Log avatar tool status
+        logger.info(f"🔍 DEBUG avatar tool config: {raw_tools.get('sb_avatar_tool')}")
+        logger.info(f"🔍 DEBUG avatar tool type: {type(raw_tools.get('sb_avatar_tool'))}")
+        
         if not isinstance(raw_tools, dict):
             return disabled_tools
         
@@ -694,7 +743,7 @@ class AgentRunner:
         all_tools = [
             'sb_shell_tool', 'sb_files_tool', 'sb_deploy_tool', 'sb_expose_tool',
             'web_search_tool', 'image_search_tool', 'sb_vision_tool', 'sb_presentation_tool', 'sb_image_edit_tool',
-            'sb_sheets_tool', 'sb_kb_tool', 'sb_design_tool', 'sb_presentation_outline_tool', 'sb_upload_file_tool',
+            'sb_avatar_tool', 'sb_sheets_tool', 'sb_kb_tool', 'sb_design_tool', 'sb_presentation_outline_tool', 'sb_upload_file_tool',
             'sb_docs_tool', 'sb_browser_tool', 'sb_templates_tool', 'computer_use_tool', 'sb_web_dev_tool', 
             'data_providers_tool', 'browser_tool', 'people_search_tool', 'company_search_tool', 
             'agent_config_tool', 'mcp_search_tool', 'credential_profile_tool', 'workflow_tool', 'trigger_tool',
@@ -702,13 +751,17 @@ class AgentRunner:
         ]
         
         for tool_name in all_tools:
-            if not is_tool_enabled(tool_name):
+            enabled = is_tool_enabled(tool_name)
+            if tool_name == 'sb_avatar_tool':
+                logger.info(f"🔍 DEBUG sb_avatar_tool enabled check: {enabled}")
+            if not enabled:
                 disabled_tools.append(tool_name)
         
         if 'sb_presentation_tool' in disabled_tools:
             disabled_tools.extend(['sb_presentation_outline_tool'])
         
         logger.debug(f"Disabled tools from config: {disabled_tools}")
+        logger.info(f"🔍 DEBUG Is sb_avatar_tool in disabled list? {'sb_avatar_tool' in disabled_tools}")
         return disabled_tools
     
     async def setup_mcp_tools(self) -> Optional[MCPToolWrapper]:
