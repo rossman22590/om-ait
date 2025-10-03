@@ -14,7 +14,7 @@ from core.billing.config import TOKEN_PRICE_MULTIPLIER
 from core.services.supabase import DBConnection
 
 
-class PeopleSearchTool(Tool):
+class PaperSearchTool(Tool):
     def __init__(self, thread_manager: ThreadManager):
         super().__init__()
         self.thread_manager = thread_manager
@@ -25,9 +25,9 @@ class PeopleSearchTool(Tool):
         
         if self.api_key:
             self.exa_client = Exa(self.api_key)
-            logger.info("People Search Tool initialized. Note: This requires an Exa Pro plan for Websets API access.")
+            logger.info("Paper Search Tool initialized. Note: This requires an Exa Pro plan for Websets API access.")
         else:
-            logger.warning("EXA_API_KEY not configured - People Search Tool will not be available")
+            logger.warning("EXA_API_KEY not configured - Paper Search Tool will not be available")
     
     async def _get_current_thread_and_user(self) -> tuple[Optional[str], Optional[str]]:
         try:
@@ -55,12 +55,12 @@ class PeopleSearchTool(Tool):
             result = await self.credit_manager.use_credits(
                 account_id=user_id,
                 amount=total_cost,
-                description=f"People search: {num_results} results",
+                description=f"Paper search: {num_results} results",
                 thread_id=thread_id
             )
             
             if result.get('success'):
-                logger.info(f"Deducted ${total_cost:.2f} for people search ({num_results} results)")
+                logger.info(f"Deducted ${total_cost:.2f} for paper search ({num_results} results)")
                 return True
             else:
                 logger.warning(f"Failed to deduct credits: {result.get('error')}")
@@ -73,33 +73,33 @@ class PeopleSearchTool(Tool):
     @openapi_schema({
         "type": "function",
         "function": {
-            "name": "people_search",
-            "description": "Search for people using natural language queries and enrich with LinkedIn profiles. IMPORTANT: Requires Exa Pro plan and costs $0.54 per search (10 results).",
+            "name": "paper_search",
+            "description": "Search for academic papers and research documents using natural language queries and enrich with paper details. IMPORTANT: Requires Exa Pro plan and costs $0.54 per search (10 results).",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Natural language search query describing the people you want to find. Examples: 'CTOs at AI startups in San Francisco', 'Senior Python developers with machine learning experience at Google', 'Marketing managers at Fortune 500 companies in New York'"
+                        "description": "Natural language search query describing the papers you want to find. Examples: 'Machine learning papers on transformer architectures published in 2024', 'Climate change research papers from Nature journal', 'Recent AI safety papers from top conferences'"
                     },
                     "enrichment_description": {
                         "type": "string",
-                        "description": "What specific information to find about each person. Default: 'LinkedIn profile URL'",
-                        "default": "LinkedIn profile URL"
+                        "description": "What specific information to find about each paper. Default: 'Paper abstract, authors, publication details, and key findings'",
+                        "default": "Paper abstract, authors, publication details, and key findings"
                     }
                 },
                 "required": ["query"]
             }
         }
     })
-    async def people_search(
+    async def paper_search(
         self,
         query: str,
-        enrichment_description: str = "LinkedIn profile URL"
+        enrichment_description: str = "Paper abstract, authors, publication details, and key findings"
     ) -> ToolResult:
         if not self.exa_client:
             return self.fail_response(
-                "People Search is not available. EXA_API_KEY is not configured. "
+                "Paper Search is not available. EXA_API_KEY is not configured. "
                 "Please contact your administrator to enable this feature."
             )
         
@@ -114,7 +114,7 @@ class PeopleSearchTool(Tool):
             )
         
         try:
-            logger.info(f"Creating Exa webset for: '{query}' with 10 results")
+            logger.info(f"Creating Exa webset for paper search: '{query}' with 10 results")
             
             enrichment_config = CreateEnrichmentParameters(
                 description=enrichment_description,
@@ -124,7 +124,10 @@ class PeopleSearchTool(Tool):
             webset_params = CreateWebsetParameters(
                 search={
                     "query": query,
-                    "count": 10
+                    "count": 10,
+                    "include_domains": ["arxiv.org", "scholar.google.com", "pubmed.ncbi.nlm.nih.gov", 
+                                      "ieee.org", "acm.org", "springer.com", "nature.com", 
+                                      "sciencedirect.com", "jstor.org", "researchgate.net"]
                 },
                 enrichments=[enrichment_config]
             )
@@ -135,15 +138,15 @@ class PeopleSearchTool(Tool):
                     params=webset_params
                 )
                 
-                logger.info(f"Webset created with ID: {webset.id}")
+                logger.info(f"Paper webset created with ID: {webset.id}")
             except Exception as create_error:
-                logger.error(f"Failed to create webset - Error type: {type(create_error).__name__}")
+                logger.error(f"Failed to create paper webset - Error type: {type(create_error).__name__}")
                 try:
                     error_str = str(create_error)
-                    logger.error(f"Failed to create webset - Error message: {error_str}")
+                    logger.error(f"Failed to create paper webset - Error message: {error_str}")
                 except:
                     error_str = "Unknown error"
-                    logger.error(f"Failed to create webset - Could not convert error to string")
+                    logger.error(f"Failed to create paper webset - Could not convert error to string")
                 
                 if "401" in error_str:
                     return self.fail_response(
@@ -155,33 +158,33 @@ class PeopleSearchTool(Tool):
                     )
                 else:
                     return self.fail_response(
-                        "Failed to create webset. Please try again."
+                        "Failed to create paper search webset. Please try again."
                     )
             
-            logger.info(f"Waiting for webset {webset.id} to complete processing...")
+            logger.info(f"Waiting for paper webset {webset.id} to complete processing...")
             try:
                 webset = await asyncio.to_thread(
                     self.exa_client.websets.wait_until_idle,
                     webset.id
                 )
-                logger.info(f"Webset {webset.id} processing complete")
+                logger.info(f"Paper webset {webset.id} processing complete")
             except Exception as wait_error:
-                logger.error(f"Error waiting for webset: {type(wait_error).__name__}: {repr(wait_error)}")
-                return self.fail_response("Failed while waiting for search results. Please try again.")
+                logger.error(f"Error waiting for paper webset: {type(wait_error).__name__}: {repr(wait_error)}")
+                return self.fail_response("Failed while waiting for paper search results. Please try again.")
 
-            logger.info(f"Retrieving items from webset {webset.id}...")
+            logger.info(f"Retrieving paper items from webset {webset.id}...")
             try:
                 items = await asyncio.to_thread(
                     self.exa_client.websets.items.list,
                     webset_id=webset.id
                 )
-                logger.info(f"Retrieved items from webset")
+                logger.info(f"Retrieved paper items from webset")
             except Exception as items_error:
-                logger.error(f"Error retrieving items: {type(items_error).__name__}: {repr(items_error)}")
-                return self.fail_response("Failed to retrieve search results. Please try again.")
+                logger.error(f"Error retrieving paper items: {type(items_error).__name__}: {repr(items_error)}")
+                return self.fail_response("Failed to retrieve paper search results. Please try again.")
             
             results = items.data if items else []
-            logger.info(f"Got {len(results)} results from webset")
+            logger.info(f"Got {len(results)} paper results from webset")
             
             formatted_results = []
             for idx, item in enumerate(results[:10], 1):
@@ -193,7 +196,6 @@ class PeopleSearchTool(Tool):
                     item_dict = vars(item) if hasattr(item, '__dict__') else {}
                 
                 properties = item_dict.get('properties', {})
-                person_info = properties.get('person', {})
                 
                 evaluations_text = ""
                 evaluations = item_dict.get('evaluations', [])
@@ -222,9 +224,8 @@ class PeopleSearchTool(Tool):
                                 else:
                                     enrichment_text = str(enrich_result) if enrich_result else ""
                 
-                picture_url = person_info.get('picture_url', '')
-                if picture_url is None:
-                    picture_url = ''
+                url = properties.get('url', '')
+                description = properties.get('description', '')
                 
                 result_entry = {
                     "rank": idx,
@@ -232,15 +233,11 @@ class PeopleSearchTool(Tool):
                     "webset_id": item_dict.get('webset_id', ''),
                     "source": str(item_dict.get('source', '')),
                     "source_id": item_dict.get('source_id', ''),
-                    "url": properties.get('url', ''),
+                    "url": url,
+                    "description": description,
                     "type": properties.get('type', ''),
-                    "description": properties.get('description', ''),
-                    "person_name": person_info.get('name', ''),
-                    "person_location": person_info.get('location', ''),
-                    "person_position": person_info.get('position', ''),
-                    "person_picture_url": str(picture_url) if picture_url else '',
+                    "paper_details": enrichment_text,
                     "evaluations": evaluations_text,
-                    "enrichment_data": enrichment_text,
                     "created_at": str(item_dict.get('created_at', '')),
                     "updated_at": str(item_dict.get('updated_at', ''))
                 }
@@ -251,13 +248,13 @@ class PeopleSearchTool(Tool):
             total_cost = base_cost * TOKEN_PRICE_MULTIPLIER
             
             if config.ENV_MODE == EnvMode.LOCAL:
-                logger.info("Running in LOCAL mode - skipping billing for people search")
+                logger.info("Running in LOCAL mode - skipping billing for paper search")
                 cost_deducted_str = f"${total_cost:.2f} (LOCAL - not charged)"
             else:
                 credits_deducted = await self._deduct_credits(user_id, len(formatted_results), thread_id)
                 if not credits_deducted:
                     return self.fail_response(
-                        "Insufficient credits for people search. "
+                        "Insufficient credits for paper search. "
                         f"This search costs ${total_cost:.2f} ({len(formatted_results)} results). "
                         "Please add credits to continue."
                     )
@@ -271,20 +268,20 @@ class PeopleSearchTool(Tool):
                 "enrichment_type": enrichment_description
             }
             
-            logger.info(f"Successfully completed people search with {len(formatted_results)} results")
+            logger.info(f"Successfully completed paper search with {len(formatted_results)} results")
             
             try:
                 json_output = json.dumps(output, indent=2, default=str)
                 return self.success_response(json_output)
             except Exception as json_error:
-                logger.error(f"Failed to serialize output: {json_error}")
-                summary = f"Found {len(formatted_results)} results for query: {query}"
+                logger.error(f"Failed to serialize paper search output: {json_error}")
+                summary = f"Found {len(formatted_results)} papers for query: {query}"
                 if formatted_results:
-                    summary += f"\n\nTop result:\nName: {formatted_results[0].get('person_name', 'Unknown')}\nPosition: {formatted_results[0].get('person_position', 'Unknown')}\nLocation: {formatted_results[0].get('person_location', 'Unknown')}"
+                    summary += f"\n\nTop result:\nTitle: {formatted_results[0].get('title', 'Unknown')}\nURL: {formatted_results[0].get('url', 'Unknown')}\nDescription: {formatted_results[0].get('description', 'Unknown')[:200]}..."
                 return self.success_response(summary)
                 
         except asyncio.TimeoutError:
-            return self.fail_response("Search timed out. Please try again with a simpler query.")
+            return self.fail_response("Paper search timed out. Please try again with a simpler query.")
         except Exception as e:
-            logger.error(f"People search failed: {repr(e)}", exc_info=True)
-            return self.fail_response("An error occurred during the search. Please try again.")
+            logger.error(f"Paper search failed: {repr(e)}", exc_info=True)
+            return self.fail_response("An error occurred during the paper search. Please try again.")

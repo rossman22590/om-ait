@@ -251,6 +251,12 @@ TOOL_GROUPS: Dict[str, ToolGroup] = {
                 description="Delete entire presentations",
                 enabled=True
             ),
+            ToolMethod(
+                name="present_presentation",
+                display_name="Present Presentation",
+                description="Present completed presentations to user",
+                enabled=True
+            ),
         ]
     ),
     
@@ -952,6 +958,36 @@ TOOL_GROUPS: Dict[str, ToolGroup] = {
         ]
     ),
 
+    "paper_search_tool": ToolGroup(
+        name="paper_search_tool",
+        display_name="Paper Search",
+        description="Search for papers using natural language queries",
+        tool_class="PaperSearchTool",
+        methods=[
+            ToolMethod(
+                name="paper_search",
+                display_name="Paper Search",
+                description="Search for papers using natural language queries",
+                enabled=True
+            ),
+        ]
+    ),
+
+    # "sb_document_parser_tool": ToolGroup(
+    #     name="sb_document_parser_tool",
+    #     display_name="Document Parser",
+    #     description="Parse documents using Chunkr AI",
+    #     tool_class="SandboxDocumentParserTool",
+    #     methods=[
+    #         ToolMethod(
+    #             name="parse_document",
+    #             display_name="Parse Document",
+    #             description="Parse documents using Chunkr AI",
+    #             enabled=True
+    #         ),
+    #     ]
+    # ),
+
     "sb_web_dev_tool": ToolGroup(
         name="sb_web_dev_tool",
         display_name="Web Development",
@@ -1069,12 +1105,6 @@ TOOL_GROUPS: Dict[str, ToolGroup] = {
                 name="web_browser_takeover",
                 display_name="Request Browser Takeover",
                 description="Request user takeover of browser interaction",
-                enabled=True
-            ),
-            ToolMethod(
-                name="present_presentation",
-                display_name="Present Presentation",
-                description="Present completed presentations to user",
                 enabled=True
             ),
             ToolMethod(

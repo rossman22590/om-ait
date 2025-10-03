@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional, Set
-from .ai_models import Model, ModelProvider, ModelCapability, ModelPricing
+from .ai_models import Model, ModelProvider, ModelCapability, ModelPricing, ModelConfig
 from core.utils.config import config, EnvMode
 
 FREE_MODEL_ID = "moonshotai/kimi-k2"
@@ -39,7 +39,12 @@ class ModelRegistry:
             tier_availability=["paid"],
             priority=100,
             recommended=True,
-            enabled=True
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "anthropic-beta": "context-1m-2025-08-07" 
+                },
+            )
         ))
         
         self.register(Model(
@@ -59,14 +64,19 @@ class ModelRegistry:
             ),
             tier_availability=["paid"],
             priority=99,
-            enabled=True
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "anthropic-beta": "prompt-caching-2024-07-31"
+                },
+            )
         ))
 
         self.register(Model(
             id="xai/grok-4-fast-non-reasoning",
             name="Grok 4 Fast",
             provider=ModelProvider.XAI,
-            aliases=["grok-4-fast-non-reasoning", "x-ai/grok-4-fast-non-reasoning", "openrouter/x-ai/grok-4-fast-non-reasoning", "Grok 4 Fast"],
+            aliases=["grok-4-fast-non-reasoning", "Grok 4 Fast"],
             context_window=2_000_000,
             capabilities=[
                 ModelCapability.CHAT,
@@ -337,13 +347,11 @@ class ModelRegistry:
     
     def to_legacy_format(self) -> Dict:
         models_dict = {}
-        aliases_dict = {}
         pricing_dict = {}
         context_windows_dict = {}
         
         for model in self.get_all(enabled_only=True):
             models_dict[model.id] = {
-                "aliases": model.aliases,
                 "pricing": {
                     "input_cost_per_million_tokens": model.pricing.input_cost_per_million_tokens,
                     "output_cost_per_million_tokens": model.pricing.output_cost_per_million_tokens,
@@ -351,9 +359,6 @@ class ModelRegistry:
                 "context_window": model.context_window,
                 "tier_availability": model.tier_availability,
             }
-            
-            for alias in model.aliases:
-                aliases_dict[alias] = model.id
             
             if model.pricing:
                 pricing_dict[model.id] = {
@@ -374,7 +379,6 @@ class ModelRegistry:
         
         return {
             "MODELS": models_dict,
-            "MODEL_NAME_ALIASES": aliases_dict,
             "HARDCODED_MODEL_PRICES": pricing_dict,
             "MODEL_CONTEXT_WINDOWS": context_windows_dict,
             "FREE_TIER_MODELS": free_models,

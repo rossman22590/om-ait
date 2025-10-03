@@ -4,7 +4,7 @@ import json
 import time
 import requests
 from dotenv import load_dotenv
-from core.agentpress.tool import ToolResult, openapi_schema, usage_example
+from core.agentpress.tool import ToolResult, openapi_schema
 from core.sandbox.tool_base import SandboxToolsBase
 from core.utils.files_utils import clean_path
 from core.agentpress.thread_manager import ThreadManager
