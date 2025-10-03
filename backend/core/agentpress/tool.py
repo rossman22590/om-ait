@@ -15,6 +15,24 @@ import inspect
 from enum import Enum
 from core.utils.logger import logger
 
+# Dummy decorator for usage examples (not currently used in tool registry)
+def usage_example(example_text):
+    """Decorator for adding usage examples to tool methods.
+    
+    This decorator attaches example usage text to tool methods for documentation purposes.
+    Currently a no-op decorator that doesn't affect tool registration.
+    
+    Args:
+        example_text: Example usage text to attach to the method
+    
+    Returns:
+        The decorated function with usage_example attribute set
+    """
+    def decorator(func):
+        func.usage_example = example_text
+        return func
+    return decorator
+
 class SchemaType(Enum):
     """Enumeration of supported schema types for tool definitions."""
     OPENAPI = "openapi"
