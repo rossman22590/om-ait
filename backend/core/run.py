@@ -164,7 +164,9 @@ class ToolManager:
                 # logger.debug("Registered data_providers_tool (all methods)")
         
         # Register search tools if EXA API key is available
-        if config.EXA_API_KEY:
+        # TEMPORARILY DISABLED: People, Company, and Paper search tools
+        # TODO: Re-enable these tools later
+        if False:  # config.EXA_API_KEY:
             if 'people_search_tool' not in disabled_tools:
                 enabled_methods = self._get_enabled_methods_for_tool('people_search_tool')
                 if enabled_methods is not None:
