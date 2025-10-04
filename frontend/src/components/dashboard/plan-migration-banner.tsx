@@ -1,11 +1,26 @@
 'use client';
 
 import { AlertTriangle, X } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 
+const BANNER_STORAGE_KEY = 'plan-migration-banner-dismissed';
+
 export function PlanMigrationBanner() {
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    // Check if banner was previously dismissed
+    const isDismissed = localStorage.getItem(BANNER_STORAGE_KEY);
+    if (!isDismissed) {
+      setIsVisible(true);
+    }
+  }, []);
+
+  const handleDismiss = () => {
+    setIsVisible(false);
+    localStorage.setItem(BANNER_STORAGE_KEY, 'true');
+  };
 
   if (!isVisible) {
     return null;
@@ -34,7 +49,7 @@ export function PlanMigrationBanner() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => setIsVisible(false)}
+          onClick={handleDismiss}
           className="text-white hover:bg-white/20 h-8 w-8 p-0 rounded-full"
         >
           <X className="h-4 w-4" />
