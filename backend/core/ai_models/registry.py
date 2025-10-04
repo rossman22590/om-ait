@@ -42,7 +42,9 @@ class ModelRegistry:
             enabled=True,
             config=ModelConfig(
                 extra_headers={
-                    "anthropic-beta": "context-1m-2025-08-07" 
+                    "anthropic-beta": "context-1m-2025-08-07",
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
                 },
             )
         ))
@@ -135,7 +137,13 @@ class ModelRegistry:
             tier_availability=["free", "paid"],
             priority=92,
             recommended=True,
-            enabled=True
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                }
+            )
         ))  
         
         # self.register(Model(
@@ -217,7 +225,13 @@ class ModelRegistry:
             ),
             tier_availability=["paid"],
             priority=95,
-            enabled=True
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                }
+            )
         ))
         
         self.register(Model(
@@ -239,7 +253,13 @@ class ModelRegistry:
             tier_availability=["free", "paid"],
             priority=93,
             recommended=True,
-            enabled=True
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                }
+            )
         ))
 
         self.register(Model(
