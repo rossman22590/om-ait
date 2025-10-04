@@ -182,6 +182,9 @@ export const GranularToolConfiguration = ({
 
   const getFilteredToolGroups = (): ToolGroup[] => {
     return Object.values(TOOL_GROUPS).filter(group => {
+      // Filter out disabled tools
+      if (!group.enabled) return false;
+      
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
       return (
@@ -220,7 +223,7 @@ export const GranularToolConfiguration = ({
           </p>
         </div>
         <Badge variant="secondary" className="text-xs">
-          {getEnabledToolsCount()} / {Object.keys(TOOL_GROUPS).length} tools enabled
+          {getEnabledToolsCount()} / {Object.values(TOOL_GROUPS).filter(g => g.enabled).length} tools enabled
         </Badge>
       </div>
 
