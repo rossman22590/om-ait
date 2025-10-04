@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SectionHeader } from '@/components/home/section-header';
 import { FooterSection } from '@/components/home/sections/footer-section';
 import { motion } from 'motion/react';
@@ -20,13 +20,13 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { KortixEnterpriseModal } from '@/components/sidebar/kortix-enterprise-modal';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
 
 // Hero Section Component
-const CustomHeroSection = () => {
+const CustomHeroSection = ({ onOpenCalendly }: { onOpenCalendly: () => void }) => {
   return (
-    <section className="w-full relative overflow-hidden">
+    <section className="w-full relative overflow-hidden bg-gradient-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-pink-950/20 dark:via-purple-950/20 dark:to-pink-950/20">
       <div className="relative flex flex-col items-center w-full px-6">
         <div className="relative z-10 pt-32 mx-auto h-full w-full max-w-6xl flex flex-col items-center justify-center">
           <div className="flex flex-col items-center justify-center gap-6 pt-12 max-w-4xl mx-auto">
@@ -35,15 +35,15 @@ const CustomHeroSection = () => {
               <KortixLogo size={48} />
             </div>
             
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-primary/10 to-secondary/10 border border-primary/20">
-              <Sparkles className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium text-primary">Enterprise Implementation Services</span>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-pink-500/10 to-purple-500/10 border border-pink-500/20">
+              <Sparkles className="w-4 h-4 text-pink-600 dark:text-pink-400" />
+              <span className="text-sm font-medium text-pink-600 dark:text-pink-400">Enterprise Implementation Services</span>
             </div>
             
             <h1 className="text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-medium tracking-tighter text-balance text-center">
-              <span className="text-primary">Enterprise AI Workers.</span>
+              <span className="bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">Enterprise AI Workers.</span>
               <br />
-              <span className="text-secondary">Delivered in days.</span>
+              <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">Delivered in days.</span>
             </h1>
             
             <p className="text-lg md:text-xl text-center text-muted-foreground font-medium text-balance leading-relaxed tracking-tight max-w-3xl">
@@ -51,24 +51,26 @@ const CustomHeroSection = () => {
             </p>
             
             <div className="flex flex-col items-center gap-6 pt-6">
-              <KortixEnterpriseModal>
-                <Button size="lg">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Schedule Strategy Call
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </KortixEnterpriseModal>
+              <Button 
+                size="lg"
+                onClick={onOpenCalendly}
+                className="bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all"
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                Schedule Strategy Call
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
               <div className="flex flex-col sm:flex-row items-center gap-4 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-primary"></div>
+                  <div className="w-2 h-2 rounded-full bg-gradient-to-r from-pink-600 to-purple-600"></div>
                   <span>Free consultation</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-primary"></div>
+                  <div className="w-2 h-2 rounded-full bg-gradient-to-r from-pink-600 to-purple-600"></div>
                   <span>Custom solution design</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-primary"></div>
+                  <div className="w-2 h-2 rounded-full bg-gradient-to-r from-pink-600 to-purple-600"></div>
                   <span>Tailored pricing</span>
                 </div>
               </div>
@@ -99,8 +101,8 @@ const ValuePropSection = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 border-t border-border">
             <div className="p-8 border-r border-border">
               <div className="space-y-6">
-                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Clock className="w-6 h-6 text-primary" />
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-pink-500/10 to-purple-500/10 flex items-center justify-center border border-pink-200 dark:border-pink-800">
+                  <Clock className="w-6 h-6 text-pink-600 dark:text-pink-400" />
                 </div>
                 <div>
                   <h3 className="text-xl font-semibold mb-3">Accelerate Time-to-Value</h3>
@@ -113,8 +115,8 @@ const ValuePropSection = () => {
             
             <div className="p-8">
               <div className="space-y-6">
-                <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center">
-                  <Settings className="w-6 h-6 text-secondary" />
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500/10 to-pink-500/10 flex items-center justify-center border border-purple-200 dark:border-purple-800">
+                  <Settings className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div>
                   <h3 className="text-xl font-semibold mb-3">Enterprise Integration</h3>
@@ -391,14 +393,14 @@ const SelfServiceSection = () => {
 };
 
 // Final CTA Section
-const FinalCTASection = () => {
+const FinalCTASection = ({ onOpenCalendly }: { onOpenCalendly: () => void }) => {
   return (
-    <section className="flex flex-col items-center justify-center w-full relative">
+    <section className="flex flex-col items-center justify-center w-full relative bg-gradient-to-br from-pink-50 via-purple-50 to-pink-50 dark:from-pink-950/20 dark:via-purple-950/20 dark:to-pink-950/20">
       <div className="relative w-full px-6">
         <div className="max-w-6xl mx-auto border-l border-r border-border">
           <SectionHeader>
             <h2 className="text-3xl md:text-4xl font-medium tracking-tighter text-center text-balance pb-1">
-              Ready to Transform Your Operations?
+              <span className="bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">Ready to Transform Your Operations?</span>
             </h2>
             <p className="text-muted-foreground text-center text-balance font-medium">
               Let's discuss your specific requirements and design a custom AI implementation strategy for your organization.
@@ -409,26 +411,28 @@ const FinalCTASection = () => {
             <div className="text-center space-y-6">
               <div className="space-y-4">
                 <div className="space-y-6">
-                  <KortixEnterpriseModal>
-                    <Button size="lg">
-                      <Calendar className="w-4 h-4 mr-2" />
-                      Book Your Strategy Session
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </KortixEnterpriseModal>
+                  <Button 
+                    size="lg"
+                    onClick={onOpenCalendly}
+                    className="bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all"
+                  >
+                    <Calendar className="w-4 h-4 mr-2" />
+                    Book Your Strategy Session
+                    <ArrowRight className="w-4 h-4 ml-2" />
+                  </Button>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center max-w-2xl mx-auto">
-                    <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-accent/20">
-                      <Shield className="w-6 h-6 text-primary" />
+                    <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-pink-100/50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800">
+                      <Shield className="w-6 h-6 text-pink-600 dark:text-pink-400" />
                       <span className="text-sm font-medium">100% Satisfaction</span>
                       <span className="text-xs text-muted-foreground">Guarantee</span>
                     </div>
-                    <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-accent/20">
-                      <Users className="w-6 h-6 text-primary" />
+                    <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-purple-100/50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+                      <Users className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                       <span className="text-sm font-medium">Enterprise Support</span>
                       <span className="text-xs text-muted-foreground">Dedicated team</span>
                     </div>
-                    <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-accent/20">
-                      <Settings className="w-6 h-6 text-primary" />
+                    <div className="flex flex-col items-center gap-2 p-4 rounded-lg bg-pink-100/50 dark:bg-pink-900/20 border border-pink-200 dark:border-pink-800">
+                      <Settings className="w-6 h-6 text-pink-600 dark:text-pink-400" />
                       <span className="text-sm font-medium">Custom Pricing</span>
                       <span className="text-xs text-muted-foreground">Tailored to needs</span>
                     </div>
@@ -445,16 +449,62 @@ const FinalCTASection = () => {
 
 // Main Page Component
 export default function CustomImplementationPage() {
+  const [isCalendlyOpen, setIsCalendlyOpen] = useState(false);
+
+  useEffect(() => {
+    // Load Calendly script
+    const script = document.createElement('script');
+    script.src = 'https://assets.calendly.com/assets/external/widget.js';
+    script.async = true;
+    document.body.appendChild(script);
+
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
+      }
+    };
+  }, []);
+
+  // Handle Calendly close event
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data.event === 'calendly.event_scheduled') {
+        setIsCalendlyOpen(false);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   return (
     <main className="flex flex-col items-center justify-center min-h-screen w-full">
+      {/* Calendly Modal */}
+      <Dialog open={isCalendlyOpen} onOpenChange={setIsCalendlyOpen}>
+        <DialogContent className="max-w-4xl h-[700px] p-0 overflow-hidden">
+          <DialogTitle className="sr-only">Schedule Enterprise Strategy Call</DialogTitle>
+          <div className="h-full w-full">
+            <iframe 
+              src="https://calendly.com/techinschools/machine-walkthrough?embed_domain=myapps.ai&embed_type=Inline"
+              width="100%" 
+              height="100%" 
+              frameBorder="0"
+              className="border-0"
+              title="Schedule enterprise strategy call"
+              aria-label="Calendar for scheduling enterprise strategy call"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="w-full divide-y divide-border">
-        <CustomHeroSection />
+        <CustomHeroSection onOpenCalendly={() => setIsCalendlyOpen(true)} />
         <ValuePropSection />
         <ProcessSection />
         <BenefitsSection />
         {/* <TestimonialsSection /> */}
         {/* <SelfServiceSection /> */}
-        <FinalCTASection />
+        <FinalCTASection onOpenCalendly={() => setIsCalendlyOpen(true)} />
         <FooterSection />
       </div>
     </main>

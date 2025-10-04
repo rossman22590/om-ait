@@ -4,7 +4,7 @@ Script to fix users affected by duplicate subscription issue.
 
 Usage:
     python fix_duplicate_subscription_users.py --email user@example.com
-    python fix_duplicate_subscription_users.py --email user@example.com --dry-run
+    python fix_duplicate_subscription_users.py --email biovidigal@gmail.com --dry-run
 """
 
 import asyncio
@@ -118,7 +118,8 @@ async def find_active_stripe_subscription(email: str):
         yearly_subs = []
         for sub in subscriptions.data:
             price_id = sub['items']['data'][0]['price']['id']
-            if 'yearly' in sub['items']['data'][0]['price'].get('nickname', '').lower():
+            nickname = sub['items']['data'][0]['price'].get('nickname') or ''
+            if 'yearly' in nickname.lower():
                 yearly_subs.append(sub)
                 
         if yearly_subs:
@@ -127,7 +128,7 @@ async def find_active_stripe_subscription(email: str):
             sub = subscriptions.data[0]
             
         price_id = sub['items']['data'][0]['price']['id']
-        price_nickname = sub['items']['data'][0]['price'].get('nickname', 'Unknown')
+        price_nickname = sub['items']['data'][0]['price'].get('nickname') or 'Unknown'
         
         print(f"✅ Found active subscription: {sub.id}")
         print(f"   Price: {price_id} ({price_nickname})")
