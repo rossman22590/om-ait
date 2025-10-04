@@ -123,7 +123,6 @@ class ThreadManager:
             logger.info(f"💰 Processing billing for LLM response: {llm_response_id}")
             
             usage = content.get("usage", {})
-            
             prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
             completion_tokens = int(usage.get("completion_tokens", 0) or 0)
             is_estimated = usage.get("estimated", False)
@@ -131,13 +130,16 @@ class ThreadManager:
             
             cache_read_tokens = int(usage.get("cache_read_input_tokens", 0) or 0)
             if cache_read_tokens == 0:
-                cache_read_tokens = int(usage.get("prompt_tokens_details", {}).get("cached_tokens", 0) or 0)
+                prompt_tokens_details = usage.get("prompt_tokens_details") or {}
+                cache_read_tokens = int(prompt_tokens_details.get("cached_tokens", 0) or 0)
             
             cache_creation_tokens = int(usage.get("cache_creation_input_tokens", 0) or 0)
             model = content.get("model")
             
+            logger.info(f"🔍 BILLING DEBUG - Model from response: '{model}'")
+            
             usage_type = "FALLBACK ESTIMATE" if is_fallback else ("ESTIMATED" if is_estimated else "EXACT")
-            logger.info(f"💰 Usage type: {usage_type} - prompt={prompt_tokens}, completion={completion_tokens}, cache_read={cache_read_tokens}, cache_creation={cache_creation_tokens}")
+            logger.info(f"💰 Usage type: {usage_type} - prompt={prompt_tokens}, completion={completion_tokens}, cache_read={cache_read_tokens}, cache_creation={cache_creation_tokens}, model={model}")
             
             client = await self.db.client
             thread_row = await client.table('threads').select('account_id').eq('thread_id', thread_id).limit(1).execute()

@@ -232,11 +232,10 @@ if __name__ == "__main__":
     setup_api_keys()
 
     response = completion(
-        model="bedrock/anthropic.claude-sonnet-4-20250115-v1:0",
+        model="openrouter/anthropic/claude-sonnet-4.5",
         messages=[{"role": "user", "content": "Hello! Testing 1M context window."}],
         max_tokens=100,
         extra_headers={
             "anthropic-beta": "context-1m-2025-08-07"  # 👈 Enable 1M context
         }
     )
-

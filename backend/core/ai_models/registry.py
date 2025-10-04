@@ -6,9 +6,9 @@ FREE_MODEL_ID = "moonshotai/kimi-k2"
 
 # Set premium model ID based on environment
 if config.ENV_MODE == EnvMode.LOCAL:
-    PREMIUM_MODEL_ID = "openrouter/anthropic/claude-sonnet-4.5"
+    PREMIUM_MODEL_ID = "anthropic/claude-sonnet-4.5"
 else:  # STAGING or PRODUCTION
-    PREMIUM_MODEL_ID = "bedrock/anthropic.claude-sonnet-4-20250514-v1:0"
+    PREMIUM_MODEL_ID = "anthropic/claude-sonnet-4.5"
 
 is_local = config.ENV_MODE == EnvMode.LOCAL
 
@@ -24,7 +24,7 @@ class ModelRegistry:
             id="openrouter/anthropic/claude-sonnet-4.5",
             name="Sonnet 4.5",
             provider=ModelProvider.OPENROUTER,
-            aliases=["claude-sonnet-4.5", "anthropic/claude-sonnet-4.5", "Claude Sonnet 4.5", "claude-sonnet-4-20250514", "bedrock-claude-sonnet-4", "bedrock/claude-sonnet-4", "anthropic.claude-sonnet-4-20250514-v1:0"],
+            aliases=["claude-sonnet-4.5", "claude-sonnet-4-5", "anthropic/claude-sonnet-4.5", "anthropic/claude-sonnet-4-5", "openrouter/anthropic/claude-sonnet-4.5", "openrouter/anthropic/claude-sonnet-4-5", "Claude Sonnet 4.5", "4.5", "Sonnet 4.5", "arn:aws:bedrock:us-west-2:935064898258:inference-profile/global.anthropic.claude-sonnet-4-5-20250929-v1:0"],
             context_window=1_000_000,
             capabilities=[
                 ModelCapability.CHAT,
@@ -37,7 +37,7 @@ class ModelRegistry:
                 output_cost_per_million_tokens=15.00
             ),
             tier_availability=["paid"],
-            priority=100,
+            priority=101,
             recommended=True,
             enabled=True,
             config=ModelConfig(
@@ -47,36 +47,63 @@ class ModelRegistry:
             )
         ))
         
-        self.register(Model(
-            id="openrouter/anthropic/claude-3.7-sonnet" if is_local else "bedrock/anthropic.claude-3-7-sonnet-20250219-v1:0",
-            name="Sonnet 3.7",
-            provider=ModelProvider.OPENROUTER,
-            aliases=["sonnet-3.7", "claude-3.7", "Claude 3.7 Sonnet", "claude-3-7-sonnet-latest", "bedrock-claude-3.7", "bedrock/claude-3.7", "anthropic.claude-3-7-sonnet-20250219-v1:0"],
-            context_window=200_000,
-            capabilities=[
-                ModelCapability.CHAT,
-                ModelCapability.FUNCTION_CALLING,
-                ModelCapability.VISION,
-            ],
-            pricing=ModelPricing(
-                input_cost_per_million_tokens=3.00,
-                output_cost_per_million_tokens=15.00
-            ),
-            tier_availability=["paid"],
-            priority=99,
-            enabled=True,
-            config=ModelConfig(
-                extra_headers={
-                    "anthropic-beta": "prompt-caching-2024-07-31"
-                },
-            )
-        ))
+        # self.register(Model(
+        #     id="openrouter/anthropic/claude-sonnet-4",
+        #     name="Sonnet 4",
+        #     provider=ModelProvider.OPENROUTER,
+        #     aliases=["claude-sonnet-4", "Claude Sonnet 4", "claude-sonnet-4-20250514", "arn:aws:bedrock:us-west-2:935064898258:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0"],
+        #     context_window=1_000_000,
+        #     capabilities=[
+        #         ModelCapability.CHAT,
+        #         ModelCapability.FUNCTION_CALLING,
+        #         ModelCapability.VISION,
+        #         ModelCapability.THINKING,
+        #     ],
+        #     pricing=ModelPricing(
+        #         input_cost_per_million_tokens=3.00,
+        #         output_cost_per_million_tokens=15.00
+        #     ),
+        #     tier_availability=["paid"],
+        #     priority=100,
+        #     recommended=True,
+        #     enabled=True,
+        #     config=ModelConfig(
+        #         extra_headers={
+        #             "anthropic-beta": "context-1m-2025-08-07" 
+        #         },
+        #     )
+        # ))
+        
+        # self.register(Model(
+        #     id="openrouter/anthropic/claude-3-7-sonnet-latest",
+        #     name="Sonnet 3.7",
+        #     provider=ModelProvider.OPENROUTER,
+        #     aliases=["claude-3.7", "Claude 3.7 Sonnet", "claude-3-7-sonnet-latest", "arn:aws:bedrock:us-west-2:935064898258:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0"],
+        #     context_window=200_000,
+        #     capabilities=[
+        #         ModelCapability.CHAT,
+        #         ModelCapability.FUNCTION_CALLING,
+        #         ModelCapability.VISION,
+        #     ],
+        #     pricing=ModelPricing(
+        #         input_cost_per_million_tokens=3.00,
+        #         output_cost_per_million_tokens=15.00
+        #     ),
+        #     tier_availability=["paid"],
+        #     priority=99,
+        #     enabled=True,
+        #     config=ModelConfig(
+        #         extra_headers={
+        #             "anthropic-beta": "prompt-caching-2024-07-31"
+        #         },
+        #     )
+        # ))
 
         self.register(Model(
             id="xai/grok-4-fast-non-reasoning",
             name="Grok 4 Fast",
             provider=ModelProvider.XAI,
-            aliases=["grok-4-fast-non-reasoning", "Grok 4 Fast"],
+            aliases=["grok-4-fast-non-reasoning", "Grok 4 Fast", "xai/grok-4-fast-non-reasoning", "grok-4-fast"],
             context_window=2_000_000,
             capabilities=[
                 ModelCapability.CHAT,
@@ -88,9 +115,28 @@ class ModelRegistry:
             ),
             tier_availability=["paid"],
             priority=98,
+            enabled=True
+        ))    
+        
+        self.register(Model(
+            id="openrouter/meta-llama/llama-4-scout",
+            name="Auto",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["meta-llama/llama-4-scout", "llama-4-scout", "Auto", "openrouter/meta-llama/llama-4-scout"],
+            context_window=128_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=0.50,
+                output_cost_per_million_tokens=1.50
+            ),
+            tier_availability=["free", "paid"],
+            priority=92,
             recommended=True,
             enabled=True
-        ))        
+        ))  
         
         # self.register(Model(
         #     id="anthropic/claude-3-5-sonnet-latest",
@@ -116,7 +162,7 @@ class ModelRegistry:
             id="openai/gpt-5",
             name="GPT-5",
             provider=ModelProvider.OPENAI,
-            aliases=["gpt-5", "GPT-5"],
+            aliases=["gpt-5", "GPT-5", "openai/gpt-5"],
             context_window=400_000,
             capabilities=[
                 ModelCapability.CHAT,
@@ -137,7 +183,7 @@ class ModelRegistry:
             id="openai/gpt-5-mini",
             name="GPT-5 Mini",
             provider=ModelProvider.OPENAI,
-            aliases=["gpt-5-mini", "GPT-5 Mini"],
+            aliases=["gpt-5-mini", "GPT-5 Mini", "openai/gpt-5-mini"],
             context_window=400_000,
             capabilities=[
                 ModelCapability.CHAT,
@@ -150,7 +196,6 @@ class ModelRegistry:
             ),
             tier_availability=["free", "paid"],
             priority=96,
-            recommended=True,
             enabled=True
         ))
         
@@ -158,7 +203,7 @@ class ModelRegistry:
             id="openrouter/google/gemini-2.5-pro",
             name="Gemini 2.5 Pro",
             provider=ModelProvider.OPENROUTER,
-            aliases=["google/gemini-2.5-pro", "gemini-2.5-pro", "Gemini 2.5 Pro"],
+            aliases=["gemini-2.5-pro", "Gemini 2.5 Pro", "google/gemini-2.5-pro"],
             context_window=2_000_000,
             capabilities=[
                 ModelCapability.CHAT,
@@ -172,7 +217,6 @@ class ModelRegistry:
             ),
             tier_availability=["paid"],
             priority=95,
-            recommended=True,
             enabled=True
         ))
         
@@ -197,33 +241,12 @@ class ModelRegistry:
             recommended=True,
             enabled=True
         ))
-        
-        self.register(Model(
-            id="openrouter/meta-llama/llama-4-scout",
-            name="Auto",
-            provider=ModelProvider.OPENROUTER,
-            aliases=["meta-llama/llama-4-scout", "llama-4-scout", "Auto"],
-            context_window=128_000,
-            capabilities=[
-                ModelCapability.CHAT,
-                ModelCapability.FUNCTION_CALLING,
-            ],
-            pricing=ModelPricing(
-                input_cost_per_million_tokens=0.50,
-                output_cost_per_million_tokens=1.50
-            ),
-            tier_availability=["free", "paid"],
-            priority=92,
-            recommended=True,
-            enabled=True
-        ))
-        
-        
+
         self.register(Model(
             id="openrouter/moonshotai/kimi-k2",
             name="Kimi K2",
             provider=ModelProvider.OPENROUTER,
-            aliases=["moonshotai/kimi-k2", "kimi-k2", "Kimi K2"],
+            aliases=["kimi-k2", "Kimi K2", "moonshotai/kimi-k2", "openrouter/moonshotai/kimi-k2"],
             context_window=200_000,
             capabilities=[
                 ModelCapability.CHAT,
@@ -235,10 +258,14 @@ class ModelRegistry:
             ),
             tier_availability=["free", "paid"],
             priority=94,
-            # recommended=True,
-            enabled=True
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                }
+            )
         ))
-
         
         # # DeepSeek Models
         # self.register(Model(
