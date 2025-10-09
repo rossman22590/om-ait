@@ -31,7 +31,6 @@ import {
   Wrench,
   Server,
   BookOpen,
-  Workflow,
   Zap,
   Download,
   Loader2,
@@ -57,7 +56,6 @@ import { AgentToolsConfiguration } from './agent-tools-configuration';
 import { GranularToolConfiguration } from './tools/granular-tool-configuration';
 import { AgentMCPConfiguration } from './agent-mcp-configuration';
 import { AgentKnowledgeBaseManager } from './knowledge-base/agent-kb-tree';
-import { AgentPlaybooksConfiguration } from './playbooks/agent-playbooks-configuration';
 import { AgentTriggersConfiguration } from './triggers/agent-triggers-configuration';
 import { AgentAvatar } from '../thread/content/agent-avatar';
 import { AgentIconEditorDialog } from './config/agent-icon-editor-dialog';
@@ -68,7 +66,7 @@ interface AgentConfigurationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   agentId: string;
-  initialTab?: 'instructions' | 'tools' | 'integrations' | 'knowledge' | 'playbooks' | 'triggers';
+  initialTab?: 'instructions' | 'tools' | 'integrations' | 'knowledge' | 'triggers';
   onAgentChange?: (agentId: string) => void;
 }
 
@@ -84,7 +82,11 @@ export function AgentConfigurationDialog({
   const queryClient = useQueryClient();
 
   const { agent, versionData, isViewingOldVersion, isLoading, error } = useAgentVersionData({ agentId });
-  const { data: agentsResponse } = useAgents({}, { enabled: !!onAgentChange });
+  const { data: agentsResponse, refetch: refetchAgents } = useAgents({}, { 
+    enabled: !!onAgentChange,
+    refetchOnWindowFocus: true,
+    refetchOnMount: 'always'
+  });
   const agents = agentsResponse?.agents || [];
 
   const updateAgentMutation = useUpdateAgent();
@@ -142,7 +144,7 @@ export function AgentConfigurationDialog({
     const newFormData = {
       name: configSource.name || '',
       system_prompt: configSource.system_prompt || '',
-      model: configSource.model,
+      model: configSource.model || undefined,
       agentpress_tools: ensureCoreToolsEnabled(configSource.agentpress_tools || DEFAULT_AGENTPRESS_TOOLS),
       configured_mcps: configSource.configured_mcps || [],
       custom_mcps: configSource.custom_mcps || [],
@@ -179,7 +181,7 @@ export function AgentConfigurationDialog({
         agentpress_tools: formData.agentpress_tools,
       };
 
-      if (formData.model !== undefined) updateData.model = formData.model;
+      if (formData.model !== undefined && formData.model !== null) updateData.model = formData.model;
       if (formData.icon_name !== undefined) updateData.icon_name = formData.icon_name;
       if (formData.icon_color !== undefined) updateData.icon_color = formData.icon_color;
       if (formData.icon_background !== undefined) updateData.icon_background = formData.icon_background;
@@ -256,7 +258,7 @@ export function AgentConfigurationDialog({
   };
 
   const handleModelChange = (model: string) => {
-    setFormData(prev => ({ ...prev, model }));
+    setFormData(prev => ({ ...prev, model: model || undefined }));
   };
 
   const handleToolsChange = (tools: Record<string, boolean | { enabled: boolean; description: string }>) => {
@@ -374,7 +376,6 @@ export function AgentConfigurationDialog({
     { id: 'tools', label: 'Tools', icon: Wrench, disabled: isSunaAgent },
     { id: 'integrations', label: 'Integrations', icon: Server, disabled: false },
     { id: 'knowledge', label: 'Knowledge', icon: BookOpen, disabled: false },
-    { id: 'playbooks', label: 'Playbooks', icon: Workflow, disabled: false },
     { id: 'triggers', label: 'Triggers', icon: Zap, disabled: false },
   ];
 
@@ -679,12 +680,6 @@ export function AgentConfigurationDialog({
                 <TabsContent value="knowledge" className="p-6 mt-0 flex flex-col h-full">
                   <div className="flex flex-col flex-1 min-h-0 h-full">
                     <AgentKnowledgeBaseManager agentId={agentId} agentName={formData.name || 'Agent'} />
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="playbooks" className="p-6 mt-0 flex flex-col h-full">
-                  <div className="flex flex-col flex-1 min-h-0 h-full">
-                    <AgentPlaybooksConfiguration agentId={agentId} agentName={formData.name || 'Agent'} />
                   </div>
                 </TabsContent>
 

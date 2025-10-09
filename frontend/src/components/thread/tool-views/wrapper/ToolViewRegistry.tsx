@@ -48,14 +48,13 @@ import { AvatarToolView } from '../AvatarToolView';
 import { UploadFileToolView } from '../UploadFileToolView';
 import { DocsToolView, ListDocumentsToolView, DeleteDocumentToolView } from '../docs-tool';
 import { CreateNewAgentToolView } from '../create-new-agent/create-new-agent';
+import { UpdateAgentToolView } from '../update-agent/update-agent';
 import { SearchMcpServersForAgentToolView } from '../search-mcp-servers-for-agent/search-mcp-servers-for-agent';
 import { CreateCredentialProfileForAgentToolView } from '../create-credential-profile-for-agent/create-credential-profile-for-agent';
 import { DiscoverMcpToolsForAgentToolView } from '../discover-mcp-tools-for-agent/discover-mcp-tools-for-agent';
+import { DiscoverUserMcpServersToolView } from '../discover-user-mcp-servers/discover-user-mcp-servers';
 import { ConfigureAgentIntegrationToolView } from '../configure-agent-integration/configure-agent-integration';
-import CreateAgentWorkflowToolView from '../create-agent-workflow/create-agent-workflow';
-import ActivateAgentWorkflowToolView from '../activate-agent-workflow/activate-agent-workflow';
 import CreateAgentScheduledTriggerToolView from '../create-agent-scheduled-trigger/create-agent-scheduled-trigger';
-import ListAgentWorkflowsToolView from '../list-agent-workflows/list-agent-workflows';
 import { createPresentationViewerToolContent, parsePresentationSlidePath } from '../utils/presentation-utils';
 import { extractToolData } from '../utils';
 import { KbToolView } from '../KbToolView';
@@ -203,14 +202,13 @@ const defaultRegistry: ToolViewRegistryType = {
   'default': GenericToolView,
 
   'create-new-agent': CreateNewAgentToolView,
+  'update-agent': UpdateAgentToolView,
   'search-mcp-servers-for-agent': SearchMcpServersForAgentToolView,
   'create-credential-profile-for-agent': CreateCredentialProfileForAgentToolView,
   'discover-mcp-tools-for-agent': DiscoverMcpToolsForAgentToolView,
+  'discover-user-mcp-servers': DiscoverUserMcpServersToolView,
   'configure-agent-integration': ConfigureAgentIntegrationToolView,
-  'create-agent-workflow': CreateAgentWorkflowToolView,
-  'activate-agent-workflow': ActivateAgentWorkflowToolView,
   'create-agent-scheduled-trigger': CreateAgentScheduledTriggerToolView,
-  'list-agent-workflows': ListAgentWorkflowsToolView,
 };
 
 class ToolViewRegistry {

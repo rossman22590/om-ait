@@ -75,8 +75,24 @@ class AgentConfigTool(AgentBuilderBaseTool):
             
             current_agent = agent_result.data[0]
 
-            # Previous Suna default restrictions have been removed
-            # All agents can now be fully customized through the agent builder
+            metadata = current_agent.get('metadata', {})
+            is_suna_default = metadata.get('is_suna_default', False)
+            
+            # Enforce Suna restrictions (simplified)
+            if is_suna_default:
+                restricted_fields = []
+                if name is not None:
+                    restricted_fields.append("name")
+                if system_prompt is not None:
+                    restricted_fields.append("system prompt")
+                if agentpress_tools is not None:
+                    restricted_fields.append("core tools")
+                
+                if restricted_fields:
+                    return self.fail_response(
+                        f"Cannot modify {', '.join(restricted_fields)} for Suna. "
+                        f"Machine's core identity is centrally managed. You can still add MCPs and triggers."
+                    )
 
             agent_update_fields = {}
             if name is not None:

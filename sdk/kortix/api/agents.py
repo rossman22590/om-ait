@@ -52,11 +52,6 @@ class AgentUpdateRequest:
 
 
 @dataclass
-class PipedreamToolsUpdateRequest:
-    enabled_tools: List[str]
-
-
-@dataclass
 class CustomMCPToolsUpdateRequest:
     url: str
     type: str
@@ -130,23 +125,6 @@ class AgentToolsResponse:
 
 
 @dataclass
-class PipedreamTool:
-    name: str
-    description: str
-    enabled: bool
-
-
-@dataclass
-class PipedreamToolsResponse:
-    profile_id: str
-    app_name: str
-    profile_name: str
-    tools: List[PipedreamTool]
-    has_mcp_config: bool
-    error: Optional[str] = None
-
-
-@dataclass
 class CustomMCPTool:
     name: str
     description: str
@@ -159,14 +137,6 @@ class CustomMCPToolsResponse:
     has_mcp_config: bool
     server_type: str
     server_url: str
-
-
-@dataclass
-class PipedreamToolsUpdateResponse:
-    success: bool
-    enabled_tools: List[str]
-    total_tools: int
-    version_name: Optional[str] = None
 
 
 @dataclass
@@ -245,17 +215,6 @@ def from_dict(cls, data: Dict[str, Any]):
         ]
         mcp_tools = [from_dict(AgentTool, tool) for tool in data.get("mcp_tools", [])]
         return cls(agentpress_tools=agentpress_tools, mcp_tools=mcp_tools)
-
-    elif cls == PipedreamToolsResponse:
-        tools = [from_dict(PipedreamTool, tool) for tool in data.get("tools", [])]
-        return cls(
-            profile_id=data["profile_id"],
-            app_name=data["app_name"],
-            profile_name=data["profile_name"],
-            tools=tools,
-            has_mcp_config=data["has_mcp_config"],
-            error=data.get("error"),
-        )
 
     elif cls == CustomMCPToolsResponse:
         tools = [from_dict(CustomMCPTool, tool) for tool in data.get("tools", [])]
@@ -497,56 +456,6 @@ class AgentsClient:
         response = await self.client.get(f"/agents/{agent_id}/tools")
         data = self._handle_response(response)
         return from_dict(AgentToolsResponse, data)
-
-    async def get_pipedream_tools(
-        self, agent_id: str, profile_id: str, version: Optional[str] = None
-    ) -> PipedreamToolsResponse:
-        """
-        [WARNING] This endpoint is not implemented.
-
-        Get Pipedream tools for an agent profile
-
-        Args:
-            agent_id: Agent identifier
-            profile_id: Pipedream profile identifier
-            version: Optional version ID to get tools from specific version
-
-        Returns:
-            PipedreamToolsResponse containing profile info and available tools
-        """
-        raise Exception("TODO: unimplemented")
-        params = {}
-        if version:
-            params["version"] = version
-
-        response = await self.client.get(
-            f"/agents/{agent_id}/pipedream-tools/{profile_id}", params=params
-        )
-        data = self._handle_response(response)
-        return from_dict(PipedreamToolsResponse, data)
-
-    async def update_pipedream_tools(
-        self, agent_id: str, profile_id: str, request: PipedreamToolsUpdateRequest
-    ) -> PipedreamToolsUpdateResponse:
-        """
-        [WARNING] This endpoint is not implemented.
-
-        Update Pipedream tools for an agent profile
-
-        Args:
-            agent_id: Agent identifier
-            profile_id: Pipedream profile identifier
-            request: PipedreamToolsUpdateRequest with enabled tools
-
-        Returns:
-            PipedreamToolsUpdateResponse with update result
-        """
-        raise Exception("TODO: unimplemented")
-        response = await self.client.put(
-            f"/agents/{agent_id}/pipedream-tools/{profile_id}", json=to_dict(request)
-        )
-        data = self._handle_response(response)
-        return from_dict(PipedreamToolsUpdateResponse, data)
 
     async def get_custom_mcp_tools(
         self,

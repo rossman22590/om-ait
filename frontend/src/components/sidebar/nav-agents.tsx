@@ -14,11 +14,19 @@ import {
   Check,
   History,
   Search,
-  Edit2
+  Edit2,
+  ChevronRight,
+  Zap,
+  Folder
 } from "lucide-react"
 import { ThreadIcon } from "./thread-icon"
 import { toast } from "sonner"
 import { usePathname, useRouter } from "next/navigation"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 import {
   DropdownMenu,
@@ -136,8 +144,6 @@ const ThreadItem: React.FC<{
               {isSelected && <Check className="h-3 w-3 text-primary-foreground" />}
             </div>
           </div>
-
-          {/* Dropdown Menu - inline with content */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -145,7 +151,6 @@ const ThreadItem: React.FC<{
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  // Ensure pointer events are enabled when dropdown opens
                   document.body.style.pointerEvents = 'auto';
                 }}
               >
@@ -243,7 +248,12 @@ export function NavAgents() {
 
   // Server-side search is now handled in useThreads hook
   // No need for client-side filtering anymore
-  const groupedThreads: GroupedThreads = groupThreadsByDate(combinedThreads);
+  // Separate trigger threads from regular threads
+  const regularThreads = combinedThreads.filter(thread => !thread.projectName?.startsWith('Trigger: '));
+  const triggerThreads = combinedThreads.filter(thread => thread.projectName?.startsWith('Trigger: '));
+  
+  const groupedThreads: GroupedThreads = groupThreadsByDate(regularThreads);
+  const groupedTriggerThreads: GroupedThreads = groupThreadsByDate(triggerThreads);
 
   const handleDeletionProgress = (completed: number, total: number) => {
     const percentage = (completed / total) * 100;
@@ -615,7 +625,6 @@ export function NavAgents() {
         {(state !== 'collapsed' || isMobile) && (
           <>
             {isLoading ? (
-              // Show skeleton loaders while loading
               Array.from({ length: 3 }).map((_, index) => (
                 <SidebarMenuItem key={`skeleton-${index}`}>
                   <SidebarMenuButton>
@@ -624,43 +633,88 @@ export function NavAgents() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))
-            ) : combinedThreads.length > 0 ? (
-              // Show threads grouped by date
-              <>
-                {Object.entries(groupedThreads).map(([dateGroup, threadsInGroup]) => (
-                  <div key={dateGroup}>
-                    <DateGroupHeader dateGroup={dateGroup} count={threadsInGroup.length} />
-                    {threadsInGroup.map((thread) => {
-                      const isActive = pathname?.includes(thread.threadId) || false;
-                      const isThreadLoading = loadingThreadId === thread.threadId;
-                      const isSelected = selectedThreads.has(thread.threadId);
+              ) : (regularThreads.length > 0 || triggerThreads.length > 0) ? (
+                <>
+                {triggerThreads.length > 0 && (
+                  <Collapsible defaultOpen={false} className="group/collapsible w-full mb-3">
+                    <SidebarMenuItem>
+                      <CollapsibleTrigger asChild>
+                        <SidebarMenuButton className="w-full">
+                          <ChevronRight className="transition-transform h-4 w-4 group-data-[state=open]/collapsible:rotate-90" />
+                          <Folder className="h-4 w-4" />
+                          <span className="flex-1 text-left">Trigger Runs ({triggerThreads.length})</span>
+                        </SidebarMenuButton>
+                      </CollapsibleTrigger>
+                    </SidebarMenuItem>
+                    <CollapsibleContent>
+                      <div className="pl-6">
+                        {Object.entries(groupedTriggerThreads).map(([dateGroup, threadsInGroup]) => (
+                          <div key={`trigger-${dateGroup}`}>
+                            <DateGroupHeader dateGroup={dateGroup} count={threadsInGroup.length} />
+                            {threadsInGroup.map((thread) => {
+                              const isActive = pathname?.includes(thread.threadId) || false;
+                              const isThreadLoading = loadingThreadId === thread.threadId;
+                              const isSelected = selectedThreads.has(thread.threadId);
 
-                      return (
-                        <ThreadItem
-                          key={`thread-${thread.threadId}`}
-                          thread={thread}
-                          isActive={isActive}
-                          isThreadLoading={isThreadLoading}
-                          isSelected={isSelected}
-                          selectedThreads={selectedThreads}
-                          loadingThreadId={loadingThreadId}
-                          pathname={pathname}
-                          isMobile={isMobile}
-                          handleThreadClick={handleThreadClick}
-                          toggleThreadSelection={toggleThreadSelection}
-                          handleDeleteThread={handleDeleteThread}
-                          setSelectedItem={setSelectedItem}
-                          setShowShareModal={setShowShareModal}
-                        />
-                      );
-                    })}
-                  </div>
-                ))}
-              </>
-            ) : (
+                              return (
+                                <ThreadItem
+                                  key={`trigger-thread-${thread.threadId}`}
+                                  thread={thread}
+                                  isActive={isActive}
+                                  isThreadLoading={isThreadLoading}
+                                  isSelected={isSelected}
+                                  selectedThreads={selectedThreads}
+                                  loadingThreadId={loadingThreadId}
+                                  pathname={pathname}
+                                  isMobile={isMobile}
+                                  handleThreadClick={handleThreadClick}
+                                  toggleThreadSelection={toggleThreadSelection}
+                                  handleDeleteThread={handleDeleteThread}
+                                  setSelectedItem={setSelectedItem}
+                                  setShowShareModal={setShowShareModal}
+                                />
+                              );
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+                  {Object.entries(groupedThreads).map(([dateGroup, threadsInGroup]) => (
+                    <div key={dateGroup}>
+                      <DateGroupHeader dateGroup={dateGroup} count={threadsInGroup.length} />
+                      {threadsInGroup.map((thread) => {
+                        const isActive = pathname?.includes(thread.threadId) || false;
+                        const isThreadLoading = loadingThreadId === thread.threadId;
+                        const isSelected = selectedThreads.has(thread.threadId);
+
+                        return (
+                          <ThreadItem
+                            key={`thread-${thread.threadId}`}
+                            thread={thread}
+                            isActive={isActive}
+                            isThreadLoading={isThreadLoading}
+                            isSelected={isSelected}
+                            selectedThreads={selectedThreads}
+                            loadingThreadId={loadingThreadId}
+                            pathname={pathname}
+                            isMobile={isMobile}
+                            handleThreadClick={handleThreadClick}
+                            toggleThreadSelection={toggleThreadSelection}
+                            handleDeleteThread={handleDeleteThread}
+                            setSelectedItem={setSelectedItem}
+                            setShowShareModal={setShowShareModal}
+                          />
+                        );
+                      })}
+                    </div>
+                  ))}
+                </>
+              ) : (
               <SidebarMenuItem>
                 <SidebarMenuButton className="text-sidebar-foreground/70">
-                  <span>No triggers yet</span>
+                  <span>No tasks yet</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}

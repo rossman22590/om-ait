@@ -2,7 +2,6 @@ from .base_tool import AgentBuilderBaseTool
 from .agent_config_tool import AgentConfigTool
 from .mcp_search_tool import MCPSearchTool
 from .credential_profile_tool import CredentialProfileTool
-from .workflow_tool import WorkflowTool
 from .trigger_tool import TriggerTool
 from .pipedream_mcp_tool import PipedreamMCPTool
 from typing import List, Type, Dict, Any
@@ -18,7 +17,6 @@ class AgentBuilderToolRegistry:
             'agent_config': AgentConfigTool,
             'mcp_search': MCPSearchTool,
             'credential_profile': CredentialProfileTool,
-            'workflow': WorkflowTool,
             'trigger': TriggerTool,
             'pipedream_mcp': PipedreamMCPTool,
         }
@@ -66,7 +64,6 @@ __all__ = [
     'AgentConfigTool',
     'MCPSearchTool',
     'CredentialProfileTool',
-    'WorkflowTool',
     'PipedreamMCPTool',
     'AgentBuilderToolRegistry',
     'agent_builder_registry'
