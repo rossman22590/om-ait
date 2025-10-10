@@ -2,8 +2,8 @@ import { ChangelogData } from "../sections/changelog";
 
 export const changeLogData: ChangelogData[] = [
     {
-      version: "Version 10.2.0",
-      date: "Aug 2025",
+      version: "Version 10.4.0",
+      date: "Sept 2025",
       title: "Introducing Custom Agents, Agent Marketplace, and much more!",
       description:
         "The most significant update for Machine yet. Build, customize, and share AI agents. Connect any service, automate complex workflows, and discover a thriving marketplace of community-built agents.",
