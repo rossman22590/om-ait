@@ -6,9 +6,9 @@ FREE_MODEL_ID = "moonshotai/kimi-k2"
 
 # Set premium model ID based on environment
 if config.ENV_MODE == EnvMode.LOCAL:
-    PREMIUM_MODEL_ID = "anthropic/claude-sonnet-4.5"
+    PREMIUM_MODEL_ID = "openrouter/anthropic/claude-sonnet-4.5"
 else:  # STAGING or PRODUCTION
-    PREMIUM_MODEL_ID = "anthropic/claude-sonnet-4.5"
+    PREMIUM_MODEL_ID = "openrouter/anthropic/claude-sonnet-4.5"
 
 is_local = config.ENV_MODE == EnvMode.LOCAL
 

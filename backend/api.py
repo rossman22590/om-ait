@@ -30,6 +30,7 @@ import sys
 from core.services import email_api
 from core.triggers import api as triggers_api
 from core.services import api_keys_api
+from core.pipedream import api as pipedream_api
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -71,6 +72,7 @@ async def lifespan(app: FastAPI):
         credentials_api.initialize(db)
         template_api.initialize(db)
         composio_api.initialize(db)
+        pipedream_api.initialize(db)
         
         yield
         
@@ -129,18 +131,15 @@ async def log_requests_middleware(request: Request, call_next):
         raise
 
 # Define allowed origins based on environment
-allowed_origins = ["https://beta.machine.myapps.ai", "https://beta-machinev5.vercel.app", "https://machinev9.ngrok.io", "https://v10-alpha-machine.vercel.app", "https://machine.myapps.ai"]
-allow_origin_regex = None
+# Always allow ngrok URLs for development
+allow_origin_regex = r"https://.*\.ngrok\.io"
 
-# Add staging-specific origins
 if config.ENV_MODE == EnvMode.LOCAL:
-    allowed_origins.append("https://machinev9.ngrok.io")
-
-# Add staging-specific origins
-if config.ENV_MODE == EnvMode.STAGING:
-    allowed_origins.append("https://beta.machine.myapps.ai")
-    allowed_origins.append("https://beta.machine.myapps.ai")
-    allow_origin_regex = r"https://suna-.*-prjcts\.vercel\.app"
+    allowed_origins = []
+elif config.ENV_MODE == EnvMode.STAGING:
+    allowed_origins = ["https://beta.machine.myapps.ai", "https://beta-machinev5.vercel.app", "https://machinev9.ngrok.io", "https://v10-alpha-machine.vercel.app", "https://machine.myapps.ai"]
+else:
+    allowed_origins = ["https://beta.machine.myapps.ai", "https://machine.myapps.ai", "https://v10-alpha-machine.vercel.app"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -180,6 +179,8 @@ api_router.include_router(triggers_api.router)
 
 from core.composio_integration import api as composio_api
 api_router.include_router(composio_api.router)
+
+api_router.include_router(pipedream_api.router)
 
 from core.google.google_slides_api import router as google_slides_router
 api_router.include_router(google_slides_router)

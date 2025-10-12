@@ -185,7 +185,7 @@ export function GetCurrentAgentConfigToolView({
                       </div>
                       <div>
                         <h4 className="font-medium text-zinc-900 dark:text-zinc-100">
-                          AgentPress Tools
+                          Machine Tools
                         </h4>
                         <p className="text-xs text-zinc-500 dark:text-zinc-400">
                           Core system capabilities

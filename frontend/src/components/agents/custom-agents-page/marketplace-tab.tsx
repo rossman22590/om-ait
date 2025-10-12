@@ -16,12 +16,12 @@ interface MarketplaceTabProps {
   setMarketplaceSearchQuery: (value: string) => void;
   marketplaceFilter: 'all' | 'kortix' | 'community' | 'mine';
   setMarketplaceFilter: (value: 'all' | 'kortix' | 'community' | 'mine') => void;
+  onDeleteTemplate?: (item: MarketplaceTemplate, e?: React.MouseEvent) => void;
   marketplaceLoading: boolean;
   allMarketplaceItems: MarketplaceTemplate[];
   mineItems: MarketplaceTemplate[];
   installingItemId: string | null;
   onInstallClick: (item: MarketplaceTemplate, e?: React.MouseEvent) => void;
-  onDeleteTemplate?: (item: MarketplaceTemplate, e?: React.MouseEvent) => void;
   getItemStyling: (item: MarketplaceTemplate) => { color: string };
   currentUserId?: string;
   onAgentPreview?: (agent: MarketplaceTemplate) => void;
@@ -82,7 +82,7 @@ export const MarketplaceTab = ({
             <SelectContent className='rounded-xl'>
               <SelectItem className='rounded-xl' value="all">All Agents</SelectItem>
               <SelectItem className='rounded-xl' value="mine">Mine</SelectItem>
-              <SelectItem className='rounded-xl' value="kortix">Machine Verified</SelectItem>
+              <SelectItem className='rounded-xl' value="kortix">Machine</SelectItem>
               <SelectItem className='rounded-xl' value="community">Community</SelectItem>
             </SelectContent>
           </Select>
