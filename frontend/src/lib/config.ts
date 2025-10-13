@@ -146,6 +146,7 @@ export const isStagingMode = (): boolean => {
 };
 
 
+
 // Plan type identification functions
 export const isMonthlyPlan = (priceId: string): boolean => {
   const allTiers = config.SUBSCRIPTION_TIERS;

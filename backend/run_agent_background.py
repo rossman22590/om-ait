@@ -135,13 +135,18 @@ async def initialize():
     """Initialize the agent API with resources from the main API."""
     global db, instance_id, _initialized
 
+    if _initialized:
+        return  # Already initialized
+    
     if not instance_id:
         instance_id = str(uuid.uuid4())[:8]
+    
+    logger.info(f"Initializing worker with Redis at {redis_host}:{redis_port}")
     await retry(lambda: redis.initialize_async())
     await db.initialize()
 
     _initialized = True
-    logger.debug(f"Initialized agent API with instance ID: {instance_id}")
+    logger.info(f"✅ Worker initialized successfully with instance ID: {instance_id}")
 
 @dramatiq.actor
 async def check_health(key: str):

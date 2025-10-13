@@ -40,11 +40,12 @@ import {
   MessageSquare,
   ExternalLink,
 } from 'lucide-react';
-import { useAdminUserDetails, useAdminUserThreads } from '@/hooks/react-query/admin/use-admin-users';
+import { useAdminUserDetails, useAdminUserThreads, useAdminUserActivity } from '@/hooks/react-query/admin/use-admin-users';
 import {
   useUserBillingSummary,
   useAdminAdjustCredits,
   useProcessRefund,
+  useAdminUserTransactions,
 } from '@/hooks/react-query/admin/use-admin-billing';
 import type { UserSummary } from '@/hooks/react-query/admin/use-admin-users';
 
@@ -68,6 +69,8 @@ export function AdminUserDetailsDialog({
   const [adjustIsExpiring, setAdjustIsExpiring] = useState(true);
   const [refundIsExpiring, setRefundIsExpiring] = useState(false);
   const [threadsPage, setThreadsPage] = useState(1);
+  const [transactionsPage, setTransactionsPage] = useState(1);
+  const [activityPage, setActivityPage] = useState(1);
 
   const { data: userDetails, isLoading } = useAdminUserDetails(user?.id || null);
   const { data: billingSummary, refetch: refetchBilling } = useUserBillingSummary(user?.id || null);
@@ -76,7 +79,17 @@ export function AdminUserDetailsDialog({
     page: threadsPage,
     page_size: 10,
   });
-  const adminAdjustCreditsMutation = useAdminAdjustCredits();
+  const { data: userTransactions, isLoading: transactionsLoading } = useAdminUserTransactions({
+    userId: user?.id || '',
+    page: transactionsPage,
+    page_size: 10,
+  });
+  const { data: userActivity, isLoading: activityLoading } = useAdminUserActivity({
+    userId: user?.id || '',
+    page: activityPage,
+    page_size: 10,
+  });
+  const adjustCreditsMutation = useAdjustCredits();
   const processRefundMutation = useProcessRefund();
 
   const formatDate = (dateString: string) => {
@@ -384,246 +397,239 @@ export function AdminUserDetailsDialog({
               </Card>
             </TabsContent>
 
-              <TabsContent value="transactions" className="space-y-4">
-                {billingSummary && (
-                  <Card className='border-0 shadow-none bg-transparent'>
-                    <CardContent className='p-0'>
-                      <div className="space-y-2">
-                        {billingSummary.recent_transactions?.length > 0 ? (
-                          billingSummary.recent_transactions.map((transaction: any) => (
-                            <div
-                              key={transaction.id}
-                              className="flex items-center justify-between p-3 border rounded-lg"
-                            >
-                              <div>
-                                <p className="text-sm font-medium">{transaction.description}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {formatDate(transaction.created_at)}
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <p className={`font-semibold ${getTransactionColor(transaction.type)}`}>
-                                  {transaction.amount > 0 ? '+' : ''}
-                                  {formatCurrency(Math.abs(transaction.amount))}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  Balance: {formatCurrency(transaction.balance_after)}
-                                </p>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <p className="text-sm text-muted-foreground">No recent transactions</p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
+            <TabsContent value="transactions" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4" />
+                    Transactions
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {transactionsLoading ? (
+                    <div className="space-y-2">
+                      {[...Array(3)].map((_, i) => (
+                        <Skeleton key={i} className="h-16 w-full" />
+                      ))}
+                    </div>
+                  ) : userTransactions && userTransactions.data?.length > 0 ? (
+                    <div className="space-y-2">
+                      {userTransactions.data.map((transaction: any) => (
+                        <div
+                          key={transaction.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                        >
+                          <div>
+                            <p className="text-sm font-medium">{transaction.description}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {formatDate(transaction.created_at)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className={`font-semibold ${getTransactionColor(transaction.type)}`}>
+                              {transaction.amount > 0 ? '+' : ''}
+                              {formatCurrency(Math.abs(transaction.amount))}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Balance: {formatCurrency(transaction.balance_after)}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                      {userTransactions.pagination && userTransactions.pagination.total_pages > 1 && (
+                        <div className="flex items-center justify-between pt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!userTransactions.pagination.has_prev}
+                            onClick={() => setTransactionsPage(p => Math.max(1, p - 1))}
+                          >
+                            Previous
+                          </Button>
+                          <span className="text-sm text-muted-foreground">
+                            Page {userTransactions.pagination.page} of {userTransactions.pagination.total_pages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!userTransactions.pagination.has_next}
+                            onClick={() => setTransactionsPage(p => p + 1)}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No transactions found</p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-              <TabsContent value="activity" className="space-y-4">
+            <TabsContent value="activity" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-4 w-4" />
+                    Activity
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {activityLoading ? (
+                    <div className="space-y-2">
+                      {[...Array(3)].map((_, i) => (
+                        <Skeleton key={i} className="h-16 w-full" />
+                      ))}
+                    </div>
+                  ) : userActivity && userActivity.data?.length > 0 ? (
+                    <div className="space-y-2">
+                      {userActivity.data.map((activity: any) => (
+                        <div
+                          key={activity.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium">{activity.agent_name}</p>
+                              <Badge
+                                variant={activity.status === 'completed' ? 'default' : activity.status === 'failed' ? 'destructive' : 'secondary'}
+                                className="text-xs"
+                              >
+                                {activity.status}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {formatDate(activity.created_at)} • Thread: {activity.thread_name || activity.thread_id.slice(-8)}
+                            </p>
+                            {activity.error && (
+                              <p className="text-xs text-red-600 mt-1 truncate">
+                                Error: {activity.error}
+                              </p>
+                            )}
+                          </div>
+                          {activity.credit_cost > 0 && (
+                            <div className="text-right ml-2">
+                              <p className="text-sm font-medium text-muted-foreground">
+                                {formatCurrency(activity.credit_cost)}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {userActivity.pagination && userActivity.pagination.total_pages > 1 && (
+                        <div className="flex items-center justify-between pt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!userActivity.pagination.has_prev}
+                            onClick={() => setActivityPage(p => Math.max(1, p - 1))}
+                          >
+                            Previous
+                          </Button>
+                          <span className="text-sm text-muted-foreground">
+                            Page {userActivity.pagination.page} of {userActivity.pagination.total_pages}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!userActivity.pagination.has_next}
+                            onClick={() => setActivityPage(p => p + 1)}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No activity found</p>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="actions" className="space-y-4">
+              <div className="grid grid-cols-1 gap-4">
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Activity className="h-4 w-4" />
-                      Recent Activity
+                      <CreditCard className="h-4 w-4" />
+                      Process Refund
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    {userDetails?.recent_activity?.length > 0 ? (
-                      <div className="space-y-2">
-                        {userDetails.recent_activity.map((activity) => (
-                          <div
-                            key={activity.id}
-                            className="flex items-center justify-between p-3 border rounded-lg"
-                          >
-                            <div>
-                              <p className="text-sm font-medium">Agent Run</p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatDate(activity.created_at)} • Thread {activity.thread_id.slice(-8)}
-                              </p>
-                            </div>
-                            <Badge
-                              variant={activity.status === 'completed' ? 'default' : 'secondary'}
-                            >
-                              {activity.status}
-                            </Badge>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No recent activity</p>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="actions" className="space-y-4">
-                <div className="grid grid-cols-1 gap-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4" />
-                        Adjust Credits
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="p-3 border border-blue-200 dark:border-blue-950 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
-                          <p className="text-sm text-blue-700">
-                            Add or remove credits from the user's account. Use negative values to remove credits.
-                          </p>
-                        </div>
-                      </div>
-                      <div>
-                        <Label htmlFor="adjust-amount">Credit Amount (USD)</Label>
-                        <Input
-                          id="adjust-amount"
-                          type="number"
-                          step="0.01"
-                          placeholder="50.00 (positive to add, negative to remove)"
-                          value={adjustAmount}
-                          onChange={(e) => setAdjustAmount(e.target.value)}
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Examples: 50.00 (adds $50), -25.00 (removes $25)
+                  <CardContent className="space-y-4">
+                    <div className="p-3 border border-red-200 dark:border-red-950 bg-red-50 dark:bg-red-950/20 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
+                        <p className="text-sm text-red-700">
+                          Refunds assigns credits back to the user's account.
                         </p>
                       </div>
-                      <div>
-                        <Label htmlFor="adjust-reason">Reason</Label>
-                        <Textarea
-                          id="adjust-reason"
-                          placeholder="Admin credit adjustment - specify reason"
-                          value={adjustReason}
-                          onChange={(e) => setAdjustReason(e.target.value)}
-                          rows={3}
-                        />
+                    </div>
+                    <div>
+                      <Label htmlFor="refund-amount">Refund Amount (USD)</Label>
+                      <Input
+                        id="refund-amount"
+                        type="number"
+                        step="0.01"
+                        placeholder="50.00"
+                        value={refundAmount}
+                        onChange={(e) => setRefundAmount(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="refund-reason mb-2">Refund Reason</Label>
+                      <Textarea
+                        id="refund-reason"
+                        placeholder="Service outage compensation"
+                        value={refundReason}
+                        onChange={(e) => setRefundReason(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                      <div className="flex items-center gap-2">
+                        <Label htmlFor="refund-expiring" className="cursor-pointer flex items-center gap-2">
+                          {refundIsExpiring ? (
+                            <Clock className="h-4 w-4 text-orange-500" />
+                          ) : (
+                            <Infinity className="h-4 w-4 text-blue-500" />
+                          )}
+                          <span className="font-medium">
+                            {refundIsExpiring ? 'Expiring Credits' : 'Non-Expiring Credits'}
+                          </span>
+                        </Label>
                       </div>
-                      <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor="adjust-expiring" className="cursor-pointer flex items-center gap-2">
-                            {adjustIsExpiring ? (
-                              <Clock className="h-4 w-4 text-orange-500" />
-                            ) : (
-                              <Infinity className="h-4 w-4 text-blue-500" />
-                            )}
-                            <span className="font-medium">
-                              {adjustIsExpiring ? 'Expiring Credits' : 'Non-Expiring Credits'}
-                            </span>
-                          </Label>
-                        </div>
-                        <Switch
-                          id="adjust-expiring"
-                          checked={!adjustIsExpiring}
-                          onCheckedChange={(checked) => setAdjustIsExpiring(!checked)}
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground -mt-2">
-                        {adjustIsExpiring 
-                          ? 'Credits will expire at the end of the billing cycle'
-                          : 'Non-expiring credits never expire (recommended for adjustments)'}
-                      </p>
-                      <Button
-                        onClick={handleAdjustCredits}
-                        disabled={adminAdjustCreditsMutation.isPending}
-                        className="w-full"
-                        variant={parseFloat(adjustAmount) < 0 ? "destructive" : "default"}
-                      >
-                        {adminAdjustCreditsMutation.isPending ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          <>
-                            {parseFloat(adjustAmount) < 0 ? 'Remove Credits' : 'Add Credits'}
-                          </>
-                        )}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <CreditCard className="h-4 w-4" />
-                        Process Refund
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="p-3 border border-red-200 dark:border-red-950 bg-red-50 dark:bg-red-950/20 rounded-lg">
-                        <div className="flex items-start gap-2">
-                          <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
-                          <p className="text-sm text-red-700">
-                            Refunds assigns credits back to the user's account.
-                          </p>
-                        </div>
-                      </div>
-                      <div>
-                        <Label htmlFor="refund-amount">Refund Amount (USD)</Label>
-                        <Input
-                          id="refund-amount"
-                          type="number"
-                          step="0.01"
-                          placeholder="50.00"
-                          value={refundAmount}
-                          onChange={(e) => setRefundAmount(e.target.value)}
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="refund-reason mb-2">Refund Reason</Label>
-                        <Textarea
-                          id="refund-reason"
-                          placeholder="Service outage compensation"
-                          value={refundReason}
-                          onChange={(e) => setRefundReason(e.target.value)}
-                          rows={3}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor="refund-expiring" className="cursor-pointer flex items-center gap-2">
-                            {refundIsExpiring ? (
-                              <Clock className="h-4 w-4 text-orange-500" />
-                            ) : (
-                              <Infinity className="h-4 w-4 text-blue-500" />
-                            )}
-                            <span className="font-medium">
-                              {refundIsExpiring ? 'Expiring Credits' : 'Non-Expiring Credits'}
-                            </span>
-                          </Label>
-                        </div>
-                        <Switch
-                          id="refund-expiring"
-                          checked={!refundIsExpiring}
-                          onCheckedChange={(checked) => setRefundIsExpiring(!checked)}
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground -mt-2">
-                        {refundIsExpiring 
-                          ? 'Credits will expire at the end of the billing cycle'
-                          : 'Refunds typically use non-expiring credits (recommended)'}
-                      </p>
-                      <Button
-                        onClick={handleProcessRefund}
-                        disabled={processRefundMutation.isPending}
-                        variant="destructive"
-                        className="w-full"
-                      >
-                        {processRefundMutation.isPending ? (
-                          <>
-                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                            Processing...
-                          </>
-                        ) : (
-                          'Process Refund'
-                        )}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </div>
-              </TabsContent>
-            </Tabs>
+                      <Switch
+                        id="refund-expiring"
+                        checked={!refundIsExpiring}
+                        onCheckedChange={(checked) => setRefundIsExpiring(!checked)}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground -mt-2">
+                      {refundIsExpiring 
+                        ? 'Credits will expire at the end of the billing cycle'
+                        : 'Refunds typically use non-expiring credits (recommended)'}
+                    </p>
+                    <Button
+                      onClick={handleProcessRefund}
+                      disabled={processRefundMutation.isPending}
+                      variant="destructive"
+                      className="w-full"
+                    >
+                      {processRefundMutation.isPending ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        'Process Refund'
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
           )}
         </div>
 
