@@ -869,7 +869,7 @@ export const TOOL_GROUPS: Record<string, ToolGroup> = {
   agent_creation_tool: {
     name: 'agent_creation_tool',
     displayName: 'Agent Creation (Machine)',
-    description: 'Comprehensive agent creation and management (Suna only)',
+    description: 'Comprehensive agent creation and management (Machine only)',
     icon: 'Plus',
     color: 'bg-indigo-100 dark:bg-indigo-800/50',
     toolClass: 'AgentCreationTool',
