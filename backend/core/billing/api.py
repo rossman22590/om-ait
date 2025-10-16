@@ -22,6 +22,7 @@ from .webhook_service import webhook_service
 from .subscription_service import subscription_service
 from .trial_service import trial_service
 from .payment_service import payment_service
+from .reconciliation_service import reconciliation_service
  
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -200,7 +201,7 @@ async def check_status(
         }
         
     except Exception as e:
-        logger.error(f"Error checking billing status: {e}", )
+        logger.error(f"Error checking billing status: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/project-limits")
@@ -402,7 +403,7 @@ async def get_subscription(
         }
         
     except Exception as e:
-        logger.error(f"Error getting subscription: {e}", )
+        logger.error(f"Error getting subscription: {str(e)}")
         no_tier = TIERS['none']
         tier_info = {
             'name': no_tier.name,
@@ -434,6 +435,54 @@ async def get_subscription(
             }
         }
 
+@router.get("/subscription-cancellation-status")
+async def get_subscription_cancellation_status(
+    account_id: str = Depends(verify_and_get_user_id_from_jwt)
+) -> Dict:
+    try:
+        subscription_info = await subscription_service.get_subscription(account_id)
+        subscription_data = subscription_info.get('subscription')
+
+        if not subscription_data or not subscription_data.get('id'):
+            return {
+                'has_subscription': False,
+                'is_cancelled': False,
+                'cancel_at': None,
+                'cancel_at_period_end': False,
+                'current_period_end': None,
+                'status': None
+            }
+        
+        try:
+            stripe_subscription = stripe.Subscription.retrieve(subscription_data['id'])
+            is_cancelled = stripe_subscription.cancel_at_period_end or stripe_subscription.cancel_at is not None
+            
+            return {
+                'has_subscription': True,
+                'subscription_id': stripe_subscription.id,
+                'is_cancelled': is_cancelled,
+                'cancel_at': stripe_subscription.cancel_at,
+                'cancel_at_period_end': stripe_subscription.cancel_at_period_end,
+                'canceled_at': stripe_subscription.canceled_at,
+                'current_period_end': stripe_subscription.current_period_end,
+                'status': stripe_subscription.status,
+                'cancellation_details': stripe_subscription.cancellation_details if hasattr(stripe_subscription, 'cancellation_details') else None
+            }
+        except stripe.error.StripeError as e:
+            return {
+                'has_subscription': True,
+                'subscription_id': subscription_data.get('id'),
+                'is_cancelled': False,
+                'cancel_at': None,
+                'cancel_at_period_end': False,
+                'current_period_end': subscription_data.get('current_period_end'),
+                'status': subscription_data.get('status'),
+                'error': 'Could not retrieve cancellation status from Stripe'
+            }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/create-checkout-session")
 async def create_checkout_session(
     request: CreateCheckoutSessionRequest,
@@ -450,7 +499,7 @@ async def create_checkout_session(
         return result
             
     except Exception as e:
-        logger.error(f"Error creating checkout session: {e}", )
+        logger.error(f"Error creating checkout session: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/create-portal-session")
@@ -465,7 +514,7 @@ async def create_portal_session(
         )
         return result
     except Exception as e:
-        logger.error(f"Error creating portal session: {e}", )
+        logger.error(f"Error creating portal session: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/sync-subscription")
@@ -486,7 +535,7 @@ async def sync_subscription(
         return result
         
     except Exception as e:
-        logger.error(f"Error syncing subscription: {e}", )
+        logger.error(f"Error syncing subscription: {str(e)}")
         return {
             'success': False,
             'message': f'Failed to sync subscription: {str(e)}'
@@ -506,8 +555,12 @@ async def cancel_subscription(
         await Cache.invalidate(f"subscription_tier:{account_id}")
         return result
         
+    except HTTPException as e:
+        raise e
     except Exception as e:
-        logger.error(f"Error canceling subscription: {e}", )
+        logger.error(f"Error canceling subscription: {str(e)}")
+        if "commitment period" in str(e).lower():
+            raise HTTPException(status_code=403, detail=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/reactivate-subscription")
@@ -519,8 +572,11 @@ async def reactivate_subscription(
         await Cache.invalidate(f"subscription_tier:{account_id}")
         return result
         
+    except HTTPException as e:
+        # Re-raise HTTP exceptions as-is
+        raise e
     except Exception as e:
-        logger.error(f"Error reactivating subscription: {e}", )
+        logger.error(f"Error reactivating subscription: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/transactions")
@@ -580,7 +636,7 @@ async def get_my_transactions(
         }
         
     except Exception as e:
-        logger.error(f"Failed to get transactions for account {account_id}: {e}", )
+        logger.error(f"Failed to get transactions for account {account_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to retrieve transactions")
 
 @router.get("/transactions/summary")
@@ -638,7 +694,7 @@ async def get_transactions_summary(
         }
         
     except Exception as e:
-        logger.error(f"Failed to get transaction summary for account {account_id}: {e}", )
+        logger.error(f"Failed to get transaction summary for account {account_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to retrieve transaction summary")
 
 @router.get("/credit-breakdown")
@@ -728,7 +784,7 @@ async def get_usage_history(
         }
         
     except Exception as e:
-        logger.error(f"Error getting usage history: {e}", )
+        logger.error(f"Error getting usage history: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) 
 
 
@@ -815,7 +871,7 @@ async def get_available_models(
         }
         
     except Exception as e:
-        logger.error(f"Error getting available models: {e}", )
+        logger.error(f"Error getting available models: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/subscription-commitment/{subscription_id}")
@@ -849,7 +905,7 @@ async def get_trial_status(
         return result
         
     except Exception as e:
-        logger.error(f"Error checking trial status: {e}", )
+        logger.error(f"Error checking trial status: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/trial/cancel")
@@ -863,7 +919,7 @@ async def cancel_trial(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error cancelling trial for account {account_id}: {e}", )
+        logger.error(f"Error cancelling trial for account {account_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/trial/start")
@@ -901,7 +957,7 @@ async def start_trial(
             logger.info(f"[TRIAL API] Trial start failed for account {account_id}: {e.detail}")
         raise
     except Exception as e:
-        logger.error(f"[TRIAL API ERROR] Unexpected error creating trial for account {account_id}: {e}", )
+        logger.error(f"[TRIAL API ERROR] Unexpected error creating trial for account {account_id}: {str(e)}")
         # Don't expose internal errors to the client
         raise HTTPException(status_code=500, detail="An error occurred while processing your request")
 
@@ -934,85 +990,144 @@ async def create_trial_checkout(
             logger.info(f"[TRIAL API] Trial checkout failed for account {account_id}: {e.detail}")
         raise
     except Exception as e:
-        logger.error(f"[TRIAL API ERROR] Unexpected error in trial checkout for account {account_id}: {e}", )
+        logger.error(f"[TRIAL API ERROR] Unexpected error in trial checkout for account {account_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="An error occurred while processing your request")
 
-@router.get("/usage-logs")
-async def get_usage_logs(
-    page: int = Query(0, ge=0),
-    items_per_page: int = Query(100, ge=1, le=1000),
-    thread_id: Optional[str] = Query(None),
+@router.get("/proration-preview")
+async def preview_proration(
+    new_price_id: str = Query(..., description="The price ID to change to"),
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
-    """
-    Get usage logs for the authenticated user.
-    Returns billing transactions and usage history.
-    """
     try:
         db = DBConnection()
-        await db.initialize()
         client = await db.client
         
-        # Calculate offset
-        offset = page * items_per_page
+        subscription_result = await client.from_('credit_accounts').select(
+            'stripe_subscription_id'
+        ).eq('account_id', account_id).execute()
         
-        # Query credit ledger for usage history (using existing schema)
-        query = client.table('credit_ledger') \
-            .select('*') \
-            .eq('account_id', account_id) \
-            .eq('type', 'debit') \
-            .order('created_at', desc=True) \
-            .range(offset, offset + items_per_page - 1)
+        if not subscription_result.data or not subscription_result.data[0].get('stripe_subscription_id'):
+            raise HTTPException(status_code=404, detail="No active subscription found")
         
-        result = await query.execute()
+        subscription_id = subscription_result.data[0]['stripe_subscription_id']
+        subscription = await stripe.Subscription.retrieve_async(subscription_id)
         
-        # Get total count for pagination
-        count_result = await client.table('credit_ledger') \
-            .select('id', count='exact') \
-            .eq('account_id', account_id) \
-            .eq('type', 'debit') \
-            .execute()
+        current_item = subscription['items']['data'][0]
         
-        total_count = count_result.count if count_result.count else 0
+        proration = await stripe.Invoice.upcoming_async(
+            customer=subscription.customer,
+            subscription=subscription_id,
+            subscription_items=[{
+                'id': current_item.id,
+                'price': new_price_id,
+            }],
+            subscription_proration_behavior='always_invoice'
+        )
         
-        # Format the response using credit_ledger data
-        usage_logs = []
-        if result.data:
-            for transaction in result.data:
-                # Parse metadata if it exists
-                metadata = transaction.get('metadata', {})
-                if isinstance(metadata, str):
-                    try:
-                        metadata = json.loads(metadata)
-                    except:
-                        metadata = {}
-                
-                # Extract thread_id from metadata
-                transaction_thread_id = metadata.get('thread_id')
-                
-                # Skip if filtering by thread and this doesn't match
-                if thread_id and transaction_thread_id != thread_id:
-                    continue
-                
-                # Format according to frontend expectations (UsageLogEntry interface)
-                usage_logs.append({
-                    'timestamp': transaction.get('created_at'),  # Frontend expects 'timestamp'
-                    'amount': float(transaction.get('amount', 0)),  # Frontend expects 'amount'
-                    'balance_after': float(transaction.get('balance_after', 0)),  # Frontend expects 'balance_after'
-                    'description': transaction.get('description', ''),
-                    'reference_type': f"thread:{transaction_thread_id}" if transaction_thread_id else None,  # Frontend expects 'reference_type'
+        current_price = current_item.price
+        new_price = await stripe.Price.retrieve_async(new_price_id)
+        
+        from billing.config import get_tier_by_price_id
+        
+        current_tier = get_tier_by_price_id(current_price.id)
+        new_tier = get_tier_by_price_id(new_price_id)
+        
+        proration_amount = Decimal(str(proration.amount_due)) / 100
+        
+        return {
+            'current_plan': {
+                'price_id': current_price.id,
+                'tier_name': current_tier.name if current_tier else 'unknown',
+                'monthly_amount': float(current_price.unit_amount / 100)
+            },
+            'new_plan': {
+                'price_id': new_price_id,
+                'tier_name': new_tier.name if new_tier else 'unknown',
+                'monthly_amount': float(new_price.unit_amount / 100)
+            },
+            'proration': {
+                'amount_due_now': float(proration_amount),
+                'credit_applied': float(abs(proration.starting_balance or 0) / 100),
+                'next_payment_date': datetime.fromtimestamp(proration.period_end, tz=timezone.utc).isoformat(),
+                'next_payment_amount': float(new_price.unit_amount / 100)
+            },
+            'is_upgrade': proration_amount > 0,
+            'description': f"You will be {'charged' if proration_amount > 0 else 'credited'} ${abs(proration_amount):.2f} for the remaining time in your billing period"
+        }
+    
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe error in proration preview: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to calculate proration: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error in proration preview: {e}")
+        raise HTTPException(status_code=500, detail="Failed to preview proration")
+
+@router.post("/reconcile")
+async def trigger_reconciliation(
+    admin_key: Optional[str] = Query(None, description="Admin API key"),
+    account_id: str = Depends(verify_and_get_user_id_from_jwt)
+) -> Dict:
+
+    if admin_key != config.get('ADMIN_API_KEY'):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    try:
+        payment_results = await reconciliation_service.reconcile_failed_payments()
+        balance_results = await reconciliation_service.verify_balance_consistency()
+        duplicate_results = await reconciliation_service.detect_double_charges()
+        cleanup_results = await reconciliation_service.cleanup_expired_credits()
+        
+        return {
+            'success': True,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+            'results': {
+                'payment_reconciliation': payment_results,
+                'balance_verification': balance_results,
+                'duplicate_detection': duplicate_results,
+                'expired_credit_cleanup': cleanup_results
+            }
+        }
+    
+    except Exception as e:
+        logger.error(f"Reconciliation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Reconciliation failed: {str(e)}")
+
+@router.get("/health-check")
+async def billing_health_check(
+    admin_key: Optional[str] = Query(None, description="Admin API key")
+) -> Dict:
+    """
+    Get billing system health status and detect issues.
+    """
+    is_admin = admin_key == config.get('ADMIN_API_KEY') if admin_key else False
+    
+    try:
+        db = DBConnection()
+        client = await db.client
+        
+        health_result = await client.from_('billing_health_check').select('*').execute()
+        
+        issues = []
+        for check in health_result.data or []:
+            if check['issue_count'] > 0:
+                issues.append({
+                    'type': check['check_type'],
+                    'count': check['issue_count'],
+                    'details': check['details'] if is_admin else None
                 })
         
         return {
-            'usage_logs': usage_logs,
-            'pagination': {
-                'page': page,
-                'items_per_page': items_per_page,
-                'total_count': total_count,
-                'has_more': (offset + len(usage_logs)) < total_count
-            }
+            'healthy': len(issues) == 0,
+            'issues_found': len(issues),
+            'issues': issues if is_admin else [{'type': i['type'], 'count': i['count']} for i in issues],
+            'message': 'All systems operational' if len(issues) == 0 else f'{len(issues)} issues detected',
+            'timestamp': datetime.now(timezone.utc).isoformat()
         }
-        
+    
     except Exception as e:
-        logger.error(f"Error fetching usage logs for account {account_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to fetch usage logs")
+        logger.error(f"Health check error: {e}")
+        return {
+            'healthy': False,
+            'error': str(e) if is_admin else 'Health check failed',
+            'timestamp': datetime.now(timezone.utc).isoformat()
+        } 

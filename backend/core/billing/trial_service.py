@@ -12,6 +12,7 @@ from .config import (
     TRIAL_CREDITS,
 )
 from .credit_manager import credit_manager
+from .idempotency import generate_trial_idempotency_key
 
 class TrialService:
     def __init__(self):
@@ -99,6 +100,14 @@ class TrialService:
             )
         
         try:
+            current_balance_result = await client.from_('credit_accounts').select(
+                'balance, expiring_credits, non_expiring_credits'
+            ).eq('account_id', account_id).execute()
+            
+            current_balance = 0
+            if current_balance_result.data:
+                current_balance = float(current_balance_result.data[0].get('balance', 0))
+            
             cancelled_subscription = stripe.Subscription.cancel(stripe_subscription_id)
             logger.info(f"[TRIAL CANCEL] Cancelled Stripe subscription {stripe_subscription_id} for account {account_id}")
             
@@ -106,6 +115,8 @@ class TrialService:
                 'trial_status': 'cancelled',
                 'tier': 'none',
                 'balance': 0.00,
+                'expiring_credits': 0.00,
+                'non_expiring_credits': 0.00,
                 'stripe_subscription_id': None
             }).eq('account_id', account_id).execute()
             
@@ -116,13 +127,14 @@ class TrialService:
                 'converted_to_paid': False
             }, on_conflict='account_id').execute()
             
-            await client.from_('credit_ledger').insert({
-                'account_id': account_id,
-                'amount': -20.00,
-                'balance_after': 0.00,
-                'type': 'adjustment',
-                'description': 'Trial cancelled by user'
-            }).execute()
+            if current_balance > 0:
+                await client.from_('credit_ledger').insert({
+                    'account_id': account_id,
+                    'amount': -current_balance,
+                    'balance_after': 0.00,
+                    'type': 'adjustment',
+                    'description': 'Trial cancelled by user - credits removed'
+                }).execute()
             
             logger.info(f"[TRIAL CANCEL] Successfully cancelled trial for account {account_id}")
             
@@ -198,47 +210,40 @@ class TrialService:
                     logger.error(f"[TRIAL SECURITY] Error checking existing subscription: {e}")
         
         ledger_check = await client.from_('credit_ledger')\
-            .select('id, description')\
+            .select('id, description, type')\
             .eq('account_id', account_id)\
             .or_(
                 'description.ilike.%trial credits%,'
                 'description.ilike.%free trial%,'
-                'description.ilike.%day trial%,'
                 'type.eq.trial_grant'
             )\
             .execute()
         
         if ledger_check.data:
-            has_actual_trial = False
-            for entry in ledger_check.data:
-                desc = entry.get('description', '').lower()
-                if 'trial credits' in desc or 'free trial' in desc or 'day trial' in desc:
-                    has_actual_trial = True
-                    break
-                elif 'start a trial' in desc or 'please start a trial' in desc:
-                    continue
-                else:
-                    has_actual_trial = True
-                    break
-            
-            if has_actual_trial:
-                logger.warning(f"[TRIAL SECURITY] Trial attempt rejected - account {account_id} has trial-related ledger entries")
-                await client.from_('trial_history').upsert({
+            try:
+                await client.from_('trial_history').insert({
                     'account_id': account_id,
                     'started_at': datetime.now(timezone.utc).isoformat(),
                     'ended_at': datetime.now(timezone.utc).isoformat(),
-                    'note': 'Created from credit_ledger detection during blocked trial attempt'
-                }, on_conflict='account_id').execute()
-                
-                raise HTTPException(
-                    status_code=403,
-                    detail="Trial history detected. Each account is limited to one free trial."
-                )
+                    'converted_to_paid': False,
+                    'note': 'Blocked trial attempt - ledger history found'
+                }).execute()
+            except Exception as e:
+                if 'unique' not in str(e).lower() and 'duplicate' not in str(e).lower():
+                    logger.error(f"[TRIAL SECURITY] Failed to record blocked trial attempt: {e}")
+            
+            raise HTTPException(
+                status_code=403,
+                detail="Trial history detected. Each account is limited to one free trial."
+            )
         
         try:
             from .subscription_service import subscription_service
             customer_id = await subscription_service.get_or_create_stripe_customer(account_id)
             logger.info(f"[TRIAL] Creating checkout session for account {account_id} - all security checks passed")
+            
+            idempotency_key = generate_trial_idempotency_key(account_id, TRIAL_DURATION_DAYS)
+            
             session = await stripe.checkout.Session.create_async(
                 customer=customer_id,
                 payment_method_types=['card'],
@@ -269,7 +274,8 @@ class TrialService:
                         'account_id': account_id,
                         'trial_start': 'true'
                     }
-                }
+                },
+                idempotency_key=idempotency_key
             )
             logger.info(f"[TRIAL SUCCESS] Checkout session created for account {account_id}: {session.id}")
             return {'checkout_url': session.url}
