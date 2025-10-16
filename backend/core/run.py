@@ -155,12 +155,14 @@ class ToolManager:
             if enabled_methods:
                 logger.debug(f"✅ Registered data_providers_tool with methods: {enabled_methods}")
         
+        # Enable Paper Search Tool if API key is configured (FREE Semantic Scholar API)
         if config.SEMANTIC_SCHOLAR_API_KEY and 'paper_search_tool' not in disabled_tools:
-            if 'paper_search_tool' not in disabled_tools:
-                enabled_methods = self._get_enabled_methods_for_tool('paper_search_tool')
-                self.thread_manager.add_tool(PaperSearchTool, function_names=enabled_methods, thread_manager=self.thread_manager)
-                if enabled_methods:
-                    logger.debug(f"✅ Registered paper_search_tool with methods: {enabled_methods}")
+            enabled_methods = self._get_enabled_methods_for_tool('paper_search_tool')
+            # Always register all methods if no specific filtering is configured
+            if enabled_methods is None:
+                enabled_methods = ['paper_search', 'get_paper_details', 'search_authors', 'get_author_details', 'get_author_papers']
+            self.thread_manager.add_tool(PaperSearchTool, function_names=enabled_methods, thread_manager=self.thread_manager)
+            logger.info(f"📚 Registered paper_search_tool with methods: {enabled_methods}")
         
         # Register search tools if EXA API key is available
         # TEMPORARILY DISABLED: People, Company, and Paper search tools
@@ -178,11 +180,14 @@ class ToolManager:
                 if enabled_methods:
                     logger.debug(f"✅ Registered company_search_tool with methods: {enabled_methods}")
         
-        if config.ENV_MODE != EnvMode.PRODUCTION and config.VAPI_PRIVATE_KEY and 'vapi_voice_tool' not in disabled_tools:
+        # Enable Vapi Voice Tool if API key is configured (now allowed in all environments)
+        if config.VAPI_PRIVATE_KEY and 'vapi_voice_tool' not in disabled_tools:
             enabled_methods = self._get_enabled_methods_for_tool('vapi_voice_tool')
+            # Always register all methods if no specific filtering is configured
+            if enabled_methods is None:
+                enabled_methods = ['make_phone_call', 'end_call', 'get_call_details', 'wait_for_call_completion']
             self.thread_manager.add_tool(VapiVoiceTool, function_names=enabled_methods, thread_manager=self.thread_manager)
-            if enabled_methods:
-                logger.debug(f"✅ Registered vapi_voice_tool with methods: {enabled_methods}")
+            logger.info(f"📞 Registered vapi_voice_tool with methods: {enabled_methods}")
             
     
     def _register_agent_builder_tools(self, agent_id: str, disabled_tools: List[str]):
@@ -300,6 +305,46 @@ class ToolManager:
                     logger.error(f"🎬 SAFEGUARD: Could not get tool_group for sb_avatar_tool!")
             else:
                 logger.info(f"🎬 SAFEGUARD: Avatar tool explicitly DISABLED in config")
+        
+        # SAFEGUARD: Always get all methods for vapi_voice_tool if it's enabled
+        if tool_name == 'vapi_voice_tool':
+            vapi_config = migrated_tools.get('vapi_voice_tool')
+            logger.info(f"📞 SAFEGUARD: Vapi tool config before get_enabled_methods: {vapi_config}")
+            
+            # If vapi tool is enabled in any way, force all methods
+            if vapi_config is None or vapi_config is True or (isinstance(vapi_config, dict) and vapi_config.get('enabled', True)):
+                from core.utils.tool_groups import get_tool_group
+                tool_group = get_tool_group('vapi_voice_tool')
+                if tool_group:
+                    all_methods = [method.name for method in tool_group.methods if method.enabled]
+                    logger.info(f"📞 SAFEGUARD: Forcing ALL vapi tool methods: {all_methods}")
+                    return all_methods
+                else:
+                    # Fallback: return all known Vapi methods manually
+                    logger.warning(f"📞 SAFEGUARD: Could not get tool_group, using fallback method list")
+                    return ['make_phone_call', 'end_call', 'get_call_details', 'wait_for_call_completion']
+            else:
+                logger.info(f"📞 SAFEGUARD: Vapi tool explicitly DISABLED in config")
+        
+        # SAFEGUARD: Always get all methods for paper_search_tool if it's enabled
+        if tool_name == 'paper_search_tool':
+            paper_config = migrated_tools.get('paper_search_tool')
+            logger.info(f"📚 SAFEGUARD: Paper Search tool config before get_enabled_methods: {paper_config}")
+            
+            # If paper search tool is enabled in any way, force all methods
+            if paper_config is None or paper_config is True or (isinstance(paper_config, dict) and paper_config.get('enabled', True)):
+                from core.utils.tool_groups import get_tool_group
+                tool_group = get_tool_group('paper_search_tool')
+                if tool_group:
+                    all_methods = [method.name for method in tool_group.methods if method.enabled]
+                    logger.info(f"📚 SAFEGUARD: Forcing ALL paper search tool methods: {all_methods}")
+                    return all_methods
+                else:
+                    # Fallback: return all known Paper Search methods manually
+                    logger.warning(f"📚 SAFEGUARD: Could not get tool_group, using fallback method list")
+                    return ['paper_search', 'get_paper_details', 'search_authors', 'get_author_details', 'get_author_papers']
+            else:
+                logger.info(f"📚 SAFEGUARD: Paper Search tool explicitly DISABLED in config")
         
         return get_enabled_methods_for_tool(tool_name, migrated_tools)
 

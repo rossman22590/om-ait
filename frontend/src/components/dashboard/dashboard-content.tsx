@@ -383,7 +383,7 @@ export function DashboardContent() {
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    Kortix Super Worker
+                    Machine Worker
                   </button>
                   <button
                     onClick={() => {
@@ -417,7 +417,7 @@ export function DashboardContent() {
                           className="tracking-tight text-2xl md:text-3xl font-normal text-foreground/90"
                           data-tour="dashboard-title"
                         >
-                          What should Kortix Super Worker do for you today?
+                          What should Machine Worker do for you today?
                         </p>
                       </div>
 

@@ -24,7 +24,20 @@ mcp_service: Optional[MCPService] = None
 connection_token_service: Optional[ConnectionTokenService] = None
 
 def initialize(database):
-    pass
+    global profile_service, connection_service, app_service, mcp_service, connection_token_service
+    
+    try:
+        # Initialize services
+        profile_service = ProfileService()
+        connection_service = ConnectionService(logger=logger)
+        app_service = get_app_service()
+        mcp_service = MCPService()
+        connection_token_service = ConnectionTokenService()
+        
+        logger.info("Pipedream services initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize pipedream services: {str(e)}")
+        raise
 
 
 class CreateConnectionTokenRequest(BaseModel):
