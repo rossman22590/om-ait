@@ -6,9 +6,9 @@ FREE_MODEL_ID = "moonshotai/kimi-k2"
 
 # Set premium model ID based on environment
 if config.ENV_MODE == EnvMode.LOCAL:
-    PREMIUM_MODEL_ID = "anthropic/claude-sonnet-4.5"
+    PREMIUM_MODEL_ID = "anthropic/claude-haiku-4.5"
 else:  # STAGING or PRODUCTION
-    PREMIUM_MODEL_ID = "anthropic/claude-sonnet-4.5"
+    PREMIUM_MODEL_ID = "anthropic/claude-haiku-4.5"
 
 is_local = config.ENV_MODE == EnvMode.LOCAL
 
@@ -37,7 +37,7 @@ class ModelRegistry:
                 output_cost_per_million_tokens=15.00
             ),
             tier_availability=["paid"],
-            priority=101,
+            priority=98,
             recommended=True,
             enabled=True,
             config=ModelConfig(
@@ -95,12 +95,38 @@ class ModelRegistry:
         #     priority=99,
         #     enabled=True,
         #     config=ModelConfig(
-        #         extra_headers={
         #             "anthropic-beta": "prompt-caching-2024-07-31"
         #         },
         #     )
         # ))
 
+        self.register(Model(
+            id="openrouter/anthropic/claude-haiku-4.5",
+            name="Haiku 4.5",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["claude-haiku-4.5", "claude-haiku-4-5", "anthropic/claude-haiku-4.5", "anthropic/claude-haiku-4-5", "openrouter/anthropic/claude-haiku-4.5", "openrouter/anthropic/claude-haiku-4-5", "Claude Haiku 4.5", "Haiku 4.5"],
+            context_window=200_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.VISION,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=1.00,
+                output_cost_per_million_tokens=5.00
+            ),
+            tier_availability=["free", "paid"],
+            priority=101,
+            recommended=True,
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                },
+            )
+        ))
+        
         self.register(Model(
             id="xai/grok-4-fast-non-reasoning",
             name="Grok 4 Fast",
@@ -118,7 +144,7 @@ class ModelRegistry:
             tier_availability=["paid"],
             priority=98,
             enabled=True
-        ))    
+        ))
         
         self.register(Model(
             id="openrouter/meta-llama/llama-4-scout",
@@ -188,6 +214,32 @@ class ModelRegistry:
         ))
         
         self.register(Model(
+            id="openrouter/openai/gpt-5-codex",
+            name="GPT-5 Codex",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["gpt-5-codex", "GPT-5 Codex", "openai/gpt-5-codex", "openrouter/openai/gpt-5-codex"],
+            context_window=400_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.STRUCTURED_OUTPUT,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=1.25,
+                output_cost_per_million_tokens=10.00
+            ),
+            tier_availability=["paid"],
+            priority=96,
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                }
+            )
+        ))
+        
+        self.register(Model(
             id="openai/gpt-5-mini",
             name="GPT-5 Mini",
             provider=ModelProvider.OPENAI,
@@ -203,8 +255,33 @@ class ModelRegistry:
                 output_cost_per_million_tokens=2.00
             ),
             tier_availability=["free", "paid"],
-            priority=96,
+            priority=95,
             enabled=True
+        ))
+        
+        self.register(Model(
+            id="openrouter/z-ai/glm-4.6",
+            name="GLM 4.6",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["glm-4.6", "GLM 4.6", "z-ai/glm-4.6", "openrouter/z-ai/glm-4.6"],
+            context_window=202_752,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=0.50,
+                output_cost_per_million_tokens=1.75
+            ),
+            tier_availability=["free", "paid"],
+            priority=94,
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                }
+            )
         ))
         
         self.register(Model(
@@ -224,7 +301,7 @@ class ModelRegistry:
                 output_cost_per_million_tokens=10.00
             ),
             tier_availability=["paid"],
-            priority=95,
+            priority=93,
             enabled=True,
             config=ModelConfig(
                 extra_headers={
