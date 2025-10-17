@@ -320,7 +320,6 @@ export function NavUserWithTeams({
                     </DropdownMenuPortal>
                   </DropdownMenuSub>
                 )}
-                
                 <DropdownMenuItem onClick={() => setShowBillingModal(true)}>
                   <Zap className="h-4 w-4" />
                   Upgrade

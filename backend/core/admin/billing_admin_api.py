@@ -1,9 +1,3 @@
-"""
-Admin Billing API
-Handles all administrative billing operations: credits, refunds, transactions.
-User search has been moved to admin_api.py as it's user-focused, not billing-focused.
-"""
-
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional, List
 from decimal import Decimal
@@ -17,10 +11,6 @@ import stripe
 from core.utils.config import config
 
 router = APIRouter(prefix="/admin/billing", tags=["admin-billing"])
-
-# ============================================================================
-# MODELS
-# ============================================================================
 
 class CreditAdjustmentRequest(BaseModel):
     account_id: str
@@ -43,16 +33,11 @@ class GrantCreditsRequest(BaseModel):
     reason: str
     is_expiring: bool = Field(True, description="Whether credits expire at end of billing cycle")
 
-# ============================================================================
-# CREDIT MANAGEMENT ENDPOINTS
-# ============================================================================
-
 @router.post("/credits/adjust")
 async def adjust_user_credits(
     request: CreditAdjustmentRequest,
     admin: dict = Depends(require_admin)
 ):
-    """Adjust credits for a user (add or remove)."""
     if abs(request.amount) > 1000 and admin.get('role') != 'super_admin':
         raise HTTPException(status_code=403, detail="Adjustments over $1000 require super_admin role")
     
@@ -224,7 +209,6 @@ async def process_refund(
     request: RefundRequest,
     admin: dict = Depends(require_super_admin)
 ):
-    """Process a refund for a user."""
     result = await credit_manager.add_credits(
         account_id=request.account_id,
         amount=request.amount,
@@ -263,16 +247,11 @@ async def process_refund(
         'is_expiring': request.is_expiring
     }
 
-# ============================================================================
-# BILLING INFO & TRANSACTIONS ENDPOINTS
-# ============================================================================
-
 @router.get("/user/{account_id}/summary")
 async def get_user_billing_summary(
     account_id: str,
     admin: dict = Depends(require_admin)
 ):
-    """Get billing summary for a specific user."""
     balance_info = await credit_manager.get_balance(account_id)
     db = DBConnection()
     client = await db.client
@@ -324,7 +303,6 @@ async def get_user_transactions(
             offset, offset + pagination_params.page_size - 1
         ).execute()
         
-        # Format transactions
         transactions = []
         for tx in transactions_result.data or []:
             transactions.append({
@@ -348,5 +326,3 @@ async def get_user_transactions(
     except Exception as e:
         logger.error(f"Failed to get user transactions: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve transactions")
-
-
