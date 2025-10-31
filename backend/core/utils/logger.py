@@ -2,17 +2,15 @@ import structlog, logging, os
 
 ENV_MODE = os.getenv("ENV_MODE", "LOCAL")
 
-# Set default logging level based on environment
-if ENV_MODE.upper() == "PRODUCTION":
-    default_level = "DEBUG"
-else:
-    default_level = "DEBUG" 
-    # default_level = "INFO"
-
-LOGGING_LEVEL = logging.getLevelNamesMapping().get(
-    os.getenv("LOGGING_LEVEL", default_level).upper(), 
-    logging.DEBUG  
+# Determine desired log level from env (prefer LOGGING_LEVEL, then LOG_LEVEL),
+# fallback to INFO by default in all environments
+level_name = (
+    os.getenv("LOGGING_LEVEL")
+    or os.getenv("LOG_LEVEL")
+    or ("INFO" if ENV_MODE.upper() in {"PRODUCTION", "STAGING", "LOCAL"} else "INFO")
 )
+
+LOGGING_LEVEL = logging.getLevelNamesMapping().get(level_name.upper(), logging.INFO)
 
 renderer = [structlog.processors.JSONRenderer()]
 if ENV_MODE.lower() == "local".lower() or ENV_MODE.lower() == "staging".lower():
