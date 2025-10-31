@@ -7,6 +7,8 @@ import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
+type LegalTab = 'terms' | 'privacy' | 'imprint';
+
 function LegalContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -14,9 +16,10 @@ function LegalContent() {
 
   // Get tab from URL or default to "imprint"
   const tabParam = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState<'terms' | 'privacy' | 'imprint'>(
-    tabParam === 'terms' || tabParam === 'privacy' || tabParam === 'imprint' ? tabParam : 'imprint'
-  );
+  const initialTab: LegalTab = (tabParam === 'terms' || tabParam === 'privacy' || tabParam === 'imprint')
+    ? (tabParam as LegalTab)
+    : 'imprint';
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   // Sync active tab with URL parameter when it changes
   useEffect(() => {
@@ -27,7 +30,7 @@ function LegalContent() {
   }, [tabParam]);
 
   // Handle tab change - updates both state and URL
-  const handleTabChange = (tab: 'terms' | 'privacy' | 'imprint') => {
+  const handleTabChange = (tab: LegalTab) => {
     setActiveTab(tab);
     const params = new URLSearchParams(searchParams);
     params.set('tab', tab);
