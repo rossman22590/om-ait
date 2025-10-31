@@ -1,3 +1,4 @@
+/*
 'use client';
 
 import { useState, useEffect, Suspense, useCallback } from 'react';
@@ -967,6 +968,18 @@ export default function LegalPage() {
         </div>
       }
     >
+      <LegalContent />
+    </Suspense>
+  );
+}
+*/
+
+import { Suspense } from 'react';
+import LegalContent from './LegalContent.client';
+
+export default function LegalPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
       <LegalContent />
     </Suspense>
   );
