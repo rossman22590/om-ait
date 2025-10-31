@@ -142,6 +142,8 @@ elif config.ENV_MODE == EnvMode.STAGING:
     allowed_origins = ["https://beta.machine.myapps.ai", "https://beta-machinev5.vercel.app", "https://machine-alpha-app.up.railway.app", "https://v10-alpha-machine.vercel.app", "https://machine.myapps.ai"]
 else:
     allowed_origins = ["https://beta.machine.myapps.ai", "https://machine.myapps.ai", "https://v10-alpha-machine.vercel.app"]
+    # Allow the alpha Railway app in production as well (public preview domain)
+    allowed_origins.append("https://machine-alpha-app.up.railway.app")
     allowed_origins.append("http://localhost:3001")
     allowed_origins.append("http://127.0.0.1:3001")
 
@@ -163,7 +165,7 @@ app.add_middleware(
     allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-Project-Id", "X-MCP-URL", "X-MCP-Type", "X-MCP-Headers", "X-Refresh-Token", "X-API-Key"],
+    allow_headers=["Content-Type", "Authorization", "X-Project-Id", "X-MCP-URL", "X-MCP-Type", "X-MCP-Headers", "X-Refresh-Token", "X-API-Key"]
 )
 
 # Create a main API router
