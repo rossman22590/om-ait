@@ -24,6 +24,46 @@ import secrets
 
 logger = logging.getLogger(__name__)
 
+class SafeConfigWrapper:
+    """
+    A safe wrapper around the Configuration class that prevents NoneType AttributeErrors.
+    This ensures that even if the underlying config is None, we can still access attributes
+    without crashing the application.
+    """
+    
+    def __init__(self, config_instance=None):
+        self._config = config_instance
+        self._defaults = {}
+    
+    def __getattr__(self, name):
+        """Safely get attribute from config, returning None if not found or config is None."""
+        if self._config is None:
+            logger.debug(f"Config is None, returning None for attribute: {name}")
+            return None
+        
+        try:
+            return getattr(self._config, name)
+        except AttributeError:
+            logger.debug(f"Attribute {name} not found in config, returning None")
+            return None
+    
+    def __setattr__(self, name, value):
+        """Set attribute on the underlying config if it exists."""
+        if name.startswith('_'):
+            super().__setattr__(name, value)
+        elif self._config is not None:
+            setattr(self._config, name, value)
+        else:
+            logger.debug(f"Cannot set {name} because config is None")
+    
+    def __bool__(self):
+        """Return True if config is loaded, False otherwise."""
+        return self._config is not None
+    
+    def __repr__(self):
+        """String representation."""
+        return f"SafeConfigWrapper(config={'loaded' if self._config else 'None'})"
+
 class EnvMode(Enum):
     """Environment mode enumeration."""
     LOCAL = "local"
@@ -39,7 +79,7 @@ class Configuration:
     """
     
     # Environment mode
-    ENV_MODE: EnvMode = EnvMode.LOCAL
+    ENV_MODE: Optional[EnvMode] = EnvMode.LOCAL
     
     
     # Subscription tier IDs - Production
@@ -210,7 +250,10 @@ class Configuration:
     OPENAI_COMPATIBLE_API_KEY: Optional[str] = None
     OPENAI_COMPATIBLE_API_BASE: Optional[str] = None
     OR_SITE_URL: Optional[str] = "https://machine.myapps.ai"
-    OR_APP_NAME: Optional[str] = "Machine"    
+    OR_APP_NAME: Optional[str] = "Machine"
+    
+    # Frontend URL configuration
+    FRONTEND_URL_ENV: Optional[str] = None
     
     # AWS Bedrock authentication
     AWS_BEARER_TOKEN_BEDROCK: Optional[str] = None
@@ -222,25 +265,25 @@ class Configuration:
     SUPABASE_JWT_SECRET: str
     
     # Redis configuration
-    REDIS_HOST: str
-    REDIS_PORT: int = 6379
+    REDIS_HOST: Optional[str] = "localhost"
+    REDIS_PORT: Optional[int] = 6379
     REDIS_PASSWORD: Optional[str] = None
-    REDIS_SSL: bool = True
+    REDIS_SSL: Optional[bool] = True
     
-    # Daytona sandbox configuration
-    DAYTONA_API_KEY: str
-    DAYTONA_SERVER_URL: str
-    DAYTONA_TARGET: str
+    # Daytona sandbox configuration (optional - sandbox features disabled if not configured)
+    DAYTONA_API_KEY: Optional[str] = None
+    DAYTONA_SERVER_URL: Optional[str] = None
+    DAYTONA_TARGET: Optional[str] = None
     
-    # Search and other API keys
-    TAVILY_API_KEY: str
-    RAPID_API_KEY: str
+    # Search and other API keys (all optional tools)
+    TAVILY_API_KEY: Optional[str] = None
+    RAPID_API_KEY: Optional[str] = None
     SERPER_API_KEY: Optional[str] = None
     CLOUDFLARE_API_TOKEN: Optional[str] = None
     CLOUDFLARE_ACCOUNT_ID: Optional[str] = None
     CLOUDFLARE_ZONE_ID: Optional[str] = None
     CUSTOM_DOMAIN: str = "mymachine.space"
-    FIRECRAWL_API_KEY: str
+    FIRECRAWL_API_KEY: Optional[str] = None
     FIRECRAWL_URL: Optional[str] = "https://api.firecrawl.dev"
     EXA_API_KEY: Optional[str] = None
     SEMANTIC_SCHOLAR_API_KEY: Optional[str] = None
@@ -256,7 +299,7 @@ class Configuration:
     STRIPE_SECRET_KEY: Optional[str] = None
     STRIPE_WEBHOOK_SECRET: Optional[str] = None
     STRIPE_DEFAULT_PLAN_ID: Optional[str] = None
-    STRIPE_DEFAULT_TRIAL_DAYS: int = 14
+    STRIPE_DEFAULT_TRIAL_DAYS: Optional[int] = 14
     
     # Stripe Product IDs
     STRIPE_PRODUCT_ID_PROD: str = 'prod_SGT7srmz5hB2qo'
@@ -303,21 +346,34 @@ class Configuration:
     FRONTEND_URL: str = "http://localhost:3000"  # Default for local development
     
     # Sandbox configuration
-    SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3.21"
-    SANDBOX_SNAPSHOT_NAME = "kortix/suna:0.1.3.21"
+    SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3.24"
+    SANDBOX_SNAPSHOT_NAME = "kortix/suna:0.1.3.24"
     SANDBOX_ENTRYPOINT = "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
 
     # LangFuse configuration
     LANGFUSE_PUBLIC_KEY: Optional[str] = None
     LANGFUSE_SECRET_KEY: Optional[str] = None
-    LANGFUSE_HOST: str = "https://cloud.langfuse.com"
+    LANGFUSE_HOST: Optional[str] = "https://cloud.langfuse.com"
 
     # Admin API key for server-side operations
     KORTIX_ADMIN_API_KEY: Optional[str] = None
 
     # API Keys system configuration
-    API_KEY_SECRET: str = "default-secret-key-change-in-production"
-    API_KEY_LAST_USED_THROTTLE_SECONDS: int = 900
+    API_KEY_SECRET: Optional[str] = "default-secret-key-change-in-production"
+    API_KEY_LAST_USED_THROTTLE_SECONDS: Optional[int] = 900
+    
+    # MCP (Master Credential Provider) configuration
+    MCP_CREDENTIAL_ENCRYPTION_KEY: Optional[str] = None
+    
+    # Composio integration
+    COMPOSIO_API_KEY: Optional[str] = None
+    COMPOSIO_WEBHOOK_SECRET: Optional[str] = None
+    
+    # Webhook configuration
+    WEBHOOK_BASE_URL: Optional[str] = None
+    TRIGGER_WEBHOOK_SECRET: Optional[str] = None
+    
+    # Email configuration
     
     # Agent execution limits (can be overridden via environment variable)
     _MAX_PARALLEL_AGENT_RUNS_ENV: Optional[str] = None
@@ -402,6 +458,29 @@ class Configuration:
             return self.STRIPE_PRODUCT_ID_STAGING
         return self.STRIPE_PRODUCT_ID_PROD
     
+    @property
+    def FRONTEND_URL(self) -> str:
+        """
+        Get the frontend URL based on environment.
+        
+        Returns:
+        - Production: 'https://kortix.com' (or FRONTEND_URL_ENV if set)
+        - Staging: 'https://staging.kortix.com' (or FRONTEND_URL_ENV if set)
+        - Local: FRONTEND_URL_ENV or 'http://localhost:3000'
+        """
+        # Check for environment variable override first
+        if self.FRONTEND_URL_ENV:
+            return self.FRONTEND_URL_ENV
+        
+        # Environment-based defaults
+        if self.ENV_MODE == EnvMode.PRODUCTION:
+            return 'https://kortix.com'
+        elif self.ENV_MODE == EnvMode.STAGING:
+            return 'https://staging.kortix.com'
+        else:
+            # Local mode
+            return 'http://localhost:3000'
+    
     def _generate_admin_api_key(self) -> str:
         """Generate a secure admin API key for Kortix administrative functions."""
         # Generate 32 random bytes and encode as hex for a readable API key
@@ -437,6 +516,10 @@ class Configuration:
     def _load_from_env(self):
         """Load configuration values from environment variables."""
         for key, expected_type in get_type_hints(self.__class__).items():
+            # Skip ENV_MODE as it's already handled in __init__
+            if key == "ENV_MODE":
+                continue
+                
             env_val = os.getenv(key)
             
             if env_val is not None:
@@ -450,17 +533,29 @@ class Configuration:
                         setattr(self, key, int(env_val))
                     except ValueError:
                         logger.warning(f"Invalid value for {key}: {env_val}, using default")
-                elif expected_type == EnvMode:
-                    # Already handled for ENV_MODE
-                    pass
                 else:
                     # String or other type
                     setattr(self, key, env_val)
+            else:
+                # For fields with defaults, use the default value
+                if hasattr(self.__class__, key):
+                    default_value = getattr(self.__class__, key)
+                    if default_value is not None:
+                        setattr(self, key, default_value)
+                    else:
+                        setattr(self, key, None)
+                else:
+                    setattr(self, key, None)
         
         # Custom handling for environment-dependent properties
         max_parallel_runs_env = os.getenv("MAX_PARALLEL_AGENT_RUNS")
         if max_parallel_runs_env is not None:
             self._MAX_PARALLEL_AGENT_RUNS_ENV = max_parallel_runs_env
+        
+        # Custom handling for frontend URL
+        frontend_url_env = os.getenv("FRONTEND_URL")
+        if frontend_url_env is not None:
+            self.FRONTEND_URL_ENV = frontend_url_env
     
     def _validate(self):
         """Validate configuration based on type hints."""
@@ -494,5 +589,33 @@ class Configuration:
             if not key.startswith('_')
         }
 
-# Create a singleton instance
-config = Configuration() 
+# Create a singleton instance with safe wrapper
+config = SafeConfigWrapper()
+
+def get_config():
+    """Get the configuration instance, creating it if it doesn't exist."""
+    global config
+    if config._config is None:
+        try:
+            # Load environment variables from .env file if it exists
+            env_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), '.env')
+            if os.path.exists(env_file):
+                load_dotenv(env_file)
+                logger.info(f"Loaded environment variables from {env_file}")
+            else:
+                logger.debug(f"No .env file found at {env_file}")
+            
+            # Create the actual configuration instance
+            actual_config = Configuration()
+            
+            # Update the wrapper with the actual config
+            config._config = actual_config
+            
+            logger.info("Configuration loaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to load configuration: {e}")
+            # Keep the safe wrapper but with None config
+            config._config = None
+    return config
+
+get_config() 

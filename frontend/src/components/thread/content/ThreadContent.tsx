@@ -53,10 +53,7 @@ export function renderAttachments(attachments: string[], fileViewerHandler?: (fi
 
 // Render Markdown content while preserving XML tags that should be displayed as tool calls
 function preprocessTextOnlyTools(content: string): string {
-    console.log('🔍 preprocessTextOnlyTools called with:', typeof content, content);
-
     if (!content || typeof content !== 'string') {
-        console.warn('❌ preprocessTextOnlyTools: Invalid content type:', typeof content, content);
         return content || '';
     }
 
@@ -224,13 +221,13 @@ export function renderMarkdownContent(
                         >
                             <button
                                 onClick={() => handleToolClick(messageId, toolName)}
-                                className="inline-flex items-center gap-1.5 py-1 px-1 pr-1.5 text-xs text-muted-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors cursor-pointer border border-neutral-200 dark:border-neutral-700/50"
+                                className="inline-flex items-center gap-1.5 py-1 px-1 pr-1.5 text-xs bg-card border rounded-lg transition-colors cursor-pointer hover:bg-card/80"
                             >
-                                <div className='border-2 bg-gradient-to-br from-neutral-200 to-neutral-300 dark:from-neutral-700 dark:to-neutral-800 flex items-center justify-center p-0.5 rounded-sm border-neutral-400/20 dark:border-neutral-600'>
-                                    <IconComponent className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                <div className='border bg-gradient-to-br from-card to-background flex items-center justify-center p-0.5 rounded-sm border-border'>
+                                    <IconComponent className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
                                 </div>
-                                <span className="font-mono text-xs text-foreground">{getUserFriendlyToolName(toolName)}</span>
-                                {paramDisplay && <span className="ml-1 text-muted-foreground truncate max-w-[200px]" title={paramDisplay}>{paramDisplay}</span>}
+                                <span className="text-xs text-foreground">{getUserFriendlyToolName(toolName)}</span>
+                                {paramDisplay && <span className="ml-1 text-foreground/60 truncate max-w-[200px]" title={paramDisplay}>{paramDisplay}</span>}
                             </button>
                         </div>
                     );
@@ -345,13 +342,13 @@ export function renderMarkdownContent(
                 >
                     <button
                         onClick={() => handleToolClick(messageId, toolName)}
-                        className="inline-flex items-center gap-1.5 py-1 px-1 pr-1.5 text-xs text-muted-foreground bg-muted hover:bg-muted/80 rounded-lg transition-colors cursor-pointer border border-neutral-200 dark:border-neutral-700/50"
+                        className="inline-flex items-center gap-1.5 py-1 px-1 pr-1.5 text-xs bg-card border rounded-lg transition-colors cursor-pointer hover:bg-card/80"
                     >
-                        <div className='border-2 bg-gradient-to-br from-neutral-200 to-neutral-300 dark:from-neutral-700 dark:to-neutral-800 flex items-center justify-center p-0.5 rounded-sm border-neutral-400/20 dark:border-neutral-600'>
-                            <IconComponent className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                        <div className='border bg-gradient-to-br from-card to-background flex items-center justify-center p-0.5 rounded-sm border-border'>
+                            <IconComponent className="h-3.5 w-3.5 text-foreground flex-shrink-0" />
                         </div>
-                        <span className="font-mono text-xs text-foreground">{getUserFriendlyToolName(toolName)}</span>
-                        {paramDisplay && <span className="ml-1 text-muted-foreground truncate max-w-[200px]" title={paramDisplay}>{paramDisplay}</span>}
+                        <span className="text-xs text-foreground">{getUserFriendlyToolName(toolName)}</span>
+                        {paramDisplay && <span className="ml-1 text-foreground/60 truncate max-w-[200px]" title={paramDisplay}>{paramDisplay}</span>}
                     </button>
                 </div>
             );
@@ -781,7 +778,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                                             try {
                                                 const parsed = safeJsonParse<ParsedContent>(message.content, { content: message.content });
                                                 const content = parsed.content || message.content;
-                                                
+
                                                 // Handle array content (multi-modal messages with images)
                                                 if (Array.isArray(content)) {
                                                     // Extract text parts from array content
@@ -790,7 +787,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                                                         .map((item: any) => typeof item === 'string' ? item : item.text || '')
                                                         .join('\n');
                                                 }
-                                                
+
                                                 // Ensure we always return a string
                                                 return typeof content === 'string' ? content : JSON.stringify(content || '');
                                             } catch {
@@ -840,18 +837,18 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                                                 {/* All file attachments rendered outside message bubble */}
                                                 {renderStandaloneAttachments(attachments as string[], handleOpenFileViewer, sandboxId, project, true)}
 
-                                                <div className="flex justify-end">
+                                                {cleanContent && (<div className="flex justify-end">
                                                     <div className="flex max-w-[85%] rounded-3xl rounded-br-lg bg-card border px-4 py-3 break-words overflow-hidden">
                                                         <div className="space-y-3 min-w-0 flex-1">
-                                                            {cleanContent && (
+                                                            {
                                                                 <ComposioUrlDetector content={cleanContent} className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none [&>:first-child]:mt-0 prose-headings:mt-3 break-words overflow-wrap-anywhere" />
-                                                            )}
+                                                            }
 
                                                             {/* Use the helper function to render regular (non-spreadsheet) attachments */}
                                                             {renderAttachments(attachments as string[], handleOpenFileViewer, sandboxId, project)}
                                                         </div>
                                                     </div>
-                                                </div>
+                                                </div>)}
                                             </div>
                                         );
                                     } else if (group.type === 'assistant_group') {

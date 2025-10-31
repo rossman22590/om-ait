@@ -14,6 +14,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { useAuth } from "@/components/AuthProvider";
+import { KortixLogo } from '@/components/sidebar/kortix-logo';
 
 const INITIAL_WIDTH = "70rem";
 const MAX_WIDTH = "800px";
@@ -55,7 +56,11 @@ const drawerMenuVariants = {
   visible: { opacity: 1 },
 };
 
-export function Navbar() {
+interface NavbarProps {
+  tabs?: string[];
+}
+
+export function Navbar({ tabs }: NavbarProps = {}) {
   const { scrollY } = useScroll();
   const [hasScrolled, setHasScrolled] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -66,13 +71,20 @@ export function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
 
+  // Filter nav links based on tabs prop
+  const filteredNavLinks = tabs
+    ? siteConfig.nav.links.filter(link =>
+      tabs.includes(link.name.toLowerCase())
+    )
+    : siteConfig.nav.links;
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
     const handleScroll = () => {
-      const sections = siteConfig.nav.links.map((item) =>
+      const sections = filteredNavLinks.map((item) =>
         item.href.substring(1),
       );
 
@@ -92,7 +104,7 @@ export function Navbar() {
     handleScroll();
 
     return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  }, [filteredNavLinks]);
 
   useEffect(() => {
     const unsubscribe = scrollY.on("change", (latest) => {
@@ -247,6 +259,7 @@ export function Navbar() {
         )}
       </AnimatePresence>
     </header>
+  );
   );
 }
 // 'use client';

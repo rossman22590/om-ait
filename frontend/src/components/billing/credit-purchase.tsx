@@ -41,13 +41,12 @@ const CREDIT_PACKAGES: CreditPackage[] = [
     { amount: 500, price: 500 },
 ];
 
-export function CreditPurchaseModal({ 
-    open, 
-    onOpenChange, 
+export function CreditPurchaseModal({
+    open,
+    onOpenChange,
     currentBalance = 0,
     canPurchase,
-    onPurchaseComplete,
-    onUpgradeClick
+    onPurchaseComplete
 }: CreditPurchaseProps) {
     const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
     const [customAmount, setCustomAmount] = useState<string>('');
@@ -209,13 +208,10 @@ export function CreditPurchaseModal({
                             {CREDIT_PACKAGES.map((pkg) => (
                                 <Card
                                     key={pkg.amount}
-                                    className={`cursor-pointer transition-all duration-200 ${
-                                        selectedPackage?.amount === pkg.amount
-                                            ? 'ring-2 ring-purple-500 ring-offset-2 shadow-lg transform scale-105'
-                                            : pkg.popular
-                                            ? 'ring-2 ring-amber-300 hover:shadow-lg hover:transform hover:scale-[1.02] dark:ring-amber-600'
-                                            : 'hover:shadow-md hover:transform hover:scale-[1.02]'
-                                    }`}
+                                    className={`cursor-pointer transition-all ${selectedPackage?.amount === pkg.amount
+                                        ? 'ring-2 ring-primary'
+                                        : 'hover:shadow-md'
+                                        }`}
                                     onClick={() => handlePackageSelect(pkg)}
                                 >
                                     <CardContent className="p-4 text-center relative">
@@ -224,9 +220,7 @@ export function CreditPurchaseModal({
                                                 Popular
                                             </Badge>
                                         )}
-                                        <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                                            ${pkg.amount}
-                                        </div>
+                                        <div className="text-2xl font-medium">${pkg.amount}</div>
                                         <div className="text-sm text-muted-foreground">credits</div>
                                         <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
                                             ≈ {Math.round(pkg.amount / 0.15)} minutes
@@ -313,11 +307,11 @@ export function CreditBalanceDisplay({ balance, canPurchase, onPurchaseClick }: 
                 </CardTitle>
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold">
+                <div className="text-2xl font-medium">
                     ${balance.toFixed(2)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                    {canPurchase 
+                    {canPurchase
                         ? 'Available for usage beyond subscription limits'
                         : 'Upgrade to highest tier to purchase credits'
                     }

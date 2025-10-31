@@ -3,7 +3,7 @@ load_dotenv()
 
 from fastapi import FastAPI, Request, HTTPException, Response, Depends, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 from core.services import redis
 import sentry
 from contextlib import asynccontextmanager
@@ -15,6 +15,7 @@ import asyncio
 from core.utils.logger import logger, structlog
 import time
 from collections import OrderedDict
+import os
 
 from pydantic import BaseModel
 import uuid
@@ -25,6 +26,7 @@ from core.sandbox import api as sandbox_api
 from core.billing.api import router as billing_router
 from core.admin.admin_api import router as admin_router
 from core.admin.billing_admin_api import router as billing_admin_router
+from core.admin.master_password_api import router as master_password_router
 from core.services import transcription as transcription_api
 import sys
 from core.services import email_api
@@ -131,8 +133,8 @@ async def log_requests_middleware(request: Request, call_next):
         raise
 
 # Define allowed origins based on environment
-# Always allow ngrok URLs for development
-allow_origin_regex = r"https://.*\.ngrok\.io"
+allowed_origins = ["https://www.kortix.com", "https://kortix.com", "https://www.suna.so", "https://suna.so"]
+allow_origin_regex = None
 
 if config.ENV_MODE == EnvMode.LOCAL:
     allowed_origins = []
@@ -140,6 +142,20 @@ elif config.ENV_MODE == EnvMode.STAGING:
     allowed_origins = ["https://beta.machine.myapps.ai", "https://beta-machinev5.vercel.app", "https://machinev9.ngrok.io", "https://v10-alpha-machine.vercel.app", "https://machine.myapps.ai"]
 else:
     allowed_origins = ["https://beta.machine.myapps.ai", "https://machine.myapps.ai", "https://v10-alpha-machine.vercel.app"]
+    allowed_origins.append("http://localhost:3000")
+    allowed_origins.append("http://127.0.0.1:3000")
+
+# Add staging-specific origins
+if config.ENV_MODE == EnvMode.STAGING:
+    allowed_origins.append("https://staging.suna.so")
+    allowed_origins.append("http://localhost:3000")
+    # Allow Vercel preview deployments for both legacy and new project names
+    allow_origin_regex = r"https://(suna|kortixcom)-.*-prjcts\.vercel\.app"
+
+# Add localhost for production mode local testing (for master password login)
+if config.ENV_MODE == EnvMode.PRODUCTION:
+    allowed_origins.append("http://localhost:3000")
+    allowed_origins.append("http://127.0.0.1:3000")
 
 app.add_middleware(
     CORSMiddleware,
@@ -160,6 +176,7 @@ api_router.include_router(billing_router)
 api_router.include_router(api_keys_api.router)
 api_router.include_router(billing_admin_router)
 api_router.include_router(admin_router)
+api_router.include_router(master_password_router)
 
 from core.mcp_module import api as mcp_api
 from core.credentials import api as credentials_api
@@ -193,6 +210,85 @@ api_router.include_router(avatars_router)
 
 from core.avatars.api import router as avatars_router
 api_router.include_router(avatars_router)
+
+@api_router.get("/presentation-templates/{template_name}/image.png", summary="Get Presentation Template Image", tags=["presentations"])
+async def get_presentation_template_image(template_name: str):
+    """Serve presentation template preview images"""
+    try:
+        # Construct path to template image
+        image_path = os.path.join(
+            os.path.dirname(__file__),
+            "core",
+            "templates",
+            "presentations",
+            template_name,
+            "image.png"
+        )
+        
+        # Verify file exists and is within templates directory (security check)
+        image_path = os.path.abspath(image_path)
+        templates_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "core", "templates", "presentations"))
+        
+        if not image_path.startswith(templates_dir):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        if not os.path.exists(image_path):
+            raise HTTPException(status_code=404, detail="Template image not found")
+        
+        return FileResponse(image_path, media_type="image/png")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving template image: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@api_router.get("/presentation-templates/{template_name}/pdf", summary="Get Presentation Template PDF", tags=["presentations"])
+async def get_presentation_template_pdf(template_name: str):
+    """Serve presentation template PDF files"""
+    try:
+        # Construct path to template pdf folder
+        pdf_folder = os.path.join(
+            os.path.dirname(__file__),
+            "core",
+            "templates",
+            "presentations",
+            template_name,
+            "pdf"
+        )
+        
+        # Verify folder exists and is within templates directory (security check)
+        pdf_folder = os.path.abspath(pdf_folder)
+        templates_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "core", "templates", "presentations"))
+        
+        if not pdf_folder.startswith(templates_dir):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        if not os.path.exists(pdf_folder):
+            raise HTTPException(status_code=404, detail="Template PDF folder not found")
+        
+        # Find the first PDF file in the folder
+        pdf_files = [f for f in os.listdir(pdf_folder) if f.lower().endswith('.pdf')]
+        
+        if not pdf_files:
+            raise HTTPException(status_code=404, detail="No PDF file found in template")
+        
+        # Use the first PDF file found
+        pdf_path = os.path.join(pdf_folder, pdf_files[0])
+        
+        return FileResponse(
+            pdf_path, 
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"inline; filename={template_name}.pdf"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error serving template PDF: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @api_router.get("/health", summary="Health Check", operation_id="health_check", tags=["system"])
 async def health_check():

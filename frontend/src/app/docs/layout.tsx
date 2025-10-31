@@ -14,7 +14,7 @@ export default function DocsLayout({
 }) {
   return (
     <div style={{ scrollBehavior: 'smooth' }} className="min-h-screen">
-     <div className="hidden dark:block fixed rotate-180 opacity-15 inset-0 -z-10 h-full w-full items-center px-5 py-24 bg-white dark:bg-black"></div>
+      <div className="hidden dark:block fixed rotate-180 opacity-15 inset-0 -z-10 h-full w-full items-center px-5 py-24 bg-white dark:bg-black"></div>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset className="flex-1">

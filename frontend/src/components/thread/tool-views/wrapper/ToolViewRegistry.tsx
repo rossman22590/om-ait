@@ -45,6 +45,7 @@ import { DeleteSlideToolView } from '../presentation-tools/DeleteSlideToolView';
 import { DeletePresentationToolView } from '../presentation-tools/DeletePresentationToolView';
 // import { PresentationStylesToolView } from '../presentation-tools/PresentationStylesToolView';
 import { PresentPresentationToolView } from '../presentation-tools/PresentPresentationToolView';
+import { ExportToPptxToolView, ExportToPdfToolView } from '../presentation-tools/ExportToolView';
 import { SheetsToolView } from '../sheets-tools/sheets-tool-view';
 import { GetProjectStructureView } from '../web-dev/GetProjectStructureView';
 import { ImageEditGenerateToolView } from '../image-edit-generate-tool/ImageEditGenerateToolView';
@@ -58,6 +59,8 @@ import { SearchMcpServersForAgentToolView } from '../search-mcp-servers-for-agen
 import { CreateCredentialProfileForAgentToolView } from '../create-credential-profile-for-agent/create-credential-profile-for-agent';
 import { DiscoverMcpToolsForAgentToolView } from '../discover-mcp-tools-for-agent/discover-mcp-tools-for-agent';
 import { DiscoverUserMcpServersToolView } from '../discover-user-mcp-servers/discover-user-mcp-servers';
+import { ListAppEventTriggersToolView } from '../list-app-event-triggers/list-app-event-triggers';
+import { CreateEventTriggerToolView } from '../create-event-trigger/create-event-trigger';
 import { ConfigureAgentIntegrationToolView } from '../configure-agent-integration/configure-agent-integration';
 import CreateAgentScheduledTriggerToolView from '../create-agent-scheduled-trigger/create-agent-scheduled-trigger';
 import { MakeCallToolView } from '../vapi-call/MakeCallToolView';
@@ -155,7 +158,8 @@ const defaultRegistry: ToolViewRegistryType = {
 
 
   'create-presentation-outline': PresentationOutlineToolView,
-  'list-presentation-templates': ListPresentationTemplatesToolView,
+  'list-templates': ListPresentationTemplatesToolView,
+  'load-template-design': ListPresentationTemplatesToolView,
 
   // New per-slide presentation tools
   'create-slide': PresentationViewer,
@@ -166,6 +170,8 @@ const defaultRegistry: ToolViewRegistryType = {
   'validate-slide': PresentationViewer,
   // 'presentation-styles': PresentationStylesToolView,
   'present-presentation': PresentPresentationToolView,
+  'export-to-pptx': ExportToPptxToolView,
+  'export-to-pdf': ExportToPdfToolView,
 
   'create-sheet': SheetsToolView,
   'update-sheet': SheetsToolView,
@@ -224,6 +230,8 @@ const defaultRegistry: ToolViewRegistryType = {
   'create-credential-profile-for-agent': CreateCredentialProfileForAgentToolView,
   'discover-mcp-tools-for-agent': DiscoverMcpToolsForAgentToolView,
   'discover-user-mcp-servers': DiscoverUserMcpServersToolView,
+  'list-app-event-triggers': ListAppEventTriggersToolView,
+  'create-event-trigger': CreateEventTriggerToolView,
   'configure-agent-integration': ConfigureAgentIntegrationToolView,
   'create-agent-scheduled-trigger': CreateAgentScheduledTriggerToolView,
 

@@ -30,15 +30,24 @@ Suna's powerful toolkit includes seamless browser automation to navigate the web
 
 ## Table of Contents
 
-- [Suna Architecture](#project-architecture)
-  - [Backend API](#backend-api)
-  - [Frontend](#frontend)
-  - [Agent Docker](#agent-docker)
-  - [Supabase Database](#supabase-database)
-- [Use Cases](#use-cases)
-- [Self-Hosting](#self-hosting)
-- [Acknowledgements](#acknowledgements)
-- [License](#license)
+- [Suna - Open Source Generalist AI Agent](#suna---open-source-generalist-ai-agent)
+  - [Table of Contents](#table-of-contents)
+  - [Project Architecture](#project-architecture)
+    - [Backend API](#backend-api)
+    - [Frontend](#frontend)
+    - [Agent Docker](#agent-docker)
+    - [Supabase Database](#supabase-database)
+  - [Use Cases](#use-cases)
+  - [Self-Hosting](#self-hosting)
+    - [Quick Start](#quick-start)
+  - [🏠 Self-Hosting](#-self-hosting)
+    - [🔧 Setup Process Includes](#-setup-process-includes)
+    - [📚 Manual Setup](#-manual-setup)
+  - [Contributing](#contributing)
+  - [Acknowledgements](#acknowledgements)
+    - [Main Contributors](#main-contributors)
+    - [Technologies](#technologies)
+  - [License](#license)
 
 ## Project Architecture
 
@@ -125,9 +134,26 @@ The wizard will guide you through 14 steps with progress saving, so you can resu
 python start.py
 ```
 
-### Manual Setup
+That's it! Your Kortix platform will be running with Suna ready to assist you.
 
-See the [Self-Hosting Guide](./docs/SELF-HOSTING.md) for detailed manual setup instructions.
+## 🏠 Self-Hosting
+
+Kortix can be self-hosted on your own infrastructure using our comprehensive setup wizard, giving you complete control over your AI agent platform. For a complete guide to self-hosting Kortix, please refer to our [Self-Hosting Guide](./docs/SELF-HOSTING.md).
+
+### 🔧 Setup Process Includes
+
+- **🏗️ Infrastructure**: Supabase project setup for database and authentication
+- **⚡ Performance**: Redis configuration for caching and session management
+- **🛡️ Security**: Daytona setup for secure agent execution environments
+- **🤖 AI Integration**: LLM providers (Anthropic, OpenAI, OpenRouter, etc.)
+- **🌐 Web Capabilities**: Search and scraping (Tavily, Firecrawl)
+- **📋 Workflows**: Background job processing
+- **🔗 Automation**: Webhook handling for automated tasks
+- **📊 Data Sources**: Optional RapidAPI integrations
+
+### 📚 Manual Setup
+
+For advanced users who prefer manual configuration, see the [Self-Hosting Guide](./docs/SELF-HOSTING.md) for detailed manual setup instructions.
 
 The wizard will guide you through all necessary steps to get your Suna instance up and running. For detailed instructions, troubleshooting tips, and advanced configuration options, see the [Self-Hosting Guide](./docs/SELF-HOSTING.md).
 

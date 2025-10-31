@@ -3,21 +3,21 @@ import { Metadata } from 'next';
 
 export async function generateMetadata({ params }: { params: Promise<{ shareId: string }> }): Promise<Metadata> {
   const { shareId: templateId } = await params;
-  
+
   try {
     const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/templates/public/${templateId}`);
-    
+
     if (!response.ok) {
       throw new Error('Template not found');
     }
-    
+
     const template = await response.json();
     
     const title = `${template.name} - AI Agent Template | Machine`;
     const description = template.description || 'Discover and install this AI agent template to enhance your workflow with powerful automation capabilities.';
-    
+
     const ogImage = `${process.env.NEXT_PUBLIC_URL}/api/og/template?shareId=${templateId}`;
-    
+
     return {
       title,
       description,

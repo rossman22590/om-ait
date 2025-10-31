@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { 
+import {
   DocsHeader,
   DocsCard,
   DocsBody,
@@ -42,7 +42,15 @@ export default function IntroductionPage() {
         size="lg"
         className="mb-8 sm:mb-12"
       />
-    
+
+      <DocsImage
+        src={imageSrc}
+        alt="Kortix Platform Interface"
+        size="full"
+        aspect="video"
+        className="mb-12"
+      />
+
       <DocsBody className="mb-8">
         <h2 id="overview">What is Machine?</h2>
         <p className="text-lg mb-6">
@@ -50,8 +58,11 @@ export default function IntroductionPage() {
         </p>
         
         <h3 id="meet-machine">Machine - Our Flagship Agent</h3>
+
+        <h3 id="meet-suna">Kortix - Our Flagship Agent</h3>
         <p className="mb-4">
           Machine is our showcase agent that demonstrates what's possible with the platform. It's a generalist AI worker that can:
+          Kortix is our showcase agent that demonstrates what's possible with Kortix. It's a generalist AI worker that can:
         </p>
         <ul className="list-disc pl-6 mb-6 space-y-1">
           <li>Research topics and gather information from across the web</li>
@@ -62,8 +73,9 @@ export default function IntroductionPage() {
         </ul>
         <p className="mb-6">
           Machine shows you what you can build with our powerful AI platform.
+          Kortix is completely open source and shows you what you can build with the Kortix platform.
         </p>
-  
+
         <h3 id="build-your-own" className="mb-4">Build Your Own Agents</h3>
         <p className="mb-6">
           The real power comes when you create agents for your specific needs. Maybe you need an agent that monitors customer support tickets, or one that processes invoices, or handles your social media posting schedule. With Machine, you get the building blocks to create agents that work exactly how you want them to.
@@ -77,8 +89,8 @@ export default function IntroductionPage() {
           <li><strong>Secure Runtime</strong> - Isolated environments where your agents run safely</li>
           <li><strong>Database</strong> - Stores your agent configs, conversation history, and results</li>
         </ul>
-        
-        <h3 id="getting-started" className="mb-4">Getting Started</h3>
+
+        <h3 id="why-open-source" className="mb-4">Why Open Source?</h3>
         <p className="mb-6">
           Start building with Machine today. Create your first agent, customize it for your needs, and watch it handle tasks automatically. Our platform makes it easy to go from idea to working agent.
         </p>

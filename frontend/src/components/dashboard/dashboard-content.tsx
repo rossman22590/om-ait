@@ -3,7 +3,8 @@
 import React, { useState, Suspense, useCallback, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Joyride, { CallBackProps, STATUS, Step } from 'react-joyride';
+// TOURS DISABLED - Joyride imports commented out
+// import Joyride, { CallBackProps, STATUS, Step } from 'react-joyride';
 import {
   ChatInput,
   ChatInputHandles,
@@ -34,13 +35,16 @@ import { AgentRunLimitDialog } from '@/components/thread/agent-run-limit-dialog'
 import { CustomAgentsSection } from './custom-agents-section';
 import { toast } from 'sonner';
 import { ReleaseBadge } from '../auth/release-badge';
-import { useDashboardTour } from '@/hooks/use-dashboard-tour';
-import { TourConfirmationDialog } from '@/components/tour/TourConfirmationDialog';
+// TOURS DISABLED - Tour imports commented out
+// import { useDashboardTour } from '@/hooks/use-dashboard-tour';
+// import { TourConfirmationDialog } from '@/components/tour/TourConfirmationDialog';
 import { Calendar, MessageSquare, Plus, Sparkles, Zap } from 'lucide-react';
 import { AgentConfigurationDialog } from '@/components/agents/agent-configuration-dialog';
+import { useSunaModePersistence } from '@/hooks/use-suna-modes-persistence';
 
 const PENDING_PROMPT_KEY = 'pendingAgentPrompt';
 
+/* TOURS DISABLED - dashboardTourSteps commented out
 const dashboardTourSteps: Step[] = [
   {
     target: '[data-tour="chat-input"]',
@@ -64,6 +68,7 @@ const dashboardTourSteps: Step[] = [
     disableBeacon: true,
   },
 ];
+*/
 
 export function DashboardContent() {
   const [inputValue, setInputValue] = useState('');
@@ -72,18 +77,21 @@ export function DashboardContent() {
   const [configAgentId, setConfigAgentId] = useState<string | null>(null);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [autoSubmit, setAutoSubmit] = useState(false);
-  const [selectedMode, setSelectedMode] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'super-worker' | 'worker-templates'>('super-worker');
-  const [selectedCharts, setSelectedCharts] = useState<string[]>([]);
-  const [selectedOutputFormat, setSelectedOutputFormat] = useState<string | null>(null);
   
-  // Reset data selections when mode changes
-  React.useEffect(() => {
-    if (selectedMode !== 'data') {
-      setSelectedCharts([]);
-      setSelectedOutputFormat(null);
-    }
-  }, [selectedMode]);
+  // Use centralized Suna modes persistence hook
+  const {
+    selectedMode,
+    selectedCharts,
+    selectedOutputFormat,
+    selectedTemplate,
+    setSelectedMode,
+    setSelectedCharts,
+    setSelectedOutputFormat,
+    setSelectedTemplate,
+  } = useSunaModePersistence();
+  
+  const [viewMode, setViewMode] = useState<'super-worker' | 'worker-templates'>('super-worker');
+  
   const {
     selectedAgentId,
     setSelectedAgent,
@@ -108,16 +116,16 @@ export function DashboardContent() {
   const initiateAgentMutation = useInitiateAgentWithInvalidation();
   const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  // Tour integration
-  const {
-    run,
-    stepIndex,
-    setStepIndex,
-    stopTour,
-    showWelcome,
-    handleWelcomeAccept,
-    handleWelcomeDecline,
-  } = useDashboardTour();
+  // TOURS DISABLED - Tour integration commented out
+  // const {
+  //   run,
+  //   stepIndex,
+  //   setStepIndex,
+  //   stopTour,
+  //   showWelcome,
+  //   handleWelcomeAccept,
+  //   handleWelcomeDecline,
+  // } = useDashboardTour();
 
   // Feature flag for custom agents section
 
@@ -176,15 +184,16 @@ export function DashboardContent() {
     }
   }, [threadQuery.data, initiatedThreadId, router]);
 
-  const handleTourCallback = useCallback((data: CallBackProps) => {
-    const { status, type, index } = data;
+  // TOURS DISABLED - handleTourCallback commented out
+  // const handleTourCallback = useCallback((data: CallBackProps) => {
+  //   const { status, type, index } = data;
 
-    if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
-      stopTour();
-    } else if (type === 'step:after') {
-      setStepIndex(index + 1);
-    }
-  }, [stopTour, setStepIndex]);
+  //   if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
+  //     stopTour();
+  //   } else if (type === 'step:after') {
+  //     setStepIndex(index + 1);
+  //   }
+  // }, [stopTour, setStepIndex]);
 
   const handleSubmit = async (
     message: string,
@@ -280,7 +289,8 @@ export function DashboardContent() {
 
   return (
     <>
-      <Joyride
+      {/* TOURS DISABLED - Joyride and TourConfirmationDialog commented out */}
+      {/* <Joyride
         steps={dashboardTourSteps}
         run={run}
         stepIndex={stepIndex}
@@ -346,13 +356,13 @@ export function DashboardContent() {
             backgroundColor: 'transparent',
           },
         }}
-      />
+      /> */}
 
-      <TourConfirmationDialog
+      {/* <TourConfirmationDialog
         open={showWelcome}
         onAccept={handleWelcomeAccept}
         onDecline={handleWelcomeDecline}
-      />
+      /> */}
 
       <BillingModal
         open={showPaymentModal}
@@ -363,11 +373,10 @@ export function DashboardContent() {
       <div className="flex flex-col h-screen w-full overflow-hidden">
 
 
-
         <div className="flex-1 overflow-y-auto">
           <div className="min-h-full flex flex-col">
             {/* Tabs at the top */}
-            {(isStagingMode() || isLocalMode()) && (
+            {/* {(isStagingMode() || isLocalMode()) && (
               <div className="px-4 pt-4 pb-4">
                 <div className="flex items-center justify-center gap-2 p-1 bg-muted/50 rounded-xl w-fit mx-auto">
                   <button
@@ -398,14 +407,14 @@ export function DashboardContent() {
                         : "text-muted-foreground hover:text-foreground"
                     )}
                   >
-                    Worker Templates
+                    AI Worker Templates
                   </button>
                 </div>
               </div>
-            )}
+            )} */}
 
             {/* Centered content area */}
-            <div className="flex-1 flex items-start justify-center pt-[20vh]">
+            <div className="flex-1 flex items-start justify-center pt-[30vh]">
               {/* Super Worker View - Suna only */}
               {viewMode === 'super-worker' && (
                 <div className="w-full animate-in fade-in-0 duration-300">
@@ -415,13 +424,12 @@ export function DashboardContent() {
                       <div className="flex flex-col items-center text-center w-full">
                         <p
                           className="tracking-tight text-2xl md:text-3xl font-normal text-foreground/90"
-                          data-tour="dashboard-title"
                         >
                           What should Machine Worker do for you today?
                         </p>
                       </div>
 
-                      <div className="w-full mb-6" data-tour="chat-input">
+                      <div className="w-full mb-6">
                         <ChatInput
                           ref={chatInputRef}
                           onSubmit={handleSubmit}
@@ -432,7 +440,7 @@ export function DashboardContent() {
                           hideAttachments={false}
                           selectedAgentId={selectedAgentId}
                           onAgentSelect={setSelectedAgent}
-                          enableAdvancedConfig={!isStagingMode() && !isLocalMode()}
+                          enableAdvancedConfig={false}
                           onConfigureAgent={(agentId) => {
                             setConfigAgentId(agentId);
                             setShowConfigDialog(true);
@@ -442,13 +450,14 @@ export function DashboardContent() {
                           animatePlaceholder={true}
                           selectedCharts={selectedCharts}
                           selectedOutputFormat={selectedOutputFormat}
+                          selectedTemplate={selectedTemplate}
                         />
                       </div>
                     </div>
                   </div>
 
                   {/* Modes Panel - Below chat input, doesn't affect its position */}
-                  {(isStagingMode() || isLocalMode()) && isSunaAgent && (
+                  {isSunaAgent && (
                     <div className="px-4 pb-8">
                       <div className="max-w-3xl mx-auto">
                         <SunaModesPanel
@@ -460,6 +469,8 @@ export function DashboardContent() {
                           onChartsChange={setSelectedCharts}
                           selectedOutputFormat={selectedOutputFormat}
                           onOutputFormatChange={setSelectedOutputFormat}
+                          selectedTemplate={selectedTemplate}
+                          onTemplateChange={setSelectedTemplate}
                         />
                       </div>
                     </div>
@@ -469,7 +480,7 @@ export function DashboardContent() {
               {(viewMode === 'worker-templates') && (
                 <div className="w-full animate-in fade-in-0 duration-300">
                   {(isStagingMode() || isLocalMode()) && (
-                    <div className="w-full px-4 pb-8" data-tour="custom-agents">
+                    <div className="w-full px-4 pb-8">
                       <div className="max-w-5xl mx-auto">
                         <CustomAgentsSection
                           onAgentSelect={setSelectedAgent}
@@ -481,16 +492,16 @@ export function DashboardContent() {
               )}
             </div>
           </div>
-        </div>
 
-        <BillingErrorAlert
-          message={billingError?.message}
-          currentUsage={billingError?.currentUsage}
-          limit={billingError?.limit}
-          accountId={personalAccount?.account_id}
-          onDismiss={clearBillingError}
-          isOpen={!!billingError}
-        />
+          <BillingErrorAlert
+            message={billingError?.message}
+            currentUsage={billingError?.currentUsage}
+            limit={billingError?.limit}
+            accountId={personalAccount?.account_id}
+            onDismiss={clearBillingError}
+            isOpen={!!billingError}
+          />
+        </div>
       </div>
 
       {agentLimitData && (

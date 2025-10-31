@@ -134,6 +134,9 @@ async def check_status(
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
     try:
+        from core.utils.ensure_suna import ensure_suna_installed
+        await ensure_suna_installed(account_id)
+        
         if config.ENV_MODE == EnvMode.LOCAL:
             return {
                 "can_run": True,
@@ -867,13 +870,17 @@ async def get_available_models(
             model_info = []
             
             for model_data in all_models:
+                # Apply markup to pricing for display
+                input_cost = model_data["pricing"]["input_per_million"] if model_data["pricing"] else None
+                output_cost = model_data["pricing"]["output_per_million"] if model_data["pricing"] else None
+                
                 model_info.append({
                     "id": model_data["id"],
                     "display_name": model_data["name"],
                     "short_name": model_data.get("aliases", [model_data["name"]])[0] if model_data.get("aliases") else model_data["name"],
                     "requires_subscription": False,
-                    "input_cost_per_million_tokens": model_data["pricing"]["input_per_million"] if model_data["pricing"] else None,
-                    "output_cost_per_million_tokens": model_data["pricing"]["output_per_million"] if model_data["pricing"] else None,
+                    "input_cost_per_million_tokens": float(Decimal(str(input_cost)) * TOKEN_PRICE_MULTIPLIER) if input_cost else None,
+                    "output_cost_per_million_tokens": float(Decimal(str(output_cost)) * TOKEN_PRICE_MULTIPLIER) if output_cost else None,
                     "context_window": model_data["context_window"],
                     "capabilities": model_data["capabilities"],
                     "recommended": model_data["recommended"],
@@ -912,13 +919,17 @@ async def get_available_models(
             
             can_access = model_id in allowed_models
             
+            # Apply markup to pricing for display
+            input_cost = model_data["pricing"]["input_per_million"] if model_data["pricing"] else None
+            output_cost = model_data["pricing"]["output_per_million"] if model_data["pricing"] else None
+            
             model_info.append({
                 "id": model_id,
                 "display_name": model_data["name"],
                 "short_name": model_data.get("aliases", [model_data["name"]])[0] if model_data.get("aliases") else model_data["name"],
                 "requires_subscription": not can_access,
-                "input_cost_per_million_tokens": model_data["pricing"]["input_per_million"] if model_data["pricing"] else None,
-                "output_cost_per_million_tokens": model_data["pricing"]["output_per_million"] if model_data["pricing"] else None,
+                "input_cost_per_million_tokens": float(Decimal(str(input_cost)) * TOKEN_PRICE_MULTIPLIER) if input_cost else None,
+                "output_cost_per_million_tokens": float(Decimal(str(output_cost)) * TOKEN_PRICE_MULTIPLIER) if output_cost else None,
                 "context_window": model_data["context_window"],
                 "capabilities": model_data["capabilities"],
                 "recommended": model_data["recommended"],
@@ -965,6 +976,9 @@ async def get_trial_status(
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
     try:
+        from core.utils.ensure_suna import ensure_suna_installed
+        await ensure_suna_installed(account_id)
+        
         result = await trial_service.get_trial_status(account_id)
         return result
         

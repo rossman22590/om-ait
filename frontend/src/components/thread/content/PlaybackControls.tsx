@@ -13,6 +13,7 @@ import { safeJsonParse } from '@/components/thread/utils';
 import Link from 'next/link';
 import { parseXmlToolCalls } from '../tool-views/xml-parser';
 import { HIDE_STREAMING_XML_TAGS } from '@/components/thread/utils';
+import { KortixLogo } from '@/components/sidebar/kortix-logo';
 
 export interface PlaybackControlsProps {
   messages: UnifiedMessage[];
@@ -186,7 +187,7 @@ export const PlaybackControls = ({
     (text: string, onComplete: () => void) => {
       if (!text || !isPlaying) {
         onComplete();
-        return () => {};
+        return () => { };
       }
 
       updatePlaybackState({

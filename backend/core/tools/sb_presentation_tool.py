@@ -7,6 +7,7 @@ import os
 from datetime import datetime
 import re
 import asyncio
+import httpx
 
 @tool_metadata(
     display_name="Presentations",
@@ -26,6 +27,8 @@ class SandboxPresentationTool(SandboxToolsBase):
     def __init__(self, project_id: str, thread_manager: ThreadManager):
         super().__init__(project_id, thread_manager)
         self.presentations_dir = "presentations"
+        # Path to built-in templates (on the backend filesystem, not in sandbox)
+        self.templates_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates", "presentations")
 
 
     async def _ensure_presentations_dir(self):
@@ -101,7 +104,332 @@ class SandboxPresentationTool(SandboxToolsBase):
         metadata_path = f"{presentation_path}/metadata.json"
         await self.sandbox.fs.upload_file(json.dumps(metadata, indent=2).encode(), metadata_path)
 
+    def _load_template_metadata(self, template_name: str) -> Dict:
+        """Load metadata from a template on the backend filesystem"""
+        metadata_path = os.path.join(self.templates_dir, template_name, "metadata.json")
+        try:
+            with open(metadata_path, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            return {}
 
+    def _read_template_slide(self, template_name: str, slide_filename: str) -> str:
+        """Read a slide HTML file from a template"""
+        slide_path = os.path.join(self.templates_dir, template_name, slide_filename)
+        try:
+            with open(slide_path, 'r') as f:
+                return f.read()
+        except Exception as e:
+            return ""
+
+    async def _copy_template_to_workspace(self, template_name: str, presentation_name: str) -> str:
+        """Copy entire template directory structure to workspace using os.walk
+        
+        Returns:
+            The presentation path in the workspace
+        """
+        await self._ensure_sandbox()
+        await self._ensure_presentations_dir()
+        
+        template_path = os.path.join(self.templates_dir, template_name)
+        safe_name = self._sanitize_filename(presentation_name)
+        presentation_path = f"{self.workspace_path}/{self.presentations_dir}/{safe_name}"
+        
+        # Ensure presentation directory exists
+        await self._ensure_presentation_dir(presentation_name)
+        
+        # Use os.walk to recursively copy all files
+        copied_files = []
+        for root, dirs, files in os.walk(template_path):
+            # Calculate relative path from template root
+            rel_path = os.path.relpath(root, template_path)
+            
+            # Create corresponding directory in workspace (if not root)
+            if rel_path != '.':
+                target_dir = os.path.join(presentation_path, rel_path)
+                target_dir_path = target_dir.replace('\\', '/')  # Normalize path separators
+                try:
+                    await self.sandbox.fs.create_folder(target_dir_path, "755")
+                except:
+                    pass  # Directory might already exist
+            else:
+                target_dir_path = presentation_path
+            
+            # Copy all files
+            for file in files:
+                source_file = os.path.join(root, file)
+                rel_file_path = os.path.relpath(source_file, template_path)
+                target_file = os.path.join(presentation_path, rel_file_path).replace('\\', '/')
+                
+                try:
+                    with open(source_file, 'rb') as f:
+                        file_content = f.read()
+                    await self.sandbox.fs.upload_file(file_content, target_file)
+                    copied_files.append(rel_file_path)
+                except Exception as e:
+                    # Log error but continue with other files
+                    print(f"Error copying {rel_file_path}: {str(e)}")
+        
+        # Update metadata.json with correct paths for the new presentation
+        metadata = await self._load_presentation_metadata(presentation_path)
+        template_metadata = self._load_template_metadata(template_name)
+        
+        # Update presentation name and preserve slides structure
+        metadata["presentation_name"] = presentation_name
+        metadata["title"] = template_metadata.get("title", presentation_name)
+        metadata["description"] = template_metadata.get("description", "")
+        metadata["created_at"] = datetime.now().isoformat()
+        metadata["updated_at"] = datetime.now().isoformat()
+        
+        # Update slide paths to match new presentation name
+        if "slides" in template_metadata:
+            updated_slides = {}
+            for slide_num, slide_data in template_metadata["slides"].items():
+                slide_filename = slide_data.get("filename", f"slide_{int(slide_num):02d}.html")
+                updated_slides[str(slide_num)] = {
+                    "title": slide_data.get("title", f"Slide {slide_num}"),
+                    "filename": slide_filename,
+                    "file_path": f"{self.presentations_dir}/{safe_name}/{slide_filename}",
+                    "preview_url": f"/workspace/{self.presentations_dir}/{safe_name}/{slide_filename}",
+                    "created_at": datetime.now().isoformat()
+                }
+            metadata["slides"] = updated_slides
+        
+        # Save updated metadata
+        await self._save_presentation_metadata(presentation_path, metadata)
+        
+        return presentation_path
+
+    def _extract_style_from_html(self, html_content: str) -> Dict:
+        """Extract CSS styles and design patterns from HTML content"""
+        style_info = {
+            "fonts": [],
+            "colors": [],
+            "layout_patterns": [],
+            "key_css_classes": []
+        }
+        
+        # Extract font imports
+        font_imports = re.findall(r'@import url\([\'"]([^\'"]+)[\'"]', html_content)
+        font_families = re.findall(r'font-family:\s*[\'"]?([^;\'"]+)[\'"]?', html_content)
+        style_info["fonts"] = list(set(font_imports + font_families))
+        
+        # Extract color values (hex, rgb, rgba)
+        hex_colors = re.findall(r'#[0-9A-Fa-f]{3,6}', html_content)
+        rgb_colors = re.findall(r'rgba?\([^)]+\)', html_content)
+        style_info["colors"] = list(set(hex_colors + rgb_colors))[:20]  # Limit to top 20
+        
+        # Extract class names
+        class_names = re.findall(r'class=[\'"]([^\'"]+)[\'"]', html_content)
+        style_info["key_css_classes"] = list(set(class_names))[:30]
+        
+        # Identify layout patterns
+        if 'display: flex' in html_content or 'display:flex' in html_content:
+            style_info["layout_patterns"].append("flexbox")
+        if 'display: grid' in html_content or 'display:grid' in html_content:
+            style_info["layout_patterns"].append("grid")
+        if 'position: absolute' in html_content:
+            style_info["layout_patterns"].append("absolute positioning")
+        
+        return style_info
+
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "list_templates",
+            "description": "List all available presentation template names with their metadata and preview images. Use this to see what template styles are available, then use load_template_design to get the full design reference for a specific template.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
+    })
+    async def list_templates(self) -> ToolResult:
+        """List all available presentation templates with metadata and images"""
+        try:
+            templates = []
+            
+            # Check if templates directory exists
+            if not os.path.exists(self.templates_dir):
+                return self.success_response({
+                    "message": "No templates directory found",
+                    "templates": []
+                })
+            
+            # List all subdirectories in templates folder
+            for item in os.listdir(self.templates_dir):
+                template_path = os.path.join(self.templates_dir, item)
+                if os.path.isdir(template_path) and not item.startswith('.'):
+                    # Load metadata for this template
+                    metadata = self._load_template_metadata(item)
+                    
+                    # Check if image.png exists
+                    image_path = os.path.join(template_path, "image.png")
+                    has_image = os.path.exists(image_path)
+                    
+                    template_info = {
+                        "id": item,
+                        "name": item,  # Use folder name directly
+                        "has_image": has_image
+                    }
+                    templates.append(template_info)
+            
+            if not templates:
+                return self.success_response({
+                    "message": "No templates found",
+                    "templates": []
+                })
+            
+            # Sort templates by name
+            templates.sort(key=lambda x: x["name"])
+            
+            return self.success_response({
+                "message": f"Found {len(templates)} template(s)",
+                "templates": templates,
+                "note": "Use load_template_design with a template id to get the complete design reference"
+            })
+            
+        except Exception as e:
+            return self.fail_response(f"Failed to list templates: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "load_template_design",
+            "description": "Load complete design reference from a presentation template including all slide HTML and extracted style patterns (colors, fonts, layouts). If presentation_name is provided, the entire template will be copied to /workspace/presentations/{presentation_name}/ so you can edit the content inside. Otherwise, use this template as DESIGN INSPIRATION ONLY - study the visual styling, CSS patterns, and layout structure to create your own original slides with similar aesthetics but completely different content.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "template_name": {
+                        "type": "string",
+                        "description": "Name of the template to load (e.g., 'textbook')"
+                    },
+                    "presentation_name": {
+                        "type": "string",
+                        "description": "Optional: Name for the presentation. If provided, the entire template will be copied to /workspace/presentations/{presentation_name}/ so you can edit the slides directly. All files from the template (including HTML slides, images, and subdirectories) will be copied."
+                    }
+                },
+                "required": ["template_name"]
+            }
+        }
+    })
+    async def load_template_design(self, template_name: str, presentation_name: Optional[str] = None) -> ToolResult:
+        """Load complete template design including all slides HTML and extracted style patterns.
+        
+        If presentation_name is provided, copies the entire template to workspace for editing.
+        """
+        try:
+            template_path = os.path.join(self.templates_dir, template_name)
+            
+            if not os.path.exists(template_path):
+                return self.fail_response(f"Template '{template_name}' not found")
+            
+            # If presentation_name is provided, copy template to workspace
+            presentation_path = None
+            if presentation_name:
+                try:
+                    presentation_path = await self._copy_template_to_workspace(template_name, presentation_name)
+                except Exception as e:
+                    return self.fail_response(f"Failed to copy template to workspace: {str(e)}")
+            
+            # Load template metadata
+            metadata = self._load_template_metadata(template_name)
+            
+            if not metadata or "slides" not in metadata:
+                return self.fail_response(f"Template '{template_name}' has no metadata or slides")
+            
+            # Extract all slides HTML
+            slides = []
+            all_fonts = set()
+            all_colors = set()
+            all_layout_patterns = set()
+            all_css_classes = set()
+            
+            for slide_num, slide_data in sorted(metadata["slides"].items(), key=lambda x: int(x[0])):
+                slide_filename = slide_data.get("filename", f"slide_{int(slide_num):02d}.html")
+                html_content = self._read_template_slide(template_name, slide_filename)
+                
+                if html_content:
+                    # Add slide info
+                    slides.append({
+                        "slide_number": int(slide_num),
+                        "title": slide_data.get("title", f"Slide {slide_num}"),
+                        "filename": slide_filename,
+                        "html_content": html_content,
+                        "html_length": len(html_content)
+                    })
+                    
+                    # Extract style information from this slide
+                    style_info = self._extract_style_from_html(html_content)
+                    all_fonts.update(style_info["fonts"])
+                    all_colors.update(style_info["colors"])
+                    all_layout_patterns.update(style_info["layout_patterns"])
+                    all_css_classes.update(style_info["key_css_classes"])
+            
+            if not slides:
+                return self.fail_response(f"Could not load any slides from template '{template_name}'")
+            
+            # Build response
+            response_data = {
+                "template_name": template_name,
+                "template_title": metadata.get("title", template_name),
+                "description": metadata.get("description", ""),
+                "total_slides": len(slides),
+                "slides": slides,
+                "design_system": {
+                    "fonts": list(all_fonts)[:10],  # Top 10 fonts
+                    "color_palette": list(all_colors)[:20],  # Top 20 colors
+                    "layout_patterns": list(all_layout_patterns),
+                    "common_css_classes": list(all_css_classes)[:30]  # Top 30 classes
+                }
+            }
+            
+            # Add workspace path info if template was copied
+            if presentation_path:
+                safe_name = self._sanitize_filename(presentation_name)
+                response_data["presentation_path"] = f"{self.presentations_dir}/{safe_name}"
+                response_data["presentation_name"] = presentation_name
+                response_data["copied_to_workspace"] = True
+                response_data["note"] = f"Template copied to /workspace/{self.presentations_dir}/{safe_name}/. All slides are available for editing. This template provides ALL slides and extracted design patterns in one response."
+                response_data["usage_instructions"] = {
+                    "purpose": "TEMPLATE COPIED TO WORKSPACE - Edit the content in the copied files",
+                    "do": [
+                        "Edit the HTML content in the copied slide files",
+                        "Modify the text, data, and information to match your needs",
+                        "Update the styling while maintaining the design structure",
+                        "Use create_slide to update individual slides if needed"
+                    ],
+                    "dont": [
+                        "Delete the copied template structure",
+                        "Remove the metadata.json file"
+                    ]
+                }
+            else:
+                response_data["copied_to_workspace"] = False
+                response_data["usage_instructions"] = {
+                    "purpose": "DESIGN REFERENCE ONLY - Use for visual inspiration",
+                    "do": [
+                        "Study the HTML structure and CSS styling patterns",
+                        "Learn the layout techniques and visual hierarchy",
+                        "Understand the color scheme and typography usage",
+                        "Analyze how elements are positioned and styled",
+                        "Create NEW slides with similar design but ORIGINAL content"
+                    ],
+                    "dont": [
+                        "Copy template content directly",
+                        "Use template text, data, or information",
+                        "Duplicate slides without modification",
+                        "Treat templates as final deliverables"
+                    ]
+                }
+                response_data["note"] = "This template provides ALL slides and extracted design patterns in one response. Study the HTML and CSS to understand the design system, then create your own original slides with similar visual styling. To edit this template directly, provide a presentation_name parameter."
+            
+            return self.success_response(response_data)
+            
+        except Exception as e:
+            return self.fail_response(f"Failed to load template design: {str(e)}")
 
 
     @openapi_schema({
@@ -636,8 +964,210 @@ print(json.dumps(result))
     @openapi_schema({
         "type": "function",
         "function": {
+            "name": "export_to_pptx",
+            "description": "Export a presentation to PPTX format. The PPTX file can be stored locally in the sandbox for repeated downloads, or returned directly. Use store_locally=True to enable the download button in the UI for repeated downloads.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "presentation_name": {
+                        "type": "string",
+                        "description": "Name of the presentation to export"
+                    },
+                    "store_locally": {
+                        "type": "boolean",
+                        "description": "If True, stores the PPTX file in the sandbox at /workspace/presentations/{presentation_name}/{presentation_name}.pptx for repeated downloads. If False, returns the file content directly without storing.",
+                        "default": True
+                    }
+                },
+                "required": ["presentation_name"]
+            }
+        }
+    })
+    async def export_to_pptx(self, presentation_name: str, store_locally: bool = True) -> ToolResult:
+        """Export presentation to PPTX format via sandbox conversion service"""
+        try:
+            await self._ensure_sandbox()
+            
+            if not presentation_name:
+                return self.fail_response("Presentation name is required.")
+            
+            safe_name = self._sanitize_filename(presentation_name)
+            presentation_path = f"/workspace/{self.presentations_dir}/{safe_name}"
+            
+            # Verify presentation exists
+            metadata = await self._load_presentation_metadata(presentation_path)
+            if not metadata.get("slides"):
+                return self.fail_response(f"Presentation '{presentation_name}' not found or has no slides")
+            
+            # Call sandbox conversion endpoint
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                convert_response = await client.post(
+                    f"{self.sandbox_url}/presentation/convert-to-pptx",
+                    json={
+                        "presentation_path": presentation_path,
+                        "download": not store_locally
+                    }
+                )
+                
+                if not convert_response.is_success:
+                    error_detail = convert_response.json().get("detail", "Unknown error") if convert_response.headers.get("content-type", "").startswith("application/json") else convert_response.text
+                    return self.fail_response(f"PPTX conversion failed: {error_detail}")
+                
+                if store_locally:
+                    # Response is JSON with download URL
+                    result = convert_response.json()
+                    pptx_filename = result.get("filename")
+                    
+                    # File is already stored in /workspace/downloads/ by the conversion service
+                    # Optionally copy to presentation directory for organization
+                    downloads_path = f"/workspace/downloads/{pptx_filename}"
+                    presentation_pptx_path = f"{presentation_path}/{safe_name}.pptx"
+                    
+                    try:
+                        # Copy to presentation directory as well for easy access
+                        pptx_content = await self.sandbox.fs.download_file(downloads_path)
+                        await self.sandbox.fs.upload_file(pptx_content, presentation_pptx_path)
+                    except Exception as e:
+                        # If copy fails, file is still available in downloads, so continue
+                        pass
+                    
+                    return self.success_response({
+                        "message": f"Presentation '{presentation_name}' exported to PPTX successfully",
+                        "presentation_name": presentation_name,
+                        "pptx_file": f"{self.presentations_dir}/{safe_name}/{safe_name}.pptx",
+                        "download_url": f"/workspace/downloads/{pptx_filename}",
+                        "total_slides": result.get("total_slides"),
+                        "stored_locally": True,
+                        "note": "PPTX file is stored in /workspace/downloads/ and can be downloaded repeatedly"
+                    })
+                else:
+                    # Response is the PPTX file content directly
+                    pptx_content = convert_response.content
+                    filename = f"{safe_name}.pptx"
+                    
+                    # Extract filename from Content-Disposition if available
+                    content_disposition = convert_response.headers.get("Content-Disposition", "")
+                    if "filename=" in content_disposition:
+                        filename = content_disposition.split('filename="')[1].split('"')[0]
+                    
+                    return self.success_response({
+                        "message": f"Presentation '{presentation_name}' exported to PPTX successfully",
+                        "presentation_name": presentation_name,
+                        "filename": filename,
+                        "file_size": len(pptx_content),
+                        "stored_locally": False,
+                        "note": "PPTX file content returned directly (not stored in sandbox)"
+                    })
+        
+        except Exception as e:
+            return self.fail_response(f"Failed to export presentation to PPTX: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
+            "name": "export_to_pdf",
+            "description": "Export a presentation to PDF format. The PDF file can be stored locally in the sandbox for repeated downloads, or returned directly. Use store_locally=True to enable the download button in the UI for repeated downloads.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "presentation_name": {
+                        "type": "string",
+                        "description": "Name of the presentation to export"
+                    },
+                    "store_locally": {
+                        "type": "boolean",
+                        "description": "If True, stores the PDF file in the sandbox at /workspace/downloads/ for repeated downloads. If False, returns the file content directly without storing.",
+                        "default": True
+                    }
+                },
+                "required": ["presentation_name"]
+            }
+        }
+    })
+    async def export_to_pdf(self, presentation_name: str, store_locally: bool = True) -> ToolResult:
+        """Export presentation to PDF format via sandbox conversion service"""
+        try:
+            await self._ensure_sandbox()
+            
+            if not presentation_name:
+                return self.fail_response("Presentation name is required.")
+            
+            safe_name = self._sanitize_filename(presentation_name)
+            presentation_path = f"/workspace/{self.presentations_dir}/{safe_name}"
+            
+            # Verify presentation exists
+            metadata = await self._load_presentation_metadata(presentation_path)
+            if not metadata.get("slides"):
+                return self.fail_response(f"Presentation '{presentation_name}' not found or has no slides")
+            
+            # Call sandbox conversion endpoint
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                convert_response = await client.post(
+                    f"{self.sandbox_url}/presentation/convert-to-pdf",
+                    json={
+                        "presentation_path": presentation_path,
+                        "download": not store_locally
+                    }
+                )
+                
+                if not convert_response.is_success:
+                    error_detail = convert_response.json().get("detail", "Unknown error") if convert_response.headers.get("content-type", "").startswith("application/json") else convert_response.text
+                    return self.fail_response(f"PDF conversion failed: {error_detail}")
+                
+                if store_locally:
+                    # Response is JSON with download URL
+                    result = convert_response.json()
+                    pdf_filename = result.get("filename")
+                    
+                    # File is already stored in /workspace/downloads/ by the conversion service
+                    # Optionally copy to presentation directory for organization
+                    downloads_path = f"/workspace/downloads/{pdf_filename}"
+                    presentation_pdf_path = f"{presentation_path}/{safe_name}.pdf"
+                    
+                    try:
+                        # Copy to presentation directory as well for easy access
+                        pdf_content = await self.sandbox.fs.download_file(downloads_path)
+                        await self.sandbox.fs.upload_file(pdf_content, presentation_pdf_path)
+                    except Exception as e:
+                        # If copy fails, file is still available in downloads, so continue
+                        pass
+                    
+                    return self.success_response({
+                        "message": f"Presentation '{presentation_name}' exported to PDF successfully",
+                        "presentation_name": presentation_name,
+                        "pdf_file": f"{self.presentations_dir}/{safe_name}/{safe_name}.pdf",
+                        "download_url": f"/workspace/downloads/{pdf_filename}",
+                        "total_slides": result.get("total_slides"),
+                        "stored_locally": True,
+                        "note": "PDF file is stored in /workspace/downloads/ and can be downloaded repeatedly"
+                    })
+                else:
+                    # Response is the PDF file content directly
+                    pdf_content = convert_response.content
+                    filename = f"{safe_name}.pdf"
+                    
+                    # Extract filename from Content-Disposition if available
+                    content_disposition = convert_response.headers.get("Content-Disposition", "")
+                    if "filename=" in content_disposition:
+                        filename = content_disposition.split('filename="')[1].split('"')[0]
+                    
+                    return self.success_response({
+                        "message": f"Presentation '{presentation_name}' exported to PDF successfully",
+                        "presentation_name": presentation_name,
+                        "filename": filename,
+                        "file_size": len(pdf_content),
+                        "stored_locally": False,
+                        "note": "PDF file content returned directly (not stored in sandbox)"
+                    })
+        
+        except Exception as e:
+            return self.fail_response(f"Failed to export presentation to PDF: {str(e)}")
+
+    @openapi_schema({
+        "type": "function",
+        "function": {
             "name": "present_presentation",
-            "description": "Present the final presentation to the user. Use this tool when: 1) All slides have been created and formatted, 2) The presentation is ready for user review, 3) You want to show the user the complete presentation with all files, 4) The presentation creation process is finished and you want to deliver the final result. IMPORTANT: This tool is specifically for presenting completed presentations, not for intermediate steps. Include the presentation name, slide count, and all relevant file attachments. This tool provides a special UI for presentation delivery. This tool allows users to download the presentation as PDF, PPTX, or upload to Google Slides.",
+            "description": "Present the final presentation to the user. Use this tool when: 1) All slides have been created and formatted, 2) The presentation is ready for user review, 3) You want to show the user the complete presentation with all files, 4) The presentation creation process is finished and you want to deliver the final result. IMPORTANT: This tool is specifically for presenting completed presentations, not for intermediate steps. Include the presentation name, slide count, and all relevant file attachments. This tool provides a special UI for presentation delivery. This tool allows users to download the presentation as PDF, PPTX, or upload to Google Slides. **IMPORTANT: Whenever a user wants to download the presentation as PDF, PPTX, or upload to Google Slides, use this tool to present the presentation to the user.**",
             "parameters": {
                 "type": "object",
                 "properties": {

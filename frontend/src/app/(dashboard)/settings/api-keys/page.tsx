@@ -208,7 +208,7 @@ export default function APIKeysPage() {
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <Key className="w-6 h-6" />
-            <h1 className="text-2xl font-bold">API Keys</h1>
+            <h1 className="text-2xl font-medium">API Keys</h1>
           </div>
           <p className="text-muted-foreground">
             Manage your API keys for programmatic access to Machine
@@ -235,7 +235,7 @@ export default function APIKeysPage() {
                     Machine SDK & API
                   </h3>
                   <p className="text-sm text-blue-700 dark:text-blue-300 leading-relaxed">
-                    Our SDK and API are currently in beta. Use these API keys to integrate with our 
+                    Our SDK and API are currently in beta. Use these API keys to integrate with our
                     programmatic interface for building custom applications and automations.
                   </p>
                 </div>
@@ -495,37 +495,37 @@ export default function APIKeysPage() {
 
                   {(apiKey.status === 'revoked' ||
                     apiKey.status === 'expired') && (
-                    <div className="flex gap-2 mt-4">
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm">
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Delete
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete API Key</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to permanently delete "
-                              {apiKey.title}"? This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() =>
-                                deleteMutation.mutate(apiKey.key_id)
-                              }
-                              className="bg-destructive hover:bg-destructive/90 text-white"
-                            >
-                              Delete Key
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  )}
+                      <div className="flex gap-2 mt-4">
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete API Key</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to permanently delete "
+                                {apiKey.title}"? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() =>
+                                  deleteMutation.mutate(apiKey.key_id)
+                                }
+                                className="bg-destructive hover:bg-destructive/90 text-white"
+                              >
+                                Delete Key
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    )}
                 </CardContent>
               </Card>
             ))}

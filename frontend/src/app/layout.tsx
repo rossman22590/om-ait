@@ -1,7 +1,6 @@
 import { ThemeProvider } from '@/components/home/theme-provider';
 import { siteConfig } from '@/lib/site';
 import type { Metadata, Viewport } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
 import { Toaster } from '@/components/ui/sonner';
@@ -10,17 +9,10 @@ import { GoogleAnalytics } from '@next/third-parties/google';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import Script from 'next/script';
 import { PostHogIdentify } from '@/components/posthog-identify';
-import '@/lib/polyfills'; // Load polyfills early
+import '@/lib/polyfills';
+import { roobert } from './fonts/roobert';
+import { roobertMono } from './fonts/roobert-mono';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
 
 export const viewport: Viewport = {
   themeColor: 'black',
@@ -72,7 +64,7 @@ export const metadata: Metadata = {
     siteName: 'Machine',
     images: [
       {
-        url: '/banner.png',
+        url: new URL('/banner.png', siteConfig.url).toString(),
         width: 1200,
         height: 630,
         alt: 'Machine - Generalist AI Agent',
@@ -80,7 +72,6 @@ export const metadata: Metadata = {
       },
     ],
     locale: 'en_US',
-    type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
@@ -99,10 +90,12 @@ export const metadata: Metadata = {
     ],
   },
   icons: {
-    icon: [{ url: '/favicon.png', sizes: 'any' }],
+    icon: [
+      { url: '/favicon.png', sizes: 'any', media: '(prefers-color-scheme: light)' },
+      { url: '/favicon-light.png', sizes: 'any', media: '(prefers-color-scheme: dark)' },
+    ],
     shortcut: '/favicon.png',
   },
-  // manifest: "/manifest.json",
   alternates: {
     canonical: siteConfig.url,
   },
@@ -110,13 +103,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${roobert.variable} ${roobertMono.variable}`}>
       <head>
-        {/* Google Tag Manager */}
         <Script id="google-tag-manager" strategy="afterInteractive">
           {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
           new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -127,9 +117,7 @@ export default function RootLayout({
         <Script async src="https://cdn.tolt.io/tolt.js" data-tolt={process.env.NEXT_PUBLIC_TOLT_REFERRAL_ID}></Script>
       </head>
 
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans bg-background`}
-      >
+      <body className="antialiased font-sans bg-background">
         <noscript>
           <iframe
             src="https://www.googletagmanager.com/ns.html?id=GTM-PCHSN4M2"

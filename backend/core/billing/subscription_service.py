@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from typing import Dict, Optional, List
 from decimal import Decimal
 from datetime import datetime, timezone, timedelta
+import time
 import stripe
 from core.services.supabase import DBConnection
 from core.utils.config import config
@@ -225,7 +226,11 @@ class SubscriptionService:
             trial_status = credit_account.data[0].get('trial_status')
             current_tier = credit_account.data[0].get('tier')
         
-        idempotency_key = generate_checkout_idempotency_key(account_id, price_id, commitment_type)
+        # Always use timestamp in idempotency key to allow retries with different parameters
+        import time
+        timestamp = int(time.time() * 1000)  # Millisecond precision
+        base_key = generate_checkout_idempotency_key(account_id, price_id, commitment_type)
+        idempotency_key = f"{base_key}_{timestamp}"
         
         if trial_status == 'active' and existing_subscription_id:
             logger.info(f"[TRIAL CONVERSION] User {account_id} upgrading from trial to paid plan")
@@ -246,8 +251,8 @@ class SubscriptionService:
                 payment_method_types=['card'],
                 line_items=[{'price': price_id, 'quantity': 1}],
                 mode='subscription',
-                success_url=success_url,
-                cancel_url=cancel_url,
+                ui_mode='embedded',
+                return_url=success_url,
                 subscription_data={
                     'metadata': {
                         'account_id': account_id,
@@ -261,8 +266,18 @@ class SubscriptionService:
             )
             
             logger.info(f"[TRIAL CONVERSION] Created new checkout session for user {account_id}")
+            
+            # Generate frontend checkout wrapper URL for Apple compliance
+            frontend_url = config.FRONTEND_URL
+            client_secret = getattr(session, 'client_secret', None)
+            checkout_param = f"client_secret={client_secret}" if client_secret else f"session_id={session.id}"
+            fe_checkout_url = f"{frontend_url}/checkout?{checkout_param}"
+            
             return {
-                'checkout_url': session.url, 
+                'checkout_url': fe_checkout_url,  # Use embedded checkout URL (session.url is None for embedded mode)
+                'fe_checkout_url': fe_checkout_url,  # Kortix-branded embedded checkout
+                'session_id': session.id,
+                'client_secret': client_secret,
                 'converting_from_trial': True,
                 'message': f'Converting from trial to {tier_display_name}. Your trial will end and the new plan will begin immediately upon payment.',
                 'tier_info': {
@@ -320,8 +335,8 @@ class SubscriptionService:
                 payment_method_types=['card'],
                 line_items=[{'price': price_id, 'quantity': 1}],
                 mode='subscription',
-                success_url=success_url,
-                cancel_url=cancel_url,
+                ui_mode='embedded',
+                return_url=success_url,
                 subscription_data={
                     'metadata': {
                         'account_id': account_id,
@@ -331,7 +346,19 @@ class SubscriptionService:
                 },
                 idempotency_key=idempotency_key
             )
-            return {'checkout_url': session.url}
+            
+            # Generate frontend checkout wrapper URL for Apple compliance
+            frontend_url = config.FRONTEND_URL
+            client_secret = getattr(session, 'client_secret', None)
+            checkout_param = f"client_secret={client_secret}" if client_secret else f"session_id={session.id}"
+            fe_checkout_url = f"{frontend_url}/checkout?{checkout_param}"
+            
+            return {
+                'checkout_url': fe_checkout_url,  # Use embedded checkout URL (session.url is None for embedded mode)
+                'fe_checkout_url': fe_checkout_url,  # Kortix-branded embedded checkout
+                'session_id': session.id,
+                'client_secret': client_secret,
+            }
 
     async def create_portal_session(self, account_id: str, return_url: str) -> Dict:
         customer_id = await self.get_or_create_stripe_customer(account_id)
@@ -698,9 +725,15 @@ class SubscriptionService:
             old_subscription_id = existing_data.get('stripe_subscription_id')
             last_grant_date = existing_data.get('last_grant_date')
             existing_anchor = existing_data.get('billing_cycle_anchor')
+            current_trial_status = existing_data.get('trial_status')
 
             last_processed_invoice = existing_data.get('last_processed_invoice_id')
             last_renewal_period_start = existing_data.get('last_renewal_period_start')
+            
+            if current_trial_status == 'cancelled' and subscription.status == 'active' and not old_subscription_id:
+                logger.info(f"[SUBSCRIPTION] User {account_id} with cancelled trial is subscribing - treating as new subscription")
+                await self._grant_initial_subscription_credits(account_id, new_tier, billing_anchor, subscription, client)
+                return
             
             # Check if invoice webhook already handled this period
             if last_renewal_period_start and last_renewal_period_start == subscription.get('current_period_start'):
@@ -926,7 +959,9 @@ class SubscriptionService:
                 'tier': new_tier['name'],
                 'stripe_subscription_id': subscription['id'],
                 'billing_cycle_anchor': billing_anchor.isoformat(),
-                'next_credit_grant': next_grant_date.isoformat()
+                'next_credit_grant': next_grant_date.isoformat(),
+                'trial_status': 'none',
+                'last_grant_date': billing_anchor.isoformat()
             }).eq('account_id', account_id).execute()
             
             logger.info(f"[CREDIT GRANT] ✅ Initial grant completed for {account_id}")
@@ -953,6 +988,13 @@ class SubscriptionService:
         if credit_result.data and len(credit_result.data) > 0:
             tier_name = credit_result.data[0].get('tier', 'none')
             trial_status = credit_result.data[0].get('trial_status')
+        
+        # IMPORTANT: If trial is active but tier is 'none', use TRIAL_TIER
+        # This handles cases where trial was activated but tier wasn't set properly
+        if trial_status == 'active' and tier_name == 'none':
+            from .config import TRIAL_TIER
+            tier_name = TRIAL_TIER
+            logger.info(f"[TIER] Trial active but tier=none for {account_id}, using TRIAL_TIER: {TRIAL_TIER}")
         
         tier_obj = TIERS.get(tier_name, TIERS['none'])
         tier_info = {

@@ -2,7 +2,8 @@ from typing import Dict, List, Optional, Set
 from .ai_models import Model, ModelProvider, ModelCapability, ModelPricing, ModelConfig
 from core.utils.config import config, EnvMode
 
-FREE_MODEL_ID = "moonshotai/kimi-k2"
+# SHOULD_USE_ANTHROPIC = False
+SHOULD_USE_ANTHROPIC = config.ENV_MODE == EnvMode.LOCAL and bool(config.ANTHROPIC_API_KEY)
 
 # Set premium model ID based on environment
 if config.ENV_MODE == EnvMode.LOCAL:
@@ -19,6 +20,27 @@ class ModelRegistry:
         self._initialize_models()
     
     def _initialize_models(self):
+        self.register(Model(
+            id="anthropic/claude-haiku-4-5" if SHOULD_USE_ANTHROPIC else "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48",
+            name="Haiku 4.5",
+            provider=ModelProvider.ANTHROPIC,
+            aliases=["claude-haiku-4.5", "anthropic/claude-haiku-4.5", "Claude Haiku 4.5", "global.anthropic.claude-haiku-4-5-20251001-v1:0", "bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0", "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48"],
+            context_window=200_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.VISION,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=1.00,
+                output_cost_per_million_tokens=5.00
+            ),
+            tier_availability=["paid"],
+            priority=102,
+            recommended=True,
+            enabled=True,
+            config=ModelConfig()
+        ))
         
         self.register(Model(
             id="openrouter/anthropic/claude-sonnet-4.5",
@@ -334,6 +356,10 @@ class ModelRegistry:
             self._aliases[alias] = model.id
     
     def get(self, model_id: str) -> Optional[Model]:
+        # Handle None or empty model_id
+        if not model_id:
+            return None
+            
         if model_id in self._models:
             return self._models[model_id]
         

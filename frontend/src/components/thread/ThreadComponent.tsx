@@ -63,7 +63,6 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   const queryClient = useQueryClient();
 
   // State
-  const [newMessage, setNewMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [fileViewerOpen, setFileViewerOpen] = useState(false);
   const [fileToView, setFileToView] = useState<string | null>(null);
@@ -175,20 +174,20 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    
+
     if (urlParams.get('google_auth') === 'success') {
       // Clean up the URL parameters first
       window.history.replaceState({}, '', window.location.pathname);
-      
+
       // Check if there was an intent to upload to Google Slides
       const uploadIntent = sessionStorage.getItem('google_slides_upload_intent');
       if (uploadIntent) {
         sessionStorage.removeItem('google_slides_upload_intent');
-        
+
         try {
           const uploadData = JSON.parse(uploadIntent);
           const { presentation_path, sandbox_url } = uploadData;
-          
+
           if (presentation_path && sandbox_url) {
             // Handle upload in async function
             (async () => {
@@ -196,10 +195,10 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
                 sandbox_url,
                 presentation_path
               );
-              
+
               // Show loading toast and handle upload
               const loadingToast = toast.loading('Google authentication successful! Uploading presentation...');
-              
+
               try {
                 await uploadPromise;
                 // Success toast is now handled universally by handleGoogleSlidesUpload
@@ -233,11 +232,11 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
       // Otherwise, fall back to threadAgentId (existing behavior)
       const threadAgentId = threadAgentData?.agent?.agent_id;
       const agentIdToUse = configuredAgentId || threadAgentId;
-      
+
       console.log(`[ThreadComponent] Agent initialization - configuredAgentId: ${configuredAgentId}, threadAgentId: ${threadAgentId}, selectedAgentId: ${selectedAgentId}`);
-      
+
       initializeFromAgents(agents, agentIdToUse);
-      
+
       // If configuredAgentId is provided, force selection and override any existing selection
       if (configuredAgentId && selectedAgentId !== configuredAgentId) {
         console.log(`[ThreadComponent] Forcing selection to configured agent: ${configuredAgentId} (was: ${selectedAgentId})`);
@@ -249,11 +248,11 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   const { data: subscriptionData } = useSharedSubscription();
   const subscriptionStatus: SubscriptionStatus =
     subscriptionData?.status === 'active' ||
-    subscriptionData?.status === 'trialing'
+      subscriptionData?.status === 'trialing'
       ? 'active'
       : 'no_subscription';
 
-  const handleProjectRenamed = useCallback((newName: string) => {}, []);
+  const handleProjectRenamed = useCallback((newName: string) => { }, []);
 
   // Create restricted agent selection handler when configuredAgentId is provided
   const handleAgentSelect = useCallback((agentId: string | undefined) => {
@@ -269,7 +268,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
       // Ignore attempts to select other agents
       return;
     }
-    
+
     // Normal agent selection behavior
     setSelectedAgent(agentId);
   }, [configuredAgentId, setSelectedAgent]);
@@ -372,7 +371,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     toast.error(`Stream Error: ${errorMessage}`);
   }, []);
 
-  const handleStreamClose = useCallback(() => {}, []);
+  const handleStreamClose = useCallback(() => { }, []);
 
   const {
     status: streamHookStatus,
@@ -414,7 +413,6 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
       };
 
       setMessages((prev) => [...prev, optimisticUserMessage]);
-      setNewMessage('');
 
       // Auto-scroll to bottom when user sends a message
       setTimeout(() => {
@@ -600,11 +598,10 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
               Tool Result
             </div>
             <div
-              className={`px-2 py-0.5 rounded-full text-xs ${
-                isSuccess
-                  ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300'
-                  : 'bg-red-50 text-red-700 dark:bg-red-900 dark:text-red-300'
-              }`}
+              className={`px-2 py-0.5 rounded-full text-xs ${isSuccess
+                ? 'bg-green-50 text-green-700 dark:bg-green-900 dark:text-green-300'
+                : 'bg-red-50 text-red-700 dark:bg-red-900 dark:text-red-300'
+                }`}
             >
               {isSuccess ? 'Success' : 'Failed'}
             </div>
@@ -902,7 +899,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
           compact={true}
         >
           {/* Thread Content - Scrollable */}
-          <div 
+          <div
             ref={scrollContainerRef}
             className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col-reverse"
           >
@@ -932,8 +929,6 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
           {/* Compact Chat Input */}
           <div className="flex-shrink-0 border-t border-border/20 bg-background p-4">
             <ChatInput
-              value={newMessage}
-              onChange={setNewMessage}
               onSubmit={handleSubmitMessage}
               placeholder={`Describe what you need help with...`}
               loading={isSending}
@@ -950,6 +945,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
               enableAdvancedConfig={false}
               onFileBrowse={handleOpenFileViewer}
               sandboxId={sandboxId || undefined}
+              projectId={projectId}
               messages={messages}
               agentName={agent && agent.name}
               selectedAgentId={selectedAgentId}
@@ -965,6 +961,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
               defaultShowSnackbar="tokens"
               showScrollToBottomIndicator={showScrollToBottom}
               onScrollToBottom={scrollToBottom}
+              threadId={threadId}
             />
           </div>
         </ThreadLayout>
@@ -1054,8 +1051,8 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
               ? ''
               : 'transition-all duration-200 ease-in-out',
             leftSidebarState === 'expanded'
-              ? 'left-[72px] md:left-[256px]'
-              : 'left-[40px]',
+              ? 'left-[94px] md:left-[320px]'
+              : 'left-[94px]',
             isSidePanelOpen && !isMobile
               ? 'right-[90%] sm:right-[450px] md:right-[500px] lg:right-[550px] xl:right-[650px]'
               : 'right-0',
@@ -1064,8 +1061,6 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         >
           <div className={cn('mx-auto', isMobile ? 'w-full' : 'max-w-3xl')}>
             <ChatInput
-              value={newMessage}
-              onChange={setNewMessage}
               onSubmit={handleSubmitMessage}
               placeholder={`Describe what you need help with...`}
               loading={isSending}
@@ -1082,10 +1077,12 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
               enableAdvancedConfig={false}
               onFileBrowse={handleOpenFileViewer}
               sandboxId={sandboxId || undefined}
+              projectId={projectId}
               messages={messages}
               agentName={agent && agent.name}
               selectedAgentId={selectedAgentId}
               onAgentSelect={handleAgentSelect}
+              threadId={threadId}
               hideAgentSelection={!!configuredAgentId}
               toolCalls={toolCalls}
               toolCallIndex={currentToolIndex}

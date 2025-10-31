@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { SpotlightCard } from '@/components/ui/spotlight-card';
 import { Settings, X, Sparkles, Key, AlertTriangle, Plus, Trash2 } from 'lucide-react';
 import {
   AlertDialog,
@@ -152,7 +153,7 @@ const MCPConfigurationItem: React.FC<{
   const { data: credentialProfiles = [] } = useCredentialProfilesForMcp(qualifiedNameForLookup);
   const profileId = mcp.selectedProfileId || mcp.config?.profile_id;
   const selectedProfile = credentialProfiles.find(p => p.profile_id === profileId);
-  
+
   const hasCredentialProfile = !!profileId && !!selectedProfile;
   const hasCredentialProfiles = credentialProfiles && credentialProfiles.length > 0;
   const isCustom = mcp.customType === 'composio' || mcp.customType === 'pipedream' || mcp.isCustom;
@@ -164,119 +165,55 @@ const MCPConfigurationItem: React.FC<{
   const isAvailable = mcp.isAvailable; // Available but not yet configured
 
   return (
-    <div className="group relative bg-card border border-border rounded-xl p-4 hover:shadow-sm transition-all duration-200">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4 min-w-0 flex-1">
-          <div className="flex-shrink-0">
+    <SpotlightCard className="bg-card border border-border">
+      <div className="flex items-center justify-between p-5">
+        <div className="flex items-center gap-4 flex-1">
+          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-card border border-border/50">
             <MCPLogo mcp={mcp} />
           </div>
-          <div className="min-w-0 flex-1">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h4 className={`font-medium text-sm truncate ${isAvailable ? 'text-muted-foreground' : 'text-foreground'}`}>
-                {mcp.name}
-              </h4>
-              {isAvailable && (
-                <Badge variant="secondary" className="text-xs bg-green-50 text-green-700 border-green-200">
-                  Available
-                </Badge>
-              )}
+              <h4 className="text-sm font-medium text-foreground truncate">{mcp.name}</h4>
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              {isAvailable ? (
-                <span>Ready to connect to your agent</span>
-              ) : (
-                <>
-                  <span>
-                    {(() => {
-                      const toolCount = mcp.enabledTools?.length || 0;
-                      console.log(`[ConfiguredMcpList] ${mcp.name} enabledTools:`, {
-                        enabledTools: mcp.enabledTools,
-                        length: toolCount,
-                        mcpType: mcp.customType
-                      });
-                      return `${toolCount} tools enabled`;
-                    })()}
+              <span>{mcp.enabledTools?.length || 0} tools enabled</span>
+              {hasCredentialProfile && (
+                <div className="flex items-center gap-1">
+                  <Key className="h-3 w-3 text-green-600" />
+                  <span className="text-green-600 font-medium truncate max-w-24">
+                    {selectedProfile.profile_name}
                   </span>
-                  {hasCredentialProfile && (
-                    <div className="flex items-center gap-1">
-                      <Key className="h-3 w-3 text-green-600" />
-                      <span className="text-green-600 font-medium truncate max-w-24">
-                        {selectedProfile.profile_name}
-                      </span>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-            {mcp.enabledTools && mcp.enabledTools.length > 0 && !isAvailable && (
-              <div className="flex items-center gap-1 mt-2">
-                <Sparkles className="h-3 w-3 text-primary" />
-                <span className="text-xs text-muted-foreground">
-                  {mcp.enabledTools.length} tool{mcp.enabledTools.length !== 1 ? 's' : ''} enabled
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-        
-        <div className="flex items-center space-x-2 flex-shrink-0">
-          {isAvailable ? (
-            <Button
-              size="sm"
-              className="h-8 px-4 text-xs gap-2"
-              onClick={() => onEdit(index)}
-            >
-              <Plus className="h-3 w-3" />
-              Connect
-            </Button>
-          ) : (
-            <>
-              {isCustom && (
-                <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 hover:bg-muted"
-                    onClick={() => onEdit(index)}
-                    title="Edit configuration"
-                  >
-                    <Settings className="h-4 w-4" />
-                  </Button>
-                  {onConfigureTools && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 hover:bg-muted"
-                      onClick={() => onConfigureTools(index)}
-                      title="Configure tools"
-            type="button"
-                    >
-                      <Sparkles className="h-4 w-4" />
-                    </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => onRemove(index)}
-                    title="Remove integration"
-          type="button"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
                 </div>
               )}
-              {needsCredentials && (
-                <Badge variant="outline" className="gap-1 text-amber-600 border-amber-200 bg-amber-50">
-                  <Key className="h-3 w-3" />
-                  Needs credentials
-                </Badge>
-              )}
-            </>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 ml-4">
+          {onConfigureTools && (
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-12 w-12 bg-card border border-border hover:bg-muted"
+              onClick={() => onConfigureTools(index)}
+              title="Configure tools"
+              type="button"
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
           )}
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-12 w-12 bg-card border border-border hover:bg-muted text-muted-foreground hover:text-destructive"
+            onClick={() => onRemove(index)}
+            title="Remove integration"
+            type="button"
+          >
+            <Trash2 className="h-5 w-5" />
+          </Button>
         </div>
       </div>
-    </div>
+    </SpotlightCard>
   );
 };
 
@@ -381,7 +318,7 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
           </div>
         )}
       </div>
-      
+
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

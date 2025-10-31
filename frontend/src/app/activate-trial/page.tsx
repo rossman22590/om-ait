@@ -3,8 +3,8 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { PlanMigrationBanner } from '@/components/dashboard/plan-migration-banner';
-import { Sparkles, CreditCard, Zap, Shield, ArrowRight, CheckCircle, Loader2, Clock, XCircle, LogOut, Calendar } from 'lucide-react';
+import { Sparkles, CreditCard, Zap, Shield, ArrowRight, CheckCircle, Clock, XCircle, LogOut, Loader2 } from 'lucide-react';
+import { KortixLoader } from '@/components/ui/kortix-loader';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
@@ -31,25 +31,14 @@ export default function ActivateTrialPage() {
   useEffect(() => {
     if (!isLoadingSubscription && !isLoadingTrial && subscription && trialStatus) {
       const hasActiveTrial = trialStatus.has_trial && trialStatus.trial_status === 'active';
-      const hasActiveSubscription = subscription.tier && 
-                                   subscription.tier.name !== 'none' && 
-                                   subscription.tier.name !== 'free';
-      const hasUsedTrialWithoutSubscription = (trialStatus.trial_status === 'used' || 
-                                              trialStatus.trial_status === 'expired' || 
-                                              trialStatus.trial_status === 'cancelled') &&
-                                              !hasActiveSubscription;
-      
-      // Debug logging
-      console.log('[ActivateTrialPage] Redirect logic:', {
-        hasActiveTrial,
-        hasActiveSubscription,
-        hasUsedTrialWithoutSubscription,
-        trialStatus: trialStatus.trial_status,
-        tierName: subscription.tier?.name,
-        subscription: subscription
-      });
-      
-      // Priority: Active subscription or trial -> dashboard
+      const hasUsedTrial = trialStatus.trial_status === 'used' ||
+        trialStatus.trial_status === 'expired' ||
+        trialStatus.trial_status === 'cancelled' ||
+        trialStatus.trial_status === 'converted';
+      const hasActiveSubscription = subscription.tier &&
+        subscription.tier.name !== 'none' &&
+        subscription.tier.name !== 'free';
+
       if (hasActiveTrial || hasActiveSubscription) {
         console.log('[ActivateTrialPage] Redirecting to /dashboard - user has active subscription or trial');
         router.push('/dashboard');
@@ -69,7 +58,7 @@ export default function ActivateTrialPage() {
         success_url: `${window.location.origin}/dashboard?trial=started`,
         cancel_url: `${window.location.origin}/activate-trial`,
       });
-      
+
       if (result.checkout_url) {
         window.location.href = result.checkout_url;
       }
@@ -91,22 +80,21 @@ export default function ActivateTrialPage() {
   if (isMaintenanceLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex items-center justify-center p-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <KortixLoader size="large" />
       </div>
     );
   }
 
   if (maintenanceNotice?.enabled) {
-    return <MaintenanceAlert open={true} onOpenChange={() => {}} closeable={false} />;
+    return <MaintenanceAlert open={true} onOpenChange={() => { }} closeable={false} />;
   }
 
   const isLoading = isLoadingSubscription || isLoadingTrial;
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen w-full flex-col items-center bg-background p-4 md:p-8">
-        <PlanMigrationBanner />
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted/20">
+        <KortixLoader size="large" />
       </div>
     );
   }
@@ -132,6 +120,9 @@ export default function ActivateTrialPage() {
             <CardTitle className="text-2xl font-bold flex items-center justify-center gap-2">
               <KortixLogo/>
               <span>Welcome to Machine</span>
+            <CardTitle className="text-2xl font-medium flex items-center justify-center gap-2">
+              <KortixLogo />
+              <span>Welcome to Suna</span>
             </CardTitle>
             <CardDescription className="mt-2">
               Start your journey with a 7-day free trial
@@ -145,7 +136,7 @@ export default function ActivateTrialPage() {
               <Zap className="h-5 w-5 text-primary" />
               What's included in trial:
             </h3>
-            
+
             <div className="grid md:grid-cols-2 gap-4">
               <div className="flex items-start gap-3">
                 <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
@@ -169,7 +160,7 @@ export default function ActivateTrialPage() {
               <div className="space-y-1">
                 <p className="font-medium">No charge during trial</p>
                 <p className="text-sm text-muted-foreground">
-                  Your card will only be charged after 7 days if you don't cancel. 
+                  Your card will only be charged after 7 days if you don't cancel.
                   You can cancel anytime from your billing settings.
                 </p>
               </div>
@@ -200,7 +191,7 @@ export default function ActivateTrialPage() {
           </div>
 
           <div className="flex flex-col gap-3">
-            <Button 
+            <Button
               onClick={handleStartTrial}
               disabled={startTrialMutation.isPending}
               className="w-full"

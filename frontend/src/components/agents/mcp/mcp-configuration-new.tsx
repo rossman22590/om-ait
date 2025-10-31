@@ -325,7 +325,7 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
               </div>
             </div>
           ) : (
-            <>
+      <>
               <TabsContent value="all" className="space-y-6">
                 <ConfiguredMcpList
                   configuredMCPs={configuredMCPs}
@@ -409,16 +409,16 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
           )}
         </Tabs>
       </div>
-      
+
       <Dialog open={showRegistryDialog} onOpenChange={setShowRegistryDialog}>
         <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-hidden">
           <DialogHeader className="sr-only">
             <DialogTitle>Select Integration</DialogTitle>
           </DialogHeader>
-          <ComposioRegistry 
-            showAgentSelector={false} 
-            selectedAgentId={selectedAgentId} 
-            onAgentChange={handleAgentChange} 
+          <ComposioRegistry
+            showAgentSelector={false}
+            selectedAgentId={selectedAgentId}
+            onAgentChange={handleAgentChange}
             onToolsSelected={handleToolsSelected}
             onClose={() => {
               setShowRegistryDialog(false);

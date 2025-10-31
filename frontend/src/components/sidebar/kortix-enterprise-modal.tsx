@@ -10,6 +10,7 @@ import Image from 'next/image';
 import Cal, { getCalApi } from '@calcom/embed-react';
 import { useTheme } from 'next-themes';
 import { Check, Calendar } from 'lucide-react';
+import { KortixLogo } from './kortix-logo';
 
 interface EnterpriseModalProps {
   children: React.ReactNode;
@@ -17,7 +18,7 @@ interface EnterpriseModalProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function KortixEnterpriseModal({ 
+export function KortixEnterpriseModal({
   children,
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange
@@ -79,7 +80,7 @@ export function KortixEnterpriseModal({
                   <div className="w-2 h-2 rounded-full bg-primary"></div>
                   <span className="text-xs font-medium text-primary">Enterprise Implementation</span>
                 </div>
-                
+
                 <h2 className="text-2xl lg:text-3xl font-semibold tracking-tight mb-3 text-foreground">
                   Let's Design Your Custom AI Solution
                 </h2>

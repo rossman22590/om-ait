@@ -8,6 +8,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
+import { KortixLogo } from '@/components/sidebar/kortix-logo';
 
 export function FooterSection() {
   const tablet = useMediaQuery('(max-width: 1024px)');
@@ -27,7 +28,7 @@ export function FooterSection() {
 
   return (
     <footer id="footer" className="w-full pb-0 px-6">
-        <div className="w-full mx-auto">
+      <div className="w-full mx-auto">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between p-10">
             <div className="flex flex-col items-start justify-start gap-y-5 max-w-xs mx-0">
@@ -75,25 +76,25 @@ export function FooterSection() {
               </div> */}
             </div>
             <div className="pt-5 md:w-1/2">
-          <div className="flex flex-col items-start justify-start md:flex-row md:items-center md:justify-between gap-y-5 lg:pl-10">
-            {siteConfig.footerLinks.map((column, columnIndex) => (
-              <ul key={columnIndex} className="flex flex-col gap-y-2">
-                <li className="mb-2 text-sm font-semibold text-primary">
-                  {column.title}
-                </li>
-                {column.links.map((link) => (
-                  <li
-                    key={link.id}
-                    className="group inline-flex cursor-pointer items-center justify-start gap-1 text-[15px]/snug text-muted-foreground"
-                  >
-                    <Link href={link.url}>{link.title}</Link>
-                    <div className="flex size-4 items-center justify-center border border-border rounded translate-x-0 transform opacity-0 transition-all duration-300 ease-out group-hover:translate-x-1 group-hover:opacity-100">
-                      <ChevronRightIcon className="h-4 w-4 " />
-                    </div>
-                  </li>
+              <div className="flex flex-col items-start justify-start md:flex-row md:items-center md:justify-between gap-y-5 lg:pl-10">
+                {siteConfig.footerLinks.map((column, columnIndex) => (
+                  <ul key={columnIndex} className="flex flex-col gap-y-2">
+                    <li className="mb-2 text-sm font-semibold text-primary">
+                      {column.title}
+                    </li>
+                    {column.links.map((link) => (
+                      <li
+                        key={link.id}
+                        className="group inline-flex cursor-pointer items-center justify-start gap-1 text-[15px]/snug text-muted-foreground"
+                      >
+                        <Link href={link.url}>{link.title}</Link>
+                        <div className="flex size-4 items-center justify-center border border-border rounded translate-x-0 transform opacity-0 transition-all duration-300 ease-out group-hover:translate-x-1 group-hover:opacity-100">
+                          <ChevronRightIcon className="h-4 w-4 " />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 ))}
-              </ul>
-            ))}
               </div>
             </div>
           </div>
