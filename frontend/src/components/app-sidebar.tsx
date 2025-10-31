@@ -97,8 +97,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 {section.items.map((item) => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
-                      className={`font-semibold ${item.comingSoon ? 'opacity-70 cursor-not-allowed' : ''}`}
-                      asChild={!item.comingSoon}
+                      className={`font-semibold ${(item as any).comingSoon ? 'opacity-70 cursor-not-allowed' : ''}`}
+                      asChild={!((item as any).comingSoon)}
                       isActive={isActive(item.url)}
                     >
                       <Link href={item.url} className="flex items-center justify-between w-full">
