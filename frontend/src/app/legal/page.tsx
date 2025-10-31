@@ -1,4 +1,3 @@
-/*
 'use client';
 
 import { useState, useEffect, Suspense, useCallback } from 'react';
@@ -325,6 +324,7 @@ function LegalContent() {
                         </li>
                       <li>
                         creates Assets that condone or promote violence against
+                       
                         people based on any protected legal category.
                       </li>
                       </ul>

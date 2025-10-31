@@ -46,7 +46,8 @@ export function CreditPurchaseModal({
     onOpenChange,
     currentBalance = 0,
     canPurchase,
-    onPurchaseComplete
+    onPurchaseComplete,
+    onUpgradeClick,
 }: CreditPurchaseProps) {
     const [selectedPackage, setSelectedPackage] = useState<CreditPackage | null>(null);
     const [customAmount, setCustomAmount] = useState<string>('');
