@@ -15,7 +15,7 @@ function LegalContent() {
   // Get tab from URL or default to "imprint"
   const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<'terms' | 'privacy' | 'imprint'>(
-    tabParam === 'terms' || tabParam === 'privacy' || tabParam === 'imprint' ? tabParam : 'imprint',
+    tabParam === 'terms' || tabParam === 'privacy' || tabParam === 'imprint' ? tabParam : 'imprint'
   );
 
   // Sync active tab with URL parameter when it changes
@@ -34,6 +34,7 @@ function LegalContent() {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
+  // Main JSX return
   return (
     <main className="flex flex-col items-center justify-center min-h-screen w-full bg-background">
       <section className="w-full pb-20">
@@ -318,14 +319,10 @@ function LegalContent() {
                           generates or disseminates personally identifying or
                           identifiable information;
                         </li>
-                        <li>
-                          creates Assets that imply or promote support of a
-                          terrorist organization;
-                        </li>
-                        <li>
-                          creates Assets that condone or promote violence against
-                          people based on any protected legal category.
-                        </li>
+                      <li>
+                        creates Assets that condone or promote violence against
+                        people based on any protected legal category.
+                      </li>
                       </ul>
 
                       <p className="text-muted-foreground text-balance mb-6">

@@ -984,6 +984,7 @@ async def stream_agent_run(
             message_queue = asyncio.Queue()
 
             async def listen_messages():
+                nonlocal pubsub
                 listener = pubsub.listen()
                 task = asyncio.create_task(listener.__anext__())
 
@@ -1010,9 +1011,32 @@ async def stream_agent_run(
                             await message_queue.put({"type": "error", "data": "Listener stopped unexpectedly"})
                             return
                         except Exception as e:
-                            logger.error(f"Error in listener for {agent_run_id}: {e}")
-                            await message_queue.put({"type": "error", "data": "Listener failed"})
-                            return
+                            logger.error(f"Error in listener for {agent_run_id}: {e} — attempting reconnect")
+                            # Try to reconnect pubsub a few times before failing
+                            reconnected = False
+                            for attempt in range(3):
+                                try:
+                                    try:
+                                        await pubsub.unsubscribe()
+                                    except Exception:
+                                        pass
+                                    try:
+                                        await pubsub.close()
+                                    except Exception:
+                                        pass
+                                    pubsub = await redis.create_pubsub()
+                                    await pubsub.subscribe(response_channel, control_channel)
+                                    listener = pubsub.listen()
+                                    task = asyncio.create_task(listener.__anext__())
+                                    reconnected = True
+                                    logger.debug(f"Reconnected pubsub for {agent_run_id} (attempt {attempt+1})")
+                                    break
+                                except Exception as recon_err:
+                                    logger.warning(f"Reconnect attempt {attempt+1} failed for {agent_run_id}: {recon_err}")
+                                    await asyncio.sleep(0.5 * (attempt + 1))
+                            if not reconnected:
+                                await message_queue.put({"type": "error", "data": "Listener failed"})
+                                return
                         finally:
                             # Resubscribe to the next message if continuing
                             if not terminate_stream:

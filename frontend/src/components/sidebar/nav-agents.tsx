@@ -688,7 +688,7 @@ export function NavAgents() {
               // Show threads grouped by date
               <>
                 {Object.entries(groupedThreads).map(([dateGroup, threadsInGroup]) => (
-                  <div key={dateGroup}>
+                  <div key={`date-group-${dateGroup || 'unknown'}`}>
                     <DateGroupHeader dateGroup={dateGroup} count={threadsInGroup.length} />
                     {threadsInGroup.map((thread) => {
                       const isActive = pathname?.includes(thread.threadId) || false;

@@ -167,6 +167,12 @@ export const groupThreadsByDate = (
     // Get start of thread date (midnight)
     const startOfThreadDate = new Date(threadDate);
     startOfThreadDate.setHours(0, 0, 0, 0);
+    // Date-only value for comparisons (midnight of the thread date)
+    const threadDateOnly = new Date(
+      threadDate.getFullYear(),
+      threadDate.getMonth(),
+      threadDate.getDate()
+    );
     
     // Calculate difference in calendar days, not 24-hour periods
     const diffInDays = Math.floor((startOfToday.getTime() - startOfThreadDate.getTime()) / (1000 * 60 * 60 * 24));

@@ -342,8 +342,9 @@ class Configuration:
     STRIPE_TIER_6_42_YEARLY_COMMITMENT_ID_STAGING: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'  # Update with actual commitment price ID
     STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID_STAGING: str = 'price_1RLwBgG23sSyONuFCzzo83e6'  # Update with actual commitment price ID
     
-    # Frontend URL configuration
-    FRONTEND_URL: str = "http://localhost:3000"  # Default for local development
+    # Note: FRONTEND_URL is exposed as a computed @property below, do not declare
+    # an annotated class attribute for it to avoid get_type_hints attempting to set
+    # a non-settable property during _load_from_env.
     
     # Sandbox configuration
     SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3.24"
@@ -466,7 +467,7 @@ class Configuration:
         Returns:
         - Production: 'https://kortix.com' (or FRONTEND_URL_ENV if set)
         - Staging: 'https://staging.kortix.com' (or FRONTEND_URL_ENV if set)
-        - Local: FRONTEND_URL_ENV or 'http://localhost:3000'
+        - Local: FRONTEND_URL_ENV or 'http://localhost:3001'
         """
         # Check for environment variable override first
         if self.FRONTEND_URL_ENV:
@@ -479,7 +480,7 @@ class Configuration:
             return 'https://staging.kortix.com'
         else:
             # Local mode
-            return 'http://localhost:3000'
+            return 'http://localhost:3001'
     
     def _generate_admin_api_key(self) -> str:
         """Generate a secure admin API key for Kortix administrative functions."""

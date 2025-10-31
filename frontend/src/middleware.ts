@@ -88,9 +88,10 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // Skip billing checks in local mode
+    // Skip billing checks in local mode or when explicitly disabled
     const isLocalMode = process.env.NEXT_PUBLIC_ENV_MODE?.toLowerCase() === 'local'
-    if (isLocalMode) {
+    const skipBilling = process.env.NEXT_PUBLIC_SKIP_BILLING?.toLowerCase() === 'true'
+    if (isLocalMode || skipBilling) {
       return supabaseResponse;
     }
 
@@ -109,13 +110,24 @@ export async function middleware(request: NextRequest) {
         .eq('primary_owner_user_id', user.id)
         .single();
 
-      if (!accounts) {
-        const url = request.nextUrl.clone();
-        url.pathname = '/activate-trial';
-        return NextResponse.redirect(url);
-      }
+      let accountId = accounts?.id as string | undefined;
 
-      const accountId = accounts.id;
+      // Fallback: allow environments without basejump by using credit_accounts keyed by user.id
+      if (!accountId) {
+        const { data: creditAccountByUser } = await supabase
+          .from('credit_accounts')
+          .select('account_id')
+          .eq('account_id', user.id)
+          .single();
+
+        if (creditAccountByUser) {
+          accountId = creditAccountByUser.account_id;
+        } else {
+          const url = request.nextUrl.clone();
+          url.pathname = '/activate-trial';
+          return NextResponse.redirect(url);
+        }
+      }
       const { data: creditAccount } = await supabase
         .from('credit_accounts')
         .select('tier, trial_status, trial_ends_at')

@@ -240,7 +240,7 @@ export function NavUserWithTeams({
                     Workspaces
                   </DropdownMenuLabel>
                   <DropdownMenuItem
-                    key={personalAccount.account_id}
+                    key={personalAccount.account_id || 'personal-account'}
                     onClick={() =>
                       handleTeamSelect({
                         name: personalAccount.name,
@@ -270,7 +270,7 @@ export function NavUserWithTeams({
                 <>
                   {teamAccounts.map((team, index) => (
                     <DropdownMenuItem
-                      key={team.account_id}
+                      key={team.account_id || `team-${index}`}
                       onClick={() =>
                         handleTeamSelect({
                           name: team.name,

@@ -106,12 +106,12 @@ export default function AgentConfigPage() {
 
         {/* Menu items - desktop */}
         <div className="space-y-1 hidden md:block">
-          {menuItems.map((item) => {
+          {menuItems.map((item, idx) => {
             const Icon = item.icon;
             const isActive = activeView === item.id;
             return (
               <SpotlightCard
-                key={item.id}
+                key={item.id || idx}
                 className={cn(
                   "transition-colors cursor-pointer",
                   isActive ? "bg-muted" : "bg-transparent"
@@ -136,12 +136,12 @@ export default function AgentConfigPage() {
 
         {/* Menu items - mobile (icon only) */}
         <div className="flex gap-2 md:hidden md:space-y-2">
-          {menuItems.map((item) => {
+          {menuItems.map((item, idx) => {
             const Icon = item.icon;
             const isActive = activeView === item.id;
             return (
               <Button
-                key={item.id}
+                key={item.id || idx}
                 variant="ghost"
                 size="icon"
                 className={cn(

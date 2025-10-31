@@ -133,28 +133,28 @@ async def log_requests_middleware(request: Request, call_next):
         raise
 
 # Define allowed origins based on environment
-allowed_origins = ["https://www.kortix.com", "https://kortix.com", "https://www.suna.so", "https://suna.so"]
+allowed_origins = ["http://localhost:3001", "https://kortix.com", "https://www.suna.so", "https://suna.so"]
 allow_origin_regex = None
 
 if config.ENV_MODE == EnvMode.LOCAL:
-    allowed_origins = []
+    allowed_origins = ["http://localhost:3001"]
 elif config.ENV_MODE == EnvMode.STAGING:
     allowed_origins = ["https://beta.machine.myapps.ai", "https://beta-machinev5.vercel.app", "https://machinev9.ngrok.io", "https://v10-alpha-machine.vercel.app", "https://machine.myapps.ai"]
 else:
     allowed_origins = ["https://beta.machine.myapps.ai", "https://machine.myapps.ai", "https://v10-alpha-machine.vercel.app"]
-    allowed_origins.append("http://localhost:3000")
-    allowed_origins.append("http://127.0.0.1:3000")
+    allowed_origins.append("http://localhost:3001")
+    allowed_origins.append("http://127.0.0.1:3001")
 
 # Add staging-specific origins
 if config.ENV_MODE == EnvMode.STAGING:
     allowed_origins.append("https://staging.suna.so")
-    allowed_origins.append("http://localhost:3000")
+    allowed_origins.append("http://localhost:3001")
     # Allow Vercel preview deployments for both legacy and new project names
     allow_origin_regex = r"https://(suna|kortixcom)-.*-prjcts\.vercel\.app"
 
 # Add localhost for production mode local testing (for master password login)
 if config.ENV_MODE == EnvMode.PRODUCTION:
-    allowed_origins.append("http://localhost:3000")
+    allowed_origins.append("http://localhost:3001")
     allowed_origins.append("http://127.0.0.1:3000")
 
 app.add_middleware(

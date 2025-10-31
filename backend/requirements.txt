@@ -71,3 +71,4 @@ svglib>=1.5.1
 reportlab>=4.0.0
 chunkr-ai>=0.3.7
 freestyle>=0.0.1
+anthropic

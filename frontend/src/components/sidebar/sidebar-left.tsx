@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Bot, Plug,Menu, Plus, Zap, ChevronRight, BookOpen, Puzzle, CodeSquare, StopCircle, Loader2, HelpCircle, User, Users, Code, Star, Package, Sparkle, Sparkles, X, MessageCircle, PanelLeftOpen, Settings, LogOut, User, CreditCard, Key, Plug, Shield, DollarSign, KeyRound, Sun, Moon, Book, Database, PanelLeftClose } from 'lucide-react';
+import { Bot, Plug, Menu, Plus, Zap, ChevronRight, BookOpen, Puzzle, CodeSquare, StopCircle, Loader2, HelpCircle, User, Users, Code, Star, Package, Sparkle, Sparkles, X, MessageCircle, PanelLeftOpen, Settings, LogOut, CreditCard, Key, Shield, DollarSign, KeyRound, Sun, Moon, Book, Database, PanelLeftClose } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { NavAgents } from '@/components/sidebar/nav-agents';

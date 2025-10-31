@@ -141,7 +141,8 @@ async def initialize():
     if not instance_id:
         instance_id = str(uuid.uuid4())[:8]
     
-    logger.info(f"Initializing worker with Redis at {redis_host}:{redis_port}")
+    # Log using configured broker URL (avoid undefined vars)
+    logger.info(f"Initializing worker with Redis broker {redis_url}")
     await retry(lambda: redis.initialize_async())
     await db.initialize()
 

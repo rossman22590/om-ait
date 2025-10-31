@@ -14,7 +14,7 @@ export async function POST(
       }
     });
     
-    const backendUrl = process.env.BACKEND_URL || 'https://machinev9api.ngrok.io';
+    const backendUrl = process.env.BACKEND_URL || 'http://localhost:8000';
     const targetUrl = `${backendUrl}/triggers/${triggerId}/webhook`;
     const response = await fetch(targetUrl, {
       method: 'POST',

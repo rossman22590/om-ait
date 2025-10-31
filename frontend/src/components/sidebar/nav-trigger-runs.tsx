@@ -171,7 +171,7 @@ export function NavTriggerRuns() {
                             // Show trigger runs grouped by date
                             <>
                                 {Object.entries(groupedTriggerThreads).map(([dateGroup, threadsInGroup]) => (
-                                    <div key={dateGroup}>
+                                    <div key={`date-group-${dateGroup || 'unknown'}`}>
                                         <DateGroupHeader dateGroup={dateGroup} count={threadsInGroup.length} />
                                         {threadsInGroup.map((thread) => {
                                             const isActive = pathname?.includes(thread.threadId) || false;

@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, CreditCard, Zap, Shield, ArrowRight, CheckCircle, Clock, XCircle, LogOut, Loader2 } from 'lucide-react';
+import { Sparkles, CreditCard, Zap, Shield, ArrowRight, CheckCircle, Clock, XCircle, LogOut, Loader2, Calendar } from 'lucide-react';
 import { KortixLoader } from '@/components/ui/kortix-loader';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
@@ -19,6 +19,7 @@ import { clearUserLocalStorage } from '@/lib/utils/clear-local-storage';
 import { useMaintenanceNoticeQuery } from '@/hooks/react-query/edge-flags';
 import { MaintenanceAlert } from '@/components/maintenance-alert';
 import { useAuth } from '@/components/AuthProvider';
+import { PlanMigrationBanner } from '@/components/dashboard/plan-migration-banner';
 
 export default function ActivateTrialPage() {
   const router = useRouter();
@@ -44,7 +45,7 @@ export default function ActivateTrialPage() {
         router.push('/dashboard');
       } 
       // Only redirect to subscription if trial was used AND no active subscription
-      else if (hasUsedTrialWithoutSubscription) {
+      else if (hasUsedTrial && !hasActiveSubscription) {
         console.log('[ActivateTrialPage] Redirecting to /subscription - trial used without active subscription');
         router.push('/subscription');
       }
@@ -120,9 +121,6 @@ export default function ActivateTrialPage() {
             <CardTitle className="text-2xl font-bold flex items-center justify-center gap-2">
               <KortixLogo/>
               <span>Welcome to Machine</span>
-            <CardTitle className="text-2xl font-medium flex items-center justify-center gap-2">
-              <KortixLogo />
-              <span>Welcome to Suna</span>
             </CardTitle>
             <CardDescription className="mt-2">
               Start your journey with a 7-day free trial
@@ -225,4 +223,4 @@ export default function ActivateTrialPage() {
       </div>
     </div>
   );
-} 
+}

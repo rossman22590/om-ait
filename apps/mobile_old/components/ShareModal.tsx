@@ -234,7 +234,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
     const generateShareLink = () => {
         // In production, this would be your actual domain
-        const baseUrl = __DEV__ ? 'http://localhost:3000' : 'https://yourdomain.com';
+        const baseUrl = __DEV__ ? 'http://localhost:3001' : 'https://yourdomain.com';
         return `${baseUrl}/share/${projectId}`;
     };
 

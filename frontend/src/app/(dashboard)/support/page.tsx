@@ -226,8 +226,8 @@ export default function SupportPage() {
       <div className="mb-12">
         <h2 className="text-3xl font-bold mb-8 text-center">Common Issues & Solutions</h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {commonIssues.map((issue) => (
-            <Card key={issue.id} className="hover:shadow-lg transition-shadow">
+          {commonIssues.map((issue, idx) => (
+            <Card key={issue.id || idx} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
