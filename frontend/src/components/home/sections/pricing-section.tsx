@@ -384,6 +384,8 @@ function PricingTier({
 
       // Since we only support monthly subscriptions, simplify the logic
       const currentIsMonthly = currentTier && currentSubscription?.price_id === currentTier.stripePriceId;
+      const currentIsYearly = currentTier && currentSubscription?.price_id === (currentTier as any).yearlyStripePriceId;
+      const currentIsYearlyCommitment = currentTier && currentSubscription?.price_id === (currentTier as any).monthlyCommitmentStripePriceId;
       const targetIsMonthly = priceId === tier.stripePriceId;
       const targetIsYearly = priceId === tier.yearlyStripePriceId;
       const targetIsYearlyCommitment = priceId === tier.monthlyCommitmentStripePriceId;
@@ -642,8 +644,8 @@ export function PricingSection({
 
     const currentTier = siteConfig.cloudPricingItems.find(
       (p) => p.stripePriceId === currentSubscription.price_id ||
-        p.yearlyStripePriceId === currentSubscription.price_id ||
-        p.monthlyCommitmentStripePriceId === currentSubscription.price_id,
+        (p as any).yearlyStripePriceId === currentSubscription.price_id ||
+        (p as any).monthlyCommitmentStripePriceId === currentSubscription.price_id,
     );
 
     if (currentTier) {

@@ -60,6 +60,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from '@/components/ui/input';
 import { ThreadWithProject, GroupedThreads } from '@/hooks/react-query/sidebar/use-sidebar';
 import { processThreadsWithProjects, useDeleteMultipleThreads, useDeleteThread, useProjects, useThreads, groupThreadsByDate } from '@/hooks/react-query/sidebar/use-sidebar';
+import { useUpdateProject } from '@/hooks/react-query';
 import { projectKeys, threadKeys } from '@/hooks/react-query/sidebar/keys';
 import { useThreadAgentStatuses } from '@/hooks/use-thread-agent-status';
 import { formatDateForList } from '@/lib/utils/date-formatting';
@@ -246,12 +247,15 @@ export function NavAgents() {
   const { performDelete } = useDeleteOperation();
   const isPerformingActionRef = useRef(false);
   const queryClient = useQueryClient();
+  const updateProjectMutation = useUpdateProject();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedThreads, setSelectedThreads] = useState<Set<string>>(new Set());
   const [deleteProgress, setDeleteProgress] = useState(0);
   const [totalToDelete, setTotalToDelete] = useState(0);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
+  const [newThreadName, setNewThreadName] = useState<string>('');
 
   const {
     data: projects = [],
@@ -451,7 +455,7 @@ export function NavAgents() {
       return;
     }
 
-    updateProjectMutation(
+    updateProjectMutation.mutate(
       {
         projectId: threadToRename.projectId,
         data: { name: newThreadName.trim() },

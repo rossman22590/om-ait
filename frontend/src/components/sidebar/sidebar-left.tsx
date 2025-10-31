@@ -105,8 +105,8 @@ function getPlanName(subscriptionData: any, isLocal: boolean = false): string {
   // Match price_id to cloudPricingItems to get the frontend tier name
   const currentTier = siteConfig.cloudPricingItems.find(
     (p) => p.stripePriceId === subscriptionData?.price_id ||
-      p.yearlyStripePriceId === subscriptionData?.price_id ||
-      p.monthlyCommitmentStripePriceId === subscriptionData?.price_id
+      (p as any).yearlyStripePriceId === subscriptionData?.price_id ||
+      (p as any).monthlyCommitmentStripePriceId === subscriptionData?.price_id
   );
 
   // Return the frontend tier name (Plus, Pro, Ultra, etc.) or fallback to backend display name
