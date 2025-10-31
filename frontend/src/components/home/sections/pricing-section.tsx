@@ -143,8 +143,8 @@ function BillingPeriodToggle({
   billingPeriod,
   setBillingPeriod
 }: {
-  billingPeriod: 'monthly';
-  setBillingPeriod: (period: 'monthly') => void;
+  billingPeriod: 'monthly' | 'yearly_commitment';
+  setBillingPeriod: (period: 'monthly' | 'yearly_commitment') => void;
 }) {
   return (
     <div className="flex items-center justify-center gap-3 w-full">
@@ -735,7 +735,7 @@ export function PricingSection({
                 isAuthenticated={isAuthenticated}
                 returnUrl={returnUrl}
                 insideDialog={insideDialog}
-                billingPeriod={billingPeriod}
+                billingPeriod={billingPeriod as 'monthly' | 'yearly_commitment'}
               />
             ))}
         </div>
