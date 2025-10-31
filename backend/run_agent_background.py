@@ -23,107 +23,24 @@ from core.utils.retry import retry
 import sentry_sdk
 from typing import Dict, Any
 
-def _detect_upstash() -> bool:
-    """Detect if we're using Upstash Redis based on environment variables."""
-    redis_url = os.getenv('REDIS_URL', '')
-    redis_host = os.getenv('REDIS_HOST', '')
-    upstash_url = os.getenv('UPSTASH_REDIS_REST_URL', '')
-    upstash_token = os.getenv('UPSTASH_REDIS_REST_TOKEN', '')
-    
-    # Check for DigitalOcean Valkey first
-    if 'db.ondigitalocean.com' in redis_url or 'db.ondigitalocean.com' in redis_host:
-        return False
-        
-    # Check for Upstash indicators
-    is_upstash = (
-        'upstash.io' in redis_url or 
-        'upstash.io' in redis_host or
-        (upstash_url and upstash_token)
-    )
-    
-    return is_upstash
+redis_url = os.getenv('REDIS_URL')
+redis_host = os.getenv('REDIS_HOST', 'redis')
+redis_port = int(os.getenv('REDIS_PORT', 6379))
 
-def _redis_broker_url() -> str:
-    """Build a Redis URL for Dramatiq RedisBroker."""
-    # First try to get the full URL
-    url = os.getenv('REDIS_URL')
-    if url:
-        # For DigitalOcean, ensure we use rediss://
-        if 'db.ondigitalocean.com' in url or 'db.ondigitalocean.com' in os.getenv('REDIS_HOST', ''):
-            if url.startswith('redis://'):
-                url = url.replace('redis://', 'rediss://', 1)
-            # Ensure proper auth format for DigitalOcean (keep default:username)
-            if '@' not in url and 'default:' not in url:
-                # If URL doesn't have auth, add it from environment variables
-                password = os.getenv('REDIS_PASSWORD')
-                if password:
-                    host_part = url.split('://')[-1]
-                    url = f'rediss://default:{password}@{host_part}'
-        # For Upstash, ensure we use rediss:// and proper auth format
-        elif 'upstash.io' in url:
-            if url.startswith('redis://'):
-                url = url.replace('redis://', 'rediss://', 1)
-            # Ensure proper auth format for Upstash (no username)
-            if 'default:' in url:
-                url = url.replace('default:', '', 1)
-        return url
-
-    # Fallback to environment variables
-    host = os.getenv('REDIS_HOST', 'redis')
-    port = os.getenv('REDIS_PORT', '6379')
-    password = os.getenv('REDIS_PASSWORD', '')
-    use_ssl = os.getenv('REDIS_SSL', 'false').lower() == 'true'
-    
-    # For DigitalOcean or SSL, use rediss:// with default username
-    if 'db.ondigitalocean.com' in host or use_ssl:
-        auth = f"default:{password}@" if password else ''
-        return f"rediss://{auth}{host}:{port}"
-    # For Upstash, use rediss:// and no username
-    elif 'upstash.io' in host:
-        auth = f":{password}@" if password else ''
-        return f"rediss://{auth}{host}:{port}"
-    else:
-        # For Railway/other Redis, use default username if needed
-        auth = f"default:{password}@" if password else ''
-        return f"redis://{auth}{host}:{port}"
-
-# Configure Dramatiq Redis broker using URL (supports TLS via rediss://)
-redis_url = _redis_broker_url()
-is_upstash = _detect_upstash()
-
-logger.info(f"[WORKER] Connecting to Redis broker at: {redis_url.split('@')[-1] if '@' in redis_url else redis_url} (Upstash: {is_upstash})")
-
-# Configure broker settings based on provider
-if is_upstash:
-    # Upstash-optimized settings
-    redis_broker = RedisBroker(
-        url=redis_url,
-        middleware=[
-            dramatiq.middleware.AsyncIO(),
-            dramatiq.middleware.Retries(max_retries=3, min_backoff=1000, max_backoff=30000),
-        ],
-        # Upstash needs longer timeouts and more connections
-        socket_connect_timeout=10,
-        socket_timeout=30,
-        socket_keepalive=True,
-        health_check_interval=30,
-        # Upstash can handle more connections
-        max_connections=512,
-    )
+if redis_url:
+    safe_url = redis_url
+    try:
+        if "@" in redis_url and ":" in redis_url.split("@", 1)[0]:
+            userinfo, rest = redis_url.split("@", 1)
+            user = userinfo.split(":", 1)[0].split("//", 1)[-1]
+            safe_url = f"{redis_url.split('://',1)[0]}://{user}:***@{rest}"
+    except Exception:
+        safe_url = "rediss://***:***@***"
+    logger.info(f"🔧 Configuring Dramatiq broker with Redis URL {safe_url}")
+    redis_broker = RedisBroker(url=redis_url, middleware=[dramatiq.middleware.AsyncIO()])
 else:
-    # Standard Redis settings
-    redis_broker = RedisBroker(
-        url=redis_url,
-        middleware=[
-            dramatiq.middleware.AsyncIO(),
-            dramatiq.middleware.Retries(max_retries=3, min_backoff=1000, max_backoff=30000),
-        ],
-        socket_connect_timeout=5,
-        socket_timeout=15,
-        socket_keepalive=True,
-        health_check_interval=30,
-        max_connections=128,
-    )
+    logger.info(f"🔧 Configuring Dramatiq broker with Redis at {redis_host}:{redis_port}")
+    redis_broker = RedisBroker(host=redis_host, port=redis_port, middleware=[dramatiq.middleware.AsyncIO()])
 
 dramatiq.set_broker(redis_broker)
 
@@ -141,8 +58,7 @@ async def initialize():
     if not instance_id:
         instance_id = str(uuid.uuid4())[:8]
     
-    # Log using configured broker URL (avoid undefined vars)
-    logger.info(f"Initializing worker with Redis broker {redis_url}")
+    logger.info(f"Initializing worker with Redis at {redis_host}:{redis_port}")
     await retry(lambda: redis.initialize_async())
     await db.initialize()
 
@@ -381,21 +297,10 @@ async def run_agent_background(
         await _cleanup_redis_run_lock(agent_run_id)
 
         # Wait for all pending redis operations to complete, with timeout
-        if pending_redis_operations:
-            try:
-                # Use return_exceptions=True to prevent one failure from stopping others
-                results = await asyncio.wait_for(
-                    asyncio.gather(*pending_redis_operations, return_exceptions=True), 
-                    timeout=10.0  # Reduced timeout for cleanup
-                )
-                # Log any failures
-                for i, result in enumerate(results):
-                    if isinstance(result, Exception):
-                        logger.warning(f"Redis operation {i} failed during cleanup: {str(result)}")
-            except asyncio.TimeoutError:
-                logger.warning(f"Timeout waiting for pending Redis operations for {agent_run_id}")
-            except Exception as e:
-                logger.warning(f"Error during Redis cleanup operations: {str(e)}")
+        try:
+            await asyncio.wait_for(asyncio.gather(*pending_redis_operations), timeout=30.0)
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout waiting for pending Redis operations for {agent_run_id}")
 
         logger.debug(f"Agent run background task fully completed for: {agent_run_id} (Instance: {instance_id}) with final status: {final_status}")
 

@@ -3,11 +3,8 @@ import os
 from dotenv import load_dotenv
 import asyncio
 from core.utils.logger import logger
-from typing import List, Any, Optional
+from typing import List, Any
 from core.utils.retry import retry
-
-# Using redis-py only for Upstash compatibility
-UPSTASH_AVAILABLE = False
 
 # Redis client and connection pool
 client: redis.Redis | None = None
@@ -19,67 +16,6 @@ _init_lock = asyncio.Lock()
 REDIS_KEY_TTL = 3600 * 24  # 24 hour TTL as safety mechanism
 
 
-def _detect_upstash() -> bool:
-    """Detect if we're using Upstash Redis based on environment variables."""
-    redis_url = os.getenv('REDIS_URL', '')
-    redis_host = os.getenv('REDIS_HOST', '')
-    
-    # Check for DigitalOcean Valkey first
-    if 'db.ondigitalocean.com' in redis_url or 'db.ondigitalocean.com' in redis_host:
-        return False
-        
-    # Check for Upstash indicators
-    is_upstash = (
-        'upstash.io' in redis_url or 
-        'upstash.io' in redis_host
-    )
-    
-    return is_upstash
-
-def _build_redis_url() -> str:
-    """Build Redis URL for redis-py client."""
-    # First try to get the full URL
-    url = os.getenv('REDIS_URL')
-    if url:
-        # For DigitalOcean, ensure we use rediss://
-        if 'db.ondigitalocean.com' in url:
-            if url.startswith('redis://'):
-                url = url.replace('redis://', 'rediss://', 1)
-            # Ensure proper auth format for DigitalOcean (keep default:username)
-            if '@' not in url and 'default:' not in url:
-                # If URL doesn't have auth, add it from environment variables
-                password = os.getenv('REDIS_PASSWORD')
-                if password:
-                    host_part = url.split('://')[-1]
-                    url = f'rediss://default:{password}@{host_part}'
-        # For Upstash, ensure we use rediss:// and proper auth format
-        elif 'upstash.io' in url:
-            if url.startswith('redis://'):
-                url = url.replace('redis://', 'rediss://', 1)
-            # Ensure proper auth format for Upstash (no username)
-            if 'default:' in url:
-                url = url.replace('default:', '', 1)
-        return url
-
-    # Fallback to environment variables
-    host = os.getenv('REDIS_HOST', 'redis')
-    port = os.getenv('REDIS_PORT', '6379')
-    password = os.getenv('REDIS_PASSWORD', '')
-    use_ssl = os.getenv('REDIS_SSL', 'false').lower() == 'true'
-    
-    # For DigitalOcean or SSL, use rediss:// with default username
-    if 'db.ondigitalocean.com' in host or use_ssl:
-        auth = f"default:{password}@" if password else ''
-        return f"rediss://{auth}{host}:{port}"
-    # For Upstash, use rediss:// and no username
-    elif 'upstash.io' in host:
-        auth = f":{password}@" if password else ''
-        return f"rediss://{auth}{host}:{port}"
-    else:
-        # For local/Railway Redis, use default username if needed
-        auth = f"default:{password}@" if password else ''
-        return f"redis://{auth}{host}:{port}"
-
 def initialize():
     """Initialize Redis connection pool and client using environment variables."""
     global client, pool
@@ -87,31 +23,25 @@ def initialize():
     # Load environment variables if not already loaded
     load_dotenv()
 
-    # Detect if we're using Upstash
-    is_upstash = _detect_upstash()
-    
-    # Use redis-py client (works great with Upstash)
-    _initialize_redis_py_client(is_upstash)
-
-    return client
-
-def _initialize_redis_py_client(is_upstash: bool = False):
-    """Initialize the standard redis-py client."""
-    global client, pool
-    
-    redis_url = _build_redis_url()
-    
     # Connection pool configuration - optimized for production
-    max_connections = 512 if is_upstash else 128  # Higher for Upstash
-    socket_timeout = 30.0 if is_upstash else 15.0  # Longer for Upstash
-    connect_timeout = 10.0
-    retry_on_timeout = not (os.getenv("REDIS_RETRY_ON_TIMEOUT", "True").lower() != "true")
+    max_connections = int(os.getenv("REDIS_MAX_CONNECTIONS", 128))  # Reasonable limit for production
+    socket_timeout = float(os.getenv("REDIS_SOCKET_TIMEOUT", 15.0))  # seconds
+    connect_timeout = float(os.getenv("REDIS_CONNECT_TIMEOUT", 10.0))  # seconds
+    retry_on_timeout = os.getenv("REDIS_RETRY_ON_TIMEOUT", "true").lower() == "true"
 
-    logger.info(f"Initializing redis-py client to {redis_url.split('@')[-1] if '@' in redis_url else redis_url} with max {max_connections} connections")
-
-    try:
-        # Create Redis client from URL (handles SSL automatically)
-        client = redis.from_url(
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        # Mask sensitive parts for logging
+        safe_url = redis_url
+        try:
+            if "@" in redis_url and ":" in redis_url.split("@", 1)[0]:
+                userinfo, rest = redis_url.split("@", 1)
+                user = userinfo.split(":", 1)[0].split("//", 1)[-1]
+                safe_url = f"{redis_url.split('://',1)[0]}://{user}:***@{rest}"
+        except Exception:
+            safe_url = "rediss://***:***@***"
+        logger.info(f"Initializing Redis connection pool from URL {safe_url} with max {max_connections} connections")
+        pool = redis.ConnectionPool.from_url(
             redis_url,
             decode_responses=True,
             socket_timeout=socket_timeout,
@@ -121,13 +51,34 @@ def _initialize_redis_py_client(is_upstash: bool = False):
             health_check_interval=30,
             max_connections=max_connections,
         )
-        
-        # Store the connection pool reference
-        pool = client.connection_pool
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize Redis client: {e}")
-        raise
+    else:
+        # Get Redis configuration from individual params
+        redis_host = os.getenv("REDIS_HOST", "redis")
+        redis_port = int(os.getenv("REDIS_PORT", 6379))
+        redis_password = os.getenv("REDIS_PASSWORD", "")
+        redis_ssl = os.getenv("REDIS_SSL", "false").lower() == "true"
+
+        logger.info(f"Initializing Redis connection pool to {redis_host}:{redis_port} (ssl={redis_ssl}) with max {max_connections} connections")
+
+        # Create connection pool with production-optimized settings
+        pool = redis.ConnectionPool(
+            host=redis_host,
+            port=redis_port,
+            password=redis_password,
+            ssl=redis_ssl,
+            decode_responses=True,
+            socket_timeout=socket_timeout,
+            socket_connect_timeout=connect_timeout,
+            socket_keepalive=True,
+            retry_on_timeout=retry_on_timeout,
+            health_check_interval=30,
+            max_connections=max_connections,
+        )
+
+    # Create Redis client from connection pool
+    client = redis.Redis(connection_pool=pool)
+
+    return client
 
 
 async def initialize_async():
@@ -141,10 +92,8 @@ async def initialize_async():
 
         try:
             # Test connection with timeout
-            if client:
-                await asyncio.wait_for(client.ping(), timeout=10.0)
-                logger.info("Successfully connected to Redis via redis-py")
-            
+            await asyncio.wait_for(client.ping(), timeout=5.0)
+            logger.info("Successfully connected to Redis")
             _initialized = True
         except asyncio.TimeoutError:
             logger.error("Redis connection timeout during initialization")
@@ -163,7 +112,6 @@ async def initialize_async():
 async def close():
     """Close Redis connection and connection pool."""
     global client, pool, _initialized
-    
     if client:
         # logger.debug("Closing Redis connection")
         try:
@@ -198,7 +146,6 @@ async def get_client():
     return client
 
 
-
 # Basic Redis operations
 async def set(key: str, value: str, ex: int = None, nx: bool = False):
     """Set a Redis key."""
@@ -219,20 +166,10 @@ async def delete(key: str):
     return await redis_client.delete(key)
 
 
-async def publish(channel: str, message: str, max_retries: int = 2):
-    """Publish a message to a Redis channel with retry logic."""
-    for attempt in range(max_retries + 1):
-        try:
-            redis_client = await get_client()
-            return await redis_client.publish(channel, str(message))
-        except (ConnectionError, TimeoutError, redis.ConnectionError) as e:
-            if attempt == max_retries:
-                logger.warning(f"Failed to publish to Redis after {max_retries} attempts: {e}")
-                raise
-            await asyncio.sleep(0.5 * (attempt + 1))  # Exponential backoff
-        except Exception as e:
-            logger.error(f"Unexpected error publishing to Redis: {e}")
-            raise
+async def publish(channel: str, message: str):
+    """Publish a message to a Redis channel."""
+    redis_client = await get_client()
+    return await redis_client.publish(channel, message)
 
 
 async def create_pubsub():
@@ -255,12 +192,13 @@ async def lrange(key: str, start: int, end: int) -> List[str]:
 
 
 # Key management
+
+
 async def keys(pattern: str) -> List[str]:
-    """Get keys matching a pattern."""
     redis_client = await get_client()
     return await redis_client.keys(pattern)
 
+
 async def expire(key: str, seconds: int):
-    """Set expiration time for a key."""
     redis_client = await get_client()
     return await redis_client.expire(key, seconds)
