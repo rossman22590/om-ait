@@ -89,7 +89,7 @@ export function AdminUserDetailsDialog({
     page: activityPage,
     page_size: 10,
   });
-  const adjustCreditsMutation = useAdjustCredits();
+  const adminAdjustCreditsMutation = useAdminAdjustCredits();
   const processRefundMutation = useProcessRefund();
 
   const formatDate = (dateString: string) => {

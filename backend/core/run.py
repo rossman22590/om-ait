@@ -295,10 +295,10 @@ class ToolManager:
             # If avatar tool is enabled in any way, force all methods
             # None = not in config (default enabled), True = explicit, dict with enabled=True
             if avatar_config is None or avatar_config is True or (isinstance(avatar_config, dict) and avatar_config.get('enabled', True)):
-                from core.utils.tool_groups import get_tool_group
+                from core.utils.tool_discovery import get_tool_group
                 tool_group = get_tool_group('sb_avatar_tool')
                 if tool_group:
-                    all_methods = [method.name for method in tool_group.methods if method.enabled]
+                    all_methods = [method['name'] for method in tool_group.get('methods', []) if method.get('enabled', True)]
                     logger.info(f"🎬 SAFEGUARD: Forcing ALL avatar tool methods: {all_methods}")
                     return all_methods
                 else:
@@ -313,10 +313,10 @@ class ToolManager:
             
             # If vapi tool is enabled in any way, force all methods
             if vapi_config is None or vapi_config is True or (isinstance(vapi_config, dict) and vapi_config.get('enabled', True)):
-                from core.utils.tool_groups import get_tool_group
+                from core.utils.tool_discovery import get_tool_group
                 tool_group = get_tool_group('vapi_voice_tool')
                 if tool_group:
-                    all_methods = [method.name for method in tool_group.methods if method.enabled]
+                    all_methods = [method['name'] for method in tool_group.get('methods', []) if method.get('enabled', True)]
                     logger.info(f"📞 SAFEGUARD: Forcing ALL vapi tool methods: {all_methods}")
                     return all_methods
                 else:
@@ -333,10 +333,10 @@ class ToolManager:
             
             # If paper search tool is enabled in any way, force all methods
             if paper_config is None or paper_config is True or (isinstance(paper_config, dict) and paper_config.get('enabled', True)):
-                from core.utils.tool_groups import get_tool_group
+                from core.utils.tool_discovery import get_tool_group
                 tool_group = get_tool_group('paper_search_tool')
                 if tool_group:
-                    all_methods = [method.name for method in tool_group.methods if method.enabled]
+                    all_methods = [method['name'] for method in tool_group.get('methods', []) if method.get('enabled', True)]
                     logger.info(f"📚 SAFEGUARD: Forcing ALL paper search tool methods: {all_methods}")
                     return all_methods
                 else:
@@ -658,10 +658,10 @@ class AgentRunner:
             # If avatar tool is enabled in any way, force all methods
             # None = not in config (default enabled), True = explicit, dict with enabled=True
             if avatar_config is None or avatar_config is True or (isinstance(avatar_config, dict) and avatar_config.get('enabled', True)):
-                from core.utils.tool_groups import get_tool_group
+                from core.utils.tool_discovery import get_tool_group
                 tool_group = get_tool_group('sb_avatar_tool')
                 if tool_group:
-                    all_methods = [method.name for method in tool_group.methods if method.enabled]
+                    all_methods = [method['name'] for method in tool_group.get('methods', []) if method.get('enabled', True)]
                     logger.info(f"🎬 SAFEGUARD (AgentRunner): Forcing ALL avatar methods: {all_methods}")
                     return all_methods
                 else:

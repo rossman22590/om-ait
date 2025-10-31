@@ -789,6 +789,69 @@ async def get_usage_history(
         raise HTTPException(status_code=500, detail=str(e)) 
 
 
+@router.get("/usage-logs")
+async def get_usage_logs(
+    page: int = Query(0, ge=0, description="Page number (0-indexed)"),
+    items_per_page: int = Query(1000, ge=1, le=1000, description="Items per page"),
+    thread_id: Optional[str] = Query(None, description="Filter by thread ID"),
+    account_id: str = Depends(verify_and_get_user_id_from_jwt)
+) -> Dict:
+    """
+    Get paginated usage logs for the current user.
+    Returns detailed transaction logs with balance tracking.
+    """
+    try:
+        db = DBConnection()
+        client = await db.client
+        
+        # Calculate offset for pagination
+        offset = page * items_per_page
+        
+        # Build query
+        query = client.from_('credit_ledger')\
+            .select('id, created_at, amount, type, description, balance_after, metadata', count='exact')\
+            .eq('account_id', account_id)
+        
+        # Filter by thread_id if provided
+        if thread_id:
+            # Thread ID might be in metadata or description
+            query = query.or_(f'metadata->>thread_id.eq.{thread_id},description.ilike.%{thread_id}%')
+        
+        # Order by created_at descending and apply pagination
+        query = query.order('created_at', desc=True)\
+            .range(offset, offset + items_per_page - 1)
+        
+        result = await query.execute()
+        
+        # Transform data to match frontend interface
+        usage_logs = []
+        for entry in result.data:
+            usage_logs.append({
+                'timestamp': entry['created_at'],
+                'amount': float(entry['amount']),
+                'balance_after': float(entry.get('balance_after', 0)),
+                'description': entry.get('description', ''),
+                'reference_type': entry.get('type', 'debit')
+            })
+        
+        # Get total count
+        total_count = result.count if hasattr(result, 'count') and result.count is not None else len(result.data)
+        
+        return {
+            'usage_logs': usage_logs,
+            'pagination': {
+                'page': page,
+                'items_per_page': items_per_page,
+                'total_count': total_count,
+                'has_more': (offset + items_per_page) < total_count
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting usage logs: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/available-models")
 async def get_available_models(
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
@@ -1114,4 +1177,4 @@ async def get_circuit_breaker_status(
         }
     except Exception as e:
         logger.error(f"Error getting circuit breaker status: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))

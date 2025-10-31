@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { PricingSection } from '@/components/home/sections/pricing-section';
+import { CreditPurchaseModal } from '@/components/billing/credit-purchase';
 
 import { isLocalMode } from '@/lib/config';
 import {
@@ -204,9 +205,8 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                         returnUrl={returnUrl} 
                         showTitleAndTabs={false}
                         onSubscriptionUpdate={() => {
-                            setTimeout(() => {
-                                fetchSubscriptionData();
-                            }, 500);
+                            // Invalidate subscription query to refetch data
+                            queryClient.invalidateQueries({ queryKey: subscriptionKeys.all });
                         }}
                     />
                 </>
@@ -217,7 +217,8 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                 currentBalance={subscriptionData?.credit_balance || 0}
                 canPurchase={subscriptionData?.can_purchase_credits || false}
                 onPurchaseComplete={() => {
-                    getSubscription().then(setSubscriptionData);
+                    // Invalidate subscription query to refetch data
+                    queryClient.invalidateQueries({ queryKey: subscriptionKeys.all });
                     setShowCreditPurchaseModal(false);
                 }}
             />
