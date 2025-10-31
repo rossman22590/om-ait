@@ -29,6 +29,7 @@ litellm.drop_params = True
 # Constants
 MAX_RETRIES = 3
 provider_router = None
+ENABLE_BEDROCK = os.getenv("ENABLE_BEDROCK", "false").lower() == "true"
 
 
 class LLMError(Exception):
@@ -102,34 +103,33 @@ def setup_provider_router(openai_compatible_api_key: str = None, openai_compatib
         },
     ]
     
-    # Configure fallbacks: MAP-tagged Bedrock app inference profiles (global routing, 14B tokens/day)
-    fallbacks = [
-        # MAP-tagged Haiku 4.5 (default) -> Sonnet 4 -> Sonnet 4.5 -> Anthropic fallbacks
-        {
-            "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48": [
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf",
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/few7z4l830xh",
-                "anthropic/claude-haiku-4-5-20251001",
-                "anthropic/claude-sonnet-4-20250514"
-            ]
-        },
-        # MAP-tagged Sonnet 4.5 -> Sonnet 4 -> Haiku 4.5 -> Anthropic fallbacks
-        {
-            "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/few7z4l830xh": [
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf",
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48",
-                "anthropic/claude-sonnet-4-5-20250929",
-                "anthropic/claude-sonnet-4-20250514"
-            ]
-        },
-        # MAP-tagged Sonnet 4 -> Haiku 4.5 -> Anthropic fallbacks
-        {
-            "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf": [
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48",
-                "anthropic/claude-sonnet-4-20250514"
-            ]
-        }
-    ]
+    # Configure fallbacks: disable Bedrock unless explicitly enabled
+    fallbacks: List[Dict[str, List[str]]] = []
+    if ENABLE_BEDROCK:
+        fallbacks = [
+            {
+                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48": [
+                    "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf",
+                    "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/few7z4l830xh",
+                    "anthropic/claude-haiku-4-5-20251001",
+                    "anthropic/claude-sonnet-4-20250514"
+                ]
+            },
+            {
+                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/few7z4l830xh": [
+                    "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf",
+                    "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48",
+                    "anthropic/claude-sonnet-4-5-20250929",
+                    "anthropic/claude-sonnet-4-20250514"
+                ]
+            },
+            {
+                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf": [
+                    "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48",
+                    "anthropic/claude-sonnet-4-20250514"
+                ]
+            }
+        ]
     
     provider_router = Router(
         model_list=model_list,
@@ -137,7 +137,10 @@ def setup_provider_router(openai_compatible_api_key: str = None, openai_compatib
         fallbacks=fallbacks,
     )
     
-    logger.info(f"Configured LiteLLM Router with {len(fallbacks)} Bedrock-only fallback rules")
+    if ENABLE_BEDROCK:
+        logger.info(f"Configured LiteLLM Router with {len(fallbacks)} Bedrock-only fallback rules")
+    else:
+        logger.info("Configured LiteLLM Router with Bedrock fallbacks disabled")
 
 def _configure_openai_compatible(params: Dict[str, Any], model_name: str, api_key: Optional[str], api_base: Optional[str]) -> None:
     """Configure OpenAI-compatible provider setup."""
