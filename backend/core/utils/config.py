@@ -475,7 +475,7 @@ class Configuration:
         
         # Environment-based defaults
         if self.ENV_MODE == EnvMode.PRODUCTION:
-            return 'https://kortix.com'
+            return 'https://machine-alpha-app.up.railway.app'
         elif self.ENV_MODE == EnvMode.STAGING:
             return 'https://staging.kortix.com'
         else:

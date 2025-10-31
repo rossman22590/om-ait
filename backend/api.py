@@ -139,7 +139,7 @@ allow_origin_regex = None
 if config.ENV_MODE == EnvMode.LOCAL:
     allowed_origins = ["http://localhost:3001"]
 elif config.ENV_MODE == EnvMode.STAGING:
-    allowed_origins = ["https://beta.machine.myapps.ai", "https://beta-machinev5.vercel.app", "https://machinev9.ngrok.io", "https://v10-alpha-machine.vercel.app", "https://machine.myapps.ai"]
+    allowed_origins = ["https://beta.machine.myapps.ai", "https://beta-machinev5.vercel.app", "https://machine-alpha-app.up.railway.app", "https://v10-alpha-machine.vercel.app", "https://machine.myapps.ai"]
 else:
     allowed_origins = ["https://beta.machine.myapps.ai", "https://machine.myapps.ai", "https://v10-alpha-machine.vercel.app"]
     allowed_origins.append("http://localhost:3001")
