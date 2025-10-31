@@ -191,6 +191,8 @@ async def run_agent_background(
         error_message = None
 
         pending_redis_operations = []
+        # Limit concurrent Redis ops to avoid connection pool exhaustion
+        MAX_PENDING_REDIS_OPS = 50
 
         async for response in agent_gen:
             if stop_signal_received:
@@ -204,6 +206,15 @@ async def run_agent_background(
             pending_redis_operations.append(asyncio.create_task(redis.rpush(response_list_key, response_json)))
             pending_redis_operations.append(asyncio.create_task(redis.publish(response_channel, "new")))
             total_responses += 1
+
+            # Flush pending Redis ops periodically to release connections
+            if len(pending_redis_operations) >= MAX_PENDING_REDIS_OPS:
+                try:
+                    await asyncio.wait_for(asyncio.gather(*pending_redis_operations), timeout=10.0)
+                except Exception as flush_err:
+                    logger.warning(f"Error flushing pending Redis ops: {flush_err}")
+                finally:
+                    pending_redis_operations.clear()
 
             # Check for agent-signaled completion or error
             if response.get('type') == 'status':
@@ -225,8 +236,15 @@ async def run_agent_background(
              logger.info(f"Agent run {agent_run_id} completed normally (duration: {duration:.2f}s, responses: {total_responses})")
              completion_message = {"type": "status", "status": "completed", "message": "Agent run completed successfully"}
              trace.span(name="agent_run_completed").end(status_message="agent_run_completed")
-             await redis.rpush(response_list_key, json.dumps(completion_message))
-             await redis.publish(response_channel, "new") # Notify about the completion message
+             # Push completion message and flush immediately
+             pending_redis_operations.append(asyncio.create_task(redis.rpush(response_list_key, json.dumps(completion_message))))
+             pending_redis_operations.append(asyncio.create_task(redis.publish(response_channel, "new")))
+             try:
+                 await asyncio.wait_for(asyncio.gather(*pending_redis_operations), timeout=10.0)
+             except Exception as flush_err:
+                 logger.warning(f"Error flushing completion Redis ops: {flush_err}")
+             finally:
+                 pending_redis_operations.clear()
 
         # Fetch final responses from Redis for DB update
         all_responses_json = await redis.lrange(response_list_key, 0, -1)
@@ -301,6 +319,8 @@ async def run_agent_background(
             await asyncio.wait_for(asyncio.gather(*pending_redis_operations), timeout=30.0)
         except asyncio.TimeoutError:
             logger.warning(f"Timeout waiting for pending Redis operations for {agent_run_id}")
+        except Exception as e:
+            logger.warning(f"Error waiting for pending Redis operations for {agent_run_id}: {e}")
 
         logger.debug(f"Agent run background task fully completed for: {agent_run_id} (Instance: {instance_id}) with final status: {final_status}")
 

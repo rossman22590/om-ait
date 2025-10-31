@@ -608,9 +608,17 @@ class AgentRunner:
         
         self.client = await self.thread_manager.db.client
         
-        response = await self.client.table('threads').select('account_id').eq('thread_id', self.config.thread_id).execute()
+        # Robust fetch with small retry to avoid transient visibility/race issues
+        response = None
+        for attempt in range(5):
+            response = await self.client.table('threads').select('account_id').eq('thread_id', self.config.thread_id).execute()
+            if response.data:
+                break
+            # Backoff a bit before retrying
+            await asyncio.sleep(0.2 * (attempt + 1))
         
-        if not response.data or len(response.data) == 0:
+        if not response or not response.data:
+            logger.error(f"Thread lookup failed in worker after retries: {self.config.thread_id}")
             raise ValueError(f"Thread {self.config.thread_id} not found")
         
         self.account_id = response.data[0].get('account_id')
@@ -618,8 +626,15 @@ class AgentRunner:
         if not self.account_id:
             raise ValueError(f"Thread {self.config.thread_id} has no associated account")
 
-        project = await self.client.table('projects').select('*').eq('project_id', self.config.project_id).execute()
-        if not project.data or len(project.data) == 0:
+        # Also ensure project exists with the same retry pattern
+        project = None
+        for attempt in range(5):
+            project = await self.client.table('projects').select('*').eq('project_id', self.config.project_id).execute()
+            if project.data:
+                break
+            await asyncio.sleep(0.2 * (attempt + 1))
+        if not project or not project.data:
+            logger.error(f"Project lookup failed in worker after retries: {self.config.project_id}")
             raise ValueError(f"Project {self.config.project_id} not found")
 
         project_data = project.data[0]

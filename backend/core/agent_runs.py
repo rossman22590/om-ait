@@ -252,6 +252,31 @@ async def _trigger_agent_background(agent_run_id: str, thread_id: str, project_i
     """
     request_id = structlog.contextvars.get_contextvars().get('request_id')
 
+    # Ensure DB visibility for newly created records before enqueue (avoids race conditions)
+    try:
+        from core.services.supabase import DBConnection
+        db_conn = DBConnection()
+        db_client = await db_conn.client
+
+        async def ensure_exists(table: str, col: str, val: str):
+            for attempt in range(5):
+                try:
+                    res = await db_client.table(table).select(col).eq(col, val).limit(1).execute()
+                    if res.data:
+                        return True
+                except Exception:
+                    pass
+                await asyncio.sleep(0.2 * (attempt + 1))
+            return False
+
+        ok_thread = await ensure_exists('threads', 'thread_id', thread_id)
+        ok_project = await ensure_exists('projects', 'project_id', project_id)
+        ok_run = await ensure_exists('agent_runs', 'id', agent_run_id)
+        if not (ok_thread and ok_project and ok_run):
+            logger.warning(f"Visibility check before enqueue failed (thread={ok_thread}, project={ok_project}, run={ok_run}) for run {agent_run_id}")
+    except Exception as vis_err:
+        logger.debug(f"Pre-enqueue visibility check skipped due to error: {vis_err}")
+
     run_agent_background.send(
         agent_run_id=agent_run_id,
         thread_id=thread_id,
