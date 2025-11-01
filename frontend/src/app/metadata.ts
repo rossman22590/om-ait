@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     siteName: siteConfig.name,
     images: [
       {
-        url: '/banner.png',
+        url: '/og-fallback.png',
         width: 1200,
         height: 630,
         alt: siteConfig.name,
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     title: siteConfig.name,
     description: siteConfig.description,
     creator: '@the_machine_ai',
-    images: ['/banner.png'],
+    images: ['/og-fallback.png'],
   },
   robots: {
     index: true,

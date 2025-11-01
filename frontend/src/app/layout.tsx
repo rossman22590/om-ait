@@ -64,7 +64,7 @@ export const metadata: Metadata = {
     siteName: 'Machine',
     images: [
       {
-        url: new URL('/banner.png', siteConfig.url).toString(),
+        url: new URL('/og-fallback.png', siteConfig.url).toString(),
         width: 1200,
         height: 630,
         alt: 'Machine - Generalist AI Agent',
@@ -82,7 +82,7 @@ export const metadata: Metadata = {
     site: '@the_machine_ai',
     images: [
       {
-        url: '/banner.png',
+        url: '/og-fallback.png',
         width: 1200,
         height: 630,
         alt: 'Machine - Generalist AI Agent',
