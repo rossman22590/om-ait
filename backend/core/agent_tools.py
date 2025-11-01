@@ -366,3 +366,125 @@ async def get_agent_tools(
             mcp_tools.append({"name": tool_name, "server": server, "enabled": True})
     return {"agentpress_tools": agentpress_tools, "mcp_tools": mcp_tools}
 
+
+@router.put("/agents/{agent_id}/pipedream-tools/{profile_id}", summary="Update Pipedream tools for agent", operation_id="update_pipedream_tools_for_agent")
+async def update_pipedream_tools_for_agent(
+    agent_id: str,
+    profile_id: str,
+    request: dict = Body(...),
+    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+):
+    """Attach/update a Pipedream MCP entry on the agent with the selected tools.
+
+    Persists a custom_mcp config that connects to Pipedream's remote MCP server via SSE and
+    stores the enabledTools list so runtime can register these tools.
+    """
+    try:
+        enabled_tools = request.get('enabled_tools', [])
+        if not isinstance(enabled_tools, list):
+            raise HTTPException(status_code=400, detail="enabled_tools must be an array")
+
+        client = await utils.db.client
+
+        # Verify agent ownership
+        agent_result = await client.table('agents').select('*').eq('agent_id', agent_id).execute()
+        if not agent_result.data:
+            raise HTTPException(status_code=404, detail="Agent not found")
+        agent = agent_result.data[0]
+        if agent.get('account_id') != user_id and not agent.get('is_public', False):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Load pipedream profile (owned by current user)
+        from core.pipedream.profile_service import get_profile_service
+        profile_service = get_profile_service()
+        profile = await profile_service.get_profile(user_id, profile_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="Pipedream profile not found")
+
+        # Build or update custom_mcp entry for this Pipedream profile/app
+        # Use SSE remote endpoint; no auth headers required, external_user_id in URL
+        remote_url = f"https://remote.mcp.pipedream.net/?app={profile.app_slug}&externalUserId={profile.external_user_id}"
+
+        # Fetch current version/config
+        version_data = None
+        if agent.get('current_version_id'):
+            try:
+                version_service = await _get_version_service()
+                version_obj = await version_service.get_version(
+                    agent_id=agent_id,
+                    version_id=agent['current_version_id'],
+                    user_id=user_id,
+                )
+                version_data = version_obj.to_dict()
+            except Exception as e:
+                logger.warning(f"Failed to fetch version for pipedream-tools update: {e}")
+
+        from .config_helper import extract_agent_config
+        agent_config = extract_agent_config(agent, version_data)
+
+        tools_cfg = agent_config.get('tools', {}) or {}
+        custom_mcps = tools_cfg.get('custom_mcp', []) or []
+
+        # Try to find existing entry by URL or by name/slug
+        updated = False
+        for i, mcp in enumerate(custom_mcps):
+            cfg = mcp.get('config', {})
+            if (mcp.get('customType') in ['sse', 'http'] and cfg.get('url') == remote_url) or \
+               (mcp.get('name') and profile.app_name and mcp.get('name') in [profile.app_name, f"Pipedream {profile.app_name}"]):
+                custom_mcps[i]['enabledTools'] = enabled_tools
+                # normalize
+                custom_mcps[i]['customType'] = 'sse'
+                custom_mcps[i]['type'] = 'sse'
+                custom_mcps[i]['name'] = f"Pipedream {profile.app_name}"
+                custom_mcps[i]['config'] = { 'url': remote_url }
+                updated = True
+                break
+
+        if not updated:
+            custom_mcps.append({
+                'name': f"Pipedream {profile.app_name}",
+                'customType': 'sse',
+                'type': 'sse',
+                'config': { 'url': remote_url },
+                'enabledTools': enabled_tools,
+            })
+
+        tools_cfg['custom_mcp'] = custom_mcps
+        agent_config['tools'] = tools_cfg
+
+        # Create a new version with updated custom_mcp tools
+        from .versioning.version_service import get_version_service
+        version_service = await get_version_service()
+        new_version = await version_service.create_version(
+            agent_id=agent_id,
+            user_id=user_id,
+            system_prompt=agent_config.get('system_prompt', ''),
+            configured_mcps=agent_config.get('tools', {}).get('mcp', []),
+            custom_mcps=custom_mcps,
+            agentpress_tools=agent_config.get('tools', {}).get('agentpress', {}),
+            change_description=f"Linked Pipedream {profile.app_name} with {len(enabled_tools)} tool(s)"
+        )
+
+        # Also persist enabled_tools into the profile itself for consistency
+        try:
+            await profile_service.update_profile(
+                user_id,
+                profile_id,
+                enabled_tools=enabled_tools
+            )
+        except Exception as e:
+            logger.warning(f"Failed to update Pipedream profile enabled_tools (non-fatal): {e}")
+
+        return {
+            'success': True,
+            'enabled_tools': enabled_tools,
+            'total_tools': len(enabled_tools),
+            'profile_id': profile_id,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating Pipedream tools for agent {agent_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+

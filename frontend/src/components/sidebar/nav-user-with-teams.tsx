@@ -28,6 +28,9 @@ import {
   BarChart3,
   FileText,
   BookOpen,
+  Puzzle,
+  CodeSquare,
+  HelpCircle,
 } from 'lucide-react';
 import { useAccounts } from '@/hooks/use-accounts';
 import NewTeamForm from '@/components/basejump/new-team-form';
@@ -67,6 +70,7 @@ import { isLocalMode } from '@/lib/config';
 import { clearUserLocalStorage } from '@/lib/utils/clear-local-storage';
 import { BillingModal } from '@/components/billing/billing-modal';
 import { UserSettingsModal } from '@/components/settings/user-settings-modal';
+import { NewAgentDialog } from '@/components/agents/new-agent-dialog';
 
 export function NavUserWithTeams({
   user,
@@ -88,6 +92,7 @@ export function NavUserWithTeams({
   const [showSettingsModal, setShowSettingsModal] = React.useState(false);
   const [settingsTab, setSettingsTab] = React.useState<'general' | 'plan' | 'billing' | 'env-manager'>('general');
   const { theme, setTheme } = useTheme();
+  const [showNewAgentDialog, setShowNewAgentDialog] = React.useState(false);
 
   // Prepare personal account and team accounts
   const personalAccount = React.useMemo(
@@ -392,6 +397,55 @@ export function NavUserWithTeams({
                 </DropdownMenuItem>
               </DropdownMenuGroup>
 
+              <DropdownMenuSeparator className="my-1" />
+              <DropdownMenuLabel className="text-muted-foreground text-xs px-2 py-1.5">
+                Workspace
+              </DropdownMenuLabel>
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  onClick={() => setShowNewAgentDialog(true)}
+                  className="gap-2 p-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Add Workers</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a
+                    href="https://machine-fragments.up.railway.app/"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="gap-2 p-2"
+                  >
+                    <Puzzle className="h-4 w-4" />
+                    Fragments
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/machine-code" className="gap-2 p-2">
+                    <CodeSquare className="h-4 w-4" />
+                    <span>Machine Code</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/my-avatars" className="gap-2 p-2">
+                    <User className="h-4 w-4" />
+                    <span>My Avatars</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/all-avatars" className="gap-2 p-2">
+                    <Users className="h-4 w-4" />
+                    <span>All Avatars</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/support" className="gap-2 p-2">
+                    <HelpCircle className="h-4 w-4" />
+                    <span>Support</span>
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+
               {(user.isAdmin || isLocalMode()) && (
                 <>
                   <DropdownMenuSeparator className="my-1" />
@@ -466,6 +520,15 @@ export function NavUserWithTeams({
         onOpenChange={setShowSettingsModal}
         defaultTab={settingsTab}
         returnUrl={typeof window !== 'undefined' ? window?.location?.href || '/' : '/'}
+      />
+
+      <NewAgentDialog
+        open={showNewAgentDialog}
+        onOpenChange={setShowNewAgentDialog}
+        onSuccess={(agentId) => {
+          setShowNewAgentDialog(false)
+          router.push(`/agents/config/${agentId}`)
+        }}
       />
     </Dialog>
   );
