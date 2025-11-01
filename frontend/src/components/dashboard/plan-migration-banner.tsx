@@ -7,6 +7,9 @@ import { Button } from '@/components/ui/button';
 const BANNER_STORAGE_KEY = 'plan-migration-banner-dismissed';
 
 export function PlanMigrationBanner() {
+  // Banner temporarily hidden
+  return null;
+
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
