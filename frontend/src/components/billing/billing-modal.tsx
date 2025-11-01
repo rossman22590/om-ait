@@ -14,8 +14,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PricingSection } from '@/components/home/sections/pricing-section';
 import { CreditPurchaseModal } from '@/components/billing/credit-purchase';
+import CreditTransactions from '@/components/billing/credit-transactions';
 
 import { isLocalMode } from '@/lib/config';
 import {
@@ -36,7 +38,8 @@ import {
     Shield, 
     CheckCircle, 
     RotateCcw, 
-    Clock 
+    Clock,
+    Receipt
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -50,6 +53,7 @@ interface BillingModalProps {
 export function BillingModal({ open, onOpenChange, returnUrl = typeof window !== 'undefined' ? window?.location?.href || '/' : '/', showUsageLimitAlert = false }: BillingModalProps) {
     const { session, isLoading: authLoading } = useAuth();
     const queryClient = useQueryClient();
+    const [activeTab, setActiveTab] = useState<string>('pricing');
     
     // Use the same hook as the dashboard for consistent data
     const { 
@@ -197,19 +201,36 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-5xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>Upgrade Your Plan</DialogTitle>
+                    <DialogTitle>Billing & Transactions</DialogTitle>
                 </DialogHeader>
 
-                <>
-                    <PricingSection 
-                        returnUrl={returnUrl} 
-                        showTitleAndTabs={false}
-                        onSubscriptionUpdate={() => {
-                            // Invalidate subscription query to refetch data
-                            queryClient.invalidateQueries({ queryKey: subscriptionKeys.all });
-                        }}
-                    />
-                </>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="pricing" className="flex items-center gap-2">
+                            <Zap className="h-4 w-4" />
+                            Upgrade Plan
+                        </TabsTrigger>
+                        <TabsTrigger value="transactions" className="flex items-center gap-2">
+                            <Receipt className="h-4 w-4" />
+                            Transaction History
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="pricing" className="mt-6">
+                        <PricingSection 
+                            returnUrl={returnUrl} 
+                            showTitleAndTabs={false}
+                            onSubscriptionUpdate={() => {
+                                // Invalidate subscription query to refetch data
+                                queryClient.invalidateQueries({ queryKey: subscriptionKeys.all });
+                            }}
+                        />
+                    </TabsContent>
+
+                    <TabsContent value="transactions" className="mt-6">
+                        <CreditTransactions />
+                    </TabsContent>
+                </Tabs>
             </DialogContent>
             <CreditPurchaseModal
                 open={showCreditPurchaseModal}

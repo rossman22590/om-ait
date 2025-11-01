@@ -44,6 +44,7 @@ import {
 import { useAuth } from '@/components/AuthProvider';
 import { PricingSection } from '@/components/home/sections/pricing-section';
 import { CreditBalanceDisplay, CreditPurchaseModal } from '@/components/billing/credit-purchase';
+import CreditTransactions from '@/components/billing/credit-transactions';
 import { useSubscriptionCommitment } from '@/hooks/react-query/subscriptions/use-subscriptions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -779,6 +780,11 @@ function BillingTab({ returnUrl }: { returnUrl: string }) {
                     canPurchase={subscriptionData?.can_purchase_credits || false}
                     onPurchaseClick={() => setShowCreditPurchaseModal(true)}
                 />
+            </div>
+
+            {/* Transaction History */}
+            <div>
+                <CreditTransactions />
             </div>            {/* Cancel Dialog */}
             <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
                 <DialogContent>

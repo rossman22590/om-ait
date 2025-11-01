@@ -90,7 +90,7 @@ export function AdminUserDetailsDialog({
     page_size: 10,
   });
   const adminAdjustCreditsMutation = useAdminAdjustCredits();
-  const processRefundMutation = useProcessRefund();
+  // Removed processRefundMutation since we're using adminAdjustCreditsMutation for both add and remove
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -142,16 +142,17 @@ export function AdminUserDetailsDialog({
     }
 
     try {
-      const result = await processRefundMutation.mutateAsync({
+      // Use negative amount to remove credits
+      const result = await adminAdjustCreditsMutation.mutateAsync({
         account_id: user.id,
-        amount: parseFloat(refundAmount),
+        amount: -Math.abs(parseFloat(refundAmount)), // Ensure negative
         reason: refundReason,
-        stripe_refund: false,
-        is_expiring: refundIsExpiring,
+        notify_user: true,
+        is_expiring: false, // When removing, it doesn't matter
       });
 
       toast.success(
-        `Refund processed. New balance: ${formatCurrency(result.new_balance)}`
+        `Credits removed successfully. New balance: ${formatCurrency(result.new_balance)}`
       );
 
       refetchBilling();
@@ -159,9 +160,8 @@ export function AdminUserDetailsDialog({
 
       setRefundAmount('');
       setRefundReason('');
-      setRefundIsExpiring(false);
     } catch (error: any) {
-      toast.error(error.message || 'Failed to process refund');
+      toast.error(error.message || 'Failed to remove credits');
     }
   };
 
@@ -549,24 +549,107 @@ export function AdminUserDetailsDialog({
               </TabsContent>
               <TabsContent value="actions" className="space-y-4">
                 <div className="grid grid-cols-1 gap-4">
+                  {/* Add Credits Card */}
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                        <CreditCard className="h-4 w-4" />
-                        Process Refund
+                        <DollarSign className="h-4 w-4 text-green-600" />
+                        Add Credits
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="p-3 border border-green-200 dark:border-green-950 bg-green-50 dark:bg-green-950/20 rounded-lg">
+                        <div className="flex items-start gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                          <p className="text-sm text-green-700 dark:text-green-400">
+                            Add credits to the user's account for promotional purposes or compensation.
+                          </p>
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="adjust-amount">Credit Amount (USD)</Label>
+                        <Input
+                          id="adjust-amount"
+                          type="number"
+                          step="0.01"
+                          placeholder="50.00"
+                          value={adjustAmount}
+                          onChange={(e) => setAdjustAmount(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="adjust-reason">Reason</Label>
+                        <Textarea
+                          id="adjust-reason"
+                          placeholder="Promotional credit / Compensation for issue"
+                          value={adjustReason}
+                          onChange={(e) => setAdjustReason(e.target.value)}
+                          rows={3}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="adjust-expiring" className="cursor-pointer flex items-center gap-2">
+                            {adjustIsExpiring ? (
+                              <Clock className="h-4 w-4 text-orange-500" />
+                            ) : (
+                              <Infinity className="h-4 w-4 text-blue-500" />
+                            )}
+                            <span className="font-medium">
+                              {adjustIsExpiring ? 'Expiring Credits' : 'Non-Expiring Credits'}
+                            </span>
+                          </Label>
+                        </div>
+                        <Switch
+                          id="adjust-expiring"
+                          checked={!adjustIsExpiring}
+                          onCheckedChange={(checked) => setAdjustIsExpiring(!checked)}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground -mt-2">
+                        {adjustIsExpiring
+                          ? 'Credits will expire at the end of the billing cycle'
+                          : 'Non-expiring credits remain until used'}
+                      </p>
+                      <Button
+                        onClick={handleAdjustCredits}
+                        disabled={adminAdjustCreditsMutation.isPending}
+                        className="w-full bg-green-600 hover:bg-green-700"
+                      >
+                        {adminAdjustCreditsMutation.isPending ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <DollarSign className="w-4 h-4 mr-2" />
+                            Add Credits
+                          </>
+                        )}
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  {/* Remove Credits Card */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        Remove Credits
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="p-3 border border-red-200 dark:border-red-950 bg-red-50 dark:bg-red-950/20 rounded-lg">
                         <div className="flex items-start gap-2">
                           <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
-                          <p className="text-sm text-red-700">
-                            Refunds assigns credits back to the user's account.
+                          <p className="text-sm text-red-700 dark:text-red-400">
+                            Remove credits from the user's account. This action cannot be undone.
                           </p>
                         </div>
                       </div>
                       <div>
-                        <Label htmlFor="refund-amount">Refund Amount (USD)</Label>
+                        <Label htmlFor="refund-amount">Amount to Remove (USD)</Label>
                         <Input
                           id="refund-amount"
                           type="number"
@@ -577,52 +660,31 @@ export function AdminUserDetailsDialog({
                         />
                       </div>
                       <div>
-                        <Label htmlFor="refund-reason mb-2">Refund Reason</Label>
+                        <Label htmlFor="refund-reason">Reason for Removal</Label>
                         <Textarea
                           id="refund-reason"
-                          placeholder="Service outage compensation"
+                          placeholder="Admin correction / Account abuse"
                           value={refundReason}
                           onChange={(e) => setRefundReason(e.target.value)}
                           rows={3}
                         />
                       </div>
-                      <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/50">
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor="refund-expiring" className="cursor-pointer flex items-center gap-2">
-                            {refundIsExpiring ? (
-                              <Clock className="h-4 w-4 text-orange-500" />
-                            ) : (
-                              <Infinity className="h-4 w-4 text-blue-500" />
-                            )}
-                            <span className="font-medium">
-                              {refundIsExpiring ? 'Expiring Credits' : 'Non-Expiring Credits'}
-                            </span>
-                          </Label>
-                        </div>
-                        <Switch
-                          id="refund-expiring"
-                          checked={!refundIsExpiring}
-                          onCheckedChange={(checked) => setRefundIsExpiring(!checked)}
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground -mt-2">
-                        {refundIsExpiring
-                          ? 'Credits will expire at the end of the billing cycle'
-                          : 'Refunds typically use non-expiring credits (recommended)'}
-                      </p>
                       <Button
                         onClick={handleProcessRefund}
-                        disabled={processRefundMutation.isPending}
+                        disabled={adminAdjustCreditsMutation.isPending}
                         variant="destructive"
                         className="w-full"
                       >
-                        {processRefundMutation.isPending ? (
+                        {adminAdjustCreditsMutation.isPending ? (
                           <>
                             <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
                             Processing...
                           </>
                         ) : (
-                          'Process Refund'
+                          <>
+                            <AlertCircle className="w-4 h-4 mr-2" />
+                            Remove Credits
+                          </>
                         )}
                       </Button>
                     </CardContent>
