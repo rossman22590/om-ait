@@ -2,14 +2,13 @@ from typing import Dict, List, Optional, Set
 from .ai_models import Model, ModelProvider, ModelCapability, ModelPricing, ModelConfig
 from core.utils.config import config, EnvMode
 
-# SHOULD_USE_ANTHROPIC = False
-SHOULD_USE_ANTHROPIC = config.ENV_MODE == EnvMode.LOCAL and bool(config.ANTHROPIC_API_KEY)
+FREE_MODEL_ID = "openrouter/moonshotai/kimi-k2"
 
 # Set premium model ID based on environment
 if config.ENV_MODE == EnvMode.LOCAL:
-    PREMIUM_MODEL_ID = "openrouter/anthropic/claude-sonnet-4.5"
+    PREMIUM_MODEL_ID = "openrouter/anthropic/claude-haiku-4.5"
 else:  # STAGING or PRODUCTION
-    PREMIUM_MODEL_ID = "openrouter/anthropic/claude-sonnet-4.5"
+    PREMIUM_MODEL_ID = "openrouter/anthropic/claude-haiku-4.5"
 
 is_local = config.ENV_MODE == EnvMode.LOCAL
 
@@ -20,28 +19,7 @@ class ModelRegistry:
         self._initialize_models()
     
     def _initialize_models(self):
-        self.register(Model(
-            id="anthropic/claude-haiku-4-5" if SHOULD_USE_ANTHROPIC else "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48",
-            name="Haiku 4.5",
-            provider=ModelProvider.ANTHROPIC,
-            aliases=["claude-haiku-4.5", "anthropic/claude-haiku-4.5", "Claude Haiku 4.5", "global.anthropic.claude-haiku-4-5-20251001-v1:0", "bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0", "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48"],
-            context_window=200_000,
-            capabilities=[
-                ModelCapability.CHAT,
-                ModelCapability.FUNCTION_CALLING,
-                ModelCapability.VISION,
-            ],
-            pricing=ModelPricing(
-                input_cost_per_million_tokens=1.00,
-                output_cost_per_million_tokens=5.00
-            ),
-            tier_availability=["paid"],
-            priority=102,
-            recommended=True,
-            enabled=True,
-            config=ModelConfig()
-        ))
-        
+        # Claude Sonnet 4.5 - Premium flagship model via OpenRouter
         self.register(Model(
             id="openrouter/anthropic/claude-sonnet-4.5",
             name="Sonnet 4.5",
@@ -59,7 +37,7 @@ class ModelRegistry:
                 output_cost_per_million_tokens=15.00
             ),
             tier_availability=["paid"],
-            priority=101,
+            priority=102,
             recommended=True,
             enabled=True,
             config=ModelConfig(
@@ -71,58 +49,35 @@ class ModelRegistry:
             )
         ))
         
-        # self.register(Model(
-        #     id="openrouter/anthropic/claude-sonnet-4",
-        #     name="Sonnet 4",
-        #     provider=ModelProvider.OPENROUTER,
-        #     aliases=["claude-sonnet-4", "Claude Sonnet 4", "claude-sonnet-4-20250514", "arn:aws:bedrock:us-west-2:935064898258:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0"],
-        #     context_window=1_000_000,
-        #     capabilities=[
-        #         ModelCapability.CHAT,
-        #         ModelCapability.FUNCTION_CALLING,
-        #         ModelCapability.VISION,
-        #         ModelCapability.THINKING,
-        #     ],
-        #     pricing=ModelPricing(
-        #         input_cost_per_million_tokens=3.00,
-        #         output_cost_per_million_tokens=15.00
-        #     ),
-        #     tier_availability=["paid"],
-        #     priority=100,
-        #     recommended=True,
-        #     enabled=True,
-        #     config=ModelConfig(
-        #         extra_headers={
-        #             "anthropic-beta": "context-1m-2025-08-07" 
-        #         },
-        #     )
-        # ))
-        
-        # self.register(Model(
-        #     id="openrouter/anthropic/claude-3-7-sonnet-latest",
-        #     name="Sonnet 3.7",
-        #     provider=ModelProvider.OPENROUTER,
-        #     aliases=["claude-3.7", "Claude 3.7 Sonnet", "claude-3-7-sonnet-latest", "arn:aws:bedrock:us-west-2:935064898258:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0"],
-        #     context_window=200_000,
-        #     capabilities=[
-        #         ModelCapability.CHAT,
-        #         ModelCapability.FUNCTION_CALLING,
-        #         ModelCapability.VISION,
-        #     ],
-        #     pricing=ModelPricing(
-        #         input_cost_per_million_tokens=3.00,
-        #         output_cost_per_million_tokens=15.00
-        #     ),
-        #     tier_availability=["paid"],
-        #     priority=99,
-        #     enabled=True,
-        #     config=ModelConfig(
-        #         # extra_headers={
-        #         #     "anthropic-beta": "prompt-caching-2024-07-31"
-        #         # },
-        #     )
-        # ))
+        # Claude Haiku 4.5 - Fast and efficient via OpenRouter
+        self.register(Model(
+            id="openrouter/anthropic/claude-haiku-4.5",
+            name="Haiku 4.5",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["claude-haiku-4.5", "anthropic/claude-haiku-4.5", "Claude Haiku 4.5", "global.anthropic.claude-haiku-4-5-20251001-v1:0", "bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0", "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48"],
+            context_window=200_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.VISION,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=1.00,
+                output_cost_per_million_tokens=5.00
+            ),
+            tier_availability=["free", "paid"],
+            priority=101,
+            recommended=True,
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                },
+            )
+        ))
 
+        # Grok 4 Fast - Via XAI directly
         self.register(Model(
             id="xai/grok-4-fast-non-reasoning",
             name="Grok 4 Fast",
@@ -142,6 +97,7 @@ class ModelRegistry:
             enabled=True
         ))    
         
+        # Meta Llama 4 Scout - Auto routing via OpenRouter
         self.register(Model(
             id="openrouter/meta-llama/llama-4-scout",
             name="Auto",
@@ -168,26 +124,7 @@ class ModelRegistry:
             )
         ))  
         
-        # self.register(Model(
-        #     id="anthropic/claude-3-5-sonnet-latest",
-        #     name="Claude 3.5 Sonnet",
-        #     provider=ModelProvider.ANTHROPIC,
-        #     aliases=["sonnet-3.5", "claude-3.5", "Claude 3.5 Sonnet", "claude-3-5-sonnet-latest"],
-        #     context_window=200_000,
-        #     capabilities=[
-        #         ModelCapability.CHAT,
-        #         ModelCapability.FUNCTION_CALLING,
-        #         ModelCapability.VISION,
-        #     ],
-        #     pricing=ModelPricing(
-        #         input_cost_per_million_tokens=3.00,
-        #         output_cost_per_million_tokens=15.00
-        #     ),
-        #     tier_availability=["paid"],
-        #     priority=90,
-        #     enabled=True
-        # ))
-        
+        # OpenAI GPT-5 - Via OpenAI directly
         self.register(Model(
             id="openai/gpt-5",
             name="GPT-5",
@@ -209,6 +146,34 @@ class ModelRegistry:
             enabled=True
         ))
         
+        # GPT-5 Codex - Via OpenRouter
+        self.register(Model(
+            id="openrouter/openai/gpt-5-codex",
+            name="GPT-5 Codex",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["gpt-5-codex", "GPT-5 Codex", "openai/gpt-5-codex", "openrouter/openai/gpt-5-codex"],
+            context_window=400_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.STRUCTURED_OUTPUT,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=1.25,
+                output_cost_per_million_tokens=10.00
+            ),
+            tier_availability=["paid"],
+            priority=96,
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                }
+            )
+        ))
+        
+        # OpenAI GPT-5 Mini - Via OpenAI directly
         self.register(Model(
             id="openai/gpt-5-mini",
             name="GPT-5 Mini",
@@ -229,6 +194,7 @@ class ModelRegistry:
             enabled=True
         ))
         
+        # Google Gemini 2.5 Pro - Via OpenRouter
         self.register(Model(
             id="openrouter/google/gemini-2.5-pro",
             name="Gemini 2.5 Pro",
@@ -256,6 +222,7 @@ class ModelRegistry:
             )
         ))
         
+        # Google Gemini 2.5 Flash - Via OpenRouter
         self.register(Model(
             id="openrouter/google/gemini-2.5-flash",
             name="Gemini 2.5 Flash",
@@ -284,6 +251,7 @@ class ModelRegistry:
             )
         ))
 
+        # Moonshot Kimi K2 - Via OpenRouter
         self.register(Model(
             id="openrouter/moonshotai/kimi-k2",
             name="Kimi K2",
@@ -309,45 +277,31 @@ class ModelRegistry:
             )
         ))
         
-        # # DeepSeek Models
-        # self.register(Model(
-        #     id="openrouter/deepseek/deepseek-chat",
-        #     name="DeepSeek Chat",
-        #     provider=ModelProvider.OPENROUTER,
-        #     aliases=["deepseek", "deepseek-chat"],
-        #     context_window=128_000,
-        #     capabilities=[
-        #         ModelCapability.CHAT, 
-        #         ModelCapability.FUNCTION_CALLING
-        #     ],
-        #     pricing=ModelPricing(
-        #         input_cost_per_million_tokens=0.38,
-        #         output_cost_per_million_tokens=0.89
-        #     ),
-        #     tier_availability=["free", "paid"],
-        #     priority=95,
-        #     enabled=False  # Currently disabled
-        # ))
-        
-        # # Qwen Models
-        # self.register(Model(
-        #     id="openrouter/qwen/qwen3-235b-a22b",
-        #     name="Qwen3 235B",
-        #     provider=ModelProvider.OPENROUTER,
-        #     aliases=["qwen3", "qwen-3"],
-        #     context_window=128_000,
-        #     capabilities=[
-        #         ModelCapability.CHAT, 
-        #         ModelCapability.FUNCTION_CALLING
-        #     ],
-        #     pricing=ModelPricing(
-        #         input_cost_per_million_tokens=0.13,
-        #         output_cost_per_million_tokens=0.60
-        #     ),
-        #     tier_availability=["free", "paid"],
-        #     priority=90,
-        #     enabled=False  # Currently disabled
-        # ))
+        # GLM 4.6 - Via OpenRouter
+        self.register(Model(
+            id="openrouter/z-ai/glm-4.6",
+            name="GLM 4.6",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["glm-4.6", "GLM 4.6", "z-ai/glm-4.6", "openrouter/z-ai/glm-4.6"],
+            context_window=202_752,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=0.50,
+                output_cost_per_million_tokens=1.75
+            ),
+            tier_availability=["free", "paid"],
+            priority=94,
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                }
+            )
+        ))
         
     
     def register(self, model: Model) -> None:

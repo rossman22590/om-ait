@@ -527,6 +527,9 @@ function BillingTab({ returnUrl }: { returnUrl: string }) {
         try {
             setIsLoading(true);
             const data = await getSubscription();
+            console.log('🔍 Subscription data received:', data);
+            console.log('🔍 Subscription object:', data.subscription);
+            console.log('🔍 Subscription status:', data.subscription?.status);
             setSubscriptionData(data);
             setError(null);
             return data;

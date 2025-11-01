@@ -85,8 +85,9 @@ export function CreditPurchaseModal({
             
             console.log('API Response:', response.data);
             
-            if (response.data && response.data.url) {
-                window.location.href = response.data.url;
+            const checkoutUrl = response.data?.url || response.data?.checkout_url;
+            if (checkoutUrl) {
+                window.location.href = checkoutUrl;
             } else {
                 console.error('Invalid response structure:', response.data);
                 throw new Error('No checkout URL received from server');

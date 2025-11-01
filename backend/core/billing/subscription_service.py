@@ -362,6 +362,7 @@ class SubscriptionService:
 
     async def create_portal_session(self, account_id: str, return_url: str) -> Dict:
         customer_id = await self.get_or_create_stripe_customer(account_id)
+        logger.info(f"📊 Creating portal session for customer {customer_id}, account {account_id}")
         
         session = await StripeAPIWrapper.safe_stripe_call(
             stripe.billing_portal.Session.create_async,
@@ -369,6 +370,7 @@ class SubscriptionService:
             return_url=return_url
         )
         
+        logger.info(f"📊 Portal session created: {session.url}")
         return {'portal_url': session.url}
 
     async def sync_subscription(self, account_id: str) -> Dict:

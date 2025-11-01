@@ -39,9 +39,14 @@ class CreatePortalSessionRequest(BaseModel):
     return_url: str
  
 class PurchaseCreditsRequest(BaseModel):
-    amount: Decimal
+    amount: Optional[Decimal] = None
+    amount_dollars: Optional[Decimal] = None
     success_url: str
     cancel_url: str
+    
+    def get_amount(self) -> Decimal:
+        """Get the amount, supporting both field names"""
+        return self.amount or self.amount_dollars or Decimal('0')
 
 class TrialStartRequest(BaseModel):
     success_url: str
@@ -335,9 +340,13 @@ async def purchase_credits_checkout(
     request: PurchaseCreditsRequest,
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
+    amount = request.get_amount()
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+    
     result = await payment_service.create_credit_purchase_checkout(
         account_id=account_id,
-        amount=request.amount,
+        amount=amount,
         success_url=request.success_url,
         cancel_url=request.cancel_url,
         get_user_subscription_tier_func=subscription_service.get_user_subscription_tier

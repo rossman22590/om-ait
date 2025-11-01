@@ -21,7 +21,11 @@ class PaymentService:
         cancel_url: str,
         get_user_subscription_tier_func
     ) -> Dict:
+        logger.info(f"[PAYMENT] Creating credit purchase for account {account_id}, amount ${amount}")
+        
         tier = await get_user_subscription_tier_func(account_id)
+        logger.info(f"[PAYMENT] User tier: {tier.get('name')}, can_purchase_credits: {tier.get('can_purchase_credits', False)}")
+        
         if not tier.get('can_purchase_credits', False):
             raise HTTPException(status_code=403, detail="Credit purchases not available for your tier")
         
@@ -29,6 +33,7 @@ class PaymentService:
         client = await db.client
         
         customer_result = await client.schema('basejump').from_('billing_customers').select('id, email').eq('account_id', account_id).execute()
+        logger.info(f"[PAYMENT] Customer lookup result: {len(customer_result.data) if customer_result.data else 0} customers found")
         
         if not customer_result.data or len(customer_result.data) == 0:
             raise HTTPException(status_code=400, detail="No billing customer found")
