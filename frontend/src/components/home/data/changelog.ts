@@ -2,6 +2,33 @@ import { ChangelogData } from "../sections/changelog";
 
 export const changeLogData: ChangelogData[] = [
     {
+      version: "Version 10.6.0",
+      date: "November 2025",
+      title: "UI Refresh, Tool Management, and Enhanced UX",
+      description:
+        "A comprehensive visual refresh with pink/purple branding, streamlined tool configuration, and improved homepage animations. Machine gets a modern makeover with better developer experience and granular control.",
+      items: [
+        "Complete UI Refresh - New pink/purple gradient theme replacing blue across the platform",
+        "Rebranded to 'Machine' - Updated from Kortix with focus on private AI workspaces",
+        "Homepage Redesign - Added interactive demo section with 3D tilt effects and animated workflows",
+        "New Integrations Showcase - Visual grid of 24+ integrations with category filters and premium badges",
+        "Enhanced Tool Configuration - Added 'Select All' and 'Deselect All' buttons for bulk tool management",
+        "Improved Loader Animation - Pink/purple gradient loader with consistent theming",
+        "Streamlined Use Cases Section - Removed redundant links and standardized page width",
+        "Updated Color System - Modern oklch color space for better color accuracy",
+        "Component Architecture Improvements - Cleaner section-based homepage structure",
+        "Migration Banner Controls - Added ability to hide plan migration notifications",
+        "Build Optimization - Fixed lightningcss dependencies for Railway deployments",
+        "DotGrid Component Fix - Resolved TypeScript expression errors",
+        "Toast Notifications - Better user feedback for tool selection actions"
+      ],
+      image: "/meta.png",
+      button: {
+        url: "/",
+        text: "See the New Look",
+      },
+    },
+    {
       version: "Version 10.4.0",
       date: "Sept 2025",
       title: "Introducing Custom Agents, Agent Marketplace, and much more!",
