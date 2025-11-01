@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { CTASection } from '@/components/home/sections/cta-section';
-// import { FAQSection } from "@/components/sections/faq-section";
 import { FooterSection } from '@/components/home/sections/footer-section';
 import { HeroSection } from '@/components/home/sections/hero-section';
 import { OpenSourceSection } from '@/components/home/sections/open-source-section';
@@ -20,6 +19,8 @@ import { FAQSection } from '@/components/home/sections/faq-section';
 import { AgentShowcaseSection } from '@/components/home/sections/agent-showcase-section';
 import { DeliverablesSection } from '@/components/home/sections/deliverables-section';
 import { CapabilitiesSection } from '@/components/home/sections/capabilities-section';
+import { IntegrationsSection } from '@/components/home/sections/integrations-section';
+import { InteractiveDemo } from '@/components/home/sections/interactive-demo';
 
 export default function Home() {
   return (
@@ -29,15 +30,13 @@ export default function Home() {
         <main className="flex flex-col items-center justify-center min-h-screen w-full">
           <div className="w-full divide-y divide-border">
             <HeroSection />
+            <InteractiveDemo />
             <CapabilitiesSection />
-            {/* <DeliverablesSection />             */}
             <BentoSection />
-            
-            {/* <AgentShowcaseSection /> */}
+            <IntegrationsSection />
+            <UseCasesSection />
             <OpenSourceSection />
             <PricingSection />
-            {/* <TestimonialSection /> */}
-            {/* <FAQSection /> */}
             <CTASection />
             <FooterSection />
           </div>
