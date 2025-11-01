@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     siteName: siteConfig.name,
     images: [
       {
-        url: '/og-fallback.png',
+        url: 'https://machine-alpha-app.up.railway.app/banner.png',
         width: 1200,
         height: 630,
         alt: siteConfig.name,
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     title: siteConfig.name,
     description: siteConfig.description,
     creator: '@the_machine_ai',
-    images: ['/og-fallback.png'],
+    images: ['https://machine-alpha-app.up.railway.app/banner.png'],
   },
   robots: {
     index: true,
