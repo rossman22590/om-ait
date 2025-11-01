@@ -2,7 +2,7 @@
 import { HeroVideoSection } from '@/components/home/sections/hero-video-section';
 import { siteConfig } from '@/lib/home';
 import { ArrowRight, Github, X, AlertCircle, Square } from 'lucide-react';
-import { FlickeringGrid } from '@/components/home/ui/flickering-grid';
+import PixelBlast from '@/components/home/ui/PixelBlast';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import { useScroll } from 'motion/react';
@@ -287,48 +287,70 @@ export function HeroSection() {
         showUsageLimitAlert={true}
       />
       <div className="relative flex flex-col items-center w-full px-4 sm:px-6">
-        {/* Left side flickering grid with gradient fades */}
+        {/* Left side PixelBlast with gradient fades */}
         <div className="hidden sm:block absolute left-0 top-0 h-[500px] sm:h-[600px] md:h-[800px] w-1/4 sm:w-1/3 -z-10 overflow-hidden">
           {/* Horizontal fade from left to right */}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-background z-10" />
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-background z-10 pointer-events-none" />
 
           {/* Vertical fade from top */}
-          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background via-background/90 to-transparent z-10" />
+          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background via-background/90 to-transparent z-10 pointer-events-none" />
 
           {/* Vertical fade to bottom */}
-          <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-background via-background/90 to-transparent z-10" />
+          <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-background via-background/90 to-transparent z-10 pointer-events-none" />
 
           {mounted && (
-            <FlickeringGrid
-              className="h-full w-full"
-              squareSize={tablet ? 2 : 2.5}
-              gridGap={tablet ? 2 : 2.5}
-              color="var(--secondary)"
-              maxOpacity={tablet ? 0.2 : 0.4}
-              flickerChance={isScrolling ? 0.005 : (tablet ? 0.015 : 0.03)} // Lower performance impact on mobile
+            <PixelBlast
+              variant="circle"
+              pixelSize={8}
+              color="#EC4899"
+              patternScale={2.5}
+              patternDensity={1.5}
+              pixelSizeJitter={0.3}
+              enableRipples
+              rippleSpeed={0.5}
+              rippleThickness={0.15}
+              rippleIntensityScale={2}
+              liquid
+              liquidStrength={0.15}
+              liquidRadius={1.5}
+              liquidWobbleSpeed={4}
+              speed={0.8}
+              edgeFade={0.2}
+              transparent
             />
           )}
         </div>
 
-        {/* Right side flickering grid with gradient fades */}
+        {/* Right side PixelBlast with gradient fades */}
         <div className="hidden sm:block absolute right-0 top-0 h-[500px] sm:h-[600px] md:h-[800px] w-1/4 sm:w-1/3 -z-10 overflow-hidden">
           {/* Horizontal fade from right to left */}
-          <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-background z-10" />
+          <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-background z-10 pointer-events-none" />
 
           {/* Vertical fade from top */}
-          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background via-background/90 to-transparent z-10" />
+          <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background via-background/90 to-transparent z-10 pointer-events-none" />
 
           {/* Vertical fade to bottom */}
-          <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-background via-background/90 to-transparent z-10" />
+          <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-background via-background/90 to-transparent z-10 pointer-events-none" />
 
           {mounted && (
-            <FlickeringGrid
-              className="h-full w-full"
-              squareSize={tablet ? 2 : 2.5}
-              gridGap={tablet ? 2 : 2.5}
-              color="var(--secondary)"
-              maxOpacity={tablet ? 0.2 : 0.4}
-              flickerChance={isScrolling ? 0.005 : (tablet ? 0.015 : 0.03)} // Lower performance impact on mobile
+            <PixelBlast
+              variant="circle"
+              pixelSize={8}
+              color="#A855F7"
+              patternScale={2.5}
+              patternDensity={1.5}
+              pixelSizeJitter={0.3}
+              enableRipples
+              rippleSpeed={0.5}
+              rippleThickness={0.15}
+              rippleIntensityScale={2}
+              liquid
+              liquidStrength={0.15}
+              liquidRadius={1.5}
+              liquidWobbleSpeed={4}
+              speed={0.8}
+              edgeFade={0.2}
+              transparent
             />
           )}
         </div>
@@ -373,7 +395,7 @@ export function HeroSection() {
           </Link> */}
           <div className="flex flex-col items-center justify-center gap-3 sm:gap-4 pt-8 sm:pt-12 max-w-4xl mx-auto">
             <h1 className="text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-medium tracking-tighter text-balance text-center px-2">
-              <span className="text-primary">Hire Kortix for </span>
+              <span className="text-primary">Hire Machine for </span>
               <RotatingText
                 texts={['Research', 'Presentations', 'Docs', 'Spreadsheets', 'Design', 'Data Analysis', 'Email Management', 'Social Media', 'SEO', 'Lead Generation', 'Customer Support', 'Content Creation', 'Project Management', 'Sales', 'Marketing', 'Analytics']}
                 className="text-secondary"
@@ -390,7 +412,7 @@ export function HeroSection() {
                 <ChatInput
                   ref={chatInputRef}
                   onSubmit={handleChatInputSubmit}
-                  placeholder="Give Kortix a task to complete..."
+                  placeholder="Give Machine a task to complete..."
                   loading={isSubmitting}
                   disabled={isSubmitting}
                   value={inputValue}
@@ -431,7 +453,7 @@ export function HeroSection() {
               </button> */}
             </div>
             <DialogDescription className="text-muted-foreground">
-              Sign in or create an account to talk with Kortix
+              Sign in or create an account to talk with Machine
             </DialogDescription>
           </DialogHeader>
 

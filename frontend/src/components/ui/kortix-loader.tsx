@@ -148,54 +148,83 @@ function LottieAnimation({
   isDark: boolean;
   speed: number;
 }) {
-  const lottieRef = React.useRef<any>(null);
-  const [Lottie, setLottie] = React.useState<any>(null);
-  const [animationData, setAnimationData] = React.useState<any>(null);
-
-  // Dynamically import Lottie and animation data on mount
-  React.useEffect(() => {
-    Promise.all([
-      import('lottie-react'),
-      import('@/assets/animations/loading.json')
-    ]).then(([lottieModule, animData]) => {
-      setLottie(() => lottieModule.default);
-      setAnimationData(animData.default);
-    });
-  }, []);
-
-  // Ensure animation starts from beginning when loaded
-  React.useEffect(() => {
-    if (lottieRef.current) {
-      lottieRef.current.goToAndPlay(0, true);
-      lottieRef.current.setSpeed(speed);
-    }
-  }, [Lottie, speed]);
-
-  // Show placeholder while loading
-  if (!Lottie || !animationData) {
-    return (
-      <div 
-        style={{ 
-          width: loaderSize, 
-          height: loaderSize 
-        }} 
-      />
-    );
-  }
-
+  // Elegant rotating gradient orb
   return (
-    <Lottie
-      lottieRef={lottieRef}
-      animationData={animationData}
-      loop={loop}
-      autoplay={autoPlay}
+    <div 
+      className="relative inline-flex items-center justify-center"
       style={{ 
         width: loaderSize, 
-        height: loaderSize,
-        // Default animation is white, invert to black for light mode
-        filter: isDark ? 'none' : 'brightness(0)'
+        height: loaderSize 
       }}
-    />
+    >
+      <style jsx>{`
+        @keyframes rotate-gradient {
+          0% { 
+            transform: rotate(0deg);
+          }
+          100% { 
+            transform: rotate(360deg);
+          }
+        }
+        @keyframes pulse-glow {
+          0%, 100% { 
+            opacity: 0.6;
+            transform: scale(1);
+          }
+          50% { 
+            opacity: 1;
+            transform: scale(1.1);
+          }
+        }
+      `}</style>
+      
+      {/* Glow effect */}
+      <svg
+        viewBox="0 0 100 100"
+        style={{ 
+          width: loaderSize * 1.4, 
+          height: loaderSize * 1.4,
+          position: 'absolute',
+          animation: `pulse-glow ${1.5 / speed}s ease-in-out infinite`,
+          filter: 'blur(8px)',
+        }}
+      >
+        <defs>
+          <radialGradient id="glowGradient">
+            <stop offset="0%" style={{ stopColor: '#EC4899', stopOpacity: 0.8 }} />
+            <stop offset="50%" style={{ stopColor: '#A855F7', stopOpacity: 0.4 }} />
+            <stop offset="100%" style={{ stopColor: '#A855F7', stopOpacity: 0 }} />
+          </radialGradient>
+        </defs>
+        <circle cx="50" cy="50" r="40" fill={isDark ? "url(#glowGradient)" : "rgba(0,0,0,0.2)"} />
+      </svg>
+      
+      {/* Main rotating gradient orb */}
+      <svg
+        viewBox="0 0 100 100"
+        style={{ 
+          width: loaderSize * 1.2, 
+          height: loaderSize * 1.2,
+          position: 'absolute',
+          animation: `rotate-gradient ${2 / speed}s linear infinite`,
+        }}
+      >
+        <defs>
+          <linearGradient id="orbGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style={{ stopColor: '#A855F7', stopOpacity: 1 }} />
+            <stop offset="50%" style={{ stopColor: '#EC4899', stopOpacity: 1 }} />
+            <stop offset="100%" style={{ stopColor: '#F472B6', stopOpacity: 1 }} />
+          </linearGradient>
+        </defs>
+        <circle 
+          cx="50" 
+          cy="50" 
+          r="35" 
+          fill="url(#orbGradient)"
+          opacity={1}
+        />
+      </svg>
+    </div>
   );
 }
 

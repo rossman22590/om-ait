@@ -20,8 +20,8 @@ const slides = [
     },
     {
         title: 'Design',
-        color: '#CFE1FF',
-        textColor: '#1D4ED8',
+        color: '#FBCFE8',
+        textColor: '#BE185D',
         subtitle: 'Professional designs in minutes',
         description: 'Tell the AI Worker what job you want it to do.',
     },

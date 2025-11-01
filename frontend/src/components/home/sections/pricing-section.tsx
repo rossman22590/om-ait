@@ -704,9 +704,16 @@ export function PricingSection({
   return (
     <section
       id="pricing"
-      className={cn("flex flex-col items-center justify-center gap-10 w-full relative", noPadding ? "pb-0" : "pb-12")}
+      className={cn(
+        "flex flex-col items-center justify-center w-full relative",
+        noPadding ? "" : "pb-12",
+        insideDialog ? "gap-4" : "gap-10"
+      )}
     >
-      <div className="w-full max-w-6xl mx-auto px-6">
+      <div className={cn(
+        "w-full max-w-6xl mx-auto",
+        insideDialog ? "px-2" : "px-6"
+      )}>
         {showTitleAndTabs && (<>
           <SectionHeader>
             <h2 className="text-3xl md:text-4xl font-medium tracking-tighter text-center text-balance">
@@ -722,10 +729,10 @@ export function PricingSection({
 
 
         <div className={cn(
-          "grid gap-6 w-full",
+          "grid w-full",
           insideDialog
-            ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 2xl:grid-cols-3"
-            : "min-[650px]:grid-cols-2 lg:grid-cols-3",
+            ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 2xl:grid-cols-3 gap-3"
+            : "min-[650px]:grid-cols-2 lg:grid-cols-3 gap-6",
           !insideDialog && "grid-rows-1 items-stretch"
         )}>
           {siteConfig.cloudPricingItems
@@ -748,8 +755,8 @@ export function PricingSection({
         </div>
       </div>
       {showInfo && (
-        <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg max-w-2xl mx-auto">
-          <p className="text-sm text-blue-800 dark:text-blue-200 text-center">
+        <div className="mt-4 p-4 bg-pink-50 dark:bg-pink-950/20 border border-pink-200 dark:border-pink-800 rounded-lg max-w-2xl mx-auto">
+          <p className="text-sm text-pink-800 dark:text-pink-200 text-center">
             <strong>What are AI tokens?</strong> Tokens are units of text that AI models process.
             Your plan includes credits to spend on various AI models - the more complex the task,
             the more tokens used.

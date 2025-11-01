@@ -23,34 +23,34 @@ export function SecondBentoAnimation() {
             speed={1}
           >
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://cdn.jsdelivr.net/gh/devicons/devicon/icons/slack/slack-original.svg" alt="Slack" className="size-8" />
+              <img src="https://cdn.simpleicons.org/slack/4A154B" alt="Slack" className="size-8" />
             </div>
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/0/01/Google_Docs_logo_%282014-2020%29.svg" alt="Google Docs" className="size-8" />
+              <img src="https://cdn.simpleicons.org/googledocs/4285F4" alt="Google Docs" className="size-8" />
             </div>
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/3/34/Microsoft_Office_Excel_%282019%E2%80%93present%29.svg" alt="Excel" className="size-8" />
+              <img src="https://img.icons8.com/color/96/microsoft-excel-2019--v1.png" alt="Excel" className="size-8" />
             </div>
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/7/7e/Gmail_icon_%282020%29.svg" alt="Gmail" className="size-8" />
+              <img src="https://cdn.simpleicons.org/gmail/EA4335" alt="Gmail" className="size-8" />
             </div>
           </OrbitingCircles>
 
           <OrbitingCircles index={1} iconSize={60} speed={0.5}>
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/a/a5/Google_Calendar_icon_%282020%29.svg" alt="Google Calendar" className="size-8" />
+              <img src="https://cdn.simpleicons.org/googlecalendar/4285F4" alt="Google Calendar" className="size-8" />
             </div>
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png" alt="Notion" className="size-8" />
+              <img src="https://cdn.simpleicons.org/notion/000000" alt="Notion" className="size-8" />
             </div>
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" className="size-8" />
+              <img src="https://cdn.simpleicons.org/whatsapp/25D366" alt="WhatsApp" className="size-8" />
             </div>
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/a/ab/Logo_TV_2015.svg" alt="Trello" className="size-8" />
+              <img src="https://cdn.simpleicons.org/trello/0052CC" alt="Trello" className="size-8" />
             </div>
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/0/05/Google_Sheets_icon_%282020%29.svg" alt="Google Sheets" className="size-8" />
+              <img src="https://cdn.simpleicons.org/googlesheets/34A853" alt="Google Sheets" className="size-8" />
             </div>
           </OrbitingCircles>
 
@@ -62,19 +62,19 @@ export function SecondBentoAnimation() {
             speed={0.5}
           >
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/d/df/Microsoft_Office_Outlook_%282018%E2%80%93present%29.svg" alt="Outlook" className="size-8" />
+              <img src="https://img.icons8.com/color/96/microsoft-outlook-2019--v2.png" alt="Outlook" className="size-8" />
             </div>
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/f/f9/Salesforce.com_logo.svg" alt="Salesforce" className="size-8" />
+              <img src="https://cdn.simpleicons.org/salesforce/00A1E0" alt="Salesforce" className="size-8" />
             </div>
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://cdn.worldvectorlogo.com/logos/asana-logo.svg" alt="Asana" className="size-8" />
+              <img src="https://cdn.simpleicons.org/asana/F06A6A" alt="Asana" className="size-8" />
             </div>
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/c/c9/Microsoft_Office_Teams_%282018%E2%80%93present%29.svg" alt="Teams" className="size-8" />
+              <img src="https://img.icons8.com/color/96/microsoft-teams.png" alt="Teams" className="size-8" />
             </div>
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Mail_%28iOS%29.svg/1024px-Mail_%28iOS%29.svg.png" alt="Apple Mail" className="size-8" />
+              <img src="https://cdn.simpleicons.org/apple/000000" alt="Apple Mail" className="size-8" />
             </div>
             <div className="size-12 bg-white rounded-full flex items-center justify-center shadow-lg border border-gray-100">
               <img src="https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png" alt="LinkedIn" className="size-8" />
@@ -89,28 +89,28 @@ export function SecondBentoAnimation() {
             speed={0.3}
           >
             <div className="size-10 bg-white rounded-full flex items-center justify-center shadow-md border border-gray-100 opacity-75">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e1/Google_Chrome_icon_%28February_2022%29.svg/480px-Google_Chrome_icon_%28February_2022%29.svg.png" alt="Chrome" className="size-6" />
+              <img src="https://cdn.simpleicons.org/googlechrome/4285F4" alt="Chrome" className="size-6" />
             </div>
             <div className="size-10 bg-white rounded-full flex items-center justify-center shadow-md border border-gray-100 opacity-75">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Twitter_bird_logo_2012.svg/512px-Twitter_bird_logo_2012.svg.png" alt="Twitter" className="size-6" />
+              <img src="https://cdn.simpleicons.org/x/000000" alt="X (Twitter)" className="size-6" />
             </div>
             <div className="size-10 bg-white rounded-full flex items-center justify-center shadow-md border border-gray-100 opacity-75">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/a/a5/Instagram_icon.png/600px-Instagram_icon.png" alt="Instagram" className="size-6" />
+              <img src="https://cdn.simpleicons.org/instagram/E4405F" alt="Instagram" className="size-6" />
             </div>
             <div className="size-10 bg-white rounded-full flex items-center justify-center shadow-md border border-gray-100 opacity-75">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Facebook_Logo_%282019%29.png/600px-Facebook_Logo_%282019%29.png" alt="Facebook" className="size-6" />
+              <img src="https://cdn.simpleicons.org/facebook/0866FF" alt="Facebook" className="size-6" />
             </div>
             <div className="size-10 bg-white rounded-full flex items-center justify-center shadow-md border border-gray-100 opacity-75">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Zoom_Icon.png/600px-Zoom_Icon.png" alt="Zoom" className="size-6" />
+              <img src="https://cdn.simpleicons.org/zoom/0B5CFF" alt="Zoom" className="size-6" />
             </div>
             <div className="size-10 bg-white rounded-full flex items-center justify-center shadow-md border border-gray-100 opacity-75">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/7/78/Dropbox_Icon.svg/480px-Dropbox_Icon.svg.png" alt="Dropbox" className="size-6" />
+              <img src="https://cdn.simpleicons.org/dropbox/0061FF" alt="Dropbox" className="size-6" />
             </div>
             <div className="size-10 bg-white rounded-full flex items-center justify-center shadow-md border border-gray-100 opacity-75">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/c2/GitHub_Invertocat_Logo.svg/480px-GitHub_Invertocat_Logo.svg.png" alt="GitHub" className="size-6" />
+              <img src="https://cdn.simpleicons.org/github/181717" alt="GitHub" className="size-6" />
             </div>
             <div className="size-10 bg-white rounded-full flex items-center justify-center shadow-md border border-gray-100 opacity-75">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/0/04/ChatGPT_logo.svg/480px-ChatGPT_logo.svg.png" alt="OpenAI" className="size-6" />
+              <img src="https://cdn.simpleicons.org/openai/412991" alt="OpenAI" className="size-6" />
             </div>
           </OrbitingCircles>
         </div>

@@ -23,8 +23,8 @@ const workers = [
     {
         title: 'Mathematician',
         icon: Shield,
-        iconBg: '#CFE1FF',
-        iconColor: '#1D4ED8',
+        iconBg: '#FBCFE8',
+        iconColor: '#BE185D',
         capabilities: ['Solve equations', 'Prove theorems', 'Explain concepts']
     },
     {

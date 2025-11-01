@@ -285,9 +285,9 @@ export function OpenSourceSection() {
           </motion.div>
         </div>
       ),
-      title: 'Secure Private Deployment',
-      description: 'Deploy 100% on-premises with complete data sovereignty. Your AI workers run entirely on your infrastructure with no external dependencies.',
-      showGitHubInfo: true,
+      title: 'Secure Private Infrastructure',
+      description: 'Machine runs on our secure servers with complete data sovereignty. Your AI workers operate with enterprise-grade security and no external dependencies.',
+      showGitHubInfo: false,
     },
     {
       id: 2,
@@ -297,7 +297,7 @@ export function OpenSourceSection() {
         </div>
       ),
       title: 'Enterprise-Grade Security',
-      description: 'Open source transparency meets enterprise security. Deploy behind your firewall with full control over models, data, and integrations.',
+      description: 'Machine operates on our private infrastructure with enterprise security. Complete control over models, data, and integrations.',
       showFeatures: true,
     },
   ];
@@ -312,10 +312,10 @@ export function OpenSourceSection() {
           {/* Section Header */}
           <SectionHeader>
             <h2 className="text-3xl md:text-4xl font-medium tracking-tighter text-center text-balance">
-              100% Open AI
+              100% Private AI
             </h2>
             <p className="text-muted-foreground text-center text-balance font-medium">
-              Deploy securely on your own infrastructure with complete control over your data and AI workflows.
+              Machine runs securely on our servers with complete control over your data and AI workflows.
             </p>
           </SectionHeader>
 
@@ -344,7 +344,7 @@ export function OpenSourceSection() {
                       Python
                     </span>
                     <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold bg-secondary/10 border-secondary/20 text-secondary">
-                      Apache 2.0 License
+                      Secure Private Deployment
                     </span>
                   </div>
                 </div>
@@ -379,9 +379,9 @@ export function OpenSourceSection() {
                       </svg>
                     </div>
                     <div>
-                      <h4 className="font-medium">On-Premises</h4>
+                      <h4 className="font-medium">Hosted Infrastructure</h4>
                       <p className="text-muted-foreground text-sm">
-                        100% private deployment
+                        100% managed on our servers
                       </p>
                     </div>
                   </div>
@@ -412,9 +412,9 @@ export function OpenSourceSection() {
                       </svg>
                     </div>
                     <div>
-                      <h4 className="font-medium">Community</h4>
+                      <h4 className="font-medium">Private Infrastructure</h4>
                       <p className="text-muted-foreground text-sm">
-                        Join our developers
+                        Your own secure environment
                       </p>
                     </div>
                   </div>
@@ -445,9 +445,9 @@ export function OpenSourceSection() {
                       </svg>
                     </div>
                     <div>
-                      <h4 className="font-medium">Apache 2.0</h4>
+                      <h4 className="font-medium">Data Sovereignty</h4>
                       <p className="text-muted-foreground text-sm">
-                        Free to use and modify
+                        Complete control over your data
                       </p>
                     </div>
                   </div>

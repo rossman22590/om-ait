@@ -490,13 +490,13 @@ function GeneralTab({ onClose }: { onClose: () => void }) {
 
 function PlanTab({ returnUrl }: { returnUrl: string }) {
     return (
-        <div className="overflow-y-auto max-h-full flex items-center justify-center py-6">
+        <div className="h-full overflow-y-auto px-2 py-4">
             <PricingSection
                 returnUrl={returnUrl}
                 showTitleAndTabs={false}
                 showInfo={false}
-                insideDialog={false}
-                noPadding={false}
+                insideDialog={true}
+                noPadding={true}
             />
         </div>
     );
