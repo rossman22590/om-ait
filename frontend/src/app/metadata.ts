@@ -19,21 +19,14 @@ export const metadata: Metadata = {
     title: siteConfig.name,
     description: siteConfig.description,
     siteName: siteConfig.name,
-    images: [
-      {
-        url: 'https://machine-alpha-app.up.railway.app/banner.png',
-        width: 1200,
-        height: 630,
-        alt: siteConfig.name,
-      },
-    ],
+    images: [`${siteConfig.url}/banner.png`],
   },
   twitter: {
     card: 'summary_large_image',
     title: siteConfig.name,
     description: siteConfig.description,
     creator: '@the_machine_ai',
-    images: ['https://machine-alpha-app.up.railway.app/banner.png'],
+    images: [`${siteConfig.url}/banner.png`],
   },
   robots: {
     index: true,

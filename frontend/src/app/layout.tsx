@@ -62,15 +62,7 @@ export const metadata: Metadata = {
       'Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
     url: siteConfig.url,
     siteName: 'Machine',
-    images: [
-      {
-        url: 'https://machine-alpha-app.up.railway.app/banner.png',
-        width: 1200,
-        height: 630,
-        alt: 'Machine - Generalist AI Agent',
-        type: 'image/png',
-      },
-    ],
+    images: [`${siteConfig.url}/banner.png`],
     locale: 'en_US',
   },
   twitter: {
@@ -80,14 +72,7 @@ export const metadata: Metadata = {
       'Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
     creator: '@the_machine_ai',
     site: '@the_machine_ai',
-    images: [
-      {
-        url: 'https://machine-alpha-app.up.railway.app/banner.png',
-        width: 1200,
-        height: 630,
-        alt: 'Machine - Generalist AI Agent',
-      },
-    ],
+    images: [`${siteConfig.url}/banner.png`],
   },
   icons: {
     icon: [

@@ -31,7 +31,7 @@ export default async function Image() {
           }}
         >
           <img
-            src="https://machine-alpha-app.up.railway.app/banner.png"
+            src={`${baseUrl}/banner.png`}
             alt={alt}
             style={{
               width: '100%',
