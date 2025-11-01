@@ -212,16 +212,25 @@ class ToolManager:
         from core.tools.agent_builder_tools.trigger_tool import TriggerTool
         from core.tools.agent_builder_tools.pipedream_mcp_tool import PipedreamMCPTool
         from core.services.supabase import DBConnection
+        from core.utils.config import config
         
         db = DBConnection()
+        
+        # Check if Pipedream is enabled
+        pipedream_enabled = getattr(config, 'PIPEDREAM', True)
         
         agent_builder_tools = [
             ('agent_config_tool', AgentConfigTool),
             ('mcp_search_tool', MCPSearchTool),
             ('credential_profile_tool', CredentialProfileTool),
             ('trigger_tool', TriggerTool),
-            ('pipedream_mcp_tool', PipedreamMCPTool),
         ]
+        
+        # Only add Pipedream tool if enabled
+        if pipedream_enabled:
+            agent_builder_tools.append(('pipedream_mcp_tool', PipedreamMCPTool))
+        else:
+            logger.info("Pipedream tool registration skipped (PIPEDREAM=false)")
 
         for tool_name, tool_class in agent_builder_tools:
             if tool_name not in disabled_tools:

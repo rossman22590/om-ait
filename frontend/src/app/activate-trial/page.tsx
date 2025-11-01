@@ -39,6 +39,14 @@ export default function ActivateTrialPage() {
       const hasActiveSubscription = subscription.tier &&
         subscription.tier.name !== 'none' &&
         subscription.tier.name !== 'free';
+      const trialBypassed = trialStatus.trial_status === 'none' || trialStatus.bypass_trial === true;
+
+      // Redirect to dashboard if trial is bypassed (BYPASS_TRIAL=true)
+      if (trialBypassed) {
+        console.log('[ActivateTrialPage] Redirecting to /dashboard - trial bypassed');
+        router.push('/dashboard');
+        return;
+      }
 
       if (hasActiveTrial || hasActiveSubscription) {
         console.log('[ActivateTrialPage] Redirecting to /dashboard - user has active subscription or trial');

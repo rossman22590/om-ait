@@ -5,7 +5,7 @@ from core.services.supabase import DBConnection
 from core.utils.logger import logger
 from core.utils.cache import Cache
 from core.utils.config import config, EnvMode
-from core.billing.config import FREE_TIER_INITIAL_CREDITS, TRIAL_ENABLED
+from core.billing.config import FREE_TIER_INITIAL_CREDITS, TRIAL_ENABLED, BYPASS_TRIAL_CREDITS
 
 class CreditService:
     def __init__(self):
@@ -63,10 +63,56 @@ class CreditService:
                     'balance_after': '0'
                 }).execute()
             else:
-                trial_mode = TRIAL_ENABLED
-                logger.info(f"Creating new user {user_id} with free tier (trial migration will handle conversion)")
+                # Check if BYPASS_TRIAL is enabled
+                bypass_trial = getattr(config, 'BYPASS_TRIAL', False)
                 
-                if trial_mode == TRIAL_ENABLED:
+                if bypass_trial:
+                    # BYPASS_TRIAL mode: Give $10 credits immediately, no trial
+                    logger.info(f"BYPASS_TRIAL enabled: Creating new user {user_id} with ${BYPASS_TRIAL_CREDITS} credits (no trial)")
+                    
+                    account_data = {
+                        'account_id': user_id,
+                        'balance': str(BYPASS_TRIAL_CREDITS),
+                        'tier': 'free',
+                        'trial_status': 'none'  # No trial when bypassing
+                    }
+                    
+                    try:
+                        logger.info(f"Creating BYPASS_TRIAL account for new user {user_id} with ${BYPASS_TRIAL_CREDITS}")
+                        
+                        try:
+                            test_data = {**account_data, 'last_grant_date': datetime.now(timezone.utc).isoformat()}
+                            await client.from_('credit_accounts').insert(test_data).execute()
+                            logger.info(f"Successfully created BYPASS_TRIAL account for user {user_id} with ${BYPASS_TRIAL_CREDITS}")
+                        except Exception as e1:
+                            logger.warning(f"Creating account without last_grant_date: {e1}")
+                            await client.from_('credit_accounts').insert(account_data).execute()
+                            logger.info(f"Successfully created minimal BYPASS_TRIAL account for user {user_id}")
+                        
+                        # Ensure default Suna agent is created for BYPASS_TRIAL user
+                        try:
+                            from core.utils.ensure_suna import ensure_suna_installed
+                            await ensure_suna_installed(user_id)
+                            logger.info(f"Ensured Suna agent for BYPASS_TRIAL user {user_id}")
+                        except Exception as suna_error:
+                            logger.warning(f"Failed to create Suna agent for BYPASS_TRIAL user {user_id}: {suna_error}")
+                            # Don't fail account creation if Suna creation fails
+                            
+                    except Exception as e:
+                        logger.error(f"Failed to create BYPASS_TRIAL account for user {user_id}: {e}")
+                        raise
+                    
+                    balance = BYPASS_TRIAL_CREDITS
+                    
+                    await client.from_('credit_ledger').insert({
+                        'account_id': user_id,
+                        'amount': str(BYPASS_TRIAL_CREDITS),
+                        'type': 'initial',
+                        'description': f'Welcome to Machine! Initial ${BYPASS_TRIAL_CREDITS} credits (no trial required)',
+                        'balance_after': str(BYPASS_TRIAL_CREDITS)
+                    }).execute()
+                    
+                elif TRIAL_ENABLED:
                     account_data = {
                         'account_id': user_id,
                         'balance': str(FREE_TIER_INITIAL_CREDITS),
@@ -84,6 +130,15 @@ class CreditService:
                             logger.warning(f"Creating account without last_grant_date: {e1}")
                             await client.from_('credit_accounts').insert(account_data).execute()
                             logger.info(f"Successfully created minimal FREE TIER account for user {user_id}")
+                        
+                        # Ensure default Suna agent is created for FREE_TIER user
+                        try:
+                            from core.utils.ensure_suna import ensure_suna_installed
+                            await ensure_suna_installed(user_id)
+                            logger.info(f"Ensured Suna agent for FREE_TIER user {user_id}")
+                        except Exception as suna_error:
+                            logger.warning(f"Failed to create Suna agent for FREE_TIER user {user_id}: {suna_error}")
+                            # Don't fail account creation if Suna creation fails
                             
                     except Exception as e:
                         logger.error(f"Failed to create FREE TIER account for user {user_id}: {e}")

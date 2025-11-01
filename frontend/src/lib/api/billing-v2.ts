@@ -168,6 +168,7 @@ export interface TrialStatus {
   tier?: string;
   can_start_trial?: boolean;
   message?: string;
+  bypass_trial?: boolean; // Indicates if BYPASS_TRIAL=true on backend
   trial_history?: {
     started_at?: string;
     ended_at?: string;

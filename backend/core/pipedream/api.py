@@ -6,6 +6,7 @@ from datetime import datetime
 
 from core.utils.logger import logger
 from core.utils.auth_utils import verify_and_get_user_id_from_jwt
+from core.utils.config import config
 from .profile_service import ProfileService, Profile, ProfileServiceError, ProfileNotFoundError, ProfileAlreadyExistsError, InvalidConfigError, EncryptionError
 from .connection_service import ConnectionService
 from .app_service import get_app_service
@@ -26,6 +27,13 @@ connection_token_service: Optional[ConnectionTokenService] = None
 def initialize(database):
     global profile_service, connection_service, app_service, mcp_service, connection_token_service
     
+    # Check if Pipedream is enabled
+    pipedream_enabled = getattr(config, 'PIPEDREAM', True)
+    
+    if not pipedream_enabled:
+        logger.info("Pipedream services disabled via PIPEDREAM=false configuration")
+        return
+    
     try:
         # Initialize services
         profile_service = ProfileService()
@@ -38,6 +46,25 @@ def initialize(database):
     except Exception as e:
         logger.error(f"Failed to initialize pipedream services: {str(e)}")
         raise
+
+
+def check_pipedream_enabled():
+    """
+    Dependency to check if Pipedream services are enabled.
+    Raises HTTPException if disabled.
+    """
+    pipedream_enabled = getattr(config, 'PIPEDREAM', True)
+    if not pipedream_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="Pipedream services are disabled"
+        )
+    if not profile_service:
+        raise HTTPException(
+            status_code=503,
+            detail="Pipedream services not initialized"
+        )
+    return True
 
 
 class CreateConnectionTokenRequest(BaseModel):
@@ -226,7 +253,8 @@ def _normalize_app_slug(app_slug: str) -> str:
 @router.post("/connection-token", response_model=ConnectionTokenResponse)
 async def create_connection_token(
     request: CreateConnectionTokenRequest,
-    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    _enabled: bool = Depends(check_pipedream_enabled)
 ):
     logger.debug(f"Creating Pipedream connection token for user: {user_id}, app: {request.app}")
     
@@ -254,7 +282,8 @@ async def create_connection_token(
 
 @router.get("/connections", response_model=ConnectionResponse)
 async def get_user_connections(
-    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    _enabled: bool = Depends(check_pipedream_enabled)
 ):
     logger.debug(f"Getting connections for user: {user_id}")
     
@@ -293,7 +322,8 @@ async def get_user_connections(
 @router.post("/mcp/discover", response_model=MCPDiscoveryResponse)
 async def discover_mcp_servers(
     request: MCPDiscoveryRequest,
-    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    _enabled: bool = Depends(check_pipedream_enabled)
 ):
     logger.debug(f"Discovering MCP servers for user: {user_id}, app: {request.app_slug}")
     
@@ -342,7 +372,8 @@ async def discover_mcp_servers(
 @router.post("/mcp/discover-profile", response_model=MCPDiscoveryResponse)
 async def discover_mcp_servers_for_profile(
     request: MCPProfileDiscoveryRequest,
-    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    _enabled: bool = Depends(check_pipedream_enabled)
 ):
     logger.debug(f"Discovering MCP servers for profile: {request.external_user_id}")
     
@@ -391,7 +422,8 @@ async def discover_mcp_servers_for_profile(
 @router.post("/mcp/connect", response_model=MCPConnectionResponse)
 async def create_mcp_connection(
     request: MCPConnectionRequest,
-    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    _enabled: bool = Depends(check_pipedream_enabled)
 ):
     logger.debug(f"Creating MCP connection for user: {user_id}, app: {request.app_slug}")
     
@@ -441,7 +473,8 @@ async def create_mcp_connection(
 async def get_pipedream_apps(
     after: Optional[str] = Query(None, description="Cursor for pagination"),
     q: Optional[str] = Query(None),
-    category: Optional[str] = Query(None)
+    category: Optional[str] = Query(None),
+    _enabled: bool = Depends(check_pipedream_enabled)
 ):
     logger.debug(f"Fetching Pipedream apps: query='{q}', category='{category}'")
     
@@ -491,7 +524,9 @@ async def get_pipedream_apps(
 
 
 @router.get("/apps/popular", response_model=Dict[str, Any])
-async def get_popular_pipedream_apps():
+async def get_popular_pipedream_apps(
+    _enabled: bool = Depends(check_pipedream_enabled)
+):
     logger.debug("Fetching popular Pipedream apps")
     
     try:
@@ -540,7 +575,10 @@ async def get_popular_pipedream_apps():
 
 
 @router.get("/apps/{app_slug}/icon")
-async def get_app_icon(app_slug: str):
+async def get_app_icon(
+    app_slug: str,
+    _enabled: bool = Depends(check_pipedream_enabled)
+):
     logger.debug(f"Fetching icon for app: {app_slug}")
     try:
         normalized = _normalize_app_slug(app_slug)
@@ -563,7 +601,10 @@ async def get_app_icon(app_slug: str):
         raise _handle_pipedream_exception(e)
 
 @router.get("/apps/{app_slug}/tools")
-async def get_app_tools(app_slug: str):
+async def get_app_tools(
+    app_slug: str,
+    _enabled: bool = Depends(check_pipedream_enabled)
+):
     logger.debug(f"Getting tools for app: {app_slug}")
     normalized = _normalize_app_slug(app_slug)
     url = f"https://remote.mcp.pipedream.net/?app={normalized}&externalUserId=tools_preview"
@@ -602,7 +643,8 @@ async def get_app_tools(app_slug: str):
 @router.post("/profiles", response_model=ProfileResponse)
 async def create_credential_profile(
     request: ProfileRequest,
-    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    _enabled: bool = Depends(check_pipedream_enabled)
 ):
     logger.debug(f"Creating credential profile for user: {user_id}, app: {request.app_slug}")
     
@@ -630,7 +672,8 @@ async def create_credential_profile(
 async def get_credential_profiles(
     app_slug: Optional[str] = Query(None),
     is_active: Optional[bool] = Query(None),
-    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    _enabled: bool = Depends(check_pipedream_enabled)
 ):
     logger.debug(f"Getting credential profiles for user: {user_id}, app: {app_slug}")
     
@@ -648,7 +691,8 @@ async def get_credential_profiles(
 @router.get("/profiles/{profile_id}", response_model=ProfileResponse)
 async def get_credential_profile(
     profile_id: str,
-    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    _enabled: bool = Depends(check_pipedream_enabled)
 ):
     logger.debug(f"Getting credential profile: {profile_id} for user: {user_id}")
     
@@ -670,7 +714,8 @@ async def get_credential_profile(
 async def update_credential_profile(
     profile_id: str,
     request: UpdateProfileRequest,
-    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    _enabled: bool = Depends(check_pipedream_enabled)
 ):
     logger.debug(f"Updating credential profile: {profile_id} for user: {user_id}")
     
@@ -695,7 +740,8 @@ async def update_credential_profile(
 @router.delete("/profiles/{profile_id}")
 async def delete_credential_profile(
     profile_id: str,
-    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    _enabled: bool = Depends(check_pipedream_enabled)
 ):
     logger.debug(f"Deleting credential profile: {profile_id} for user: {user_id}")
     
@@ -716,7 +762,8 @@ async def delete_credential_profile(
 async def connect_credential_profile(
     profile_id: str,
     app: Optional[str] = Query(None),
-    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    _enabled: bool = Depends(check_pipedream_enabled)
 ):
     logger.debug(f"Connecting credential profile: {profile_id} for user: {user_id}")
     
@@ -753,7 +800,8 @@ async def connect_credential_profile(
 @router.get("/profiles/{profile_id}/connections")
 async def get_profile_connections(
     profile_id: str,
-    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
+    _enabled: bool = Depends(check_pipedream_enabled)
 ):
     logger.debug(f"Getting connections for profile: {profile_id}, user: {user_id}")
     

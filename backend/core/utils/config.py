@@ -301,6 +301,12 @@ class Configuration:
     STRIPE_DEFAULT_PLAN_ID: Optional[str] = None
     STRIPE_DEFAULT_TRIAL_DAYS: Optional[int] = 14
     
+    # Bypass trial - give users immediate credits without CC
+    BYPASS_TRIAL: Optional[bool] = False
+    
+    # Pipedream integration - enable/disable Pipedream services
+    PIPEDREAM: Optional[bool] = True
+    
     # Stripe Product IDs
     STRIPE_PRODUCT_ID_PROD: str = 'prod_SGT7srmz5hB2qo'
     STRIPE_PRODUCT_ID_STAGING: str = 'prod_SGT7srmz5hB2qo'
@@ -524,6 +530,14 @@ class Configuration:
             env_val = os.getenv(key)
             
             if env_val is not None:
+                # Check if type is Optional (Union with None)
+                is_optional = hasattr(expected_type, "__origin__") and expected_type.__origin__ is Union
+                if is_optional:
+                    # Get the actual type from Union[Type, None]
+                    actual_types = [t for t in expected_type.__args__ if t is not type(None)]
+                    if actual_types:
+                        expected_type = actual_types[0]
+                
                 # Convert environment variable to the expected type
                 if expected_type == bool:
                     # Handle boolean conversion

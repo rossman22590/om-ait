@@ -147,12 +147,19 @@ export async function middleware(request: NextRequest) {
       const hasActiveTrial = creditAccount.trial_status === 'active';
       const trialExpired = creditAccount.trial_status === 'expired' || creditAccount.trial_status === 'cancelled';
       const trialConverted = creditAccount.trial_status === 'converted';
+      const trialBypassed = creditAccount.trial_status === 'none'; // BYPASS_TRIAL mode
       
+      // Allow access if user has paid tier or converted trial
       if (hasTier && (trialConverted || !trialExpired)) {
         return supabaseResponse;
       }
 
-      if (!hasTier && !hasActiveTrial && !trialConverted) {
+      // Allow access if trial is bypassed (BYPASS_TRIAL=true users)
+      if (trialBypassed && !hasTier) {
+        return supabaseResponse;
+      }
+
+      if (!hasTier && !hasActiveTrial && !trialConverted && !trialBypassed) {
         if (hasUsedTrial || trialExpired || creditAccount.trial_status === 'cancelled') {
           const url = request.nextUrl.clone();
           url.pathname = '/subscription';

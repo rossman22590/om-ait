@@ -13,6 +13,10 @@ MINIMUM_CREDIT_FOR_RUN = Decimal('0.01')
 DEFAULT_TOKEN_COST = Decimal('0.000002')
 
 FREE_TIER_INITIAL_CREDITS = Decimal('5.00')
+BYPASS_TRIAL_CREDITS = Decimal('10.00')  # Credits given when BYPASS_TRIAL=true
+
+# Import FREE_MODEL_ID to make it available for free tier users
+from core.ai_models.registry import FREE_MODEL_ID
 
 @dataclass
 class Tier:
@@ -31,7 +35,7 @@ TIERS: Dict[str, Tier] = {
         monthly_credits=Decimal('0.00'),
         display_name='No Plan',
         can_purchase_credits=True,
-        models=[],
+        models=[FREE_MODEL_ID],  # Allow free model for no plan
         project_limit=3
     ),
     'free': Tier(
@@ -40,7 +44,7 @@ TIERS: Dict[str, Tier] = {
         monthly_credits=Decimal('0.00'),
         display_name='Free Tier (Discontinued)',
         can_purchase_credits=True,
-        models=[],
+        models=[FREE_MODEL_ID],  # Allow free model for free tier
         project_limit=3
     ),
     'tier_2_20': Tier(

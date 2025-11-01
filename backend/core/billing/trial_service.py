@@ -10,6 +10,7 @@ from .config import (
     TRIAL_DURATION_DAYS,
     TRIAL_TIER,
     TRIAL_CREDITS,
+    BYPASS_TRIAL_CREDITS,
 )
 from .credit_manager import credit_manager
 from .idempotency import generate_trial_idempotency_key
@@ -22,6 +23,16 @@ class TrialService:
     async def get_trial_status(self, account_id: str) -> Dict:
         db = DBConnection()
         client = await db.client
+        
+        # Check if BYPASS_TRIAL is enabled - no trial needed
+        bypass_trial = getattr(config, 'BYPASS_TRIAL', False)
+        if bypass_trial:
+            return {
+                'has_trial': False,
+                'trial_status': 'none',
+                'bypass_trial': True,
+                'message': 'Trial bypassed - you have immediate access with credits'
+            }
         
         if not TRIAL_ENABLED:
             return {
@@ -200,6 +211,15 @@ class TrialService:
         client = await db.client
         
         logger.info(f"[TRIAL SECURITY] Trial activation attempt for account {account_id}")
+        
+        # Check if BYPASS_TRIAL is enabled - no trial needed
+        bypass_trial = getattr(config, 'BYPASS_TRIAL', False)
+        if bypass_trial:
+            logger.info(f"[TRIAL SECURITY] Trial attempt rejected - BYPASS_TRIAL enabled for account {account_id}")
+            raise HTTPException(
+                status_code=400, 
+                detail="Trial not needed - you already have immediate access with credits"
+            )
         
         if not TRIAL_ENABLED:
             logger.warning(f"[TRIAL SECURITY] Trial attempt rejected - trials disabled for account {account_id}")
