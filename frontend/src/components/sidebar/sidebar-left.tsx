@@ -304,12 +304,12 @@ export function SidebarLeft({
       {...props}
     >
       <SidebarHeader className={cn("px-6 pt-7 overflow-hidden", state === 'collapsed' && "px-6")}>
-        <div className={cn("flex h-[32px] items-center justify-between min-w-[200px]")}>
+        <div className={cn("flex h-[40px] items-center justify-between min-w-[200px]")}>
           <div className="">
             {state === 'collapsed' ? (
               <div className="pl-2 relative flex items-center justify-center w-fit group/logo">
                 <Link href="/dashboard" onClick={() => isMobile && setOpenMobile(false)}>
-                  <KortixLogo size={20} className="flex-shrink-0 opacity-100 group-hover/logo:opacity-0 transition-opacity" />
+                  <KortixLogo size={32} className="flex-shrink-0 opacity-100 group-hover/logo:opacity-0 transition-opacity" />
                 </Link>
                 <Tooltip delayDuration={2000}>
                   <TooltipTrigger asChild>
@@ -328,7 +328,7 @@ export function SidebarLeft({
             ) : (
               <div className="pl-2 relative flex items-center justify-center w-fit">
                 <Link href="/dashboard" onClick={() => isMobile && setOpenMobile(false)}>
-                  <KortixLogo size={20} className="flex-shrink-0" />
+                  <KortixLogo size={32} className="flex-shrink-0" />
                 </Link>
               </div>
             )}

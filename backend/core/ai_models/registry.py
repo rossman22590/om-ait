@@ -194,6 +194,27 @@ class ModelRegistry:
             enabled=True
         ))
         
+        # OpenAI GPT-5 Nano - Via OpenAI directly
+        self.register(Model(
+            id="openai/gpt-5-nano-2025-08-07",
+            name="GPT-5 Nano",
+            provider=ModelProvider.OPENAI,
+            aliases=["gpt-5-nano", "GPT-5 Nano", "openai/gpt-5-nano", "openai/gpt-5-nano-2025-08-07"],
+            context_window=400_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.STRUCTURED_OUTPUT,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=0.10,
+                output_cost_per_million_tokens=0.80
+            ),
+            tier_availability=["free", "paid"],
+            priority=95,
+            enabled=True
+        ))
+        
         # Google Gemini 2.5 Pro - Via OpenRouter
         self.register(Model(
             id="openrouter/google/gemini-2.5-pro",

@@ -148,7 +148,7 @@ function LottieAnimation({
   isDark: boolean;
   speed: number;
 }) {
-  // Elegant rotating gradient orb
+  // Elegant rotating gradient orb with machine.svg in center
   return (
     <div 
       className="relative inline-flex items-center justify-center"
@@ -224,6 +224,19 @@ function LottieAnimation({
           opacity={1}
         />
       </svg>
+      
+      {/* Machine.svg in center - made white */}
+      <img
+        src="/machine.svg"
+        alt=""
+        style={{
+          width: loaderSize * 0.5,
+          height: loaderSize * 0.5,
+          position: 'absolute',
+          filter: 'brightness(0) invert(1)', // Makes the SVG white
+          opacity: 0.9,
+        }}
+      />
     </div>
   );
 }
