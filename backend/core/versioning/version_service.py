@@ -179,8 +179,22 @@ class VersionService:
                 
                 mcp_copy['config'] = {k: v for k, v in config.items() if k == 'profile_id'}
             
+            elif mcp_type == 'pipedream':
+                if 'mcp_qualified_name' not in mcp_copy:
+                    # Strip "(Pipedream)" suffix from display names like "Gmail (Pipedream)" -> "gmail"
+                    clean_name = mcp_name.replace('(Pipedream)', '').replace('(pipedream)', '').strip()
+                    app_slug = config.get('app_slug', clean_name.lower().replace(' ', '_'))
+                    mcp_copy['mcp_qualified_name'] = f"pipedream:{app_slug}"
+                if 'app_slug' not in mcp_copy:
+                    # Strip "(Pipedream)" suffix from display names
+                    clean_name = mcp_name.replace('(Pipedream)', '').replace('(pipedream)', '').strip()
+                    mcp_copy['app_slug'] = config.get('app_slug', clean_name.lower().replace(' ', '_'))
+                
+                mcp_copy['config'] = {k: v for k, v in config.items() if k == 'profile_id'}
+            
             normalized.append(mcp_copy)
         return normalized
+
 
     async def create_version(
         self,

@@ -40,19 +40,22 @@ interface ConfiguredMcpListProps {
 }
 
 const extractAppSlug = (mcp: MCPConfiguration): { type: 'pipedream' | 'composio', slug: string } | null => {
+  // Strictly prefer explicit fields; avoid deriving from qualifiedName unless the prefix matches
   if (isPipedreamMCP(mcp)) {
-    // Try multiple sources for the app slug
-    const slug = (mcp as PipedreamMCPConfiguration).app_slug ||
-      mcp.config?.app_slug ||
-      mcp.config?.headers?.['x-pd-app-slug'] ||
-      mcp.qualifiedName.replace('pipedream_', '').split('_')[0]; // Extract first part before profile ID
-    return slug ? { type: 'pipedream', slug } : null;
+    const pdSlug = (mcp as PipedreamMCPConfiguration).app_slug
+      || mcp.config?.app_slug
+      || (mcp as any)?.profileData?.app_slug
+      || mcp.config?.headers?.['x-pd-app-slug'];
+    return pdSlug ? { type: 'pipedream', slug: pdSlug } : null;
   }
   if (isComposioMCP(mcp)) {
-    const slug = (mcp as ComposioMCPConfiguration).toolkitSlug ||
-      mcp.config?.toolkit_slug ||
-      mcp.qualifiedName.replace('composio.', '');
-    return slug ? { type: 'composio', slug } : null;
+    const explicit = (mcp as ComposioMCPConfiguration).toolkitSlug || mcp.config?.toolkit_slug;
+    if (explicit) return { type: 'composio', slug: explicit };
+    const qn = (mcp as any).mcp_qualified_name || mcp.qualifiedName;
+    if (typeof qn === 'string' && qn.startsWith('composio.')) {
+      return { type: 'composio', slug: qn.replace('composio.', '') };
+    }
+    return null;
   }
   return null;
 };
@@ -64,8 +67,9 @@ const MCPLogo: React.FC<{ mcp: MCPConfiguration }> = ({ mcp }) => {
 
   // For Pipedream, we can fetch the app icon
   const { data: pipedreamIconData } = usePipedreamAppIcon(
-    isPipedream && appInfo ? appInfo.slug : ''
-  ) as { data?: { icon_url: string } | string };
+    isPipedream && appInfo ? appInfo.slug : '',
+    { enabled: !!(isPipedream && appInfo?.slug) }
+  ) as { data?: { icon_url: string; app_slug?: string } };
 
   // For Composio, we can fetch the toolkit icon directly
   const { data: composioIconData } = useComposioToolkitIcon(
@@ -85,9 +89,7 @@ const MCPLogo: React.FC<{ mcp: MCPConfiguration }> = ({ mcp }) => {
 
   // Handle Pipedream icon
   if (isPipedream && pipedreamIconData) {
-    const iconUrl = typeof pipedreamIconData === 'string' 
-      ? pipedreamIconData 
-      : pipedreamIconData.icon_url;
+    const iconUrl = (pipedreamIconData as any)?.icon_url;
     
     if (iconUrl) {
       return (

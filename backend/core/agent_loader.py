@@ -6,6 +6,7 @@ eliminating duplication across agent_crud, agent_service, and agent_runs.
 """
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
+import json
 from core.utils.logger import logger
 from core.services.supabase import DBConnection
 
@@ -404,7 +405,11 @@ class AgentLoader:
                 
                 agent.triggers = []
             
-            agent.version_name = version_dict.get('version_name', 'v1')
+            # Load default profiles (is_default: true) and add to custom_mcps if not already present
+            await self._add_default_profiles_to_custom_mcps(agent)
+            
+            logger.info(f"✅ Agent {agent.agent_id} loaded with {len(agent.custom_mcps)} custom MCPs: {[mcp.get('name', 'unknown') for mcp in agent.custom_mcps]}")
+            logger.debug(f"Full custom_mcps structure: {agent.custom_mcps}")
             agent.version_number = version_dict.get('version_number')
             agent.version_created_at = version_dict.get('created_at')
             agent.version_updated_at = version_dict.get('updated_at')
@@ -427,6 +432,98 @@ class AgentLoader:
         agent.triggers = []
         agent.version_name = 'v1'
         agent.restrictions = {}
+    
+    async def _add_default_profiles_to_custom_mcps(self, agent: AgentData):
+        """
+        Load profiles marked as is_default=true from user_mcp_credential_profiles table
+        and add them to agent's custom_mcps if not already present.
+        """
+        try:
+            client = await self.db.client
+            
+            # Query for default profiles for this account
+            result = await client.table('user_mcp_credential_profiles').select('*').eq(
+                'account_id', agent.account_id
+            ).eq('is_default', True).eq('is_active', True).execute()
+            
+            if not result.data:
+                logger.info(f"No default profiles found for agent {agent.agent_id} (account: {agent.account_id})")
+                return
+            
+            default_profiles = result.data
+            logger.info(f"Found {len(default_profiles)} default profiles for agent {agent.agent_id}")
+            
+            # Track profile IDs already in custom_mcps to avoid duplicates
+            existing_profile_ids = set()
+            for mcp in agent.custom_mcps:
+                if isinstance(mcp, dict) and 'config' in mcp and 'profile_id' in mcp['config']:
+                    existing_profile_ids.add(mcp['config']['profile_id'])
+            
+            # Add default profiles that aren't already included
+            for profile in default_profiles:
+                profile_id = profile.get('profile_id')
+                mcp_qualified_name = profile.get('mcp_qualified_name', '')
+                
+                logger.debug(f"Processing default profile: {profile_id} ({mcp_qualified_name})")
+                
+                # Skip if already in custom_mcps
+                if profile_id in existing_profile_ids:
+                    logger.debug(f"Skipping profile {profile_id} - already in custom_mcps")
+                    continue
+                
+                # Determine MCP type and create profile entry
+                if mcp_qualified_name.startswith('composio.'):
+                    app_slug = mcp_qualified_name.replace('composio.', '')
+                    # Extract profile name - use from credentials if available
+                    profile_name = profile.get('profile_name', app_slug)
+                    
+                    mcp_entry = {
+                        'name': profile_name,
+                        'type': 'composio',
+                        'qualifiedName': mcp_qualified_name,
+                        'config': {
+                            'profile_id': profile_id
+                        },
+                        'enabledTools': profile.get('enabled_tools', [])
+                    }
+                    logger.info(f"Adding Composio profile: {profile_id} ({mcp_qualified_name})")
+                elif mcp_qualified_name.startswith('pipedream:'):
+                    raw_slug = mcp_qualified_name.replace('pipedream:', '')
+                    # Sanitize slug to avoid variants like "gmail_(pipedream)"
+                    def _sanitize_slug(n: str) -> str:
+                        n = (n or '').lower().strip()
+                        n = n.replace(' (pipedream)', '').replace('(pipedream)', '')
+                        n = n.replace(' ', '_')
+                        return ''.join(ch for ch in n if ch.isalnum() or ch in ['_', '-'])
+                    app_slug = _sanitize_slug(raw_slug)
+                    # Extract profile name - use from credentials if available
+                    profile_name = profile.get('profile_name', app_slug)
+                    
+                    mcp_entry = {
+                        'name': profile_name,
+                        'type': 'pipedream',
+                        # Force normalized qualifiedName to sanitized slug
+                        'qualifiedName': f"pipedream:{app_slug}",
+                        'app_slug': app_slug,
+                        'config': {
+                            'profile_id': profile_id,
+                            'app_slug': app_slug
+                        },
+                        'enabledTools': profile.get('enabled_tools', [])
+                    }
+                    logger.info(f"Adding Pipedream profile: {profile_id} ({mcp_qualified_name})")
+                    logger.info(f"📋 Pipedream MCP entry structure: {json.dumps(mcp_entry, default=str)}")
+                else:
+                    # Unknown type, skip
+                    logger.warning(f"Unknown MCP type for profile {profile_id}: {mcp_qualified_name}")
+                    continue
+                
+                agent.custom_mcps.append(mcp_entry)
+                logger.info(f"✅ Auto-loaded default profile {profile_id} ({mcp_qualified_name}) for agent {agent.agent_id}")
+                
+        except Exception as e:
+            logger.warning(f"Failed to load default profiles for agent {agent.agent_id}: {e}")
+            # Continue without default profiles rather than failing
     
     async def _batch_load_configs(self, agents: list[AgentData]):
         """Batch load configurations for multiple agents."""

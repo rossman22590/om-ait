@@ -56,9 +56,11 @@ export const PipedreamUrlDetector: React.FC<PipedreamUrlDetectorProps> = ({
   content, 
   className 
 }) => {
+  const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
   const pipedreamUrls = detectPipedreamUrls(content);
 
-  if (pipedreamUrls.length === 0) {
+  // If Pipedream UI is disabled, just pass through to Composio detector
+  if (!showPipedreamUI || pipedreamUrls.length === 0) {
     return (
       <ComposioUrlDetector content={content} className={className} />
     );

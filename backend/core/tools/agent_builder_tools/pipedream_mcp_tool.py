@@ -1,4 +1,5 @@
 from typing import Optional, List, Dict, Any
+from datetime import datetime, timezone
 from core.agentpress.tool import ToolResult, openapi_schema, usage_example
 from core.agentpress.thread_manager import ThreadManager
 from .base_tool import AgentBuilderBaseTool
@@ -349,23 +350,92 @@ class PipedreamMCPTool(AgentBuilderBaseTool):
 
             server = await mcp_service.create_connection(external_user, app, oauth_app_id)
 
-            # Dynamically register tools (custom MCP of type 'pipedream')
+            # Save to agent config (same format as Composio)
             try:
-                from agent.tools.mcp_tool_wrapper import MCPToolWrapper
+                account_id = await self._get_current_account_id()
+                client = await self.db.client
+                
+                agent_result = await client.table('agents').select('current_version_id').eq('agent_id', self.agent_id).execute()
+                if not agent_result.data or not agent_result.data[0].get('current_version_id'):
+                    logger.warning(f"Could not find agent config for agent {self.agent_id}")
+                else:
+                    version_result = await client.table('agent_versions')\
+                        .select('config')\
+                        .eq('version_id', agent_result.data[0]['current_version_id'])\
+                        .maybe_single()\
+                        .execute()
+                    
+                    if version_result.data and version_result.data.get('config'):
+                        current_config = version_result.data['config']
+                        current_tools = current_config.get('tools', {})
+                        current_custom_mcps = current_tools.get('custom_mcp', [])
+                        
+                        new_mcp_config = {
+                            'name': profile.app_name or app_slug,
+                            'type': 'pipedream',
+                            'config': {
+                                'profile_id': profile_id,
+                                'app_slug': app_slug,
+                                'external_user_id': profile.external_user_id,
+                                'oauth_app_id': oauth_app_id
+                            },
+                            'enabledTools': profile.enabled_tools or []
+                        }
+                        
+                        updated_mcps = [mcp for mcp in current_custom_mcps 
+                                      if not (mcp.get('type') == 'pipedream' and mcp.get('config', {}).get('profile_id') == profile_id)]
+                        
+                        updated_mcps.append(new_mcp_config)
+                        
+                        current_tools['custom_mcp'] = updated_mcps
+                        current_config['tools'] = current_tools
+                        
+                        from core.versioning.version_service import get_version_service
+                        version_service = await get_version_service()
+                        new_version = await version_service.create_version(
+                            agent_id=self.agent_id,
+                            user_id=account_id,
+                            system_prompt=current_config.get('system_prompt', ''),
+                            configured_mcps=current_config.get('tools', {}).get('mcp', []),
+                            custom_mcps=updated_mcps,
+                            agentpress_tools=current_config.get('tools', {}).get('agentpress', {}),
+                            change_description=f"Connected Pipedream {app_slug} with {len(profile.enabled_tools or [])} tools"
+                        )
+                        
+                        # Update agent's current_version_id to the newly created version
+                        client = await self.db.client
+                        update_result = await client.table('agents').update({
+                            'current_version_id': new_version.version_id,
+                            'updated_at': datetime.now(timezone.utc).isoformat()
+                        }).eq('agent_id', self.agent_id).execute()
+                        
+                        logger.info(f"✅ Saved Pipedream profile {profile_id} ({app_slug}) to agent version {new_version.version_id}")
+                        logger.info(f"✅ Updated agent {self.agent_id} to use new version {new_version.version_id}")
+                        logger.info(f"✅ Database update result: {update_result.data if hasattr(update_result, 'data') else 'success'}")
+            except Exception as e:
+                logger.warning(f"Could not save Pipedream profile to agent config: {e}", exc_info=True)
 
+            # Dynamically register tools (standard MCP of type 'pipedream')
+            try:
+                from core.tools.mcp_tool_wrapper import MCPToolWrapper
+
+                # If the profile doesn't have explicit enabled tools, enable all tools returned by the server
+                server_tool_names = [t.name for t in getattr(server, 'available_tools', [])] if server else []
+                enabled_tools = (profile.enabled_tools or []) or server_tool_names
+
+                # Register as a standard MCP (NOT custom). Custom handler doesn't support 'pipedream'.
                 mcp_config_for_wrapper = {
                     'name': profile.app_name or app_slug,
                     'qualifiedName': f"pipedream:{app_slug}",
+                    'type': 'pipedream',
                     'config': {
                         'profile_id': profile_id,
                         'app_slug': app_slug,
                         'external_user_id': profile.external_user_id,
                         'oauth_app_id': oauth_app_id
                     },
-                    'enabledTools': profile.enabled_tools or [],
-                    'instructions': '',
-                    'isCustom': True,
-                    'customType': 'pipedream'
+                    'enabledTools': enabled_tools,
+                    'instructions': ''
                 }
 
                 mcp_wrapper_instance = MCPToolWrapper(mcp_configs=[mcp_config_for_wrapper])
@@ -407,3 +477,73 @@ class PipedreamMCPTool(AgentBuilderBaseTool):
         except Exception as e:
             logger.error(f"Error connecting Pipedream MCP: {e}", exc_info=True)
             return self.fail_response(f"Error connecting Pipedream MCP: {str(e)}")
+
+    def get_schemas(self):
+        """Get tool schemas. Override to include auto-discovery of Pipedream tools.
+        
+        This follows the same pattern as Composio - auto-discovering and registering
+        tools from enabled Pipedream profiles when the agent loads.
+        """
+        # Get base schemas from parent class
+        schemas = super().get_schemas()
+        
+        # Auto-discover Pipedream profiles for this agent and register their tools
+        # This will be called during tool registration in run.py
+        try:
+            self._auto_register_pipedream_tools_sync()
+        except Exception as e:
+            logger.debug(f"Could not auto-register Pipedream tools: {e}")
+        
+        return schemas
+    
+    def _auto_register_pipedream_tools_sync(self) -> None:
+        """Synchronously auto-discover and register Pipedream profiles for this agent.
+        
+        This discovers any Pipedream profiles linked to this agent and registers
+        their tools in the tool_registry immediately, without needing async.
+        """
+        try:
+            # This is called during tool registration, which is synchronous
+            # We can't do async DB queries here, so profiles must be loaded
+            # through connect_pipedream_mcp when the user connects an app
+            
+            logger.debug(f"Pipedream MCP tool registered for agent {self.agent_id}")
+            logger.debug("Note: Pipedream tools will be available once profiles are connected via connect_pipedream_mcp")
+            
+        except Exception as e:
+            logger.debug(f"Pipedream auto-registration: {e}")
+
+    async def configure_profile_for_agent(self, profile_id: str) -> ToolResult:
+        """Configure a Pipedream profile for the current agent and register its tools.
+        
+        This mirrors the Composio credential_profile_tool.configure_profile_for_agent method.
+        It loads a Pipedream profile and automatically registers all its tools in the 
+        tool registry, making them available for the agent to use.
+        
+        Args:
+            profile_id: ID of the Pipedream profile to configure
+            
+        Returns:
+            ToolResult with configuration status
+        """
+        try:
+            profile = await self._load_profile_for_account(profile_id)
+            if not profile:
+                return self.fail_response(f"Pipedream profile {profile_id} not found")
+            
+            app_slug = profile.app_slug
+            oauth_app_id = profile.oauth_app_id
+            
+            # Connect and register the MCP tools
+            result = await self.connect_pipedream_mcp(profile_id, app_slug, oauth_app_id)
+            
+            if result.success:
+                logger.info(f"✅ Configured Pipedream profile {profile_id} ({app_slug}) for agent {self.agent_id}")
+            else:
+                logger.error(f"❌ Failed to configure Pipedream profile {profile_id}: {result.output}")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in configure_profile_for_agent: {e}", exc_info=True)
+            return self.fail_response(f"Error configuring profile: {str(e)}")

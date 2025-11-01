@@ -120,43 +120,85 @@ class MCPService:
         
         try:
             server_url = await self._get_server_url(request.qualified_name, request.config, request.provider)
-            headers = self._get_headers(request.qualified_name, request.config, request.provider, request.external_user_id)
-            
-            # Add debugging
-            self._logger.debug(f"MCP connection details - Provider: {request.provider}, URL: {server_url}, Headers: {headers}")
-            
-            # Add timeout to prevent hanging
-            async with asyncio.timeout(30):
-                async with streamablehttp_client(server_url, headers=headers) as (
-                    read_stream, write_stream, _
-                ):
-                    session = ClientSession(read_stream, write_stream)
-                    await session.initialize()
-                    
-                    tool_result = await session.list_tools()
-                    tools = tool_result.tools if tool_result else []
-                    
-                    connection = MCPConnection(
-                        qualified_name=request.qualified_name,
-                        name=request.name,
-                        config=request.config,
-                        enabled_tools=request.enabled_tools,
-                        provider=request.provider,
-                        external_user_id=request.external_user_id,
-                        session=session,
-                        tools=tools
-                    )
-                    
-                    self._connections[request.qualified_name] = connection
-                    self._logger.debug(f"Connected to {request.qualified_name} ({len(tools)} tools available)")
-                    
-                    return connection
-                    
-        except asyncio.TimeoutError:
-            error_msg = f"Connection timeout for {request.qualified_name} after 30 seconds"
-            self._logger.error(error_msg)
-            raise MCPConnectionError(error_msg)
+            headers = await self._get_headers_async(request.qualified_name, request.config, request.provider, request.external_user_id)
+
+            # Log connection details at info level with redacted auth for easier diagnosis in production
+            redacted_headers = dict(headers)
+            if 'Authorization' in redacted_headers:
+                redacted_headers['Authorization'] = 'Bearer ***'
+            self._logger.info(f"MCP connection details - Provider: {request.provider}, URL: {server_url}, Headers: {redacted_headers}")
+
+            last_error = None
+            for attempt in range(2):
+                try:
+                    timeout_secs = 30
+                    async with asyncio.timeout(timeout_secs):
+                        async with streamablehttp_client(server_url, headers=headers) as (
+                            read_stream, write_stream, _
+                        ):
+                            session = ClientSession(read_stream, write_stream)
+                            await session.initialize()
+
+                            tool_result = await session.list_tools()
+                            tools = tool_result.tools if tool_result else []
+
+                            connection = MCPConnection(
+                                qualified_name=request.qualified_name,
+                                name=request.name,
+                                config=request.config,
+                                enabled_tools=request.enabled_tools,
+                                provider=request.provider,
+                                external_user_id=request.external_user_id,
+                                session=session,
+                                tools=tools
+                            )
+
+                            self._connections[request.qualified_name] = connection
+                            self._logger.debug(f"Connected to {request.qualified_name} ({len(tools)} tools available)")
+                            return connection
+                except asyncio.TimeoutError as e:
+                    last_error = e
+                    self._logger.warning(f"Timeout connecting to {request.qualified_name} (attempt {attempt+1}/2)")
+                    await asyncio.sleep(0.5)
+                except Exception as e:
+                    last_error = e
+                    break
+
+            # Fallback: if Pipedream and HTTP transport failed, try SSE transport once
+            if request.provider == 'pipedream':
+                try:
+                    self._logger.info(f"Trying SSE fallback for {request.qualified_name}")
+                    async with asyncio.timeout(20):
+                        async with sse_client(server_url, headers=headers) as (read_stream, write_stream):
+                            session = ClientSession(read_stream, write_stream)
+                            await session.initialize()
+                            tool_result = await session.list_tools()
+                            tools = tool_result.tools if tool_result else []
+                            connection = MCPConnection(
+                                qualified_name=request.qualified_name,
+                                name=request.name,
+                                config=request.config,
+                                enabled_tools=request.enabled_tools,
+                                provider=request.provider,
+                                external_user_id=request.external_user_id,
+                                session=session,
+                                tools=tools
+                            )
+                            self._connections[request.qualified_name] = connection
+                            self._logger.info(f"✓ Connected via SSE to {request.qualified_name} ({len(tools)} tools available)")
+                            return connection
+                except Exception as se:
+                    self._logger.error(f"SSE fallback failed for {request.qualified_name}: {se}")
+
+            if isinstance(last_error, asyncio.TimeoutError):
+                error_msg = f"Connection timeout for {request.qualified_name} after 30 seconds"
+                self._logger.error(error_msg)
+                raise MCPConnectionError(error_msg)
+            else:
+                self._logger.error(f"Failed to connect to {request.qualified_name}: {str(last_error)}")
+                raise MCPConnectionError(f"Failed to connect to MCP server: {str(last_error)}")
         except Exception as e:
+            # Ensure outer try has an except to satisfy Python syntax and provide robust error handling
             self._logger.error(f"Failed to connect to {request.qualified_name}: {str(e)}")
             raise MCPConnectionError(f"Failed to connect to MCP server: {str(e)}")
     
@@ -214,7 +256,8 @@ class MCPService:
                 continue
             
             for tool in connection.tools:
-                if tool.name not in connection.enabled_tools:
+                # If enabled_tools is empty/None, treat as ALL tools enabled (especially for Pipedream default)
+                if connection.enabled_tools and tool.name not in connection.enabled_tools:
                     continue
                 
                 openapi_tool = {
@@ -247,7 +290,8 @@ class MCPService:
         if not connection.session:
             raise MCPToolExecutionError(f"No active session for tool: {request.tool_name}")
         
-        if request.tool_name not in connection.enabled_tools:
+        # Allow all tools if enabled_tools is empty/None
+        if connection.enabled_tools and request.tool_name not in connection.enabled_tools:
             raise MCPToolExecutionError(f"Tool not enabled: {request.tool_name}")
         
         try:
@@ -393,13 +437,14 @@ class MCPService:
         else:
             raise MCPProviderError(f"Unknown provider type: {provider}")
     
-    def _get_headers(self, qualified_name: str, config: Dict[str, Any], provider: str, external_user_id: Optional[str] = None) -> Dict[str, str]:
-        if provider in ['custom', 'http', 'sse', 'pipedream']:
+    async def _get_headers_async(self, qualified_name: str, config: Dict[str, Any], provider: str, external_user_id: Optional[str] = None) -> Dict[str, str]:
+        if provider in ['custom', 'http', 'sse']:
             return self._get_custom_headers(qualified_name, config, external_user_id)
-        elif provider == 'composio':
+        if provider == 'pipedream':
+            return await self._get_pipedream_headers(config, external_user_id)
+        if provider == 'composio':
             return self._get_composio_headers(qualified_name, config, external_user_id)
-        else:
-            raise MCPProviderError(f"Unknown provider type: {provider}")
+        raise MCPProviderError(f"Unknown provider type: {provider}")
 
     async def _get_pipedream_server_url(self, config: Dict[str, Any]) -> str:
         """Build the Pipedream remote MCP URL from config.
@@ -414,31 +459,66 @@ class MCPService:
             return url
 
         app_slug = config.get('app_slug') or config.get('app')
-        external_user_id = config.get('external_user_id')
-        profile_id = config.get('profile_id')
-
         if not app_slug:
             raise MCPProviderError("Pipedream config missing app_slug")
+        # Prefer full URL with query params (some proxies strip custom headers)
+        external_user_id = await self._resolve_pipedream_external_user_id(config)
+        if external_user_id:
+            return f"https://remote.mcp.pipedream.net/?app={app_slug}&externalUserId={external_user_id}"
+        return "https://remote.mcp.pipedream.net"
 
-        if not external_user_id and profile_id:
-            try:
-                # Resolve external_user_id from stored profile config
-                from core.services.supabase import DBConnection
-                from core.utils.encryption import decrypt_data
-                db = DBConnection()
-                supabase = await db.client
-                result = await supabase.table('user_mcp_credential_profiles').select('encrypted_config').eq('profile_id', profile_id).single().execute()
-                if result.data and result.data.get('encrypted_config'):
-                    decrypted = decrypt_data(result.data['encrypted_config'])
-                    cfg = json.loads(decrypted)
-                    external_user_id = cfg.get('external_user_id')
-            except Exception as e:
-                self._logger.error(f"Failed to resolve Pipedream external_user_id for profile {profile_id}: {e}")
+    async def _resolve_pipedream_external_user_id(self, config: Dict[str, Any]) -> Optional[str]:
+        external_user_id = config.get('external_user_id')
+        profile_id = config.get('profile_id')
+        if external_user_id:
+            return external_user_id
+        if not profile_id:
+            return None
+        try:
+            from core.services.supabase import DBConnection
+            from core.utils.encryption import decrypt_data
+            db = DBConnection()
+            supabase = await db.client
+            result = await supabase.table('user_mcp_credential_profiles').select('encrypted_config').eq('profile_id', profile_id).single().execute()
+            if result.data and result.data.get('encrypted_config'):
+                decrypted = decrypt_data(result.data['encrypted_config'])
+                cfg = json.loads(decrypted)
+                return cfg.get('external_user_id')
+        except Exception as e:
+            self._logger.error(f"Failed to resolve Pipedream external_user_id for profile {profile_id}: {e}")
+        return None
 
-        if not external_user_id:
-            raise MCPProviderError("Pipedream config missing external_user_id and could not resolve from profile_id")
+    async def _get_pipedream_headers(self, config: Dict[str, Any], external_user_id: Optional[str] = None) -> Dict[str, str]:
+        app_slug = config.get('app_slug') or config.get('app')
+        if not app_slug:
+            raise MCPProviderError("Pipedream config missing app_slug")
+        resolved_external_user_id = external_user_id or await self._resolve_pipedream_external_user_id(config)
+        if not resolved_external_user_id:
+            raise MCPProviderError("Pipedream external_user_id not provided and could not be resolved")
 
-        return f"https://remote.mcp.pipedream.net/?app={app_slug}&externalUserId={external_user_id}"
+        # Get access token via pipedream service (reuses auth logic)
+        try:
+            from core.pipedream.mcp_service import get_mcp_service  # type: ignore
+            pd_service = get_mcp_service()
+            access_token = await pd_service._ensure_access_token()  # Uses client credentials
+        except Exception as e:
+            raise MCPProviderError(f"Failed to obtain Pipedream access token: {e}")
+
+        project_id = os.getenv("PIPEDREAM_PROJECT_ID")
+        environment = os.getenv("PIPEDREAM_X_PD_ENVIRONMENT", "development")
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "x-pd-external-user-id": resolved_external_user_id,
+            "x-pd-app-slug": app_slug,
+        }
+        # Optional headers (don't fail if not provided)
+        if project_id:
+            headers["x-pd-project-id"] = project_id
+        if environment:
+            headers["x-pd-environment"] = environment
+        return headers
     
     async def _get_custom_server_url(self, qualified_name: str, config: Dict[str, Any]) -> str:
         url = config.get("url")

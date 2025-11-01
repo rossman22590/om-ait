@@ -234,23 +234,21 @@ class ToolManager:
                         db_connection=db, 
                         agent_id=agent_id
                     )
+                    
                     if enabled_methods:
                         logger.debug(f"✅ Registered {tool_name} with methods: {enabled_methods}")
+                    else:
                         logger.debug(f"✅ Registered {tool_name} (all methods)")
                     
-                    # Special verification for critical Pipedream tools
+                    # Special note for Pipedream tools
                     if tool_name == 'pipedream_mcp_tool':
-                        available_functions = self.thread_manager.tool_registry.get_available_functions()
-                        pipedream_functions = [f for f in available_functions.keys() if 'pipedream' in f]
-                        if pipedream_functions:
-                            logger.info(f"✅ ✅ Pipedream functions registered: {pipedream_functions}")
-                        else:
-                            logger.error(f"❌ Pipedream tool registered but no functions found!")
+                        logger.debug(f"ℹ️ Pipedream tool registered. Connected profiles will auto-load when agent starts.")
+                        
                 except Exception as e:
                     logger.error(f"❌ Failed to register {tool_name}: {e}")
                     # For Pipedream specifically, this is critical
                     if tool_name == 'pipedream_mcp_tool':
-                        logger.error(f"❌ CRITICAL: Pipedream tool registration failed - agent builder will not have dual platform support!")
+                        logger.error(f"❌ CRITICAL: Pipedream tool registration failed - agent will not have Pipedream support!")
                     # Continue with other tools instead of failing completely
     
     def _register_suna_specific_tools(self, disabled_tools: List[str]):
@@ -380,6 +378,11 @@ class MCPManager:
     async def register_mcp_tools(self, agent_config: dict) -> Optional[MCPToolWrapper]:
         all_mcps = []
         
+        logger.info(f"🔍 MCPManager: Received agent_config with {len(agent_config.get('custom_mcps', []))} custom_mcps")
+        if agent_config.get('custom_mcps'):
+            logger.info(f"📋 Custom MCPs: {[mcp.get('name') for mcp in agent_config['custom_mcps']]}")
+            logger.debug(f"📋 Full custom_mcps: {agent_config.get('custom_mcps')}")
+        
         if agent_config.get('configured_mcps'):
             all_mcps.extend(agent_config['configured_mcps'])
         
@@ -400,6 +403,48 @@ class MCPManager:
                         'instructions': custom_mcp.get('instructions', ''),
                         'isCustom': True,
                         'customType': 'composio'
+                    }
+                    all_mcps.append(mcp_config)
+                    continue
+                
+                if custom_type == 'pipedream':
+                    # Derive and sanitize app_slug/qualifiedName to avoid variants like "gmail_(pipedream)"
+                    def _sanitize_slug(n: str) -> str:
+                        n = (n or '').lower().strip()
+                        n = n.replace(' (pipedream)', '').replace('(pipedream)', '')
+                        n = n.replace(' ', '_')
+                        return ''.join(ch for ch in n if ch.isalnum() or ch in ['_', '-'])
+
+                    qn_raw = custom_mcp.get('qualifiedName') or ''
+                    cfg_app = (custom_mcp.get('config') or {}).get('app_slug')
+
+                    # Prefer app slug from explicit fields; otherwise sanitize whatever is in qualifiedName/name
+                    if qn_raw.startswith('pipedream:'):
+                        raw_slug = qn_raw.split(':', 1)[1]
+                    else:
+                        raw_slug = None
+
+                    name_based = _sanitize_slug(custom_mcp.get('name', ''))
+                    chosen_app = custom_mcp.get('app_slug') or cfg_app or raw_slug or name_based
+                    app_slug = _sanitize_slug(chosen_app)
+
+                    # Always normalize qualifiedName to the sanitized form
+                    qualified_name = f"pipedream:{app_slug}"
+
+                    # Treat Pipedream as a standard provider, not a custom MCP
+                    config_obj = (custom_mcp.get('config') or {}).copy()
+                    config_obj['app_slug'] = app_slug  # force sanitized
+                    # Preserve external_user_id/profile_id if present at the top level
+                    if 'external_user_id' in custom_mcp:
+                        config_obj.setdefault('external_user_id', custom_mcp['external_user_id'])
+
+                    mcp_config = {
+                        'name': custom_mcp['name'],
+                        'qualifiedName': qualified_name,
+                        'type': 'pipedream',
+                        'config': config_obj,
+                        'enabledTools': custom_mcp.get('enabledTools', []),
+                        'instructions': custom_mcp.get('instructions', '')
                     }
                     all_mcps.append(mcp_config)
                     continue
@@ -667,13 +712,9 @@ class AgentRunner:
         tool_manager.register_all_tools(agent_id=agent_id, disabled_tools=disabled_tools)
         
         is_suna_agent = (self.config.agent_config and self.config.agent_config.get('is_suna_default', False)) or (self.config.agent_config is None)
-        logger.debug(f"Agent config check: agent_config={self.config.agent_config is not None}, is_suna_default={is_suna_agent}")
         
         if is_suna_agent:
-            logger.debug("Registering Suna-specific tools...")
             self._register_suna_specific_tools(disabled_tools)
-        else:
-            logger.debug("Not a Suna agent, skipping Suna-specific tool registration")
     
     def _get_enabled_methods_for_tool(self, tool_name: str) -> Optional[List[str]]:
         if not self.config.agent_config or 'agentpress_tools' not in self.config.agent_config:

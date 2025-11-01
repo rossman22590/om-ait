@@ -11,10 +11,32 @@ class DynamicToolBuilder:
     def create_dynamic_methods(self, tools_info: List[Dict[str, Any]], custom_tools: Dict[str, Dict[str, Any]], execute_callback: Callable[[str, Dict[str, Any]], Awaitable[ToolResult]]) -> Dict[str, Callable]:
         methods = {}
         
+        # Normalize and create methods for standard MCP tools (OpenAPI-like structure)
         for tool_info in tools_info:
-            tool_name = tool_info.get('name', '')
-            if tool_name:
-                method = self._create_dynamic_method(tool_name, tool_info, execute_callback)
+            normalized = None
+            original_name = None
+            try:
+                if isinstance(tool_info, dict) and 'function' in tool_info:
+                    f = tool_info.get('function') or {}
+                    original_name = f.get('name', '')
+                    normalized = {
+                        'name': original_name,
+                        'description': f.get('description', ''),
+                        'parameters': f.get('parameters', {
+                            'type': 'object',
+                            'properties': {},
+                            'required': []
+                        })
+                    }
+                else:
+                    original_name = tool_info.get('name', '')
+                    normalized = tool_info
+            except Exception:
+                normalized = None
+                original_name = None
+
+            if original_name:
+                method = self._create_dynamic_method(original_name, normalized, execute_callback)
                 if method:
                     methods[method['method_name']] = method['method']
         

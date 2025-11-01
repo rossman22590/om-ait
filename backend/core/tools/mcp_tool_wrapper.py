@@ -157,8 +157,7 @@ class MCPToolWrapper(Tool):
                     if cached_data:
                         cached_configs.append(config.get('qualifiedName', 'Unknown'))
                         cached_tools_data.append(cached_data)
-                        continue
-                
+                        # IMPORTANT: still connect to establish live sessions; cache alone isn't enough for standard MCPs
                 task = self._initialize_single_standard_server(config)
                 initialization_tasks.append(('standard', config, task))
         
@@ -295,6 +294,30 @@ class MCPToolWrapper(Tool):
                 if method and hasattr(method, 'tool_schemas'):
                     self._schemas[method_name] = method.tool_schemas
                     # logger.debug(f"Registered dynamic method schemas for '{method_name}'")
+
+            # Also register hyphen-name aliases so XML callers using original tool names work
+            try:
+                for tool_name, tool_data in self._dynamic_tools.items():
+                    original_name = tool_data.get('original_tool_name')
+                    method_name = tool_data.get('method_name')
+                    schema_list = self._schemas.get(method_name, [])
+                    if not original_name or not schema_list:
+                        continue
+                    # Duplicate schema with function name set to original (hyphen) tool name
+                    alias_schemas = []
+                    for schema in schema_list:
+                        if hasattr(schema, 'schema') and isinstance(schema.schema, dict):
+                            alias_schema_dict = dict(schema.schema)
+                            func = dict(alias_schema_dict.get('function', {}))
+                            func['name'] = original_name
+                            alias_schema_dict['function'] = func
+                            from core.agentpress.tool import ToolSchema, SchemaType
+                            alias_schemas.append(ToolSchema(schema_type=SchemaType.OPENAPI, schema=alias_schema_dict))
+                    if alias_schemas:
+                        self._schemas[original_name] = alias_schemas
+                        logger.debug(f"Registered alias schema for MCP tool: {original_name} -> {method_name}")
+            except Exception as e:
+                logger.warning(f"Failed to register alias schemas for MCP tools: {e}")
         
         logger.debug(f"Registration complete for MCPToolWrapper - total schemas: {len(self._schemas)}")
     

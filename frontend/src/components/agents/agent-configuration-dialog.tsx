@@ -686,7 +686,7 @@ export function AgentConfigurationDialog({
                         system_prompt: formData.system_prompt,
                         agentpress_tools: formData.agentpress_tools
                       }}
-                      saveMode="callback"
+                      saveMode="direct"
                       isLoading={updateAgentMCPsMutation.isPending}
                     />
                   </div>
