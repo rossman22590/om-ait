@@ -14,7 +14,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import LottieView from 'lottie-react-native';
-import { MessageRenderer, ToolCallPanel, ChatInputSection, ChatDrawers, type ToolMessagePair } from '@/components/chat';
+import { ThreadContent, ToolCallPanel, ChatInputSection, ChatDrawers, type ToolMessagePair } from '@/components/chat';
 import { ThreadHeader, ThreadActionsDrawer } from '@/components/threads';
 import { FileManagerScreen } from '@/components/files';
 import { useChatCommons, type UseChatReturn, useDeleteThread, useShareThread } from '@/hooks';
@@ -247,7 +247,15 @@ export function ThreadPage({
   const shareThreadMutation = useShareThread();
   
   // Get full thread data with sandbox info
-  const { data: fullThreadData } = useThread(chat.activeThread?.id);
+  const { data: fullThreadData, refetch: refetchThreadData } = useThread(chat.activeThread?.id);
+  
+  // Refetch thread data when file manager opens to ensure latest sandbox info
+  React.useEffect(() => {
+    if (isFileManagerVisible) {
+      console.log('[ThreadPage] File manager opened - refetching thread/sandbox data...');
+      refetchThreadData();
+    }
+  }, [isFileManagerVisible, refetchThreadData]);
   
   const messages = chat.messages || [];
   const streamingContent = chat.streamingContent || '';
@@ -440,7 +448,7 @@ export function ThreadPage({
               flexGrow: 1,
               paddingTop: insets.top + 60, 
               paddingBottom: 200,
-              paddingHorizontal: 16,
+              paddingHorizontal: 14,
             }}
             keyboardShouldPersistTaps="handled"
             scrollEventThrottle={16}
@@ -466,16 +474,21 @@ export function ThreadPage({
               />
             }
           >
-            <MessageRenderer
+            <ThreadContent
               messages={messages}
-              streamingContent={streamingContent}
+              streamingTextContent={streamingContent}
               streamingToolCall={streamingToolCall}
-              isStreaming={chat.isStreaming}
+              agentStatus={chat.isAgentRunning ? 'running' : 'idle'}
+              streamHookStatus={chat.isStreaming ? 'streaming' : 'idle'}
               sandboxId={chat.activeSandboxId || fullThreadData?.project?.sandbox?.id}
+              handleToolClick={(assistantMessageId: string | null, toolName: string) => {
+                console.log('[ThreadPage] Tool clicked:', toolName);
+              }}
               onToolPress={(toolMessages, initialIndex) => {
+                console.log('[ThreadPage] Tool card pressed, opening panel');
                 chat.setSelectedToolData({ toolMessages, initialIndex });
               }}
-              onFilePress={(filePath) => {
+              onFilePress={(filePath: string) => {
                 console.log('[ThreadPage] File clicked:', filePath);
                 const normalizedPath = filePath.startsWith('/') ? filePath : `/workspace/${filePath}`;
                 setSelectedFilePath(normalizedPath);
@@ -496,22 +509,20 @@ export function ThreadPage({
       )}
 
 
-    <View className="absolute top-0 left-0 right-0">
       {/* Thread Header */}
       <ThreadHeader
-          threadTitle={chat.activeThread?.title}
-          onTitleChange={async (newTitle) => {
-            console.log('📝 Thread title changed to:', newTitle);
-            try {
-              await chat.updateThreadTitle(newTitle);
-            } catch (error) {
-              console.error('❌ Failed to update thread title:', error);
-            }
-          }}
-          onMenuPress={onMenuPress}
-          onActionsPress={() => setIsThreadActionsVisible(true)}
-        />
-    </View>        
+        threadTitle={chat.activeThread?.title}
+        onTitleChange={async (newTitle) => {
+          console.log('📝 Thread title changed to:', newTitle);
+          try {
+            await chat.updateThreadTitle(newTitle);
+          } catch (error) {
+            console.error('❌ Failed to update thread title:', error);
+          }
+        }}
+        onMenuPress={onMenuPress}
+        onActionsPress={() => setIsThreadActionsVisible(true)}
+      />        
 
       {/* Chat Input Section with Gradient */}
       <ChatInputSection
