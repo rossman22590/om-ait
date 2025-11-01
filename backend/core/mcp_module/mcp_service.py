@@ -388,16 +388,57 @@ class MCPService:
             return await self._get_custom_server_url(qualified_name, config)
         elif provider == 'composio':
             return await self._get_composio_server_url(qualified_name, config)
+        elif provider == 'pipedream':
+            return await self._get_pipedream_server_url(config)
         else:
             raise MCPProviderError(f"Unknown provider type: {provider}")
     
     def _get_headers(self, qualified_name: str, config: Dict[str, Any], provider: str, external_user_id: Optional[str] = None) -> Dict[str, str]:
-        if provider in ['custom', 'http', 'sse']:
+        if provider in ['custom', 'http', 'sse', 'pipedream']:
             return self._get_custom_headers(qualified_name, config, external_user_id)
         elif provider == 'composio':
             return self._get_composio_headers(qualified_name, config, external_user_id)
         else:
             raise MCPProviderError(f"Unknown provider type: {provider}")
+
+    async def _get_pipedream_server_url(self, config: Dict[str, Any]) -> str:
+        """Build the Pipedream remote MCP URL from config.
+        Accepts either:
+        - config with explicit 'url'
+        - or { app_slug, external_user_id }
+        - or { app_slug, profile_id } and we resolve external_user_id from DB
+        """
+        # If a direct URL was provided, prefer it
+        url = config.get('url')
+        if url:
+            return url
+
+        app_slug = config.get('app_slug') or config.get('app')
+        external_user_id = config.get('external_user_id')
+        profile_id = config.get('profile_id')
+
+        if not app_slug:
+            raise MCPProviderError("Pipedream config missing app_slug")
+
+        if not external_user_id and profile_id:
+            try:
+                # Resolve external_user_id from stored profile config
+                from core.services.supabase import DBConnection
+                from core.utils.encryption import decrypt_data
+                db = DBConnection()
+                supabase = await db.client
+                result = await supabase.table('user_mcp_credential_profiles').select('encrypted_config').eq('profile_id', profile_id).single().execute()
+                if result.data and result.data.get('encrypted_config'):
+                    decrypted = decrypt_data(result.data['encrypted_config'])
+                    cfg = json.loads(decrypted)
+                    external_user_id = cfg.get('external_user_id')
+            except Exception as e:
+                self._logger.error(f"Failed to resolve Pipedream external_user_id for profile {profile_id}: {e}")
+
+        if not external_user_id:
+            raise MCPProviderError("Pipedream config missing external_user_id and could not resolve from profile_id")
+
+        return f"https://remote.mcp.pipedream.net/?app={app_slug}&externalUserId={external_user_id}"
     
     async def _get_custom_server_url(self, qualified_name: str, config: Dict[str, Any]) -> str:
         url = config.get("url")

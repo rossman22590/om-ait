@@ -196,6 +196,7 @@ export function SidebarLeft({
   const [showSearchModal, setShowSearchModal] = useState(false);
   const { isOpen: isDocumentModalOpen } = useDocumentModalStore();
   const [isStoppingAll, setIsStoppingAll] = useState(false);
+  const [showCustomAIWorkerModal, setShowCustomAIWorkerModal] = useState(false);
 
   // Update active view based on pathname
   useEffect(() => {
@@ -487,35 +488,33 @@ export function SidebarLeft({
       </SidebarContent>
 
       {/* Enterprise Demo Card - Only show when expanded */}
-      {
-        state !== 'collapsed' && showEnterpriseCard && (
-          <div className="absolute bottom-[86px] left-6 right-6 z-10">
-            <div className="rounded-2xl p-5 backdrop-blur-[12px] border-[1.5px] bg-gradient-to-br from-white/25 to-gray-300/25 dark:from-gray-600/25 dark:to-gray-800/25 border-gray-300/50 dark:border-gray-600/50">
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="h-4 w-4" />
-                <span className="text-sm font-medium text-foreground">Enterprise Demo</span>
+      {false && state !== 'collapsed' && showEnterpriseCard && (
+        <div className="absolute bottom-[86px] left-6 right-6 z-10">
+          <div className="rounded-2xl p-5 backdrop-blur-[12px] border-[1.5px] bg-gradient-to-br from-white/25 to-gray-300/25 dark:from-gray-600/25 dark:to-gray-800/25 border-gray-300/50 dark:border-gray-600/50">
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="h-4 w-4" />
+              <span className="text-sm font-medium text-foreground">Enterprise Demo</span>
 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="ml-auto h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                  onClick={() => setShowEnterpriseCard(false)}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mb-4">
-                Request custom AI Workers implementation
-              </p>
-              <KortixProcessModal>
-                <Button size="sm" className="w-full text-xs h-8">
-                  Learn More
-                </Button>
-              </KortixProcessModal>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="ml-auto h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowEnterpriseCard(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Request custom AI Workers implementation
+            </p>
+            <KortixProcessModal>
+              <Button size="sm" className="w-full text-xs h-8">
+                Learn More
+              </Button>
+            </KortixProcessModal>
           </div>
-        )
-      }
+        </div>
+      )}
 
       <div className={cn("pb-4", state === 'collapsed' ? "px-6" : "px-6")}>
         <UserProfileSection user={user} />
