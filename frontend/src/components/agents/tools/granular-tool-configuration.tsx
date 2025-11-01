@@ -164,6 +164,76 @@ export const GranularToolConfiguration = ({
     onToolsChange(updatedTools);
   };
 
+  const handleSelectAll = () => {
+    if (disabled && isSunaAgent) {
+      toast.error("Tools cannot be modified", {
+        description: "Suna's default tools are managed centrally and cannot be changed.",
+      });
+      return;
+    }
+
+    if (isLoading) return;
+
+    const updatedTools: Record<string, any> = {};
+    
+    Object.keys(TOOL_GROUPS).forEach(toolName => {
+      const toolGroup = getToolGroup(toolName, toolsData);
+      if (!toolGroup || toolGroup.visible === false || !toolGroup.enabled) return;
+
+      if (hasGranularControl(toolName, toolsData)) {
+        updatedTools[toolName] = {
+          enabled: true,
+          methods: toolGroup.methods.reduce((acc, method) => {
+            if (method.visible !== false) {
+              acc[method.name] = true;
+            }
+            return acc;
+          }, {} as Record<string, boolean>),
+        };
+      } else {
+        updatedTools[toolName] = true;
+      }
+    });
+
+    onToolsChange(updatedTools);
+    toast.success("All tools enabled");
+  };
+
+  const handleDeselectAll = () => {
+    if (disabled && isSunaAgent) {
+      toast.error("Tools cannot be modified", {
+        description: "Suna's default tools are managed centrally and cannot be changed.",
+      });
+      return;
+    }
+
+    if (isLoading) return;
+
+    const updatedTools: Record<string, any> = {};
+    
+    Object.keys(TOOL_GROUPS).forEach(toolName => {
+      const toolGroup = getToolGroup(toolName, toolsData);
+      if (!toolGroup || toolGroup.visible === false || !toolGroup.enabled) return;
+
+      if (hasGranularControl(toolName, toolsData)) {
+        updatedTools[toolName] = {
+          enabled: false,
+          methods: toolGroup.methods.reduce((acc, method) => {
+            if (method.visible !== false) {
+              acc[method.name] = false;
+            }
+            return acc;
+          }, {} as Record<string, boolean>),
+        };
+      } else {
+        updatedTools[toolName] = false;
+      }
+    });
+
+    onToolsChange(updatedTools);
+    toast.success("All tools disabled");
+  };
+
   const toggleGroupExpansion = (toolName: string) => {
     const newExpanded = new Set(expandedGroups);
     if (newExpanded.has(toolName)) {
@@ -236,9 +306,29 @@ export const GranularToolConfiguration = ({
             Configure tools and their individual capabilities for your agent
           </p>
         </div>
-        <Badge variant="default" className="text-xs">
-          {getEnabledToolsCount()} / {Object.keys(TOOL_GROUPS).length} tools enabled
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSelectAll}
+            disabled={disabled || isLoading}
+            className="text-xs"
+          >
+            Select All
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDeselectAll}
+            disabled={disabled || isLoading}
+            className="text-xs"
+          >
+            Deselect All
+          </Button>
+          <Badge variant="default" className="text-xs">
+            {getEnabledToolsCount()} / {Object.keys(TOOL_GROUPS).length} tools enabled
+          </Badge>
+        </div>
       </div>
 
       <div className="relative flex-shrink-0 mb-4">
