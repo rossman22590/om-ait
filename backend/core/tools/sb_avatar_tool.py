@@ -7,7 +7,7 @@ import base64
 import re
 import datetime
 
-from core.agentpress.tool import ToolResult, openapi_schema, usage_example
+from core.agentpress.tool import ToolResult, openapi_schema, usage_example, tool_metadata
 from core.sandbox.tool_base import SandboxToolsBase
 from core.agentpress.thread_manager import ThreadManager
 from core.utils.config import config
@@ -31,7 +31,14 @@ SUBSCRIPTION_AVATAR_MAPPING = {
 ASSIGNED_AVATAR_IDS = {mapping["avatar_id"] for mapping in SUBSCRIPTION_AVATAR_MAPPING.values()}
 ASSIGNED_VOICE_IDS = {mapping["voice_id"] for mapping in SUBSCRIPTION_AVATAR_MAPPING.values()}
 
-
+@tool_metadata(
+    display_name="Avatar Videos",
+    description="Generate AI avatar videos with custom scripts and voiceovers",
+    icon="Video",
+    color="bg-pink-100 dark:bg-pink-800/50",
+    weight=240,
+    visible=True
+)
 class SandboxAvatarTool(SandboxToolsBase):
     """Tool for generating AI avatar videos using Argil AI API."""
 

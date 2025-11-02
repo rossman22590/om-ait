@@ -31,20 +31,24 @@ export default function Home() {
         <main className="flex flex-col items-center justify-center min-h-screen w-full">
           <div className="w-full divide-y divide-border">
             <HeroSection />
-            {/* Senja testimonials embed (right under first section) */}
+            <InteractiveDemo />
+            {/* Senja testimonials embed (after Watch Machine Work section) */}
             <Script
               src="https://widget.senja.io/widget/698903f7-82e1-43c9-a1e4-507b33742e0a/platform.js"
               async
               strategy="afterInteractive"
             />
-            <div
-              className="senja-embed"
-              data-id="698903f7-82e1-43c9-a1e4-507b33742e0a"
-              data-mode="shadow"
-              data-lazyload="false"
-              style={{ display: 'block', width: '100%' }}
-            />
-            <InteractiveDemo />
+            <div className="w-full py-16 px-4 sm:px-6 lg:px-8">
+              <div className="max-w-7xl mx-auto">
+                <div
+                  className="senja-embed"
+                  data-id="698903f7-82e1-43c9-a1e4-507b33742e0a"
+                  data-mode="shadow"
+                  data-lazyload="false"
+                  style={{ display: 'block', width: '100%' }}
+                />
+              </div>
+            </div>
             <CapabilitiesSection />
             <BentoSection />
             <IntegrationsSection />
