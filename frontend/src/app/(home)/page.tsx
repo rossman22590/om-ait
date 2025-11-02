@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
+import Script from "next/script";
 import { CTASection } from '@/components/home/sections/cta-section';
 import { FooterSection } from '@/components/home/sections/footer-section';
 import { HeroSection } from '@/components/home/sections/hero-section';
@@ -30,6 +31,19 @@ export default function Home() {
         <main className="flex flex-col items-center justify-center min-h-screen w-full">
           <div className="w-full divide-y divide-border">
             <HeroSection />
+            {/* Senja testimonials embed (right under first section) */}
+            <Script
+              src="https://widget.senja.io/widget/698903f7-82e1-43c9-a1e4-507b33742e0a/platform.js"
+              async
+              strategy="afterInteractive"
+            />
+            <div
+              className="senja-embed"
+              data-id="698903f7-82e1-43c9-a1e4-507b33742e0a"
+              data-mode="shadow"
+              data-lazyload="false"
+              style={{ display: 'block', width: '100%' }}
+            />
             <InteractiveDemo />
             <CapabilitiesSection />
             <BentoSection />

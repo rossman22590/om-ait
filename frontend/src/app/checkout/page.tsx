@@ -138,7 +138,7 @@ function CheckoutContent() {
         }}
       />
       
-      <div className="min-h-screen bg-white flex items-start justify-center p-4 pt-8">
+      <div className="min-h-screen bg-white flex items-center justify-center p-4">
         {error ? (
           <Card className="w-full max-w-md bg-white">
             <CardHeader className="text-center">
@@ -159,9 +159,9 @@ function CheckoutContent() {
             <p className="text-gray-600 text-sm">Loading secure checkout...</p>
           </div>
         ) : (
-          // Embedded checkout container - needs min-height and proper width for Stripe
-          <div className="w-full max-w-4xl min-h-[600px]">
-            <div id="checkout-container" className="w-full"></div>
+          // Embedded checkout container
+          <div className="w-full max-w-4xl">
+            <div id="checkout-container"></div>
           </div>
         )}
       </div>
