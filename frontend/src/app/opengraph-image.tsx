@@ -1,9 +1,9 @@
-import { headers } from 'next/headers';
-import { ImageResponse } from 'next/og';
+import { readFile } from 'fs/promises';
+import { join } from 'path';
 
 // Configuration exports
-export const runtime = 'edge';
-export const alt = 'Machine';
+export const runtime = 'nodejs';
+export const alt = 'Machine - Generalist AI Agent';
 export const size = {
   width: 1200,
   height: 630,
@@ -11,40 +11,13 @@ export const size = {
 export const contentType = 'image/png';
 
 export default async function Image() {
-  try {
-    // Get the host from headers
-    const headersList = await headers();
-    const host = headersList.get('host') || '';
-    const protocol = process.env.NODE_ENV === 'development' ? 'http' : 'https';
-    const baseUrl = `${protocol}://${host}`;
-
-    return new ImageResponse(
-      (
-        <div
-          style={{
-            height: '100%',
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'black',
-          }}
-        >
-          <img
-            src={`${baseUrl}/banner.png`}
-            alt={alt}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-            }}
-          />
-        </div>
-      ),
-      { ...size },
-    );
-  } catch (error) {
-    console.error('Error generating OpenGraph image:', error);
-    return new Response(`Failed to generate image`, { status: 500 });
-  }
+  // Read the banner.png file from the public directory
+  const imageBuffer = await readFile(join(process.cwd(), 'public', 'banner.png'));
+  
+  return new Response(imageBuffer, {
+    headers: {
+      'Content-Type': 'image/png',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    },
+  });
 }
