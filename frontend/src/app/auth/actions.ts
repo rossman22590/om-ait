@@ -14,7 +14,7 @@ async function sendWelcomeEmail(email: string, name?: string) {
       return;
     }
     
-    const response = await fetch(`${backendUrl}/api/send-welcome-email`, {
+    const response = await fetch(`${backendUrl}/send-welcome-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

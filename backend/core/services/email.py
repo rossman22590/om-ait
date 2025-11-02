@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class EmailService:
     def __init__(self):
         self.api_token = os.getenv('MAILTRAP_API_TOKEN')
-        self.sender_email = os.getenv('MAILTRAP_SENDER_EMAIL', 'rcohen@mytsi.org')
+        self.sender_email = os.getenv('MAILTRAP_SENDER_EMAIL', 'hello@myapps.ai')
         self.sender_name = os.getenv('MAILTRAP_SENDER_NAME', 'Machine Team')
         
         if not self.api_token:
@@ -145,15 +145,15 @@ class EmailService:
 
     <p><em><strong>Welcome to Machine — we're excited to have you on board!</strong></em></p>
 
-    <p>To get started, we'd like to get to know you better: fill out this short <a href="#">form</a>!</p>
+    <p>To get started, make sure you activate your account on Machine!</p>
 
-    <p>To celebrate your arrival, here's a <strong>15% discount</strong> for your first month to get more usage:</p>
+    <p>To celebrate your arrival, here's a <strong>$10</strong> credit for your first month to get more usage:</p>
 
-    <p>🎁 Use code <strong>WELCOME15</strong> at checkout.</p>
+    <p>🎁 Use code <strong>WELCOME10</strong> at checkout.</p>
 
-    <p>Let us know if you need help getting started or have questions — we're always here, and join our <a href="#">Discord community</a>.</p>
+    <p>Let us know if you need help getting started or have questions — we're always here, and join our <a href="https://discord.gg/U5WEMTE79g">Discord community</a>.</p>
 
-    <p><strong>For your business:</strong> if you want to automate manual and ordinary tasks for your company, book a call with us <a href="#">here</a></p>
+    <p><strong>For your business:</strong> if you want to automate manual and ordinary tasks for your company, book a call with us <a href="https://calendly.com/techinschools/machine-walkthrough">here</a></p>
 
     <p>Thanks again, and welcome to the Machine community <span class="emoji">🌞</span></p>
 
