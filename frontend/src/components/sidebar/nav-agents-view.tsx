@@ -132,6 +132,22 @@ export function NavAgentsView() {
                                 Add Workers
                             </div>
                         </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full shadow-none justify-center items-center h-10 px-4 bg-background mt-2"
+                            onClick={() => {
+                                router.push('/agents?tab=my-agents');
+                                if (isMobile) {
+                                    setOpenMobile(false);
+                                }
+                            }}
+                        >
+                            <div className="flex items-center gap-2">
+                                <Bot className="h-4 w-4" />
+                                Manage Workers
+                            </div>
+                        </Button>
                     </>
                 )}
             </div>
