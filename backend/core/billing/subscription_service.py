@@ -251,8 +251,8 @@ class SubscriptionService:
                 payment_method_types=['card'],
                 line_items=[{'price': price_id, 'quantity': 1}],
                 mode='subscription',
-                ui_mode='embedded',
-                return_url=success_url,
+                success_url=success_url,
+                cancel_url=cancel_url,
                 subscription_data={
                     'metadata': {
                         'account_id': account_id,
@@ -267,17 +267,10 @@ class SubscriptionService:
             
             logger.info(f"[TRIAL CONVERSION] Created new checkout session for user {account_id}")
             
-            # Generate frontend checkout wrapper URL for Apple compliance
-            frontend_url = config.FRONTEND_URL
-            client_secret = getattr(session, 'client_secret', None)
-            checkout_param = f"client_secret={client_secret}" if client_secret else f"session_id={session.id}"
-            fe_checkout_url = f"{frontend_url}/checkout?{checkout_param}"
-            
+            # Return hosted Stripe checkout URL
             return {
-                'checkout_url': fe_checkout_url,  # Use embedded checkout URL (session.url is None for embedded mode)
-                'fe_checkout_url': fe_checkout_url,  # Kortix-branded embedded checkout
+                'checkout_url': session.url,  # Direct Stripe hosted checkout URL
                 'session_id': session.id,
-                'client_secret': client_secret,
                 'converting_from_trial': True,
                 'message': f'Converting from trial to {tier_display_name}. Your trial will end and the new plan will begin immediately upon payment.',
                 'tier_info': {
