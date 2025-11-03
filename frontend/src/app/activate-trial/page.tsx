@@ -17,8 +17,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { createClient } from '@/lib/supabase/client';
 import { clearUserLocalStorage } from '@/lib/utils/clear-local-storage';
 import { useMaintenanceNoticeQuery } from '@/hooks/react-query/edge-flags';
-import { MaintenanceAlert } from '@/components/maintenance-alert';
 import { useAuth } from '@/components/AuthProvider';
+import { MaintenancePage } from '@/components/maintenance/maintenance-page';
+import { useAdminRole } from '@/hooks/react-query/use-admin-role';
 import { PlanMigrationBanner } from '@/components/dashboard/plan-migration-banner';
 
 export default function ActivateTrialPage() {
@@ -28,6 +29,8 @@ export default function ActivateTrialPage() {
   const { data: trialStatus, isLoading: isLoadingTrial } = useTrialStatus(!!user);
   const startTrialMutation = useStartTrial();
   const { data: maintenanceNotice, isLoading: maintenanceLoading } = useMaintenanceNoticeQuery();
+  const { data: adminRoleData, isLoading: isCheckingAdminRole } = useAdminRole();
+  const isAdmin = adminRoleData?.isAdmin ?? false;
 
   useEffect(() => {
     if (!isLoadingSubscription && !isLoadingTrial && subscription && trialStatus) {
@@ -76,7 +79,7 @@ export default function ActivateTrialPage() {
     router.push('/auth');
   };
 
-  const isMaintenanceLoading = maintenanceLoading;
+  const isMaintenanceLoading = maintenanceLoading || isCheckingAdminRole;
 
   if (isMaintenanceLoading) {
     return (
@@ -86,8 +89,8 @@ export default function ActivateTrialPage() {
     );
   }
 
-  if (maintenanceNotice?.enabled) {
-    return <MaintenanceAlert open={true} onOpenChange={() => { }} closeable={false} />;
+  if (maintenanceNotice?.enabled && !isAdmin) {
+    return <MaintenancePage/>;
   }
 
   const isLoading = isLoadingSubscription || isLoadingTrial;

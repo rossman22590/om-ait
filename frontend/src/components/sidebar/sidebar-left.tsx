@@ -74,10 +74,14 @@ import { isLocalMode } from '@/lib/config';
 import { KortixProcessModal } from './kortix-enterprise-modal';
 
 // Helper function to get plan icon - maps frontend tier names from cloudPricingItems
-function getPlanIcon(planName: string, isLocal: boolean = false) {
+export function getPlanIcon(planName: string, isLocal: boolean = false) {
   if (isLocal) return '/plan-icons/ultra.svg';
 
   const plan = planName?.toLowerCase();
+
+  if (plan?.includes('free')) {
+    return null;
+  }
 
   // Ultra tier
   if (plan?.includes('ultra')) {
@@ -99,8 +103,12 @@ function getPlanIcon(planName: string, isLocal: boolean = false) {
 }
 
 // Helper function to get plan name - matches price_id to cloudPricingItems tier name
-function getPlanName(subscriptionData: any, isLocal: boolean = false): string {
+export function getPlanName(subscriptionData: any, isLocal: boolean = false): string {
   if (isLocal) return 'Ultra';
+
+  if (subscriptionData?.tier?.name === 'free') {
+    return 'Free Tier';
+  }
 
   // Match price_id to cloudPricingItems to get the frontend tier name
   const currentTier = siteConfig.cloudPricingItems.find(

@@ -80,8 +80,8 @@ class Configuration:
     
     # Environment mode
     ENV_MODE: Optional[EnvMode] = EnvMode.LOCAL
-    
-    
+
+
     # Subscription tier IDs - Production
     STRIPE_FREE_TIER_ID_PROD: str = 'price_1RLwBMG23sSyONuFrhkNh9fe'
     STRIPE_TIER_2_20_ID_PROD: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'

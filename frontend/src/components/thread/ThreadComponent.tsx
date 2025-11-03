@@ -47,6 +47,7 @@ import { AgentRunLimitDialog } from '@/components/thread/agent-run-limit-dialog'
 import { useAgentSelection } from '@/lib/stores/agent-selection-store';
 import { useQueryClient } from '@tanstack/react-query';
 import { threadKeys } from '@/hooks/react-query/threads/keys';
+import { fileQueryKeys } from '@/hooks/react-query/files';
 import { useProjectRealtime } from '@/hooks/useProjectRealtime';
 import { handleGoogleSlidesUpload } from './tool-views/utils/presentation-utils';
 
@@ -98,6 +99,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   const initialLayoutAppliedRef = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const lastStreamStartedRef = useRef<string | null>(null); // Track last runId we started streaming for
+  const pendingMessageRef = useRef<string | null>(null); // Store pending message to add when agent starts
 
   // Sidebar
   const { state: leftSidebarState, setOpen: setLeftSidebarOpen } = useSidebar();
@@ -171,6 +173,30 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     queryClient.invalidateQueries({ queryKey: threadKeys.agentRuns(threadId) });
     queryClient.invalidateQueries({ queryKey: threadKeys.messages(threadId) });
   }, [threadId, queryClient]);
+
+  // Listen for sandbox-active event to invalidate file caches
+  useEffect(() => {
+    const handleSandboxActive = (event: Event) => {
+      const customEvent = event as CustomEvent<{ sandboxId: string; projectId: string }>;
+      const { sandboxId, projectId: eventProjectId } = customEvent.detail;
+      
+      // Only invalidate if it's for this project
+      if (eventProjectId === projectId) {
+        console.log('[ThreadComponent] Sandbox active, invalidating file caches for:', sandboxId);
+        
+        // Invalidate all file content queries
+        queryClient.invalidateQueries({ 
+          queryKey: fileQueryKeys.contents()
+        });
+        
+        // This will cause all file attachments to refetch with the now-active sandbox
+        // toast.success('Sandbox is ready');
+      }
+    };
+
+    window.addEventListener('sandbox-active', handleSandboxActive);
+    return () => window.removeEventListener('sandbox-active', handleSandboxActive);
+  }, [projectId, queryClient]);
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -347,13 +373,37 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
           break;
         case 'connecting':
           setAgentStatus('connecting');
+          
+          // Add optimistic message when agent starts connecting
+          if (pendingMessageRef.current) {
+            const optimisticUserMessage: UnifiedMessage = {
+              message_id: `temp-${Date.now()}`,
+              thread_id: threadId,
+              type: 'user',
+              is_llm_message: false,
+              content: pendingMessageRef.current,
+              metadata: '{}',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            };
+
+            setMessages((prev) => [...prev, optimisticUserMessage]);
+            pendingMessageRef.current = null; // Clear after adding
+            
+            // Auto-scroll to bottom when message is added
+            setTimeout(() => {
+              if (scrollContainerRef.current) {
+                scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            }, 100);
+          }
           break;
         case 'streaming':
           setAgentStatus('running');
           break;
       }
     },
-    [setAgentStatus, setAgentRunId, setAutoOpenedPanel],
+    [setAgentStatus, setAgentRunId, setAutoOpenedPanel, threadId, setMessages],
   );
 
   const handleStreamError = useCallback((errorMessage: string) => {
@@ -369,6 +419,9 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
 
     console.error(`[PAGE] Stream hook error: ${errorMessage}`);
     toast.error(`Stream Error: ${errorMessage}`);
+    
+    // Clear pending message on error
+    pendingMessageRef.current = null;
   }, []);
 
   const handleStreamClose = useCallback(() => { }, []);
@@ -401,25 +454,8 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
       if (!message.trim()) return;
       setIsSending(true);
 
-      const optimisticUserMessage: UnifiedMessage = {
-        message_id: `temp-${Date.now()}`,
-        thread_id: threadId,
-        type: 'user',
-        is_llm_message: false,
-        content: message,
-        metadata: '{}',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      setMessages((prev) => [...prev, optimisticUserMessage]);
-
-      // Auto-scroll to bottom when user sends a message
-      setTimeout(() => {
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      }, 100);
+      // Store the message to add optimistically when agent starts running
+      pendingMessageRef.current = message;
 
       try {
         const messagePromise = addUserMessageMutation.mutateAsync({
@@ -443,6 +479,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         if (results[0].status === 'rejected') {
           const reason = results[0].reason;
           console.error('Failed to send message:', reason);
+          pendingMessageRef.current = null;
           throw new Error(
             `Failed to send message: ${reason?.message || reason}`,
           );
@@ -451,6 +488,7 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         if (results[1].status === 'rejected') {
           const error = results[1].reason;
           console.error('Failed to start agent:', error);
+          pendingMessageRef.current = null;
 
           if (error instanceof BillingError) {
             setBillingData({
@@ -462,12 +500,6 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
               accountId: null,
             });
             setShowBillingAlert(true);
-
-            setMessages((prev) =>
-              prev.filter(
-                (m) => m.message_id !== optimisticUserMessage.message_id,
-              ),
-            );
             return;
           }
 
@@ -479,12 +511,6 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
               runningThreadIds: running_thread_ids,
             });
             setShowAgentLimitDialog(true);
-
-            setMessages((prev) =>
-              prev.filter(
-                (m) => m.message_id !== optimisticUserMessage.message_id,
-              ),
-            );
             return;
           }
 
@@ -498,12 +524,6 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
               accountId: null,
             });
             setShowBillingAlert(true);
-
-            setMessages((prev) =>
-              prev.filter(
-                (m) => m.message_id !== optimisticUserMessage.message_id,
-              ),
-            );
             return;
           }
 
@@ -521,9 +541,6 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         ) {
           toast.error(err instanceof Error ? err.message : 'Operation failed');
         }
-        setMessages((prev) =>
-          prev.filter((m) => m.message_id !== optimisticUserMessage.message_id),
-        );
       } finally {
         setIsSending(false);
       }

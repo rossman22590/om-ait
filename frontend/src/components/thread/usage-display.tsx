@@ -131,7 +131,7 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
       <Badge variant="highlight" className="flex items-center gap-1 px-2 py-1 text-xs">
         <DollarSign className="h-3 w-3" />
         Balance:
-        {isBalanceLoading ? '—' : ` $${formatBalance(balanceData?.balance || 0)}`}
+        {isBalanceLoading ? '—' : ` $${formatBalance((balanceData?.balance || 0) / 100)}`}
       </Badge>
       
       {/* Show thread cost - always visible */}
