@@ -26,10 +26,10 @@ export default function IntroductionPage() {
   }, []);
 
   const imageSrc = !mounted
-    ? '/thumbnail-light.png'
+    ? '/banner.png'
     : resolvedTheme === 'dark'
-      ? '/thumbnail-dark.png'
-      : '/thumbnail-light.png';
+      ? '/banner.png'
+      : '/banner.png';
 
   return (
     <>
@@ -45,7 +45,7 @@ export default function IntroductionPage() {
 
       <DocsImage
         src={imageSrc}
-        alt="Kortix Platform Interface"
+        alt="Machine Platform Interface"
         size="full"
         aspect="video"
         className="mb-12"
@@ -58,11 +58,8 @@ export default function IntroductionPage() {
         </p>
         
         <h3 id="meet-machine">Machine - Our Flagship Agent</h3>
-
-        <h3 id="meet-suna">Kortix - Our Flagship Agent</h3>
         <p className="mb-4">
           Machine is our showcase agent that demonstrates what's possible with the platform. It's a generalist AI worker that can:
-          Kortix is our showcase agent that demonstrates what's possible with Kortix. It's a generalist AI worker that can:
         </p>
         <ul className="list-disc pl-6 mb-6 space-y-1">
           <li>Research topics and gather information from across the web</li>
@@ -73,7 +70,6 @@ export default function IntroductionPage() {
         </ul>
         <p className="mb-6">
           Machine shows you what you can build with our powerful AI platform.
-          Kortix is completely open source and shows you what you can build with the Kortix platform.
         </p>
 
         <h3 id="build-your-own" className="mb-4">Build Your Own Agents</h3>
@@ -90,7 +86,7 @@ export default function IntroductionPage() {
           <li><strong>Database</strong> - Stores your agent configs, conversation history, and results</li>
         </ul>
 
-        <h3 id="why-open-source" className="mb-4">Why Open Source?</h3>
+        <h3 id="get-started" className="mb-4">Get Started</h3>
         <p className="mb-6">
           Start building with Machine today. Create your first agent, customize it for your needs, and watch it handle tasks automatically. Our platform makes it easy to go from idea to working agent.
         </p>
