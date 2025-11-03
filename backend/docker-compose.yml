@@ -53,7 +53,6 @@ services:
     networks:
       - app-network
     environment:
-      # - REDIS_URL=rediss://default:AWoQAAIjcDE5OTJiMzRjNjNkZGU0ODZjYWU5ZTBmY2FmYTk0MDhjNXAxMA@cheerful-marten-27152.upstash.io:6379
       - LOG_LEVEL=INFO
     logging:
       driver: "json-file"
