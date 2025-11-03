@@ -1205,15 +1205,15 @@ export function KnowledgeBaseManager({
                                                     setCurrentFolderId(folder.id);
                                                 }}
                                             >
-                                                <div className="relative bg-muted/20 border border-border/50 rounded-lg p-4 transition-all duration-200 hover:bg-muted/30 hover:border-border">
+                                                <div className="relative bg-muted/20 border border-border/50 rounded-lg p-4 transition-all duration-200 hover:bg-muted/30 hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/10 hover:-translate-y-1">
                                                     <div className="flex flex-col items-center space-y-3">
                                                         <div className="relative">
-                                                            <div className="w-16 h-16 bg-purple-500/10 rounded-lg flex items-center justify-center">
-                                                                <FolderIcon className="h-8 w-8 text-purple-500" />
+                                                            <div className="w-16 h-16 bg-purple-500/10 rounded-lg flex items-center justify-center transition-all duration-200 group-hover:bg-purple-500/20 group-hover:scale-110">
+                                                                <FolderIcon className="h-8 w-8 text-purple-500 transition-all duration-200 group-hover:scale-110" />
                                                             </div>
                                                         </div>
                                                         <div className="text-center space-y-1 w-full">
-                                                            <p className="text-sm font-medium text-foreground truncate" title={folder.name}>
+                                                            <p className="text-sm font-medium text-foreground truncate transition-colors duration-200 group-hover:text-purple-500" title={folder.name}>
                                                                 {folder.name}
                                                             </p>
                                                             <p className="text-xs text-muted-foreground">
@@ -1272,20 +1272,20 @@ export function KnowledgeBaseManager({
                                                             }
                                                         }}
                                                     >
-                                                        <div className="relative bg-muted/20 border border-border/50 rounded-lg p-4 transition-all duration-200 hover:bg-muted/30 hover:border-border">
+                                                        <div className="relative bg-muted/20 border border-border/50 rounded-lg p-4 transition-all duration-200 hover:bg-muted/30 hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/10 hover:-translate-y-1">
                                                             <div className="flex flex-col items-center space-y-3">
                                                                 <div className="relative">
-                                                                    <div className="w-12 h-12 bg-muted/80 rounded-lg flex items-center justify-center">
-                                                                        <FileIcon className="h-6 w-6 text-foreground/60" />
+                                                                    <div className="w-12 h-12 bg-muted/80 rounded-lg flex items-center justify-center transition-all duration-200 group-hover:bg-purple-500/10 group-hover:scale-110">
+                                                                        <FileIcon className="h-6 w-6 text-foreground/60 transition-all duration-200 group-hover:text-purple-500 group-hover:scale-110" />
                                                                     </div>
-                                                                    <div className="absolute -bottom-1 -right-1 bg-background border border-border rounded px-1 py-0.5">
-                                                                        <span className="text-[8px] font-medium text-muted-foreground uppercase">
+                                                                    <div className="absolute -bottom-1 -right-1 bg-background border border-border rounded px-1 py-0.5 transition-all duration-200 group-hover:border-purple-500/50">
+                                                                        <span className="text-[8px] font-medium text-muted-foreground uppercase transition-colors duration-200 group-hover:text-purple-500">
                                                                             {fileInfo.extension.slice(0, 3)}
                                                                         </span>
                                                                     </div>
                                                                 </div>
                                                                 <div className="text-center space-y-1 w-full">
-                                                                    <p className="text-xs font-medium text-foreground truncate" title={file.name}>
+                                                                    <p className="text-xs font-medium text-foreground truncate transition-colors duration-200 group-hover:text-purple-500" title={file.name}>
                                                                         {file.name.length > 16 ? `${file.name.slice(0, 16)}...` : file.name}
                                                                     </p>
                                                                     {file.data && 'file_size' in file.data && (

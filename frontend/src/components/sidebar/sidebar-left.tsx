@@ -480,7 +480,7 @@ export function SidebarLeft({
 
               {/* Content area */}
               <div className="px-6 flex-1 overflow-hidden">
-                {activeView === 'chats' && <NavAgents />}
+                {activeView === 'chats' && <NavAgents onOpenSearch={() => setShowSearchModal(true)} />}
                 {activeView === 'agents' && <NavAgentsView />}
                 {activeView === 'starred' && (
                   <>

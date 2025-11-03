@@ -22,11 +22,7 @@ export const useProjects = createQueryHook(
 export const useThreads = (searchQuery?: string) => createQueryHook(
   threadKeys.lists(searchQuery),
   async () => {
-    // Start with 100 most recent threads to prevent performance issues
-    // Can be increased if needed for power users
-    // If searching, increase limit to 500 to find older matches
-    const limit = searchQuery?.trim() ? 500 : 100;
-    const data = await getThreads(undefined, limit, searchQuery);
+    const data = await getThreads();
     return data as Thread[];
   },
   {

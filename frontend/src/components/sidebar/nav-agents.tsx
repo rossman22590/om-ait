@@ -235,7 +235,7 @@ const ThreadItem: React.FC<{
     );
   };
 
-export function NavAgents() {
+export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
   const { isMobile, state, setOpenMobile } = useSidebar()
   const [loadingThreadId, setLoadingThreadId] = useState<string | null>(null)
   const [showShareModal, setShowShareModal] = useState(false)
@@ -749,13 +749,16 @@ export function NavAgents() {
               )}
             </div>
           ) : (
-            <div className="px-2.5 pt-5 mb-1 flex items-center justify-between text-xs text-muted-foreground">
+            <button
+              onClick={onOpenSearch}
+              className="w-full px-2.5 pt-5 mb-1 flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
               <span>Search</span>
               <div className="flex items-center gap-1 h-8">
-                <kbd className="h-6 w-6 flex items-center justify-center bg-muted border border-border rounded-md text-base leading-0 cursor-pointer">⌘</kbd>
-                <kbd className="h-6 w-6 flex items-center justify-center bg-muted border border-border rounded-md text-xs cursor-pointer">K</kbd>
+                <kbd className="h-6 w-6 flex items-center justify-center bg-muted border border-border rounded-md text-base leading-0">⌘</kbd>
+                <kbd className="h-6 w-6 flex items-center justify-center bg-muted border border-border rounded-md text-xs">K</kbd>
               </div>
-            </div>
+            </button>
           )}
         </>
       )}
