@@ -1,5 +1,5 @@
 'use client';
-import { HeroVideoSection } from '@/components/home/sections/hero-video-section';
+// import { HeroVideoSection } from '@/components/home/sections/hero-video-section';
 import { siteConfig } from '@/lib/home';
 import { ArrowRight, Github, X, AlertCircle, Square } from 'lucide-react';
 import PixelBlast from '@/components/home/ui/PixelBlast';
