@@ -142,7 +142,7 @@ export default function SubscriptionRequiredPage() {
           <p>
             Questions? Contact us at{' '}
             <a href="mailto:support@kortix.ai" className="underline hover:text-primary">
-              support@kortix.ai
+              support@mytsi.org
             </a>
           </p>
         </div>

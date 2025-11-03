@@ -25,7 +25,7 @@ export default function SupportPage() {
               className="text-lg font-medium text-primary hover:underline inline-flex items-center gap-2"
             >
               <Mail className="w-5 h-5" />
-              support@kortix.com
+              support@mytsi.org
             </a>
           </div>
         </CardContent>
