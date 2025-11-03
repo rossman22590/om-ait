@@ -26,23 +26,47 @@ export const sampleNavigation: DocsNavigationSection[] = [
     items: [
       {
         id: 'introduction',
-        title: 'What is Kortix?',
-        href: '#introduction',
+        title: 'What is Machine?',
+        href: '/docs/introduction',
         icon: BookOpen,
         isActive: true
       },
       {
         id: 'quick-start',
-        title: 'Quick Start',
-        href: '#quick-start',
+        title: 'Getting Started',
+        href: '/docs/getting-started',
         icon: Rocket,
         badge: 'Recommended'
+      }
+    ]
+  },
+  {
+    id: 'building',
+    title: 'Building Agents',
+    items: [
+      {
+        id: 'building-agents',
+        title: 'Building Agents',
+        href: '/docs/building-agents',
+        icon: Code
       },
       {
-        id: 'setup-wizard',
-        title: 'Setup Wizard',
-        href: '#setup-wizard',
+        id: 'features',
+        title: 'Features & Tools',
+        href: '/docs/features',
         icon: Zap
+      }
+    ]
+  },
+  {
+    id: 'advanced',
+    title: 'Advanced',
+    items: [
+      {
+        id: 'advanced',
+        title: 'Advanced Topics',
+        href: '/docs/advanced',
+        icon: Settings
       }
     ]
   },
@@ -53,98 +77,20 @@ export const sampleNavigation: DocsNavigationSection[] = [
       {
         id: 'overview',
         title: 'Overview',
-        href: '#self-hosting-overview',
+        href: '/docs/self-hosting',
         icon: Layers
-      },
-      {
-        id: 'prerequisites',
-        title: 'Prerequisites',
-        href: '#prerequisites',
-        icon: Settings,
-        children: [
-          {
-            id: 'supabase-setup',
-            title: 'Supabase Project',
-            href: '#supabase-setup'
-          },
-          {
-            id: 'api-keys',
-            title: 'API Keys',
-            href: '#api-keys'
-          },
-          {
-            id: 'software',
-            title: 'Required Software',
-            href: '#required-software'
-          }
-        ]
-      },
-      {
-        id: 'installation',
-        title: 'Installation',
-        href: '#installation',
-        icon: Code,
-        children: [
-          {
-            id: 'docker-setup',
-            title: 'Docker Setup',
-            href: '#docker-setup'
-          },
-          {
-            id: 'manual-setup',
-            title: 'Manual Setup',
-            href: '#manual-setup'
-          }
-        ]
-      },
-      {
-        id: 'configuration',
-        title: 'Configuration',
-        href: '#configuration',
-        icon: Settings,
-        children: [
-          {
-            id: 'backend-env',
-            title: 'Backend Environment',
-            href: '#backend-env'
-          },
-          {
-            id: 'frontend-env',
-            title: 'Frontend Environment',
-            href: '#frontend-env'
-          }
-        ]
-      },
-      {
-        id: 'troubleshooting',
-        title: 'Troubleshooting',
-        href: '#troubleshooting',
-        icon: Shield
-      }
-    ]
-  },
-  {
-    id: 'platform',
-    title: 'Platform',
-    items: [
-      {
-        id: 'architecture',
-        title: 'Architecture',
-        href: '#architecture',
-        icon: Database
-      },
-      {
-        id: 'agent-examples',
-        title: 'Agent Examples',
-        href: '#agent-examples',
-        icon: Users,
-        badge: 'Popular'
       },
       {
         id: 'contributing',
         title: 'Contributing',
-        href: '#contributing',
+        href: '/docs/contributing',
         icon: MessageSquare
+      },
+      {
+        id: 'architecture',
+        title: 'Architecture',
+        href: '/docs/architecture',
+        icon: Database
       }
     ]
   }

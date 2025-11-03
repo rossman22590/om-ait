@@ -1,11 +1,14 @@
 from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, validator
 from core.utils.auth_utils import verify_and_get_user_id_from_jwt, require_agent_access, AuthorizedAgentAccess
 from core.services.supabase import DBConnection
 from .file_processor import FileProcessor
 from core.utils.logger import logger
 from .validation import FileNameValidator, ValidationError, validate_folder_name_unique, validate_file_name_unique_in_folder
+import mimetypes
+import io
 
 # Constants
 MAX_TOTAL_FILE_SIZE = 50 * 1024 * 1024  # 50MB total limit per user
@@ -600,3 +603,62 @@ async def move_file(
     except Exception as e:
         logger.error(f"Error moving file: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to move file")
+
+@router.get("/entries/{entry_id}/download")
+async def download_file(
+    entry_id: str,
+    user_id: str = Depends(verify_and_get_user_id_from_jwt)
+):
+    """Download the original file from a knowledge base entry."""
+    try:
+        client = await db.client
+        account_id = user_id
+        
+        # Get entry details including file path and filename
+        entry_result = await client.table('knowledge_base_entries').select(
+            'entry_id, file_path, filename, folder_id'
+        ).eq('entry_id', entry_id).execute()
+        
+        if not entry_result.data:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        entry = entry_result.data[0]
+        file_path = entry['file_path']
+        filename = entry['filename']
+        folder_id = entry['folder_id']
+        
+        # Verify the folder belongs to the user
+        folder_result = await client.table('knowledge_base_folders').select(
+            'folder_id'
+        ).eq('folder_id', folder_id).eq('account_id', account_id).execute()
+        
+        if not folder_result.data:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Download file from Supabase Storage
+        try:
+            file_bytes = await client.storage.from_('file-uploads').download(file_path)
+            
+            # Detect MIME type
+            mime_type, _ = mimetypes.guess_type(filename)
+            if mime_type is None:
+                mime_type = 'application/octet-stream'
+            
+            # Return file as streaming response
+            return StreamingResponse(
+                io.BytesIO(file_bytes),
+                media_type=mime_type,
+                headers={
+                    'Content-Disposition': f'attachment; filename="{filename}"'
+                }
+            )
+            
+        except Exception as storage_error:
+            logger.error(f"Error downloading file from storage: {str(storage_error)}")
+            raise HTTPException(status_code=500, detail="Failed to download file from storage")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in download endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to download file")

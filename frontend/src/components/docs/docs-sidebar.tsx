@@ -24,25 +24,25 @@ const navigationItems = [
   {
     title: 'Getting Started',
     items: [
-      { title: 'Introduction', href: '#introduction', icon: BookOpen },
-      { title: 'Quick Start', href: '#quick-start', icon: Rocket },
-      { title: 'Installation', href: '#installation', icon: Settings },
+      { title: 'Introduction', href: '/docs/introduction', icon: BookOpen },
+      { title: 'Quick Start', href: '/docs/quick-start', icon: Rocket },
+      { title: 'Dashboard', href: '/docs/dashboard', icon: Settings },
     ]
   },
   {
-    title: 'Guides',
+    title: 'Building',
     items: [
-      { title: 'Building Agents', href: '#building-agents', icon: Code },
-      { title: 'Automation', href: '#automation', icon: Zap },
-      { title: 'Workflows', href: '#workflows', icon: FileText },
+      { title: 'Building Agents', href: '/docs/building-agents', icon: Code },
+      { title: 'AI Models', href: '/docs/models', icon: Zap },
+      { title: 'Workflows', href: '/docs/workflows', icon: FileText },
     ]
   },
   {
-    title: 'Advanced',
+    title: 'Reference',
     items: [
-      { title: 'API Reference', href: '#api-reference', icon: Database },
-      { title: 'Authentication', href: '#authentication', icon: Shield },
-      { title: 'Community', href: '#community', icon: Users },
+      { title: 'API Reference', href: '/docs/api-reference', icon: Database },
+      { title: 'Common Issues', href: '/docs/common-issues', icon: Shield },
+      { title: 'Contributing', href: '/docs/contributing', icon: Users },
     ]
   }
 ];

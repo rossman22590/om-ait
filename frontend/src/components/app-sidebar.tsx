@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation"
 import Link from "next/link"
 import {
   GalleryVerticalEnd,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 
 import { TeamSwitcher } from "@/components/team-switcher"
@@ -24,6 +26,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { ThemeToggle } from "./home/theme-toggle"
 import Image from "next/image"
@@ -51,6 +54,86 @@ const data = {
           title: "What is Machine?",
           url: "/docs/introduction",
         },
+        {
+          title: "Compare with Others",
+          url: "/docs/comparison-chart",
+        },
+        {
+          title: "Getting Started",
+          url: "/docs/getting-started",
+        },
+      ],
+    },
+    {
+      title: "User Guides",
+      items: [
+        {
+          title: "User Guide",
+          url: "/docs/user-guide",
+        },
+        {
+          title: "Dashboard Guide",
+          url: "/docs/dashboard",
+        },
+        {
+          title: "Workspace & Organization",
+          url: "/docs/workspace",
+        },
+        {
+          title: "Knowledge Base",
+          url: "/docs/knowledge-base",
+        },
+        {
+          title: "Agent Management",
+          url: "/docs/agent-management",
+        },
+        {
+          title: "Use Cases",
+          url: "/docs/use-cases",
+        },
+      ],
+    },
+    {
+      title: "Building Agents",
+      items: [
+        {
+          title: "Building Agents",
+          url: "/docs/building-agents",
+        },
+        {
+          title: "AI Models",
+          url: "/docs/models",
+        },
+        {
+          title: "Features & Tools",
+          url: "/docs/features",
+        },
+        {
+          title: "Integrations & MCPs",
+          url: "/docs/integrations",
+        },
+        {
+          title: "Example Agents",
+          url: "/docs/example-agents",
+        },
+      ],
+    },
+    {
+      title: "Why Machine?",
+      items: [
+        {
+          title: "Why Machine?",
+          url: "/docs/why-machine",
+        },
+      ],
+    },
+    {
+      title: "Advanced",
+      items: [
+        {
+          title: "Advanced Topics",
+          url: "/docs/advanced",
+        },
       ],
     },
   ],
@@ -60,6 +143,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const [mounted, setMounted] = React.useState(false);
   const { theme, resolvedTheme } = useTheme();
+  const { toggleSidebar, state } = useSidebar();
 
   useEffect(() => {
     setMounted(true);
@@ -82,9 +166,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <Image
           src={logoSrc}
           alt="Machine Logo"
-          width={40}
-          height={30}
-          className="w-[40px] h-[30px]"
+          width={35}
+          height={35}
+          className="w-[35px] h-[35px]"
           priority
         /> 
       </SidebarHeader>
@@ -112,12 +196,33 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroup>
         ))}
       </SidebarContent>
-      <SidebarFooter className="bg-transparent p-4 flex flex-row justify-between items-center">
-        <div className="text-muted-foreground text-xs">Version 10.2.0</div>
-        <ThemeToggle/>
+      <SidebarFooter className="bg-transparent p-4 flex flex-row justify-between items-center gap-2 group-data-[state=expanded]:flex group-data-[state=collapsed]:hidden">
+        <div className="text-muted-foreground text-xs">Version 10.6.0</div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleSidebar}
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors"
+            title={state === 'expanded' ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            {state === 'expanded' ? (
+              <ChevronLeft className="w-4 h-4" />
+            ) : (
+              <ChevronRight className="w-4 h-4" />
+            )}
+          </button>
+          <ThemeToggle/>
+        </div>
       </SidebarFooter>
+      <div className="group-data-[state=collapsed]:flex group-data-[state=expanded]:hidden p-2 flex justify-center">
+        <button
+          onClick={toggleSidebar}
+          className="p-2 hover:bg-gray-200 dark:hover:bg-gray-800 rounded transition-colors"
+          title="Expand sidebar"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
       <SidebarRail />
     </Sidebar>
   )
 }
-

@@ -12,7 +12,9 @@ import {
     TrashIcon,
     ChevronDownIcon,
     ChevronRightIcon,
-    MoreVerticalIcon
+    MoreVerticalIcon,
+    LayoutGrid,
+    List
 } from 'lucide-react';
 import {
     DndContext,
@@ -99,6 +101,8 @@ export function KnowledgeBaseManager({
     const [editingName, setEditingName] = useState('');
     const [validationError, setValidationError] = useState<string | null>(null);
     const [activeId, setActiveId] = useState<string | null>(null);
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
     const editInputRef = useRef<HTMLInputElement>(null);
 
     // Assignment state for agent mode
@@ -829,6 +833,14 @@ export function KnowledgeBaseManager({
         };
     };
 
+    const formatFileSize = (bytes: number) => {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+
     if (foldersLoading || (enableAssignments && assignmentsLoading)) {
         return (
             <div className="space-y-4">
@@ -919,21 +931,42 @@ export function KnowledgeBaseManager({
                             {enableAssignments ? `Manage ${agentName}'s knowledge sources and access` : headerDescription}
                         </p>
                     </div>
-                    <UnifiedKbEntryModal
-                        folders={folders}
-                        onUploadComplete={() => {
-                            refetchFolders();
-                            if (enableAssignments) {
-                                loadAssignments();
-                            }
-                        }}
-                        trigger={
-                            <Button size="sm" className="gap-2">
-                                <PlusIcon className="h-4 w-4" />
-                                Add Knowledge
+                    <div className="flex items-center gap-2">
+                        {/* View Mode Toggle */}
+                        <div className="flex items-center border rounded-lg">
+                            <Button
+                                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                                size="sm"
+                                className="rounded-r-none border-r"
+                                onClick={() => setViewMode('list')}
+                            >
+                                <List className="h-4 w-4" />
                             </Button>
-                        }
-                    />
+                            <Button
+                                variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                                size="sm"
+                                className="rounded-l-none"
+                                onClick={() => setViewMode('grid')}
+                            >
+                                <LayoutGrid className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        <UnifiedKbEntryModal
+                            folders={folders}
+                            onUploadComplete={() => {
+                                refetchFolders();
+                                if (enableAssignments) {
+                                    loadAssignments();
+                                }
+                            }}
+                            trigger={
+                                <Button size="sm" className="gap-2">
+                                    <PlusIcon className="h-4 w-4" />
+                                    Add Knowledge
+                                </Button>
+                            }
+                        />
+                    </div>
                 </div>
             )}
 
@@ -1026,115 +1059,283 @@ export function KnowledgeBaseManager({
                         </div>
                     )
                 ) : (
-                    <DndContext
-                        sensors={sensors}
-                        collisionDetection={closestCenter}
-                        onDragStart={handleDragStart}
-                        onDragEnd={handleDragEnd}
-                    >
-                        <SortableContext
-                            items={[]}
-                            strategy={verticalListSortingStrategy}
-                        >
-                            <div className="space-y-3">
-                                {treeData.map((item) => {
-                                    // Build assignments for assignment mode
-                                    const allAssignments: { [id: string]: boolean } = {};
-                                    const allIndeterminateStates: { [id: string]: boolean } = {};
+                    <>
+                        {viewMode === 'list' ? (
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragStart={handleDragStart}
+                                onDragEnd={handleDragEnd}
+                            >
+                                <SortableContext
+                                    items={[]}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    <div className="space-y-3">
+                                        {treeData.map((item) => {
+                                            // Build assignments for assignment mode
+                                            const allAssignments: { [id: string]: boolean } = {};
+                                            const allIndeterminateStates: { [id: string]: boolean } = {};
 
-                                    if (enableAssignments) {
-                                        // Add all files from all folders
-                                        treeData.forEach(folder => {
-                                            if (folder.children) {
-                                                folder.children.forEach(child => {
-                                                    allAssignments[child.id] = selectedEntries.has(child.id);
+                                            if (enableAssignments) {
+                                                // Add all files from all folders
+                                                treeData.forEach(folder => {
+                                                    if (folder.children) {
+                                                        folder.children.forEach(child => {
+                                                            allAssignments[child.id] = selectedEntries.has(child.id);
+                                                        });
+                                                    }
+                                                });
+
+                                                // Add folder states
+                                                treeData.forEach(folder => {
+                                                    const folderState = getFolderSelectionState(folder.id);
+                                                    allAssignments[folder.id] = folderState.selected;
+                                                    if (folderState.indeterminate) {
+                                                        allIndeterminateStates[folder.id] = true;
+                                                    }
                                                 });
                                             }
-                                        });
 
-                                        // Add folder states
-                                        treeData.forEach(folder => {
-                                            const folderState = getFolderSelectionState(folder.id);
-                                            allAssignments[folder.id] = folderState.selected;
-                                            if (folderState.indeterminate) {
-                                                allIndeterminateStates[folder.id] = true;
-                                            }
-                                        });
-                                    }
+                                            return (
+                                                <SharedTreeItem
+                                                    key={item.id}
+                                                    item={item}
+                                                    onExpand={handleExpand}
+                                                    onSelect={handleFileSelect}
+                                                    enableDnd={true}
+                                                    enableActions={true}
+                                                    enableEdit={!enableAssignments} // Only allow editing in main KB page
+                                                    enableAssignment={enableAssignments}
+                                                    assignments={enableAssignments ? allAssignments : undefined}
+                                                    assignmentIndeterminate={enableAssignments ? allIndeterminateStates : undefined}
+                                                    onToggleAssignment={enableAssignments ? (id) => {
+                                                        const targetItem = treeData.find(f => f.id === id) ||
+                                                            treeData.flatMap(f => f.children || []).find(c => c.id === id);
+                                                        if (targetItem?.type === 'folder') {
+                                                            toggleFolderSelection(id);
+                                                        } else {
+                                                            toggleEntrySelection(id);
+                                                        }
+                                                    } : undefined}
+                                                    onDelete={handleDelete}
+                                                    onEditSummary={handleEditSummary}
+                                                    editingFolder={editingFolder}
+                                                    editingName={editingName}
+                                                    onStartEdit={handleStartEdit}
+                                                    onFinishEdit={handleFinishEdit}
+                                                    onEditChange={handleEditChange}
+                                                    onEditKeyPress={handleEditKeyPress}
+                                                    editInputRef={editInputRef}
+                                                    onNativeFileDrop={handleNativeFileDrop}
+                                                    uploadStatus={uploadStatus[item.id]}
+                                                    validationError={editingFolder === item.id ? validationError : null}
+                                                    isLoadingEntries={loadingFolders[item.id]}
+                                                    movingFiles={movingFiles}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                </SortableContext>
 
-                                    return (
-                                        <SharedTreeItem
-                                            key={item.id}
-                                            item={item}
-                                            onExpand={handleExpand}
-                                            onSelect={handleFileSelect}
-                                            enableDnd={true}
-                                            enableActions={true}
-                                            enableEdit={!enableAssignments} // Only allow editing in main KB page
-                                            enableAssignment={enableAssignments}
-                                            assignments={enableAssignments ? allAssignments : undefined}
-                                            assignmentIndeterminate={enableAssignments ? allIndeterminateStates : undefined}
-                                            onToggleAssignment={enableAssignments ? (id) => {
-                                                const targetItem = treeData.find(f => f.id === id) ||
-                                                    treeData.flatMap(f => f.children || []).find(c => c.id === id);
-                                                if (targetItem?.type === 'folder') {
-                                                    toggleFolderSelection(id);
-                                                } else {
-                                                    toggleEntrySelection(id);
+                                <DragOverlay>
+                                    {activeId ? (() => {
+                                        const findActiveItem = (items: TreeItem[]): TreeItem | null => {
+                                            for (const item of items) {
+                                                if (item.id === activeId) return item;
+                                                if (item.children) {
+                                                    const found = findActiveItem(item.children);
+                                                    if (found) return found;
                                                 }
-                                            } : undefined}
-                                            onDelete={handleDelete}
-                                            onEditSummary={handleEditSummary}
-                                            editingFolder={editingFolder}
-                                            editingName={editingName}
-                                            onStartEdit={handleStartEdit}
-                                            onFinishEdit={handleFinishEdit}
-                                            onEditChange={handleEditChange}
-                                            onEditKeyPress={handleEditKeyPress}
-                                            editInputRef={editInputRef}
-                                            onNativeFileDrop={handleNativeFileDrop}
-                                            uploadStatus={uploadStatus[item.id]}
-                                            validationError={editingFolder === item.id ? validationError : null}
-                                            isLoadingEntries={loadingFolders[item.id]}
-                                            movingFiles={movingFiles}
-                                        />
-                                    );
-                                })}
-                            </div>
-                        </SortableContext>
+                                            }
+                                            return null;
+                                        };
 
-                        <DragOverlay>
-                            {activeId ? (() => {
-                                const findActiveItem = (items: TreeItem[]): TreeItem | null => {
-                                    for (const item of items) {
-                                        if (item.id === activeId) return item;
-                                        if (item.children) {
-                                            const found = findActiveItem(item.children);
-                                            if (found) return found;
+                                        const activeItem = findActiveItem(treeData);
+
+                                        if (activeItem?.type === 'file') {
+                                            return <FileDragOverlay item={activeItem} />;
+                                        } else {
+                                            return (
+                                                <div className="bg-background border rounded-lg p-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <FolderIcon className="h-4 w-4" />
+                                                        <span className="font-medium text-sm">
+                                                            {activeItem?.name}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
                                         }
-                                    }
-                                    return null;
-                                };
+                                    })() : null}
+                                </DragOverlay>
+                            </DndContext>
+                        ) : (
+                            <div className="space-y-4">
+                                {/* Breadcrumb navigation for grid view */}
+                                {currentFolderId && (
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => setCurrentFolderId(null)}
+                                            className="gap-2"
+                                        >
+                                            <ChevronRightIcon className="h-4 w-4 rotate-180" />
+                                            All Folders
+                                        </Button>
+                                        <ChevronRightIcon className="h-4 w-4 text-muted-foreground" />
+                                        <span className="font-medium">
+                                            {treeData.find(f => f.id === currentFolderId)?.name}
+                                        </span>
+                                    </div>
+                                )}
 
-                                const activeItem = findActiveItem(treeData);
-
-                                if (activeItem?.type === 'file') {
-                                    return <FileDragOverlay item={activeItem} />;
-                                } else {
-                                    return (
-                                        <div className="bg-background border rounded-lg p-3">
-                                            <div className="flex items-center gap-2">
-                                                <FolderIcon className="h-4 w-4" />
-                                                <span className="font-medium text-sm">
-                                                    {activeItem?.name}
-                                                </span>
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+                                    {!currentFolderId ? (
+                                        // Show folders
+                                        treeData.map((folder) => (
+                                            <div
+                                                key={folder.id}
+                                                className="group cursor-pointer"
+                                                onClick={() => {
+                                                    if (!folder.expanded) {
+                                                        handleExpand(folder.id);
+                                                    }
+                                                    setCurrentFolderId(folder.id);
+                                                }}
+                                            >
+                                                <div className="relative bg-muted/20 border border-border/50 rounded-lg p-4 transition-all duration-200 hover:bg-muted/30 hover:border-border">
+                                                    <div className="flex flex-col items-center space-y-3">
+                                                        <div className="relative">
+                                                            <div className="w-16 h-16 bg-purple-500/10 rounded-lg flex items-center justify-center">
+                                                                <FolderIcon className="h-8 w-8 text-purple-500" />
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-center space-y-1 w-full">
+                                                            <p className="text-sm font-medium text-foreground truncate" title={folder.name}>
+                                                                {folder.name}
+                                                            </p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                {folder.children?.length || 0} files
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    {/* Actions dropdown */}
+                                                    {!enableAssignments && (
+                                                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                                        <MoreVerticalIcon className="h-4 w-4" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end">
+                                                                    <DropdownMenuItem onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleStartEdit(folder.id, folder.name);
+                                                                    }}>
+                                                                        Rename
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem
+                                                                        className="text-destructive"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleDelete(folder.id, folder.type);
+                                                                        }}
+                                                                    >
+                                                                        Delete
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
-                                }
-                            })() : null}
-                        </DragOverlay>
-                    </DndContext>
+                                        ))
+                                    ) : (
+                                        // Show files in current folder
+                                        treeData
+                                            .find(f => f.id === currentFolderId)
+                                            ?.children?.map((file) => {
+                                                const fileInfo = getFileTypeInfo(file.name);
+                                                return (
+                                                    <div
+                                                        key={file.id}
+                                                        className="group cursor-pointer"
+                                                        onClick={() => {
+                                                            if (file.data && 'entry_id' in file.data) {
+                                                                setFilePreviewModal({
+                                                                    isOpen: true,
+                                                                    file: file.data as Entry,
+                                                                });
+                                                            }
+                                                        }}
+                                                    >
+                                                        <div className="relative bg-muted/20 border border-border/50 rounded-lg p-4 transition-all duration-200 hover:bg-muted/30 hover:border-border">
+                                                            <div className="flex flex-col items-center space-y-3">
+                                                                <div className="relative">
+                                                                    <div className="w-12 h-12 bg-muted/80 rounded-lg flex items-center justify-center">
+                                                                        <FileIcon className="h-6 w-6 text-foreground/60" />
+                                                                    </div>
+                                                                    <div className="absolute -bottom-1 -right-1 bg-background border border-border rounded px-1 py-0.5">
+                                                                        <span className="text-[8px] font-medium text-muted-foreground uppercase">
+                                                                            {fileInfo.extension.slice(0, 3)}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-center space-y-1 w-full">
+                                                                    <p className="text-xs font-medium text-foreground truncate" title={file.name}>
+                                                                        {file.name.length > 16 ? `${file.name.slice(0, 16)}...` : file.name}
+                                                                    </p>
+                                                                    {file.data && 'file_size' in file.data && (
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            {formatFileSize(file.data.file_size)}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            {/* Actions dropdown */}
+                                                            {!enableAssignments && (
+                                                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <DropdownMenu>
+                                                                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                                                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                                                <MoreVerticalIcon className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </DropdownMenuTrigger>
+                                                                        <DropdownMenuContent align="end">
+                                                                            <DropdownMenuItem onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                if (file.data && 'entry_id' in file.data) {
+                                                                                    const entry = file.data as Entry;
+                                                                                    handleEditSummary(entry.entry_id, entry.filename, entry.summary);
+                                                                                }
+                                                                            }}>
+                                                                                Edit Summary
+                                                                            </DropdownMenuItem>
+                                                                            <DropdownMenuItem
+                                                                                className="text-destructive"
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    handleDelete(file.id, file.type);
+                                                                                }}
+                                                                            >
+                                                                                Delete
+                                                                            </DropdownMenuItem>
+                                                                        </DropdownMenuContent>
+                                                                    </DropdownMenu>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 
