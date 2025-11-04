@@ -59,7 +59,6 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from '@/components/ui/input';
 import { ThreadWithProject, GroupedThreads } from '@/hooks/react-query/sidebar/use-sidebar';
 import { processThreadsWithProjects, useDeleteMultipleThreads, useDeleteThread, useProjects, groupThreadsByDate } from '@/hooks/react-query/sidebar/use-sidebar';
-import { useUpdateProject } from '@/hooks/react-query';
 import { projectKeys, threadKeys } from '@/hooks/react-query/sidebar/keys';
 import { useThreadAgentStatuses } from '@/hooks/use-thread-agent-status';
 import { formatDateForList } from '@/lib/utils/date-formatting';
@@ -262,8 +261,6 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
   const pageLimit = 50;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const savedScrollPositionRef = useRef<number | null>(null);
-  const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
-  const [newThreadName, setNewThreadName] = useState<string>('');
 
   const {
     data: projects = [],
@@ -311,15 +308,15 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
   useEffect(() => {
     if (threadsResponse?.pagination) {
       const currentTotal = threadsResponse.pagination.total;
-      
+
       // If the total decreased (threads were deleted), reset to page 1
-      if (previousTotalRef.current !== undefined && 
-          currentTotal < previousTotalRef.current && 
-          currentPage > 1) {
+      if (previousTotalRef.current !== undefined &&
+        currentTotal < previousTotalRef.current &&
+        currentPage > 1) {
         setCurrentPage(1);
         setAllThreads([]);
       }
-      
+
       previousTotalRef.current = currentTotal;
     }
   }, [threadsResponse?.pagination, currentPage]);
@@ -339,9 +336,9 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
   const groupedTriggerThreads: GroupedThreads = groupThreadsByDate(triggerThreads);
 
   // Check if there are more threads to load
-  const hasMore = threadsResponse?.pagination && 
-                  threadsResponse.pagination.page < threadsResponse.pagination.pages;
-  
+  const hasMore = threadsResponse?.pagination &&
+    threadsResponse.pagination.page < threadsResponse.pagination.pages;
+
   const handleLoadMore = () => {
     if (hasMore && !isThreadsLoading) {
       // Save current scroll position and height before loading more
@@ -349,7 +346,7 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
       if (scrollContainer) {
         savedScrollPositionRef.current = scrollContainer.scrollTop;
       }
-      
+
       setCurrentPage(prev => prev + 1);
     }
   };
@@ -812,7 +809,7 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
                     })}
                   </div>
                 ))}
-                
+
                 {/* Show skeleton loaders while loading more threads */}
                 {isThreadsLoading && allThreads.length > 0 && (
                   <div className="space-y-1 mt-1">
@@ -825,7 +822,7 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
                     ))}
                   </div>
                 )}
-                
+
                 {/* Load More section - simple and minimal */}
                 {threadsResponse?.pagination && threadsResponse.pagination.total > pageLimit && !isThreadsLoading && (
                   <div className="px-2 py-3">
@@ -850,7 +847,7 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
                 )}
               </>
             ) : (
-              <div className="py-2 text-sm text-muted-foreground">
+              <div className="py-2 pl-2.5 text-sm text-muted-foreground">
                 No conversations yet
               </div>
             )}

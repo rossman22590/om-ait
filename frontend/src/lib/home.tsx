@@ -126,6 +126,7 @@ export const siteConfig = {
       hours: '2 hours',
       features: [
         '2,000 credits/m',
+        '2,000 credits/m',
         '5 custom agents',
         'Private projects',
         'Custom abilities',
@@ -147,6 +148,7 @@ export const siteConfig = {
       hours: '6 hours',
       features: [
         '5,000 credits/m',
+        '5,000 credits/m',
         '20 custom agents',
         'Private projects',
         'Custom abilities',
@@ -166,6 +168,7 @@ export const siteConfig = {
       isPopular: false,
       hours: '12 hours',
       features: [
+        '10,000 credits/m',
         '10,000 credits/m',
         '20 custom agents',
         'Private projects',
@@ -188,6 +191,7 @@ export const siteConfig = {
       hours: '25 hours',
       features: [
         '20,000 credits/m',
+        '20,000 credits/m',
         '100 custom agents',
         'Private projects',
         'Custom abilities',
@@ -209,6 +213,7 @@ export const siteConfig = {
       hours: '50 hours',
       features: [
         '40,000 credits/m',
+        '40,000 credits/m',
         'Private projects',
         'Custom abilities',
         '100+ integrations',
@@ -228,6 +233,7 @@ export const siteConfig = {
       isPopular: false,
       hours: '125 hours',
       features: [
+        '80,000 credits/m',
         '80,000 credits/m',
         'Private projects',
         'Custom abilities',
@@ -249,6 +255,7 @@ export const siteConfig = {
       isPopular: false,
       hours: '200 hours',
       features: [
+        '100,000 credits/m',
         '100,000 credits/m',
         'Private projects',
         'Custom abilities',

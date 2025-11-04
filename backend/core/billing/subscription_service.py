@@ -355,6 +355,56 @@ class SubscriptionService:
                 }
 
             # For all other cases (not free -> paid), update the subscription directly
+            current_price = subscription['items']['data'][0]['price']
+            current_amount = current_price.get('unit_amount', 0) or 0
+            
+            if current_amount == 0 or current_tier == 'free':
+                logger.info(f"[FREE TIER UPGRADE] User {account_id} upgrading from free tier to paid plan")
+                
+                new_tier_info = get_tier_by_price_id(price_id)
+                tier_display_name = new_tier_info.display_name if new_tier_info else 'paid plan'
+                
+                session = await StripeAPIWrapper.create_checkout_session(
+                    customer=customer_id,
+                    payment_method_types=['card'],
+                    line_items=[{'price': price_id, 'quantity': 1}],
+                    mode='subscription',
+                    ui_mode='embedded',
+                    return_url=success_url,
+                    subscription_data={
+                        'metadata': {
+                            'account_id': account_id,
+                            'account_type': 'personal',
+                            'converting_from_free': 'true',
+                            'previous_tier': current_tier or 'free',
+                            'previous_subscription_id': existing_subscription_id,
+                            'commitment_type': commitment_type or 'none'
+                        }
+                    },
+                    idempotency_key=idempotency_key
+                )
+                
+                logger.info(f"[FREE TIER UPGRADE] Created checkout session for user {account_id}")
+                
+                frontend_url = config.FRONTEND_URL
+                client_secret = getattr(session, 'client_secret', None)
+                checkout_param = f"client_secret={client_secret}" if client_secret else f"session_id={session.id}"
+                fe_checkout_url = f"{frontend_url}/checkout?{checkout_param}"
+                
+                return {
+                    'checkout_url': fe_checkout_url,
+                    'fe_checkout_url': fe_checkout_url,
+                    'session_id': session.id,
+                    'client_secret': client_secret,
+                    'converting_from_free': True,
+                    'message': f'Upgrading from free tier to {tier_display_name}. Your free tier will end and the new plan will begin immediately upon payment.',
+                    'tier_info': {
+                        'name': new_tier_info.name if new_tier_info else price_id,
+                        'display_name': tier_display_name,
+                        'monthly_credits': float(new_tier_info.monthly_credits) if new_tier_info else 0
+                    }
+                }
+            
             logger.info(f"Updating subscription {existing_subscription_id} to price {price_id}")
             modify_key = generate_subscription_modify_idempotency_key(existing_subscription_id, price_id)
             updated_subscription = await StripeAPIWrapper.modify_subscription(

@@ -46,6 +46,14 @@ interface KortixLoaderProps {
   variant?: 'white' | 'black' | 'auto';
   /**
    * @deprecated Use 'variant' instead
+   * Force a specific loader variant (overrides auto-detection)
+   * - 'white': White loader (for dark backgrounds)
+   * - 'black': Black loader (for light backgrounds)
+   * - 'auto': Auto-detect based on theme (default)
+   */
+  variant?: 'white' | 'black' | 'auto';
+  /**
+   * @deprecated Use 'variant' instead
    */
   forceTheme?: 'light' | 'dark';
 }
@@ -70,7 +78,20 @@ const SIZE_MAP = {
  * **Manual Override (for special cases):**
  * Use the `variant` prop when the background doesn't match the theme.
  * For example, a dark button in light mode needs `variant="white"`.
+ * Uses separate Lottie animations (white and black) that dynamically load
+ * based on the current theme or can be explicitly set.
  * 
+ * **Automatic Behavior:**
+ * - Light mode → Black loader (for white backgrounds)
+ * - Dark mode → White loader (for dark backgrounds)
+ * 
+ * **Manual Override (for special cases):**
+ * Use the `variant` prop when the background doesn't match the theme.
+ * For example, a dark button in light mode needs `variant="white"`.
+ * 
+ * **Files:**
+ * - loading-white.json: White loader (for dark backgrounds)
+ * - loading-black.json: Black loader (for light backgrounds)
  * **Files:**
  * - loading-white.json: White loader (for dark backgrounds)
  * - loading-black.json: Black loader (for light backgrounds)
@@ -78,7 +99,14 @@ const SIZE_MAP = {
  * @example
  * ```tsx
  * // Auto-themed (default)
+ * // Auto-themed (default)
  * <KortixLoader />
+ * 
+ * // Always white (for dark backgrounds in any theme)
+ * <KortixLoader variant="white" />
+ * 
+ * // Always black (for light backgrounds in any theme)
+ * <KortixLoader variant="black" />
  * 
  * // Always white (for dark backgrounds in any theme)
  * <KortixLoader variant="white" />
@@ -100,6 +128,8 @@ export function KortixLoader({
   loop = true,
   variant = 'auto',
   forceTheme, // deprecated, but kept for backwards compatibility
+  variant = 'auto',
+  forceTheme, // deprecated, but kept for backwards compatibility
 }: KortixLoaderProps) {
   const { resolvedTheme } = useTheme();
   const loaderSize = customSize || SIZE_MAP[size];
@@ -112,6 +142,20 @@ export function KortixLoader({
     setMounted(true);
   }, []);
 
+  // Determine which variant to use
+  let effectiveVariant: 'white' | 'black';
+  
+  if (variant !== 'auto') {
+    // Explicit variant set
+    effectiveVariant = variant;
+  } else if (forceTheme) {
+    // Backwards compatibility with forceTheme
+    effectiveVariant = forceTheme === 'dark' ? 'white' : 'black';
+  } else {
+    // Auto-detect from theme
+    const isDark = (resolvedTheme || 'dark') === 'dark';
+    effectiveVariant = isDark ? 'white' : 'black';
+  }
   // Determine which variant to use
   let effectiveVariant: 'white' | 'black';
   
@@ -153,6 +197,7 @@ export function KortixLoader({
         loop={loop}
         autoPlay={autoPlay}
         variant={effectiveVariant}
+        variant={effectiveVariant}
         speed={speed}
       />
     </div>
@@ -165,11 +210,13 @@ function LottieAnimation({
   loop,
   autoPlay,
   variant,
+  variant,
   speed,
 }: {
   loaderSize: number;
   loop: boolean;
   autoPlay: boolean;
+  variant: 'white' | 'black';
   variant: 'white' | 'black';
   speed: number;
 }) {

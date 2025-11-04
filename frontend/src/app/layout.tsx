@@ -22,6 +22,13 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: 'white' },
+    { media: '(prefers-color-scheme: dark)', color: 'black' }
+  ],
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export const metadata: Metadata = {
@@ -29,13 +36,17 @@ export const metadata: Metadata = {
   title: {
     default: siteConfig.name,
     template: `%s | ${siteConfig.name}`,
+    template: `%s | ${siteConfig.name}`,
   },
   description:
     'Machine is an AI assistant that helps you accomplish real-world tasks with ease. Through natural conversation, Machine becomes your digital companion for research, data analysis, and everyday challenges.',
   keywords: [
     'AI assistant',
     'open source AI',
+    'AI assistant',
+    'open source AI',
     'artificial intelligence',
+    'AI worker',
     'AI worker',
     'browser automation',
     'web scraping',
@@ -43,6 +54,9 @@ export const metadata: Metadata = {
     'AI assistant',
     'research',
     'data analysis',
+    'task automation',
+    'Kortix',
+    'generalist AI',
     'task automation',
     'Kortix',
     'generalist AI',
@@ -63,9 +77,13 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
     nocache: false,
+    nocache: false,
     googleBot: {
       index: true,
       follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
       'max-video-preview': -1,
       'max-image-preview': 'large',
       'max-snippet': -1,
@@ -92,14 +110,20 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: '/favicon.png', sizes: 'any' },
+      { url: '/favicon.png', sizes: 'any' },
       { url: '/favicon-light.png', sizes: 'any', media: '(prefers-color-scheme: dark)' },
     ],
     shortcut: '/favicon.png',
     apple: '/favicon.png',
+    apple: '/favicon.png',
   },
+  manifest: '/manifest.json',
   manifest: '/manifest.json',
   alternates: {
     canonical: siteConfig.url,
+  },
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
   },
   verification: {
     google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
@@ -112,6 +136,58 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`${roobert.variable} ${roobertMono.variable}`}>
       <head>
+        {/* Structured Data for Organization */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: 'Kortix',
+              alternateName: ['Suna', 'Kortix AI'],
+              url: 'https://kortix.com',
+              logo: 'https://kortix.com/favicon.png',
+              description: siteConfig.description,
+              foundingDate: '2024',
+              sameAs: [
+                'https://github.com/kortix-ai',
+                'https://x.com/kortix',
+                'https://linkedin.com/company/kortix',
+              ],
+              contactPoint: {
+                '@type': 'ContactPoint',
+                contactType: 'Customer Support',
+                url: 'https://kortix.com',
+              },
+            }),
+          }}
+        />
+        
+        {/* Structured Data for Software Application */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'SoftwareApplication',
+              name: 'Kortix',
+              alternateName: 'Suna',
+              applicationCategory: 'BusinessApplication',
+              operatingSystem: 'Web, macOS, Windows, Linux',
+              offers: {
+                '@type': 'Offer',
+                price: '0',
+                priceCurrency: 'USD',
+              },
+              aggregateRating: {
+                '@type': 'AggregateRating',
+                ratingValue: '4.8',
+                ratingCount: '1000',
+              },
+            }),
+          }}
+        />
+        
         {/* Structured Data for Organization */}
         <script
           type="application/ld+json"

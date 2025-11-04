@@ -21,10 +21,11 @@ const PUBLIC_ROUTES = [
   '/tools', // Tools showcase page should be public
 ];
 
-// Routes that require authentication but are related to billing/trials/setup
+// Routes that require authentication but are related to billing/trials/setup/setup
 const BILLING_ROUTES = [
   '/activate-trial',
   '/subscription',
+  '/setting-up',
 ];
 
 // Routes that require authentication and active subscription
