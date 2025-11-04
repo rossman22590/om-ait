@@ -17,6 +17,7 @@ import { clearUserLocalStorage } from '@/lib/utils/clear-local-storage';
 import { useMaintenanceNoticeQuery } from '@/hooks/react-query/edge-flags';
 import { MaintenancePage } from '@/components/maintenance/maintenance-page';
 import { useAdminRole } from '@/hooks/react-query/use-admin-role';
+import { FixAccountButton } from '@/components/admin/fix-account-button';
 
 export default function SubscriptionRequiredPage() {
   const [isCheckingStatus, setIsCheckingStatus] = useState(true);
@@ -134,6 +135,13 @@ export default function SubscriptionRequiredPage() {
               ? 'Your 7-day free trial has ended. Choose a plan to continue using Machine AI.'
               : 'A subscription is required to use Machine. Choose the plan that works best for you.'}
           </p>
+          
+          {/* Temporary fix button for accounts with tier='none' */}
+          {billingStatus?.tier?.name === 'none' && (
+            <div className="max-w-xl mx-auto mt-4">
+              <FixAccountButton />
+            </div>
+          )}
         </div>
         <PricingSection
           returnUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/dashboard?subscription=activated`}

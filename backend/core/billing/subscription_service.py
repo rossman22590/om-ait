@@ -234,7 +234,6 @@ class SubscriptionService:
         
         if trial_status == 'active' and existing_subscription_id:
             logger.info(f"[TRIAL CONVERSION] User {account_id} upgrading from trial to paid plan")
-            
             new_tier_info = get_tier_by_price_id(price_id)
             tier_display_name = new_tier_info.display_name if new_tier_info else 'paid plan'
 
@@ -257,12 +256,31 @@ class SubscriptionService:
                 },
                 idempotency_key=idempotency_key
             )
-            
+            # Embedded checkout session for mobile
+            embedded_session = await StripeAPIWrapper.create_checkout_session(
+                customer=customer_id,
+                payment_method_types=['card'],
+                line_items=[{'price': price_id, 'quantity': 1}],
+                mode='subscription',
+                # success_url and cancel_url are NOT supported for embedded
+                subscription_data={
+                    'metadata': {
+                        'account_id': account_id,
+                        'account_type': 'personal',
+                        'converting_from_trial': 'true',
+                        'previous_tier': current_tier or 'trial',
+                        'previous_subscription_id': existing_subscription_id,
+                        'commitment_type': commitment_type or 'none'
+                    }
+                },
+                idempotency_key=f"{idempotency_key}_embedded",
+                ui_mode='embedded',
+                redirect_on_completion='never'
+            )
             logger.info(f"[TRIAL CONVERSION] Created new checkout session for user {account_id}")
-            
-            # Return hosted Stripe checkout URL
             return {
                 'checkout_url': session.url,  # Direct Stripe hosted checkout URL
+                'fe_checkout_url': embedded_session.url,  # Embedded checkout for mobile
                 'session_id': session.id,
                 'converting_from_trial': True,
                 'message': f'Converting from trial to {tier_display_name}. Your trial will end and the new plan will begin immediately upon payment.',
@@ -275,23 +293,20 @@ class SubscriptionService:
 
         elif existing_subscription_id and trial_status != 'active':
             subscription = await StripeAPIWrapper.retrieve_subscription(existing_subscription_id)
-            
             current_price = subscription['items']['data'][0]['price']
             current_amount = current_price.get('unit_amount', 0) or 0
-            
             if current_amount == 0 or current_tier == 'free':
                 logger.info(f"[FREE TIER UPGRADE] User {account_id} upgrading from free tier to paid plan")
-                
                 new_tier_info = get_tier_by_price_id(price_id)
                 tier_display_name = new_tier_info.display_name if new_tier_info else 'paid plan'
-                
+                # Always create a Stripe Checkout session for upgrades from free or $0 to paid
                 session = await StripeAPIWrapper.create_checkout_session(
                     customer=customer_id,
                     payment_method_types=['card'],
                     line_items=[{'price': price_id, 'quantity': 1}],
                     mode='subscription',
-                    ui_mode='embedded',
-                    return_url=success_url,
+                    success_url=success_url,
+                    cancel_url=cancel_url,
                     subscription_data={
                         'metadata': {
                             'account_id': account_id,
@@ -304,19 +319,32 @@ class SubscriptionService:
                     },
                     idempotency_key=idempotency_key
                 )
-                
+                # Embedded checkout session for mobile
+                embedded_session = await StripeAPIWrapper.create_checkout_session(
+                    customer=customer_id,
+                    payment_method_types=['card'],
+                    line_items=[{'price': price_id, 'quantity': 1}],
+                    mode='subscription',
+                    # success_url and cancel_url are NOT supported for embedded
+                    subscription_data={
+                        'metadata': {
+                            'account_id': account_id,
+                            'account_type': 'personal',
+                            'converting_from_free': 'true',
+                            'previous_tier': current_tier or 'free',
+                            'previous_subscription_id': existing_subscription_id,
+                            'commitment_type': commitment_type or 'none'
+                        }
+                    },
+                    idempotency_key=f"{idempotency_key}_embedded",
+                    ui_mode='embedded',
+                    redirect_on_completion='never'
+                )
                 logger.info(f"[FREE TIER UPGRADE] Created checkout session for user {account_id}")
-                
-                frontend_url = config.FRONTEND_URL
-                client_secret = getattr(session, 'client_secret', None)
-                checkout_param = f"client_secret={client_secret}" if client_secret else f"session_id={session.id}"
-                fe_checkout_url = f"{frontend_url}/checkout?{checkout_param}"
-                
                 return {
-                    'checkout_url': fe_checkout_url,
-                    'fe_checkout_url': fe_checkout_url,
+                    'checkout_url': session.url,  # Direct Stripe hosted checkout URL
+                    'fe_checkout_url': embedded_session.url,  # Embedded checkout for mobile
                     'session_id': session.id,
-                    'client_secret': client_secret,
                     'converting_from_free': True,
                     'message': f'Upgrading from free tier to {tier_display_name}. Your free tier will end and the new plan will begin immediately upon payment.',
                     'tier_info': {
@@ -325,11 +353,10 @@ class SubscriptionService:
                         'monthly_credits': float(new_tier_info.monthly_credits) if new_tier_info else 0
                     }
                 }
-            
+
+            # For all other cases (not free -> paid), update the subscription directly
             logger.info(f"Updating subscription {existing_subscription_id} to price {price_id}")
-            
             modify_key = generate_subscription_modify_idempotency_key(existing_subscription_id, price_id)
-            
             updated_subscription = await StripeAPIWrapper.modify_subscription(
                 existing_subscription_id,
                 items=[{
@@ -340,21 +367,16 @@ class SubscriptionService:
                 payment_behavior='pending_if_incomplete',
                 idempotency_key=modify_key
             )
-            
             logger.info(f"Stripe subscription updated, processing subscription change")
             await self.handle_subscription_change(updated_subscription)
-
             await Cache.invalidate(f"subscription_tier:{account_id}")
             await Cache.invalidate(f"credit_balance:{account_id}")
             await Cache.invalidate(f"credit_summary:{account_id}")
-            
             old_price_id = subscription['items']['data'][0].price.id
             old_tier = get_tier_by_price_id(old_price_id)
             new_tier = get_tier_by_price_id(price_id)
-            
             old_amount = float(old_tier.monthly_credits) if old_tier else 0
             new_amount = float(new_tier.monthly_credits) if new_tier else 0
-            
             return {
                 'status': 'upgraded' if new_amount > old_amount else 'updated',
                 'subscription_id': updated_subscription.id,
@@ -382,10 +404,28 @@ class SubscriptionService:
                 },
                 idempotency_key=idempotency_key
             )
-            
-            # Return hosted Stripe checkout URL
+            # Embedded checkout session for mobile
+            embedded_session = await StripeAPIWrapper.create_checkout_session(
+                customer=customer_id,
+                payment_method_types=['card'],
+                line_items=[{'price': price_id, 'quantity': 1}],
+                mode='subscription',
+                # success_url and cancel_url are NOT supported for embedded
+                subscription_data={
+                    'metadata': {
+                        'account_id': account_id,
+                        'account_type': 'personal',
+                        'commitment_type': commitment_type or 'none'
+                    }
+                },
+                idempotency_key=f"{idempotency_key}_embedded",
+                ui_mode='embedded',
+                redirect_on_completion='never'
+            )
+            # Return hosted and embedded Stripe checkout URLs
             return {
                 'checkout_url': session.url,  # Direct Stripe hosted checkout URL
+                'fe_checkout_url': embedded_session.url,  # Embedded checkout for mobile
                 'session_id': session.id,
             }
 

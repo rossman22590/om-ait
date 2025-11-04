@@ -17,13 +17,39 @@ class FreeTierService:
             logger.info(f"[FREE TIER] Auto-subscribing user {account_id} to free tier")
             
             existing_sub = await client.from_('credit_accounts').select(
-                'stripe_subscription_id, tier'
+                'stripe_subscription_id, tier, balance'
             ).eq('account_id', account_id).execute()
             
             if existing_sub.data and len(existing_sub.data) > 0:
-                if existing_sub.data[0].get('stripe_subscription_id'):
-                    logger.info(f"[FREE TIER] User {account_id} already has subscription, skipping")
-                    return {'success': False, 'message': 'Already subscribed'}
+                credit_account = existing_sub.data[0]
+                existing_subscription_id = credit_account.get('stripe_subscription_id')
+                existing_balance = float(credit_account.get('balance', 0))
+                
+                # If they have subscription and credits, they're all set
+                if existing_subscription_id and existing_balance > 0:
+                    logger.info(f"[FREE TIER] User {account_id} already has subscription with credits, skipping")
+                    return {'success': True, 'message': 'Already subscribed', 'subscription_id': existing_subscription_id}
+                
+                # If they have subscription but no credits, grant credits
+                if existing_subscription_id and existing_balance == 0:
+                    logger.info(f"[FREE TIER] User {account_id} has subscription but no credits, granting credits")
+                    await client.from_('credit_accounts').update({
+                        'tier': 'free',
+                        'balance': float(FREE_TIER_INITIAL_CREDITS),
+                        'non_expiring_credits': float(FREE_TIER_INITIAL_CREDITS),
+                        'last_grant_date': 'now()'
+                    }).eq('account_id', account_id).execute()
+                    
+                    await client.from_('credit_ledger').insert({
+                        'account_id': account_id,
+                        'amount': float(FREE_TIER_INITIAL_CREDITS),
+                        'balance_after': float(FREE_TIER_INITIAL_CREDITS),
+                        'type': 'tier_grant',
+                        'description': 'Welcome to Machine! Free tier initial credits'
+                    }).execute()
+                    
+                    logger.info(f"[FREE TIER] ✅ Granted ${FREE_TIER_INITIAL_CREDITS} credits to existing subscription {existing_subscription_id}")
+                    return {'success': True, 'subscription_id': existing_subscription_id}
             
             customer_result = await client.schema('basejump').from_('billing_customers').select(
                 'id'
@@ -85,12 +111,25 @@ class FreeTierService:
                 }
             )
             
+            # Update credit account with subscription and grant initial credits
             await client.from_('credit_accounts').update({
                 'tier': 'free',
-                'stripe_subscription_id': subscription.id
+                'stripe_subscription_id': subscription.id,
+                'balance': float(FREE_TIER_INITIAL_CREDITS),
+                'non_expiring_credits': float(FREE_TIER_INITIAL_CREDITS),
+                'last_grant_date': 'now()'
             }).eq('account_id', account_id).execute()
             
-            logger.info(f"[FREE TIER] ✅ Successfully created free tier subscription {subscription.id} for {account_id}")
+            # Create ledger entry for the initial credit grant
+            await client.from_('credit_ledger').insert({
+                'account_id': account_id,
+                'amount': float(FREE_TIER_INITIAL_CREDITS),
+                'balance_after': float(FREE_TIER_INITIAL_CREDITS),
+                'type': 'tier_grant',
+                'description': 'Welcome to Machine! Free tier initial credits'
+            }).execute()
+            
+            logger.info(f"[FREE TIER] ✅ Successfully created free tier subscription {subscription.id} for {account_id} with ${FREE_TIER_INITIAL_CREDITS} credits")
             
             return {
                 'success': True,

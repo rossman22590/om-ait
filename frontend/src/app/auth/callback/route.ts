@@ -29,6 +29,7 @@ export async function GET(request: NextRequest) {
       }
 
       if (data.user) {
+        // Always check for account and credit account, and redirect to /setting-up if not ready
         const { data: accountData } = await supabase
           .schema('basejump')
           .from('accounts')
@@ -37,20 +38,28 @@ export async function GET(request: NextRequest) {
           .eq('personal_account', true)
           .single();
 
-        if (accountData) {
-          const { data: creditAccount } = await supabase
-            .from('credit_accounts')
-            .select('tier, stripe_subscription_id')
-            .eq('account_id', accountData.id)
-            .single();
+        // Debug: Log accountData
+        console.log('[CALLBACK] accountData:', accountData);
 
-          if (creditAccount && (creditAccount.tier === 'none' || !creditAccount.stripe_subscription_id)) {
-            return NextResponse.redirect(`${baseUrl}/setting-up`);
-          }
+        if (!accountData) {
+          return NextResponse.redirect(`${baseUrl}/setting-up`)
+        }
+
+        const { data: creditAccount } = await supabase
+          .from('credit_accounts')
+          .select('tier, stripe_subscription_id')
+          .eq('account_id', accountData.id)
+          .single();
+
+        // Debug: Log creditAccount
+        console.log('[CALLBACK] creditAccount:', creditAccount);
+
+        if (!creditAccount || creditAccount.tier === 'none' || !creditAccount.stripe_subscription_id) {
+          return NextResponse.redirect(`${baseUrl}/setting-up`)
         }
       }
 
-      // URL to redirect to after sign in process completes
+      // Only redirect to dashboard if everything is ready
       return NextResponse.redirect(`${baseUrl}${next}`)
     } catch (error) {
       console.error('❌ Unexpected error in auth callback:', error)
