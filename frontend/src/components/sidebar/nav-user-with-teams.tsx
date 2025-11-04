@@ -209,27 +209,21 @@ export function NavUserWithTeams({
                 <div className="flex flex-col justify-between flex-1 min-w-0 h-10 group-data-[collapsible=icon]:hidden">
                   <span className="truncate font-medium text-sm leading-tight">{user.name}</span>
                   {user.planName ? (
-                    user.planIcon ? (
-                      <div className="flex items-center">
-                        <>
-                          <div className="bg-black dark:hidden rounded-full px-2 py-0.5 flex items-center justify-center w-fit">
-                            <img
-                              src={user.planIcon}
-                              alt={user.planName}
-                              className="flex-shrink-0 h-[10px] w-auto"
-                            />
-                          </div>
-                          <img
-                            src={user.planIcon}
-                            alt={user.planName}
-                            className="flex-shrink-0 h-[10px] w-auto hidden dark:block"
-                          />
-                        </>
-                      </div>
-                    ) : (
+                    user.planName.toLowerCase() === 'free' ? (
                       <div className='flex items-center'>
                         <Zap className="h-3 w-3 text-blue-500 dark:text-blue-400 mr-1" />
                         <span className="text-xs text-blue-500 dark:text-blue-400 leading-tight">Free</span>
+                      </div>
+                    ) : (
+                      <div className="bg-black dark:bg-white rounded-full px-2 py-0.5 flex items-center gap-1.5 w-fit">
+                        <img
+                          src="/logo.png"
+                          alt="Machine Logo"
+                          className="h-[10px] w-auto dark:invert"
+                        />
+                        <span className="text-white dark:text-black text-[10px] font-medium">
+                          {user.planName}
+                        </span>
                       </div>
                     )
                   ) : (

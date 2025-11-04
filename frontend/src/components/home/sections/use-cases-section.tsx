@@ -18,10 +18,19 @@ interface UseCase {
 }
 
 export function UseCasesSection() {
-  // Get featured use cases from siteConfig and limit to 8
-  const featuredUseCases: UseCase[] = (siteConfig.useCases || []).filter(
-    (useCase: UseCase) => useCase.featured,
-  );
+  // Get featured use cases from siteConfig and filter out duplicates
+  const seenImages = new Set<string>();
+  const featuredUseCases: UseCase[] = (siteConfig.useCases || [])
+    .filter((useCase: UseCase) => useCase.featured)
+    .filter((useCase: UseCase) => {
+      // Skip if we've already seen this image
+      if (seenImages.has(useCase.image)) {
+        console.warn(`Duplicate image detected for use case: ${useCase.id} - ${useCase.title}`);
+        return false;
+      }
+      seenImages.add(useCase.image);
+      return true;
+    });
 
   return (
     <section

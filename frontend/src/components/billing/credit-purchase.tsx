@@ -191,7 +191,7 @@ export function CreditPurchaseModal({
                     <Alert className="bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200 dark:from-emerald-950/20 dark:to-green-950/20 dark:border-emerald-800">
                         <AlertCircleIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                         <AlertDescription className="text-emerald-700 dark:text-emerald-300">
-                            <strong>Current balance:</strong> ${currentBalance.toFixed(2)} in credits available
+                            <strong>Current balance:</strong> ${(currentBalance / 100).toFixed(2)} in credits available
                         </AlertDescription>
                     </Alert>
                 )}

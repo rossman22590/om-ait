@@ -713,22 +713,16 @@ function BillingTab({ returnUrl }: { returnUrl: string }) {
                     <CardContent className="space-y-4">
                         <div className="flex items-center justify-between">
                             <div>
-                                {!isFreeTier && planName && planIcon ? (
-                                    <div className="flex items-center">
-                                    <>
-                                        <div className="bg-black dark:hidden rounded-full px-2 py-0.5 flex items-center justify-center w-fit">
+                                {!isFreeTier && planName ? (
+                                    <div className="bg-black dark:bg-white rounded-full px-3 py-1.5 flex items-center gap-2 w-fit">
                                         <img
-                                            src={planIcon}
-                                            alt={planName}
-                                            className="flex-shrink-0 h-[16px] w-auto"
+                                            src="/logo.png"
+                                            alt="Machine Logo"
+                                            className="h-[16px] w-auto dark:invert"
                                         />
-                                        </div>
-                                        <img
-                                        src={planIcon}
-                                        alt={planName}
-                                        className="flex-shrink-0 h-[16px] w-auto hidden dark:block"
-                                        />
-                                    </>
+                                        <span className="text-white dark:text-black text-sm font-medium">
+                                            {planName}
+                                        </span>
                                     </div>
                                 ) : null}
                             </div>

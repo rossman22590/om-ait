@@ -461,6 +461,7 @@ function PricingTier({
           ? 'bg-card border border-border'
           : 'bg-card border border-border',
         !insideDialog && ringClass,
+        isCurrentActivePlan && 'bg-pink-50 dark:bg-pink-950/20 border-pink-200 dark:border-pink-800',
       )}
     >
       {/* AnimatedBg for Ultra plan */}
@@ -505,22 +506,18 @@ function PricingTier({
         insideDialog ? "p-3" : "p-4"
       )}>
         <div className="flex items-center gap-2">
-          <div className="bg-black dark:hidden rounded-full px-2 py-1 flex items-center justify-center w-fit">
+          <div className="bg-black dark:bg-white rounded-full px-3 py-1.5 flex items-center gap-2 w-fit">
             <NextImage
-              src={getPlanIcon(tier.name)}
-              alt={tier.name}
-              width={24}
-              height={24}
-              className="h-[24px] w-auto"
+              src="/logo.png"
+              alt="Machine Logo"
+              width={20}
+              height={20}
+              className="h-[16px] w-auto dark:invert"
             />
+            <span className="text-white dark:text-black text-sm font-medium">
+              {tier.name}
+            </span>
           </div>
-          <NextImage
-            src={getPlanIcon(tier.name)}
-            alt={tier.name}
-            width={24}
-            height={24}
-            className="h-[24px] w-auto hidden dark:block"
-          />
           <div className="flex items-center gap-2">
             {tier.isPopular && (
               <Badge variant='outline'>Popular</Badge>

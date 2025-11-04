@@ -209,63 +209,65 @@ export default function CreditTransactions({ accountId }: Props) {
             </div>
           ) : (
             <>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[180px]">Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead className="text-center">Credit Type</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead className="text-right">Balance After</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {transactions.map((tx) => (
-                      <TableRow key={tx.id}>
-                        <TableCell className="font-mono text-xs">
-                          {formatDate(tx.created_at)}
-                        </TableCell>
-                        <TableCell>
-                          {getTransactionBadge(tx.type)}
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          <div className="flex items-center gap-2">
-                            {getTransactionIcon(tx.type, tx.amount)}
-                            {tx.description || 'No description'}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {tx.is_expiring !== undefined && (
-                            <div className="flex items-center justify-center gap-1">
-                              {tx.is_expiring ? (
-                                <>
-                                  <Clock className="h-3 w-3 text-orange-500" />
-                                  <span className="text-xs text-muted-foreground">Expiring</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Infinity className="h-3 w-3 text-blue-500" />
-                                  <span className="text-xs text-muted-foreground">Permanent</span>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className={cn(
-                          "text-right font-mono font-semibold",
-                          tx.amount >= 0 ? "text-green-600" : "text-red-600"
-                        )}>
-                          {formatAmount(tx.amount)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono">
-                          {formatBalance(tx.balance_after)}
-                        </TableCell>
+              <div className="rounded-md border overflow-hidden">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[140px] min-w-[140px]">Date</TableHead>
+                        <TableHead className="w-[100px] min-w-[100px]">Type</TableHead>
+                        <TableHead className="min-w-[150px]">Description</TableHead>
+                        <TableHead className="text-center w-[100px] min-w-[100px]">Credit Type</TableHead>
+                        <TableHead className="text-right w-[90px] min-w-[90px]">Amount</TableHead>
+                        <TableHead className="text-right w-[100px] min-w-[100px]">Balance</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {transactions.map((tx) => (
+                        <TableRow key={tx.id}>
+                          <TableCell className="font-mono text-xs">
+                            {formatDate(tx.created_at)}
+                          </TableCell>
+                          <TableCell>
+                            {getTransactionBadge(tx.type)}
+                          </TableCell>
+                          <TableCell className="text-sm max-w-[200px]">
+                            <div className="flex items-center gap-2">
+                              {getTransactionIcon(tx.type, tx.amount)}
+                              <span className="truncate">{tx.description || 'No description'}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {tx.is_expiring !== undefined && (
+                              <div className="flex items-center justify-center gap-1">
+                                {tx.is_expiring ? (
+                                  <>
+                                    <Clock className="h-3 w-3 text-orange-500" />
+                                    <span className="text-xs text-muted-foreground">Expiring</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Infinity className="h-3 w-3 text-blue-500" />
+                                    <span className="text-xs text-muted-foreground">Permanent</span>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className={cn(
+                            "text-right font-mono font-semibold text-sm",
+                            tx.amount >= 0 ? "text-green-600" : "text-red-600"
+                          )}>
+                            {formatAmount(tx.amount)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">
+                            {formatBalance(tx.balance_after)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
               {data?.pagination && (
                 <div className="flex items-center justify-between mt-4">

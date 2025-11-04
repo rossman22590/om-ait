@@ -1236,7 +1236,7 @@ export const siteConfig = {
         </svg>
       ),
       image:
-        'https://images.unsplash.com/photo-1576091160550-2173dba999ef?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2400&q=80',
+        'https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2400&q=80',
       url: 'https://machine.myapps.ai/share/2fbf0552-87d6-4d12-be25-d54f435bc493',
     },
     {
@@ -1488,7 +1488,7 @@ export const siteConfig = {
         </svg>
       ),
       image:
-        'https://images.unsplash.com/photo-1532153975070-2e9ab71f1b14?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2400&q=80',
+        'https://images.unsplash.com/photo-1532619675605-1ede6c2ed2b0?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2400&q=80',
       url: 'https://machine.myapps.ai/share/a106ef9f-ed97-46ee-8e51-7bfaf2ac3c29',
     },
     {
@@ -1628,7 +1628,7 @@ export const siteConfig = {
         </svg>
       ),
       image:
-        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2400&q=80',
+        'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2400&q=80',
       url: 'https://machine.myapps.ai/share/8442cc76-ac8b-438c-b539-4b93909a2218',
     },
     {
@@ -1663,7 +1663,7 @@ export const siteConfig = {
         </svg>
       ),
       image:
-        'https://images.unsplash.com/photo-1444653614773-995cb1ef9efa?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2400&q=80',
+        'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2400&q=80',
       url: 'https://machine.myapps.ai/share/f04c871c-6bf5-4464-8e9c-5351c9cf5a60',
     },
     {
