@@ -42,7 +42,10 @@ TIERS: Dict[str, Tier] = {
         monthly_credits=FREE_TIER_INITIAL_CREDITS,
         display_name='Free Tier',
         can_purchase_credits=False,
-        models=['all'],
+        models=[
+            'openrouter/anthropic/claude-haiku-4.5',
+            'openai/gpt-5-mini',
+        ],
         project_limit=3
     ),
     'tier_2_20': Tier(

@@ -116,7 +116,7 @@ class ModelRegistry:
                 input_cost_per_million_tokens=0.50,
                 output_cost_per_million_tokens=1.50
             ),
-            tier_availability=["free", "paid"],
+            tier_availability=["paid"],
             priority=92,
             recommended=True,
             enabled=True,
@@ -264,7 +264,7 @@ class ModelRegistry:
                 input_cost_per_million_tokens=0.30,
                 output_cost_per_million_tokens=2.50
             ),
-            tier_availability=["free", "paid"],
+            tier_availability=["paid"],
             priority=93,
             recommended=True,
             enabled=True,
@@ -317,7 +317,7 @@ class ModelRegistry:
                 input_cost_per_million_tokens=0.50,
                 output_cost_per_million_tokens=1.75
             ),
-            tier_availability=["free", "paid"],
+            tier_availability=["paid"],
             priority=94,
             enabled=True,
             config=ModelConfig(

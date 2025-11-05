@@ -932,8 +932,13 @@ async def get_available_models(
         logger.debug(f"User {account_id} allowed models: {allowed_models}")
         logger.debug(f"User tier: {tier['name']}")
         
+        # If free tier, hide models the user cannot access (only show allowed)
+        visible_models = all_models
+        if tier_name == 'free':
+            visible_models = [m for m in all_models if m["id"] in allowed_models]
+
         model_info = []
-        for model_data in all_models:
+        for model_data in visible_models:
             model_id = model_data["id"]
             
             can_access = model_id in allowed_models
