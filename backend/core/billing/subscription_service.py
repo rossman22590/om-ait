@@ -244,6 +244,7 @@ class SubscriptionService:
                 mode='subscription',
                 success_url=success_url,
                 cancel_url=cancel_url,
+                allow_promotion_codes=True,
                 subscription_data={
                     'metadata': {
                         'account_id': account_id,
@@ -263,6 +264,7 @@ class SubscriptionService:
                 line_items=[{'price': price_id, 'quantity': 1}],
                 mode='subscription',
                 # success_url and cancel_url are NOT supported for embedded
+                allow_promotion_codes=True,
                 subscription_data={
                     'metadata': {
                         'account_id': account_id,
@@ -307,6 +309,7 @@ class SubscriptionService:
                     mode='subscription',
                     success_url=success_url,
                     cancel_url=cancel_url,
+                    allow_promotion_codes=True,
                     subscription_data={
                         'metadata': {
                             'account_id': account_id,
@@ -326,6 +329,7 @@ class SubscriptionService:
                     line_items=[{'price': price_id, 'quantity': 1}],
                     mode='subscription',
                     # success_url and cancel_url are NOT supported for embedded
+                    allow_promotion_codes=True,
                     subscription_data={
                         'metadata': {
                             'account_id': account_id,
@@ -371,6 +375,7 @@ class SubscriptionService:
                     mode='subscription',
                     ui_mode='embedded',
                     return_url=success_url,
+                    allow_promotion_codes=True,
                     subscription_data={
                         'metadata': {
                             'account_id': account_id,
@@ -445,6 +450,7 @@ class SubscriptionService:
                 mode='subscription',
                 success_url=success_url,
                 cancel_url=cancel_url,
+                allow_promotion_codes=True,
                 subscription_data={
                     'metadata': {
                         'account_id': account_id,
@@ -461,6 +467,7 @@ class SubscriptionService:
                 line_items=[{'price': price_id, 'quantity': 1}],
                 mode='subscription',
                 # success_url and cancel_url are NOT supported for embedded
+                allow_promotion_codes=True,
                 subscription_data={
                     'metadata': {
                         'account_id': account_id,
