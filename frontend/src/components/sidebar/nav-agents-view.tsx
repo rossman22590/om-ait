@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { Plus, MoreHorizontal, Trash2, ExternalLink } from 'lucide-react';
+import { Plus, MoreHorizontal, Trash2, ExternalLink, Bot } from 'lucide-react';
 import { useSidebar } from '@/components/ui/sidebar';
 import { useAgents, useDeleteAgent } from '@/hooks/react-query/agents/use-agents';
 import { cn } from '@/lib/utils';

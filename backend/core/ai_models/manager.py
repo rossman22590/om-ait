@@ -2,7 +2,7 @@ from typing import Optional, List, Dict, Any, Tuple
 from .registry import registry
 from .ai_models import Model, ModelCapability
 from core.utils.logger import logger
-from .registry import PREMIUM_MODEL_ID
+from .registry import PREMIUM_MODEL_ID, FREE_MODEL_ID
 
 class ModelManager:
     def __init__(self):
