@@ -22,20 +22,12 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 5,
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: 'white' },
-    { media: '(prefers-color-scheme: dark)', color: 'black' }
-  ],
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 5,
 };
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: {
     default: siteConfig.name,
-    template: `%s | ${siteConfig.name}`,
     template: `%s | ${siteConfig.name}`,
   },
   description:
@@ -77,13 +69,9 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
     nocache: false,
-    nocache: false,
     googleBot: {
       index: true,
       follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
       'max-video-preview': -1,
       'max-image-preview': 'large',
       'max-snippet': -1,
@@ -110,20 +98,14 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       { url: '/favicon.png', sizes: 'any' },
-      { url: '/favicon.png', sizes: 'any' },
       { url: '/favicon-light.png', sizes: 'any', media: '(prefers-color-scheme: dark)' },
     ],
     shortcut: '/favicon.png',
     apple: '/favicon.png',
-    apple: '/favicon.png',
   },
-  manifest: '/manifest.json',
   manifest: '/manifest.json',
   alternates: {
     canonical: siteConfig.url,
-  },
-  verification: {
-    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
   },
   verification: {
     google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
@@ -259,7 +241,6 @@ export default function RootLayout({
             style={{ display: 'none', visibility: 'hidden' }}
           />
         </noscript>
-        {/* End Google Tag Manager (noscript) */}
 
         <ThemeProvider
           attribute="class"

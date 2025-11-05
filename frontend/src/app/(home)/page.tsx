@@ -20,6 +20,7 @@ import { DeliverablesSection } from '@/components/home/sections/deliverables-sec
 import { CapabilitiesSection } from '@/components/home/sections/capabilities-section';
 import { IntegrationsSection } from '@/components/home/sections/integrations-section';
 import { InteractiveDemo } from '@/components/home/sections/interactive-demo';
+import { HeroSection } from '@/components/home/sections/hero-section';
 
 export default function Home() {
   return (

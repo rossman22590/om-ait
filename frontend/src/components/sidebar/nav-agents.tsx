@@ -255,6 +255,8 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
   const [deleteProgress, setDeleteProgress] = useState(0);
   const [totalToDelete, setTotalToDelete] = useState(0);
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+  const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
+  const [newThreadName, setNewThreadName] = useState<string>('');
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);

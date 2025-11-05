@@ -14,40 +14,36 @@ import { Button } from '@/components/ui/button';
 // Simple confetti component (no library)
 function ConfettiBurst({ show }: { show: boolean }) {
   const colors = ['#34d399', '#60a5fa', '#fbbf24', '#f472b6', '#a78bfa', '#f87171'];
-  const confetti = Array.from({ length: 24 });
-  return show ? (
+  const confetti = useRef(
+    Array.from({ length: 24 }).map((_, i) => ({
+      left: Math.random() * 100,
+      duration: 1.2 + Math.random() * 0.8,
+      delay: Math.random(),
+      size: 8 + Math.random() * 8,
+      color: colors[i % colors.length],
+      rotate: Math.random() * 360,
+    }))
+  );
+  if (!show) return null;
+  return (
     <div className="pointer-events-none fixed inset-0 z-50 overflow-hidden">
-      {confetti.map((_, i) => {
-        // Use useRef to keep confetti positions stable during rerenders
-        const confettiRef = useRef(
-          {
-            left: Math.random() * 100,
-            duration: 1.2 + Math.random() * 0.8,
-            delay: Math.random(),
-            size: 8 + Math.random() * 8,
-            color: colors[i % colors.length],
-            rotate: Math.random() * 360,
-          }
-        );
-        const { left, duration, delay, size, color, rotate } = confettiRef.current;
-        return (
-          <div
-            key={i}
-            style={{
-              left: `${left}%`,
-              width: size,
-              height: size * 2,
-              background: color,
-              position: 'absolute',
-              top: '-24px',
-              borderRadius: '2px',
-              transform: `rotate(${rotate}deg)`,
-              opacity: 0.85,
-              animation: `confetti-fall ${duration}s ${delay}s cubic-bezier(.62,.01,.5,1) forwards`,
-            }}
-          />
-        );
-      })}
+      {confetti.current.map((cfg, i) => (
+        <div
+          key={i}
+          style={{
+            left: `${cfg.left}%`,
+            width: cfg.size,
+            height: cfg.size * 2,
+            background: cfg.color,
+            position: 'absolute',
+            top: '-24px',
+            borderRadius: '2px',
+            transform: `rotate(${cfg.rotate}deg)`,
+            opacity: 0.85,
+            animation: `confetti-fall ${cfg.duration}s ${cfg.delay}s cubic-bezier(.62,.01,.5,1) forwards`,
+          }}
+        />
+      ))}
       <style>{`
         @keyframes confetti-fall {
           to {
@@ -65,7 +61,7 @@ function ConfettiBurst({ show }: { show: boolean }) {
         }
       `}</style>
     </div>
-  ) : null;
+  );
 }
 
 export default function SettingUpPage() {
