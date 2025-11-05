@@ -18,6 +18,7 @@ const PUBLIC_ROUTES = [
   '/master-login', // Master password admin login
   '/checkout', // Public checkout wrapper for Apple compliance
   '/support', // Support page should be public
+  '/machine', // Suna rebrand page should be public for SEO
   '/tools', // Tools showcase page should be public
 ];
 
