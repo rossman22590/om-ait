@@ -113,9 +113,11 @@ class ToolManager:
         
         # Register other sandbox tools from centralized registry
         from core.tools.tool_registry import SANDBOX_TOOLS, get_tool_class
+        # Ensure Avatar tool is registered even though it's listed in CORE_TOOLS mapping
+        from core.tools.sb_avatar_tool import SandboxAvatarTool
         
         # Tools that need thread_id
-        tools_needing_thread_id = {'sb_vision_tool', 'sb_image_edit_tool', 'sb_design_tool'}
+        tools_needing_thread_id = {'sb_vision_tool', 'sb_image_edit_tool', 'sb_design_tool', 'sb_avatar_tool'}
         
         sandbox_tools = []
         for tool_name, module_path, class_name in SANDBOX_TOOLS:
@@ -131,6 +133,16 @@ class ToolManager:
             except (ImportError, AttributeError) as e:
                 logger.warning(f"❌ Failed to load tool {tool_name} ({class_name}): {e}")
         
+        # Explicitly add sb_avatar_tool (moved to CORE_TOOLS mapping but not auto-registered here)
+        try:
+            sandbox_tools.append(('sb_avatar_tool', SandboxAvatarTool, {
+                'project_id': self.project_id,
+                'thread_manager': self.thread_manager,
+                'thread_id': self.thread_id
+            }))
+        except Exception as e:
+            logger.warning(f"❌ Failed to prepare sb_avatar_tool: {e}")
+
         for tool_name, tool_class, kwargs in sandbox_tools:
             if tool_name not in disabled_tools:
                 try:
