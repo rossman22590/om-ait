@@ -410,7 +410,7 @@ function PricingTier({
               alt="Machine Logo"
               width={20}
               height={20}
-              className="h-[16px] w-auto dark:invert"
+              className="h-[16px] w-auto"
             />
             <span className="text-white dark:text-black text-sm font-medium">
               {tier.name}

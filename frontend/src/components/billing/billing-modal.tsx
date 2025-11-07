@@ -193,7 +193,7 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-5xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="w-full max-w-5xl">
                 <DialogHeader>
                     <DialogTitle>Billing & Transactions</DialogTitle>
                 </DialogHeader>
@@ -210,11 +210,15 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                         </TabsTrigger>
                     </TabsList>
 
-                    <TabsContent value="pricing" className="mt-6">
+                    <TabsContent value="pricing" className="mt-2">
+                    <TabsContent value="pricing" className="mt-2">
+                        <div className="mb-4 text-center">
+                        </div>
                         <PricingSection 
                             returnUrl={returnUrl} 
                             showTitleAndTabs={false}
-                            onSubscriptionUpdate={() => {
+                            showTitleAndTabs={false}
+                            insideDialog
                                 // Invalidate subscription query to refetch data
                                 queryClient.invalidateQueries({ queryKey: subscriptionKeys.all });
                             }}

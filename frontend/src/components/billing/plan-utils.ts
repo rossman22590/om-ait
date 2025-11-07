@@ -23,12 +23,17 @@ export function getPlanName(subscriptionData: any, isLocal: boolean = false): st
     return 'Basic';
   }
 
-  // Try to match tier_key to cloudPricingItems to get the frontend tier name
+  // Prefer backend-provided display names when present
+  if (subscriptionData?.display_plan_name) {
+    return subscriptionData.display_plan_name;
+  }
+  if (subscriptionData?.tier?.display_name) {
+    return subscriptionData.tier.display_name;
+  }
+
+  // Fallback: try to match tier_key to cloudPricingItems to get the frontend tier name
   const tierKey = subscriptionData?.tier_key || subscriptionData?.tier?.name || subscriptionData?.plan_name;
-  
-  const currentTier = siteConfig.cloudPricingItems.find(
-    (p) => p.tierKey === tierKey
-  );
+  const currentTier = siteConfig.cloudPricingItems.find((p) => p.tierKey === tierKey);
 
   if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     console.log('[getPlanName]', {
@@ -39,8 +44,8 @@ export function getPlanName(subscriptionData: any, isLocal: boolean = false): st
     });
   }
 
-  // Return the frontend tier name (Plus, Pro, Ultra, etc.) or fallback to backend display name
-  return currentTier?.name || subscriptionData?.display_plan_name || subscriptionData?.tier?.display_name || 'Basic';
+  // Final fallback
+  return currentTier?.name || 'Basic';
 }
 
 /**
@@ -66,7 +71,7 @@ export function getPlanIcon(planName: string, isLocal: boolean = false): string 
   }
 
   // Pro tier (Pro, Business, Enterprise, Scale, Max)
-  if (plan?.includes('pro') || plan?.includes('business') || plan?.includes('enterprise') || plan?.includes('scale') || plan?.includes('max')) {
+  if (plan?.includes('pro') || plan?.includes('business') || plan?.includes('enterprise') || plan?.includes('scale') || plan?.includes('max') || plan?.includes('ultimate')) {
     return '/logo.png';
   }
 

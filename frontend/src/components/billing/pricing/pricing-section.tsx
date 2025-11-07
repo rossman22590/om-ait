@@ -542,15 +542,17 @@ function PricingTier({
 
       <div className={cn(
         "flex flex-col gap-3 relative z-10",
-        insideDialog ? "p-3" : "p-4"
+        insideDialog ? "p-3 pt-4" : "p-4 pt-6"
       )}>
         <div className="flex items-center justify-between gap-2">
-          <TierBadge planName={tier.name} size="lg" variant="default" />
+          <div className="flex items-center gap-2">
+            <NextImage src="/logo.png" alt="Plan" width={18} height={18} className="h-[18px] w-[18px]" />
+            <span className="text-sm font-medium">{tier.name}</span>
+          </div>
           <div className="flex items-center gap-2">
             {tier.isPopular && (
               <Badge variant='default'>Popular</Badge>
             )}
-            {/* Show upgrade badge for yearly commitment plans when user is on monthly */}
             {isAuthenticated && statusBadge}
           </div>
         </div>
@@ -781,23 +783,40 @@ export function PricingSection({
   return (
     <section
       id="pricing"
-      className={cn("flex flex-col items-center justify-center w-full relative", noPadding ? "pb-0" : "pb-12")}
+      className={cn(
+        "flex flex-col items-center justify-center w-full relative",
+        insideDialog
+          ? "pt-6 pb-6"
+          : noPadding 
+            ? "pb-0 pt-8 sm:pt-12" 
+            : "pb-6 sm:pb-12 pt-8 sm:pt-12"
+      )}
     >
-      <div className="w-full mx-auto px-6 flex flex-col items-center">
+      <div className="w-full mx-auto px-4 sm:px-6 flex flex-col items-center">
+        {/* Header section with safe top spacing */}
         {showTitleAndTabs && (
-          <div className="w-full flex justify-center mb-6">
-            <h2 className="text-3xl md:text-4xl font-medium tracking-tight text-center text-balance leading-tight max-w-2xl">
+          <div className={cn(
+            "w-full flex flex-col items-center",
+            insideDialog ? "mb-6" : "mb-8"
+          )}>
+            <h2 className={cn(
+              "font-medium tracking-tight text-center text-balance leading-tight max-w-2xl",
+              insideDialog ? "text-2xl sm:text-3xl" : "text-3xl md:text-4xl"
+            )}>
               {customTitle || 'Pick the plan that works for you.'}
             </h2>
+            {!insideDialog && (
+              <div className="w-full h-px bg-border/40 mt-6 mb-4" />
+            )}
           </div>
         )}
-
-
+        
+        {/* Pricing grid with proper spacing */}
         <div className={cn(
-          "grid gap-4 w-full max-w-6xl",
+          "w-full max-w-6xl grid gap-4 sm:gap-6",
           insideDialog
-            ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
-            : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4",
+            ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mt-2"
+            : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 mt-4",
           !insideDialog && "grid-rows-1 items-stretch"
         )}>
           {siteConfig.cloudPricingItems

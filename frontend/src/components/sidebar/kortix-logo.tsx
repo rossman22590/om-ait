@@ -20,9 +20,7 @@ export function KortixLogo({ size = 24, variant = 'symbol', className }: KortixL
     setMounted(true);
   }, []);
 
-  const shouldInvert = mounted && (
-    theme === 'dark' || (theme === 'system' && systemTheme === 'dark')
-  );
+  const shouldInvert = false;
 
   // For logomark variant, use logomark-white.svg which is already white
   // and invert it for light mode instead
@@ -33,7 +31,7 @@ export function KortixLogo({ size = 24, variant = 'symbol', className }: KortixL
         alt="Kortix"
         width={size}
         height={size}
-        className={cn(`${shouldInvert ? '' : 'invert'} flex-shrink-0`, className)}
+        className={cn(`flex-shrink-0`, className)}
         style={{ height: size, width: 'auto' }}
       />
     );
@@ -46,7 +44,7 @@ export function KortixLogo({ size = 24, variant = 'symbol', className }: KortixL
       alt="Machine"
       width={size}
       height={size}
-      className={cn(`${shouldInvert ? 'invert' : ''} flex-shrink-0`, className)}
+      className={cn(`flex-shrink-0`, className)}
       style={{ width: size, height: size, minWidth: size, minHeight: size }}
     />
   );

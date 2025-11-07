@@ -180,7 +180,7 @@ export function Navbar({ tabs }: NavbarProps = {}) {
       <AnimatePresence>
         {isDrawerOpen && (
           <motion.div
-            key="drawer"
+            key="mobile-drawer-root"
             className="fixed inset-0 z-50"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -188,10 +188,12 @@ export function Navbar({ tabs }: NavbarProps = {}) {
             transition={{ duration: 0.2 }}
           >
             <motion.div
+              key="mobile-drawer-overlay"
               className="fixed inset-0 bg-background/80 backdrop-blur-sm"
               onClick={toggleDrawer}
             />
             <motion.div
+              key="mobile-drawer"
               className="fixed bottom-0 left-0 right-0 top-20 z-50 overflow-hidden rounded-t-2xl border border-border bg-card p-4"
               initial={{ y: "100%" }}
               animate={{ y: "0%" }}
@@ -209,7 +211,7 @@ export function Navbar({ tabs }: NavbarProps = {}) {
               <motion.div className="flex flex-col gap-2 divide-y divide-border">
                 {siteConfig.nav.links.map((item) => (
                   <Link
-                    key={item.id}
+                    key={`drawer-link-${item.id}`}
                     href={item.href}
                     target={item.href.startsWith('http') ? '_blank' : undefined}
                     rel={item.href.startsWith('http') ? 'noopener noreferrer' : undefined}
