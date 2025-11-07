@@ -3,9 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import { Clock, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useUsageLogs } from '@/hooks/react-query/subscriptions/use-billing';
-import { useCreditBalance } from '@/hooks/react-query/use-billing-v2';
-import { useMessagesQuery } from '@/hooks/react-query/threads/use-messages';
+import { useUsageLogs } from '@/hooks/billing/use-usage-logs';
+import { useCreditBalance } from '@/hooks/billing/use-subscription';
+import { useMessagesQuery } from '@/hooks/threads/use-messages';
 import { Badge } from '@/components/ui/badge';
 
 interface UsageDisplayProps {
@@ -32,9 +32,8 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
   className,
   messageCount = 0,
 }) => {
-  // Fetch usage logs for the account (could filter by thread if needed)
-  // For per-thread usage, filter logs for this threadId
-  const { data: usageLogsData, isLoading } = useUsageLogs(0, 1000, threadId);
+  // Fetch usage logs (filter by thread when available)
+  const { data: usageLogsData, isLoading } = useUsageLogs({ page: 0, itemsPerPage: 1000, threadId });
   
   // Fetch account balance
   const { data: balanceData, isLoading: isBalanceLoading } = useCreditBalance();
@@ -63,21 +62,14 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
     // In billing-v2, we may not have thread_id in the logs
     // Instead, we'll use the reference_type field if it contains the thread ID
     // or we'll show all logs if we can't filter by thread
-    const threadLogs = usageLogsData?.usage_logs?.filter(
-      log => {
-        // If we can't filter by thread, show all logs
-        if (!log.reference_type) return true;
-        
-        // If reference_type is in format 'thread:thread-id', check if it matches
-        if (log.reference_type.startsWith('thread:')) {
-          const logThreadId = log.reference_type.split(':')[1];
-          return logThreadId === threadId;
-        }
-        
-        // Fallback: if reference_type is the thread ID itself
-        return log.reference_type === threadId;
+    const threadLogs = (usageLogsData?.usage_logs || []).filter((log) => {
+      if (!log.reference_type) return true;
+      if (log.reference_type.startsWith('thread:')) {
+        const logThreadId = log.reference_type.split(':')[1];
+        return logThreadId === threadId;
       }
-    ) || [];
+      return log.reference_type === threadId;
+    });
     
     // Debug: Log what we found
     console.log(`[UsageDisplay] Found ${threadLogs.length} logs for thread ${threadId}`, threadLogs);
@@ -86,8 +78,7 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
     let totalSeconds = 0;
     let totalCost = 0;
     
-    threadLogs.forEach(log => {
-      // For billing-v2, we use the 'amount' field instead of calculating from tokens
+    threadLogs.forEach((log) => {
       const amount = log.amount || 0;
       totalCost += amount;
       

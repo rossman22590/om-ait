@@ -24,9 +24,9 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
 
 // Section Header Component
-const SectionHeader = ({ children }: { children: React.ReactNode }) => {
+const LocalSectionHeader = ({ children }: { children: React.ReactNode }) => {
   return (
-    <div className="p-8 space-y-4">
+    <div className="section-header">
       {children}
     </div>
   );
@@ -98,14 +98,14 @@ const ValuePropSection = () => {
     <section className="flex flex-col items-center justify-center w-full relative">
       <div className="relative w-full px-6">
         <div className="max-w-6xl mx-auto border-l border-r border-border">
-          <SectionHeader>
+          <LocalSectionHeader>
             <h2 className="text-3xl md:text-4xl font-medium tracking-tighter text-center text-balance pb-1">
               When Standard Solutions Fall Short
             </h2>
             <p className="text-muted-foreground text-center text-balance font-medium">
               Professional implementation services designed for organizations with unique requirements and mission-critical automation needs.
             </p>
-          </SectionHeader>
+          </LocalSectionHeader>
 
           <div className="grid grid-cols-1 md:grid-cols-2 border-t border-border">
             <div className="p-8 border-r border-border">
@@ -169,14 +169,14 @@ const ProcessSection = () => {
     <section className="flex flex-col items-center justify-center w-full relative">
       <div className="relative w-full px-6">
         <div className="max-w-6xl mx-auto border-l border-r border-border">
-          <SectionHeader>
+          <LocalSectionHeader>
             <h2 className="text-3xl md:text-4xl font-medium tracking-tighter text-center text-balance pb-1">
               Our Implementation Methodology
             </h2>
             <p className="text-muted-foreground text-center text-balance font-medium">
               A proven three-phase approach that transforms your vision into production-ready AI workers
             </p>
-          </SectionHeader>
+          </LocalSectionHeader>
 
           <div className="border-t border-border">
             {steps.map((step, index) => (
@@ -229,14 +229,14 @@ const BenefitsSection = () => {
     <section className="flex flex-col items-center justify-center w-full relative">
       <div className="relative w-full px-6">
         <div className="max-w-6xl mx-auto border-l border-r border-border">
-          <SectionHeader>
+          <LocalSectionHeader>
             <h2 className="text-3xl md:text-4xl font-medium tracking-tighter text-center text-balance pb-1">
               Enterprise-Grade Implementation
             </h2>
             <p className="text-muted-foreground text-center text-balance font-medium">
               Premium service tier with dedicated resources and tailored solutions for complex organizational needs
             </p>
-          </SectionHeader>
+          </LocalSectionHeader>
 
           <div className="border-t border-border p-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

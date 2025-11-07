@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Play, Pause, Volume2, User, Mic, Copy, Check, ShoppingCart, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { fetchAllAvatars, AllAvatarsItem, AllAvatarsResponse } from '@/lib/api';
+import { fetchAllAvatars, type AllAvatarsItem, type AllAvatarsResponse } from '@/lib/api/avatars';
 import { toast } from 'sonner';
 
 export default function AllAvatarsPage() {

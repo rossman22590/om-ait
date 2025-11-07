@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Play, Pause, Volume2, User, Mic, Copy, Check, ShoppingCart } from 'lucide-react';
-import { fetchUserAvatars } from '@/lib/api';
+import { fetchUserAvatars } from '@/lib/api/avatars';
 import { toast } from 'sonner';
 
 interface UserAvatar {

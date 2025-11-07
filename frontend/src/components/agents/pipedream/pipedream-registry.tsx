@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { X, Bot, Search, Sparkles, TrendingUp, Star, Filter } from 'lucide-react';
 import { usePipedreamApps, usePopularPipedreamApps } from '@/hooks/react-query/pipedream/use-pipedream';
 import { usePipedreamProfiles } from '@/hooks/react-query/pipedream/use-pipedream-profiles';
-import { useAgent } from '@/hooks/react-query/agents/use-agents';
+import { useAgent } from '@/hooks/agents/use-agents';
 import { PipedreamConnector } from './pipedream-connector';
 import { toast } from 'sonner';
 // import { cn } from '@/lib/utils';

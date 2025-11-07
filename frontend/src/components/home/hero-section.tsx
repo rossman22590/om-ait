@@ -3,22 +3,17 @@
 import { siteConfig } from '@/lib/home';
 import { ArrowRight, Github, X, AlertCircle, Square } from 'lucide-react';
 import PixelBlast from '@/components/home/ui/PixelBlast';
-import { useMediaQuery } from '@/hooks/use-media-query';
+import { useMediaQuery } from '@/hooks/utils';
 import { useState, useEffect, useRef, FormEvent } from 'react';
 import { useScroll } from 'motion/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
-import {
-  BillingError,
-  AgentRunLimitError,
-  ProjectLimitError,
-} from '@/lib/api';
-import { useInitiateAgentMutation } from '@/hooks/react-query/dashboard/use-initiate-agent';
-import { useThreadQuery } from '@/hooks/react-query/threads/use-threads';
-import { generateThreadName } from '@/lib/actions/threads';
+import { BillingError, AgentRunLimitError, ProjectLimitError } from '@/lib/api/errors';
+import { useInitiateAgentMutation } from '@/hooks/dashboard/use-initiate-agent';
+import { useThreadQuery } from '@/hooks/threads/use-threads';
 import GoogleSignIn from '@/components/GoogleSignIn';
-import { useAgents } from '@/hooks/react-query/agents/use-agents';
+import { useAgents } from '@/hooks/agents/use-agents';
 import {
   Dialog,
   DialogContent,
@@ -27,20 +22,17 @@ import {
   DialogTitle,
   DialogOverlay,
 } from '@/components/ui/dialog';
-import { BillingErrorAlert } from '@/components/billing/usage-limit-alert';
-import { BillingModal } from '@/components/billing/billing-modal';
-import { useBillingError } from '@/hooks/useBillingError';
-import { useAccounts } from '@/hooks/use-accounts';
+import { useAccounts } from '@/hooks/account/use-accounts';
 import { isLocalMode, config } from '@/lib/config';
 import { toast } from 'sonner';
 
 import { ChatInput, ChatInputHandles } from '@/components/thread/chat-input/chat-input';
 import { normalizeFilenameToNFC } from '@/lib/utils/unicode';
 import { createQueryHook } from '@/hooks/use-query';
-import { agentKeys } from '@/hooks/react-query/agents/keys';
-import { getAgents } from '@/hooks/react-query/agents/utils';
+import { agentKeys } from '@/hooks/agents/keys';
+import { getAgents } from '@/hooks/agents/utils';
 import { AgentRunLimitDialog } from '@/components/thread/agent-run-limit-dialog';
-import { useAgentSelection } from '@/lib/stores/agent-selection-store';
+import { useAgentSelection } from '@/stores/agent-selection-store';
 
 // Custom dialog overlay with blur effect
 const BlurredDialogOverlay = () => (
@@ -104,10 +96,6 @@ export function HeroSection() {
     initializeFromAgents
   } = useAgentSelection();
   const { user, isLoading } = useAuth();
-  const { billingError, handleBillingError, clearBillingError } =
-    useBillingError();
-  const { data: accounts } = useAccounts({ enabled: !!user });
-  const personalAccount = accounts?.find((account) => account.personal_account);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const initiateAgentMutation = useInitiateAgentMutation();
   const [initiatedThreadId, setInitiatedThreadId] = useState<string | null>(null);
@@ -274,18 +262,12 @@ export function HeroSection() {
           );
         }
       }
-    } finally {
-      setIsSubmitting(false);
     }
+    setIsSubmitting(false);
   };
 
   return (
     <section id="hero" className="w-full relative overflow-hidden">
-      <BillingModal
-        open={showPaymentModal}
-        onOpenChange={setShowPaymentModal}
-        showUsageLimitAlert={true}
-      />
       <div className="relative flex flex-col items-center w-full px-4 sm:px-6">
         {/* Left side PixelBlast with gradient fades */}
         <div className="hidden sm:block absolute left-0 top-0 h-[500px] sm:h-[600px] md:h-[800px] w-1/4 sm:w-1/3 -z-10 overflow-hidden">
@@ -507,16 +489,6 @@ export function HeroSection() {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Add Billing Error Alert here */}
-      <BillingErrorAlert
-        message={billingError?.message}
-        currentUsage={billingError?.currentUsage}
-        limit={billingError?.limit}
-        accountId={personalAccount?.account_id}
-        onDismiss={clearBillingError}
-        isOpen={!!billingError}
-      />
 
       {agentLimitData && (
         <AgentRunLimitDialog

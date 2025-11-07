@@ -50,6 +50,8 @@ export const siteConfig = {
       { id: 6, name: 'Status', href: 'https://ai-tutor-x-pixio.instatus.com/' },
     ],
   },
+  // Optional list consumed by components like UseCasesSection
+  useCases: [] as any[],
   hero: {
     badgeIcon: (
       <svg

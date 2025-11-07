@@ -17,6 +17,10 @@ import {
   Settings,
   User,
   AudioWaveform,
+  Puzzle,
+  BookOpen,
+  CodeSquare,
+  HelpCircle,
   Sun,
   Moon,
   KeyRound,
@@ -401,7 +405,7 @@ export function NavUserWithTeams({
               </DropdownMenuLabel>
               <DropdownMenuGroup>
                 <DropdownMenuItem
-                  onClick={() => setShowNewAgentDialog(true)}
+                  onClick={() => setShowNewTeamDialog(true)}
                   className="gap-2 p-2"
                 >
                   <Plus className="h-4 w-4" />

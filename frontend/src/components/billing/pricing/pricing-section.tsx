@@ -137,8 +137,8 @@ function BillingPeriodToggle({
   billingPeriod,
   setBillingPeriod
 }: {
-  billingPeriod: 'monthly' | 'yearly_commitment';
-  setBillingPeriod: (period: 'monthly' | 'yearly_commitment') => void;
+  billingPeriod: 'monthly' | 'yearly' | 'yearly_commitment';
+  setBillingPeriod: (period: 'monthly' | 'yearly' | 'yearly_commitment') => void;
 }) {
   const isYearly = billingPeriod === 'yearly_commitment' || billingPeriod === 'yearly';
 

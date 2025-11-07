@@ -43,7 +43,7 @@ import {
 import { useAdminUserDetails, useAdminUserThreads, useAdminUserActivity } from '@/hooks/admin/use-admin-users';
 import {
   useUserBillingSummary,
-  useAdminAdjustCredits,
+  useAdjustCredits,
   useProcessRefund,
   useAdminUserTransactions,
 } from '@/hooks/billing';
@@ -90,8 +90,7 @@ export function AdminUserDetailsDialog({
     page: activityPage,
     page_size: 10,
   });
-  const adminAdjustCreditsMutation = useAdminAdjustCredits();
-  // Removed processRefundMutation since we're using adminAdjustCreditsMutation for both add and remove
+  const adminAdjustCreditsMutation = useAdjustCredits();
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -699,4 +698,4 @@ export function AdminUserDetailsDialog({
       </DialogContent>
     </Dialog>
   );
-} 
+}

@@ -64,7 +64,7 @@ import { useThreadAgentStatuses } from '@/hooks/threads';
 import { formatDateForList } from '@/lib/utils/date-formatting';
 import { Thread, getThreadsPaginated } from '@/lib/api/threads';
 import { useQuery } from '@tanstack/react-query';
-import { useUpdateProject } from '@/hooks/react-query';
+import { useUpdateProject } from '@/hooks/threads';
 
 // Component for date group headers
 const DateGroupHeader: React.FC<{ dateGroup: string; count: number }> = ({ dateGroup, count }) => {

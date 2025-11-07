@@ -31,14 +31,22 @@ export default function SubscriptionRequiredPage() {
         !(subscriptionData.subscription as any).cancel_at_period_end;
 
       const hasActiveTrial = (subscriptionData as any).trial_status === 'active';
+      const trialConverted = (subscriptionData as any).trial_status === 'converted';
       
       // ✅ Use tier_key for consistency
       const tierKey = subscriptionData.tier_key || subscriptionData.tier?.name;
       const hasValidTier = tierKey && tierKey !== 'none';
       const isFreeTier = tierKey === 'free';
+      const hasPaidTier = !!hasValidTier && !isFreeTier;
 
       // Redirect to dashboard if user has valid subscription/trial/free tier
-      if ((hasActiveSubscription && hasValidTier) || (hasActiveTrial && hasValidTier) || isFreeTier) {
+      if (
+        hasPaidTier ||
+        (hasActiveSubscription && hasValidTier) ||
+        (hasActiveTrial && hasValidTier) ||
+        trialConverted ||
+        isFreeTier
+      ) {
         router.push('/dashboard');
       }
     }
@@ -124,7 +132,7 @@ export default function SubscriptionRequiredPage() {
           </p>
           
           {/* Temporary fix button for accounts with tier='none' */}
-          {billingStatus?.tier?.name === 'none' && (
+          {subscriptionData?.tier?.name === 'none' && (
             <div className="max-w-xl mx-auto mt-4">
               <FixAccountButton />
             </div>

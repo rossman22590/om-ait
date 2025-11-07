@@ -12,7 +12,6 @@ import {
     CommandList,
 } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { SpotlightCard } from '@/components/ui/spotlight-card';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { ThreadIcon } from './thread-icon';

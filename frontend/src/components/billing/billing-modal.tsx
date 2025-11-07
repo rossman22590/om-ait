@@ -15,21 +15,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { PricingSection } from '@/components/home/sections/pricing-section';
+import { PricingSection } from '@/components/billing/pricing/pricing-section';
 import { CreditPurchaseModal } from '@/components/billing/credit-purchase';
 import CreditTransactions from '@/components/billing/credit-transactions';
 
 import { isLocalMode } from '@/lib/config';
-import {
-    createPortalSession,
-    cancelSubscription,
-    reactivateSubscription,
-    SubscriptionStatus,
-} from '@/lib/api';
+import { cancelSubscription, createPortalSession, reactivateSubscription } from '@/lib/api/billing';
 import { useAuth } from '@/components/AuthProvider';
-import { useSubscriptionCommitment, useSubscription } from '@/hooks/react-query/subscriptions/use-subscriptions';
+import { useSubscriptionCommitment, useSubscription, subscriptionKeys } from '@/hooks/billing/use-subscription';
 import { useQueryClient } from '@tanstack/react-query';
-import { subscriptionKeys } from '@/hooks/react-query/subscriptions/keys';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
     X, 
@@ -103,17 +97,17 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
     const getEffectiveCancellationDate = () => {
         if (subscriptionData?.subscription?.cancel_at) {
             // Yearly commitment cancellation - use cancel_at timestamp
-            return formatDate(subscriptionData.subscription.cancel_at);
+            return formatDate(Number(subscriptionData.subscription.cancel_at));
         }
         // Regular cancellation - use current period end
-        return formatDate(subscriptionData?.subscription?.current_period_end || 0);
+        return formatDate(Number(subscriptionData?.subscription?.current_period_end) || 0);
     };
 
     const handleManageSubscription = async () => {
         try {
             setIsManaging(true);
-            const { url } = await createPortalSession({ return_url: returnUrl });
-            window.location.href = url;
+            const { portal_url } = await createPortalSession({ return_url: returnUrl });
+            window.location.href = portal_url;
         } catch (err) {
             console.error('Failed to create portal session:', err);
             // setError(err instanceof Error ? err.message : 'Failed to create portal session');
@@ -235,8 +229,8 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
             <CreditPurchaseModal
                 open={showCreditPurchaseModal}
                 onOpenChange={setShowCreditPurchaseModal}
-                currentBalance={subscriptionData?.credit_balance || 0}
-                canPurchase={subscriptionData?.can_purchase_credits || false}
+                currentBalance={subscriptionData?.credits?.balance || 0}
+                canPurchase={subscriptionData?.credits?.can_purchase_credits || false}
                 onPurchaseComplete={() => {
                     // Invalidate subscription query to refetch data
                     queryClient.invalidateQueries({ queryKey: subscriptionKeys.all });
@@ -245,4 +239,4 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
             />
         </Dialog>
     );
-} 
+}

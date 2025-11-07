@@ -17,8 +17,6 @@ import {
 import { MCPConfiguration } from './types';
 import { useCredentialProfilesForMcp } from '@/hooks/mcp/use-credential-profiles';
 
-import { useComposioToolkits } from '@/hooks/composio/use-composio';
-
 interface ConfiguredMcpListProps {
   configuredMCPs: MCPConfiguration[];
   onEdit: (index: number) => void;
@@ -26,19 +24,10 @@ interface ConfiguredMcpListProps {
   onConfigureTools?: (index: number) => void;
 }
 
-const extractAppSlug = (mcp: MCPConfiguration): { type: 'pipedream' | 'composio', slug: string } | null => {
-  if (isPipedreamMCP(mcp)) {
-    // Try multiple sources for the app slug
-    const slug = (mcp as PipedreamMCPConfiguration).app_slug ||
-      mcp.config?.app_slug ||
-      mcp.config?.headers?.['x-pd-app-slug'] ||
-      mcp.qualifiedName.replace('pipedream_', '').split('_')[0]; // Extract first part before profile ID
-    return slug ? { type: 'pipedream', slug } : null;
-  }
-  if (isComposioMCP(mcp)) {
-    const slug = (mcp as ComposioMCPConfiguration).toolkitSlug ||
-      mcp.config?.toolkit_slug ||
-      mcp.qualifiedName.replace('composio.', '');
+// Only support Composio MCPs now
+const extractAppSlug = (mcp: MCPConfiguration): { type: 'composio', slug: string } | null => {
+  if (mcp.customType === 'composio') {
+    const slug = mcp.config?.app_slug || mcp.qualifiedName.replace('composio_', '').split('_')[0];
     return slug ? { type: 'composio', slug } : null;
   }
   return null;
@@ -46,19 +35,7 @@ const extractAppSlug = (mcp: MCPConfiguration): { type: 'pipedream' | 'composio'
 
 const MCPLogo: React.FC<{ mcp: MCPConfiguration }> = ({ mcp }) => {
   const appInfo = extractAppSlug(mcp);
-  const isPipedream = appInfo?.type === 'pipedream';
   const isComposio = appInfo?.type === 'composio';
-
-  // For Pipedream, we can fetch the app icon
-  const { data: pipedreamIconData } = usePipedreamAppIcon(
-    isPipedream && appInfo ? appInfo.slug : ''
-  ) as { data?: { icon_url: string } | string };
-
-  // For Composio, we can fetch the toolkit icon directly
-  const { data: composioIconData } = useComposioToolkitIcon(
-    isComposio && appInfo ? appInfo.slug : '',
-    { enabled: isComposio && !!appInfo?.slug }
-  );
 
   // Fallback for when we don't have app info
   if (!appInfo) {
@@ -70,43 +47,11 @@ const MCPLogo: React.FC<{ mcp: MCPConfiguration }> = ({ mcp }) => {
     );
   }
 
-  // Handle Pipedream icon
-  if (isPipedream && pipedreamIconData) {
-    const iconUrl = typeof pipedreamIconData === 'string' 
-      ? pipedreamIconData 
-      : pipedreamIconData.icon_url;
-    
-    if (iconUrl) {
-      return (
-        <img
-          src={iconUrl}
-          alt={appInfo?.slug || 'Pipedream App'}
-          className="h-8 w-8 rounded-md object-cover"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
-            target.nextElementSibling?.classList.remove('hidden');
-          }}
-        />
-      );
-    }
-  }
-
   // Handle Composio icon
-  if (isComposio && composioIconData?.success && composioIconData?.icon_url) {
+  if (isComposio) {
     return (
       <>
-        <img
-          src={composioIconData.icon_url}
-          alt={mcp.name}
-          className="h-8 w-8 rounded-md object-cover"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
-            target.nextElementSibling?.classList.remove('hidden');
-          }}
-        />
-        <div className="hidden h-8 w-8 rounded-full bg-muted items-center justify-center">
+        <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center">
           <span className="text-xs font-medium">
             {mcp.name?.charAt(0).toUpperCase() || 'C'}
           </span>
@@ -133,9 +78,7 @@ const MCPConfigurationItem: React.FC<{
   onConfigureTools?: (index: number) => void;
 }> = ({ mcp, index, onEdit, onRemove, onConfigureTools }) => {
   // Determine the qualified name based on the MCP type
-  const qualifiedNameForLookup = isComposioMCP(mcp)
-    ? mcp.mcp_qualified_name || mcp.config?.mcp_qualified_name || mcp.qualifiedName
-    : mcp.qualifiedName;
+  const qualifiedNameForLookup = mcp.mcp_qualified_name || mcp.config?.mcp_qualified_name || mcp.qualifiedName;
 
   const { data: credentialProfiles = [] } = useCredentialProfilesForMcp(qualifiedNameForLookup);
   const profileId = mcp.selectedProfileId || mcp.config?.profile_id;
@@ -219,8 +162,6 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
     return mcp.qualifiedName || (mcp as any).mcp_qualified_name || '';
   };
 
-  const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
-
   const handleDeleteClick = (mcp: MCPConfiguration, index: number) => {
     setMcpToDelete({ mcp, index });
     setDeleteDialogOpen(true);
@@ -246,14 +187,8 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
   const configuredMCPs_filtered = configuredMCPs.filter(mcp => !mcp.isAvailable);
   const availableMCPs = configuredMCPs.filter(mcp => mcp.isAvailable);
   
-  const composioMCPs = configuredMCPs_filtered.filter(mcp => isComposioMCP(mcp));
-  const pipedreamMCPs = configuredMCPs_filtered.filter(mcp => isPipedreamMCP(mcp));
-  const otherMCPs = configuredMCPs_filtered.filter(mcp =>
-    !isComposioMCP(mcp) && !isPipedreamMCP(mcp)
-  );
-  
-  const availableComposioMCPs = availableMCPs.filter(mcp => isComposioMCP(mcp));
-  const availablePipedreamMCPs = availableMCPs.filter(mcp => isPipedreamMCP(mcp));
+  const composioMCPs = configuredMCPs_filtered.filter(mcp => mcp.customType === 'composio');
+  const availableComposioMCPs = availableMCPs.filter(mcp => mcp.customType === 'composio');
 
   const renderMCPs = (mcps: MCPConfiguration[], title?: string) => {
     if (mcps.length === 0) return null;
@@ -266,7 +201,7 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
             <div className="h-px bg-border flex-1"></div>
           </div>
         )}
-                 {mcps.map((mcp, index) => {
+        {mcps.map((mcp, index) => {
            const globalIndex = configuredMCPs.findIndex(m => getQualifiedName(m) === getQualifiedName(mcp));
            return (
              <MCPConfigurationItem
@@ -287,8 +222,6 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
     <>
       <div className="space-y-8 w-full overflow-hidden">
         {renderMCPs(composioMCPs, composioMCPs.length > 0 ? 'Composio Integrations' : undefined)}
-        {showPipedreamUI && renderMCPs(pipedreamMCPs, pipedreamMCPs.length > 0 ? 'Pipedream Integrations' : undefined)}
-        {renderMCPs(otherMCPs, otherMCPs.length > 0 ? 'Other MCP Servers' : undefined)}
         
         {/* Available integrations section */}
         {availableMCPs.length > 0 && (
@@ -301,7 +234,6 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
               </Badge>
             </div>
             {renderMCPs(availableComposioMCPs, availableComposioMCPs.length > 0 ? 'Composio' : undefined)}
-            {showPipedreamUI && renderMCPs(availablePipedreamMCPs, availablePipedreamMCPs.length > 0 ? 'Pipedream' : undefined)}
           </div>
         )}
       </div>

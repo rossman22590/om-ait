@@ -30,7 +30,7 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { usePipedreamProfiles, useCreatePipedreamProfile, useConnectPipedreamProfile } from '@/hooks/react-query/pipedream/use-pipedream-profiles';
-import { useUpdatePipedreamToolsForAgent } from '@/hooks/react-query/agents/use-pipedream-tools';
+import { useUpdatePipedreamToolsForAgent } from '@/hooks/agents/use-pipedream-tools';
 import { pipedreamApi } from '@/hooks/react-query/pipedream/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import type { CreateProfileRequest } from '@/components/agents/pipedream/pipedream-types';

@@ -83,7 +83,7 @@ export function CreditPurchaseModal({
             if (response.checkout_url) {
                 window.location.href = response.checkout_url;
             } else {
-                console.error('Invalid response structure:', response.data);
+                console.error('Invalid response structure:', response);
                 throw new Error('No checkout URL received from server');
             }
         } catch (err: any) {

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { MCPConfigurationNew } from './mcp/mcp-configuration-new';
 import { usePipedreamProfiles } from '@/hooks/react-query/pipedream/use-pipedream-profiles';
-import { useComposioCredentialsProfiles } from '@/hooks/react-query/composio/use-composio-profiles';
+import { useComposioCredentialsProfiles } from '@/hooks/composio/use-composio-profiles';
 
 interface AgentMCPConfigurationProps {
   configuredMCPs: any[];

@@ -57,6 +57,8 @@ import { isLocalMode } from '@/lib/config';
 import { KortixProcessModal } from './kortix-enterprise-modal';
 
 import { getPlanIcon, getPlanName } from '@/components/billing/plan-utils';
+import { getActiveAgentRuns, stopAgent } from '@/lib/api/agents';
+import { toast } from 'sonner';
 
 // Helper function to get user initials
 function getInitials(name: string) {
@@ -228,19 +230,19 @@ export function SidebarLeft({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [state, setOpen, isDocumentModalOpen, router, isMobile, setOpenMobile]);
 
-  const handleStopAllAgents = async () => {
-    if (isStoppingAll) return;
-    setIsStoppingAll(true);
-    try {
-      const result = await stopAllAgents();
-      toast.success(result?.message || `Stopped ${result?.stopped_count ?? 0} running agent(s).`);
-    } catch (err: any) {
-      console.error('Failed to stop all agents:', err);
-      toast.error(err?.message || 'Failed to stop all agents');
-    } finally {
-      setIsStoppingAll(false);
-    }
-  };
+  // const handleStopAllAgents = async () => {
+  //   if (isStoppingAll) return;
+  //   setIsStoppingAll(true);
+  //   try {
+  //     const result = await stopAllAgents();
+  //     toast.success(result?.message || `Stopped ${result?.stopped_count ?? 0} running agent(s).`);
+  //   } catch (err: any) {
+  //     console.error('Failed to stop all agents:', err);
+  //     toast.error(err?.message || 'Failed to stop all agents');
+  //   } finally {
+  //     setIsStoppingAll(false);
+  //   }
+  // };
 
   return (
     <Sidebar

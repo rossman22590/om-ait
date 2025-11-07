@@ -533,12 +533,14 @@ function BillingTab({ returnUrl, onOpenPlanModal, isActive }: { returnUrl: strin
 
     // Calculate days until refresh
     const getDaysUntilRefresh = () => {
-        if (!creditBalance?.next_credit_grant) return null;
-        const nextGrant = new Date(creditBalance.next_credit_grant);
+        // Prefer backend-provided next_credit_grant; fall back to subscription period end
+        const target = creditBalance?.next_credit_grant || subscriptionData?.subscription?.current_period_end || null;
+        if (!target) return null;
+        const nextGrant = typeof target === 'number' ? new Date(target * 1000) : new Date(target);
         const now = new Date();
         const diffTime = nextGrant.getTime() - now.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays > 0 ? diffDays : null;
+        return diffDays > 0 ? diffDays : 0;
     };
 
     const daysUntilRefresh = getDaysUntilRefresh();
@@ -669,6 +671,7 @@ function BillingTab({ returnUrl, onOpenPlanModal, isActive }: { returnUrl: strin
 
     const isSubscribed = subscriptionData?.subscription?.status === 'active' || subscriptionData?.subscription?.status === 'trialing';
     const isFreeTier = subscriptionData?.tier?.name === 'free';
+    const hasPaidTier = !!(subscriptionData?.tier_key || subscriptionData?.tier?.name) && !isFreeTier;
     const subscription = subscriptionData?.subscription;
     const isCancelled = subscription?.cancel_at_period_end || subscription?.cancel_at || subscription?.canceled_at;
     const canPurchaseCredits = subscriptionData?.credits?.can_purchase_credits || false;
@@ -728,9 +731,12 @@ function BillingTab({ returnUrl, onOpenPlanModal, isActive }: { returnUrl: strin
                         <div>
                             <div className="text-2xl leading-none font-medium mb-1">{formatCredits(expiringCredits)}</div>
                             <p className="text-xs text-muted-foreground">
-                                {daysUntilRefresh !== null 
-                                    ? `Refresh in ${daysUntilRefresh} ${daysUntilRefresh === 1 ? 'day' : 'days'}`
-                                    : 'No refresh scheduled'
+                                {subscription?.current_period_end
+                                    ? `Renews ${formatDateFlexible(subscription.current_period_end)}`
+                                    : (daysUntilRefresh !== null
+                                        ? `Refresh in ${daysUntilRefresh} ${daysUntilRefresh === 1 ? 'day' : 'days'}`
+                                        : (hasPaidTier ? 'Renews monthly' : 'No refresh scheduled')
+                                      )
                                 }
                             </p>
                         </div>

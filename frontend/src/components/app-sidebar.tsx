@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 
 import { TeamSwitcher } from "@/components/team-switcher"
-import { NavUser } from "@/components/nav-user"
+import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams'
 import { DocsThemeToggle } from "@/components/ui/docs-theme-toggle"
 import { Badge } from "@/components/ui/badge"
 
