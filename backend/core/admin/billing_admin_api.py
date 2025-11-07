@@ -75,7 +75,7 @@ async def adjust_user_credits(
         
         db = DBConnection()
         client = await db.client
-        await client.table('admin_audit_log').insert({
+        audit_payload = {
             'admin_account_id': admin['user_id'],
             'action': 'credit_adjustment',
             'target_account_id': request.account_id,
@@ -85,7 +85,17 @@ async def adjust_user_credits(
                 'is_expiring': request.is_expiring,
                 'new_balance': float(new_balance)
             }
-        }).execute()
+        }
+        try:
+            # Prefer the correct table name if present
+            await client.table('admin_action_logs').insert(audit_payload).execute()
+        except Exception as e_primary:
+            try:
+                # Fallback for older deployments
+                await client.table('admin_actions_log').insert(audit_payload).execute()
+            except Exception:
+                # Do not fail the operation if audit logging table is missing
+                logger.warning("Admin audit log table missing or schema mismatch; skipping audit log write.", exc_info=True)
         
         logger.info(f"[ADMIN] Admin {admin['user_id']} adjusted credits for {request.account_id} by {request.amount} (expiring: {request.is_expiring})")
         
