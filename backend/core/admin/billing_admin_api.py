@@ -75,7 +75,19 @@ async def adjust_user_credits(
         
         db = DBConnection()
         client = await db.client
-        audit_payload = {
+        # Prepare payloads for known schemas
+        payload_actions = {
+            'admin_user_id': admin['user_id'],
+            'action_type': 'credit_adjustment',
+            'target_user_id': request.account_id,
+            'details': {
+                'amount': float(request.amount),
+                'reason': request.reason,
+                'is_expiring': request.is_expiring,
+                'new_balance': float(new_balance)
+            }
+        }
+        payload_audit = {
             'admin_account_id': admin['user_id'],
             'action': 'credit_adjustment',
             'target_account_id': request.account_id,
@@ -86,16 +98,21 @@ async def adjust_user_credits(
                 'new_balance': float(new_balance)
             }
         }
-        try:
-            # Prefer the correct table name if present
-            await client.table('admin_action_logs').insert(audit_payload).execute()
-        except Exception as e_primary:
+        # Try admin_action_logs (singular action), then admin_actions_log (plural actions), then legacy admin_audit_log
+        wrote_log = False
+        for table_name, payload in [
+            ('admin_action_logs', payload_actions),
+            ('admin_actions_log', payload_actions),
+            ('admin_audit_log', payload_audit),
+        ]:
             try:
-                # Fallback for older deployments
-                await client.table('admin_actions_log').insert(audit_payload).execute()
+                await client.table(table_name).insert(payload).execute()
+                wrote_log = True
+                break
             except Exception:
-                # Do not fail the operation if audit logging table is missing
-                logger.warning("Admin audit log table missing or schema mismatch; skipping audit log write.", exc_info=True)
+                continue
+        if not wrote_log:
+            logger.warning("Admin audit log table not found or insert failed for all known schemas; skipping audit log write.")
         
         logger.info(f"[ADMIN] Admin {admin['user_id']} adjusted credits for {request.account_id} by {request.amount} (expiring: {request.is_expiring})")
         
@@ -145,9 +162,48 @@ async def admin_adjust_user_credits(
             new_balance = result.get('total_balance', 0)
             logger.info(f"[ADMIN] Normal flow, new balance: {new_balance}")
         
-        # Skip audit log for now - it was causing HTTP 500 errors
-        # The credit_ledger already tracks all transactions
-        logger.info(f"[ADMIN] Skipping audit log - credit_ledger provides sufficient tracking")
+        # Write admin action log (same schema handling as /credits/adjust)
+        try:
+            db = DBConnection()
+            client = await db.client
+            payload_actions = {
+                'admin_user_id': admin['user_id'],
+                'action_type': 'credit_adjustment',
+                'target_user_id': request.account_id,
+                'details': {
+                    'amount': float(request.amount),
+                    'reason': request.reason,
+                    'is_expiring': request.is_expiring,
+                    'new_balance': float(new_balance)
+                }
+            }
+            payload_audit = {
+                'admin_account_id': admin['user_id'],
+                'action': 'credit_adjustment',
+                'target_account_id': request.account_id,
+                'details': {
+                    'amount': float(request.amount),
+                    'reason': request.reason,
+                    'is_expiring': request.is_expiring,
+                    'new_balance': float(new_balance)
+                }
+            }
+            wrote_log = False
+            for table_name, payload in [
+                ('admin_action_logs', payload_actions),
+                ('admin_actions_log', payload_actions),
+                ('admin_audit_log', payload_audit),
+            ]:
+                try:
+                    await client.table(table_name).insert(payload).execute()
+                    wrote_log = True
+                    break
+                except Exception:
+                    continue
+            if not wrote_log:
+                logger.warning("Admin audit log write skipped: no matching table schema found.")
+        except Exception as e:
+            logger.warning(f"Admin audit log write failed: {e}")
         
         logger.info(f"[ADMIN] Admin {admin['user_id']} adjusted credits for {request.account_id} by {request.amount} (expiring: {request.is_expiring})")
         
