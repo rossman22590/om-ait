@@ -211,15 +211,13 @@ export function BillingModal({ open, onOpenChange, returnUrl = typeof window !==
                     </TabsList>
 
                     <TabsContent value="pricing" className="mt-2">
-                    <TabsContent value="pricing" className="mt-2">
                         <div className="mb-4 text-center">
                         </div>
                         <PricingSection 
                             returnUrl={returnUrl} 
                             showTitleAndTabs={false}
-                            showTitleAndTabs={false}
                             insideDialog
-                                // Invalidate subscription query to refetch data
+                            onSubscriptionUpdate={() => {
                                 queryClient.invalidateQueries({ queryKey: subscriptionKeys.all });
                             }}
                         />
