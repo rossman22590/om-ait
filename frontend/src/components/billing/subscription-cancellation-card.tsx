@@ -14,6 +14,7 @@ import {
 import { toast } from 'sonner';
 import { useReactivateSubscription } from '@/hooks/billing';
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '../ui/alert-dialog';
+import PlanLogoWithName from '../../components/PlanLogoWithName';
 
 interface SubscriptionCancellationCardProps {
   subscription: {
@@ -86,6 +87,7 @@ export function SubscriptionCancellationCard({
     <>
       <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20">
         <CardContent className="space-y-4">
+          <PlanLogoWithName name={subscription?.planName || 'Unknown'} size={24} />
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm">
               <Calendar className="h-4 w-4 text-amber-600" />

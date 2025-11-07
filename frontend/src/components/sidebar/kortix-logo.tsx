@@ -29,7 +29,7 @@ export function KortixLogo({ size = 24, variant = 'symbol', className }: KortixL
   if (variant === 'logomark') {
     return (
       <Image
-        src="/logomark-white.svg"
+        src="/logo.png"
         alt="Kortix"
         width={size}
         height={size}

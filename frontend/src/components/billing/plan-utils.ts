@@ -67,7 +67,7 @@ export function getPlanIcon(planName: string, isLocal: boolean = false): string 
 
   // Pro tier (Pro, Business, Enterprise, Scale, Max)
   if (plan?.includes('pro') || plan?.includes('business') || plan?.includes('enterprise') || plan?.includes('scale') || plan?.includes('max')) {
-    return '/plan-icons/pro.svg';
+    return '/logo.png';
   }
 
   // Plus tier

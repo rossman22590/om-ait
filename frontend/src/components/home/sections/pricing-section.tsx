@@ -72,7 +72,7 @@ function getPlanIcon(planName: string, isLocal: boolean = false) {
 
   const plan = planName?.toLowerCase();
   if (plan?.includes('ultra')) return '/plan-icons/ultra.svg';
-  if (plan?.includes('pro')) return '/plan-icons/pro.svg';
+  if (plan?.includes('pro')) return '/logo.png';
   if (plan?.includes('plus')) return '/plan-icons/plus.svg';
   return '/plan-icons/plus.svg'; // default
 }
@@ -583,9 +583,16 @@ export function PricingSection({
         "w-full max-w-6xl mx-auto",
         insideDialog ? "px-2" : "px-6"
       )}>
-        {showTitleAndTabs && (<>
-        </>
-      )}
+        {showTitleAndTabs && (
+          <div className={cn(
+            "w-full flex justify-center",
+            insideDialog ? "mt-2 mb-4" : "mt-8 mb-6"
+          )}>
+            <h2 className="text-2xl md:text-4xl font-medium tracking-tight text-center text-balance leading-tight max-w-2xl">
+              Pick the plan that works for you.
+            </h2>
+          </div>
+        )}
 
 
 

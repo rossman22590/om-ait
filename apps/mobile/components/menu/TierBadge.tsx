@@ -3,9 +3,7 @@ import { View } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
-import PlusSvg from '@/assets/brand/tiers/plus.svg';
-import ProSvg from '@/assets/brand/tiers/pro.svg';
-import UltraSvg from '@/assets/brand/tiers/ultra.svg';
+import LogoPng from '@/assets/logo.png';
 import { useColorScheme } from 'nativewind';
 import type { TierType } from './types';
 
@@ -36,8 +34,8 @@ export function TierBadge({ tier, size = 'small' }: TierBadgeProps) {
   const textSize = isSmall ? 'text-[13.33px]' : 'text-[116px]';
   const gapSize = isSmall ? 'gap-1' : 'gap-[35px]';
 
-  // Select appropriate SVG component
-  const TierIcon = tier === 'Plus' ? PlusSvg : tier === 'Pro' ? ProSvg : UltraSvg;
+  // Select appropriate icon
+  const TierIcon = LogoPng;
 
   // Text color adapts to color scheme for visibility
   // In dark mode: white text, in light mode: dark text for contrast
