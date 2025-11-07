@@ -18,6 +18,7 @@ CORE_TOOLS = [
     ('expand_msg_tool', 'core.tools.expand_msg_tool', 'ExpandMessageTool'),
     ('message_tool', 'core.tools.message_tool', 'MessageTool'),
     ('task_list_tool', 'core.tools.task_list_tool', 'TaskListTool'),
+    ('sb_avatar_tool', 'core.tools.sb_avatar_tool', 'SandboxAvatarTool'),  # <-- Moved avatar tool to core
 ]
 
 # Sandbox tools - File system, shell, and workspace operations
@@ -32,6 +33,7 @@ SANDBOX_TOOLS = [
     ('sb_presentation_tool', 'core.tools.sb_presentation_tool', 'SandboxPresentationTool'),
     ('sb_upload_file_tool', 'core.tools.sb_upload_file_tool', 'SandboxUploadFileTool'),
     ('sb_docs_tool', 'core.tools.sb_docs_tool', 'SandboxDocsTool'),
+    # ('sb_avatar_tool', 'core.tools.sb_avatar_tool', 'SandboxAvatarTool'),  # <-- Removed from sandbox
 ]
 
 # Search and research tools
