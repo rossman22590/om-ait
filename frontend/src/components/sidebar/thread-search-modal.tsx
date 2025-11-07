@@ -12,11 +12,12 @@ import {
     CommandList,
 } from '@/components/ui/command';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { SpotlightCard } from '@/components/ui/spotlight-card';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { ThreadIcon } from './thread-icon';
-import { useThreads, useProjects, processThreadsWithProjects } from '@/hooks/react-query/sidebar/use-sidebar';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useThreads, useProjects, processThreadsWithProjects } from '@/hooks/sidebar/use-sidebar';
+import { useIsMobile } from '@/hooks/utils';
 import { useSidebar } from '@/components/ui/sidebar';
 
 interface ThreadSearchModalProps {
@@ -56,7 +57,7 @@ export function ThreadSearchModal({ open, onOpenChange }: ThreadSearchModalProps
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl p-0 overflow-hidden bg-background">
                 <VisuallyHidden>
-                    <DialogTitle>Search Conversations</DialogTitle>
+                    <DialogTitle>Search chats</DialogTitle>
                 </VisuallyHidden>
                 <Command className="bg-background border-0" shouldFilter={false}>
                     <div className="px-4 py-3">

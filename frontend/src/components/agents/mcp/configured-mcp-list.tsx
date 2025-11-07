@@ -14,23 +14,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { cn } from '@/lib/utils';
-import { 
-  MCPConfiguration, 
-  isComposioMCP, 
-  isPipedreamMCP, 
-  ComposioMCPConfiguration, 
-  PipedreamMCPConfiguration 
-} from './types';
-import { usePipedreamAppIcon } from '@/hooks/react-query/pipedream/use-pipedream';
-import { useComposioToolkitIcon } from '@/hooks/react-query/composio/use-composio';
-import { useCredentialProfilesForMcp } from '@/hooks/react-query/mcp/use-credential-profiles';
+import { MCPConfiguration } from './types';
+import { useCredentialProfilesForMcp } from '@/hooks/mcp/use-credential-profiles';
 
-// Helper type to handle different response formats
-type ToolkitResponse = {
-  toolkits?: Array<{ icon_url?: string; logo?: string; name?: string; slug?: string }>;
-  [key: string]: any;
-} | Array<{ icon_url?: string; logo?: string; name?: string; slug?: string }>;
+import { useComposioToolkits } from '@/hooks/composio/use-composio';
 
 interface ConfiguredMcpListProps {
   configuredMCPs: MCPConfiguration[];

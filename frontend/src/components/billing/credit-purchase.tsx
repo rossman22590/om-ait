@@ -10,12 +10,11 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Loader2, CreditCard, AlertCircle, Zap, AlertCircleIcon } from 'lucide-react';
-import { apiClient, backendApi } from '@/lib/api-client';
+import { Loader2, AlertCircle } from 'lucide-react';
+import { billingApi } from '@/lib/api/billing';
 import { toast } from 'sonner';
+import { formatCredits } from '@/lib/utils/credit-formatter';
 
 interface CreditPurchaseProps {
     open: boolean;
@@ -76,36 +75,20 @@ export function CreditPurchaseModal({
         setIsProcessing(true);
         setError(null);
         try {
-            console.log('Purchasing credits:', { amount });
-            const response = await backendApi.post('/billing/purchase-credits', {
-                amount_dollars: amount,
+            const response = await billingApi.purchaseCredits({
+                amount: amount,
                 success_url: `${window.location.origin}/dashboard?credit_purchase=success`,
                 cancel_url: `${window.location.origin}/dashboard?credit_purchase=cancelled`
             });
-            
-            console.log('API Response:', response.data);
-            
-            const checkoutUrl = response.data?.url || response.data?.checkout_url;
-            if (checkoutUrl) {
-                window.location.href = checkoutUrl;
+            if (response.checkout_url) {
+                window.location.href = response.checkout_url;
             } else {
                 console.error('Invalid response structure:', response.data);
                 throw new Error('No checkout URL received from server');
             }
         } catch (err: any) {
             console.error('Credit purchase error:', err);
-            console.error('Error response:', err.response?.data);
-            
-            let errorMessage = 'Failed to create checkout session';
-            
-            if (err.response?.status === 403) {
-                errorMessage = 'Credit purchases are currently restricted. Please contact support.';
-            } else if (err.response?.data?.detail) {
-                errorMessage = err.response.data.detail;
-            } else if (err.message) {
-                errorMessage = err.message;
-            }
-            
+            const errorMessage = err.details?.detail || err.message || 'Failed to create checkout session';
             setError(errorMessage);
             toast.error(errorMessage);
         } finally {
@@ -144,13 +127,13 @@ export function CreditPurchaseModal({
                             Credits Not Available
                         </DialogTitle>
                         <DialogDescription>
-                            Credit purchases are only available for users on the highest subscription tier.
+                            Credit purchases are only available for users on the $200/month subscription tier.
                         </DialogDescription>
                     </DialogHeader>
-                    <Alert className="bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 dark:from-amber-950/20 dark:to-orange-950/20 dark:border-amber-800">
-                        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                        <AlertDescription className="text-amber-800 dark:text-amber-200">
-                            <strong>Upgrade Required:</strong> Please upgrade to the Premium tier ($1000/month) to unlock credit purchases for unlimited usage beyond your subscription limit.
+                    <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                            Please upgrade your subscription to the $200/month tier to unlock credit purchases for unlimited usage.
                         </AlertDescription>
                     </Alert>
                     <div className="flex justify-between gap-3">
@@ -178,55 +161,33 @@ export function CreditPurchaseModal({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        <Zap className="h-5 w-5 text-amber-500 dark:text-amber-400" />
-                        Purchase Credits
-                    </DialogTitle>
+                    <DialogTitle>Get additional credits</DialogTitle>
                     <DialogDescription>
                         Add credits to your account for usage beyond your subscription limit. Credits never expire and are used automatically when you exceed your monthly allowance.
                     </DialogDescription>
                 </DialogHeader>
 
                 {currentBalance > 0 && (
-                    <Alert className="bg-gradient-to-r from-emerald-50 to-green-50 border-emerald-200 dark:from-emerald-950/20 dark:to-green-950/20 dark:border-emerald-800">
-                        <AlertCircleIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                        <AlertDescription className="text-emerald-700 dark:text-emerald-300">
-                            <strong>Current balance:</strong> ${(currentBalance / 100).toFixed(2)} in credits available
-                        </AlertDescription>
-                    </Alert>
+                    <div className="text-sm text-muted-foreground">
+                        Current balance: {formatCredits(currentBalance, { showDecimals: true })}
+                    </div>
                 )}
 
                 <div className="space-y-6">
                     <div>
-                        <div className="flex items-center justify-between mb-3">
-                            <Label className="text-base font-semibold">Select a Credit Package</Label>
-                            {selectedPackage?.popular && (
-                                <span className="text-sm text-green-600 dark:text-green-400 font-medium">
-                                    ✅ Popular choice selected
-                                </span>
-                            )}
-                        </div>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                             {CREDIT_PACKAGES.map((pkg) => (
                                 <Card
                                     key={pkg.amount}
                                     className={`cursor-pointer transition-all ${selectedPackage?.amount === pkg.amount
-                                        ? 'ring-2 ring-primary'
-                                        : 'hover:shadow-md'
+                                        ? 'ring-2 ring-border'
+                                        : 'hover:border-border/80'
                                         }`}
                                     onClick={() => handlePackageSelect(pkg)}
                                 >
-                                    <CardContent className="p-4 text-center relative">
-                                        {pkg.popular && (
-                                            <Badge className="absolute -top-2 -right-2 bg-gradient-to-r from-purple-600 to-pink-600" variant="default">
-                                                Popular
-                                            </Badge>
-                                        )}
-                                        <div className="text-2xl font-medium">${pkg.amount}</div>
-                                        <div className="text-sm text-muted-foreground">credits</div>
-                                        <div className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                                            ≈ {Math.round(pkg.amount / 0.15)} minutes
-                                        </div>
+                                    <CardContent className="p-4 text-center">
+                                        <div className="text-xl font-medium">${pkg.amount}</div>
+                                        <div className="text-xs text-muted-foreground mt-1">Credits</div>
                                     </CardContent>
                                 </Card>
                             ))}
@@ -250,18 +211,11 @@ export function CreditPurchaseModal({
                         </Alert>
                     )}
                 </div>
-                <div className="flex justify-between gap-3 mt-6 pt-4 border-t">
-                    <Button
-                        variant="outline"
-                        onClick={() => onOpenChange(false)}
-                        disabled={isProcessing}
-                    >
-                        Cancel
-                    </Button>
+                <div className="flex justify-center mt-6">
                     <Button
                         onClick={handleConfirmPurchase}
-                        disabled={isProcessing || (!selectedPackage && (!customAmount || customAmount.trim() === ''))}
-                        className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-md hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={isProcessing || (!selectedPackage && !customAmount)}
+                        className="w-full sm:w-auto min-w-[120px]"
                     >
                         {isProcessing ? (
                             <>
@@ -269,13 +223,7 @@ export function CreditPurchaseModal({
                                 Processing...
                             </>
                         ) : (
-                            <>
-                                <CreditCard className="h-4 w-4 mr-2" />
-                                {selectedPackage || customAmount 
-                                    ? `Purchase $${selectedPackage ? selectedPackage.amount : customAmount} Credits`
-                                    : 'Select Package to Continue'
-                                }
-                            </>
+                            'Continue'
                         )}
                     </Button>
                 </div>
@@ -293,10 +241,7 @@ export function CreditBalanceDisplay({ balance, canPurchase, onPurchaseClick }: 
         <Card>
             <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center justify-between">
-                    <span className="flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-yellow-500" />
-                        Credit Balance
-                    </span>
+                    <span>Credit Balance</span>
                     {canPurchase && onPurchaseClick && (
                         <Button
                             size="sm"
@@ -310,7 +255,7 @@ export function CreditBalanceDisplay({ balance, canPurchase, onPurchaseClick }: 
             </CardHeader>
             <CardContent>
                 <div className="text-2xl font-medium">
-                    ${(balance / 100).toFixed(2)}
+                    {formatCredits(balance)}
                 </div>
             </CardContent>
         </Card>

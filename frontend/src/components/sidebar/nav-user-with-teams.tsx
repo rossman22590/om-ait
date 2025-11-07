@@ -27,15 +27,13 @@ import {
   Users,
   BarChart3,
   FileText,
-  BookOpen,
-  Puzzle,
-  CodeSquare,
-  HelpCircle,
+  TrendingDown,
 } from 'lucide-react';
-import { useAccounts } from '@/hooks/use-accounts';
-import NewTeamForm from '@/components/basejump/new-team-form';
+import { useAccounts } from '@/hooks/account';
+import { useSubscription } from '@/hooks/billing';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -68,9 +66,9 @@ import { createClient } from '@/lib/supabase/client';
 import { useTheme } from 'next-themes';
 import { isLocalMode } from '@/lib/config';
 import { clearUserLocalStorage } from '@/lib/utils/clear-local-storage';
-import { BillingModal } from '@/components/billing/billing-modal';
 import { UserSettingsModal } from '@/components/settings/user-settings-modal';
-import { NewAgentDialog } from '@/components/agents/new-agent-dialog';
+import { PlanSelectionModal } from '@/components/billing/pricing';
+import { TierBadge } from '@/components/billing/tier-badge';
 
 export function NavUserWithTeams({
   user,
@@ -87,12 +85,18 @@ export function NavUserWithTeams({
   const router = useRouter();
   const { isMobile } = useSidebar();
   const { data: accounts } = useAccounts();
+  const { data: subscriptionData } = useSubscription({ enabled: true });
   const [showNewTeamDialog, setShowNewTeamDialog] = React.useState(false);
-  const [showBillingModal, setShowBillingModal] = React.useState(false);
   const [showSettingsModal, setShowSettingsModal] = React.useState(false);
-  const [settingsTab, setSettingsTab] = React.useState<'general' | 'plan' | 'billing' | 'env-manager'>('general');
+  const [showPlanModal, setShowPlanModal] = React.useState(false);
+  const [settingsTab, setSettingsTab] = React.useState<'general' | 'billing' | 'usage' | 'env-manager'>('general');
   const { theme, setTheme } = useTheme();
-  const [showNewAgentDialog, setShowNewAgentDialog] = React.useState(false);
+
+  // Check if user is on free tier
+  const isFreeTier = subscriptionData?.tier_key === 'free' ||
+    subscriptionData?.tier?.name === 'free' ||
+    subscriptionData?.plan_name === 'free' ||
+    !subscriptionData?.tier_key;
 
   // Prepare personal account and team accounts
   const personalAccount = React.useMemo(
@@ -193,7 +197,7 @@ export function NavUserWithTeams({
   return (
     <Dialog open={showNewTeamDialog} onOpenChange={setShowNewTeamDialog}>
       <SidebarMenu>
-        <SidebarMenuItem>
+        <SidebarMenuItem className="relative">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <SidebarMenuButton
@@ -209,23 +213,7 @@ export function NavUserWithTeams({
                 <div className="flex flex-col justify-between flex-1 min-w-0 h-10 group-data-[collapsible=icon]:hidden">
                   <span className="truncate font-medium text-sm leading-tight">{user.name}</span>
                   {user.planName ? (
-                    user.planName.toLowerCase() === 'free' ? (
-                      <div className='flex items-center'>
-                        <Zap className="h-3 w-3 text-blue-500 dark:text-blue-400 mr-1" />
-                        <span className="text-xs text-blue-500 dark:text-blue-400 leading-tight">Free</span>
-                      </div>
-                    ) : (
-                      <div className="bg-black dark:bg-white rounded-full px-2 py-0.5 flex items-center gap-1.5 w-fit">
-                        <img
-                          src="/logo.png"
-                          alt="Machine Logo"
-                          className="h-[10px] w-auto dark:invert"
-                        />
-                        <span className="text-white dark:text-black text-[10px] font-medium">
-                          {user.planName}
-                        </span>
-                      </div>
-                    )
+                    <TierBadge planName={user.planName} size="xxs" variant="default" />
                   ) : (
                     <span className="truncate text-xs text-muted-foreground leading-tight">{user.email}</span>
                   )}
@@ -326,8 +314,7 @@ export function NavUserWithTeams({
               <DropdownMenuGroup>
                 <DropdownMenuItem
                   onClick={() => {
-                    setSettingsTab('plan');
-                    setShowSettingsModal(true);
+                    setShowPlanModal(true);
                   }}
                   className="gap-2 p-2"
                 >
@@ -369,6 +356,16 @@ export function NavUserWithTeams({
                 >
                   <CreditCard className="h-4 w-4" />
                   <span>Billing</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSettingsTab('usage');
+                    setShowSettingsModal(true);
+                  }}
+                  className="gap-2 p-2"
+                >
+                  <TrendingDown className="h-4 w-4" />
+                  <span>Usage</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link href="/settings/credentials" className="gap-2 p-2">
@@ -493,6 +490,20 @@ export function NavUserWithTeams({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Upgrade Button - Only for Free Tier */}
+          {isFreeTier && (
+            <div className="absolute bottom-full left-0 right-0 mb-2 px-0 group-data-[collapsible=icon]:hidden z-50">
+              <Button
+                onClick={() => setShowPlanModal(true)}
+                variant="default"
+                size="lg"
+                className="w-full relative z-50"
+              >
+                Upgrade
+              </Button>
+            </div>
+          )}
         </SidebarMenuItem>
       </SidebarMenu>
 
@@ -505,15 +516,8 @@ export function NavUserWithTeams({
             Create a team to collaborate with others.
           </DialogDescription>
         </DialogHeader>
-        <NewTeamForm />
+        {/* Team form removed - basejump functionality deprecated */}
       </DialogContent>
-
-      {/* Billing Modal */}
-      <BillingModal
-        open={showBillingModal}
-        onOpenChange={setShowBillingModal}
-        returnUrl={typeof window !== 'undefined' ? window?.location?.href || '/' : '/'}
-      />
 
       {/* User Settings Modal */}
       <UserSettingsModal
@@ -523,13 +527,11 @@ export function NavUserWithTeams({
         returnUrl={typeof window !== 'undefined' ? window?.location?.href || '/' : '/'}
       />
 
-      <NewAgentDialog
-        open={showNewAgentDialog}
-        onOpenChange={setShowNewAgentDialog}
-        onSuccess={(agentId) => {
-          setShowNewAgentDialog(false)
-          router.push(`/agents/config/${agentId}`)
-        }}
+      {/* Plan Selection Modal */}
+      <PlanSelectionModal
+        open={showPlanModal}
+        onOpenChange={setShowPlanModal}
+        returnUrl={typeof window !== 'undefined' ? window?.location?.href || '/' : '/'}
       />
     </Dialog>
   );

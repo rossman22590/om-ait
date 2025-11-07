@@ -23,6 +23,15 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
 
+// Section Header Component
+const SectionHeader = ({ children }: { children: React.ReactNode }) => {
+  return (
+    <div className="p-8 space-y-4">
+      {children}
+    </div>
+  );
+};
+
 // Hero Section Component
 const CustomHeroSection = ({ onOpenCalendly }: { onOpenCalendly: () => void }) => {
   return (

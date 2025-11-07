@@ -11,7 +11,6 @@ import { NavGlobalConfig } from '@/components/sidebar/nav-global-config';
 import { NavTriggerRuns } from '@/components/sidebar/nav-trigger-runs';
 import { NavUserWithTeams } from '@/components/sidebar/nav-user-with-teams';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
-import { CTACard } from '@/components/sidebar/cta';
 import { siteConfig } from '@/lib/home';
 import {
   Sidebar,
@@ -45,81 +44,19 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuGroup,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuPortal,
-} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { useIsMobile } from '@/hooks/utils';
 import { cn } from '@/lib/utils';
 import { usePathname, useSearchParams } from 'next/navigation';
 import posthog from 'posthog-js';
-import { stopAllAgents } from '@/lib/api';
-import { toast } from 'sonner';
-import { useDocumentModalStore } from '@/lib/stores/use-document-modal-store';
-import { useSubscriptionData } from '@/contexts/SubscriptionContext';
+import { useDocumentModalStore } from '@/stores/use-document-modal-store';
+import { useSubscriptionData } from '@/stores/subscription-store';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Image from 'next/image';
 import { isLocalMode } from '@/lib/config';
 import { KortixProcessModal } from './kortix-enterprise-modal';
 
-// Helper function to get plan icon - maps frontend tier names from cloudPricingItems
-export function getPlanIcon(planName: string, isLocal: boolean = false) {
-  if (isLocal) return '/plan-icons/ultra.svg';
-
-  const plan = planName?.toLowerCase();
-
-  if (plan?.includes('free')) {
-    return null;
-  }
-
-  // Ultra tier
-  if (plan?.includes('ultra')) {
-    return '/plan-icons/ultra.svg';
-  }
-
-  // Pro tier (Pro, Business, Enterprise, Scale, Max)
-  if (plan?.includes('pro') || plan?.includes('business') || plan?.includes('enterprise') || plan?.includes('scale') || plan?.includes('max')) {
-    return '/plan-icons/pro.svg';
-  }
-
-  // Plus tier
-  if (plan?.includes('plus')) {
-    return '/plan-icons/plus.svg';
-  }
-
-  // Default to plus
-  return '/plan-icons/plus.svg';
-}
-
-// Helper function to get plan name - matches price_id to cloudPricingItems tier name
-export function getPlanName(subscriptionData: any, isLocal: boolean = false): string {
-  if (isLocal) return 'Ultra';
-
-  if (subscriptionData?.tier?.name === 'free') {
-    return 'Free Tier';
-  }
-
-  // Match price_id to cloudPricingItems to get the frontend tier name
-  const currentTier = siteConfig.cloudPricingItems.find(
-    (p) => p.stripePriceId === subscriptionData?.price_id ||
-      (p as any).yearlyStripePriceId === subscriptionData?.price_id ||
-      (p as any).monthlyCommitmentStripePriceId === subscriptionData?.price_id
-  );
-
-  // Return the frontend tier name (Plus, Pro, Ultra, etc.) or fallback to backend display name
-  return currentTier?.name || subscriptionData?.display_plan_name || subscriptionData?.tier?.display_name || 'Free';
-}
+import { getPlanIcon, getPlanName } from '@/components/billing/plan-utils';
 
 // Helper function to get user initials
 function getInitials(name: string) {
@@ -496,33 +433,35 @@ export function SidebarLeft({
       </SidebarContent>
 
       {/* Enterprise Demo Card - Only show when expanded */}
-      {false && state !== 'collapsed' && showEnterpriseCard && (
-        <div className="absolute bottom-[86px] left-6 right-6 z-10">
-          <div className="rounded-2xl p-5 backdrop-blur-[12px] border-[1.5px] bg-gradient-to-br from-white/25 to-gray-300/25 dark:from-gray-600/25 dark:to-gray-800/25 border-gray-300/50 dark:border-gray-600/50">
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="h-4 w-4" />
-              <span className="text-sm font-medium text-foreground">Enterprise Demo</span>
+      {/* {
+        state !== 'collapsed' && showEnterpriseCard && (
+          <div className="absolute bottom-[86px] left-6 right-6 z-10">
+            <div className="rounded-2xl p-5 backdrop-blur-[12px] border-[1.5px] bg-gradient-to-br from-white/25 to-gray-300/25 dark:from-gray-600/25 dark:to-gray-800/25 border-gray-300/50 dark:border-gray-600/50">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="h-4 w-4" />
+                <span className="text-sm font-medium text-foreground">Enterprise Demo</span>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ml-auto h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                onClick={() => setShowEnterpriseCard(false)}
-              >
-                <X className="h-4 w-4" />
-              </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowEnterpriseCard(false)}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Request custom AI Workers implementation
+              </p>
+              <KortixProcessModal>
+                <Button size="sm" className="w-full text-xs h-8">
+                  Learn More
+                </Button>
+              </KortixProcessModal>
             </div>
-            <p className="text-xs text-muted-foreground mb-4">
-              Request custom AI Workers implementation
-            </p>
-            <KortixProcessModal>
-              <Button size="sm" className="w-full text-xs h-8">
-                Learn More
-              </Button>
-            </KortixProcessModal>
           </div>
-        </div>
-      )}
+        )
+      } */}
 
       <div className={cn("pb-4", state === 'collapsed' ? "px-6" : "px-6")}>
         <UserProfileSection user={user} />

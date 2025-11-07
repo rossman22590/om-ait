@@ -216,14 +216,14 @@
 
   @keyframes elliptical-orbit {
     from {
-      transform: rotate(var(--angle, 0) deg)
+      transform: rotate(calc(1deg * var(--angle, 0)))
         translate(var(--h-radius, 160px), 0)
-        rotate(calc(var(--angle, 0) deg * -1));
+        rotate(calc(-1deg * var(--angle, 0)));
     }
     to {
-      transform: rotate(calc(var(--angle, 0) deg + 360deg))
+      transform: rotate(calc(1deg * (var(--angle, 0) + 360)))
         translate(var(--h-radius, 160px), 0)
-        rotate(calc((var(--angle, 0) deg + 360deg) * -1));
+        rotate(calc(-1deg * (var(--angle, 0) + 360)));
     }
   }
 
