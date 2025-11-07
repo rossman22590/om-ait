@@ -34,7 +34,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { useQueryClient } from '@tanstack/react-query';
 import { billingKeys } from '@/hooks/billing/use-subscription';
 import posthog from 'posthog-js';
-import { AnimatedBg } from '@/components/ui/animated-bg';
+import PixelBlast from '@/components/home/ui/PixelBlast';
 import { TierBadge } from '@/components/billing/tier-badge';
 import { CreditPurchaseModal } from '@/components/billing/credit-purchase';
 import { BorderBeam } from '@/components/ui/border-beam';
@@ -194,6 +194,8 @@ function PricingTier({
   currentBillingPeriod = null as 'monthly' | 'yearly' | 'yearly_commitment' | null,
 }: PricingTierProps & { currentBillingPeriod?: 'monthly' | 'yearly' | 'yearly_commitment' | null }) {
   const queryClient = useQueryClient();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Determine the price to display based on billing period
   const getDisplayPrice = () => {
@@ -477,10 +479,12 @@ function PricingTier({
             buttonClassName = 'bg-primary hover:bg-primary/90 text-primary-foreground';
           }
         } else if (targetAmount < currentAmount || isSameTierDowngradeToShorterTerm) {
-          buttonText = 'Downgrade';
-          buttonVariant = 'outline';
-          buttonClassName = '';
-          isDowngradeAction = true;
+          // Temporarily disable downgrades entirely
+          buttonText = 'Not Available';
+          buttonDisabled = true;
+          buttonVariant = 'secondary';
+          buttonClassName = 'opacity-50 cursor-not-allowed bg-muted text-muted-foreground';
+          isDowngradeAction = false;
         } else {
           buttonText = 'Select Plan';
           buttonVariant = tier.buttonColor as ButtonVariant;
@@ -518,41 +522,22 @@ function PricingTier({
         isCurrentActivePlan && 'bg-pink-50 dark:bg-pink-950/20 border-pink-200 dark:border-pink-800',
       )}
     >
-      {/* AnimatedBg for Ultra plan */}
+      {/* PixelBlast background for Ultra plan card */}
+      {/* Animated light purple/pink gradient background for Ultra */}
       {isUltraPlan && (
-        <AnimatedBg
-          variant="header"
-          blurMultiplier={0.8}
-          sizeMultiplier={0.7}
-          customArcs={{
-            left: [
-              {
-                pos: { left: -120, top: -30 },
-                size: 350,
-                tone: 'light',
-                opacity: 0.15,
-                delay: 0.02,
-                x: [0, 12, -6, 0],
-                y: [0, 8, -4, 0],
-                scale: [0.85, 1.05, 0.95, 0.85],
-                blur: ['10px', '15px', '12px', '10px'],
-              },
-            ],
-            right: [
-              {
-                pos: { right: -110, top: 200 },
-                size: 380,
-                tone: 'dark',
-                opacity: 0.2,
-                delay: 1.0,
-                x: [0, -15, 8, 0],
-                y: [0, 10, -6, 0],
-                scale: [0.9, 1.1, 0.98, 0.9],
-                blur: ['8px', '4px', '6px', '8px'],
-              },
-            ],
-          }}
-        />
+        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+          <motion.div
+            className="absolute -top-12 -left-16 w-[180%] h-[110%] rounded-[40%] bg-pink-500/25 blur-2xl"
+            animate={{ x: [0, 24, -14, 0], y: [0, 12, -10, 0], scale: [1, 1.06, 0.97, 1] }}
+            transition={{ duration: 14, repeat: Infinity, ease: [0.85, 0, 0.15, 1] }}
+          />
+          <motion.div
+            className="absolute -bottom-12 -right-16 w-[170%] h-[105%] rounded-[40%] bg-purple-500/25 blur-2xl"
+            animate={{ x: [0, -20, 14, 0], y: [0, -10, 12, 0], scale: [1, 0.96, 1.05, 1] }}
+            transition={{ duration: 14, repeat: Infinity, ease: [0.85, 0, 0.15, 1], delay: 0.35 }}
+          />
+          <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-background/70 to-transparent" />
+        </div>
       )}
 
       <div className={cn(
@@ -653,25 +638,26 @@ function PricingTier({
         </Button>
       </div>
 
-      {/* BorderBeam for Ultra plan only - dual tracers in sync */}
+      {/* Make the animated border more dominant for Ultra */}
       {isUltraPlan && (
         <>
           <BorderBeam
-            size={200}
-            duration={12}
+            size={260}
+            duration={9}
             delay={0}
-            borderWidth={1.5}
+            borderWidth={2.5}
             colorFrom="#23D3FF"
             colorTo="#FF1B07"
           />
           <BorderBeam
-            size={200}
-            duration={12}
+            size={260}
+            duration={9}
             delay={0}
-            borderWidth={1.5}
+            borderWidth={2.5}
             colorFrom="#FFC78C"
             colorTo="#FDF5E0"
-            initialOffset={50}
+            initialOffset={35}
+            reverse
           />
         </>
       )}
