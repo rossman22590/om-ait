@@ -218,7 +218,7 @@ export function NavUserWithTeams({
                   <span className="truncate font-medium text-sm leading-tight">{user.name}</span>
                   {user.planName ? (
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <TierBadge planName={user.planName} size="xxs" variant="default" />
+                      <TierBadge planName={user.planName} size="xs" variant="default" />
                       <span className="truncate text-xs text-muted-foreground leading-tight">{user.planName}</span>
                     </div>
                   ) : (
