@@ -223,12 +223,8 @@ export function AgentCreationModal({ open, onOpenChange, onSuccess }: AgentCreat
               <div className="flex flex-col items-center gap-6 py-4 pb-8">
                 {[
                   { id: 'scratch' as const, icon: Wrench, label: 'Configure Manually' },
-                  { id: 'chat' as const, icon: MessageSquare, label: 'Configure by Chat' },
-                  { id: 'template' as const, icon: Globe, label: 'Explore Templates' }
+                  { id: 'chat' as const, icon: MessageSquare, label: 'Configure by Chat' }
                 ].map((option, index) => {
-                  const Icon = option.icon;
-                  const isTopRow = index < 2;
-
                   if (index === 0) {
                     return (
                       <div key="top-row" className="flex gap-6">
@@ -257,26 +253,6 @@ export function AgentCreationModal({ open, onOpenChange, onSuccess }: AgentCreat
                       </div>
                     );
                   }
-
-                  if (index === 2) {
-                    return (
-                      <button
-                        key={option.id}
-                        onClick={() => handleOptionClick(option.id)}
-                        disabled={createNewAgentMutation.isPending}
-                        className={`min-w-[380px] h-[144px] rounded-3xl border transition-all ${selectedOption === option.id
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border bg-card hover:bg-muted/30'
-                          } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      >
-                        <div className="flex flex-col items-center justify-center gap-4 h-full">
-                          <Icon className="h-8 w-8" />
-                          <span className="text-2xl font-medium">{option.label}</span>
-                        </div>
-                      </button>
-                    );
-                  }
-
                   return null;
                 })}
               </div>
