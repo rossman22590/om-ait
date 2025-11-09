@@ -295,7 +295,7 @@ export const setupAgentFromChat = async (request: AgentSetupFromChatRequest): Pr
     const response = await backendApi.post<AgentSetupFromChatResponse>(
       '/agents/setup-from-chat',
       request,
-      { showErrors: true, timeout: 20000 } // 20 seconds (single optimized LLM call)
+      { showErrors: true, timeout: 60000 } // Increase to 60s to avoid premature client timeout on slower LLMs
     );
 
     if (response.error) {

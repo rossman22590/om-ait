@@ -166,6 +166,32 @@ export function AgentCreationModal({ open, onOpenChange, onSuccess }: AgentCreat
       router.push(`/agents/config/${result.agent_id}`);
 
     } catch (error: any) {
+      // If client timed out but backend likely created the agent, try to recover
+      const isTimeout = error?.code === 'TIMEOUT' || /timeout/i.test(error?.message || '');
+      if (isTimeout) {
+        toast.message('Checking if worker was created…', { id: 'agent-setup' });
+        try {
+          const { getAgents } = await import('@/hooks/agents/utils');
+          const tryFetchNewest = async () => {
+            const latest = await getAgents({ limit: 1, sort_by: 'created_at', sort_order: 'desc' });
+            return latest?.agents?.[0];
+          };
+          let newest = await tryFetchNewest();
+          if (!newest) {
+            await new Promise(res => setTimeout(res, 1500));
+            newest = await tryFetchNewest();
+          }
+          if (newest?.agent_id) {
+            toast.success(`Created "${newest.name}"!`, { id: 'agent-setup' });
+            onOpenChange(false);
+            router.push(`/agents/config/${newest.agent_id}`);
+            return;
+          }
+        } catch (e) {
+          // fall through to generic error below
+        }
+      }
+
       toast.error('Failed to create agent', { id: 'agent-setup' });
 
       if (error?.detail?.error_code === 'AGENT_LIMIT_EXCEEDED') {

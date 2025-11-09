@@ -18,7 +18,6 @@ import { AgentCountLimitDialog } from './agent-count-limit-dialog';
 import { AgentCountLimitError } from '@/lib/api/errors';
 import { toast } from 'sonner';
 import { AgentCreationModal } from './agent-creation-modal';
-import { isLocalMode, isStagingMode } from '@/lib/config';
 
 interface NewAgentDialogProps {
   open: boolean;
@@ -27,18 +26,8 @@ interface NewAgentDialogProps {
 }
 
 export function NewAgentDialog({ open, onOpenChange, onSuccess }: NewAgentDialogProps) {
-  if (isLocalMode() || isStagingMode()) {
-    return (
-      <AgentCreationModal
-        open={open}
-        onOpenChange={onOpenChange}
-        onSuccess={onSuccess}
-      />
-    );
-  }
-
   return (
-    <NewAgentDialogLegacy
+    <AgentCreationModal
       open={open}
       onOpenChange={onOpenChange}
       onSuccess={onSuccess}

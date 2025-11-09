@@ -264,9 +264,9 @@ export const siteConfig = {
     {
       title: 'Kortix',
       links: [
-        { id: 1, title: 'About', url: 'https://kortix.com' },
+        { id: 1, title: 'About', url: 'https://machine.myapps.ai' },
         { id: 3, title: 'Contact', url: 'mailto:hey@kortix.com' },
-        { id: 4, title: 'Careers', url: 'https://kortix.com/careers' },
+        { id: 4, title: 'Careers', url: 'https://machine.myapps.ai/careers' },
       ],
     },
     {
@@ -287,12 +287,12 @@ export const siteConfig = {
         {
           id: 9,
           title: 'Privacy Policy',
-          url: 'https://kortix.com/legal?tab=privacy',
+          url: 'https://machine.myapps.ai/legal?tab=privacy',
         },
         {
           id: 10,
           title: 'Terms of Service',
-          url: 'https://kortix.com/legal?tab=terms',
+          url: 'https://machine.myapps.ai/legal?tab=terms',
         },
         {
           id: 11,

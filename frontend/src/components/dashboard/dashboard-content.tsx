@@ -389,15 +389,13 @@ export function DashboardContent() {
               )}
               {(viewMode === 'worker-templates') && (
                 <div className="w-full animate-in fade-in-0 duration-300">
-                  {(isStagingMode() || isLocalMode()) && (
-                    <div className="w-full px-4 pb-8">
-                      <div className="max-w-5xl mx-auto">
-                        <CustomAgentsSection
-                          onAgentSelect={setSelectedAgent}
-                        />
-                      </div>
+                  <div className="w-full px-4 pb-8">
+                    <div className="max-w-5xl mx-auto">
+                      <CustomAgentsSection
+                        onAgentSelect={setSelectedAgent}
+                      />
                     </div>
-                  )}
+                  </div>
                 </div>
               )}
             </div>

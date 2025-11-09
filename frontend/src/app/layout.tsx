@@ -128,8 +128,8 @@ export default function RootLayout({
               '@type': 'Organization',
               name: 'Kortix',
               alternateName: ['Suna', 'Kortix AI'],
-              url: 'https://kortix.com',
-              logo: 'https://kortix.com/favicon.png',
+              url: 'https://machine.myapps.ai',
+              logo: 'https://machine.myapps.ai/favicon.png',
               description: siteConfig.description,
               foundingDate: '2024',
               sameAs: [
@@ -140,7 +140,7 @@ export default function RootLayout({
               contactPoint: {
                 '@type': 'ContactPoint',
                 contactType: 'Customer Support',
-                url: 'https://kortix.com',
+                url: 'https://machine.myapps.ai',
               },
             }),
           }}
@@ -180,8 +180,8 @@ export default function RootLayout({
               '@type': 'Organization',
               name: 'Kortix',
               alternateName: ['Suna', 'Kortix AI'],
-              url: 'https://kortix.com',
-              logo: 'https://kortix.com/favicon.png',
+              url: 'https://machine.myapps.ai',
+              logo: 'https://machine.myapps.ai/favicon.png',
               description: siteConfig.description,
               foundingDate: '2024',
               sameAs: [
@@ -192,7 +192,7 @@ export default function RootLayout({
               contactPoint: {
                 '@type': 'ContactPoint',
                 contactType: 'Customer Support',
-                url: 'https://kortix.com',
+                url: 'https://machine.myapps.ai',
               },
             }),
           }}

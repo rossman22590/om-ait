@@ -14,6 +14,7 @@ import type { MarketplaceTemplate } from '@/components/agents/installation/types
 import { AgentsParams } from '@/hooks/agents/utils';
 
 import { AgentsPageHeader } from '@/components/agents/custom-agents-page/header';
+import PixelBlast from '@/components/home/ui/PixelBlast';
 import { TabsNavigation } from '@/components/agents/custom-agents-page/tabs-navigation';
 import { MyAgentsTab } from '@/components/agents/custom-agents-page/my-agents-tab';
 import { MarketplaceTab } from '@/components/agents/custom-agents-page/marketplace-tab';
@@ -565,8 +566,64 @@ export default function AgentsPage() {
     setAgentsPage(1);
   };
 
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Side PixelBlast like Integrations */}
+      <div className="hidden sm:block absolute left-0 top-0 h-[500px] sm:h-[600px] md:h-[800px] w-1/4 sm:w-1/3 -z-10 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-background z-10 pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background via-background/90 to-transparent z-10 pointer-events-none" />
+        <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-background via-background/90 to-transparent z-10 pointer-events-none" />
+        {mounted && (
+          <PixelBlast
+            variant="circle"
+            pixelSize={8}
+            color="#EC4899"
+            patternScale={2.5}
+            patternDensity={1.5}
+            pixelSizeJitter={0.3}
+            enableRipples
+            rippleSpeed={0.5}
+            rippleThickness={0.15}
+            rippleIntensityScale={2}
+            liquid
+            liquidStrength={0.15}
+            liquidRadius={1.5}
+            liquidWobbleSpeed={4}
+            speed={0.8}
+            edgeFade={0.2}
+            transparent
+          />
+        )}
+      </div>
+      <div className="hidden sm:block absolute right-0 top-0 h:[500px] sm:h-[600px] md:h-[800px] w-1/4 sm:w-1/3 -z-10 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-background z-10 pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background via-background/90 to-transparent z-10 pointer-events-none" />
+        <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-background via-background/90 to-transparent z-10 pointer-events-none" />
+        {mounted && (
+          <PixelBlast
+            variant="circle"
+            pixelSize={8}
+            color="#A855F7"
+            patternScale={2.5}
+            patternDensity={1.5}
+            pixelSizeJitter={0.3}
+            enableRipples
+            rippleSpeed={0.5}
+            rippleThickness={0.15}
+            rippleIntensityScale={2}
+            liquid
+            liquidStrength={0.15}
+            liquidRadius={1.5}
+            liquidWobbleSpeed={4}
+            speed={0.8}
+            edgeFade={0.2}
+            transparent
+          />
+        )}
+      </div>
       <div className="container mx-auto max-w-7xl px-4 py-8">
         <AgentsPageHeader />
       </div>
