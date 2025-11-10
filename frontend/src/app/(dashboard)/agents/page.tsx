@@ -22,7 +22,6 @@ import { PublishDialog } from '@/components/agents/custom-agents-page/publish-di
 import { LoadingSkeleton } from '@/components/agents/custom-agents-page/loading-skeleton';
 import { NewAgentDialog } from '@/components/agents/new-agent-dialog';
 import { MarketplaceAgentPreviewDialog } from '@/components/agents/marketplace-agent-preview-dialog';
-import { AgentCountLimitDialog } from '@/components/agents/agent-count-limit-dialog';
 import { AgentCountLimitError } from '@/lib/api/errors';
 
 type ViewMode = 'grid' | 'list';
@@ -86,8 +85,6 @@ export default function AgentsPage() {
 
   const [publishingAgentId, setPublishingAgentId] = useState<string | null>(null);
   const [showNewAgentDialog, setShowNewAgentDialog] = useState(false);
-  const [showAgentLimitDialog, setShowAgentLimitDialog] = useState(false);
-  const [agentLimitError, setAgentLimitError] = useState<AgentCountLimitError | null>(null);
 
   const activeTab = useMemo(() => {
     const tab = searchParams.get('tab');
@@ -400,8 +397,6 @@ export default function AgentsPage() {
       console.error('Installation error:', error);
 
       if (error instanceof AgentCountLimitError) {
-        setAgentLimitError(error);
-        setShowAgentLimitDialog(true);
         return;
       }
 
@@ -726,15 +721,6 @@ export default function AgentsPage() {
           onInstall={handlePreviewInstall}
           isInstalling={installingItemId === selectedItem?.id}
         />
-        {agentLimitError && (
-          <AgentCountLimitDialog
-            open={showAgentLimitDialog}
-            onOpenChange={setShowAgentLimitDialog}
-            currentCount={agentLimitError.detail.current_count}
-            limit={agentLimitError.detail.limit}
-            tierName={agentLimitError.detail.tier_name}
-          />
-        )}
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ import { PostHogIdentify } from '@/components/posthog-identify';
 import '@/lib/polyfills';
 import { roobert } from './fonts/roobert';
 import { roobertMono } from './fonts/roobert-mono';
+import { PlanSelectionModal } from '@/components/billing/pricing/plan-selection-modal';
 
 
 export const viewport: Viewport = {
@@ -253,6 +254,7 @@ export default function RootLayout({
             <ReactQueryProvider>
               {children}
               <Toaster />
+              <PlanSelectionModal />
             </ReactQueryProvider>
           </AuthProvider>
           <Analytics />

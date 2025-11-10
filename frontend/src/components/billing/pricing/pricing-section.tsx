@@ -21,6 +21,7 @@ import {
   Zap,
   ShoppingCart,
   Lightbulb,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +39,7 @@ import PixelBlast from '@/components/home/ui/PixelBlast';
 import { TierBadge } from '@/components/billing/tier-badge';
 import { CreditPurchaseModal } from '@/components/billing/credit-purchase';
 import { BorderBeam } from '@/components/ui/border-beam';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 // Constants
 export const SUBSCRIPTION_PLANS = {
@@ -282,10 +284,13 @@ function PricingTier({
             : 'Subscription updated successfully';
           toast.success(upgradeMessage);
           posthog.capture('plan_upgraded');
-          // Invalidate all billing queries immediately after upgrade
           queryClient.invalidateQueries({ queryKey: billingKeys.all });
-          // Trigger subscription update callback to refetch data
           if (onSubscriptionUpdate) onSubscriptionUpdate();
+          if (response.redirect_to_dashboard) {
+            setTimeout(() => {
+              window.location.href = '/dashboard';
+            }, 1000);
+          }
           break;
         case 'commitment_blocks_downgrade':
           toast.warning(response.message || 'Cannot downgrade during commitment period');
@@ -673,6 +678,8 @@ interface PricingSectionProps {
   noPadding?: boolean;
   onSubscriptionUpdate?: () => void;
   customTitle?: string;
+  isAlert?: boolean;
+  alertTitle?: string;
 }
 
 export function PricingSection({
@@ -683,6 +690,8 @@ export function PricingSection({
   noPadding = false,
   onSubscriptionUpdate,
   customTitle,
+  isAlert = false,
+  alertTitle
 }: PricingSectionProps) {
   const { user } = useAuth();
   const isUserAuthenticated = !!user;
@@ -793,17 +802,20 @@ export function PricingSection({
             : "pb-6 sm:pb-12 pt-8 sm:pt-12"
       )}
     >
-      <div className="w-full mx-auto px-4 sm:px-6 flex flex-col items-center">
-        {/* Header section with safe top spacing */}
-        {showTitleAndTabs && (
-          <div className={cn(
-            "w-full flex flex-col items-center",
-            insideDialog ? "mb-6" : "mb-8"
-          )}>
-            <h2 className={cn(
-              "font-medium tracking-tight text-center text-balance leading-tight max-w-2xl",
-              insideDialog ? "text-2xl sm:text-3xl" : "text-3xl md:text-4xl"
-            )}>
+      <div className="w-full mx-auto px-6 flex flex-col items-center">
+        {isAlert && (
+          <div className="w-full flex justify-center mb-6 gap-4">
+            <div className="h-10 w-10 rounded-full bg-amber-600/10 border border-amber-600/20 dark:bg-amber-500/10 dark:border-amber-500/20 flex items-center justify-center">
+              <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+            </div>
+            <h2 className="text-3xl font-medium tracking-tight text-center text-balance leading-tight max-w-2xl text-amber-600 dark:text-amber-500">
+              {alertTitle || 'Pick the plan that works for you.'}
+            </h2>
+          </div>
+        )}
+        {showTitleAndTabs && !isAlert && (
+          <div className="w-full flex justify-center mb-6">
+            <h2 className="text-3xl font-medium tracking-tight text-center text-balance leading-tight max-w-2xl">
               {customTitle || 'Pick the plan that works for you.'}
             </h2>
             {!insideDialog && (
@@ -811,8 +823,7 @@ export function PricingSection({
             )}
           </div>
         )}
-        
-        {/* Pricing grid with proper spacing */}
+                {/* Pricing grid with proper spacing */}
         <div className={cn(
           "w-full max-w-6xl grid gap-4 sm:gap-6",
           insideDialog

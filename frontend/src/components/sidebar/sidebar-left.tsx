@@ -57,6 +57,8 @@ import { isLocalMode } from '@/lib/config';
 import { KortixProcessModal } from './kortix-enterprise-modal';
 
 import { getPlanIcon, getPlanName } from '@/components/billing/plan-utils';
+import { Kbd } from '../ui/kbd';
+import { KbdGroup } from '../ui/kbd';
 import { getActiveAgentRuns, stopAgent } from '@/lib/api/agents';
 import { toast } from 'sonner';
 
@@ -385,8 +387,10 @@ export function SidebarLeft({
                         New Chat
                       </div>
                       <div className="flex items-center gap-1">
-                        <kbd className="h-6 w-6 flex items-center justify-center bg-muted border border-border rounded-md text-base leading-0 cursor-pointer">⌘</kbd>
-                        <kbd className="h-6 w-6 flex items-center justify-center bg-muted border border-border rounded-md text-xs cursor-pointer">J</kbd>
+                      <KbdGroup>
+                        <Kbd>⌘</Kbd>
+                        <Kbd>J</Kbd>
+                      </KbdGroup>
                       </div>
                     </Link>
                   </Button>
