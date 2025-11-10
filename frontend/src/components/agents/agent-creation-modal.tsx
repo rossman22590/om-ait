@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { useCreateNewAgent } from '@/hooks/agents/use-agents';
 import { useKortixTeamTemplates } from '@/hooks/secure-mcp/use-secure-mcp';
 import { AgentCountLimitError } from '@/lib/api/errors';
+import { AgentCountLimitDialog } from '@/components/agents/agent-count-limit-dialog';
 import { toast } from 'sonner';
 import { UnifiedAgentCard } from '@/components/ui/unified-agent-card';
 import type { BaseAgentData } from '@/components/ui/unified-agent-card';
@@ -33,6 +34,12 @@ export function AgentCreationModal({ open, onOpenChange, onSuccess }: AgentCreat
   const [selectedOption, setSelectedOption] = useState<'scratch' | 'chat' | 'template' | null>(null);
   const [showChatStep, setShowChatStep] = useState(false);
   const [chatDescription, setChatDescription] = useState('');
+  const [showAgentLimitDialog, setShowAgentLimitDialog] = useState(false);
+  const [agentLimitData, setAgentLimitData] = useState<{
+    current_count: number;
+    limit: number;
+    tier_name: string;
+  } | null>(null);
 
   const createNewAgentMutation = useCreateNewAgent();
   const { data: templates, isLoading } = useKortixTeamTemplates();
@@ -47,6 +54,8 @@ export function AgentCreationModal({ open, onOpenChange, onSuccess }: AgentCreat
       },
       onError: (error) => {
         if (error instanceof AgentCountLimitError) {
+          setAgentLimitData(error.detail);
+          setShowAgentLimitDialog(true);
           onOpenChange(false);
         } else {
           toast.error(error instanceof Error ? error.message : 'Failed to create agent');
@@ -124,7 +133,7 @@ export function AgentCreationModal({ open, onOpenChange, onSuccess }: AgentCreat
         },
         onError: (error) => {
           if (error instanceof AgentCountLimitError) {
-            setAgentLimitError(error.detail);
+            setAgentLimitData(error.detail);
             setShowAgentLimitDialog(true);
             onOpenChange(false);
           } else {
@@ -190,7 +199,7 @@ export function AgentCreationModal({ open, onOpenChange, onSuccess }: AgentCreat
       toast.error('Failed to create agent', { id: 'agent-setup' });
 
       if (error?.detail?.error_code === 'AGENT_LIMIT_EXCEEDED') {
-        setAgentLimitError(error.detail);
+        setAgentLimitData(error.detail);
         setShowAgentLimitDialog(true);
         onOpenChange(false);
       } else {
@@ -299,6 +308,16 @@ export function AgentCreationModal({ open, onOpenChange, onSuccess }: AgentCreat
         onInstall={handlePreviewInstall}
         isInstalling={false}
       />
+
+      {agentLimitData && (
+        <AgentCountLimitDialog
+          open={showAgentLimitDialog}
+          onOpenChange={setShowAgentLimitDialog}
+          currentCount={agentLimitData.current_count}
+          limit={agentLimitData.limit}
+          tierName={agentLimitData.tier_name}
+        />
+      )}
     </>
   );
 }
