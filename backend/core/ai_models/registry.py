@@ -177,6 +177,27 @@ class ModelRegistry:
             )
         ))
         
+        # OpenAI GPT-5.1 Codex - Via OpenAI directly
+        self.register(Model(
+            id="openai/gpt-5.1-codex",
+            name="GPT-5.1 Codex",
+            provider=ModelProvider.OPENAI,
+            aliases=["gpt-5.1-codex", "GPT-5.1 Codex", "openai/gpt-5.1-codex"],
+            context_window=400_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.STRUCTURED_OUTPUT,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=1.25,
+                output_cost_per_million_tokens=10.00
+            ),
+            tier_availability=["paid"],
+            priority=96,
+            enabled=True
+        ))
+        
         # OpenAI GPT-5 Mini - Via OpenAI directly
         self.register(Model(
             id="openai/gpt-5-mini",
@@ -302,6 +323,33 @@ class ModelRegistry:
             )
         ))
         
+        # Moonshot Kimi K2 Thinking - Via OpenRouter
+        self.register(Model(
+            id="openrouter/moonshotai/kimi-k2-thinking",
+            name="Kimi K2 Thinking",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["kimi-k2-thinking", "Kimi K2 Thinking", "moonshotai/kimi-k2-thinking", "openrouter/moonshotai/kimi-k2-thinking"],
+            context_window=200_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.THINKING,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=1.50,
+                output_cost_per_million_tokens=6.00
+            ),
+            tier_availability=["paid"],
+            priority=94,
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                }
+            )
+        ))
+
         # GLM 4.6 - Via OpenRouter
         self.register(Model(
             id="openrouter/z-ai/glm-4.6",
@@ -319,6 +367,32 @@ class ModelRegistry:
             ),
             tier_availability=["paid"],
             priority=94,
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                }
+            )
+        ))
+
+        # Minimax M2 - Via OpenRouter
+        self.register(Model(
+            id="openrouter/minimax/minimax-m2",
+            name="Minimax M2",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["minimax/minimax-m2", "minimax-m2", "openrouter/minimax/minimax-m2"],
+            context_window=200_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=0.60,
+                output_cost_per_million_tokens=2.00
+            ),
+            tier_availability=["paid"],
+            priority=93,
             enabled=True,
             config=ModelConfig(
                 extra_headers={
