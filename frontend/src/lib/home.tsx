@@ -1,5 +1,6 @@
 import { FlickeringGrid } from '@/components/ui/flickering-grid';
 import { config } from '@/lib/config';
+import { ArrowRight } from 'lucide-react';
 
 interface UpgradePlan {
   /** @deprecated */
@@ -51,7 +52,208 @@ export const siteConfig = {
     ],
   },
   // Optional list consumed by components like UseCasesSection
-  useCases: [] as any[],
+  useCases: [
+    {
+      id: 'uc-1',
+      title: 'Automated Market Research',
+      description: 'Machine scans global markets and trends for actionable insights.',
+      category: 'Research',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=800&q=80',
+      url: '#',
+    },
+    {
+      id: 'uc-2',
+      title: 'Customer Sentiment Analysis',
+      description: 'Analyze customer feedback and social media for sentiment trends.',
+      category: 'Analytics',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80',
+      url: '#',
+    },
+    {
+      id: 'uc-3',
+      title: 'Automated Email Response',
+      description: 'Respond to customer emails instantly and accurately.',
+      category: 'Support',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=800&q=80',
+      url: '#',
+    },
+    {
+      id: 'uc-4',
+      title: 'Financial Forecasting',
+      description: 'Predict financial outcomes using historical data and AI.',
+      category: 'Finance',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1464983953574-0892a716854b?auto=format&fit=crop&w=800&q=80',
+      url: '#',
+    },
+    {
+      id: 'uc-5',
+      title: 'Automated Scheduling',
+      description: 'Coordinate meetings and events across teams automatically.',
+      category: 'Productivity',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&q=80',
+      url: '#',
+    },
+    {
+      id: 'uc-6',
+      title: 'Document Summarization',
+      description: 'Summarize lengthy documents into concise briefs.',
+      category: 'Content',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?auto=format&fit=crop&w=800&q=80', // books and documents
+      url: '#',
+    },
+    {
+      id: 'uc-7',
+      title: 'Social Media Automation',
+      description: 'Schedule and post content across platforms automatically.',
+      category: 'Marketing',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?auto=format&fit=crop&w=800&q=80', // social media icons on phone
+      url: '#',
+    },
+    {
+      id: 'uc-8',
+      title: 'AI-Powered Recruiting',
+      description: 'Screen resumes and schedule interviews with AI.',
+      category: 'HR',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1503676382389-4809596d5290?auto=format&fit=crop&w=800&q=80', // recruiting/interview
+      url: '#',
+    },
+    {
+      id: 'uc-9',
+      title: 'Inventory Management',
+      description: 'Track and optimize inventory levels in real time.',
+      category: 'Operations',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://plus.unsplash.com/premium_photo-1681426730828-bfee2d13861d?q=80&w=1332&auto?auto=format&fit=crop&w=800&q=80', // real warehouse, shelves, boxes
+      url: '#',
+    },
+    {
+      id: 'uc-10',
+      title: 'Automated Code Review',
+      description: 'Review code for errors and best practices automatically.',
+      category: 'Development',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=800&q=80', // code
+      url: '#',
+    },
+    {
+      id: 'uc-11',
+      title: 'AI Chatbots',
+      description: 'Deploy chatbots for instant customer support.',
+      category: 'Support',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=800&q=80', // chatbot
+      url: '#',
+    },
+    {
+      id: 'uc-12',
+      title: 'Automated Testing',
+      description: 'Run automated tests for software quality assurance.',
+      category: 'QA',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?auto=format&fit=crop&w=800&q=80', // testing
+      url: '#',
+    },
+    {
+      id: 'uc-13',
+      title: 'Personalized Recommendations',
+      description: 'Deliver personalized product or content recommendations.',
+      category: 'E-commerce',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1501426026826-31c667bdf23d?auto=format&fit=crop&w=800&q=80', // recommendations
+      url: '#',
+    },
+    {
+      id: 'uc-14',
+      title: 'Fraud Detection',
+      description: 'Detect and prevent fraudulent activities using AI.',
+      category: 'Security',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1516574187841-cb9cc2ca948b?auto=format&fit=crop&w=800&q=80', // security/fraud
+      url: '#',
+    },
+    {
+      id: 'uc-15',
+      title: 'Voice Transcription',
+      description: 'Transcribe audio and video files automatically.',
+      category: 'Content',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?auto=format&fit=crop&w=800&q=80', // audio/transcription
+      url: '#',
+    },
+    {
+      id: 'uc-16',
+      title: 'Smart Home Automation',
+      description: 'Control smart home devices and routines with AI.',
+      category: 'IoT',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=800&q=80', // smart home
+      url: '#',
+    },
+    {
+      id: 'uc-17',
+      title: 'Medical Diagnosis Support',
+      description: 'Assist doctors with AI-powered diagnostic tools.',
+      category: 'Healthcare',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80', // medical
+      url: '#',
+    },
+    {
+      id: 'uc-18',
+      title: 'Energy Usage Optimization',
+      description: 'Monitor and optimize energy consumption in buildings.',
+      category: 'Sustainability',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1464983953574-0892a716854b?auto=format&fit=crop&w=800&q=80', // energy
+      url: '#',
+    },
+    {
+      id: 'uc-19',
+      title: 'Translation Services',
+      description: 'Translate text and speech between languages automatically.',
+      category: 'Language',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1503676382389-4809596d5290?auto=format&fit=crop&w=800&q=80', // translation
+      url: '#',
+    },
+    {
+      id: 'uc-20',
+      title: 'Remote Device Monitoring',
+      description: 'Monitor and manage remote devices and sensors.',
+      category: 'IoT',
+      featured: true,
+      icon: <ArrowRight />,
+      image: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308?auto=format&fit=crop&w=800&q=80', // sensors/devices
+      url: '#',
+    },
+  ],
   hero: {
     badgeIcon: (
       <svg
