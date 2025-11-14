@@ -197,7 +197,6 @@ export function AgentCreationModal({ open, onOpenChange, onSuccess }: AgentCreat
       }
 
       toast.error('Failed to create agent', { id: 'agent-setup' });
-
       if (error?.detail?.error_code === 'AGENT_LIMIT_EXCEEDED') {
         setAgentLimitData(error.detail);
         setShowAgentLimitDialog(true);
