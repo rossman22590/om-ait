@@ -128,16 +128,16 @@ export default function RootLayout({
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'Organization',
-              name: 'Kortix',
-              alternateName: ['Suna', 'Kortix AI'],
+              name: 'Machine',
+              alternateName: ['Machine', 'Machine AI'],
               url: 'https://machine.myapps.ai',
               logo: 'https://machine.myapps.ai/favicon.png',
               description: siteConfig.description,
               foundingDate: '2024',
               sameAs: [
-                'https://github.com/kortix-ai',
-                'https://x.com/kortix',
-                'https://linkedin.com/company/kortix',
+
+               'https://x.com/the_machine_ai',
+
               ],
               contactPoint: {
                 '@type': 'ContactPoint',

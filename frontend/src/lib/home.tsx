@@ -464,45 +464,45 @@ export const siteConfig = {
   ],
   footerLinks: [
     {
-      title: 'Kortix',
+      title: 'Machine',
       links: [
         { id: 1, title: 'About', url: 'https://machine.myapps.ai' },
-        { id: 3, title: 'Contact', url: 'mailto:hey@kortix.com' },
-        { id: 4, title: 'Careers', url: 'https://machine.myapps.ai/careers' },
+        { id: 3, title: 'Contact', url: 'mailto:support@mytsi.org' },
+        // { id: 4, title: 'Careers', url: 'https://machine.myapps.ai/careers' },
       ],
     },
-    {
-      title: 'Resources',
-      links: [
-        {
-          id: 5,
-          title: 'Documentation',
-          url: 'https://github.com/Kortix-ai/Suna',
-        },
-        { id: 7, title: 'Discord', url: 'https://discord.gg/Py6pCBUUPw' },
-        { id: 8, title: 'GitHub', url: 'https://github.com/Kortix-ai/Suna' },
-      ],
-    },
-    {
-      title: 'Legal',
-      links: [
-        {
-          id: 9,
-          title: 'Privacy Policy',
-          url: 'https://machine.myapps.ai/legal?tab=privacy',
-        },
-        {
-          id: 10,
-          title: 'Terms of Service',
-          url: 'https://machine.myapps.ai/legal?tab=terms',
-        },
-        {
-          id: 11,
-          title: 'License Apache 2.0',
-          url: 'https://github.com/Kortix-ai/Suna/blob/main/LICENSE',
-        },
-      ],
-    },
+    // {
+    //   title: 'Resources',
+    //   links: [
+    //     // {
+    //     //   id: 5,
+    //     //   title: 'Documentation',
+    //     //   url: 'https://github.com/Kortix-ai/Suna',
+    //     // },
+    //     // { id: 7, title: 'Discord', url: 'https://discord.gg/Py6pCBUUPw' },
+    //     // { id: 8, title: 'GitHub', url: 'https://github.com/Kortix-ai/Suna' },
+    //   ],
+    // },
+    // {
+    //   title: 'Legal',
+    //   links: [
+    //     // {
+    //     //   id: 9,
+    //     //   title: 'Privacy Policy',
+    //     //   url: 'https://machine.myapps.ai/legal?tab=privacy',
+    //     // },
+    //     // {
+    //     //   id: 10,
+    //     //   title: 'Terms of Service',
+    //     //   url: 'https://machine.myapps.ai/legal?tab=terms',
+    //     // },
+    //     // {
+    //     //   id: 11,
+    //     //   title: 'License Apache 2.0',
+    //     //   url: 'https://github.com/Kortix-ai/Suna/blob/main/LICENSE',
+    //     // },
+    //   ],
+    // },
   ],
 };
 
