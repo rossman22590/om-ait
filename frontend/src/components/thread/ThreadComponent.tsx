@@ -53,6 +53,7 @@ import { threadKeys } from '@/hooks/threads/keys';
 import { fileQueryKeys } from '@/hooks/files';
 import { useProjectRealtime } from '@/hooks/threads';
 import { handleGoogleSlidesUpload } from './tool-views/utils/presentation-utils';
+import { WorkspaceIntroModal } from '@/components/thread/workspace-intro-modal';
 
 interface ThreadComponentProps {
   projectId: string;
@@ -1066,6 +1067,9 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
           )}
         </ThreadLayout>
 
+        {/* One-time workspace intro modal for empty workspaces (compact) */}
+        <WorkspaceIntroModal sandboxId={sandboxId} />
+
         <PlanSelectionModal
           open={showBillingModal}
           onOpenChange={closeBillingModal}
@@ -1214,6 +1218,9 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
           />
         )}
       </ThreadLayout>
+
+      {/* One-time workspace intro modal for empty workspaces */}
+      <WorkspaceIntroModal sandboxId={sandboxId} />
 
       <PlanSelectionModal
         open={showBillingModal}
