@@ -4,7 +4,7 @@ import { useRouter, Stack } from 'expo-router';
 import { useColorScheme } from 'nativewind';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
-import { Eye, EyeOff, Check, MailCheck, ArrowLeft, Mail, ExternalLink } from 'lucide-react-native';
+import { Eye, EyeOff, Check, MailCheck, ArrowLeft, Mail } from 'lucide-react-native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '@/hooks/useAuth';
@@ -29,6 +29,7 @@ import { KortixLoader } from '@/components/ui/kortix-loader';
 import { KortixLogo } from '@/components/ui/KortixLogo';
 import { BackgroundLogo } from '@/components/home';
 import { AnimatedPageWrapper } from '@/components/shared/AnimatedPageWrapper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const AnimatedView = Animated.createAnimatedComponent(View);
@@ -36,31 +37,35 @@ const AnimatedText = Animated.createAnimatedComponent(Text);
 
 type AuthView = 'welcome' | 'sign-in' | 'sign-up';
 
-const ROTATING_PHRASES = [
-  { text: 'presentations', color: '' },
-  { text: 'writing', color: '' },
-  { text: 'emails', color: '' },
-  { text: 'research', color: '' },
-  { text: 'planning', color: '' },
-  { text: 'studying', color: '' },
-  { text: 'anything.', color: '#3B82F6' },
-];
+function getRotatingPhrases(t: (key: string) => string) {
+  return [
+    { text: t('auth.rotatingPhrases.presentations'), color: '' },
+    { text: t('auth.rotatingPhrases.writing'), color: '' },
+    { text: t('auth.rotatingPhrases.emails'), color: '' },
+    { text: t('auth.rotatingPhrases.research'), color: '' },
+    { text: t('auth.rotatingPhrases.planning'), color: '' },
+    { text: t('auth.rotatingPhrases.studying'), color: '' },
+    { text: t('auth.rotatingPhrases.anything'), color: '#3B82F6' },
+  ];
+}
 
 function RotatingText() {
+  const { t } = useLanguage();
+  const rotatingPhrases = React.useMemo(() => getRotatingPhrases(t), [t]);
   const [currentIndex, setCurrentIndex] = React.useState(0);
-  const [currentPhrase, setCurrentPhrase] = React.useState(ROTATING_PHRASES[0]);
+  const [currentPhrase, setCurrentPhrase] = React.useState(rotatingPhrases[0]);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % ROTATING_PHRASES.length);
+      setCurrentIndex((prev) => (prev + 1) % rotatingPhrases.length);
     }, 1800);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [rotatingPhrases.length]);
 
   React.useEffect(() => {
-    setCurrentPhrase(ROTATING_PHRASES[currentIndex]);
-  }, [currentIndex]);
+    setCurrentPhrase(rotatingPhrases[currentIndex]);
+  }, [currentIndex, rotatingPhrases]);
 
   const chars = currentPhrase.text.split('');
 
@@ -184,13 +189,13 @@ export default function AuthScreen() {
     if (result.success) {
       handleNavigateToHome();
     } else {
-      setError(result.error?.message || 'Sign in failed. Please try again.');
+      setError(result.error?.message || t('auth.signInFailed'));
     }
   };
 
   const handleSignIn = async () => {
     if (!email || !password) {
-      setError('Please enter both email and password');
+      setError(t('auth.validationErrors.emailPasswordRequired'));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
@@ -202,26 +207,26 @@ export default function AuthScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       handleNavigateToHome();
     } else {
-      setError(result.error?.message || 'Sign in failed. Please try again.');
+      setError(result.error?.message || t('auth.signInFailed'));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };
 
   const handleSignUp = async () => {
     if (!email || !password) {
-      setError('Please enter both email and password');
+      setError(t('auth.validationErrors.emailPasswordRequired'));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
     if (password !== confirmPassword) {
-      setError('Passwords don\'t match');
+      setError(t('auth.validationErrors.passwordsNoMatch'));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
     if (password.length < 8) {
-      setError('Password must be at least 8 characters');
+      setError(t('auth.validationErrors.passwordTooShort'));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
@@ -234,7 +239,7 @@ export default function AuthScreen() {
       setRegistrationEmail(email);
       setShowEmailConfirmation(true);
     } else {
-      setError(result.error?.message || 'Sign up failed. Please try again.');
+      setError(result.error?.message || t('auth.signUpFailed'));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };
@@ -264,11 +269,7 @@ export default function AuthScreen() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-        className="flex-1 bg-background"
-        keyboardVerticalOffset={0}
-      >
+      <View className="flex-1 bg-background">
         <ScrollView
           className="flex-1"
           contentContainerClassName="flex-grow"
@@ -342,12 +343,13 @@ export default function AuthScreen() {
             }}
           />
         </AnimatedPageWrapper>
-      </KeyboardAvoidingView>
+      </View>
     </>
   );
 }
 
 function WelcomeView({ onSignUp, onSignIn }: { onSignUp: () => void; onSignIn: () => void }) {
+  const { t } = useLanguage();
   const { colorScheme } = useColorScheme();
   const scale1 = useSharedValue(1);
   const scale2 = useSharedValue(1);
@@ -390,11 +392,11 @@ function WelcomeView({ onSignUp, onSignIn }: { onSignUp: () => void; onSignIn: (
       </View>
       <View className="justify-center mb-10">
         <View className="-mb-4">
-          <KortixLogo variant="logomark" size={80} />
+          <KortixLogo variant="logomark" size={80} color={isDark ? 'dark' : 'light'} />
         </View>
         <View className="mb-6">
-          <Text className="text-[40px] font-roobert-semibold text-foreground leading-tight">
-            Hire Kortix for
+          <Text className="text-3xl font-roobert-semibold text-foreground leading-tight">
+            {t('auth.welcomeTitle')}
           </Text>
           <RotatingText />
         </View>
@@ -429,19 +431,19 @@ function WelcomeView({ onSignUp, onSignIn }: { onSignUp: () => void; onSignIn: (
 
           <View className="flex-1 flex-row flex-wrap">
             <Text className="text-[14px] font-roobert text-muted-foreground leading-5">
-              I agree with{' '}
+              {t('auth.agreeTerms')}{' '}
             </Text>
             <TouchableOpacity onPress={handleOpenTerms}>
               <Text className="text-[14px] font-roobert text-foreground leading-5 underline">
-                User Terms And Conditions
+                {t('auth.userTerms')}
               </Text>
             </TouchableOpacity>
             <Text className="text-[14px] font-roobert text-muted-foreground leading-5">
-              {' '}and acknowledge the{' '}
+              {' '}{t('auth.acknowledgePrivacy')}{' '}
             </Text>
             <TouchableOpacity onPress={handleOpenPrivacy}>
               <Text className="text-[14px] font-roobert text-foreground leading-5 underline">
-                Privacy notice
+                {t('auth.privacyNotice')}
               </Text>
             </TouchableOpacity>
           </View>
@@ -478,7 +480,7 @@ function WelcomeView({ onSignUp, onSignIn }: { onSignUp: () => void; onSignIn: (
             fontSize: 16,
             fontFamily: 'Roobert-Medium',
           }}>
-            Sign up
+            {t('auth.signUp')}
           </Text>
         </AnimatedPressable>
 
@@ -504,7 +506,7 @@ function WelcomeView({ onSignUp, onSignIn }: { onSignUp: () => void; onSignIn: (
           }]}
         >
           <Text className="text-foreground text-[16px] font-roobert-medium">
-            Log in
+            {t('auth.logIn')}
           </Text>
         </AnimatedPressable>
       </View>
@@ -545,6 +547,7 @@ function SignInView({
   emailInputRef,
   passwordInputRef,
 }: SignInViewProps) {
+  const { t } = useLanguage();
   const { colorScheme } = useColorScheme();
   const buttonScale = useSharedValue(1);
 
@@ -556,10 +559,14 @@ function SignInView({
   const canSubmit = email.length > 0 && password.length > 0 && !isLoading;
 
   return (
-    <View className="flex-1 bg-background">
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      className="flex-1 bg-background"
+      keyboardVerticalOffset={0}
+    >
       <ScrollView 
         className="flex-1"
-        contentContainerClassName="px-8 py-16"
+        contentContainerStyle={{ paddingHorizontal: 32, paddingVertical: 64, flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         bounces={false}
@@ -573,7 +580,7 @@ function SignInView({
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Text className="text-muted-foreground text-[16px] font-roobert">
-            Back
+            {t('common.back')}
           </Text>
         </TouchableOpacity>
 
@@ -585,7 +592,7 @@ function SignInView({
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Text className="text-foreground text-[16px] font-roobert-medium">
-            Sign up
+            {t('auth.signUp')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -593,27 +600,27 @@ function SignInView({
       <View className="flex-1">
         <View>
           <View className="-mb-2">
-            <KortixLogo variant="logomark" size={64} />
+            <KortixLogo variant="logomark" size={64} color={isDark ? 'dark' : 'light'} />
           </View>
           <Text className="text-[36px] font-roobert-semibold text-foreground leading-tight mb-8">
-            Log in
+            {t('auth.logIn')}
           </Text>
         </View>
 
         <View className="gap-3 mb-6">
           <AppleSignInButton
             onPress={() => onOAuthSignIn('apple')}
-            label="Continue with Apple"
+            label={t('auth.continueWithApple')}
           />
           <GoogleSignInButton
             onPress={() => onOAuthSignIn('google')}
-            label="Continue with Google"
+            label={t('auth.continueWithGoogle')}
           />
         </View>
 
         <View className="flex-row items-center mb-6">
           <View className="flex-1 h-px bg-border" />
-          <Text className="text-muted-foreground text-[14px] font-roobert mx-4">or</Text>
+          <Text className="text-muted-foreground text-[14px] font-roobert mx-4">{t('auth.or')}</Text>
           <View className="flex-1 h-px bg-border" />
         </View>
 
@@ -623,7 +630,7 @@ function SignInView({
               ref={emailInputRef}
               value={email}
               onChangeText={(text) => setEmail(text.trim().toLowerCase())}
-              placeholder="Email"
+              placeholder={t('auth.emailPlaceholder')}
               placeholderTextColor="hsl(var(--muted-foreground))"
               keyboardType="email-address"
               textContentType="emailAddress"
@@ -643,7 +650,7 @@ function SignInView({
               ref={passwordInputRef}
               value={password}
               onChangeText={setPassword}
-              placeholder="Password"
+              placeholder={t('auth.passwordPlaceholder')}
               placeholderTextColor="hsl(var(--muted-foreground))"
               secureTextEntry={!showPassword}
               textContentType="password"
@@ -707,13 +714,13 @@ function SignInView({
               fontSize: 16,
               fontFamily: 'Roobert-Medium',
             }}>
-              Log in
+              {t('auth.logIn')}
             </Text>
           )}
         </AnimatedPressable>
       </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -768,6 +775,7 @@ function SignUpView({
   passwordInputRef,
   confirmPasswordInputRef,
 }: SignUpViewProps) {
+  const { t } = useLanguage();
   const { colorScheme } = useColorScheme();
   const buttonScale = useSharedValue(1);
 
@@ -785,10 +793,14 @@ function SignUpView({
     !isLoading;
 
   return (
-    <View className="flex-1 bg-background">
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      className="flex-1 bg-background"
+      keyboardVerticalOffset={0}
+    >
       <ScrollView 
         className="flex-1"
-        contentContainerClassName="px-8 py-16"
+        contentContainerStyle={{ paddingHorizontal: 32, paddingVertical: 64, flexGrow: 1 }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         bounces={false}
@@ -802,7 +814,7 @@ function SignUpView({
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Text className="text-muted-foreground text-[16px] font-roobert">
-            Back
+            {t('common.back')}
           </Text>
         </TouchableOpacity>
 
@@ -814,7 +826,7 @@ function SignUpView({
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Text className="text-foreground text-[16px] font-roobert-medium">
-            Log in
+            {t('auth.logIn')}
           </Text>
         </TouchableOpacity>
       </View>
@@ -822,27 +834,27 @@ function SignUpView({
       <View className="flex-1">
         <View>
           <View className="-mb-2">
-            <KortixLogo variant="logomark" size={64} />
+            <KortixLogo variant="logomark" size={64} color={isDark ? 'dark' : 'light'} />
           </View>
           <Text className="text-[36px] font-roobert-semibold text-foreground leading-tight mb-8">
-            Create account
+            {t('auth.createAccount')}
           </Text>
         </View>
 
         <View className="gap-3 mb-6">
           <AppleSignInButton
             onPress={() => onOAuthSignIn('apple')}
-            label="Continue with Apple"
+            label={t('auth.continueWithApple')}
           />
           <GoogleSignInButton
             onPress={() => onOAuthSignIn('google')}
-            label="Continue with Google"
+            label={t('auth.continueWithGoogle')}
           />
         </View>
 
         <View className="flex-row items-center mb-6">
           <View className="flex-1 h-px bg-border" />
-          <Text className="text-muted-foreground text-[14px] font-roobert mx-4">or</Text>
+          <Text className="text-muted-foreground text-[14px] font-roobert mx-4">{t('auth.or')}</Text>
           <View className="flex-1 h-px bg-border" />
         </View>
 
@@ -852,7 +864,7 @@ function SignUpView({
               ref={emailInputRef}
               value={email}
               onChangeText={(text) => setEmail(text.trim().toLowerCase())}
-              placeholder="Email"
+              placeholder={t('auth.emailPlaceholder')}
               placeholderTextColor="hsl(var(--muted-foreground))"
               keyboardType="email-address"
               textContentType="emailAddress"
@@ -872,7 +884,7 @@ function SignUpView({
               ref={passwordInputRef}
               value={password}
               onChangeText={setPassword}
-              placeholder="Password"
+              placeholder={t('auth.passwordPlaceholder')}
               placeholderTextColor="hsl(var(--muted-foreground))"
               secureTextEntry={!showPassword}
               textContentType="newPassword"
@@ -904,7 +916,7 @@ function SignUpView({
               ref={confirmPasswordInputRef}
               value={confirmPassword}
               onChangeText={setConfirmPassword}
-              placeholder="Confirm your password"
+              placeholder={t('auth.confirmPasswordPlaceholder')}
               placeholderTextColor="hsl(var(--muted-foreground))"
               secureTextEntry={!showConfirmPassword}
               textContentType="newPassword"
@@ -935,7 +947,7 @@ function SignUpView({
         {!passwordsMatch && confirmPassword.length > 0 && (
           <AnimatedView entering={FadeIn.duration(200)} className="mb-4">
             <Text className="text-destructive text-[14px] font-roobert text-center">
-              Passwords don't match
+              {t('auth.passwordsDontMatch')}
             </Text>
           </AnimatedView>
         )}
@@ -976,13 +988,13 @@ function SignUpView({
               fontSize: 16,
               fontFamily: 'Roobert-Medium',
             }}>
-              Sign up
+              {t('auth.signUp')}
             </Text>
           )}
         </AnimatedPressable>
       </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -1073,6 +1085,103 @@ function GoogleLogo() {
   );
 }
 
+function GmailLogo() {
+  return (
+    <Svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <Path
+        d="M18 4.5L10 10.5L2 4.5V3.5C2 2.67157 2.67157 2 3.5 2H16.5C17.3284 2 18 2.67157 18 3.5V4.5Z"
+        fill="#EA4335"
+      />
+      <Path
+        d="M2 4.5V16.5C2 17.3284 2.67157 18 3.5 18H6V10L2 6.5V4.5Z"
+        fill="#FBBC05"
+      />
+      <Path
+        d="M18 4.5V16.5C18 17.3284 17.3284 18 16.5 18H14V10L18 6.5V4.5Z"
+        fill="#34A853"
+      />
+      <Path
+        d="M6 18H14V10L10 13L6 10V18Z"
+        fill="#C5221F"
+      />
+    </Svg>
+  );
+}
+
+function OutlookLogo() {
+  return (
+    <Svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <Path
+        d="M3 3H17C17.5523 3 18 3.44772 18 4V16C18 16.5523 17.5523 17 17 17H3C2.44772 17 2 16.5523 2 16V4C2 3.44772 2.44772 3 3 3Z"
+        fill="#0078D4"
+      />
+      <Path
+        d="M10 9C11.1046 9 12 9.89543 12 11C12 12.1046 11.1046 13 10 13C8.89543 13 8 12.1046 8 11C8 9.89543 8.89543 9 10 9Z"
+        fill="white"
+      />
+      <Path
+        d="M7 6.5C7.82843 6.5 8.5 7.17157 8.5 8C8.5 8.82843 7.82843 9.5 7 9.5C6.17157 9.5 5.5 8.82843 5.5 8C5.5 7.17157 6.17157 6.5 7 6.5Z"
+        fill="white"
+      />
+      <Path
+        d="M13 6.5C13.8284 6.5 14.5 7.17157 14.5 8C14.5 8.82843 13.8284 9.5 13 9.5C12.1716 9.5 11.5 8.82843 11.5 8C11.5 7.17157 12.1716 6.5 13 6.5Z"
+        fill="white"
+      />
+    </Svg>
+  );
+}
+
+interface EmailAppButtonProps {
+  onPress: () => void;
+  appName: string;
+  logo: React.ReactNode;
+  variant?: 'primary' | 'secondary';
+}
+
+function EmailAppButton({ onPress, appName, logo, variant = 'secondary' }: EmailAppButtonProps) {
+  const scale = useSharedValue(1);
+  const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const isPrimary = variant === 'primary';
+
+  return (
+    <AnimatedPressable
+      onPress={onPress}
+      onPressIn={() => {
+        scale.value = withSpring(0.96, { damping: 15, stiffness: 400 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 15, stiffness: 400 });
+      }}
+      style={[animatedStyle, { 
+        backgroundColor: isPrimary ? (isDark ? '#FFFFFF' : '#000000') : '',
+        borderWidth: isPrimary ? 0 : 1,
+        borderColor: isPrimary ? 'transparent' : (isDark ? '#454444' : '#c2c2c2'),
+        height: 56,
+        borderRadius: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
+        flexDirection: 'row',
+        gap: 8,
+      }]}
+    >
+      {logo}
+      <Text style={{ 
+        color: isPrimary ? (isDark ? '#000000' : '#FFFFFF') : (isDark ? '#FFFFFF' : '#000000'),
+        fontSize: 16,
+        fontFamily: 'Roobert-Medium',
+      }}>
+        {appName}
+      </Text>
+    </AnimatedPressable>
+  );
+}
+
 function EmailConfirmationView({ 
   email, 
   onBack 
@@ -1080,7 +1189,9 @@ function EmailConfirmationView({
   email: string; 
   onBack: () => void;
 }) {
+  const { t } = useLanguage();
   const { colorScheme } = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   const handleOpenEmail = async (app?: string) => {
     try {
@@ -1097,103 +1208,69 @@ function EmailConfirmationView({
 
   return (
     <View className="flex-1 bg-background">
-      <ScrollView 
+      <View className="absolute top-0 left-0 right-0 pt-16 px-8 z-10">
+        <TouchableOpacity
+          onPress={async () => {
+            await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onBack();
+          }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text className="text-muted-foreground text-[16px] font-roobert">
+            Back
+          </Text>
+        </TouchableOpacity>
+      </View>
+      <View className='absolute inset-0' pointerEvents="none">
+        <BackgroundLogo/>
+      </View>
+      <ScrollView
         className="flex-1"
+        contentContainerClassName="flex-grow"
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
-        bounces={false}
       >
-        {/* Header - matching SettingsHeader style */}
-        <View className="px-6 pt-16 pb-6">
-          <View className="flex-row items-center justify-between">
-            <TouchableOpacity
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                onBack();
-              }}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              className="w-10 h-10 items-center justify-center"
-            >
-              <Icon as={ArrowLeft} size={24} className="text-foreground" strokeWidth={2} />
-            </TouchableOpacity>
-            <Text className="text-xl font-roobert-semibold text-foreground">
-              Email Sent
-            </Text>
-            <View className="w-10" />
-          </View>
-        </View>
-
-        <View className="px-6 pb-8">
-          <View className="mb-8 items-center pt-4">
-            <View className="mb-3 h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-              <Icon as={MailCheck} size={28} className="text-primary" strokeWidth={2} />
+        <AnimatedView 
+          entering={FadeIn.duration(400)}
+          className="flex-1 justify-end px-8 py-16"
+        >
+          <View className="justify-center">
+            <View className="mb-6 h-20 w-20 items-center justify-center rounded-3xl bg-rose-500">
+              <Icon as={MailCheck} size={36} className="text-white" strokeWidth={2} />
             </View>
-            <Text className="mb-1 text-4xl font-roobert-semibold text-foreground tracking-tight text-center">
-              Check your email
+            <Text className="text-[36px] font-roobert-semibold text-foreground leading-tight mb-3">
+              {t('auth.checkYourEmail')}
             </Text>
-            <Text className="text-sm font-roobert text-muted-foreground text-center">
-              Confirmation link sent to
+            <Text className="text-[16px] font-roobert text-muted-foreground mb-2">
+              {t('auth.confirmationEmailSent')}
             </Text>
-          </View>
-          <View className="mb-6 bg-primary/5 rounded-3xl p-5">
-            <Text className="text-base font-roobert-medium text-foreground text-center">
-              {email}
-            </Text>
-          </View>
-          <View className="mb-6 items-center">
-            <TouchableOpacity
-              onPress={() => handleOpenEmail()}
-              className="w-full rounded-full bg-primary border border-border/40 px-4 py-3 flex-row items-center justify-center gap-2 active:opacity-80"
-            >
-              <Icon as={Mail} size={16} className="text-primary-foreground" strokeWidth={2.5} />
-              <Text className="text-sm font-roobert-medium text-primary-foreground">
-                Open Email App
+            <View className="mb-8 bg-muted/10 dark:bg-muted/30 rounded-[20px] px-5 py-4">
+              <Text className="text-[15px] font-roobert-medium text-foreground">
+                {email}
               </Text>
-            </TouchableOpacity>
-          </View>
-          <View className="mb-6">
-            <Text className="mb-3 text-xs font-roobert-medium text-muted-foreground uppercase tracking-wider">
-              Or open in
-            </Text>
-            <View className="flex-row gap-3">
-              <TouchableOpacity
-                onPress={() => handleOpenEmail('gmail')}
-                className="flex-1 bg-primary/5 rounded-3xl p-5 active:opacity-80"
-              >
-                <View className="mb-3 h-8 w-8 items-center justify-center rounded-full bg-primary">
-                  <Icon as={Mail} size={16} className="text-primary-foreground" strokeWidth={2.5} />
-                </View>
-                <Text className="text-xs font-roobert-medium text-foreground">
-                  Gmail
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => handleOpenEmail('apple-mail')}
-                className="flex-1 bg-primary/5 rounded-3xl p-5 active:opacity-80"
-              >
-                <View className="mb-3 h-8 w-8 items-center justify-center rounded-full bg-primary">
-                  <Icon as={Mail} size={16} className="text-primary-foreground" strokeWidth={2.5} />
-                </View>
-                <Text className="text-xs font-roobert-medium text-foreground">
-                  Mail
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={() => handleOpenEmail('outlook')}
-                className="flex-1 bg-primary/5 rounded-3xl p-5 active:opacity-80"
-              >
-                <View className="mb-3 h-8 w-8 items-center justify-center rounded-full bg-primary">
-                  <Icon as={Mail} size={16} className="text-primary-foreground" strokeWidth={2.5} />
-                </View>
-                <Text className="text-xs font-roobert-medium text-foreground">
-                  Outlook
-                </Text>
-              </TouchableOpacity>
             </View>
           </View>
-          <View className="h-6" />
-        </View>
+
+          <View className="w-full gap-4">
+            {Platform.OS === 'ios' && (
+              <EmailAppButton
+                onPress={() => handleOpenEmail()}
+                appName={t('auth.openEmailAppBtn')}
+                logo={
+                  <Icon as={Mail} size={20} color={isDark ? '#000000' : '#FFFFFF'} strokeWidth={2.5} />
+                }
+                variant="primary"
+              />
+            )}
+            <EmailAppButton
+              onPress={() => handleOpenEmail('gmail')}
+                appName={t('auth.openGmailBtn')}
+              logo={
+                <MaterialCommunityIcons name="gmail" size={22} color={isDark ? '#FFFFFF' : '#000000'} />
+              }
+            />
+          </View>
+        </AnimatedView>
       </ScrollView>
     </View>
   );
