@@ -100,6 +100,8 @@ export async function createTeamKey(email: string, team_id: string, maxBudget?: 
         "Machine Code Flash",
         "Machine Code Premium",
         "Machine Code Max",
+        "Machine Code Max Fallback",
+        "machine-cli",
         "Machine Code Ultimate",
       ],
       max_budget: keyBudget,
@@ -209,6 +211,8 @@ export async function createUserTeam(email: string) {
         "Machine Code Flash",
         "Machine Code Premium",
         "Machine Code Max",
+        "Machine Code Max Fallback",
+        "machine-cli",
         "Machine Code Ultimate"
       ],
     }),
