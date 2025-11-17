@@ -93,8 +93,8 @@ function SecretKeyBox({
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <span
-          className="break-all font-mono text-card-foreground text-base select-all"
-          style={{ wordBreak: "break-all" }}
+          className="break-all font-mono text-card-foreground text-base select-all whitespace-nowrap overflow-x-auto max-w-full px-1 border rounded bg-muted/20"
+          style={{ wordBreak: "normal", fontFamily: "'Fira Mono', 'Menlo', 'Consolas', 'Monaco', 'monospace'" }}
         >
           {show ? secretKey : masked}
         </span>
@@ -155,7 +155,8 @@ function SecretKeyBox({
 }
 
 // Copy-to-clipboard for base url
-function BaseUrlBox({ baseUrl }: { baseUrl: string }) {
+function BaseUrlBox() {
+  const baseUrl = "https://machine-code.up.railway.app";
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
@@ -166,7 +167,9 @@ function BaseUrlBox({ baseUrl }: { baseUrl: string }) {
 
   return (
     <div className="flex items-center gap-2">
-      <span className="break-all font-mono text-card-foreground text-base select-all">{baseUrl}</span>
+      <span className="break-all font-mono text-card-foreground text-base select-all whitespace-nowrap overflow-x-auto max-w-full px-1 border rounded bg-muted/20">
+        {baseUrl}
+      </span>
       <Button
         type="button"
         size="icon"
@@ -192,6 +195,12 @@ export default function MachineCodePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [postCheckoutRefresh, setPostCheckoutRefresh] = useState(false);
   const [regeneratingKey, setRegeneratingKey] = useState(false);
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [transferEmail, setTransferEmail] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [transferError, setTransferError] = useState("");
+  const [transferSuccess, setTransferSuccess] = useState("");
 
   const [email, setEmail] = useState<string | null>(null);
   const [team, setTeam] = useState<any>(null);
@@ -462,6 +471,34 @@ export default function MachineCodePage() {
     }
   }, [refreshTeamData]);
 
+  // Add handleTransferSend inside MachineCodePage
+  async function handleTransferSend() {
+    setTransferLoading(true);
+    setTransferError("");
+    setTransferSuccess("");
+    try {
+      const res = await fetch("/api/send-transfer-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ amount: transferAmount, transferEmail })
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to send email");
+      }
+      setTransferSuccess("Transfer email sent successfully!");
+      setTransferModalOpen(false);
+      setTransferEmail("");
+      setTransferAmount("");
+    } catch (e) {
+      setTransferError(e.message || "Error sending transfer");
+    } finally {
+      setTransferLoading(false);
+    }
+  }
+
   // --- START: NEW, MORE ROBUST RENDER LOGIC ---
   
   // Show loading screen until the initialization process is fully complete.
@@ -543,7 +580,7 @@ export default function MachineCodePage() {
   const progress = budget > 0 ? Math.min(100, (spend / budget) * 100) : 0;
 
   return (
-    <>
+    <div>
       <div className="min-h-[100vh] flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 py-16">
         <h1 className="text-4xl font-extrabold mb-10 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent drop-shadow-lg">
           Machine Code
@@ -551,6 +588,15 @@ export default function MachineCodePage() {
         <div className="flex flex-row flex-wrap gap-12 w-full max-w-7xl justify-center">
           {/* Budget & Spend Card */}
           <Card className="flex-1 min-w-[520px] max-w-[700px] rounded-2xl border border-purple-200/50 dark:border-purple-800/50 shadow-lg bg-white/80 dark:bg-gray-900/60 p-12 relative">
+            <div className="absolute top-6 right-6 z-10">
+              <Button
+                className="px-6 py-2 text-base font-semibold bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-pink-600 hover:to-purple-600 transition-all"
+                disabled={postCheckoutRefresh}
+                onClick={() => setTransferModalOpen(true)}
+              >
+                Transfer credits from Machine
+              </Button>
+            </div>
             {(refreshing || postCheckoutRefresh) && (
               <div className="absolute inset-0 bg-white/50 dark:bg-gray-900/50 flex items-center justify-center rounded-2xl backdrop-blur-sm">
                 <div className="flex flex-col items-center gap-2">
@@ -632,16 +678,72 @@ export default function MachineCodePage() {
                 <div>
                   <span className="font-semibold text-gray-700 dark:text-gray-200">Base URL:</span>
                   <div className="mt-1">
-                    <BaseUrlBox baseUrl={baseUrl} />
+                    <BaseUrlBox />
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
-         <InstallationGuide />
-      </div>
+        
+        {/* Supported Models Section */}
+        <div className="w-full max-w-7xl mt-12">
+          <h2 className="text-2xl font-bold mb-6 text-center text-primary">Supported Models</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
+            { [
+              {
+                name: "Machine Code Flash",
+                description: "Ultra-fast, cost-effective model for rapid tasks and prototyping.",
+              },
+              {
+                name: "Machine Code Premium",
+                description: "Balanced performance and quality for most production workloads.",
+              },
+              {
+                name: "Machine Code Max",
+                description: "High-capacity model for complex, large-scale operations.",
+              },
+              {
+                name: "Machine Code Ultimate",
+                description: "Top-tier model for mission-critical and advanced AI tasks.",
+              },
+              {
+                name: "machine-cli",
+                description: "Command-line interface for automation and scripting with Machine Code.",
+              },
+            ].map((model, idx) => (
+              <Card
+                key={model.name}
+                className="rounded-xl shadow-lg border-0 p-0 flex flex-col items-center justify-center overflow-hidden"
+                style={{
+                  background: [
+                    "linear-gradient(135deg, #7F7FD5 0%, #86A8E7 100%)",
+                    "linear-gradient(135deg, #FFB347 0%, #FFCC33 100%)",
+                    "linear-gradient(135deg, #43cea2 0%, #185a9d 100%)",
+                    "linear-gradient(135deg, #ff6e7f 0%, #bfe9ff 100%)",
+                    "linear-gradient(135deg, #f7971e 0%, #ffd200 100%)"
+                  ][idx % 5],
+                }}
+              >
+                <div className="w-full h-full p-4 flex flex-col items-center justify-center">
+                  <CardTitle
+                    className="text-base font-bold text-white mb-1 text-center whitespace-nowrap w-full truncate"
+                    style={{textShadow: "0 2px 8px rgba(0,0,0,0.18)"}}
+                  >
+                    {model.name}
+                  </CardTitle>
+                  <CardContent className="text-xs text-white/90 text-center mt-0">
+                    {model.description}
+                  </CardContent>
+                </div>
+              </Card>
+            ))}
+          </div> 
 
+          {/* Extension install buttons removed as requested */}
+        </div>
+        <InstallationGuide />
+      </div>
       <Dialog open={stripeModalOpen} onOpenChange={setStripeModalOpen}>
         <DialogContent className="sm:max-w-[425px] p-0 border-none bg-transparent">
           <StripeModal
@@ -653,7 +755,45 @@ export default function MachineCodePage() {
           />
         </DialogContent>
       </Dialog>
-
+      <Dialog open={transferModalOpen} onOpenChange={setTransferModalOpen}>
+        <DialogContent className="sm:max-w-[400px] p-6">
+          <DialogHeader>
+            <DialogTitle>Transfer Credits</DialogTitle>
+            <DialogDescription>Send credits to another user via email.</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 mt-4">
+            <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs rounded px-3 py-2 mb-2">
+              <strong>Note:</strong> Credit transfers may take up to <b>1-2 hours</b> to process. The recipient will receive credits at <b>70% of the original value</b> (e.g., transferring 100 credits results in 50 credits for the recipient).
+            </div>
+            <label className="text-sm font-medium">Credit amount:</label>
+            <input
+              type="number"
+              min="1"
+              className="border rounded px-3 py-2"
+              value={transferAmount}
+              onChange={e => setTransferAmount(e.target.value)}
+              placeholder="Enter amount"
+            />
+            <label className="text-sm font-medium">Email:</label>
+            <input
+              type="email"
+              className="border rounded px-3 py-2"
+              value={transferEmail}
+              onChange={e => setTransferEmail(e.target.value)}
+              placeholder="Enter recipient email"
+            />
+            {transferError && <div className="text-red-500 text-xs">{transferError}</div>}
+            {transferSuccess && <div className="text-green-500 text-xs">{transferSuccess}</div>}
+            <Button
+              className="px-6 py-2 text-base font-semibold bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-pink-600 hover:to-purple-600 transition-all mt-2"
+              disabled={transferLoading || !transferEmail || !transferAmount}
+              onClick={handleTransferSend}
+            >
+              {transferLoading ? "Sending..." : "Send"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <style jsx>{`
         .mc-progress-bar-container {
           width: 100%;
@@ -678,6 +818,6 @@ export default function MachineCodePage() {
           transition: width 0.3s cubic-bezier(.4,1,.7,1);
         }
       `}</style>
-    </>
+    </div>
   );
 }
