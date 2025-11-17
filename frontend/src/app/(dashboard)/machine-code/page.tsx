@@ -763,7 +763,7 @@ export default function MachineCodePage() {
           </DialogHeader>
           <div className="flex flex-col gap-4 mt-4">
             <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs rounded px-3 py-2 mb-2">
-              <strong>Note:</strong> Credit transfers may take up to <b>1-2 hours</b> to process. The recipient will receive credits at <b>70% of the original value</b> (e.g., transferring 100 credits results in 50 credits for the recipient).
+              <strong>Note:</strong> Credit transfers may take up to <b>1-2 hours</b> to process. The recipient will receive credits at <b>70% of the original value</b> (e.g., transferring 100 credits results in 70 credits for the recipient).
             </div>
             <label className="text-sm font-medium">Credit amount:</label>
             <input
