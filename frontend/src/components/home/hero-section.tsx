@@ -33,6 +33,7 @@ import { agentKeys } from '@/hooks/agents/keys';
 import { getAgents } from '@/hooks/agents/utils';
 import { AgentRunLimitDialog } from '@/components/thread/agent-run-limit-dialog';
 import { useAgentSelection } from '@/stores/agent-selection-store';
+import { useTranslations } from 'next-intl';
 
 // Custom dialog overlay with blur effect
 const BlurredDialogOverlay = () => (

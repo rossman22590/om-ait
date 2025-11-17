@@ -58,6 +58,7 @@ import { KortixProcessModal } from './kortix-enterprise-modal';
 
 import { getPlanIcon, getPlanName } from '@/components/billing/plan-utils';
 import { Kbd } from '../ui/kbd';
+import { useTranslations } from 'next-intl';
 import { KbdGroup } from '../ui/kbd';
 import { getActiveAgentRuns, stopAgent } from '@/lib/api/agents';
 import { toast } from 'sonner';
@@ -121,6 +122,7 @@ function FloatingMobileMenuButton() {
 export function SidebarLeft({
   ...props
 }: React.ComponentProps<typeof Sidebar>) {
+  const t = useTranslations('sidebar');
   const { state, setOpen, setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
   const { theme, setTheme } = useTheme();
@@ -384,7 +386,7 @@ export function SidebarLeft({
                     >
                       <div className="flex items-center gap-2">
                         <Plus className="h-4 w-4" />
-                        New Chat
+                        {t('newChat')}
                       </div>
                       <div className="flex items-center gap-1">
                       <KbdGroup>
@@ -399,9 +401,9 @@ export function SidebarLeft({
                 {/* State buttons horizontally */}
                 <div className="flex justify-between items-center gap-2">
                   {[
-                    { view: 'chats' as const, icon: MessageCircle, label: 'Chats' },
-                    { view: 'agents' as const, icon: Bot, label: 'Workers' },
-                    { view: 'starred' as const, icon: Zap, label: 'Triggers' }
+                    { view: 'chats' as const, icon: MessageCircle, label: t('chats') },
+                    { view: 'agents' as const, icon: Bot, label: t('workers') },
+                    { view: 'starred' as const, icon: Zap, label: t('triggers') }
                   ].map(({ view, icon: Icon, label }) => (
                     <button
                       key={view}

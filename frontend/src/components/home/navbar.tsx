@@ -15,6 +15,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { useGitHubStars } from '@/hooks/utils';
 import { useRouter, usePathname } from 'next/navigation';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
+import { useTranslations } from 'next-intl';
 
 const INITIAL_WIDTH = "70rem";
 const MAX_WIDTH = "800px";
@@ -70,6 +71,7 @@ export function Navbar({ tabs }: NavbarProps = {}) {
   const { user } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const t = useTranslations('common');
 
   // Filter nav links based on tabs prop
   const filteredNavLinks = tabs
