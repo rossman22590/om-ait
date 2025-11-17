@@ -3,7 +3,7 @@ User-agent: *
 Allow: /
 
 # Sitemap
-Sitemap: https://kortix.com/sitemap.xml
+Sitemap: https://machine.myapps.ai/sitemap.xml
 
 # Disallow sensitive routes
 Disallow: /api/

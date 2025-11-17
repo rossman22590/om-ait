@@ -21,7 +21,7 @@ export default function SupportPage() {
               For support inquiries, please contact us at:
             </p>
             <a 
-              href="mailto:support@kortix.com" 
+              href="mailto:support@myapps.ai" 
               className="text-lg font-medium text-primary hover:underline inline-flex items-center gap-2"
             >
               <Mail className="w-5 h-5" />

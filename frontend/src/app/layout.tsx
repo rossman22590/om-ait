@@ -51,10 +51,10 @@ export const metadata: Metadata = {
     'research',
     'data analysis',
     'task automation',
-    'Kortix',
+    'Machine',
     'generalist AI',
     'task automation',
-    'Kortix',
+    'Machine',
     'generalist AI',
   ],
   authors: [{ name: 'Machine Team', url: 'https://machine.myapps.ai' }],
@@ -156,8 +156,8 @@ export default function RootLayout({
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'SoftwareApplication',
-              name: 'Kortix',
-              alternateName: 'Suna',
+              name: 'Machine',
+              alternateName: 'Machine',
               applicationCategory: 'BusinessApplication',
               operatingSystem: 'Web, macOS, Windows, Linux',
               offers: {
@@ -181,16 +181,13 @@ export default function RootLayout({
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'Organization',
-              name: 'Kortix',
-              alternateName: ['Suna', 'Kortix AI'],
+              name: 'Machine',
+              alternateName: ['Machine', 'Machine AI'],
               url: 'https://machine.myapps.ai',
               logo: 'https://machine.myapps.ai/favicon.png',
               description: siteConfig.description,
               foundingDate: '2024',
               sameAs: [
-                'https://github.com/kortix-ai',
-                'https://x.com/kortix',
-                'https://linkedin.com/company/kortix',
               ],
               contactPoint: {
                 '@type': 'ContactPoint',
@@ -208,8 +205,8 @@ export default function RootLayout({
             __html: JSON.stringify({
               '@context': 'https://schema.org',
               '@type': 'SoftwareApplication',
-              name: 'Kortix',
-              alternateName: 'Suna',
+              name: 'Machine',
+              alternateName: 'Machine',
               applicationCategory: 'BusinessApplication',
               operatingSystem: 'Web, macOS, Windows, Linux',
               offers: {

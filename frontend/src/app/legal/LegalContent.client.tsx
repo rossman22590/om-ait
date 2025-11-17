@@ -85,21 +85,21 @@ export default function LegalContent() {
                       <p className="text-sm text-muted-foreground mb-6">Information according to legal requirements</p>
                       <h3 className="text-lg font-medium tracking-tight">Company Information</h3>
                       <div className="text-muted-foreground mb-6 space-y-2">
-                        <p><strong>Kortix AI Corp</strong></p>
-                        <p>701 Tillery Street</p>
+                        <p><strong>Machine AI</strong></p>
+                        {/* <p>701 Tillery Street</p>
                         <p>Unit 12-2521</p>
-                        <p>Austin, TX 78702</p>
+                        <p>Austin, TX 78702</p> */}
                         <p>United States</p>
                       </div>
                       <h3 className="text-lg font-medium tracking-tight">Contact</h3>
                       <div className="text-muted-foreground mb-6">
                         <p>
                           Email{' '}
-                          <a href="mailto:info@kortix.com" className="text-primary hover:underline">info@kortix.com</a>
+                          <a href="mailto:info@myapps.ai" className="text-primary hover:underline">info@myapps.ai</a>
                         </p>
                       </div>
                       <h3 className="text-lg font-medium tracking-tight">Responsible for Content</h3>
-                      <p className="text-muted-foreground mb-6">Kortix AI Corp is responsible for the content of this website in accordance with applicable laws.</p>
+                      <p className="text-muted-foreground mb-6">Machine AI is responsible for the content of this website in accordance with applicable laws.</p>
                       <h3 className="text-lg font-medium tracking-tight">Disclaimer</h3>
                       <p className="text-muted-foreground text-balance mb-6">The information provided on this website is for general informational purposes only...</p>
                     </div>

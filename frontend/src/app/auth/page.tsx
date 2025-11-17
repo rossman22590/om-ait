@@ -360,7 +360,7 @@ function LoginContent() {
                           parts.push(
                             <a 
                               key="privacy"
-                              href="https://www.kortix.com/legal?tab=privacy" 
+                              href="https://machine.myapps.ai/legal?tab=privacy" 
                               target="_blank"
                               rel="noopener noreferrer"
                               className="hover:underline underline-offset-2 transition-colors text-primary"
@@ -385,7 +385,7 @@ function LoginContent() {
                           parts.push(
                             <a 
                               key="terms"
-                              href="https://www.kortix.com/legal?tab=terms"
+                              href="https://machine.myapps.ai/legal?tab=terms"
                               target="_blank"
                               rel="noopener noreferrer"
                               className="hover:underline underline-offset-2 transition-colors text-primary"
@@ -413,7 +413,7 @@ function LoginContent() {
                             parts.push(
                               <a 
                                 key="privacy"
-                                href="https://www.kortix.com/legal?tab=privacy" 
+                                href="https://machine.myapps.ai/legal?tab=privacy" 
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="hover:underline underline-offset-2 transition-colors text-primary"
@@ -426,7 +426,7 @@ function LoginContent() {
                             parts.push(
                               <a 
                                 key="terms"
-                                href="https://www.kortix.com/legal?tab=terms"
+                                href="https://machine.myapps.ai/legal?tab=terms"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="hover:underline underline-offset-2 transition-colors text-primary"
