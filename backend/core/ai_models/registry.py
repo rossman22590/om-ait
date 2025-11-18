@@ -401,8 +401,36 @@ class ModelRegistry:
                 }
             )
         ))
-        
-    
+
+        # Google Gemini 3 Pro Preview - Via OpenRouter
+        self.register(Model(
+            id="openrouter/google/gemini-3-pro-preview",
+            name="Gemini 3 Pro Preview",
+            provider=ModelProvider.OPENROUTER,
+            aliases=["google/gemini-3-pro-preview", "gemini-3-pro-preview", "Gemini 3 Pro Preview", "openrouter/google/gemini-3-pro-preview"],
+            context_window=1_000_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.VISION,
+                ModelCapability.STRUCTURED_OUTPUT,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=1.00,
+                output_cost_per_million_tokens=8.00
+            ),
+            tier_availability=["paid"],
+            priority=92,
+            recommended=True,
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                }
+            )
+        ))
+
     def register(self, model: Model) -> None:
         self._models[model.id] = model
         for alias in model.aliases:
@@ -511,4 +539,4 @@ class ModelRegistry:
             "PAID_TIER_MODELS": paid_models,
         }
 
-registry = ModelRegistry() 
+registry = ModelRegistry()
