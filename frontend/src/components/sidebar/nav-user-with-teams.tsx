@@ -340,6 +340,16 @@ export function NavUserWithTeams({
                     Docs
                   </a>
                 </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                  <a
+                    href="/docs/introduction"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    FAQ
+                  </a>
+                </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <a
                     href="https://ai-tutor-x-pixio.instatus.com"
