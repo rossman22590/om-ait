@@ -7,6 +7,12 @@ import { useUsageLogs } from '@/hooks/billing/use-usage-logs';
 import { useCreditBalance } from '@/hooks/billing/use-subscription';
 import { useMessagesQuery } from '@/hooks/threads/use-messages';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface UsageDisplayProps {
   threadId: string;
@@ -111,26 +117,41 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
     setThreadCost(totalCost);
   }, [usageLogsData, threadId, messagesData, messageCount]);
 
-  // Format balance for display
-  const formatBalance = (balance: number) => {
-    return balance >= 1 ? balance.toFixed(2) : balance.toFixed(3);
+  // Format balance for display as credits
+  const formatCredits = (credits: number) => {
+    return Math.round(credits);
   };
 
   return (
-    <div className={cn('flex items-center gap-2', className)}>
-      {/* Show account balance */}
-      <Badge variant="highlight" className="flex items-center gap-1 px-2 py-1 text-xs">
-        <DollarSign className="h-3 w-3" />
-        Balance:
-        {isBalanceLoading ? '—' : ` $${formatBalance((balanceData?.balance || 0) / 100)}`}
-      </Badge>
-      
-      {/* Show thread cost - always visible */}
-      <Badge variant="outline" className="flex items-center gap-1 px-2 py-1 text-xs">
-        <Clock className="h-3 w-3 text-blue-600" />
-        Thread:
-        {isLoading ? ' —' : ` $${threadCost.toFixed(3)}`}
-      </Badge>
-    </div>
+    <TooltipProvider>
+      <div className={cn('flex items-center gap-2', className)}>
+        {/* Credits pill with shadcn/ui tooltip */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="highlight" className="flex items-center gap-1 px-2 py-1 text-xs">
+              <DollarSign className="h-3 w-3" />
+              Credits:
+              {isBalanceLoading ? '—' : ` ${formatCredits(balanceData?.balance || 0)}`}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>Your current account balance in credits</p>
+          </TooltipContent>
+        </Tooltip>
+        {/* Used pill with shadcn/ui tooltip */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="outline" className="flex items-center gap-1 px-2 py-1 text-xs">
+              <Clock className="h-3 w-3 text-blue-600" />
+              Used:
+              {isLoading ? ' —' : ` ${formatCredits(threadCost * 100)}`}
+            </Badge>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>Credits spent on this thread</p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    </TooltipProvider>
   );
 };
