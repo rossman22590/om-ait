@@ -305,10 +305,10 @@
     "localModeMessage": "Running in local development mode - billing features are disabled",
     "creditsExplainedPage": {
       "title": "Credits Explained",
-      "subtitle": "Everything you need to know about how credits work on Kortix",
+      "subtitle": "Everything you need to know about how credits work on Machine",
       "understandingCredits": {
         "title": "Understanding Credits",
-        "description": "Credits serve as Kortix's universal currency for platform operations. Every action your AI agents perform—from analyzing data to generating code—consumes credits based on the task's complexity and the resources required."
+        "description": "Credits serve as Machine's universal currency for platform operations. Every action your AI agents perform—from analyzing data to generating code—consumes credits based on the task's complexity and the resources required."
       },
       "howCreditsWork": {
         "title": "How Credits Work",
@@ -326,7 +326,7 @@
       },
       "gettingMoreCredits": {
         "title": "Getting More Credits",
-        "description": "There are several ways to obtain credits in Kortix:",
+        "description": "There are several ways to obtain credits in Machine:",
         "monthlySubscription": {
           "title": "Monthly Subscription Credits",
           "description": "Included with your paid plan and renewed automatically each month. These are expiring credits."
@@ -346,7 +346,7 @@
       },
       "typesOfCredits": {
         "title": "Types of Credits",
-        "description": "Kortix uses two types of credits to give you flexibility in how you manage your usage:",
+        "description": "Machine uses two types of credits to give you flexibility in how you manage your usage:",
         "expiringCredits": {
           "title": "Expiring Credits",
           "description": "Monthly subscription credits",
@@ -359,7 +359,7 @@
         },
         "creditPriority": {
           "title": "Credit Priority:",
-          "description": "When you use Kortix, expiring credits are consumed first. Only after your expiring credits run out will non-expiring credits be used."
+          "description": "When you use Machine, expiring credits are consumed first. Only after your expiring credits run out will non-expiring credits be used."
         }
       }
     },
