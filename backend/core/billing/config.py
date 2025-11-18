@@ -56,10 +56,10 @@ TIERS: Dict[str, Tier] = {
             'openrouter/anthropic/claude-haiku-4.5',
             'openai/gpt-5-mini',
         ],
-        project_limit=1,
+        project_limit=3,
         thread_limit=10,
         concurrent_runs=1,
-        custom_workers_limit=0,
+        custom_workers_limit=1,
         scheduled_triggers_limit=1,
         app_triggers_limit=2
     ),

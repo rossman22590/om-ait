@@ -303,7 +303,7 @@ export const siteConfig = {
       features: [
         '200 credits/month',
         '1 custom Worker',
-        '1 private project',
+        '3 private projects',
         '1 custom trigger',
       ],
       tierKey: config.SUBSCRIPTION_TIERS.FREE_TIER.tierKey,
