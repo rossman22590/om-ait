@@ -31,37 +31,28 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: {
-    default: siteConfig.name,
-    template: `%s | ${siteConfig.name}`,
+    default: 'Machine',
+    template: '%s | Machine',
   },
-  description:
-    'Machine is an AI assistant that helps you accomplish real-world tasks with ease. Through natural conversation, Machine becomes your digital companion for research, data analysis, and everyday challenges.',
+  description: 'Machine is an AI assistant that helps you accomplish real-world tasks with ease. Through natural conversation, Machine becomes your digital companion for research, data analysis, and everyday challenges.',
   keywords: [
     'AI assistant',
-    'open source AI',
-    'AI assistant',
-    'open source AI',
     'artificial intelligence',
-    'AI worker',
     'AI worker',
     'browser automation',
     'web scraping',
     'file management',
-    'AI assistant',
-    'research',
+    'research assistant',
     'data analysis',
     'task automation',
     'Machine',
     'generalist AI',
-    'task automation',
-    'Machine',
-    'generalist AI',
   ],
-  authors: [{ name: 'Machine Team', url: 'https://machine.myapps.ai' }],
-  creator:
-    'Machine Team',
-  publisher:
-    'Machine Team',
+  authors: [
+    { name: 'Machine Team', url: 'https://machine.myapps.ai' }
+  ],
+  creator: 'Machine Team',
+  publisher: 'Machine Team',
   category: 'Technology',
   applicationName: 'Machine',
   formatDetection: {
@@ -82,22 +73,29 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
+    type: 'website',
     title: 'Machine - Generalist AI Agent',
-    description:
-      'Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
+    description: 'Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
     url: siteConfig.url,
     siteName: 'Machine',
-    images: [`${siteConfig.url}/banner.png`],
     locale: 'en_US',
+    images: [
+      {
+        url: '/banner.png',
+        width: 1200,
+        height: 630,
+        alt: 'Machine - Generalist AI Agent',
+        type: 'image/png',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Machine - Generalist AI Agent',
-    description:
-      'Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
+    description: 'Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
     creator: '@the_machine_ai',
     site: '@the_machine_ai',
-    images: [`${siteConfig.url}/banner.png`],
+    images: ['/banner.png'],
   },
   icons: {
     icon: [
@@ -122,7 +120,14 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={`${roobert.variable} ${roobertMono.variable}`}>
       <head>
-        {/* Structured Data for Organization */}
+        <meta property="og:title" content="Machine - Generalist AI Agent" />
+        <meta property="og:description" content="Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation." />
+        <meta property="og:image" content="/banner.png" />
+        <meta property="og:url" content={siteConfig.url} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Machine - Generalist AI Agent" />
+        <meta name="twitter:description" content="Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation." />
+        <meta name="twitter:image" content="/banner.png" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -131,25 +136,19 @@ export default function RootLayout({
               '@type': 'Organization',
               name: 'Machine',
               alternateName: ['Machine', 'Machine AI'],
-              url: 'https://machine.myapps.ai',
-              logo: 'https://machine.myapps.ai/favicon.png',
-              description: siteConfig.description,
+              url: siteConfig.url,
+              logo: `${siteConfig.url}/favicon.png`,
+              description: metadata.description,
               foundingDate: '2024',
-              sameAs: [
-
-               'https://x.com/the_machine_ai',
-
-              ],
+              sameAs: ['https://x.com/the_machine_ai'],
               contactPoint: {
                 '@type': 'ContactPoint',
                 contactType: 'Customer Support',
-                url: 'https://machine.myapps.ai',
+                url: siteConfig.url,
               },
             }),
           }}
         />
-        
-        {/* Structured Data for Software Application */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -173,56 +172,6 @@ export default function RootLayout({
             }),
           }}
         />
-        
-        {/* Structured Data for Organization */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'Organization',
-              name: 'Machine',
-              alternateName: ['Machine', 'Machine AI'],
-              url: 'https://machine.myapps.ai',
-              logo: 'https://machine.myapps.ai/favicon.png',
-              description: siteConfig.description,
-              foundingDate: '2024',
-              sameAs: [
-              ],
-              contactPoint: {
-                '@type': 'ContactPoint',
-                contactType: 'Customer Support',
-                url: 'https://machine.myapps.ai',
-              },
-            }),
-          }}
-        />
-        
-        {/* Structured Data for Software Application */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              '@context': 'https://schema.org',
-              '@type': 'SoftwareApplication',
-              name: 'Machine',
-              alternateName: 'Machine',
-              applicationCategory: 'BusinessApplication',
-              operatingSystem: 'Web, macOS, Windows, Linux',
-              offers: {
-                '@type': 'Offer',
-                price: '0',
-                priceCurrency: 'USD',
-              },
-              aggregateRating: {
-                '@type': 'AggregateRating',
-                ratingValue: '4.8',
-                ratingCount: '1000',
-              },
-            }),
-          }}
-        />
-        
         <Script id="google-tag-manager" strategy="afterInteractive">
           {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
           new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
@@ -242,6 +191,7 @@ export default function RootLayout({
             style={{ display: 'none', visibility: 'hidden' }}
           />
         </noscript>
+        {/* End Google Tag Manager (noscript) */}
 
         <ThemeProvider
           attribute="class"
