@@ -7,17 +7,18 @@ import { detectBestLocale } from '@/lib/utils/geo-detection';
 
 /**
  * Gets the stored locale with priority:
- * 1. User profile preference (from user_metadata)
- * 2. Cookie
- * 3. localStorage
- * 4. Geo-detection (timezone/browser)
- * 5. Default
+ * 1. User profile preference (from user_metadata) - ALWAYS highest priority
+ * 2. Cookie (explicit user preference)
+ * 3. localStorage (explicit user preference)
+ * 4. Geo-detection (timezone/browser) - default when nothing is explicitly set
+ * 5. Default locale
  */
 async function getStoredLocale(): Promise<Locale> {
   if (typeof window === 'undefined') return defaultLocale;
 
   try {
-    // Check user profile preference (if authenticated)
+    // Priority 1: Check user profile preference (if authenticated)
+    // This ALWAYS takes precedence - user explicitly set it in settings
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (user?.user_metadata?.locale && locales.includes(user.user_metadata.locale as Locale)) {
@@ -25,10 +26,9 @@ async function getStoredLocale(): Promise<Locale> {
     }
   } catch (error) {
     // Silently fail - user might not be authenticated
-    console.debug('Could not fetch user locale:', error);
   }
-
-  // Check cookie
+  
+  // Priority 2: Check cookie (explicit user preference)
   const cookies = document.cookie.split(';');
   const localeCookie = cookies.find(c => c.trim().startsWith('locale='));
   if (localeCookie) {
@@ -37,15 +37,16 @@ async function getStoredLocale(): Promise<Locale> {
       return value as Locale;
     }
   }
-
-  // Check localStorage
+  
+  // Priority 3: Check localStorage (explicit user preference)
   const stored = localStorage.getItem('locale');
   if (stored && locales.includes(stored as Locale)) {
     return stored as Locale;
   }
-
-  // Geo-detection fallback
-  return detectBestLocale();
+  
+  // Priority 4: Geo-detection (default when nothing is explicitly set)
+  const geoDetected = detectBestLocale();
+  return geoDetected;
 }
 
 // Custom event name for locale changes
@@ -95,7 +96,8 @@ export function useLanguage() {
     setIsChanging(true);
     
     try {
-      // Save to user profile if authenticated (highest priority)
+      // Priority 1: Save to user profile if authenticated (highest priority)
+      // This is the explicit user preference from settings
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -107,8 +109,6 @@ export function useLanguage() {
           
           if (updateError) {
             console.warn('Failed to save locale to user profile:', updateError);
-          } else {
-            console.log(`💾 Saved locale to user profile: ${newLocale}`);
           }
         } catch (error) {
           console.warn('Error saving locale to user profile:', error);
@@ -116,18 +116,15 @@ export function useLanguage() {
       }
     } catch (error) {
       // User might not be authenticated, continue with cookie/localStorage
-      console.debug('User not authenticated, skipping profile save:', error);
     }
     
-    // Store preference in cookie with proper encoding
+    // Priority 2: Store preference in cookie (explicit user preference)
     const cookieValue = `locale=${newLocale}; path=/; max-age=31536000; SameSite=Lax`;
     document.cookie = cookieValue;
-    console.log(`🍪 Setting locale cookie: ${cookieValue}`);
     
-    // Store in localStorage as backup
+    // Priority 3: Store in localStorage as backup (explicit user preference)
     if (typeof window !== 'undefined') {
       localStorage.setItem('locale', newLocale);
-      console.log(`💾 Setting locale in localStorage: ${newLocale}`);
     }
 
     // Update local state immediately
@@ -136,8 +133,6 @@ export function useLanguage() {
     // Dispatch custom event to notify I18nProvider and other components
     const event = new CustomEvent(LOCALE_CHANGE_EVENT, { detail: newLocale });
     window.dispatchEvent(event);
-    
-    console.log(`🌍 Language changed to: ${newLocale}`);
     
     // Reset changing state after a brief delay
     setTimeout(() => {

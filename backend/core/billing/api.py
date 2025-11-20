@@ -7,7 +7,7 @@ import stripe
 import json
 from core.credits import credit_service
 from core.services.supabase import DBConnection
-from core.utils.auth_utils import verify_and_get_user_id_from_jwt
+from core.utils.auth_utils import verify_and_get_user_id_from_jwt, get_optional_user_id_from_jwt
 from core.utils.config import config, EnvMode
 from core.utils.logger import logger
 from core.utils.cache import Cache
@@ -25,6 +25,7 @@ from .trial_service import trial_service
 from .payment_service import payment_service
 from .reconciliation_service import reconciliation_service
 from .stripe_circuit_breaker import StripeAPIWrapper, stripe_circuit_breaker
+from .revenuecat_service import revenuecat_service
  
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -425,9 +426,20 @@ async def deduct_token_usage(
 
 @router.get("/balance")
 async def get_credit_balance(
-    account_id: str = Depends(verify_and_get_user_id_from_jwt)
+    account_id: Optional[str] = Depends(get_optional_user_id_from_jwt)
 ) -> Dict:
     from .config import CREDITS_PER_DOLLAR
+    
+    if not account_id:
+        return {
+            'balance': 0,
+            'expiring_credits': 0,
+            'non_expiring_credits': 0,
+            'tier': 'guest',
+            'tier_name': 'Guest',
+            'trial_status': None,
+            'trial_ends_at': None
+        }
     
     db = DBConnection()
     client = await db.client
@@ -510,9 +522,18 @@ async def stripe_webhook(request: Request):
 
 @router.get("/subscription")
 async def get_subscription(
-    account_id: str = Depends(verify_and_get_user_id_from_jwt)
+    account_id: Optional[str] = Depends(get_optional_user_id_from_jwt)
 ) -> Dict:
     try:
+        if not account_id:
+            return {
+                'has_subscription': False,
+                'tier': 'guest',
+                'tier_name': 'Guest',
+                'status': None,
+                'plan_name': None
+            }
+        
         subscription_info = await subscription_service.get_subscription(account_id)
         
         balance = await credit_service.get_balance(account_id)
@@ -542,18 +563,36 @@ async def get_subscription(
         
         from .config import CREDITS_PER_DOLLAR, get_price_type
         
-        # Determine billing period from price_id
+        credit_account = subscription_info.get('credit_account', {})
+        provider = credit_account.get('provider', 'stripe') if credit_account else 'stripe'
+        revenuecat_customer_id = credit_account.get('revenuecat_customer_id') if credit_account else None
+        revenuecat_subscription_id = credit_account.get('revenuecat_subscription_id') if credit_account else None
+        revenuecat_product_id = credit_account.get('revenuecat_product_id') if credit_account else None
+        
         billing_period = None
-        if subscription_info.get('price_id'):
+        
+        if provider == 'revenuecat' and revenuecat_product_id:
+            product_id_lower = revenuecat_product_id.lower()
+            if 'commitment' in product_id_lower:
+                billing_period = 'yearly_commitment'
+            elif 'yearly' in product_id_lower or 'annual' in product_id_lower:
+                billing_period = 'yearly'
+            elif 'monthly' in product_id_lower:
+                billing_period = 'monthly'
+        elif subscription_info.get('price_id'):
             billing_period = get_price_type(subscription_info['price_id'])
         
         return {
             'status': status,
             'plan_name': tier_info['name'],
-            'tier_key': tier_info['name'],  # Explicit tier_key for frontend
+            'tier_key': tier_info['name'],
             'display_plan_name': display_plan_name,
             'price_id': subscription_info['price_id'],
-            'billing_period': billing_period,  # 'monthly', 'yearly', or 'yearly_commitment'
+            'billing_period': billing_period,
+            'provider': provider,
+            'revenuecat_customer_id': revenuecat_customer_id,
+            'revenuecat_subscription_id': revenuecat_subscription_id,
+            'revenuecat_product_id': revenuecat_product_id,
             'subscription': subscription_data,
             'subscription_id': subscription_data['id'] if subscription_data else None,
             'current_usage': float(summary['lifetime_used']) * CREDITS_PER_DOLLAR,
@@ -753,6 +792,24 @@ async def cancel_subscription(
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
     try:
+        db = DBConnection()
+        client = await db.client
+        
+        credit_account = await client.from_('credit_accounts').select('provider').eq(
+            'account_id', account_id
+        ).execute()
+        
+        provider = credit_account.data[0].get('provider') if credit_account.data else 'stripe'
+        
+        if provider == 'revenuecat':
+            logger.info(f"[CANCEL] User {account_id} on RevenueCat - cancellation must be done in app")
+            return {
+                'success': False,
+                'message': 'Please cancel your subscription from the mobile app settings',
+                'provider': 'revenuecat',
+                'requires_app_cancellation': True
+            }
+        
         result = await subscription_service.cancel_subscription(
             account_id=account_id,
             feedback=request.feedback
@@ -1332,13 +1389,44 @@ async def get_usage_logs(
 
 @router.get("/available-models")
 async def get_available_models(
-    account_id: str = Depends(verify_and_get_user_id_from_jwt)
+    account_id: Optional[str] = Depends(get_optional_user_id_from_jwt)
 ) -> Dict:
     try:
         from core.ai_models import model_manager
         from core.services.supabase import DBConnection
-        # Use the implemented get_allowed_models_for_user function
-        
+
+        if not account_id:
+            logger.info(f"Guest user requesting models: {account_id}")
+            all_models = model_manager.list_available_models(tier=None, include_disabled=False)
+            model_info = []
+            
+            for model_data in all_models:
+                if model_data.get("requires_subscription", False):
+                    continue
+                    
+                input_cost = model_data["pricing"]["input_per_million"] if model_data["pricing"] else None
+                output_cost = model_data["pricing"]["output_per_million"] if model_data["pricing"] else None
+                
+                model_info.append({
+                    "id": model_data["id"],
+                    "display_name": model_data["name"],
+                    "short_name": model_data.get("aliases", [model_data["name"]])[0] if model_data.get("aliases") else model_data["name"],
+                    "requires_subscription": False,
+                    "input_cost_per_million_tokens": float(Decimal(str(input_cost)) * TOKEN_PRICE_MULTIPLIER) if input_cost else None,
+                    "output_cost_per_million_tokens": float(Decimal(str(output_cost)) * TOKEN_PRICE_MULTIPLIER) if output_cost else None,
+                    "context_window": model_data["context_window"],
+                    "capabilities": model_data["capabilities"],
+                    "recommended": model_data["recommended"],
+                    "priority": model_data["priority"]
+                })
+            
+            return {
+                "models": model_info,
+                "subscription_tier": "Guest (Free Tier)",
+                "total_models": len(model_info)
+            }
+            
+
         if config.ENV_MODE == EnvMode.LOCAL:
             logger.debug("Running in local development mode - all models available")
             all_models = model_manager.list_available_models(include_disabled=False)
@@ -1707,4 +1795,35 @@ async def get_tier_configurations() -> Dict:
     
     except Exception as e:
         logger.error(f"Error getting tier configurations: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get tier configurations") 
+        raise HTTPException(status_code=500, detail="Failed to get tier configurations")
+
+@router.post("/revenuecat/webhook")
+async def revenuecat_webhook(request: Request) -> Dict:
+    try:
+        logger.info("[REVENUECAT] Received webhook")
+        result = await revenuecat_service.process_webhook(request)
+        return result
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"[REVENUECAT] Error processing webhook: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/revenuecat/sync")
+async def sync_revenuecat_customer(
+    request: Request,
+    account_id: str = Depends(verify_and_get_user_id_from_jwt)
+) -> Dict:
+    try:
+        body = await request.json()
+        customer_info = body.get('customer_info', {})
+        result = await revenuecat_service.sync_customer_info(account_id, customer_info)
+        
+        await Cache.invalidate(f"subscription_tier:{account_id}")
+        await Cache.invalidate(f"credit_balance:{account_id}")
+        await Cache.invalidate(f"credit_summary:{account_id}")
+        
+        return result
+    except Exception as e:
+        logger.error(f"[REVENUECAT] Error syncing customer: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e)) 

@@ -80,6 +80,8 @@ class Configuration:
     
     # Environment mode
     ENV_MODE: Optional[EnvMode] = EnvMode.LOCAL
+    
+    GUEST_MODE_ADMIN_USER_ID: Optional[str] = None
 
 
     # Subscription tier IDs - Production
@@ -301,6 +303,9 @@ class Configuration:
     STRIPE_DEFAULT_PLAN_ID: Optional[str] = None
     STRIPE_DEFAULT_TRIAL_DAYS: Optional[int] = 14
     
+    # RevenueCat configuration
+    REVENUECAT_WEBHOOK_SECRET: Optional[str] = None
+    
     # Stripe Product IDs
     STRIPE_PRODUCT_ID_PROD: str = 'prod_SGT7srmz5hB2qo'
     STRIPE_PRODUCT_ID_STAGING: str = 'prod_SGT7srmz5hB2qo'
@@ -347,8 +352,8 @@ class Configuration:
     # a non-settable property during _load_from_env.
     
     # Sandbox configuration
-    SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3.24"
-    SANDBOX_SNAPSHOT_NAME = "kortix/suna:0.1.3.24"
+    SANDBOX_IMAGE_NAME = "kortix/suna:0.1.3.25"
+    SANDBOX_SNAPSHOT_NAME = "kortix/suna:0.1.3.25"
     SANDBOX_ENTRYPOINT = "/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf"
 
     # LangFuse configuration

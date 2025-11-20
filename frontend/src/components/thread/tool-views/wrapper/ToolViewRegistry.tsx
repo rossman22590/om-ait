@@ -22,8 +22,6 @@ import { PaperReferencesToolView } from '../paper-references-tool/PaperReference
 import { DocumentParserToolView } from '../document-parser-tool/DocumentParserToolView';
 import { SeeImageToolView } from '../see-image-tool/SeeImageToolView';
 import { TerminateCommandToolView } from '../command-tool/TerminateCommandToolView';
-import { AskToolView } from '../ask-tool/AskToolView';
-import { CompleteToolView } from '../CompleteToolView';
 import { WaitToolView } from '../wait-tool/WaitToolView';
 import { ExecuteDataProviderCallToolView } from '../data-provider-tool/ExecuteDataProviderCallToolView';
 import { DataProviderEndpointsToolView } from '../data-provider-tool/DataProviderEndpointsToolView';
@@ -43,7 +41,6 @@ import { ListPresentationsToolView } from '../presentation-tools/ListPresentatio
 import { DeleteSlideToolView } from '../presentation-tools/DeleteSlideToolView';
 import { DeletePresentationToolView } from '../presentation-tools/DeletePresentationToolView';
 // import { PresentationStylesToolView } from '../presentation-tools/PresentationStylesToolView';
-import { PresentPresentationToolView } from '../presentation-tools/PresentPresentationToolView';
 import { ExportToPptxToolView, ExportToPdfToolView } from '../presentation-tools/ExportToolView';
 import { SheetsToolView } from '../sheets-tools/sheets-tool-view';
 import { GetProjectStructureView } from '../web-dev/GetProjectStructureView';
@@ -149,8 +146,6 @@ const defaultRegistry: ToolViewRegistryType = {
   'check-argil-video-status': AvatarToolView,
   'check_argil_video_status': AvatarToolView,
 
-  'ask': AskToolView,
-  'complete': CompleteToolView,
   'wait': WaitToolView,
   'expand_message': ExpandMessageToolView,
   'expand-message': ExpandMessageToolView,
@@ -168,7 +163,6 @@ const defaultRegistry: ToolViewRegistryType = {
   'delete-presentation': DeletePresentationToolView,
   'validate-slide': PresentationViewer,
   // 'presentation-styles': PresentationStylesToolView,
-  'present-presentation': PresentPresentationToolView,
   'export-to-pptx': ExportToPptxToolView,
   'export-to-pdf': ExportToPdfToolView,
 
@@ -311,7 +305,6 @@ export function ToolView({ name = 'default', assistantContent, toolContent, ...p
     'delete-presentation',
     'validate-slide',
     // 'presentation-styles',
-    'present-presentation',
   ]
 
   const isAlreadyPresentationTool = presentationTools.includes(name);

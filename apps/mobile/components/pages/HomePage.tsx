@@ -15,7 +15,7 @@ interface HomePageProps {
   onMenuPress?: () => void;
   chat: UseChatReturn;
   isAuthenticated: boolean;
-  onOpenAuthDrawer: () => void;
+  isGuestMode?: boolean;
 }
 
 export interface HomePageRef {
@@ -26,16 +26,16 @@ export const HomePage = React.forwardRef<HomePageRef, HomePageProps>(({
   onMenuPress,
   chat,
   isAuthenticated,
-  onOpenAuthDrawer,
+  isGuestMode = false,
 }, ref) => {
   const { agentManager, audioRecorder, audioHandlers, isTranscribing } = useChatCommons(chat);
-  
+
   const { isOpen: isPricingModalOpen, alertTitle, creditsExhausted, closePricingModal } = usePricingModalStore();
   const [isUsageDrawerOpen, setIsUsageDrawerOpen] = React.useState(false);
   const [isCreditsPurchaseOpen, setIsCreditsPurchaseOpen] = React.useState(false);
-  
+
   const chatInputRef = React.useRef<ChatInputSectionRef>(null);
-  
+
   React.useImperativeHandle(ref, () => ({
     focusChatInput: () => {
       console.log('🎯 Focusing chat input from HomePage');
@@ -83,22 +83,23 @@ export const HomePage = React.forwardRef<HomePageRef, HomePageProps>(({
 
   return (
     <View className="flex-1 bg-background">
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1"
         keyboardVerticalOffset={0}
         enabled={false}
       >
-        <Pressable 
-          className="flex-1" 
+        <Pressable
+          className="flex-1"
           onPress={Keyboard.dismiss}
           accessible={false}
         >
           <View className="flex-1 relative">
-            <TopNav 
-              onMenuPress={onMenuPress} 
+            <TopNav
+              onMenuPress={onMenuPress}
               onUpgradePress={handleUpgradePress}
               onCreditsPress={handleCreditsPress}
+              isGuestMode={isGuestMode}
             />
             <View className="absolute inset-0" pointerEvents="none">
               <BackgroundLogo />
@@ -112,12 +113,12 @@ export const HomePage = React.forwardRef<HomePageRef, HomePageProps>(({
               }}
               onSendAudio={audioHandlers.handleSendAudio}
               onAttachPress={chat.openAttachmentDrawer}
-              onAgentPress={agentManager.openDrawer}
+              onAgentPress={isGuestMode ? () => {} : agentManager.openDrawer}
               onAudioRecord={audioHandlers.handleStartRecording}
               onCancelRecording={audioHandlers.handleCancelRecording}
               onStopAgentRun={chat.stopAgent}
               placeholder={chat.getPlaceholder()}
-              agent={agentManager.selectedAgent || undefined}
+              agent={isGuestMode ? undefined : (agentManager.selectedAgent || undefined)}
               isRecording={audioRecorder.isRecording}
               recordingDuration={audioRecorder.recordingDuration}
               audioLevel={audioRecorder.audioLevel}
@@ -138,15 +139,15 @@ export const HomePage = React.forwardRef<HomePageRef, HomePageProps>(({
                 chatInputRef.current?.focusInput();
               }}
               isAuthenticated={isAuthenticated}
-              onOpenAuthDrawer={onOpenAuthDrawer}
               isAgentRunning={chat.isAgentRunning}
               isSendingMessage={chat.isSendingMessage}
               isTranscribing={isTranscribing}
+              isGuestMode={isGuestMode}
             />
           </View>
         </Pressable>
         <ChatDrawers
-          isAgentDrawerVisible={agentManager.isDrawerVisible}
+          isAgentDrawerVisible={!isGuestMode && agentManager.isDrawerVisible}
           onCloseAgentDrawer={agentManager.closeDrawer}
           isAttachmentDrawerVisible={chat.isAttachmentDrawerVisible}
           onCloseAttachmentDrawer={chat.closeAttachmentDrawer}

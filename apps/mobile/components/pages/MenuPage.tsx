@@ -1,9 +1,9 @@
 import * as React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { 
-  useAnimatedStyle, 
-  useSharedValue, 
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
   withSpring
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,7 +14,7 @@ import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { SearchBar } from '@/components/ui/SearchBar';
 import { KortixLoader } from '@/components/ui';
-import { Search, Plus, X, AlertCircle, MessageSquare, Users, Zap } from 'lucide-react-native';
+import { Search, Plus, X, AlertCircle, MessageSquare, Users, Zap, PanelLeftClose, CircleChevronLeft, ChevronLeft, ChevronFirst, ChevronsUpDown } from 'lucide-react-native';
 import { ConversationSection } from '@/components/menu/ConversationSection';
 import { BottomNav } from '@/components/menu/BottomNav';
 import { ProfileSection } from '@/components/menu/ProfileSection';
@@ -34,19 +34,16 @@ import { AnimatedPageWrapper } from '@/components/shared/AnimatedPageWrapper';
 import type { Conversation, UserProfile, ConversationSection as ConversationSectionType } from '@/components/menu/types';
 import type { Agent, TriggerWithAgent } from '@/api/types';
 import { ProfilePicture } from '../settings/ProfilePicture';
+import { TierBadge } from '@/components/billing/TierBadge';
+import { useAuthDrawerStore } from '@/stores/auth-drawer-store';
+import { useGuestMode } from '@/contexts';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const AnimatedScrollView = Animated.createAnimatedComponent(ScrollView);
 
-/**
- * EmptyState Component
- * 
- * Unified empty state component for all tabs (Chats, Workers, Triggers)
- * Handles: loading, error, no results (search), and no items states
- */
 interface EmptyStateProps {
   type: 'loading' | 'error' | 'no-results' | 'empty';
-  icon: any; // Lucide icon component
+  icon: any;
   title: string;
   description: string;
   actionLabel?: string;
@@ -63,25 +60,24 @@ function EmptyState({
 }: EmptyStateProps) {
   const { colorScheme } = useColorScheme();
   const scale = useSharedValue(1);
-  
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
-  
+
   const handlePressIn = () => {
     scale.value = withSpring(0.96, { damping: 15, stiffness: 400 });
   };
-  
+
   const handlePressOut = () => {
     scale.value = withSpring(1, { damping: 15, stiffness: 400 });
   };
-  
+
   const handleActionPress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onActionPress?.();
   };
-  
-  // Get colors based on type
+
   const getColors = () => {
     switch (type) {
       case 'loading':
@@ -111,10 +107,9 @@ function EmptyState({
         };
     }
   };
-  
+
   const { iconColor, iconBgColor } = getColors();
-  
-  // Loading state with spinner
+
   if (type === 'loading') {
     return (
       <View className="items-center justify-center py-16 px-8">
@@ -125,12 +120,11 @@ function EmptyState({
       </View>
     );
   }
-  
-  // All other states
+
   return (
     <View className="items-center justify-center py-20 px-8">
       <View className={`w-20 h-20 rounded-full ${iconBgColor} items-center justify-center mb-6`}>
-        <Icon 
+        <Icon
           as={icon}
           size={36}
           color={iconColor}
@@ -153,7 +147,7 @@ function EmptyState({
           accessibilityRole="button"
           accessibilityLabel={actionLabel}
         >
-          <Icon 
+          <Icon
             as={Plus}
             size={18}
             className="text-primary-foreground"
@@ -168,12 +162,6 @@ function EmptyState({
   );
 }
 
-/**
- * BackButton Component
- * 
- * Elegant close button to close the menu and return to home
- * Uses X icon from Lucide
- */
 interface BackButtonProps {
   onPress?: () => void;
 }
@@ -181,42 +169,42 @@ interface BackButtonProps {
 function BackButton({ onPress }: BackButtonProps) {
   const { t } = useLanguage();
   const scale = useSharedValue(1);
-  
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
-  
+
   const handlePressIn = () => {
     scale.value = withSpring(0.9, { damping: 15, stiffness: 400 });
   };
-  
+
   const handlePressOut = () => {
     scale.value = withSpring(1, { damping: 15, stiffness: 400 });
   };
-  
+
   const handlePress = () => {
     console.log('🎯 Close button pressed');
     console.log('📱 Returning to Home');
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPress?.();
   };
-  
+
   return (
     <AnimatedPressable
       onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={animatedStyle}
-      className="w-10 h-10 rounded-full bg-primary/10 items-center justify-center active:bg-muted/50"
+      className="w-10 h-10 rounded-full items-center justify-center p-0"
       accessibilityRole="button"
       accessibilityLabel={t('actions.goBack')}
       accessibilityHint={t('actions.returnToHome')}
     >
-      <Icon 
-        as={X}
-        size={20}
+      <Icon
+        as={ChevronFirst}
+        size={22}
         className="text-foreground"
-        strokeWidth={2.5}
+        strokeWidth={2}
       />
     </AnimatedPressable>
   );
@@ -251,7 +239,7 @@ function NewChatButton({ onPress }: NewChatButtonProps) {
       }}
       className="h-14 w-full rounded-full bg-primary flex-row items-center justify-center gap-2"
     >
-      <Icon 
+      <Icon
         as={Plus}
         size={20}
         strokeWidth={2}
@@ -276,45 +264,43 @@ function FloatingActionButton({ activeTab, onChatPress, onWorkerPress, onTrigger
   const { colorScheme } = useColorScheme();
   const scale = useSharedValue(1);
   const rotate = useSharedValue(0);
-  
+
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { scale: scale.value },
       { rotate: `${rotate.value}deg` }
     ],
   }));
-  
+
   const handlePressIn = () => {
     scale.value = withSpring(0.9, { damping: 15, stiffness: 400 });
   };
-  
+
   const handlePressOut = () => {
     scale.value = withSpring(1, { damping: 15, stiffness: 400 });
   };
-  
+
   const handlePress = () => {
     const action = activeTab === 'chats' ? t('menu.newChat') : activeTab === 'workers' ? t('menu.newWorker') : t('menu.newTrigger');
     console.log('🎯 FAB pressed:', action);
     console.log('⏰ Timestamp:', new Date().toISOString());
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    // Rotate animation
+
     rotate.value = withSpring(rotate.value + 90, { damping: 15, stiffness: 400 });
-    
+
     if (activeTab === 'chats') onChatPress?.();
     else if (activeTab === 'workers') onWorkerPress?.();
     else if (activeTab === 'triggers') onTriggerPress?.();
   };
-  
-  // Get accessibility label based on active tab
+
   const getAccessibilityLabel = () => {
     const item = activeTab === 'chats' ? 'chat' : activeTab === 'workers' ? 'worker' : 'trigger';
     return t('actions.createNew', { item });
   };
-  
+
   const bgColor = colorScheme === 'dark' ? '#FFFFFF' : '#121215';
   const iconColor = colorScheme === 'dark' ? '#121215' : '#FFFFFF';
-  
+
   return (
     <AnimatedPressable
       onPress={handlePress}
@@ -337,7 +323,7 @@ function FloatingActionButton({ activeTab, onChatPress, onWorkerPress, onTrigger
       accessibilityRole="button"
       accessibilityLabel={getAccessibilityLabel()}
     >
-      <Icon 
+      <Icon
         as={Plus}
         size={26}
         color={iconColor}
@@ -410,6 +396,7 @@ export function MenuPage({
   const router = useRouter();
   const { agents } = useAgent();
   const { isEnabled: advancedFeaturesEnabled } = useAdvancedFeatures();
+  const { isGuestMode } = useGuestMode();
   const scrollY = useSharedValue(0);
   const profileScale = useSharedValue(1);
   const [isSettingsVisible, setIsSettingsVisible] = React.useState(false);
@@ -419,69 +406,69 @@ export function MenuPage({
   React.useEffect(() => {
     console.log('🔧 TriggerCreationDrawer visible changed to:', isTriggerDrawerVisible);
   }, [isTriggerDrawerVisible]);
-  
+
   const isGuest = !user;
-  
+
   // Fetch real threads from backend
   const { data: threads = [], isLoading: isLoadingThreads, error: threadsError } = useThreads();
-  
+
   // Transform threads to sections
   const sections = React.useMemo(() => {
     // If prop sections provided (for backwards compatibility), use those
     if (propSections && propSections.length > 0) {
       return propSections;
     }
-    
+
     // Otherwise, use real threads from backend
     if (threads && Array.isArray(threads) && threads.length > 0) {
       return groupThreadsByMonth(threads);
     }
-    
+
     return [];
   }, [propSections, threads]);
-  
+
   // Search functionality for different tabs
   const chatsSearchFields = React.useMemo(() => ['title', 'lastMessage'], []);
   const workersSearchFields = React.useMemo(() => ['name', 'description'], []);
   const triggersSearchFields = React.useMemo(() => ['name', 'description', 'agent_name', 'trigger_type'], []);
-  
+
   // Memoize conversations array to prevent infinite loops
-  const conversations = React.useMemo(() => 
-    sections.flatMap(section => section.conversations), 
+  const conversations = React.useMemo(() =>
+    sections.flatMap(section => section.conversations),
     [sections]
   );
-  
+
   const chatsSearch = useSearch(conversations, chatsSearchFields);
-  
+
   // Transform agents to have 'id' field for search
-  const searchableAgents = React.useMemo(() => 
-    agents.map(agent => ({ ...agent, id: agent.agent_id })), 
+  const searchableAgents = React.useMemo(() =>
+    agents.map(agent => ({ ...agent, id: agent.agent_id })),
     [agents]
   );
   const workersSearch = useSearch(searchableAgents, workersSearchFields);
-  
+
   // Transform results back to Agent type
-  const agentResults = React.useMemo(() => 
-    workersSearch.results.map(result => ({ ...result, agent_id: result.id })), 
+  const agentResults = React.useMemo(() =>
+    workersSearch.results.map(result => ({ ...result, agent_id: result.id })),
     [workersSearch.results]
   );
-  
+
   // Get triggers data
   const { data: triggers = [], isLoading: triggersLoading, error: triggersError, refetch: refetchTriggers } = useAllTriggers();
-  
+
   // Transform triggers to have 'id' field for search
-  const searchableTriggers = React.useMemo(() => 
-    triggers.map(trigger => ({ ...trigger, id: trigger.trigger_id })), 
+  const searchableTriggers = React.useMemo(() =>
+    triggers.map(trigger => ({ ...trigger, id: trigger.trigger_id })),
     [triggers]
   );
   const triggersSearch = useSearch(searchableTriggers, triggersSearchFields);
-  
+
   // Transform results back to TriggerWithAgent type
-  const triggerResults = React.useMemo(() => 
-    triggersSearch.results.map(result => ({ ...result, trigger_id: result.id })), 
+  const triggerResults = React.useMemo(() =>
+    triggersSearch.results.map(result => ({ ...result, trigger_id: result.id })),
     [triggersSearch.results]
   );
-  
+
   /**
    * Handle scroll event to track scroll position
    * Used for blur fade effect at bottom
@@ -490,7 +477,7 @@ export function MenuPage({
     'worklet';
     scrollY.value = event.nativeEvent.contentOffset.y;
   };
-  
+
   const profileAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: profileScale.value }],
   }));
@@ -511,7 +498,7 @@ export function MenuPage({
   const handleProfilePressOut = () => {
     profileScale.value = withSpring(1, { damping: 15, stiffness: 400 });
   };
-  
+
   /**
    * Handle settings drawer close
    */
@@ -546,9 +533,9 @@ export function MenuPage({
     // Refetch triggers to show the new one
     refetchTriggers();
   };
-  
+
   return (
-    <View 
+    <View
       className="flex-1 bg-background rounded-r-[24px] overflow-hidden"
       style={{
         shadowColor: '#000',
@@ -560,56 +547,60 @@ export function MenuPage({
     >
       <SafeAreaView edges={['top', 'bottom']} className="flex-1">
         <View className="flex-1 px-6 pt-2">
-          <View className="flex-row items-center justify-between mb-6">
-            <AnimatedPressable 
-              onPress={handleProfilePress}
-              onPressIn={handleProfilePressIn}
-              onPressOut={handleProfilePressOut}
+          <View className="mb-4 flex-row items-center gap-3">
+            <View className="flex-1">
+              {activeTab === 'chats' && (
+                <SearchBar
+                  value={chatsSearch.query}
+                  onChangeText={chatsSearch.updateQuery}
+                  placeholder={t('menu.searchConversations') || 'Search chats...'}
+                  onClear={chatsSearch.clearSearch}
+                />
+              )}
+              {activeTab === 'workers' && (
+                <SearchBar
+                  value={workersSearch.query}
+                  onChangeText={workersSearch.updateQuery}
+                  placeholder={t('placeholders.searchWorkers') || 'Search workers...'}
+                  onClear={workersSearch.clearSearch}
+                />
+              )}
+              {activeTab === 'triggers' && (
+                <SearchBar
+                  value={triggersSearch.query}
+                  onChangeText={triggersSearch.updateQuery}
+                  placeholder={t('placeholders.searchTriggers') || 'Search triggers...'}
+                  onClear={triggersSearch.clearSearch}
+                />
+              )}
+            </View>
+            <AnimatedPressable
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                if (activeTab === 'chats') onNewChat?.();
+                else if (activeTab === 'workers') onNewWorker?.();
+                else if (activeTab === 'triggers') handleTriggerCreate();
+              }}
+              onPressIn={() => {
+                profileScale.value = withSpring(0.9, { damping: 15, stiffness: 400 });
+              }}
+              onPressOut={() => {
+                profileScale.value = withSpring(1, { damping: 15, stiffness: 400 });
+              }}
               style={profileAnimatedStyle}
-              className="flex-row items-center gap-3"
+              className="w-11 h-11 rounded-[21px] bg-primary items-center justify-center"
             >
-              <ProfilePicture imageUrl={placeholderImageUrl} size={12} />
-              <View className="flex-col items-start -mt-1.5">
-                <Text className="text-lg font-roobert-semibold text-foreground">
-                  {profile.name || 'User'}
-                </Text>
-                <Text className="text-sm font-roobert text-muted-foreground">
-                  {profile.email || 'Tap to open settings'}
-                </Text>
-              </View>
+              <Icon
+                as={Plus}
+                size={20}
+                className="text-primary-foreground"
+                strokeWidth={2.5}
+              />
             </AnimatedPressable>
-            <BackButton onPress={onClose} />
           </View>
-          
-          <View className="mb-4">
-            {activeTab === 'chats' && (
-              <SearchBar
-                value={chatsSearch.query}
-                onChangeText={chatsSearch.updateQuery}
-                placeholder={t('menu.searchConversations') || 'Search chats...'}
-                onClear={chatsSearch.clearSearch}
-              />
-            )}
-            {activeTab === 'workers' && (
-              <SearchBar
-                value={workersSearch.query}
-                onChangeText={workersSearch.updateQuery}
-                placeholder={t('placeholders.searchWorkers') || 'Search workers...'}
-                onClear={workersSearch.clearSearch}
-              />
-            )}
-            {activeTab === 'triggers' && (
-              <SearchBar
-                value={triggersSearch.query}
-                onChangeText={triggersSearch.updateQuery}
-                placeholder={t('placeholders.searchTriggers') || 'Search triggers...'}
-                onClear={triggersSearch.clearSearch}
-              />
-            )}
-          </View>
-          
+
           <View className="flex-1 relative -mx-6">
-            <AnimatedScrollView 
+            <AnimatedScrollView
               className="flex-1"
               contentContainerClassName="px-6"
               showsVerticalScrollIndicator={false}
@@ -619,7 +610,21 @@ export function MenuPage({
             >
               {activeTab === 'chats' && (
                 <>
-                  {isLoadingThreads ? (
+                  {isGuestMode ? (
+                    <EmptyState
+                      type="empty"
+                      icon={MessageSquare}
+                      title="Sign up to save conversations"
+                      description="Create an account to keep your chat history and access it across devices"
+                      actionLabel="Sign Up"
+                      onActionPress={() => {
+                        useAuthDrawerStore.getState().openAuthDrawer({
+                          title: 'Sign up to continue',
+                          message: 'Create an account to save your conversations and access them from anywhere'
+                        });
+                      }}
+                    />
+                  ) : isLoadingThreads ? (
                     <EmptyState
                       type="loading"
                       icon={MessageSquare}
@@ -645,16 +650,16 @@ export function MenuPage({
                   ) : (
                     <View className="gap-8">
                       {sections.map((section) => {
-                        const filteredConversations = chatsSearch.isSearching 
-                          ? section.conversations.filter(conv => 
-                              chatsSearch.results.some(result => result.id === conv.id)
-                            )
+                        const filteredConversations = chatsSearch.isSearching
+                          ? section.conversations.filter(conv =>
+                            chatsSearch.results.some(result => result.id === conv.id)
+                          )
                           : section.conversations;
-                        
+
                         if (filteredConversations.length === 0 && chatsSearch.isSearching) {
                           return null;
                         }
-                        
+
                         return (
                           <ConversationSection
                             key={section.id}
@@ -666,25 +671,25 @@ export function MenuPage({
                           />
                         );
                       })}
-                      
-                      {chatsSearch.isSearching && 
-                       sections.every(section => 
-                         !section.conversations.some(conv => 
-                           chatsSearch.results.some(result => result.id === conv.id)
-                         )
-                       ) && (
-                        <EmptyState
-                          type="no-results"
-                          icon={Search}
-                          title={t('emptyStates.noResults') || 'No results'}
-                          description={t('emptyStates.tryDifferentSearch') || 'Try a different search term'}
-                        />
-                      )}
+
+                      {chatsSearch.isSearching &&
+                        sections.every(section =>
+                          !section.conversations.some(conv =>
+                            chatsSearch.results.some(result => result.id === conv.id)
+                          )
+                        ) && (
+                          <EmptyState
+                            type="no-results"
+                            icon={Search}
+                            title={t('emptyStates.noResults') || 'No results'}
+                            description={t('emptyStates.tryDifferentSearch') || 'Try a different search term'}
+                          />
+                        )}
                     </View>
                   )}
                 </>
               )}
-              
+
               {activeTab === 'workers' && (
                 <>
                   {agentResults.length === 0 && !workersSearch.isSearching ? (
@@ -714,7 +719,7 @@ export function MenuPage({
                   )}
                 </>
               )}
-              
+
               {activeTab === 'triggers' && (
                 <>
                   {triggersLoading ? (
@@ -759,8 +764,8 @@ export function MenuPage({
                 </>
               )}
             </AnimatedScrollView>
-            
-            <View 
+
+            <View
               className="absolute bottom-0 left-0 right-0 pointer-events-none"
               style={{ height: 70 }}
             >
@@ -768,21 +773,21 @@ export function MenuPage({
                 colors={
                   colorScheme === 'dark'
                     ? [
-                        'rgba(18, 18, 21, 0)',
-                        'rgba(18, 18, 21, 0.2)',
-                        'rgba(18, 18, 21, 0.5)',
-                        'rgba(18, 18, 21, 0.8)',
-                        'rgba(18, 18, 21, 0.95)',
-                        '#121215'
-                      ]
+                      'rgba(18, 18, 21, 0)',
+                      'rgba(18, 18, 21, 0.2)',
+                      'rgba(18, 18, 21, 0.5)',
+                      'rgba(18, 18, 21, 0.8)',
+                      'rgba(18, 18, 21, 0.95)',
+                      '#121215'
+                    ]
                     : [
-                        'rgba(248, 248, 248, 0)',
-                        'rgba(248, 248, 248, 0.2)',
-                        'rgba(248, 248, 248, 0.5)',
-                        'rgba(248, 248, 248, 0.8)',
-                        'rgba(248, 248, 248, 0.95)',
-                        '#F8F8F8'
-                      ]
+                      'rgba(248, 248, 248, 0)',
+                      'rgba(248, 248, 248, 0.2)',
+                      'rgba(248, 248, 248, 0.5)',
+                      'rgba(248, 248, 248, 0.8)',
+                      'rgba(248, 248, 248, 0.95)',
+                      '#F8F8F8'
+                    ]
                 }
                 locations={[0, 0.2, 0.4, 0.6, 0.8, 1]}
                 style={{ flex: 1 }}
@@ -790,21 +795,48 @@ export function MenuPage({
             </View>
           </View>
         </View>
-        
-        <View className="px-6 pb-4">
-          {advancedFeaturesEnabled ? (
+
+        <View className="px-6 pb-0 gap-4">
+          <AnimatedPressable
+            onPress={handleProfilePress}
+            onPressIn={handleProfilePressIn}
+            onPressOut={handleProfilePressOut}
+            style={profileAnimatedStyle}
+            className="flex-row items-center gap-3 border border-border p-3 rounded-2xl"
+          >
+            <ProfilePicture imageUrl={placeholderImageUrl} size={12} />
+            <View className="flex-col items-start -mt-1.5">
+              <Text className="text-lg font-roobert-semibold text-foreground">
+                {profile.name || 'User'}
+              </Text>
+              {profile.planName ? (
+                <View className="flex-row items-center gap-2">
+                  <TierBadge planName={profile.planName} size="sm" variant="default" />
+                </View>
+              ) : (
+                <Text className="text-sm font-roobert text-muted-foreground">
+                  {profile.email || 'Tap to open settings'}
+                </Text>
+              )}
+            </View>
+            <Icon
+              as={ChevronsUpDown}
+              size={20}
+              className="text-muted-foreground ml-auto"
+              strokeWidth={2}
+            />
+          </AnimatedPressable>
+          {advancedFeaturesEnabled && (
             <BottomNav
               activeTab={activeTab}
               onChatsPress={onChatsPress}
               onWorkersPress={onWorkersPress}
               onTriggersPress={onTriggersPress}
             />
-          ) : (
-            <NewChatButton onPress={onNewChat} />
           )}
         </View>
       </SafeAreaView>
-      
+
       {/* Settings Page */}
       <AnimatedPageWrapper visible={isSettingsVisible} onClose={handleCloseSettings}>
         <SettingsPage
@@ -813,7 +845,7 @@ export function MenuPage({
           onClose={handleCloseSettings}
         />
       </AnimatedPageWrapper>
-      
+
       {/* Floating Action Button */}
       {advancedFeaturesEnabled && (
         <FloatingActionButton

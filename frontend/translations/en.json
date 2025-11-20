@@ -85,7 +85,7 @@
       }
     },
     "billing": {
-      "title": "Billing Status",
+      "title": "Billing & Subscription",
       "description": "Manage your credits and subscription",
       "totalCredits": "Total Available Credits",
       "allCredits": "All credits",
@@ -111,7 +111,12 @@
       "keepSubscription": "Keep Subscription",
       "cancelling": "Cancelling...",
       "localMode": "Local Mode Active",
-      "localModeDescription": "All premium features are available in this environment"
+      "localModeDescription": "All premium features are available in this environment",
+      "insufficientCredits": "Insufficient credits",
+      "insufficientCreditsMessage": "Billing check failed: Insufficient credits. Your balance is {balance}. Please add credits to continue.",
+      "creditsExhausted": "You ran out of credits. Upgrade now.",
+      "billingCheckFailed": "Billing check failed. Please upgrade to continue.",
+      "failedToStartAgent": "Failed to start agent {agentName}: {message}"
     },
     "usage": {
       "title": "Usage"
@@ -200,6 +205,7 @@
     "eventBasedTrigger": "Event-based Trigger",
     "eventBasedTriggerDescription": "Make a trigger to run when an event occurs",
     "noChatsFound": "No chats found",
+    "noConversations": "No chats yet",
     "search": "Search",
     "searchPlaceholder": "Search...",
     "searchResults": "Search Results",
@@ -213,7 +219,24 @@
     "adminPanel": "Admin Panel",
     "apiKeys": "API Keys",
     "envManager": "Env Manager",
-    "advanced": "Advanced"
+    "advanced": "Advanced",
+    "plan": "Plan",
+    "knowledgeBase": "Knowledge Base",
+    "conversation": "Conversation",
+    "conversations": "Conversations",
+    "startNewChat": "Start a new chat",
+    "openInNewTab": "Open in new tab",
+    "delete": "Delete",
+    "deleting": "Deleting",
+    "allThreadsLoaded": "All threads loaded",
+    "myWorkforce": "My Workforce",
+    "addTeam": "Add Team",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
+    "selectAllConversations": "Select all conversations",
+    "deselectAllConversations": "Deselect all conversations",
+    "loadMore": "Load more",
+    "remaining": "remaining"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -225,7 +248,7 @@
     "customWorkers": "Custom Workers",
     "scheduledTriggers": "Scheduled Triggers",
     "appTriggers": "App Triggers",
-    "limitsExceeded": "You ran out of limits. Upgrade your plan to chat more.",
+    "limitsExceeded": "You've reached your chat limit ({current}/{limit}). Upgrade your plan to create more chats.",
     "agentInitiatedSuccessfully": "Agent initiated successfully",
     "aiAssistantReady": "Your AI assistant is ready to help"
   },
@@ -240,6 +263,10 @@
     "autonomousDescription": "Deep work mode for multi-step problem solving",
     "chat": "Chat",
     "chatDescription": "Simple back-and-forth conversation",
+    "sampleAnswers": "Sample answers",
+    "samplePrompts": "Sample prompts",
+    "waitingForUserResponse": "Kortix will proceed to work autonomously after you answer.",
+    "taskCompleted": "Task completed",
     "uploadingFiles": "Uploading {count} file{plural}...",
     "uploadingFilesOne": "Uploading {count} file...",
     "uploadingFilesMany": "Uploading {count} files...",
@@ -258,7 +285,15 @@
     "noActionsYet": "No actions yet",
     "workerActionsDescription": "Worker actions and results will appear here as they execute",
     "toolIsRunning": "Tool is running",
-    "toolCurrentlyExecuting": "{toolName} is currently executing. Results will appear here when complete."
+    "toolCurrentlyExecuting": "{toolName} is currently executing. Results will appear here when complete.",
+    "rateThisResult": "Rate this result",
+    "feedbackHelpsImprove": "Your feedback helps us improve",
+    "additionalFeedbackOptional": "Additional feedback (optional)",
+    "helpKortixImprove": "Help Kortix improve with the feedback",
+    "submit": "Submit",
+    "submitting": "Submitting...",
+    "feedbackSubmittedSuccess": "Feedback submitted successfully",
+    "feedbackSubmitFailed": "Failed to submit feedback"
   },
   "agents": {
     "title": "Agents",
@@ -283,7 +318,7 @@
     "placeholder": "Type your message..."
   },
   "billing": {
-    "title": "Billing",
+    "title": "Billing & Subscription",
     "subscription": "Subscription",
     "credits": "Credits",
     "popular": "Popular",
@@ -294,7 +329,7 @@
     "currentBadge": "Current",
     "scheduled": "Scheduled",
     "scheduledBadge": "Scheduled",
-    "loading": "Loading...",
+    "loading": "Loading billing information...",
     "subscriptionChangeScheduled": "Subscription change scheduled",
     "planWillChangeOn": "Your plan will change on {date}.",
     "failedToInitiateSubscription": "Failed to initiate subscription. Please try again.",
@@ -406,35 +441,35 @@
   },
   "auth": {
     "logIntoAccount": "Log into your account",
-    "createAccount": "Create your account",
+    "createAccount": "Create account",
     "continueWithGoogle": "Continue with Google",
     "continueWithGitHub": "Continue with GitHub",
     "orEmail": "or email",
     "emailAddress": "Email address",
     "password": "Password",
-    "confirmPassword": "Confirm password",
+    "confirmPassword": "Confirm your password",
     "signIn": "Sign in",
     "signUp": "Sign up",
     "signingIn": "Signing in...",
     "creatingAccount": "Creating account...",
     "forgotPassword": "Forgot password?",
-    "dontHaveAccount": "Don't have an account? Sign up",
-    "alreadyHaveAccount": "Already have an account? Sign in",
+    "dontHaveAccount": "Don't have an account?",
+    "alreadyHaveAccount": "Already have an account?",
     "acceptPrivacyTerms": "I accept the <privacyPolicy>Privacy Policy</privacyPolicy> and <termsOfService>Terms of Service</termsOfService>",
     "privacyPolicy": "Privacy Policy",
     "termsOfService": "Terms of Service",
     "checkYourEmail": "Check your email",
-    "confirmationLinkSent": "We've sent a confirmation link to:",
+    "confirmationLinkSent": "We sent a reset link to",
     "clickLinkToActivate": "Click the link in the email to activate your account. If you don't see the email, check your spam folder.",
     "returnToHome": "Return to home",
     "backToSignIn": "Back to sign in",
-    "resetPassword": "Reset Password",
-    "resetPasswordDescription": "Enter your email address and we'll send you a link to reset your password.",
-    "sendResetLink": "Send Reset Link",
+    "resetPassword": "Reset password",
+    "resetPasswordDescription": "Enter your email and we'll send you a reset link",
+    "sendResetLink": "Send link",
     "cancel": "Cancel",
     "pleaseEnterValidEmail": "Please enter a valid email address",
-    "signInFailed": "Login failed",
-    "signUpFailed": "Sign up failed"
+    "signInFailed": "Sign in failed. Check your credentials.",
+    "signUpFailed": "Sign up failed. Please try again."
   },
   "onboarding": {
     "welcome": "Welcome",
@@ -564,7 +599,12 @@
   "languages": {
     "en": "English",
     "de": "Deutsch",
-    "it": "Italiano"
+    "it": "Italiano",
+    "zh": "中文",
+    "ja": "日本語",
+    "pt": "Português",
+    "fr": "Français",
+    "es": "Español"
   },
   "suna": {
     "samplePrompts": "Sample prompts",

@@ -171,7 +171,7 @@ Welcome to Machine — we're excited to have you on board!
 
 To get started, we'd like to get to know you better: fill out this short form!
 
-To celebrate your arrival, here's a 15% discount for your first month to get more usage:
+To celebrate your arrival, here's a 15% discount for your first month:
 🎁 Use code WELCOME15 at checkout.
 
 Let us know if you need help getting started or have questions — we're always here, and join our Discord community: 

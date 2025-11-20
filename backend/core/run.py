@@ -66,6 +66,9 @@ class ToolManager:
         """
         disabled_tools = disabled_tools or []
         
+        # Migrate tool config ONCE at the start to avoid repeated expensive operations
+        self.migrated_tools = self._get_migrated_tools_config()
+        
         # Core tools - always enabled
         self._register_core_tools()
         
@@ -301,19 +304,26 @@ class ToolManager:
             if enabled_methods:
                 logger.debug(f"✅ Registered browser_tool with methods: {enabled_methods}")
     
-    def _get_enabled_methods_for_tool(self, tool_name: str) -> Optional[List[str]]:
+    def _get_migrated_tools_config(self) -> dict:
+        """Migrate tool config once and cache it. This is expensive so we only do it once."""
         if not self.agent_config or 'agentpress_tools' not in self.agent_config:
-            return None
+            return {}
         
-        from core.utils.tool_discovery import get_enabled_methods_for_tool
         from core.utils.tool_migration import migrate_legacy_tool_config
         
         raw_tools = self.agent_config['agentpress_tools']
         
         if not isinstance(raw_tools, dict):
+            return {}
+        
+        return migrate_legacy_tool_config(raw_tools)
+    
+    def _get_enabled_methods_for_tool(self, tool_name: str) -> Optional[List[str]]:
+        """Get enabled methods for a tool using the pre-migrated config."""
+        if not hasattr(self, 'migrated_tools') or not self.migrated_tools:
             return None
         
-        migrated_tools = migrate_legacy_tool_config(raw_tools)
+        from core.utils.tool_discovery import get_enabled_methods_for_tool
         
         # SAFEGUARD: Always get all methods for avatar tool if it's enabled
         if tool_name == 'sb_avatar_tool':
@@ -384,7 +394,7 @@ class ToolManager:
             else:
                 logger.info(f"📚 SAFEGUARD: Paper Search tool explicitly DISABLED in config")
         
-        return get_enabled_methods_for_tool(tool_name, migrated_tools)
+        return get_enabled_methods_for_tool(tool_name, self.migrated_tools)
 
 class MCPManager:
     def __init__(self, thread_manager: ThreadManager, account_id: str):
@@ -690,6 +700,9 @@ class AgentRunner:
         
         disabled_tools = self._get_disabled_tools_from_config()
         
+        # Cache migrated tools config once for use in AgentRun methods
+        self.migrated_tools = self._get_migrated_tools_config()
+        
         tool_manager.register_all_tools(agent_id=agent_id, disabled_tools=disabled_tools)
         
         is_suna_agent = (self.config.agent_config and self.config.agent_config.get('is_suna_default', False)) or (self.config.agent_config is None)
@@ -701,19 +714,26 @@ class AgentRunner:
         else:
             logger.debug("Not a Suna agent, skipping Suna-specific tool registration")
     
-    def _get_enabled_methods_for_tool(self, tool_name: str) -> Optional[List[str]]:
+    def _get_migrated_tools_config(self) -> dict:
+        """Migrate tool config once and cache it. This is expensive so we only do it once."""
         if not self.config.agent_config or 'agentpress_tools' not in self.config.agent_config:
-            return None
+            return {}
         
-        from core.utils.tool_discovery import get_enabled_methods_for_tool
         from core.utils.tool_migration import migrate_legacy_tool_config
         
         raw_tools = self.config.agent_config['agentpress_tools']
         
         if not isinstance(raw_tools, dict):
+            return {}
+        
+        return migrate_legacy_tool_config(raw_tools)
+    
+    def _get_enabled_methods_for_tool(self, tool_name: str) -> Optional[List[str]]:
+        """Get enabled methods for a tool using the pre-migrated config."""
+        if not hasattr(self, 'migrated_tools') or not self.migrated_tools:
             return None
         
-        migrated_tools = migrate_legacy_tool_config(raw_tools)
+        from core.utils.tool_discovery import get_enabled_methods_for_tool
         
         # SAFEGUARD: Always get all methods for avatar tool if it's enabled
         if tool_name == 'sb_avatar_tool':
@@ -734,7 +754,7 @@ class AgentRunner:
             else:
                 logger.info(f"🎬 SAFEGUARD (AgentRunner): Avatar tool explicitly DISABLED in config")
         
-        return get_enabled_methods_for_tool(tool_name, migrated_tools)
+        return get_enabled_methods_for_tool(tool_name, self.migrated_tools)
     
     def _register_suna_specific_tools(self, disabled_tools: List[str]):
         if 'agent_creation_tool' not in disabled_tools:
@@ -982,7 +1002,7 @@ class AgentRunner:
                             generation.end(status_message="error_detected", level="ERROR")
                         break
                         
-                    if agent_should_terminate or last_tool_call in ['ask', 'complete', 'present_presentation']:
+                    if agent_should_terminate or last_tool_call in ['ask', 'complete']:
                         if generation:
                             generation.end(status_message="agent_stopped")
                         continue_execution = False
