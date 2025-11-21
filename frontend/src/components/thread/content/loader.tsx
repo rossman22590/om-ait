@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 
-const TEXTS = ["Thinking", "Planning", "Strategising", "Analyzing", "Processing"];
+const TEXTS = [
+  "Dreaming up solutions...",
+  "Mapping the next move...",
+  "Connecting the dots...",
+  "Exploring new ideas...",
+  "Crafting your response...",
+  "Unlocking insights...",
+  "Building possibilities...",
+  "Weaving intelligence...",
+  "Solving the puzzle...",
+  "Lighting the way forward..."
+];
 const TYPE_DELAY = 100;
 const ERASE_DELAY = 50;
 const PAUSE_DELAY = 1000;
