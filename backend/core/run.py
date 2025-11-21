@@ -327,7 +327,7 @@ class ToolManager:
         
         # SAFEGUARD: Always get all methods for avatar tool if it's enabled
         if tool_name == 'sb_avatar_tool':
-            avatar_config = migrated_tools.get('sb_avatar_tool')
+            avatar_config = self.migrated_tools.get('sb_avatar_tool')
             if AVATAR_TOOL_DEBUG:
                 logger.debug(f"🎬 SAFEGUARD: Avatar tool config before get_enabled_methods: {avatar_config}")
             
@@ -350,7 +350,7 @@ class ToolManager:
         
         # SAFEGUARD: Always get all methods for vapi_voice_tool if it's enabled
         if tool_name == 'vapi_voice_tool':
-            vapi_config = migrated_tools.get('vapi_voice_tool')
+            vapi_config = self.migrated_tools.get('vapi_voice_tool')
             if AVATAR_TOOL_DEBUG:
                 logger.debug(f"📞 SAFEGUARD: Vapi tool config before get_enabled_methods: {vapi_config}")
             
@@ -373,7 +373,7 @@ class ToolManager:
         
         # SAFEGUARD: Always get all methods for paper_search_tool if it's enabled
         if tool_name == 'paper_search_tool':
-            paper_config = migrated_tools.get('paper_search_tool')
+            paper_config = self.migrated_tools.get('paper_search_tool')
             if AVATAR_TOOL_DEBUG:
                 logger.debug(f"📚 SAFEGUARD: Paper Search tool config before get_enabled_methods: {paper_config}")
             
@@ -737,7 +737,7 @@ class AgentRunner:
         
         # SAFEGUARD: Always get all methods for avatar tool if it's enabled
         if tool_name == 'sb_avatar_tool':
-            avatar_config = migrated_tools.get('sb_avatar_tool')
+            avatar_config = self.migrated_tools.get('sb_avatar_tool')
             logger.info(f"🎬 SAFEGUARD (AgentRunner): Avatar tool config: {avatar_config}")
             
             # If avatar tool is enabled in any way, force all methods
