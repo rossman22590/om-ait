@@ -188,6 +188,9 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
   const availableMCPs = configuredMCPs.filter(mcp => mcp.isAvailable);
   
   const composioMCPs = configuredMCPs_filtered.filter(mcp => mcp.customType === 'composio');
+  const otherConfiguredMCPs = configuredMCPs_filtered.filter(
+    mcp => mcp.customType !== 'composio' && mcp.customType !== 'pipedream'
+  );
   const availableComposioMCPs = availableMCPs.filter(mcp => mcp.customType === 'composio');
 
   const renderMCPs = (mcps: MCPConfiguration[], title?: string) => {
@@ -222,6 +225,7 @@ export const ConfiguredMcpList: React.FC<ConfiguredMcpListProps> = ({
     <>
       <div className="space-y-8 w-full overflow-hidden">
         {renderMCPs(composioMCPs, composioMCPs.length > 0 ? 'Composio Integrations' : undefined)}
+        {renderMCPs(otherConfiguredMCPs, otherConfiguredMCPs.length > 0 ? 'Other Integrations' : undefined)}
         
         {/* Available integrations section */}
         {availableMCPs.length > 0 && (
