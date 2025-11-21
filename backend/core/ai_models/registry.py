@@ -39,8 +39,8 @@ class ModelRegistry:
                 ModelCapability.THINKING,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=3.00,
-                output_cost_per_million_tokens=15.00
+                input_cost_per_million_tokens=3.00 * pricing_multiplier,
+                output_cost_per_million_tokens=15.00 * pricing_multiplier
             ),
             tier_availability=["paid"],
             priority=102,
@@ -95,8 +95,8 @@ class ModelRegistry:
                 ModelCapability.FUNCTION_CALLING,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=0.20,
-                output_cost_per_million_tokens=0.50
+                input_cost_per_million_tokens=0.20 * pricing_multiplier,
+                output_cost_per_million_tokens=0.50 * pricing_multiplier
             ),
             tier_availability=["paid"],
             priority=98,
@@ -115,8 +115,8 @@ class ModelRegistry:
                 ModelCapability.FUNCTION_CALLING,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=0.50,
-                output_cost_per_million_tokens=1.50
+                input_cost_per_million_tokens=0.50 * pricing_multiplier,
+                output_cost_per_million_tokens=1.50 * pricing_multiplier
             ),
             tier_availability=["paid"],
             priority=92,
@@ -144,8 +144,8 @@ class ModelRegistry:
                 ModelCapability.STRUCTURED_OUTPUT,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=1.25,
-                output_cost_per_million_tokens=10.00
+                input_cost_per_million_tokens=1.25 * pricing_multiplier,
+                output_cost_per_million_tokens=10.00 * pricing_multiplier
             ),
             tier_availability=["paid"],
             priority=97,
@@ -165,8 +165,8 @@ class ModelRegistry:
                 ModelCapability.STRUCTURED_OUTPUT,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=1.25,
-                output_cost_per_million_tokens=10.00
+                input_cost_per_million_tokens=1.25 * pricing_multiplier,
+                output_cost_per_million_tokens=10.00 * pricing_multiplier
             ),
             tier_availability=["paid"],
             priority=96,
@@ -192,8 +192,8 @@ class ModelRegistry:
                 ModelCapability.STRUCTURED_OUTPUT,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=1.25,
-                output_cost_per_million_tokens=10.00
+                input_cost_per_million_tokens=1.25 * pricing_multiplier,
+                output_cost_per_million_tokens=10.00 * pricing_multiplier
             ),
             tier_availability=["paid"],
             priority=96,
@@ -213,8 +213,8 @@ class ModelRegistry:
                 ModelCapability.STRUCTURED_OUTPUT,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=0.25,
-                output_cost_per_million_tokens=2.00
+                input_cost_per_million_tokens=0.25 * pricing_multiplier,
+                output_cost_per_million_tokens=2.00 * pricing_multiplier
             ),
             tier_availability=["free", "paid"],
             priority=96,
@@ -234,8 +234,8 @@ class ModelRegistry:
                 ModelCapability.STRUCTURED_OUTPUT,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=0.10,
-                output_cost_per_million_tokens=0.80
+                input_cost_per_million_tokens=0.10 * pricing_multiplier,
+                output_cost_per_million_tokens=0.80 * pricing_multiplier
             ),
             tier_availability=["free", "paid"],
             priority=95,
@@ -256,8 +256,8 @@ class ModelRegistry:
                 ModelCapability.STRUCTURED_OUTPUT,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=1.25,
-                output_cost_per_million_tokens=10.00
+                input_cost_per_million_tokens=1.25 * pricing_multiplier,
+                output_cost_per_million_tokens=10.00 * pricing_multiplier
             ),
             tier_availability=["paid"],
             priority=95,
@@ -311,8 +311,8 @@ class ModelRegistry:
                 ModelCapability.FUNCTION_CALLING,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=1.00,
-                output_cost_per_million_tokens=3.00
+                input_cost_per_million_tokens=1.00 * pricing_multiplier,
+                output_cost_per_million_tokens=3.00 * pricing_multiplier
             ),
             tier_availability=["free", "paid"],
             priority=94,
@@ -338,8 +338,8 @@ class ModelRegistry:
                 ModelCapability.THINKING,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=1.50,
-                output_cost_per_million_tokens=6.00
+                input_cost_per_million_tokens=1.50 * pricing_multiplier,
+                output_cost_per_million_tokens=6.00 * pricing_multiplier
             ),
             tier_availability=["paid"],
             priority=94,
@@ -364,8 +364,8 @@ class ModelRegistry:
                 ModelCapability.FUNCTION_CALLING,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=0.50,
-                output_cost_per_million_tokens=1.75
+                input_cost_per_million_tokens=0.50 * pricing_multiplier,
+                output_cost_per_million_tokens=1.75 * pricing_multiplier
             ),
             tier_availability=["paid"],
             priority=94,
@@ -390,8 +390,8 @@ class ModelRegistry:
                 ModelCapability.FUNCTION_CALLING,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=0.60,
-                output_cost_per_million_tokens=2.00
+                input_cost_per_million_tokens=0.60 * pricing_multiplier,
+                output_cost_per_million_tokens=2.00 * pricing_multiplier
             ),
             tier_availability=["paid"],
             priority=93,
