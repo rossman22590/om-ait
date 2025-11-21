@@ -1,17 +1,33 @@
 'use client';
 
-import { createMutationHook } from "@/hooks/use-query";
-import { getProjects, Project } from "@/lib/api/projects";
-import { getThreads, Thread } from "@/lib/api/threads";
+import { Project } from "@/lib/api/projects";
 import { createQueryHook } from '@/hooks/use-query';
+import { getThreads, Thread } from "@/lib/api/threads";
 import { threadKeys } from "./keys";
 import { projectKeys } from "./keys";
 
 export const useProjects = createQueryHook(
   projectKeys.lists(),
   async () => {
-    const data = await getProjects();
-    return data as Project[];
+    const data = await getThreads();
+    const map = new Map<string, Project>();
+    (data as Thread[]).forEach((t: any) => {
+      if (t.project && t.project.project_id) {
+        const p = t.project;
+        const mapped: Project = {
+          id: p.project_id,
+          name: p.name || '',
+          description: p.description || '',
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+          sandbox: p.sandbox || {},
+          is_public: p.is_public,
+          icon_name: p.icon_name ?? null,
+        } as Project;
+        map.set(mapped.id, mapped);
+      }
+    });
+    return Array.from(map.values());
   },
   {
     staleTime: 5 * 60 * 1000,

@@ -66,8 +66,8 @@ import { formatDateForList } from '@/lib/utils/date-formatting';
 import { Thread, getThreadsPaginated, type ThreadsResponse } from '@/lib/api/threads';
 import { useThreads } from '@/hooks/threads/use-threads';
 import { useTranslations } from 'next-intl';
-import { useMemo } from 'react';
 import { Project } from '@/lib/api/projects';
+import { useUpdateProject } from '@/hooks/threads/use-project';
 
 // Component for date group headers
 const DateGroupHeader: React.FC<{ dateGroup: string; count: number }> = ({ dateGroup, count }) => {
@@ -238,7 +238,7 @@ const ThreadItem: React.FC<{
     );
   };
 
-export function NavAgents() {
+export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
   const t = useTranslations('sidebar');
   const { isMobile, state, setOpenMobile } = useSidebar()
   const [loadingThreadId, setLoadingThreadId] = useState<string | null>(null)
@@ -261,6 +261,21 @@ export function NavAgents() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
   const [renamingThreadId, setRenamingThreadId] = useState<string | null>(null);
   const [newThreadName, setNewThreadName] = useState<string>('');
+
+  const defaultOpenSearch = () => {
+    try {
+      const el = document.getElementById('sidebar-search-input') || document.getElementById('global-search-input');
+      if (el && 'focus' in el) {
+        (el as HTMLInputElement).focus();
+        return;
+      }
+      const evt = new KeyboardEvent('keydown', { key: 'k', metaKey: true });
+      document.dispatchEvent(evt);
+    } catch {
+      // no-op
+    }
+  };
+  const handleOpenSearch = onOpenSearch ?? defaultOpenSearch;
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -797,7 +812,7 @@ export function NavAgents() {
             </div>
           ) : (
             <button
-              onClick={onOpenSearch}
+              onClick={handleOpenSearch}
               className="w-full px-2.5 pt-5 mb-1 flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
             >
               <span>Search</span>

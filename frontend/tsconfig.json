@@ -31,7 +31,8 @@
       "@/*": [
         "./src/*"
       ]
-    }
+    },
+    "strictNullChecks": false
   },
   "include": [
     "**/*.ts",
