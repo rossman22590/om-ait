@@ -159,7 +159,7 @@ const PanelHeader = memo(function PanelHeader({
   showMinimize = false,
   layoutId,
 }: PanelHeaderProps) {
-  const title = agentName ? `${agentName}'s Computer` : "Suna's Computer";
+  const title = agentName ? `${agentName}'s Computer` : "Machine's Computer";
   
   if (variant === 'drawer') {
     return (
