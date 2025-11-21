@@ -40,7 +40,26 @@ class SubscriptionService:
             .execute()
         
         if customer_result.data:
-            return customer_result.data[0]['id']
+            customer_id = customer_result.data[0]['id']
+            try:
+                await StripeAPIWrapper.safe_stripe_call(
+                    stripe.Customer.retrieve_async,
+                    customer_id
+                )
+                logger.info(f"[BILLING] Found existing Stripe customer {customer_id} for account {account_id}")
+                return customer_id
+            except stripe.error.InvalidRequestError as e:
+                if 'No such customer' in str(e):
+                    logger.warning(f"[BILLING] Customer {customer_id} not found in Stripe, deleting stale record and creating new customer")
+                    await client.schema('basejump').from_('billing_customers')\
+                        .delete()\
+                        .eq('account_id', account_id)\
+                        .execute()
+                else:
+                    raise
+            except Exception as e:
+                logger.error(f"[BILLING] Error verifying customer {customer_id}: {e}")
+                raise
         
         account_result = await client.schema('basejump').from_('accounts')\
             .select('id, name, personal_account, primary_owner_user_id')\
@@ -679,6 +698,7 @@ class SubscriptionService:
                 f"by {guard_check.data.get('processed_by')}. Will only update metadata, no credit grants."
             )
             await self._update_subscription_metadata_only(account_id, subscription, price_id, client)
+            await Cache.invalidate(f"subscription_tier:{account_id}")
             return
 
         current_account = await client.from_('credit_accounts').select(
@@ -837,6 +857,7 @@ class SubscriptionService:
                     'next_credit_grant': datetime.fromtimestamp(subscription['current_period_end'], tz=timezone.utc).isoformat()
                 }).eq('account_id', account_id).execute()
                 logger.info(f"[RENEWAL BLOCK] Updated subscription metadata only (no credits granted)")
+            await Cache.invalidate(f"subscription_tier:{account_id}")
             return
         
         await self._track_commitment_if_needed(account_id, price_id, subscription, client)
@@ -844,6 +865,7 @@ class SubscriptionService:
         new_tier_info = get_tier_by_price_id(price_id)
         if not new_tier_info:
             logger.warning(f"Unknown price ID in subscription: {price_id}")
+            await Cache.invalidate(f"subscription_tier:{account_id}")
             return
         
         new_tier = {
@@ -857,6 +879,7 @@ class SubscriptionService:
                 logger.info(f"[SUBSCRIPTION] Trial already converted for {account_id}, processing as regular subscription")
             else:
                 await self._handle_trial_subscription(subscription, account_id, new_tier, client)
+                await Cache.invalidate(f"subscription_tier:{account_id}")
                 return
         
         next_grant_date = datetime.fromtimestamp(subscription['current_period_end'], tz=timezone.utc)
@@ -877,12 +900,14 @@ class SubscriptionService:
             if current_trial_status == 'cancelled' and subscription.status == 'active' and not old_subscription_id:
                 logger.info(f"[SUBSCRIPTION] User {account_id} with cancelled trial is subscribing - treating as new subscription")
                 await self._grant_initial_subscription_credits(account_id, new_tier, billing_anchor, subscription, client)
+                await Cache.invalidate(f"subscription_tier:{account_id}")
                 return
             
             # Check if invoice webhook already handled this period
             if last_renewal_period_start and last_renewal_period_start == subscription.get('current_period_start'):
                 logger.warning(f"[DOUBLE CREDIT BLOCK] Invoice webhook already processed period {subscription.get('current_period_start')}")
                 logger.warning(f"[DOUBLE CREDIT BLOCK] NO credits will be granted via subscription.updated - RETURNING")
+                await Cache.invalidate(f"subscription_tier:{account_id}")
                 return
             
             # Additional check using last_grant_date as fallback
@@ -893,6 +918,7 @@ class SubscriptionService:
                     if abs((billing_anchor - last_grant_dt).total_seconds()) < 60:
                         logger.warning(f"[DOUBLE CREDIT BLOCK] Credits recently granted at period start - likely duplicate")
                         logger.warning(f"[DOUBLE CREDIT BLOCK] Last grant: {last_grant_dt}, Period: {billing_anchor}")
+                        await Cache.invalidate(f"subscription_tier:{account_id}")
                         return
                 except:
                     pass
@@ -906,12 +932,14 @@ class SubscriptionService:
                     if time_since_last_grant < 900 and current_tier_name == new_tier['name']:
                         logger.warning(f"[DOUBLE CREDIT BLOCK] Credits granted {time_since_last_grant:.0f}s ago for tier {new_tier['name']}")
                         logger.warning(f"[DOUBLE CREDIT BLOCK] This is too recent - BLOCKING duplicate credit grant")
+                        await Cache.invalidate(f"subscription_tier:{account_id}")
                         return
                     
                     # Check if credits align with billing period (likely a renewal)
                     if abs((billing_anchor - last_grant_dt).total_seconds()) < 900:
                         logger.warning(f"[DOUBLE CREDIT BLOCK] Credits already granted near billing period start")
                         logger.warning(f"[DOUBLE CREDIT BLOCK] Last grant: {last_grant_dt}, Period: {billing_anchor} - BLOCKING")
+                        await Cache.invalidate(f"subscription_tier:{account_id}")
                         return
                 except Exception as e:
                     logger.warning(f"Error parsing dates for idempotency check: {e}")
@@ -937,6 +965,7 @@ class SubscriptionService:
                     'billing_cycle_anchor': billing_anchor.isoformat(),
                     'next_credit_grant': next_grant_date.isoformat()
                 }).eq('account_id', account_id).execute()
+                await Cache.invalidate(f"subscription_tier:{account_id}")
                 return
             
             should_grant_credits = self._should_grant_credits(current_tier_name, current_tier, new_tier, subscription, old_subscription_id, is_renewal)
@@ -960,6 +989,11 @@ class SubscriptionService:
         else:
             logger.warning(f"[SUBSCRIPTION] No existing credit account found for {account_id} - creating initial subscription (may indicate new user or data issue)")
             await self._grant_initial_subscription_credits(account_id, new_tier, billing_anchor, subscription, client)
+        
+        await Cache.invalidate(f"subscription_tier:{account_id}")
+        await Cache.invalidate(f"credit_balance:{account_id}")
+        await Cache.invalidate(f"credit_summary:{account_id}")
+        await Cache.invalidate(f"project_count_limit:{account_id}")
 
     async def _handle_trial_subscription(self, subscription, account_id, new_tier, client):
         if not subscription.get('trial_end'):
@@ -1015,6 +1049,10 @@ class SubscriptionService:
                 'account_id': account_id,
                 'started_at': datetime.now(timezone.utc).isoformat()
             }, on_conflict='account_id').execute()
+            
+            await Cache.invalidate(f"subscription_tier:{account_id}")
+            await Cache.invalidate(f"credit_balance:{account_id}")
+            await Cache.invalidate(f"credit_summary:{account_id}")
             
             logger.info(f"[WEBHOOK] ✅ Started trial for user {account_id} via Stripe subscription - granted ${TRIAL_CREDITS} credits")
         finally:
@@ -1108,15 +1146,21 @@ class SubscriptionService:
                 'last_grant_date': billing_anchor.isoformat()
             }).eq('account_id', account_id).execute()
             
+            await Cache.invalidate(f"subscription_tier:{account_id}")
+            await Cache.invalidate(f"credit_balance:{account_id}")
+            await Cache.invalidate(f"credit_summary:{account_id}")
+            
             logger.info(f"[CREDIT GRANT] ✅ Initial grant completed for {account_id}")
         finally:
             await lock.release()
 
-    async def get_user_subscription_tier(self, account_id: str) -> Dict:
+    async def get_user_subscription_tier(self, account_id: str, skip_cache: bool = False) -> Dict:
         cache_key = f"subscription_tier:{account_id}"
-        cached = await Cache.get(cache_key)
-        if cached:
-            return cached
+        
+        if not skip_cache:
+            cached = await Cache.get(cache_key)
+            if cached:
+                return cached
         
         db = DBConnection()
         client = await db.client
@@ -1196,6 +1240,7 @@ class SubscriptionService:
         new_tier_info = get_tier_by_price_id(price_id)
         if not new_tier_info:
             logger.warning(f"Unknown price ID in subscription: {price_id}")
+            await Cache.invalidate(f"subscription_tier:{account_id}")
             return
         
         billing_anchor = datetime.fromtimestamp(subscription['current_period_start'], tz=timezone.utc)
@@ -1209,6 +1254,11 @@ class SubscriptionService:
         }).eq('account_id', account_id).execute()
         
         await self._track_commitment_if_needed(account_id, price_id, subscription, client)
+        
+        await Cache.invalidate(f"subscription_tier:{account_id}")
+        await Cache.invalidate(f"credit_balance:{account_id}")
+        await Cache.invalidate(f"credit_summary:{account_id}")
+        await Cache.invalidate(f"project_count_limit:{account_id}")
         
         logger.info(f"[SUBSCRIPTION] ✅ Metadata updated for {account_id}, tier={new_tier_info.name}")
     

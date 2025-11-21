@@ -15,6 +15,8 @@ else:
     PREMIUM_MODEL_ID = "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48"
 
 is_local = config.ENV_MODE == EnvMode.LOCAL
+is_prod = config.ENV_MODE == EnvMode.PRODUCTION
+pricing_multiplier = 0.20 if is_prod else 1.0
 
 class ModelRegistry:
     def __init__(self):
@@ -66,8 +68,8 @@ class ModelRegistry:
                 ModelCapability.VISION,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=1.00,
-                output_cost_per_million_tokens=5.00
+                input_cost_per_million_tokens=1.00 * pricing_multiplier,
+                output_cost_per_million_tokens=5.00 * pricing_multiplier
             ),
             tier_availability=["free", "paid"],
             priority=101,
@@ -282,8 +284,8 @@ class ModelRegistry:
                 ModelCapability.STRUCTURED_OUTPUT,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=0.30,
-                output_cost_per_million_tokens=2.50
+                input_cost_per_million_tokens=0.30 * pricing_multiplier,
+                output_cost_per_million_tokens=2.50 * pricing_multiplier
             ),
             tier_availability=["paid"],
             priority=93,
@@ -416,8 +418,8 @@ class ModelRegistry:
                 ModelCapability.STRUCTURED_OUTPUT,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=1.00,
-                output_cost_per_million_tokens=8.00
+                input_cost_per_million_tokens=1.00 * pricing_multiplier,
+                output_cost_per_million_tokens=8.00 * pricing_multiplier
             ),
             tier_availability=["paid"],
             priority=92,

@@ -77,7 +77,7 @@ TIERS: Dict[str, Tier] = {
         project_limit=100,
         thread_limit=100,
         concurrent_runs=3,
-        custom_workers_limit=2,
+        custom_workers_limit=5,
         scheduled_triggers_limit=5,
         app_triggers_limit=10
     ),
@@ -95,7 +95,7 @@ TIERS: Dict[str, Tier] = {
         project_limit=500,
         thread_limit=500,
         concurrent_runs=5,
-        custom_workers_limit=5,
+        custom_workers_limit=20,
         scheduled_triggers_limit=10,
         app_triggers_limit=25
     ),
@@ -130,7 +130,7 @@ TIERS: Dict[str, Tier] = {
         project_limit=2500,
         thread_limit=2500,
         concurrent_runs=20,
-        custom_workers_limit=25,
+        custom_workers_limit=100,
         scheduled_triggers_limit=50,
         app_triggers_limit=100
     ),
