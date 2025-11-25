@@ -159,31 +159,9 @@ function BillingPeriodToggle({
         >
           {t('monthly')}
         </Button>
-        <Button
-          variant={billingPeriod === 'yearly' ? 'default' : 'outline'}
-          onClick={() => {
-            setHasUserToggledBillingPeriod(true);
-            setBillingPeriod('yearly');
-          }}
-          className={cn(
-            "flex items-center gap-1.5 border-[1.5px]",
-            billingPeriod === 'yearly' ? 'border-primary' : 'border-border'
-          )}
-        >
-          {t('yearly')}
-          <span className={cn(
-            "px-1.5 py-0.5 rounded-full text-xs font-medium",
-            billingPeriod === 'yearly'
-              ? "bg-background/90 text-primary"
-              : "bg-muted/80 text-primary dark:bg-muted"
-          )}>
-            15% OFF
-          </span>
-        </Button>
       </div>
       <div className="text-xs text-muted-foreground text-center max-w-2xl">
         {billingPeriod === 'monthly' && 'Pay monthly, get credits monthly. Cancel anytime.'}
-        {billingPeriod === 'yearly' && 'Pay upfront for the year, get credits monthly. 15% discount. Cancel anytime, effective at period end.'}
       </div>
     </div>
   );
