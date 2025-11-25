@@ -14,7 +14,12 @@ import stripe
 from core.services.supabase import DBConnection
 from core.utils.config import config
 from core.utils.logger import logger
-from core.billing.shared.config import get_tier_by_price_id, is_commitment_price_id, get_commitment_duration_months
+from core.billing.shared.config import (
+    get_tier_by_price_id,
+    get_tier_by_name,
+    is_commitment_price_id,
+    get_commitment_duration_months,
+)
 from core.billing.credits.manager import credit_manager
 
 stripe.api_key = config.STRIPE_SECRET_KEY
@@ -91,6 +96,8 @@ async def fix_missing_subscription(
     override_price_id: str | None = None,
     override_tier: str | None = None,
     override_subscription_id: str | None = None,
+    grant_initial_balance: bool = False,
+    force_monthly: bool = False,
 ):
     logger.info("="*80)
     logger.info(f"FIXING SUBSCRIPTION FOR {user_email}")
@@ -497,6 +504,12 @@ async def fix_missing_subscription(
     
     is_commitment = is_commitment_price_id(price_id)
     commitment_duration = get_commitment_duration_months(price_id)
+
+    # If operator explicitly requests to treat this subscription as monthly, clear commitment
+    if force_monthly:
+        logger.info("Operator requested force-monthly: clearing commitment detection")
+        is_commitment = False
+        commitment_duration = 0
     
     logger.info(f"   Is commitment: {is_commitment}")
     logger.info(f"   Commitment duration: {commitment_duration} months")
@@ -616,27 +629,52 @@ async def fix_missing_subscription(
     
     logger.info(f"Current balance: ${balance}")
     
-    if not dry_run and balance < Decimal('1.0'):
-        credits_to_grant = tier.monthly_credits
-        logger.info(f"Granting ${credits_to_grant} initial credits...")
-        
-        result = await credit_manager.add_credits(
-            account_id=account_id,
-            amount=credits_to_grant,
-            is_expiring=True,
-            description=(
-                f"Initial credits for {tier.display_name} (yearly commitment)" if is_commitment else
-                f"Initial credits for {tier.display_name}"
-            )
-        )
-        
-        if result.get('success'):
-            logger.info(f"✅ Granted ${credits_to_grant} credits")
-            logger.info(f"   New balance: ${result.get('new_total', 0)}")
+    # Grant initial credits behavior:
+    # - Default: only auto-grant when balance < $1 (preserves existing balances)
+    # - If `grant_initial_balance` is True: force add tier.monthly_credits to existing balance
+    if dry_run:
+        if grant_initial_balance:
+            logger.info(f"[DRY RUN] Would add ${tier.monthly_credits} to existing balance ${balance} (force add)")
+        elif balance < Decimal('1.0'):
+            logger.info(f"[DRY RUN] Would grant ${tier.monthly_credits} initial credits (balance is ${balance})")
         else:
-            logger.error(f"❌ Failed to grant credits: {result.get('error', 'Unknown error')}")
+            logger.info(f"[DRY RUN] User already has ${balance} credits, skipping initial grant")
     else:
-        logger.info(f"User already has ${balance} credits, skipping initial grant")
+        if grant_initial_balance:
+            credits_to_grant = tier.monthly_credits
+            logger.info(f"Adding ${credits_to_grant} to existing balance ${balance} (force add)")
+            result = await credit_manager.add_credits(
+                account_id=account_id,
+                amount=credits_to_grant,
+                is_expiring=True,
+                description=(
+                    f"Forced initial credits add for {tier.display_name} (via admin script)"
+                )
+            )
+            if result.get('success'):
+                logger.info(f"✅ Added ${credits_to_grant} credits")
+                logger.info(f"   New balance: ${result.get('new_total', 0)}")
+            else:
+                logger.error(f"❌ Failed to add credits: {result.get('error', 'Unknown error')}")
+        elif balance < Decimal('1.0'):
+            credits_to_grant = tier.monthly_credits
+            logger.info(f"Granting ${credits_to_grant} initial credits...")
+            result = await credit_manager.add_credits(
+                account_id=account_id,
+                amount=credits_to_grant,
+                is_expiring=True,
+                description=(
+                    f"Initial credits for {tier.display_name} (yearly commitment)" if is_commitment else
+                    f"Initial credits for {tier.display_name}"
+                )
+            )
+            if result.get('success'):
+                logger.info(f"✅ Granted ${credits_to_grant} credits")
+                logger.info(f"   New balance: ${result.get('new_total', 0)}")
+            else:
+                logger.error(f"❌ Failed to grant credits: {result.get('error', 'Unknown error')}")
+        else:
+            logger.info(f"User already has ${balance} credits, skipping initial grant")
     
     logger.info("\n" + "="*80)
     logger.info("VERIFICATION")
@@ -705,6 +743,16 @@ def main():
         type=str,
         help='Override Stripe subscription ID if customer has multiple'
     )
+    parser.add_argument(
+        '--grant-initial-balance',
+        action='store_true',
+        help='Force-add the tier monthly credits to the existing balance (use with care)'
+    )
+    parser.add_argument(
+        '--force-monthly',
+        action='store_true',
+        help='Treat this subscription as a regular monthly plan; clear any detected yearly commitment'
+    )
     
     args = parser.parse_args()
     asyncio.run(
@@ -714,6 +762,8 @@ def main():
             override_price_id=args.price_id,
             override_tier=args.tier,
             override_subscription_id=args.subscription_id,
+            grant_initial_balance=args.grant_initial_balance,
+            force_monthly=args.force_monthly,
         )
     )
 
