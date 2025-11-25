@@ -7,7 +7,7 @@ import {
   ReasoningContent,
   ReasoningResponse,
 } from '@/components/home/ui/reasoning';
-import { AnimatePresence, motion, useInView } from 'motion/react';
+import { AnimatePresence, motion, useInView } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
 

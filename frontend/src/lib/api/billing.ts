@@ -183,7 +183,12 @@ export interface UsageLogEntry {
   amount: number;
   balance_after: number;
   description: string;
-  reference_type?: string;
+  // Optional fields used for filtering and debugging
+  reference_type?: string; // e.g., 'thread:<thread_id>'
+  thread_id?: string;
+  message_id?: string;
+  model?: string;
+  tokens?: any;
 }
 
 export interface UsageLogsResponse {
@@ -519,13 +524,48 @@ export const billingApi = {
   },
 
   async getUsageLogs(page = 0, itemsPerPage = 1000, threadId?: string) {
-    let url = `/billing/usage-logs?page=${page}&items_per_page=${itemsPerPage}`;
-    if (threadId) {
-      url += `&thread_id=${encodeURIComponent(threadId)}`;
-    }
-    const response = await backendApi.get<UsageLogsResponse>(url);
-    if (response.error) throw response.error;
-    return response.data!;
+    // Backend enforces limit <= 100; clamp to avoid 422
+    const limit = Math.min(itemsPerPage, 100);
+    const offset = page * itemsPerPage;
+    const resp = await backendApi.get<{
+      usage_records: Array<{
+        id: string;
+        amount: number; // credits already
+        description: string;
+        created_at: string;
+        message_id?: string;
+        thread_id?: string;
+        model?: string;
+        tokens?: any;
+      }>;
+      pagination: { limit: number; offset: number; total: number; has_more: boolean };
+    }>(`/billing/credit-usage?limit=${limit}&offset=${offset}`);
+    if (resp.error) throw resp.error;
+
+    const all = resp.data?.usage_records || [];
+    const filtered = threadId ? all.filter(r => r.thread_id === threadId) : all;
+
+    const usage_logs: UsageLogEntry[] = filtered.map(r => ({
+      timestamp: r.created_at,
+      amount: r.amount,
+      balance_after: 0,
+      description: r.description,
+      reference_type: r.thread_id ? `thread:${r.thread_id}` : undefined,
+      thread_id: r.thread_id,
+      message_id: r.message_id,
+      model: r.model,
+      tokens: r.tokens,
+    }));
+
+    return {
+      usage_logs,
+      pagination: {
+        page,
+        items_per_page: itemsPerPage,
+        total_count: resp.data?.pagination?.total ?? usage_logs.length,
+        has_more: resp.data?.pagination?.has_more ?? false,
+      },
+    } as UsageLogsResponse;
   },
 
   async triggerTestRenewal() {

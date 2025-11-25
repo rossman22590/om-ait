@@ -16,6 +16,28 @@ import {
 import { parseXmlToolCalls, isNewXmlFormat } from './xml-parser';
 import { parseToolResult, ParsedToolResult } from './tool-result-parser';
 
+// Minimal adapter to supply legacy components with a normalized toolResult shape
+export function extractToolData(content: any): { toolResult: { toolOutput: any } } {
+  try {
+    // Prefer metadata.result if passed through
+    if (content && typeof content === 'object') {
+      const meta = (content as any).metadata ? ((typeof (content as any).metadata === 'string') ? JSON.parse((content as any).metadata) : (content as any).metadata) : null;
+      if (meta?.result && 'output' in meta.result) {
+        return { toolResult: { toolOutput: meta.result.output } };
+      }
+      if ('content' in content && typeof (content as any).content === 'string') {
+        return { toolResult: { toolOutput: (content as any).content } };
+      }
+    }
+  } catch {
+    // fall through to generic handling
+  }
+  // Generic normalization
+  if (content == null) return { toolResult: { toolOutput: null } };
+  if (typeof content === 'string') return { toolResult: { toolOutput: content } };
+  return { toolResult: { toolOutput: content } };
+}
+
 // Helper function to format timestamp
 export function formatTimestamp(isoString?: string): string {
   if (!isoString) return '';

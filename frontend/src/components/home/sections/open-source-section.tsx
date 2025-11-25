@@ -3,7 +3,7 @@
 import { SectionHeader } from '@/components/home/section-header';
 import { FlickeringGrid } from '@/components/home/ui/flickering-grid';
 import { Globe } from '@/components/home/ui/globe';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 export function OpenSourceSection() {

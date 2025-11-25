@@ -3,7 +3,7 @@
 import { SectionHeader } from '@/components/home/section-header';
 import { siteConfig } from '@/lib/home';
 import { cn } from '@/lib/utils';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { useState } from 'react';
 

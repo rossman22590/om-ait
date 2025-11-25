@@ -25,8 +25,15 @@ class CreditService:
         
         if use_cache and self.cache:
             cached = await self.cache.get(cache_key)
-            if cached:
-                return Decimal(cached)
+            if cached is not None:
+                try:
+                    # Ensure cached is a primitive convertible to Decimal
+                    if isinstance(cached, (int, float, str)):
+                        return Decimal(str(cached))
+                    # If unexpected type (e.g., dict), invalidate and skip cache
+                    await self.cache.invalidate(cache_key)
+                except Exception:
+                    await self.cache.invalidate(cache_key)
         
         try:
             client = await self._get_client()

@@ -1,7 +1,7 @@
 'use client';
 
 import { SectionHeader } from '@/components/home/section-header';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { UnifiedAgentCard, type BaseAgentData } from '@/components/ui/unified-agent-card';
 

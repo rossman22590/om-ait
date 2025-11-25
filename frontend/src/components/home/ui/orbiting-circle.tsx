@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import { cubicBezier, HTMLMotionProps, motion, useInView } from 'motion/react';
+import { HTMLMotionProps, motion, useInView } from 'framer-motion';
 import React, { useEffect, useRef, useState } from 'react';
 
 export interface OrbitingCirclesProps extends HTMLMotionProps<'div'> {
@@ -109,7 +109,7 @@ export function OrbitingCircles({
                 transition={{
                   duration: 0.5,
                   delay: 0.6 + index * 0.2 + startAnimationDelay,
-                  ease: cubicBezier(0, 0, 0.58, 1),
+                  ease: [0, 0, 0.58, 1],
                   type: 'spring',
                   stiffness: 120,
                   damping: 18,

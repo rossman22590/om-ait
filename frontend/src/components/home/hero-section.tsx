@@ -5,7 +5,7 @@ import { ArrowRight, Github, X, AlertCircle, Square } from 'lucide-react';
 import PixelBlast from '@/components/home/ui/PixelBlast';
 import { useMediaQuery } from '@/hooks/utils';
 import { useState, useEffect, useRef, FormEvent } from 'react';
-import { useScroll } from 'motion/react';
+import { useScroll } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';

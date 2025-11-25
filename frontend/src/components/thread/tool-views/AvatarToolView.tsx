@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle, Play, Download, Eye } from 'lucide-react';
 import { ToolViewProps } from './types';
-import { extractToolData, getToolTitle } from './utils';
+import { getToolTitle } from './utils';
 import { cn } from '@/lib/utils';
 
 // Interfaces for API and Parsed Content
@@ -51,34 +51,31 @@ type VideoGenerationResult = VideoGenerationInputArgs | VideoGenerationPollingRe
 type ParsedToolContent = ArgilAvatar[] | Voice[] | VideoGenerationResult;
 
 export function AvatarToolView({
-  assistantContent,
-  toolContent,
+  toolCall,
+  toolResult,
   assistantTimestamp,
   toolTimestamp,
   isSuccess = true,
   isStreaming = false,
-  name = 'avatar-tool',
   project,
 }: ToolViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [imageDimensions, setImageDimensions] = useState<Record<string, { aspectRatio: number; orientation: 'portrait' | 'landscape' | 'square' }>>({});
 
-  const toolTitle = getToolTitle(name);
-  const { toolResult } = extractToolData(toolContent);
+  const functionName = toolCall?.function_name || 'avatar-tool';
+  const toolTitle = getToolTitle(functionName);
 
   // Parse the tool result
   let dataToRender: ParsedToolContent | null = null;
   let error: string | null = null;
 
   try {
-    if (toolResult && toolResult.toolOutput) {
-      const output = toolResult.toolOutput;
+    const output = toolResult?.output as any;
+    if (output !== undefined) {
       if (typeof output === 'string') {
-        // Check if output is a streaming status or non-JSON content
         if (output.trim() === 'STREAMING' || output.includes('STREAMING')) {
-          // Handle streaming status - don't try to parse as JSON
           dataToRender = null;
-          error = null; // This is expected during streaming
+          error = null;
         } else {
           try {
             dataToRender = JSON.parse(output);
@@ -153,6 +150,7 @@ export function AvatarToolView({
   }
 
   // Render based on the tool name and parsed data
+  const name = functionName.toLowerCase();
   switch (name) {
     case 'list-argil-avatars':
     case 'list_argil_avatars':
@@ -597,7 +595,7 @@ export function AvatarToolView({
               <div className="relative p-2 rounded-lg border bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/20">
                 <Play className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
-              <CardTitle className="text-base font-medium">Display for '{name}'</CardTitle>
+              <CardTitle className="text-base font-medium">Display for '{toolTitle}'</CardTitle>
             </div>
           </CardHeader>
           <CardContent className="p-4">

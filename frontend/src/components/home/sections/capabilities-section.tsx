@@ -1,7 +1,7 @@
 'use client';
 
 import { SectionHeader } from '@/components/home/section-header';
-import { motion, useInView } from 'motion/react';
+import { motion, useInView } from 'framer-motion';
 import { useRef } from 'react';
 import { 
   FileText,

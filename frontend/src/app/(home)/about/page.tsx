@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { SectionHeader } from '@/components/home/section-header';
 import { FooterSection } from '@/components/home/sections/footer-section';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { 
   ArrowRight, 
   Check, 

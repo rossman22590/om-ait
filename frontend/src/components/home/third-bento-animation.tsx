@@ -1,6 +1,6 @@
 'use client';
 
-import { motion, useInView, AnimatePresence } from 'motion/react';
+import { motion, useInView, AnimatePresence } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 import { Icons } from '@/components/home/icons';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';

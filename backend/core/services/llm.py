@@ -165,13 +165,76 @@ def _configure_openai_compatible(params: Dict[str, Any], model_name: str, api_ke
     setup_provider_router(api_key, api_base)
     logger.debug(f"Configured OpenAI-compatible provider with custom API base")
 
-def _add_tools_config(params: Dict[str, Any], tools: Optional[List[Dict[str, Any]]], tool_choice: str) -> None:
-    """Add tools configuration to parameters."""
+def _sanitize_json_schema(obj: Any) -> Any:
+    """Sanitize JSON Schemas for providers that don't support combinators or union types.
+    - Removes anyOf/oneOf/allOf recursively
+    - Ensures parameters/properties are valid with a concrete 'type'
+    - Collapses list types like ["string","null"] to a single permissive type
+    """
+    def _sanitize(o: Any) -> Any:
+        if isinstance(o, dict):
+            # Drop unsupported combinators
+            o = {k: _sanitize(v) for k, v in o.items() if k not in ("anyOf", "oneOf", "allOf", "if", "then", "else")}
+
+            # Ensure objects have correct structure
+            if o.get("type") == "object" or "properties" in o or "required" in o:
+                o.setdefault("type", "object")
+                o.setdefault("properties", {})
+                if not isinstance(o["properties"], dict):
+                    o["properties"] = {}
+
+            # Fix properties without explicit type
+            props = o.get("properties")
+            if isinstance(props, dict):
+                for name, prop in list(props.items()):
+                    if isinstance(prop, dict):
+                        if "type" not in prop:
+                            if "items" in prop:
+                                prop["type"] = "array"
+                            else:
+                                prop["type"] = "string"
+                        t = prop.get("type")
+                        if isinstance(t, list):
+                            # Prefer a non-null primitive
+                            non_null = [x for x in t if x != "null"]
+                            prop["type"] = non_null[0] if non_null else "string"
+                        # Recurse into nested structures
+                        props[name] = _sanitize(prop)
+
+            # Arrays: ensure items exist and sanitize
+            if o.get("type") == "array":
+                if "items" in o:
+                    o["items"] = _sanitize(o["items"]) or {"type": "string"}
+                else:
+                    o["items"] = {"type": "string"}
+
+            # Collapse top-level type list
+            if isinstance(o.get("type"), list):
+                tn = [x for x in o["type"] if x != "null"]
+                o["type"] = tn[0] if tn else "string"
+
+            return o
+        if isinstance(o, list):
+            return [_sanitize(i) for i in o]
+        return o
+
+    return _sanitize(obj)
+
+
+def _add_tools_config(params: Dict[str, Any], tools: Optional[List[Dict[str, Any]]], tool_choice: str, sanitize: bool = True) -> None:
+    """Add tools configuration to parameters.
+    If sanitize is True, strip unsupported JSON Schema combinators; otherwise pass through unchanged.
+    """
     if tools is None:
         return
     
+    sanitized_tools = tools
+    if sanitize:
+        # Use robust sanitizer to remove combinators and collapse union/null types
+        sanitized_tools = _sanitize_json_schema(tools)
+
     params.update({
-        "tools": tools,
+        "tools": sanitized_tools,
         "tool_choice": tool_choice
     })
     # logger.debug(f"Added {len(tools)} tools to API parameters")
@@ -217,6 +280,13 @@ async def make_llm_api_call(
     # Prepare parameters using centralized model configuration
     from core.ai_models import model_manager
     resolved_model_name = model_manager.resolve_model_id(model_name)
+
+    def _should_sanitize(model: str) -> bool:
+        if not isinstance(model, str):
+            return False
+        model_l = model.lower()
+        # Only sanitize for Anthropic via OpenRouter and OpenRouter OpenAI (e.g., gpt-5-codex)
+        return model_l.startswith("openrouter/anthropic/") or model_l.startswith("openrouter/openai/")
     
     # Only pass headers/extra_headers if they are not None to avoid overriding model config
     override_params = {
@@ -236,6 +306,24 @@ async def make_llm_api_call(
     if extra_headers is not None:
         override_params["extra_headers"] = extra_headers
     
+    # Optionally sanitize response_format only for strict providers
+    rf_to_send = response_format
+    if _should_sanitize(resolved_model_name) and isinstance(response_format, dict):
+        try:
+            if response_format.get("type") == "json_schema":
+                js = response_format.get("json_schema") or {}
+                if isinstance(js, dict):
+                    if "schema" in js and isinstance(js["schema"], (dict, list)):
+                        js["schema"] = _sanitize_json_schema(js["schema"])
+                    else:
+                        response_format["json_schema"] = _sanitize_json_schema(js)
+                rf_to_send = response_format
+        except Exception as e:
+            logger.warning(f"Failed to sanitize response_format schema: {e}")
+
+    if rf_to_send is not None:
+        override_params["response_format"] = rf_to_send
+
     params = model_manager.get_litellm_params(resolved_model_name, **override_params)
     
     # Ensure stop sequences are in final params
@@ -253,7 +341,7 @@ async def make_llm_api_call(
     
     # Apply additional configurations
     _configure_openai_compatible(params, model_name, api_key, api_base)
-    _add_tools_config(params, tools, tool_choice)
+    _add_tools_config(params, tools, tool_choice, sanitize=_should_sanitize(resolved_model_name))
     
     # Final safeguard: Re-apply stop sequences
     if stop is not None:
@@ -297,7 +385,90 @@ async def make_llm_api_call(
         return response
         
     except Exception as e:
-        # Use ErrorProcessor to handle the error consistently
+        # Retry once with sanitized payload if schema-related error and we didn't sanitize initially
+        err_msg = str(e).lower()
+        schema_err = any(tok in err_msg for tok in ["oneof", "anyof", "allof", "input_schema", "does not support", "schema"])
+        initial = _should_sanitize(resolved_model_name)
+        if not initial and schema_err:
+            try:
+                retry_override = dict(override_params)
+                # Force sanitize response_format
+                retry_rf = response_format
+                if isinstance(response_format, dict):
+                    try:
+                        if response_format.get("type") == "json_schema":
+                            js = response_format.get("json_schema") or {}
+                            if isinstance(js, dict):
+                                if "schema" in js and isinstance(js["schema"], (dict, list)):
+                                    js["schema"] = _sanitize_json_schema(js["schema"])
+                                else:
+                                    response_format["json_schema"] = _sanitize_json_schema(js)
+                        retry_rf = response_format
+                    except Exception:
+                        pass
+                if retry_rf is not None:
+                    retry_override["response_format"] = retry_rf
+                retry_params = model_manager.get_litellm_params(resolved_model_name, **retry_override)
+                _configure_openai_compatible(retry_params, model_name, api_key, api_base)
+                _add_tools_config(retry_params, tools, tool_choice, sanitize=True)
+                if stop is not None:
+                    retry_params["stop"] = stop
+                if stream:
+                    retry_params["stream_options"] = {"include_usage": True}
+                response = await provider_router.acompletion(**retry_params)
+                if hasattr(response, '__aiter__') and stream:
+                    return _wrap_streaming_response(response)
+                return response
+            except Exception as retry_e:
+                # Final fallback: drop tools/response_format to get a plain text answer
+                try:
+                    retry_override2 = dict(override_params)
+                    retry_override2.pop("response_format", None)
+                    retry_params2 = model_manager.get_litellm_params(resolved_model_name, **retry_override2)
+                    _configure_openai_compatible(retry_params2, model_name, api_key, api_base)
+                    # Do not include tools
+                    if "tools" in retry_params2:
+                        retry_params2.pop("tools", None)
+                    if "tool_choice" in retry_params2:
+                        retry_params2.pop("tool_choice", None)
+                    if stop is not None:
+                        retry_params2["stop"] = stop
+                    if stream:
+                        retry_params2["stream_options"] = {"include_usage": True}
+                    response = await provider_router.acompletion(**retry_params2)
+                    if hasattr(response, '__aiter__') and stream:
+                        return _wrap_streaming_response(response)
+                    return response
+                except Exception as retry2_e:
+                    processed_retry = ErrorProcessor.process_llm_error(retry2_e, context={"model": model_name, "retry": True, "fallback_no_tools": True})
+                    ErrorProcessor.log_error(processed_retry)
+                    raise LLMError(processed_retry.message)
+
+        # If initial sanitization was applied and still schema error, try no-tools fallback once
+        if initial and schema_err:
+            try:
+                simple_override = dict(override_params)
+                simple_override.pop("response_format", None)
+                simple_params = model_manager.get_litellm_params(resolved_model_name, **simple_override)
+                _configure_openai_compatible(simple_params, model_name, api_key, api_base)
+                # remove tools
+                if "tools" in simple_params:
+                    simple_params.pop("tools", None)
+                if "tool_choice" in simple_params:
+                    simple_params.pop("tool_choice", None)
+                if stop is not None:
+                    simple_params["stop"] = stop
+                if stream:
+                    simple_params["stream_options"] = {"include_usage": True}
+                response = await provider_router.acompletion(**simple_params)
+                if hasattr(response, '__aiter__') and stream:
+                    return _wrap_streaming_response(response)
+                return response
+            except Exception as retry3_e:
+                processed_retry = ErrorProcessor.process_llm_error(retry3_e, context={"model": model_name, "retry": True, "initial_sanitized": True, "fallback_no_tools": True})
+                ErrorProcessor.log_error(processed_retry)
+                raise LLMError(processed_retry.message)
+
         processed_error = ErrorProcessor.process_llm_error(e, context={"model": model_name})
         ErrorProcessor.log_error(processed_error)
         raise LLMError(processed_error.message)

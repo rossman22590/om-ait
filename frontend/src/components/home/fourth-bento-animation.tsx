@@ -6,7 +6,7 @@ import {
   useInView,
   useMotionValue,
   useSpring,
-} from 'motion/react';
+} from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
 
 interface BoxConfig {

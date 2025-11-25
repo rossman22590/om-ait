@@ -16,7 +16,8 @@ else:
 
 is_local = config.ENV_MODE == EnvMode.LOCAL
 is_prod = config.ENV_MODE == EnvMode.PRODUCTION
-# pricing_multiplier = 0.20 if is_prod else 1.0
+# Apply a global pricing multiplier (cheaper in production if desired)
+pricing_multiplier = 0.20 if is_prod else 1.0
 
 class ModelRegistry:
     def __init__(self):

@@ -28,13 +28,8 @@ async def check_billing_status(
         return {'can_run': True, 'message': 'Local mode', 'balance': 999999}
     
     from ..subscriptions import subscription_service
+    balance = await credit_service.get_balance(account_id)
     
-    balance_result = await credit_service.get_balance(account_id) 
-    if isinstance(balance_result, dict):
-        balance = Decimal(str(balance_result.get('total', 0)))
-    else:
-        balance = balance_result
-        
     tier = await subscription_service.get_user_subscription_tier(account_id)
     
     return {
@@ -65,12 +60,7 @@ async def check_status(
             }
         
         from ..subscriptions import subscription_service
-        
-        balance_result = await credit_service.get_balance(account_id)
-        if isinstance(balance_result, dict):
-            balance = Decimal(str(balance_result.get('total', 0)))
-        else:
-            balance = balance_result
+        balance = await credit_service.get_balance(account_id)
             
         summary = await credit_service.get_account_summary(account_id)
         tier = await subscription_service.get_user_subscription_tier(account_id)

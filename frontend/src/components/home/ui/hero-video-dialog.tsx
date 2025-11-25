@@ -1,7 +1,7 @@
 'use client';
 
 import { Play, XIcon } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useState } from 'react';
 import Image from 'next/image';
 

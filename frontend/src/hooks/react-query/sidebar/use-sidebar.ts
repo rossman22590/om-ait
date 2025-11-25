@@ -1,6 +1,6 @@
 'use client';
 
-import { Project } from "@/lib/api/projects";
+import { Project } from "@/lib/api/threads";
 import { createQueryHook } from '@/hooks/use-query';
 import { getThreads, Thread } from "@/lib/api/threads";
 import { threadKeys } from "./keys";

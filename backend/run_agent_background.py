@@ -81,8 +81,10 @@ async def run_agent_background(
     instance_id: str,
     project_id: str,
     model_name: str = "openai/gpt-5-mini",
-    agent_id: Optional[str] = None,  # Changed from agent_config to agent_id
-    request_id: Optional[str] = None
+    agent_id: Optional[str] = None,  # Preferred path: pass agent_id
+    request_id: Optional[str] = None,
+    agent_config: Optional[Dict[str, Any]] = None,  # Back-compat: accept legacy payloads
+    **kwargs,
 ):
     """Run the agent in the background using Redis for state."""
     structlog.contextvars.clear_contextvars()
@@ -215,9 +217,8 @@ async def run_agent_background(
         # Ensure active run key exists and has TTL
         await redis.set(instance_active_key, "running", ex=redis.REDIS_KEY_TTL)
 
-        # Fetch agent_config from agent_id if provided
-        agent_config = None
-        if agent_id:
+        # Prefer fetching agent_config from agent_id; otherwise, use provided legacy agent_config
+        if agent_id and agent_config is None:
             try:
                 # Get account_id from agent to load config
                 agent_result = await client.table('agents').select('account_id').eq('agent_id', agent_id).single().execute()
@@ -230,6 +231,15 @@ async def run_agent_background(
                     logger.warning(f"Agent not found for agent_id: {agent_id}")
             except Exception as e:
                 logger.warning(f"Failed to fetch agent config for agent_id {agent_id}: {e}. Using default config.")
+        elif agent_config is not None:
+            logger.debug("Using legacy agent_config passed in message (back-compat).")
+        
+        if kwargs:
+            # Safely ignore any unexpected kwargs from legacy enqueued messages
+            try:
+                logger.debug(f"Ignoring unexpected kwargs in run payload: {list(kwargs.keys())}")
+            except Exception:
+                pass
 
         # Initialize agent generator with cancellation event
         agent_gen = run_agent(

@@ -17,6 +17,7 @@ import asyncio
 from core.utils.logger import logger
 from typing import List, Any, Optional
 from core.utils.retry import retry
+from urllib.parse import urlparse
 
 # Import get_redis_config from base redis module to share config
 from core.services.redis import get_redis_config
@@ -74,25 +75,36 @@ def initialize():
         f"{max_concurrent_ops} concurrent operations"
     )
 
-    # Create connection pool optimized for high-throughput worker operations
-    pool_kwargs = {
-        "host": config["host"],
-        "port": config["port"],
-        "password": config["password"],
-        "decode_responses": True,
-        "socket_timeout": socket_timeout,
-        "socket_connect_timeout": connect_timeout,
-        "socket_keepalive": True,
-        "retry_on_timeout": retry_on_timeout,
-        "health_check_interval": 30,
-        "max_connections": max_connections,
-    }
-    
-    if config["username"]:
-        pool_kwargs["username"] = config["username"]
-    
-    pool = redis_lib.ConnectionPool(**pool_kwargs)
-    client = redis_lib.Redis(connection_pool=pool)
+    # Prefer URL configuration (supports rediss) when available
+    if config.get("url"):
+        pool = redis_lib.ConnectionPool.from_url(
+            config["url"],
+            decode_responses=True,
+            socket_timeout=socket_timeout,
+            socket_connect_timeout=connect_timeout,
+            retry_on_timeout=retry_on_timeout,
+            health_check_interval=30,
+            max_connections=max_connections,
+        )
+        client = redis_lib.Redis(connection_pool=pool)
+    else:
+        # Create connection pool optimized for high-throughput worker operations
+        pool_kwargs = {
+            "host": config["host"],
+            "port": config["port"],
+            "password": config["password"],
+            "decode_responses": True,
+            "socket_timeout": socket_timeout,
+            "socket_connect_timeout": connect_timeout,
+            "socket_keepalive": True,
+            "retry_on_timeout": retry_on_timeout,
+            "health_check_interval": 30,
+            "max_connections": max_connections,
+        }
+        if config["username"]:
+            pool_kwargs["username"] = config["username"]
+        pool = redis_lib.ConnectionPool(**pool_kwargs)
+        client = redis_lib.Redis(connection_pool=pool)
     
     # Initialize semaphore for concurrency limiting
     _operation_semaphore = asyncio.Semaphore(max_concurrent_ops)
