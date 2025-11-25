@@ -66,7 +66,7 @@ import { formatDateForList } from '@/lib/utils/date-formatting';
 import { Thread, getThreadsPaginated, type ThreadsResponse } from '@/lib/api/threads';
 import { useThreads } from '@/hooks/threads/use-threads';
 import { useTranslations } from 'next-intl';
-import { Project } from '@/lib/api/projects';
+import { Project } from '@/lib/api/threads';
 import { useUpdateProject } from '@/hooks/threads/use-project';
 
 // Component for date group headers
@@ -297,13 +297,6 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
     page: currentPage,
     limit: pageLimit,
   });
-  
-  console.log('📋 NavAgents: useThreads response', { 
-    threadsCount: threadsResponse?.threads?.length || 0,
-    pagination: threadsResponse?.pagination,
-    isThreadsLoading,
-    currentPage 
-  });
 
   const { mutate: deleteThreadMutation, isPending: isDeletingSingle } = useDeleteThread();
   const {
@@ -313,12 +306,6 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
 
   // Use threads directly from response
   const currentThreads = threadsResponse?.threads || [];
-  
-  console.log('📋 NavAgents: Current threads', {
-    currentThreadsLength: currentThreads.length,
-    currentPage,
-    hasProjectData: !!currentThreads[0]?.project
-  });
 
   // Reset pagination when total thread count changes (e.g., after deletion)
   const previousTotalRef = useRef<number | undefined>(undefined);
@@ -341,7 +328,6 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
   // No need to map threads to projects, just transform the data structure
   const combinedThreads: ThreadWithProject[] = useMemo(() => {
     if (currentThreads.length === 0) {
-      console.log('📦 NavAgents: No threads to process');
       return [];
     }
     
@@ -352,11 +338,6 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
       const project = thread.project; // Backend already provides this!
       
       if (!projectId || !project) {
-        console.log('📦 NavAgents: Thread missing project data', {
-          thread_id: thread.thread_id,
-          project_id: projectId,
-          hasProject: !!project
-        });
         continue;
       }
       
@@ -373,12 +354,6 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
       });
     }
     
-    console.log('📦 NavAgents: Processed threads', {
-      inputCount: currentThreads.length,
-      outputCount: processed.length,
-      sample: processed[0]
-    });
-    
     // Sort by updated_at
     return processed.sort((a, b) => 
       new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -393,31 +368,12 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
 
   const groupedThreads: GroupedThreads = groupThreadsByDate(regularThreads);
   const groupedTriggerThreads: GroupedThreads = groupThreadsByDate(triggerThreads);
-  
-  // Debug logging for grouped threads
-  console.log('📋 NavAgents: Grouped threads', {
-    combinedCount: combinedThreads.length,
-    regularCount: regularThreads.length,
-    triggerCount: triggerThreads.length,
-    groupedKeys: Object.keys(groupedThreads),
-    groupedCounts: Object.entries(groupedThreads).map(([key, threads]) => ({ [key]: threads.length }))
-  });
 
   // Pagination helpers
   const pagination = threadsResponse?.pagination;
   const totalPages = pagination?.pages || 1;
   const canGoPrevious = currentPage > 1;
   const canGoNext = currentPage < totalPages;
-  
-  console.log('📋 NavAgents: Pagination state', {
-    threadsResponseExists: !!threadsResponse,
-    paginationExists: !!pagination,
-    pagination,
-    totalPages,
-    currentPage,
-    canGoPrevious,
-    canGoNext
-  });
 
   const handlePreviousPage = () => {
     if (canGoPrevious) {

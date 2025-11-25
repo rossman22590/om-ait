@@ -14,14 +14,8 @@ import stripe
 from core.services.supabase import DBConnection
 from core.utils.config import config
 from core.utils.logger import logger
-from core.billing.config import (
-    get_tier_by_price_id,
-    is_commitment_price_id,
-    get_commitment_duration_months,
-    get_tier_by_name,
-)
-from core.billing.credit_manager import credit_manager
-from core.utils.cache import Cache
+from core.billing.shared.config import get_tier_by_price_id, is_commitment_price_id, get_commitment_duration_months
+from core.billing.credits.manager import credit_manager
 
 stripe.api_key = config.STRIPE_SECRET_KEY
 

@@ -298,7 +298,7 @@ export function SidebarLeft({
             <PanelLeftClose className="!h-5 !w-5" />
           </Button>
         </div>
-      </SidebarHeader >
+      </SidebarHeader>
       <SidebarContent className="[&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
         <AnimatePresence mode="wait">
           {state === 'collapsed' ? (
@@ -481,7 +481,7 @@ export function SidebarLeft({
         open={showSearchModal}
         onOpenChange={setShowSearchModal}
       />
-    </Sidebar >
+    </Sidebar>
   );
 }
 

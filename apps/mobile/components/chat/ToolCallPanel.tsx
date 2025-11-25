@@ -2,8 +2,9 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
+import { Button } from '@/components/ui/button';
 import type { UnifiedMessage } from '@/api/types';
-import { parseToolMessage } from '@/lib/utils/tool-parser';
+import { extractToolCallAndResult } from '@/lib/utils/tool-data-extractor';
 import { getToolViewComponent } from './tool-views';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import type { BottomSheetBackdropProps } from '@gorhom/bottom-sheet';
@@ -22,6 +23,11 @@ interface ToolCallPanelProps {
   onClose: () => void;
   toolMessages: ToolMessagePair[];
   initialIndex?: number;
+  project?: {
+    id: string;
+    name: string;
+    sandbox_id?: string;
+  };
 }
 
 export function ToolCallPanel({
@@ -29,6 +35,7 @@ export function ToolCallPanel({
   onClose,
   toolMessages,
   initialIndex = 0,
+  project,
 }: ToolCallPanelProps) {
   const bottomSheetRef = React.useRef<BottomSheet>(null);
   const snapPoints = React.useMemo(() => ['85%'], []);
@@ -49,12 +56,16 @@ export function ToolCallPanel({
 
   const currentPair = toolMessages[currentIndex];
   
-  const toolData = useMemo(() => {
-    if (!currentPair?.toolMessage) return null;
-    return parseToolMessage(currentPair.toolMessage.content);
+  // Extract tool call and tool result from messages
+  const { toolCall, toolResult, isSuccess, assistantTimestamp, toolTimestamp } = useMemo(() => {
+    if (!currentPair?.toolMessage) return { toolCall: null, toolResult: null, isSuccess: false, assistantTimestamp: undefined, toolTimestamp: undefined };
+    return extractToolCallAndResult(currentPair.assistantMessage, currentPair.toolMessage);
   }, [currentPair]);
 
-  const { toolName } = toolData || { toolName: 'Error' };
+  const toolName = useMemo(() => {
+    if (!toolCall) return 'Error';
+    return toolCall.function_name.replace(/_/g, '-');
+  }, [toolCall]);
 
   const ToolViewComponent = useMemo(() => {
     return getToolViewComponent(toolName);
@@ -82,17 +93,19 @@ export function ToolCallPanel({
     onClose();
   }, [onClose]);
 
+  const isDark = colorScheme === 'dark';
+
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
       <BottomSheetBackdrop
         {...props}
         disappearsOnIndex={-1}
         appearsOnIndex={0}
-        opacity={0.5}
+        opacity={isDark ? 0.8 : 0.5}
         pressBehavior="close"
       />
     ),
-    []
+    [isDark]
   );
 
   const handleSheetChange = useCallback((index: number) => {
@@ -112,11 +125,11 @@ export function ToolCallPanel({
       enablePanDownToClose
       onChange={handleSheetChange}
       backdropComponent={renderBackdrop}
-      backgroundStyle={{ 
-        backgroundColor: colorScheme === 'dark' ? '#161618' : '#FFFFFF'
+      backgroundStyle={{
+        backgroundColor: isDark ? '#1a1a1c' : '#ffffff',
       }}
-      handleIndicatorStyle={{ 
-        backgroundColor: colorScheme === 'dark' ? '#3F3F46' : '#D4D4D8',
+      handleIndicatorStyle={{
+        backgroundColor: isDark ? '#3a3a3c' : '#d1d1d6',
         width: 36,
         height: 5,
         borderRadius: 3,
@@ -127,15 +140,19 @@ export function ToolCallPanel({
       style={{
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
-        overflow: 'hidden'
+        overflow: 'hidden',
+        backgroundColor: isDark ? '#1a1a1c' : '#ffffff',
       }}
     >
-      <BottomSheetScrollView 
+      <BottomSheetScrollView
         className="flex-1"
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 20 }}
+        contentContainerStyle={{ 
+          paddingBottom: 20,
+          backgroundColor: isDark ? '#1a1a1c' : '#ffffff',
+        }}
       >
-        {!currentPair || !toolData ? (
+        {!currentPair || !toolCall ? (
           <View className="flex-1 justify-center items-center px-6 py-12">
             <Text className="text-foreground font-roobert-semibold text-lg mb-4">
               Error Loading Tool Data
@@ -146,81 +163,68 @@ export function ToolCallPanel({
           </View>
         ) : (
           <ToolViewComponent
-            toolData={toolData}
-            assistantMessage={currentPair.assistantMessage}
-            toolMessage={currentPair.toolMessage}
+            toolCall={toolCall}
+            toolResult={toolResult || undefined}
+            assistantTimestamp={currentPair.assistantMessage?.created_at}
+            toolTimestamp={currentPair.toolMessage?.created_at}
+            isSuccess={toolResult?.success !== false}
             currentIndex={currentIndex}
             totalCalls={toolMessages.length}
+            project={project}
           />
         )}
       </BottomSheetScrollView>
 
       {toolMessages.length > 1 && (
-        <View 
-          className="border-t border-border bg-card px-6"
+        <View
+          className="px-6 border-t border-border"
           style={{
             paddingTop: 12,
             paddingBottom: Math.max(insets.bottom, 12),
+            backgroundColor: isDark ? '#1a1a1c' : '#ffffff',
+            borderTopColor: isDark ? '#2a2a2c' : '#e5e5e7',
           }}
         >
-          <View className="flex-row items-center justify-between">
-            <Pressable
+          <View className="flex-row items-center justify-between gap-3">
+            <Button
               onPress={handlePrev}
               disabled={isPrevDisabled}
-              className={`flex-row items-center px-4 py-2 rounded-2xl ${
-                isPrevDisabled
-                  ? 'bg-secondary/50 opacity-40'
-                  : 'bg-secondary active:bg-secondary/80'
-              }`}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              variant="default"
+              size="sm"
+              className="rounded-2xl px-4"
             >
-              <Icon 
-                as={ChevronLeft} 
-                size={16} 
-                className={isPrevDisabled ? 'text-foreground/30' : 'text-foreground/60'} 
+              <Icon
+                as={ChevronLeft}
+                size={14}
+                className="text-primary-foreground"
               />
-              <Text 
-                className={`text-sm ml-1 font-roobert-medium ${
-                  isPrevDisabled 
-                    ? 'text-foreground/30' 
-                    : 'text-foreground/60'
-                }`}
-              >
+              <Text className="text-sm font-roobert-medium text-primary-foreground">
                 Prev
               </Text>
-            </Pressable>
+            </Button>
 
-            <View className="px-4">
+            <View className="px-2">
               <Text className="text-sm font-roobert-semibold text-foreground tabular-nums">
                 {currentIndex + 1}/{toolMessages.length}
               </Text>
             </View>
 
-            <Pressable
+            <Button
               onPress={handleNext}
               disabled={isNextDisabled}
-              className={`flex-row items-center px-4 py-2 rounded-2xl ${
-                isNextDisabled
-                  ? 'bg-secondary/50 opacity-40'
-                  : 'bg-secondary active:bg-secondary/80'
-              }`}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              variant="default"
+              size="sm"
+              className="rounded-2xl px-4"
             >
-              <Text 
-                className={`text-sm mr-1 font-roobert-medium ${
-                  isNextDisabled
-                    ? 'text-foreground/30' 
-                    : 'text-foreground/60'
-                }`}
-              >
+              <Text className="text-sm font-roobert-medium text-primary-foreground">
                 Next
               </Text>
-              <Icon 
-                as={ChevronRight} 
-                size={16} 
-                className={isNextDisabled ? 'text-foreground/30' : 'text-foreground/60'} 
+              <Icon
+                as={ChevronRight}
+                size={14}
+                className="text-primary-foreground"
               />
-            </Pressable>
+            </Button>
           </View>
         </View>
       )}

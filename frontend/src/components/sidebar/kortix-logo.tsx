@@ -1,9 +1,7 @@
 'use client';
 
-import Image from 'next/image';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
-import { isLocalMode, isStagingMode } from '@/lib/config';
 import { cn } from '@/lib/utils';
 
 interface KortixLogoProps {
@@ -11,6 +9,7 @@ interface KortixLogoProps {
   variant?: 'symbol' | 'logomark';
   className?: string;
 }
+
 export function KortixLogo({ size = 24, variant = 'symbol', className }: KortixLogoProps) {
   const { theme, systemTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -37,7 +36,7 @@ export function KortixLogo({ size = 24, variant = 'symbol', className }: KortixL
     );
   }
 
-  // Default symbol variant behavior (unchanged)
+  // Default symbol variant behavior
   return (
     <Image
       src="/logo.png"

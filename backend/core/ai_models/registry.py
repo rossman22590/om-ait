@@ -16,7 +16,7 @@ else:
 
 is_local = config.ENV_MODE == EnvMode.LOCAL
 is_prod = config.ENV_MODE == EnvMode.PRODUCTION
-pricing_multiplier = 0.20 if is_prod else 1.0
+# pricing_multiplier = 0.20 if is_prod else 1.0
 
 class ModelRegistry:
     def __init__(self):
@@ -284,8 +284,11 @@ class ModelRegistry:
                 ModelCapability.STRUCTURED_OUTPUT,
             ],
             pricing=ModelPricing(
-                input_cost_per_million_tokens=0.30 * pricing_multiplier,
-                output_cost_per_million_tokens=2.50 * pricing_multiplier
+                input_cost_per_million_tokens=0.30,
+                output_cost_per_million_tokens=2.50,
+                cached_read_cost_per_million_tokens=0.30,  # Cache hits & refreshes
+                cache_write_5m_cost_per_million_tokens=3.75,  # 5-minute cache writes
+                cache_write_1h_cost_per_million_tokens=6.00  # 1-hour cache writes
             ),
             tier_availability=["paid"],
             priority=93,

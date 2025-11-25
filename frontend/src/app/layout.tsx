@@ -47,6 +47,10 @@ export const metadata: Metadata = {
     'task automation',
     'Machine',
     'generalist AI',
+    'code generation',
+    'AI coding assistant',
+    'workflow automation',
+    'AI productivity',
   ],
   authors: [
     { name: 'Machine Team', url: 'https://machine.myapps.ai' }
@@ -99,11 +103,13 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/favicon.png', sizes: 'any' },
-      { url: '/favicon-light.png', sizes: 'any', media: '(prefers-color-scheme: dark)' },
+      { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
+      { url: '/favicon-light.png', sizes: '32x32', type: 'image/png', media: '(prefers-color-scheme: dark)' },
     ],
     shortcut: '/favicon.png',
-    apple: '/favicon.png',
+    apple: [
+      { url: '/logo_black.png', sizes: '180x180', type: 'image/png' },
+    ],
   },
   manifest: '/manifest.json',
   alternates: {
@@ -111,6 +117,11 @@ export const metadata: Metadata = {
   },
   verification: {
     google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+  },
+  other: {
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+    'apple-mobile-web-app-title': 'Kortix',
   },
 };
 
@@ -159,6 +170,7 @@ export default function RootLayout({
               alternateName: 'Machine',
               applicationCategory: 'BusinessApplication',
               operatingSystem: 'Web, macOS, Windows, Linux',
+              description: siteConfig.description,
               offers: {
                 '@type': 'Offer',
                 price: '0',
@@ -179,7 +191,6 @@ export default function RootLayout({
           'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
           })(window,document,'script','dataLayer','GTM-PCHSN4M2');`}
         </Script>
-        <Script async src="https://cdn.tolt.io/tolt.js" data-tolt={process.env.NEXT_PUBLIC_TOLT_REFERRAL_ID}></Script>
       </head>
 
       <body className="antialiased font-sans bg-background">

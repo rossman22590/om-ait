@@ -12,6 +12,13 @@ import {
   HIDE_STREAMING_XML_TAGS,
 } from '@/lib/utils/tool-parser';
 import { getToolIcon, getUserFriendlyToolName } from '@/lib/utils/tool-display';
+import {
+  extractTextFromPartialJson,
+  extractTextFromArguments,
+  isAskOrCompleteTool,
+  findAskOrCompleteTool,
+  shouldSkipStreamingRender,
+} from '@/lib/utils/streaming-utils';
 import { useColorScheme } from 'nativewind';
 import Markdown from 'react-native-markdown-display';
 import { markdownStyles, markdownStylesDark } from '@/lib/utils/markdown-styles';
@@ -23,6 +30,7 @@ import { AgentLoader } from './AgentLoader';
 import { CircleDashed, CheckCircle2, AlertCircle, Info } from 'lucide-react-native';
 import { StreamingToolCard } from './StreamingToolCard';
 import { TaskCompletedFeedback } from './tool-views/complete-tool/TaskCompletedFeedback';
+import { renderAssistantMessage } from './assistant-message-renderer';
 
 export interface ToolMessagePair {
   assistantMessage: UnifiedMessage | null;
@@ -101,7 +109,7 @@ interface MarkdownContentProps {
   isLatestMessage?: boolean;
 }
 
-function MarkdownContent({ content, handleToolClick, messageId, threadId, onFilePress, sandboxId, isLatestMessage }: MarkdownContentProps) {
+const MarkdownContent = React.memo(function MarkdownContent({ content, handleToolClick, messageId, threadId, onFilePress, sandboxId, isLatestMessage }: MarkdownContentProps) {
   const { colorScheme } = useColorScheme();
 
   const processedContent = useMemo(() => {
@@ -183,7 +191,7 @@ function MarkdownContent({ content, handleToolClick, messageId, threadId, onFile
               >
                 {askText}
               </Markdown>
-              
+
               <View className="flex-row items-start gap-2.5 rounded-xl border border-border bg-muted/40 dark:bg-muted/20 px-3 py-2.5 mt-2">
                 <Icon as={Info} size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
                 <Text className="text-sm font-roobert text-muted-foreground flex-1 leading-relaxed">
@@ -218,13 +226,13 @@ function MarkdownContent({ content, handleToolClick, messageId, threadId, onFile
               >
                 {completeText}
               </Markdown>
-              
+
               <TaskCompletedFeedback
                 taskSummary={completeText}
                 threadId={threadId || ''}
                 messageId={messageId || ''}
                 onFollowUpClick={(prompt) => {
-                  console.log('Follow-up clicked:', prompt);
+                  // TODO: Handle follow-up click - could trigger a new message
                 }}
               />
             </View>
@@ -301,7 +309,7 @@ function MarkdownContent({ content, handleToolClick, messageId, threadId, onFile
       {processedContent}
     </Markdown>
   );
-}
+});
 
 const ToolCard = React.memo(function ToolCard({
   message,
@@ -319,7 +327,7 @@ const ToolCard = React.memo(function ToolCard({
   const completedData = useMemo(() => {
     if (!message || isLoading) return null;
 
-    const parsed = parseToolMessage(message.content);
+    const parsed = parseToolMessage(message);
     if (!parsed) {
       return {
         toolName: 'Unknown Tool',
@@ -355,9 +363,9 @@ const ToolCard = React.memo(function ToolCard({
       <Pressable
         onPress={onPress}
         disabled={!onPress}
-        className="flex-row items-center gap-3 p-3 rounded-3xl border border-neutral-400/50 dark:border-neutral-700 bg-neutral-200 dark:bg-neutral-800 active:opacity-70"
+        className="flex-row items-center gap-3 p-3 rounded-3xl border border-border bg-card"
       >
-        <View className="h-8 w-8 rounded-xl border border-neutral-400/50 dark:border-neutral-700 items-center justify-center bg-primary/10">
+        <View className="h-8 w-8 rounded-xl border border-border items-center justify-center bg-background">
           <Icon as={CircleDashed} size={16} className="text-primary animate-spin" />
         </View>
         <View className="flex-1">
@@ -378,9 +386,9 @@ const ToolCard = React.memo(function ToolCard({
     <Pressable
       onPress={onPress}
       disabled={!onPress}
-      className="flex-row items-center gap-3 p-3 rounded-3xl bg-primary/10 active:opacity-70"
+      className="flex-row items-center gap-3 p-3 rounded-3xl bg-card border border-border"
     >
-      <View className={`h-8 w-8 rounded-xl items-center justify-center ${isError ? 'bg-destructive/10' : 'bg-primary/10'}`}>
+      <View className={`h-8 w-8 rounded-xl items-center justify-center border border-border ${isError ? 'bg-destructive/10' : 'bg-background'}`}>
         <Icon
           as={isError ? AlertCircle : IconComponent}
           size={16}
@@ -404,7 +412,7 @@ const ToolCard = React.memo(function ToolCard({
 interface ThreadContentProps {
   messages: UnifiedMessage[];
   streamingTextContent?: string;
-  streamingToolCall?: any;
+  streamingToolCall?: UnifiedMessage | null;
   agentStatus: 'idle' | 'running' | 'connecting' | 'error';
   handleToolClick?: (assistantMessageId: string | null, toolName: string) => void;
   onFilePress?: (filePath: string) => void;
@@ -420,7 +428,7 @@ interface MessageGroup {
   key: string;
 }
 
-export const ThreadContent: React.FC<ThreadContentProps> = ({
+export const ThreadContent: React.FC<ThreadContentProps> = React.memo(({
   messages,
   streamingTextContent = "",
   streamingToolCall,
@@ -450,7 +458,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
       const metadata = safeJsonParse<ParsedMetadata>(toolMsg.metadata, {});
       const assistantId = metadata.assistant_message_id || null;
 
-      const parsed = parseToolMessage(toolMsg.content);
+      const parsed = parseToolMessage(toolMsg);
       const toolName = parsed?.toolName || '';
 
       if (toolName === 'ask' || toolName === 'complete') {
@@ -608,6 +616,21 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
       }
     }
 
+    // Handle streaming tool call (e.g., ask/complete) - ensure there's a group to render in
+    // This is needed because native tool calls have no text content, only metadata
+    if (streamingToolCall && !streamingTextContent) {
+      const lastGroup = finalGroupedMessages.at(-1);
+      if (!lastGroup || lastGroup.type === 'user') {
+        // Create new empty assistant group so streaming tool call can render
+        assistantGroupCounter++;
+        finalGroupedMessages.push({
+          type: 'assistant_group',
+          messages: [],
+          key: `assistant-group-${assistantGroupCounter}-streaming-tool`
+        });
+      }
+    }
+
     return finalGroupedMessages;
   }, [displayMessages, streamingTextContent]);
 
@@ -633,7 +656,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
           const metadata = safeJsonParse<ParsedMetadata>(toolMsg.metadata, {});
           const assistantId = metadata.assistant_message_id || null;
 
-          const parsed = parseToolMessage(toolMsg.content);
+          const parsed = parseToolMessage(toolMsg);
           const toolName = parsed?.toolName || '';
 
           if (toolName === 'ask' || toolName === 'complete') {
@@ -653,15 +676,10 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
     return maps;
   }, [groupedMessages]);
 
-  const handleToolPress = useCallback((clickedToolMsg: UnifiedMessage) => {
+  const handleToolPressInternal = useCallback((clickedToolMsg: UnifiedMessage) => {
     const clickedIndex = allToolMessages.findIndex(
       t => t.toolMessage.message_id === clickedToolMsg.message_id
     );
-    console.log('🎯 [ThreadContent] Tool clicked:', {
-      toolId: clickedToolMsg.message_id,
-      indexInThread: clickedIndex,
-      totalToolsInThread: allToolMessages.length,
-    });
     onToolPress?.(allToolMessages, clickedIndex >= 0 ? clickedIndex : 0);
   }, [allToolMessages, onToolPress]);
 
@@ -755,10 +773,19 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
 
               <View className="gap-3">
                 {assistantMessages.map((message, msgIndex) => {
-                  const parsedContent = safeJsonParse<ParsedContent>(message.content, {});
                   const msgKey = message.message_id || `submsg-assistant-${msgIndex}`;
-
-                  if (!parsedContent.content) return null;
+                  
+                  // Parse metadata to check for tool calls and text content
+                  const metadata = safeJsonParse<ParsedMetadata>(message.metadata, {});
+                  const toolCalls = metadata.tool_calls || [];
+                  const textContent = metadata.text_content || '';
+                  
+                  // Skip if no content (no text and no tool calls)
+                  if (!textContent && toolCalls.length === 0) {
+                    // Fallback: try parsing content for legacy messages
+                    const parsedContent = safeJsonParse<ParsedContent>(message.content, {});
+                    if (!parsedContent.content) return null;
+                  }
 
                   const linkedTools = toolResultsMap.get(message.message_id || null);
 
@@ -767,17 +794,25 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                   const isLastAssistantMessage = msgIndex === assistantMessages.length - 1;
                   const isLatestMessage = isLastGroup && isLastAssistantMessage;
 
+                  // Use metadata-based rendering (new approach)
+                  const renderedContent = renderAssistantMessage({
+                    message,
+                    onToolClick: handleToolClick || (() => {}),
+                    onFileClick: onFilePress,
+                    sandboxId,
+                    isLatestMessage,
+                    threadId: undefined, // TODO: pass threadId if available
+                    onPromptFill: undefined, // TODO: add prompt fill handler if needed
+                    isDark, // Pass color scheme from parent
+                  });
+
                   return (
                     <View key={msgKey}>
-                      <MarkdownContent
-                        content={parsedContent.content}
-                        handleToolClick={handleToolClick}
-                        messageId={message.message_id}
-                        threadId={message.thread_id}
-                        onFilePress={onFilePress}
-                        sandboxId={sandboxId}
-                        isLatestMessage={isLatestMessage}
-                      />
+                      {renderedContent && (
+                        <View className="gap-2">
+                          {renderedContent}
+                        </View>
+                      )}
 
                       {linkedTools && linkedTools.length > 0 && (
                         <View className="gap-2 mt-3">
@@ -803,14 +838,11 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                   );
                 })}
 
-                {groupIndex === groupedMessages.length - 1 && (streamHookStatus === 'streaming' || streamHookStatus === 'connecting') && (
+                {/* Render streaming text content (XML tool calls or regular text) */}
+                {groupIndex === groupedMessages.length - 1 && (streamHookStatus === 'streaming' || streamHookStatus === 'connecting') && streamingTextContent && (
                   <View className="mt-3">
                     {(() => {
                       const rawContent = streamingTextContent || '';
-
-                      if (!rawContent) {
-                        return <AgentLoader />;
-                      }
 
                       let detectedTag: string | null = null;
                       let tagStartIndex = -1;
@@ -856,6 +888,69 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                   </View>
                 )}
 
+                {/* Render streaming native tool call (ask/complete) */}
+                {groupIndex === groupedMessages.length - 1 && 
+                  (streamHookStatus === 'streaming' || streamHookStatus === 'connecting') && 
+                  streamingToolCall && 
+                  (() => {
+                    // Check if this is ask/complete - render as text instead of tool indicator
+                    const parsedMetadata = safeJsonParse<ParsedMetadata>(streamingToolCall.metadata, {});
+                    const toolCalls = parsedMetadata.tool_calls || [];
+                    
+                    const askOrCompleteTool = findAskOrCompleteTool(toolCalls);
+                    
+                    // For ask/complete, render the text content directly
+                    if (askOrCompleteTool) {
+                      // Check if the last assistant message already has completed ask/complete
+                      const currentGroupAssistantMessages = group.messages.filter(m => m.type === 'assistant');
+                      const lastAssistantMessage = currentGroupAssistantMessages.length > 0 
+                        ? currentGroupAssistantMessages[currentGroupAssistantMessages.length - 1] 
+                        : null;
+                      if (lastAssistantMessage) {
+                        const lastMsgMetadata = safeJsonParse<ParsedMetadata>(lastAssistantMessage.metadata, {});
+                        // If the last message already has ask/complete and is complete, skip
+                        if (shouldSkipStreamingRender(lastMsgMetadata)) {
+                          return null;
+                        }
+                      }
+                      
+                      // Extract text from arguments
+                      const toolArgs: any = askOrCompleteTool.arguments;
+                      let askCompleteText = '';
+                      if (toolArgs) {
+                        askCompleteText = extractTextFromArguments(toolArgs);
+                      }
+                      
+                      const toolName = askOrCompleteTool.function_name?.replace(/_/g, '-').toLowerCase() || '';
+                      const textToShow = askCompleteText || (toolName === 'ask' ? 'Asking...' : 'Completing...');
+                      
+                      return (
+                        <View className="mt-3">
+                          <Markdown
+                            style={colorScheme === 'dark' ? markdownStylesDark : markdownStyles}
+                            onLinkPress={(url) => {
+                              Linking.openURL(url).catch(console.error);
+                              return false;
+                            }}
+                          >
+                            {textToShow}
+                          </Markdown>
+                        </View>
+                      );
+                    }
+                    
+                    // For non-ask/complete tools, check if any tool calls exist
+                    const isAskOrComplete = toolCalls.some(tc => isAskOrCompleteTool(tc.function_name));
+                    
+                    // Don't render tool call indicator for ask/complete - they're handled above
+                    if (isAskOrComplete) {
+                      return null;
+                    }
+                    
+                    // For other tools, could render a spinning indicator here if needed
+                    return null;
+                  })()}
+
               </View>
             </View>
           );
@@ -880,7 +975,9 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
       <View className="h-4" />
     </View>
   );
-};
+});
+
+ThreadContent.displayName = 'ThreadContent';
 
 export default ThreadContent;
 
