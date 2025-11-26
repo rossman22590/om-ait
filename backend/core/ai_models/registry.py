@@ -108,7 +108,7 @@ class ModelRegistry:
                 output_cost_per_million_tokens=5.00 * pricing_multiplier
             ),
             tier_availability=["free", "paid"],
-            priority=101,
+            priority=105,
             recommended=True,
             enabled=True,
             config=ModelConfig(
