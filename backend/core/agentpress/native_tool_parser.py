@@ -159,21 +159,40 @@ def convert_buffer_to_complete_tool_calls(tool_calls_buffer: Dict[int, Dict[str,
     """
     complete_tool_calls = []
     
-    for idx, tc_buf in tool_calls_buffer.items():
+    # Preserve provider order by sorting on the tool_call index
+    for idx in sorted(tool_calls_buffer.keys()):
+        tc_buf = tool_calls_buffer[idx]
         if tc_buf.get('id') and tc_buf.get('function', {}).get('name') and tc_buf.get('function', {}).get('arguments'):
             try:
                 # Validate that arguments are valid JSON
                 from core.utils.json_helpers import safe_json_parse
                 safe_json_parse(tc_buf['function']['arguments'])
                 # Keep arguments as JSON string for LiteLLM compatibility
-                complete_tool_calls.append({
+                complete_call = {
                     "id": tc_buf['id'],
                     "type": "function",
                     "function": {
                         "name": tc_buf['function']['name'],
                         "arguments": tc_buf['function']['arguments']
                     }
-                })
+                }
+                # Preserve provider-specific fields and thought_signature (e.g., Gemini)
+                buf_psf = tc_buf.get('provider_specific_fields')
+                if isinstance(buf_psf, dict) and buf_psf:
+                    complete_call['provider_specific_fields'] = {
+                        **complete_call.get('provider_specific_fields', {}),
+                        **buf_psf
+                    }
+                if 'thought_signature' in tc_buf and tc_buf['thought_signature']:
+                    ts = tc_buf['thought_signature']
+                    complete_call['provider_specific_fields'] = {
+                        **complete_call.get('provider_specific_fields', {}),
+                        'thought_signature': ts
+                    }
+                    complete_call['function']['thought_signature'] = ts
+                    complete_call['thought_signature'] = ts
+
+                complete_tool_calls.append(complete_call)
             except (json.JSONDecodeError, TypeError):
                 continue
     

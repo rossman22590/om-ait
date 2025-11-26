@@ -342,6 +342,20 @@ async def make_llm_api_call(
     # Apply additional configurations
     _configure_openai_compatible(params, model_name, api_key, api_base)
     _add_tools_config(params, tools, tool_choice, sanitize=_should_sanitize(resolved_model_name))
+
+    # Gemini 3 Pro Preview: ensure reasoning is enabled so thought_signatures are produced and can be preserved
+    try:
+        if isinstance(resolved_model_name, str) and resolved_model_name.lower().startswith("openrouter/google/gemini-3-pro-preview"):
+            # Prefer LiteLLM-compatible flag; default to low to control cost, unless already provided by caller
+            if "reasoning_effort" not in params:
+                params["reasoning_effort"] = "low"
+            
+            # Note: X-OpenRouter-Preserve-Reasoning might cause timeouts, keeping simple for now
+            
+            logger.info("🔧 Gemini 3 Pro Preview: Set reasoning_effort=low")
+    except Exception as e:
+        logger.warning(f"Failed to configure Gemini 3 Pro Preview parameters: {e}")
+        pass
     
     # Final safeguard: Re-apply stop sequences
     if stop is not None:
@@ -389,6 +403,7 @@ async def make_llm_api_call(
         err_msg = str(e).lower()
         schema_err = any(tok in err_msg for tok in ["oneof", "anyof", "allof", "input_schema", "does not support", "schema"])
         initial = _should_sanitize(resolved_model_name)
+        # Gemini-specific no-tools fallback removed per policy; rely on preservation fixes and normal error handling.
         if not initial and schema_err:
             try:
                 retry_override = dict(override_params)
@@ -420,54 +435,15 @@ async def make_llm_api_call(
                     return _wrap_streaming_response(response)
                 return response
             except Exception as retry_e:
-                # Final fallback: drop tools/response_format to get a plain text answer
-                try:
-                    retry_override2 = dict(override_params)
-                    retry_override2.pop("response_format", None)
-                    retry_params2 = model_manager.get_litellm_params(resolved_model_name, **retry_override2)
-                    _configure_openai_compatible(retry_params2, model_name, api_key, api_base)
-                    # Do not include tools
-                    if "tools" in retry_params2:
-                        retry_params2.pop("tools", None)
-                    if "tool_choice" in retry_params2:
-                        retry_params2.pop("tool_choice", None)
-                    if stop is not None:
-                        retry_params2["stop"] = stop
-                    if stream:
-                        retry_params2["stream_options"] = {"include_usage": True}
-                    response = await provider_router.acompletion(**retry_params2)
-                    if hasattr(response, '__aiter__') and stream:
-                        return _wrap_streaming_response(response)
-                    return response
-                except Exception as retry2_e:
-                    processed_retry = ErrorProcessor.process_llm_error(retry2_e, context={"model": model_name, "retry": True, "fallback_no_tools": True})
-                    ErrorProcessor.log_error(processed_retry)
-                    raise LLMError(processed_retry.message)
-
-        # If initial sanitization was applied and still schema error, try no-tools fallback once
-        if initial and schema_err:
-            try:
-                simple_override = dict(override_params)
-                simple_override.pop("response_format", None)
-                simple_params = model_manager.get_litellm_params(resolved_model_name, **simple_override)
-                _configure_openai_compatible(simple_params, model_name, api_key, api_base)
-                # remove tools
-                if "tools" in simple_params:
-                    simple_params.pop("tools", None)
-                if "tool_choice" in simple_params:
-                    simple_params.pop("tool_choice", None)
-                if stop is not None:
-                    simple_params["stop"] = stop
-                if stream:
-                    simple_params["stream_options"] = {"include_usage": True}
-                response = await provider_router.acompletion(**simple_params)
-                if hasattr(response, '__aiter__') and stream:
-                    return _wrap_streaming_response(response)
-                return response
-            except Exception as retry3_e:
-                processed_retry = ErrorProcessor.process_llm_error(retry3_e, context={"model": model_name, "retry": True, "initial_sanitized": True, "fallback_no_tools": True})
+                processed_retry = ErrorProcessor.process_llm_error(retry_e, context={"model": model_name, "retry": True, "sanitized_schema_retry_failed": True})
                 ErrorProcessor.log_error(processed_retry)
                 raise LLMError(processed_retry.message)
+
+        # If initial sanitization was applied and still schema error, surface the error (do not drop tools)
+        if initial and schema_err:
+            processed_error = ErrorProcessor.process_llm_error(e, context={"model": model_name, "initial_sanitized": True})
+            ErrorProcessor.log_error(processed_error)
+            raise LLMError(processed_error.message)
 
         processed_error = ErrorProcessor.process_llm_error(e, context={"model": model_name})
         ErrorProcessor.log_error(processed_error)

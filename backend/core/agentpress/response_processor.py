@@ -254,6 +254,7 @@ class ResponseProcessor:
         xml_tool_calls_with_ids = [] # Track XML tool calls with their IDs for metadata storage
         content_chunk_buffer = {} # Buffer to reorder content chunks: sequence -> chunk_data
         next_expected_sequence = 0 # Track the next expected sequence number for ordering
+        reasoning_details_buffer = [] # Collect provider reasoning_details blocks for preservation (Gemini/Claude/OpenAI)
 
         # Store the complete LiteLLM response object as received
         final_llm_response = None
@@ -411,7 +412,7 @@ class ResponseProcessor:
                     native_tool_calls_updated = False
                     native_tool_calls_updated = False
                     
-                    # Check for and log Anthropic thinking content
+                    # Check for and log Anthropic/Gemini thinking content (guard to Gemini 3 Pro Preview for special replay semantics)
                     if delta and hasattr(delta, 'reasoning_content') and delta.reasoning_content:
                         if not has_printed_thinking_prefix:
                             # print("[THINKING]: ", end='', flush=True)
@@ -424,6 +425,33 @@ class ResponseProcessor:
                             reasoning_content = ''.join(str(item) for item in reasoning_content)
                         # logger.debug(f"About to concatenate reasoning_content (type={type(reasoning_content)}) to accumulated_content (type={type(accumulated_content)})")
                         accumulated_content += reasoning_content
+
+                    # Preserve provider reasoning_details array if present (for Gemini 3 Pro Preview tool-calling continuity)
+                    try:
+                        if (
+                            isinstance(llm_model, str)
+                            and llm_model.lower().startswith("openrouter/google/gemini-3-pro-preview")
+                            and delta and hasattr(delta, 'reasoning_details') and delta.reasoning_details
+                        ):
+                            rd = delta.reasoning_details
+                            if isinstance(rd, list):
+                                for item in rd:
+                                    if isinstance(item, dict):
+                                        reasoning_details_buffer.append(item)
+                                    elif hasattr(item, 'model_dump'):
+                                        reasoning_details_buffer.append(item.model_dump())
+                                    else:
+                                        # Best-effort conversion
+                                        try:
+                                            reasoning_details_buffer.append(json.loads(json.dumps(item, default=str)))
+                                        except Exception:
+                                            pass
+                            elif isinstance(rd, dict):
+                                reasoning_details_buffer.append(rd)
+                            elif hasattr(rd, 'model_dump'):
+                                reasoning_details_buffer.append(rd.model_dump())
+                    except Exception:
+                        pass
 
                     # Process content chunk
                     if delta and hasattr(delta, 'content') and delta.content:
@@ -517,6 +545,29 @@ class ResponseProcessor:
                                 tool_calls_buffer[idx]['function']['name'] = tool_call_chunk.function.name
                             if hasattr(tool_call_chunk.function, 'arguments') and tool_call_chunk.function.arguments:
                                 tool_calls_buffer[idx]['function']['arguments'] += tool_call_chunk.function.arguments
+                            # Preserve Gemini 3 Pro Preview thought_signature and provider_specific_fields if present
+                            try:
+                                if isinstance(llm_model, str) and llm_model.lower().startswith("openrouter/google/gemini-3-pro-preview"):
+                                    if hasattr(tool_call_chunk, 'thought_signature') and tool_call_chunk.thought_signature:
+                                        tool_calls_buffer[idx]['thought_signature'] = tool_call_chunk.thought_signature
+                                    # Some providers may nest it under function or metadata
+                                    elif hasattr(tool_call_chunk, 'metadata') and getattr(tool_call_chunk, 'metadata', None):
+                                        meta = getattr(tool_call_chunk, 'metadata')
+                                        if isinstance(meta, dict) and meta.get('thought_signature'):
+                                            tool_calls_buffer[idx]['thought_signature'] = meta.get('thought_signature')
+                                    # Capture provider_specific_fields wholesale when available
+                                    if hasattr(tool_call_chunk, 'provider_specific_fields') and tool_call_chunk.provider_specific_fields:
+                                        try:
+                                            psf = tool_call_chunk.provider_specific_fields
+                                            # Ensure dict form
+                                            if hasattr(psf, 'model_dump'):
+                                                psf = psf.model_dump()
+                                            if isinstance(psf, dict):
+                                                tool_calls_buffer[idx]['provider_specific_fields'] = psf
+                                        except Exception:
+                                            pass
+                            except Exception:
+                                pass
                             
                             native_tool_calls_updated = True
                             
@@ -560,6 +611,17 @@ class ResponseProcessor:
                                     tool_calls_buffer,
                                     include_partial=True  # Include partial tool calls for streaming
                                 )
+                                # Attach provider_specific_fields if present in buffer entries
+                                try:
+                                    for i, tc in enumerate(native_unified):
+                                        buf = tool_calls_buffer.get(i)
+                                        if isinstance(buf, dict) and buf.get('provider_specific_fields'):
+                                            tc['provider_specific_fields'] = buf['provider_specific_fields']
+                                        if isinstance(buf, dict) and buf.get('thought_signature'):
+                                            psf = tc.setdefault('provider_specific_fields', {})
+                                            psf['thought_signature'] = buf['thought_signature']
+                                except Exception:
+                                    pass
                                 unified_tool_calls.extend(native_unified)
                             
                             # Add XML tool calls
@@ -746,6 +808,24 @@ class ResponseProcessor:
                 # Update complete_native_tool_calls from buffer (initialized earlier)
                 if config.native_tool_calling:
                     complete_native_tool_calls.extend(convert_buffer_to_complete_tool_calls(tool_calls_buffer))
+                    # For Gemini 3 Pro Preview, mirror thought_signature into extra_content.google
+                    try:
+                        if isinstance(llm_model, str) and llm_model.lower().startswith("openrouter/google/gemini-3-pro-preview"):
+                            for tc in complete_native_tool_calls:
+                                sig = None
+                                try:
+                                    psf = tc.get('provider_specific_fields') if isinstance(tc, dict) else None
+                                    if isinstance(psf, dict):
+                                        sig = psf.get('thought_signature') or sig
+                                    fn = tc.get('function') if isinstance(tc, dict) else None
+                                    if isinstance(fn, dict):
+                                        sig = fn.get('thought_signature') or sig
+                                except Exception:
+                                    pass
+                                if sig:
+                                    tc['extra_content'] = {"google": {"thought_signature": sig}}
+                    except Exception:
+                        pass
 
                 # Remove stop token from content if present (Bedrock may include it due to batch generation)
                 final_content = accumulated_content
@@ -756,6 +836,8 @@ class ResponseProcessor:
                 message_data = { # Dict to be saved in 'content'
                     "role": "assistant", "content": final_content
                 }
+                if reasoning_details_buffer and isinstance(llm_model, str) and llm_model.lower().startswith("openrouter/google/gemini-3-pro-preview"):
+                    message_data["reasoning_details"] = reasoning_details_buffer
                 
                 # Only add tool_calls field for NATIVE tool calling
                 if config.native_tool_calling and complete_native_tool_calls:
@@ -1301,6 +1383,7 @@ class ResponseProcessor:
                      logger.debug(f"Non-streaming finish_reason: {finish_reason}")
                      self.trace.event(name="non_streaming_finish_reason", level="DEFAULT", status_message=(f"Non-streaming finish_reason: {finish_reason}"))
                  response_message = llm_response.choices[0].message if hasattr(llm_response.choices[0], 'message') else None
+                 extracted_reasoning_details = None
                  if response_message:
                      if hasattr(response_message, 'content') and response_message.content:
                          content = response_message.content
@@ -1317,19 +1400,89 @@ class ResponseProcessor:
                              all_tool_data.extend(parsed_xml_data)
                              xml_tool_call_count += len(parsed_xml_data)
 
+                     # Capture reasoning_details for Gemini 3 Pro Preview (non-streaming)
+                     try:
+                         if isinstance(llm_model, str) and llm_model.lower().startswith("openrouter/google/gemini-3-pro-preview"):
+                             if hasattr(response_message, 'reasoning_details') and response_message.reasoning_details:
+                                 rd = response_message.reasoning_details
+                                 if isinstance(rd, list):
+                                     extracted_reasoning_details = []
+                                     for item in rd:
+                                         if isinstance(item, dict):
+                                             extracted_reasoning_details.append(item)
+                                         elif hasattr(item, 'model_dump'):
+                                             extracted_reasoning_details.append(item.model_dump())
+                                         else:
+                                             try:
+                                                 extracted_reasoning_details.append(json.loads(json.dumps(item, default=str)))
+                                             except Exception:
+                                                 pass
+                                 elif isinstance(rd, dict):
+                                     extracted_reasoning_details = rd
+                                 elif hasattr(rd, 'model_dump'):
+                                     extracted_reasoning_details = rd.model_dump()
+                     except Exception:
+                         pass
+
                      if config.native_tool_calling and hasattr(response_message, 'tool_calls') and response_message.tool_calls:
                           for tool_call in response_message.tool_calls:
                              if hasattr(tool_call, 'function'):
                                  raw_arguments_str = tool_call.function.arguments if isinstance(tool_call.function.arguments, str) else to_json_string(tool_call.function.arguments)
                                  exec_tool_call = convert_to_exec_tool_call(tool_call, raw_arguments_str=raw_arguments_str)
                                  all_tool_data.append({"tool_call": exec_tool_call})
-                                 native_tool_calls_for_message.append({
-                                     "id": exec_tool_call["id"], "type": "function",
+                                 # Build native tool_call preserving provider-specific fields (e.g., Gemini thought_signature)
+                                 native_tc = {
+                                     "id": exec_tool_call["id"],
+                                     "type": "function",
                                      "function": {
                                          "name": tool_call.function.name,
                                          "arguments": raw_arguments_str  # Keep as string for LiteLLM compatibility
                                      }
-                                 })
+                                 }
+                                 try:
+                                     psf = None
+                                     thought_sig = None
+                                     
+                                     # Debug log the raw tool_call object for Gemini 3 Pro Preview
+                                     if isinstance(llm_model, str) and llm_model.lower().startswith("openrouter/google/gemini-3-pro-preview"):
+                                         logger.debug(f"🔍 Raw tool_call object attributes: {dir(tool_call)}")
+                                         logger.debug(f"🔍 Raw tool_call dict: {tool_call.__dict__ if hasattr(tool_call, '__dict__') else 'no __dict__'}")
+                                     
+                                     # Direct attributes
+                                     if hasattr(tool_call, 'provider_specific_fields') and getattr(tool_call, 'provider_specific_fields'):
+                                         psf = getattr(tool_call, 'provider_specific_fields')
+                                         if hasattr(psf, 'model_dump'):
+                                             psf = psf.model_dump()
+                                         logger.debug(f"🔍 Found provider_specific_fields: {psf}")
+                                     if hasattr(tool_call, 'thought_signature') and getattr(tool_call, 'thought_signature'):
+                                         thought_sig = getattr(tool_call, 'thought_signature')
+                                         logger.debug(f"🔍 Found thought_signature directly: {thought_sig}")
+                                     # Maybe under function
+                                     if thought_sig is None and hasattr(tool_call, 'function') and hasattr(tool_call.function, 'thought_signature'):
+                                         thought_sig = getattr(tool_call.function, 'thought_signature')
+                                         logger.debug(f"🔍 Found thought_signature under function: {thought_sig}")
+                                     # Maybe under metadata
+                                     if thought_sig is None and hasattr(tool_call, 'metadata') and getattr(tool_call, 'metadata') is not None:
+                                         meta = getattr(tool_call, 'metadata')
+                                         if isinstance(meta, dict):
+                                             thought_sig = meta.get('thought_signature') or thought_sig
+                                         elif hasattr(meta, 'thought_signature'):
+                                             thought_sig = getattr(meta, 'thought_signature')
+                                         if thought_sig:
+                                             logger.debug(f"🔍 Found thought_signature under metadata: {thought_sig}")
+                                     # Apply to function + provider_specific_fields
+                                     if thought_sig:
+                                         native_tc['function']['thought_signature'] = thought_sig
+                                         native_tc['provider_specific_fields'] = {**native_tc.get('provider_specific_fields', {}), 'thought_signature': thought_sig}
+                                         logger.info(f"✅ Preserved thought_signature in native tool_call: {thought_sig}")
+                                     else:
+                                         logger.warning(f"⚠️ No thought_signature found for Gemini 3 Pro Preview tool_call")
+                                     if isinstance(psf, dict) and psf:
+                                         native_tc['provider_specific_fields'] = {**native_tc.get('provider_specific_fields', {}), **psf}
+                                 except Exception as e:
+                                     logger.error(f"❌ Error capturing thought_signature: {e}")
+                                     pass
+                                 native_tool_calls_for_message.append(native_tc)
 
 
             # --- SAVE and YIELD Final Assistant Message ---
@@ -1337,6 +1490,24 @@ class ResponseProcessor:
             
             # Only add tool_calls field for NATIVE tool calling
             if config.native_tool_calling and native_tool_calls_for_message:
+                # For Gemini 3 Pro Preview, mirror thought_signature into extra_content.google
+                try:
+                    if isinstance(llm_model, str) and llm_model.lower().startswith("openrouter/google/gemini-3-pro-preview"):
+                        for tc in native_tool_calls_for_message:
+                            sig = None
+                            try:
+                                psf = tc.get('provider_specific_fields') if isinstance(tc, dict) else None
+                                if isinstance(psf, dict):
+                                    sig = psf.get('thought_signature') or sig
+                                fn = tc.get('function') if isinstance(tc, dict) else None
+                                if isinstance(fn, dict):
+                                    sig = fn.get('thought_signature') or sig
+                            except Exception:
+                                pass
+                            if sig:
+                                tc['extra_content'] = {"google": {"thought_signature": sig}}
+                except Exception:
+                    pass
                 message_data["tool_calls"] = native_tool_calls_for_message
             
             # Build unified metadata with all tool calls (native + XML) and clean text
@@ -1373,6 +1544,13 @@ class ResponseProcessor:
                 assistant_metadata["tool_calls"] = unified_tool_calls
                 logger.debug(f"Storing {len(unified_tool_calls)} unified tool calls in assistant message metadata (non-streaming)")
             
+            # For Gemini 3 Pro Preview, attach preserved reasoning_details to assistant message content
+            if extracted_reasoning_details and isinstance(llm_model, str) and llm_model.lower().startswith("openrouter/google/gemini-3-pro-preview"):
+                try:
+                    message_data["reasoning_details"] = extracted_reasoning_details
+                except Exception:
+                    pass
+
             assistant_message_object = await self._add_message_with_agent_info(
                 thread_id=thread_id, type="assistant", content=message_data,
                 is_llm_message=True, metadata=assistant_metadata
