@@ -26,6 +26,41 @@ class ModelRegistry:
         self._initialize_models()
     
     def _initialize_models(self):
+        # Claude Opus 4.5 - Best quality via OpenRouter
+        self.register(Model(
+            id="openrouter/anthropic/claude-opus-4.5",
+            name="Opus 4.5",
+            provider=ModelProvider.OPENROUTER,
+            aliases=[
+                "claude-opus-4.5", "claude-opus-4-5",
+                "anthropic/claude-opus-4.5", "anthropic/claude-opus-4-5",
+                "openrouter/anthropic/claude-opus-4.5", "openrouter/anthropic/claude-opus-4-5",
+                "Claude Opus 4.5"
+            ],
+            context_window=1_000_000,
+            capabilities=[
+                ModelCapability.CHAT,
+                ModelCapability.FUNCTION_CALLING,
+                ModelCapability.VISION,
+                ModelCapability.THINKING,
+            ],
+            pricing=ModelPricing(
+                input_cost_per_million_tokens=6.00 * pricing_multiplier,
+                output_cost_per_million_tokens=30.00 * pricing_multiplier
+            ),
+            tier_availability=["paid"],
+            priority=103,
+            recommended=True,
+            enabled=True,
+            config=ModelConfig(
+                extra_headers={
+                    "anthropic-beta": "context-1m-2025-08-07",
+                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+                },
+            )
+        ))
+
         # Claude Sonnet 4.5 - Premium flagship model via OpenRouter
         self.register(Model(
             id="openrouter/anthropic/claude-sonnet-4.5",
@@ -61,7 +96,7 @@ class ModelRegistry:
             id="openrouter/anthropic/claude-haiku-4.5",
             name="Haiku 4.5",
             provider=ModelProvider.OPENROUTER,
-            aliases=["claude-haiku-4.5", "anthropic/claude-haiku-4.5", "Claude Haiku 4.5", "global.anthropic.claude-haiku-4-5-20251001-v1:0", "bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0", "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48"],
+            aliases=["claude-haiku-4.5", "anthropic/claude-haiku-4.5", "anthropic/claude-haiku-4-5", "Claude Haiku 4.5", "global.anthropic.claude-haiku-4-5-20251001-v1:0", "bedrock/global.anthropic.claude-haiku-4-5-20251001-v1:0", "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48"],
             context_window=200_000,
             capabilities=[
                 ModelCapability.CHAT,
@@ -409,33 +444,33 @@ class ModelRegistry:
         ))
 
         # Google Gemini 3 Pro Preview - Via OpenRouter
-        self.register(Model(
-            id="openrouter/google/gemini-3-pro-preview",
-            name="Gemini 3 Pro Preview",
-            provider=ModelProvider.OPENROUTER,
-            aliases=["google/gemini-3-pro-preview", "gemini-3-pro-preview", "Gemini 3 Pro Preview", "openrouter/google/gemini-3-pro-preview"],
-            context_window=1_000_000,
-            capabilities=[
-                ModelCapability.CHAT,
-                ModelCapability.FUNCTION_CALLING,
-                ModelCapability.VISION,
-                ModelCapability.STRUCTURED_OUTPUT,
-            ],
-            pricing=ModelPricing(
-                input_cost_per_million_tokens=1.00 * pricing_multiplier,
-                output_cost_per_million_tokens=8.00 * pricing_multiplier
-            ),
-            tier_availability=["paid"],
-            priority=92,
-            recommended=True,
-            enabled=True,
-            config=ModelConfig(
-                extra_headers={
-                    "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
-                    "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
-                }
-            )
-        ))
+        # self.register(Model(
+        #     id="openrouter/google/gemini-3-pro-preview",
+        #     name="Gemini 3 Pro Preview",
+        #     provider=ModelProvider.OPENROUTER,
+        #     aliases=["google/gemini-3-pro-preview", "gemini-3-pro-preview", "Gemini 3 Pro Preview", "openrouter/google/gemini-3-pro-preview"],
+        #     context_window=1_000_000,
+        #     capabilities=[
+        #         ModelCapability.CHAT,
+        #         ModelCapability.FUNCTION_CALLING,
+        #         ModelCapability.VISION,
+        #         ModelCapability.STRUCTURED_OUTPUT,
+        #     ],
+        #     pricing=ModelPricing(
+        #         input_cost_per_million_tokens=1.00 * pricing_multiplier,
+        #         output_cost_per_million_tokens=8.00 * pricing_multiplier
+        #     ),
+        #     tier_availability=["paid"],
+        #     priority=92,
+        #     recommended=True,
+        #     enabled=True,
+        #     config=ModelConfig(
+        #         extra_headers={
+        #             "HTTP-Referer": config.OR_SITE_URL if hasattr(config, 'OR_SITE_URL') and config.OR_SITE_URL else "",
+        #             "X-Title": config.OR_APP_NAME if hasattr(config, 'OR_APP_NAME') and config.OR_APP_NAME else ""
+        #         }
+        #     )
+        # ))
 
     def register(self, model: Model) -> None:
         self._models[model.id] = model
