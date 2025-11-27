@@ -9,6 +9,8 @@ import { createClient } from '@/lib/supabase/client';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { AnimatedBg } from '@/components/ui/animated-bg';
+import { KortixLoader } from '@/components/ui/kortix-loader';
 
 // Simple confetti component (no library)
 function ConfettiBurst({ show }: { show: boolean }) {
