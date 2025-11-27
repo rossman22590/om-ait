@@ -529,7 +529,7 @@
   "auth": {
     "logIntoAccount": "Log into your account",
     "createAccount": "Create account",
-    "signInOrCreateAccount": "Sign in or create your Kortix account",
+    "signInOrCreateAccount": "Sign in or create your Machine account",
     "continueWithGoogle": "Continue with Google",
     "continueWithGitHub": "Continue with GitHub",
     "orEmail": "or email",
