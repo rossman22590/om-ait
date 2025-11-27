@@ -44,9 +44,9 @@ export function getFrontendUrl(): string {
   // Environment-based defaults
   switch (ENV_MODE) {
     case EnvMode.PRODUCTION:
-      return 'https://kortix.com';
+      return 'https://machine.myapps.ai';
     case EnvMode.STAGING:
-      return 'https://staging.suna.so';
+      return 'https://beta.machine.myapps.ai';
     case EnvMode.LOCAL:
     default:
       return 'http://localhost:3000';

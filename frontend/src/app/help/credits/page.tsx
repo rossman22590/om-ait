@@ -46,7 +46,7 @@ export default function CreditsPage() {
         <section>
           <h2 className="text-2xl font-semibold mb-4">Types of Credits</h2>
           <p className="mb-6">
-            Kortix uses two types of credits to give you flexibility in how you manage your usage:
+            Machine uses two types of credits to give you flexibility in how you manage your usage:
           </p>
 
           <div className="grid gap-4 md:grid-cols-2 mb-8">

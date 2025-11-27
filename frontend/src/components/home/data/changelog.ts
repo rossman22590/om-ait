@@ -9,7 +9,7 @@ export const changeLogData: ChangelogData[] = [
         "A comprehensive visual refresh with pink/purple branding, streamlined tool configuration, and improved homepage animations. Machine gets a modern makeover with better developer experience and granular control.",
       items: [
         "Complete UI Refresh - New pink/purple gradient theme replacing blue across the platform",
-        "Rebranded to 'Machine' - Updated from Kortix with focus on private AI workspaces",
+        "Rebranded to 'Machine' - Updated from Machine with focus on private AI workspaces",
         "Homepage Redesign - Added interactive demo section with 3D tilt effects and animated workflows",
         "New Integrations Showcase - Visual grid of 24+ integrations with category filters and premium badges",
         "Enhanced Tool Configuration - Added 'Select All' and 'Deselect All' buttons for bulk tool management",
