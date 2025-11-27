@@ -4,7 +4,7 @@ import { siteConfig } from '@/lib/home';
 import { ArrowRight, Github, X, AlertCircle, Square } from 'lucide-react';
 import PixelBlast from '@/components/home/ui/PixelBlast';
 import { useMediaQuery } from '@/hooks/utils';
-import { useState, useEffect, useRef, FormEvent } from 'react';
+import { useState, useEffect, useRef, FormEvent, lazy, Suspense } from 'react';
 import { useScroll } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -29,7 +29,6 @@ import { normalizeFilenameToNFC } from '@/lib/utils/unicode';
 import { createQueryHook } from '@/hooks/use-query';
 import { agentKeys } from '@/hooks/agents/keys';
 import { getAgents } from '@/hooks/agents/utils';
-import { AgentRunLimitDialog } from '@/components/thread/agent-run-limit-dialog';
 import { useAgentSelection } from '@/stores/agent-selection-store';
 import { useTranslations } from 'next-intl';
 
@@ -455,7 +454,9 @@ export function HeroSection() {
 
           {/* OAuth Sign In */}
           <div className="w-full">
-            <GoogleSignIn returnUrl="/dashboard" />
+            <Suspense fallback={null}>
+              <GoogleSignIn returnUrl="/dashboard" />
+            </Suspense>
           </div>
 
           {/* Divider */}
@@ -503,13 +504,15 @@ export function HeroSection() {
       </Dialog>
 
       {agentLimitData && (
-        <AgentRunLimitDialog
-          open={showAgentLimitDialog}
-          onOpenChange={setShowAgentLimitDialog}
-          runningCount={agentLimitData.runningCount}
-          runningThreadIds={agentLimitData.runningThreadIds}
-          projectId={undefined} // Hero section doesn't have a specific project context
-        />
+        <Suspense fallback={null}>
+          <AgentRunLimitDialog
+            open={showAgentLimitDialog}
+            onOpenChange={setShowAgentLimitDialog}
+            runningCount={agentLimitData.runningCount}
+            runningThreadIds={agentLimitData.runningThreadIds}
+            projectId={undefined}
+          />
+        </Suspense>
       )}
     </section>
   );

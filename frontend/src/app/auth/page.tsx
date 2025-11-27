@@ -309,7 +309,7 @@ function LoginContent() {
               <div className="pt-2">
                 <div className="relative">
                   <SubmitButton
-                    formAction={isSignUp ? handleSignUp : handleSignIn}
+                    formAction={handleAuth}
                     className="w-full h-10"
                     pendingText={isSignUp ? t('creatingAccount') : t('signingIn')}
                     disabled={isSignUp && !acceptedTerms}
