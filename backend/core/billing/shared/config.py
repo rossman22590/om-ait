@@ -70,7 +70,6 @@ TIERS: Dict[str, Tier] = {
             'refresh_interval_hours': 24
         },
         monthly_refill_enabled=False
-        app_triggers_limit=2
     ),
     'tier_2_20': Tier(
         name='tier_2_20',

@@ -81,7 +81,7 @@ export const metadata: Metadata = {
     type: 'website',
     title: 'Machine - Generalist AI Agent',
     description: 'Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation.',
-    url: siteConfig.url,
+    url: siteMetadata.url,
     siteName: 'Machine',
     locale: 'en_US',
     images: [
@@ -125,7 +125,7 @@ export default function RootLayout({
         <meta property="og:title" content="Machine - Generalist AI Agent" />
         <meta property="og:description" content="Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation." />
         <meta property="og:image" content="/banner.png" />
-        <meta property="og:url" content={siteConfig.url} />
+        <meta property="og:url" content={siteMetadata.url} />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content="Machine - Generalist AI Agent" />
         <meta name="twitter:description" content="Machine is an AI assistant that helps you accomplish real-world tasks with ease through natural conversation." />
@@ -138,15 +138,15 @@ export default function RootLayout({
               '@type': 'Organization',
               name: 'Machine',
               alternateName: ['Machine', 'Machine AI'],
-              url: siteConfig.url,
-              logo: `${siteConfig.url}/favicon.png`,
+              url: siteMetadata.url,
+              logo: `${siteMetadata.url}/favicon.png`,
               description: metadata.description,
               foundingDate: '2024',
               sameAs: ['https://x.com/the_machine_ai'],
               contactPoint: {
                 '@type': 'ContactPoint',
                 contactType: 'Customer Support',
-                url: siteConfig.url,
+                url: siteMetadata.url,
               },
             }),
           }}
