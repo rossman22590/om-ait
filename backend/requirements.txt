@@ -22,10 +22,10 @@ exa-py==1.9.1
 e2b-code-interpreter==1.2.0
 certifi==2024.2.2
 python-ripgrep==0.0.6
-daytona-sdk==0.21.0
-daytona-api-client==0.21.0
-daytona-api-client-async==0.21.0
-daytona>=0.21.0
+daytona-sdk>=0.115.0
+daytona-api-client>=0.115.0
+daytona-api-client-async>=0.115.0
+daytona>=0.21.6
 boto3==1.37.3
 openai==1.90.0
 nest-asyncio==1.6.0

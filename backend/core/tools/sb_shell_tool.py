@@ -26,15 +26,27 @@ class SandboxShellTool(SandboxToolsBase):
 
     async def _ensure_session(self, session_name: str = "default") -> str:
         """Ensure a session exists and return its ID."""
-        if session_name not in self._sessions:
-            session_id = str(uuid4())
+        await self._ensure_sandbox()  # Ensure sandbox is initialized
+        
+        # If we have a cached session, return it
+        if session_name in self._sessions:
+            return self._sessions[session_name]
+        
+        # Create new session
+        session_id = str(uuid4())
+        try:
+            await self.sandbox.process.create_session(session_id)
+            self._sessions[session_name] = session_id
+            return session_id
+        except Exception as e:
+            # If session creation fails, try once more with a fresh ID
             try:
-                await self._ensure_sandbox()  # Ensure sandbox is initialized
+                session_id = str(uuid4())
                 await self.sandbox.process.create_session(session_id)
                 self._sessions[session_name] = session_id
-            except Exception as e:
-                raise RuntimeError(f"Failed to create session: {str(e)}")
-        return self._sessions[session_name]
+                return session_id
+            except Exception as e2:
+                raise RuntimeError(f"Failed to create session: {str(e2)}")
 
     async def _cleanup_session(self, session_name: str):
         """Clean up a session if it exists."""
@@ -153,7 +165,7 @@ class SandboxShellTool(SandboxToolsBase):
                 await self._execute_raw_command(f"tmux kill-session -t {session_name}")
                 
                 return self.success_response({
-                    "output": final_output,
+                    "output": self._sanitize_output(final_output),
                     "session_name": session_name,
                     "cwd": cwd,
                     "completed": True
@@ -181,36 +193,140 @@ class SandboxShellTool(SandboxToolsBase):
 
     async def _execute_raw_command(self, command: str) -> Dict[str, Any]:
         """Execute a raw command directly in the sandbox."""
-        # Ensure session exists for raw commands
-        session_id = await self._ensure_session("raw_commands")
+        for attempt in range(2):  # Retry once if session is dead
+            try:
+                # Ensure session exists for raw commands
+                session_id = await self._ensure_session("raw_commands")
+                
+                # Execute command in session (sync mode - returns output directly)
+                from daytona_sdk import SessionExecuteRequest
+                
+                # Wrap command with cd to set working directory
+                full_command = f"cd {self.workspace_path} && {command}"
+                
+                req = SessionExecuteRequest(
+                    command=full_command,
+                    run_async=False  # Sync execution - response includes output directly
+                )
+                
+                response = await self.sandbox.process.execute_session_command(
+                    session_id=session_id,
+                    req=req,
+                    timeout=30  # Short timeout for utility commands
+                )
+                break  # Success, exit retry loop
+            except Exception as session_err:
+                # If session is dead/invalid, clear cache and retry
+                if attempt == 0 and "raw_commands" in self._sessions:
+                    del self._sessions["raw_commands"]
+                    continue
+                # Second attempt failed, return error
+                return {
+                    "output": f"Command execution error: {str(session_err)}",
+                    "exit_code": 1
+                }
         
-        # Execute command in session
-        from daytona_sdk import SessionExecuteRequest
-        req = SessionExecuteRequest(
-            command=command,
-            var_async=False,
-            cwd=self.workspace_path
-        )
-        
-        response = await self.sandbox.process.execute_session_command(
-            session_id=session_id,
-            req=req,
-            timeout=30  # Short timeout for utility commands
-        )
-        
-        logs = await self.sandbox.process.get_session_command_logs(
-            session_id=session_id,
-            command_id=response.cmd_id
-        )
-        
-        # Extract the actual log content from the SessionCommandLogsResponse object
-        # The response has .output, .stdout, and .stderr attributes
-        logs_output = logs.output if logs and logs.output else ""
-        
-        return {
-            "output": logs_output,
-            "exit_code": response.exit_code
-        }
+        try:
+            # Handle case where response is a string directly (some SDK versions)
+            if isinstance(response, str):
+                return {
+                    "output": self._sanitize_output(response),
+                    "exit_code": 0
+                }
+            
+            # Handle case where response is a dict
+            if isinstance(response, dict):
+                output = response.get("output") or response.get("stdout") or ""
+                stderr = response.get("stderr")
+                if stderr:
+                    output = f"{output}\n{stderr}" if output else stderr
+                return {
+                    "output": self._sanitize_output(output),
+                    "exit_code": response.get("exit_code", 0)
+                }
+            
+            # For sync execution (run_async=False), response includes output directly
+            # Per Daytona SDK docs: SessionExecuteResponse has stdout, stderr, output, exit_code
+            output = ""
+            exit_code = 0
+            
+            # Try to get output directly from response (preferred for sync execution)
+            if hasattr(response, 'output') and response.output:
+                output = response.output
+            elif hasattr(response, 'stdout') and response.stdout:
+                output = response.stdout
+                if hasattr(response, 'stderr') and response.stderr:
+                    output = f"{output}\n{response.stderr}"
+            
+            # Get exit code
+            if hasattr(response, 'exit_code'):
+                exit_code = response.exit_code or 0
+            
+            # If no output from response, try fetching logs (fallback for async or edge cases)
+            if not output:
+                command_id = getattr(response, 'cmd_id', None) or getattr(response, 'command_id', None)
+                if command_id:
+                    try:
+                        logs = await self.sandbox.process.get_session_command_logs(
+                            session_id=session_id,
+                            command_id=command_id
+                        )
+                        output = self._extract_output(logs)
+                    except Exception:
+                        pass  # Ignore log fetch errors, we have what we have
+            
+            return {
+                "output": self._sanitize_output(output),
+                "exit_code": exit_code
+            }
+        except Exception as e:
+            # Return error as output instead of raising
+            return {
+                "output": f"Command execution error: {str(e)}",
+                "exit_code": 1
+            }
+
+    def _extract_output(self, data: Any) -> str:
+        """Extract output string from various SDK response formats."""
+        try:
+            if data is None:
+                return ""
+            if isinstance(data, str):
+                return data
+            if isinstance(data, dict):
+                # Try 'output' key first
+                if isinstance(data.get("output"), str):
+                    return data.get("output")
+                # Try stdout/stderr
+                parts = []
+                for key in ("stdout", "stderr"):
+                    val = data.get(key)
+                    if isinstance(val, str):
+                        parts.append(val)
+                    elif isinstance(val, list):
+                        parts.append("\n".join(str(x) for x in val))
+                return "\n".join(p for p in parts if p)
+            # Handle object with attributes
+            for attr in ("output", "stdout", "result"):
+                if hasattr(data, attr):
+                    val = getattr(data, attr)
+                    if isinstance(val, str):
+                        return val
+            # Try stdout/stderr attributes
+            parts = []
+            for attr in ("stdout", "stderr"):
+                if hasattr(data, attr):
+                    val = getattr(data, attr)
+                    if isinstance(val, str):
+                        parts.append(val)
+                    elif isinstance(val, list):
+                        parts.append("\n".join(str(x) for x in val))
+            if parts:
+                return "\n".join(parts)
+            # Last resort
+            return str(data)
+        except Exception:
+            return str(data) if data is not None else ""
 
     @openapi_schema({
         "type": "function",
@@ -250,7 +366,7 @@ class SandboxShellTool(SandboxToolsBase):
             
             # Get output from tmux pane
             output_result = await self._execute_raw_command(f"tmux capture-pane -t {session_name} -p -S - -E -")
-            output = output_result.get("output", "")
+            output = self._sanitize_output(output_result.get("output", ""))
             
             # Kill session if requested
             if kill_session:
@@ -366,6 +482,25 @@ class SandboxShellTool(SandboxToolsBase):
         else:
             # For regular commands, use semicolon separator
             return f"{command} ; echo {marker}"
+
+    def _sanitize_output(self, text: Any) -> str:
+        """Remove ANSI escape codes and control characters from captured output (hides \x01, etc.)."""
+        try:
+            if text is None:
+                return ""
+            if not isinstance(text, str):
+                text = str(text)
+            import re
+            # Strip ANSI escape sequences (CSI and OSC)
+            text = re.sub(r"\x1B\[[0-?]*[ -/]*[@-~]", "", text)
+            text = re.sub(r"\x1B\][0-?]*.*?\x07", "", text)
+            # Remove control chars except tab/newline/carriage return
+            text = re.sub(r"[\x00-\x08\x0B-\x1F\x7F]", "", text)
+            # Collapse excessive blank lines
+            text = re.sub(r"\n{3,}", "\n\n", text)
+            return text
+        except Exception:
+            return str(text) if text is not None else ""
 
     def _is_command_completed(self, current_output: str, marker: str) -> bool:
         """
