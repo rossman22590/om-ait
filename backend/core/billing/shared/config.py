@@ -14,7 +14,7 @@ DEFAULT_TOKEN_COST = Decimal('0.000002')
 
 CREDITS_PER_DOLLAR = 100
 
-FREE_TIER_INITIAL_CREDITS = Decimal('2.00')
+FREE_TIER_INITIAL_CREDITS = Decimal('0.00')
 
 @dataclass
 class Tier:
@@ -30,6 +30,8 @@ class Tier:
     custom_workers_limit: int
     scheduled_triggers_limit: int
     app_triggers_limit: int
+    daily_credit_config: Optional[Dict] = None
+    monthly_refill_enabled: Optional[bool] = True
 
 TIERS: Dict[str, Tier] = {
     'none': Tier(
@@ -38,18 +40,18 @@ TIERS: Dict[str, Tier] = {
         monthly_credits=Decimal('0.00'),
         display_name='No Plan',
         can_purchase_credits=True,
-        models=[],
+        models=['haiku'],
         project_limit=0,
         thread_limit=0,
         concurrent_runs=0,
         custom_workers_limit=0,
         scheduled_triggers_limit=0,
-        app_triggers_limit=0
+        app_triggers_limit=0,
     ),
     'free': Tier(
         name='free',
         price_ids=[config.STRIPE_FREE_TIER_ID],
-        monthly_credits=FREE_TIER_INITIAL_CREDITS,
+        monthly_credits=Decimal('0.00'),
         display_name='Basic',
         can_purchase_credits=False,
         models=[
@@ -61,6 +63,13 @@ TIERS: Dict[str, Tier] = {
         concurrent_runs=1,
         custom_workers_limit=1,
         scheduled_triggers_limit=1,
+        app_triggers_limit=1,
+        daily_credit_config={
+            'enabled': True,
+            'amount': Decimal('2.00'),
+            'refresh_interval_hours': 24
+        },
+        monthly_refill_enabled=False
         app_triggers_limit=2
     ),
     'tier_2_20': Tier(
@@ -79,7 +88,8 @@ TIERS: Dict[str, Tier] = {
         concurrent_runs=3,
         custom_workers_limit=5,
         scheduled_triggers_limit=5,
-        app_triggers_limit=10
+        app_triggers_limit=10,
+        monthly_refill_enabled=True
     ),
     'tier_6_50': Tier(
         name='tier_6_50',

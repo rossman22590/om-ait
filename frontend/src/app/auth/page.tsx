@@ -4,19 +4,11 @@ import Link from 'next/link';
 import { SubmitButton } from '@/components/ui/submit-button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import GoogleSignIn from '@/components/GoogleSignIn';
 import { useMediaQuery } from '@/hooks/utils';
-import { useState, useEffect, Suspense } from 'react';
-import { signIn, signUp, forgotPassword } from './actions';
+import { useState, useEffect, Suspense, lazy } from 'react';
+import { signUp } from './actions';
 import { useSearchParams, useRouter } from 'next/navigation';
-import {
-  ArrowLeft,
-  X,
-  CheckCircle,
-  AlertCircle,
-  MailCheck,
-} from 'lucide-react';
-import { KortixLoader } from '@/components/ui/kortix-loader';
+import { MailCheck } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { useAuthMethodTracking } from '@/stores/auth-tracking';
 import { toast } from 'sonner';
@@ -32,8 +24,11 @@ import {
 } from '@/components/ui/dialog';
 
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
-import { AnimatedBg } from '@/components/ui/animated-bg';
-import { ReleaseBadge } from '@/components/auth/release-badge';
+
+// Lazy load heavy components
+const GoogleSignIn = lazy(() => import('@/components/GoogleSignIn'));
+const GitHubSignIn = lazy(() => import('@/components/GithubSignIn'));
+const AnimatedBg = lazy(() => import('@/components/ui/animated-bg').then(mod => ({ default: mod.AnimatedBg })));
 
 function LoginContent() {
   const router = useRouter();
@@ -44,10 +39,10 @@ function LoginContent() {
   const message = searchParams.get('message');
   const t = useTranslations('auth');
 
-  const isSignUp = mode === 'signup';
+  const isSignUp = mode !== 'signin';
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [mounted, setMounted] = useState(false);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false); // GDPR requires explicit opt-in
 
   const { wasLastMethod: wasEmailLastMethod, markAsUsed: markEmailAsUsed } = useAuthMethodTracking('email');
 
@@ -68,13 +63,6 @@ function LoginContent() {
     useState(!!isSuccessMessage);
   const [registrationEmail, setRegistrationEmail] = useState('');
 
-  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
-  const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
-  const [forgotPasswordStatus, setForgotPasswordStatus] = useState<{
-    success?: boolean;
-    message?: string;
-  }>({});
-
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -85,26 +73,30 @@ function LoginContent() {
     }
   }, [isSuccessMessage]);
 
-  const handleSignIn = async (prevState: any, formData: FormData) => {
+  const handleAuth = async (prevState: any, formData: FormData) => {
     markEmailAsUsed();
+
+    const email = formData.get('email') as string;
+    setRegistrationEmail(email);
 
     const finalReturnUrl = returnUrl || '/dashboard';
     formData.append('returnUrl', finalReturnUrl);
-    const result = await signIn(prevState, formData);
+    formData.append('origin', window.location.origin);
+    formData.append('acceptedTerms', acceptedTerms.toString());
 
-    if (
-      result &&
-      typeof result === 'object' &&
-      'success' in result &&
-      result.success &&
-      'redirectTo' in result
-    ) {
-      window.location.href = result.redirectTo as string;
-      return null;
+    const result = await signUp(prevState, formData);
+
+    // Magic link always returns success with message (no immediate redirect)
+    if (result && typeof result === 'object' && 'success' in result && result.success) {
+      if ('email' in result && result.email) {
+        setRegistrationEmail(result.email as string);
+        setRegistrationSuccess(true);
+        return result;
+      }
     }
 
     if (result && typeof result === 'object' && 'message' in result) {
-      toast.error(t('signInFailed'), {
+      toast.error(t('signUpFailed'), {
         description: result.message as string,
         duration: 5000,
       });
@@ -114,83 +106,6 @@ function LoginContent() {
     return result;
   };
 
-  const handleSignUp = async (prevState: any, formData: FormData) => {
-    markEmailAsUsed();
-
-    const email = formData.get('email') as string;
-    setRegistrationEmail(email);
-
-    const finalReturnUrl = returnUrl || '/dashboard';
-    formData.append('returnUrl', finalReturnUrl);
-
-    // Add origin for email redirects
-    formData.append('origin', window.location.origin);
-
-    const result = await signUp(prevState, formData);
-
-    // Check for success and redirectTo properties (direct login case)
-    if (
-      result &&
-      typeof result === 'object' &&
-      'success' in result &&
-      result.success &&
-      'redirectTo' in result
-    ) {
-      // Use window.location for hard navigation to avoid stale state
-      window.location.href = result.redirectTo as string;
-      return null; // Return null to prevent normal form action completion
-    }
-
-    // Check if registration was successful but needs email verification
-    if (result && typeof result === 'object' && 'message' in result) {
-      const resultMessage = result.message as string;
-      if (resultMessage.includes('Check your email')) {
-        setRegistrationSuccess(true);
-
-        // Update URL without causing a refresh
-        const params = new URLSearchParams(window.location.search);
-        params.set('message', resultMessage);
-
-        const newUrl =
-          window.location.pathname +
-          (params.toString() ? '?' + params.toString() : '');
-
-        window.history.pushState({ path: newUrl }, '', newUrl);
-
-        return result;
-      } else {
-        toast.error(t('signUpFailed'), {
-          description: resultMessage,
-          duration: 5000,
-        });
-        return {};
-      }
-    }
-
-    return result;
-  };
-
-  const handleForgotPassword = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    setForgotPasswordStatus({});
-
-    if (!forgotPasswordEmail || !forgotPasswordEmail.includes('@')) {
-      setForgotPasswordStatus({
-        success: false,
-        message: t('pleaseEnterValidEmail'),
-      });
-      return;
-    }
-
-    const formData = new FormData();
-    formData.append('email', forgotPasswordEmail);
-    formData.append('origin', window.location.origin);
-
-    const result = await forgotPassword(null, formData);
-
-    setForgotPasswordStatus(result);
-  };
 
   const resetRegistrationSuccess = () => {
     setRegistrationSuccess(false);
@@ -208,14 +123,8 @@ function LoginContent() {
     router.refresh();
   };
 
-  // Show loading spinner while checking auth state
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <KortixLoader size="large" />
-      </div>
-    );
-  }
+  // Don't block render while checking auth - let content show immediately
+  // The useEffect will redirect if user is already authenticated
 
   // Registration success view
   if (registrationSuccess) {
@@ -232,7 +141,7 @@ function LoginContent() {
             </h1>
 
             <p className="text-muted-foreground mb-2">
-              {t('confirmationLinkSent')}
+              {t('magicLinkSent') || 'We sent a magic link to'}
             </p>
 
             <p className="text-lg font-medium mb-6">
@@ -241,7 +150,7 @@ function LoginContent() {
 
             <div className="bg-green-50 dark:bg-green-950/20 border border-green-100 dark:border-green-900/50 rounded-lg p-4 mb-8">
               <p className="text-sm text-green-800 dark:text-green-400">
-                {t('clickLinkToActivate')}
+                {t('magicLinkDescription') || 'Click the link in your email to sign in. The link will expire in 1 hour.'}
               </p>
             </div>
 
@@ -277,7 +186,7 @@ function LoginContent() {
           <div className="w-full max-w-sm">
             <div className="mb-4 flex items-center flex-col gap-3 sm:gap-4 justify-center">
               <h1 className="text-xl sm:text-2xl font-semibold text-foreground text-center leading-tight">
-                {isSignUp ? t('createAccount') : t('logIntoAccount')}
+                {t('signInOrCreateAccount')}
               </h1>
             </div>
             <div className="space-y-3 mb-4">
@@ -293,7 +202,7 @@ function LoginContent() {
                 </span>
               </div>
             </div>
-            <form className="space-y-3">
+            <form className="space-y-4">
               <Input
                 id="email"
                 name="email"
@@ -415,107 +324,29 @@ function LoginContent() {
                 </div>
               </div>
             </form>
-
-            <div className="mt-4 space-y-3 text-center text-sm">
-              {!isSignUp && (
-                <button
-                  type="button"
-                  onClick={() => setForgotPasswordOpen(true)}
-                  className="text-primary hover:underline"
-                >
-                  {t('forgotPassword')}
-                </button>
-              )}
-
-              <div>
-                <Link
-                  href={isSignUp
-                    ? `/auth${returnUrl ? `?returnUrl=${returnUrl}` : ''}`
-                    : `/auth?mode=signup${returnUrl ? `&returnUrl=${returnUrl}` : ''}`
-                  }
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  {isSignUp
-                    ? t('alreadyHaveAccount')
-                    : t('dontHaveAccount')
-                  }
-                </Link>
-              </div>
-            </div>
           </div>
         </div>
         <div className="hidden lg:flex flex-1 items-center justify-center relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-accent/10" />
           <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-            <AnimatedBg
-              variant="hero"
-              customArcs={{
-                left: [
-                  { pos: { left: -120, top: 150 }, opacity: 0.15 },
-                  { pos: { left: -120, top: 400 }, opacity: 0.18 },
-                ],
-                right: [
-                  { pos: { right: -150, top: 50 }, opacity: 0.2 },
-                  { pos: { right: 10, top: 650 }, opacity: 0.17 },
-                ]
-              }}
-            />
+            <Suspense fallback={null}>
+              <AnimatedBg
+                variant="hero"
+                customArcs={{
+                  left: [
+                    { pos: { left: -120, top: 150 }, opacity: 0.15 },
+                    { pos: { left: -120, top: 400 }, opacity: 0.18 },
+                  ],
+                  right: [
+                    { pos: { right: -150, top: 50 }, opacity: 0.2 },
+                    { pos: { right: 10, top: 650 }, opacity: 0.17 },
+                  ]
+                }}
+              />
+            </Suspense>
           </div>
         </div>
       </div>
-      <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle>{t('resetPassword')}</DialogTitle>
-            </div>
-            <DialogDescription>
-              {t('resetPasswordDescription')}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleForgotPassword} className="space-y-4">
-            <Input
-              id="forgot-password-email"
-              type="email"
-              placeholder={t('emailAddress')}
-              value={forgotPasswordEmail}
-              onChange={(e) => setForgotPasswordEmail(e.target.value)}
-              className=""
-              required
-            />
-            {forgotPasswordStatus.message && (
-              <div
-                className={`p-3 rounded-md flex items-center gap-3 ${forgotPasswordStatus.success
-                  ? 'bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-900/50 text-green-800 dark:text-green-400'
-                  : 'bg-destructive/10 border border-destructive/20 text-destructive'
-                  }`}
-              >
-                {forgotPasswordStatus.success ? (
-                  <CheckCircle className="h-4 w-4 flex-shrink-0" />
-                ) : (
-                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                )}
-                <span className="text-sm">{forgotPasswordStatus.message}</span>
-              </div>
-            )}
-            <DialogFooter className="gap-2">
-              <button
-                type="button"
-                onClick={() => setForgotPasswordOpen(false)}
-                className="h-10 px-4 border border-border bg-background hover:bg-accent transition-colors rounded-md"
-              >
-                {t('cancel')}
-              </button>
-              <button
-                type="submit"
-                className="h-10 px-4 bg-primary text-primary-foreground hover:bg-primary/90 transition-colors rounded-md"
-              >
-                {t('sendResetLink')}
-              </button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

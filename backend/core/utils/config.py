@@ -90,7 +90,7 @@ class Configuration:
     AGENT_TOOL_EXECUTION_STRATEGY: str = "parallel"  # "parallel" or "sequential"
     # ============================================
     
-    GUEST_MODE_ADMIN_USER_ID: Optional[str] = None
+    SYSTEM_ADMIN_USER_ID: Optional[str] = None  # User ID that owns shared/fallback agents
 
     # Subscription tier IDs - Production
     STRIPE_FREE_TIER_ID_PROD: str = 'price_1RLwBMG23sSyONuFrhkNh9fe'
@@ -369,7 +369,18 @@ class Configuration:
     
     # Debug configuration
     # Set to True to save LLM API call inputs and stream outputs to debug_streams/ directory
-    DEBUG_SAVE_LLM_IO: Optional[bool] = True
+    # Always False in production, regardless of environment variable
+    _DEBUG_SAVE_LLM_IO: Optional[bool] = True
+    
+    @property
+    def DEBUG_SAVE_LLM_IO(self) -> bool:
+        """
+        Debug flag to save LLM API call inputs and stream outputs.
+        Always returns False in production, regardless of environment variable.
+        """
+        if self.ENV_MODE == EnvMode.PRODUCTION:
+            return False
+        return self._DEBUG_SAVE_LLM_IO or False
 
     # LangFuse configuration
     LANGFUSE_PUBLIC_KEY: Optional[str] = None
@@ -578,6 +589,11 @@ class Configuration:
         frontend_url_env = os.getenv("FRONTEND_URL")
         if frontend_url_env is not None:
             self.FRONTEND_URL_ENV = frontend_url_env
+        
+        # Custom handling for DEBUG_SAVE_LLM_IO (always False in production)
+        debug_save_llm_io_env = os.getenv("DEBUG_SAVE_LLM_IO")
+        if debug_save_llm_io_env is not None:
+            self._DEBUG_SAVE_LLM_IO = debug_save_llm_io_env.lower() in ('true', 't', 'yes', 'y', '1')
     
     def _validate(self):
         """Validate configuration based on type hints."""

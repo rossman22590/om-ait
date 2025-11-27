@@ -1,21 +1,23 @@
 import { ThemeProvider } from '@/components/home/theme-provider';
-import { siteConfig } from '@/lib/site';
+import { siteMetadata } from '@/lib/site-metadata';
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/components/AuthProvider';
 import { ReactQueryProvider } from './react-query-provider';
 import { Toaster } from '@/components/ui/sonner';
-import { Analytics } from '@vercel/analytics/react';
-import { GoogleAnalytics } from '@next/third-parties/google';
-import { SpeedInsights } from '@vercel/speed-insights/next';
 import Script from 'next/script';
-import { PostHogIdentify } from '@/components/posthog-identify';
 import '@/lib/polyfills';
 import { roobert } from './fonts/roobert';
 import { roobertMono } from './fonts/roobert-mono';
-import { PlanSelectionModal } from '@/components/billing/pricing/plan-selection-modal';
-import { Suspense } from 'react';
+import { Suspense, lazy } from 'react';
 import { I18nProvider } from '@/components/i18n-provider';
+
+// Lazy load non-critical analytics and global components
+const Analytics = lazy(() => import('@vercel/analytics/react').then(mod => ({ default: mod.Analytics })));
+const SpeedInsights = lazy(() => import('@vercel/speed-insights/next').then(mod => ({ default: mod.SpeedInsights })));
+const GoogleAnalytics = lazy(() => import('@next/third-parties/google').then(mod => ({ default: mod.GoogleAnalytics })));
+const PostHogIdentify = lazy(() => import('@/components/posthog-identify').then(mod => ({ default: mod.PostHogIdentify })));
+const PlanSelectionModal = lazy(() => import('@/components/billing/pricing/plan-selection-modal').then(mod => ({ default: mod.PlanSelectionModal })));
 
 
 export const viewport: Viewport = {
@@ -29,7 +31,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteConfig.url),
+  metadataBase: new URL(siteMetadata.url),
   title: {
     default: 'Machine',
     template: '%s | Machine',
@@ -67,7 +69,6 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
-    nocache: false,
     googleBot: {
       index: true,
       follow: true,
@@ -103,25 +104,15 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/favicon.png', sizes: '32x32', type: 'image/png' },
-      { url: '/favicon-light.png', sizes: '32x32', type: 'image/png', media: '(prefers-color-scheme: dark)' },
+      { url: '/favicon.png', sizes: '32x32' },
+      { url: '/favicon-light.png', sizes: '32x32', media: '(prefers-color-scheme: dark)' },
     ],
     shortcut: '/favicon.png',
-    apple: [
-      { url: '/logo_black.png', sizes: '180x180', type: 'image/png' },
-    ],
+    apple: [{ url: '/logo_black.png', sizes: '180x180' }],
   },
   manifest: '/manifest.json',
   alternates: {
-    canonical: siteConfig.url,
-  },
-  verification: {
-    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
-  },
-  other: {
-    'apple-mobile-web-app-capable': 'yes',
-    'apple-mobile-web-app-status-bar-style': 'black-translucent',
-    'apple-mobile-web-app-title': 'Kortix',
+    canonical: siteMetadata.url,
   },
 };
 
@@ -170,7 +161,7 @@ export default function RootLayout({
               alternateName: 'Machine',
               applicationCategory: 'BusinessApplication',
               operatingSystem: 'Web, macOS, Windows, Linux',
-              description: siteConfig.description,
+              description: siteMetadata.description,
               offers: {
                 '@type': 'Offer',
                 price: '0',
@@ -211,20 +202,29 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <I18nProvider>
-          <AuthProvider>
-            <ReactQueryProvider>
-              {children}
-              <Toaster />
-              <Suspense fallback={null}>
-                <PlanSelectionModal />
-              </Suspense>
-            </ReactQueryProvider>
-          </AuthProvider>
+            <AuthProvider>
+              <ReactQueryProvider>
+                {children}
+                <Toaster />
+                <Suspense fallback={null}>
+                  <PlanSelectionModal />
+                </Suspense>
+              </ReactQueryProvider>
+            </AuthProvider>
           </I18nProvider>
-          <Analytics />
-          <GoogleAnalytics gaId="G-6ETJFB3PT3" />
-          <SpeedInsights />
-          <PostHogIdentify />
+          {/* Analytics - lazy loaded to not block FCP */}
+          <Suspense fallback={null}>
+            <Analytics />
+          </Suspense>
+          <Suspense fallback={null}>
+            <GoogleAnalytics gaId="G-6ETJFB3PT3" />
+          </Suspense>
+          <Suspense fallback={null}>
+            <SpeedInsights />
+          </Suspense>
+          <Suspense fallback={null}>
+            <PostHogIdentify />
+          </Suspense>
         </ThemeProvider>
       </body>
     </html>

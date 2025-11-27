@@ -12,8 +12,6 @@ import { useAuth } from '@/components/AuthProvider';
 import { BillingError, AgentRunLimitError, ProjectLimitError } from '@/lib/api/errors';
 import { useInitiateAgentMutation } from '@/hooks/dashboard/use-initiate-agent';
 import { useThreadQuery } from '@/hooks/threads/use-threads';
-import GoogleSignIn from '@/components/GoogleSignIn';
-import { useAgents } from '@/hooks/agents/use-agents';
 import {
   Dialog,
   DialogContent,
@@ -34,6 +32,19 @@ import { getAgents } from '@/hooks/agents/utils';
 import { AgentRunLimitDialog } from '@/components/thread/agent-run-limit-dialog';
 import { useAgentSelection } from '@/stores/agent-selection-store';
 import { useTranslations } from 'next-intl';
+
+// Lazy load components only needed when dialogs are open
+const GoogleSignIn = lazy(() => import('@/components/GoogleSignIn'));
+const GitHubSignIn = lazy(() => import('@/components/GithubSignIn'));
+const PlanSelectionModal = lazy(() => 
+    import('@/components/billing/pricing').then(mod => ({ default: mod.PlanSelectionModal }))
+);
+const AgentRunLimitDialog = lazy(() => 
+    import('@/components/thread/agent-run-limit-dialog').then(mod => ({ default: mod.AgentRunLimitDialog }))
+);
+const SunaModesPanel = lazy(() => 
+    import('@/components/dashboard/suna-modes-panel').then(mod => ({ default: mod.SunaModesPanel }))
+);
 
 // Custom dialog overlay with blur effect
 const BlurredDialogOverlay = () => (

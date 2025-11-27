@@ -5,9 +5,8 @@ import { useRouter } from 'next/navigation';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { useInitializeAccount } from '@/hooks/account';
-import { AnimatedBg } from '@/components/ui/animated-bg';
+import { createClient } from '@/lib/supabase/client';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
-import { KortixLoader } from '@/components/ui/kortix-loader';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
@@ -70,6 +69,8 @@ export default function SettingUpPage() {
   const [status, setStatus] = useState<'initializing' | 'success' | 'error'>('initializing');
   const [retryCount, setRetryCount] = useState(0);
   const initializeMutation = useInitializeAccount();
+  const hasAttemptedInit = useRef(false);
+  const isInitializing = useRef(false);
 
   useEffect(() => {
     if (user && status === 'initializing' && !initializeMutation.isPending) {

@@ -14,6 +14,9 @@ class ToolRegistry:
     Maintains a collection of tool instances and their schemas, allowing for
     selective registration of tool functions and easy access to tool capabilities.
     
+    PERFORMANCE: Uses pre-computed schemas from the global cache when available,
+    avoiding expensive reflection-based schema extraction on each registration.
+    
     Attributes:
         tools (Dict[str, Dict[str, Any]]): OpenAPI-style tools and schemas
         
@@ -39,20 +42,33 @@ class ToolRegistry:
         Notes:
             - If function_names is None, all functions are registered
             - Handles OpenAPI schema registration
+            - Uses cached schemas and instances when available for better performance
         """
-        from core.utils.logger import logger
+        import time
+        start = time.time()
         
-        # Debug logging for avatar tool
-        if tool_class.__name__ == 'SandboxAvatarTool' and AVATAR_TOOL_DEBUG:
-            logger.debug(f"🎬 REGISTRY: Registering {tool_class.__name__}")
-            logger.debug(f"🎬 REGISTRY: function_names filter: {function_names}")
+        # Try to use cached instance first (for stateless tools without kwargs)
+        from core.utils.tool_discovery import get_cached_schemas, get_cached_tool_instance
         
-        tool_instance = tool_class(**kwargs)
-        schemas = tool_instance.get_schemas()
+        tool_instance = None
+        used_cache = False
+        if not kwargs:
+            # Only use cached instance if no custom kwargs
+            tool_instance = get_cached_tool_instance(tool_class)
+            if tool_instance:
+                used_cache = True
         
-        # Debug logging for avatar tool
-        if tool_class.__name__ == 'SandboxAvatarTool' and AVATAR_TOOL_DEBUG:
-            logger.debug(f"🎬 REGISTRY: Available schemas in tool: {list(schemas.keys())}")
+        if tool_instance is None:
+            # Create new instance if not cached or has custom kwargs
+            tool_instance = tool_class(**kwargs)
+        
+        # Try to use cached schemas first (pre-computed at startup)
+        schemas = get_cached_schemas(tool_class)
+        schema_cached = schemas is not None
+        
+        if schemas is None:
+            # Fall back to instance-based schema extraction
+            schemas = tool_instance.get_schemas()
         
         registered_openapi = 0
         registered_names = []
@@ -66,17 +82,11 @@ class ToolRegistry:
                             "schema": schema
                         }
                         registered_openapi += 1
-                        registered_names.append(func_name)
-                        # logger.debug(f"Registered OpenAPI function {func_name} from {tool_class.__name__}")
-            else:
-                # Debug: Log filtered out methods for avatar tool
-                if tool_class.__name__ == 'SandboxAvatarTool' and AVATAR_TOOL_DEBUG:
-                    logger.debug(f"🎬 REGISTRY: FILTERED OUT {func_name} (not in function_names list)")
         
-        # Debug logging for avatar tool
-        if tool_class.__name__ == 'SandboxAvatarTool' and AVATAR_TOOL_DEBUG:
-            logger.debug(f"🎬 REGISTRY: Registered {registered_openapi} methods: {registered_names}")
-            logger.debug(f"🎬 REGISTRY: Total tools in registry: {len(self.tools)}")
+        elapsed = (time.time() - start) * 1000
+        if elapsed > 10:  # Only log if took >10ms (noisy otherwise)
+            cache_info = f"(instance={'cached' if used_cache else 'new'}, schema={'cached' if schema_cached else 'computed'})"
+            logger.debug(f"⏱️ [TIMING] register_tool({tool_class.__name__}): {elapsed:.1f}ms {cache_info}")
 
     def get_available_functions(self) -> Dict[str, Callable]:
         """Get all available tool functions.

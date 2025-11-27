@@ -63,7 +63,8 @@ services:
       test: ["CMD", "python", "worker_health.py"]
       timeout: 20s
       interval: 30s
-      start_period: 40s
+      retries: 3
+      start_period: 60s
 
   # redis:
   #   image: redis:8-alpine

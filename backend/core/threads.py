@@ -1,10 +1,11 @@
+import asyncio
 import json
 import traceback
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends, Form, Query, Body, Request
-from core.utils.auth_utils import verify_and_get_user_id_from_jwt, verify_and_authorize_thread_access, require_thread_access, AuthorizedThreadAccess, get_optional_user_id_from_jwt, get_optional_user_id
+from core.utils.auth_utils import verify_and_get_user_id_from_jwt, verify_and_authorize_thread_access, require_thread_access, AuthorizedThreadAccess, get_optional_user_id
 from core.utils.logger import logger
 from core.sandbox.sandbox import create_sandbox, delete_sandbox
 from core.utils.config import config, EnvMode
@@ -17,30 +18,17 @@ router = APIRouter(tags=["threads"])
 @router.get("/threads", summary="List User Threads", operation_id="list_user_threads")
 async def get_user_threads(
     request: Request,
-    user_id: Optional[str] = Depends(get_optional_user_id_from_jwt),
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
     page: Optional[int] = Query(1, ge=1, description="Page number (1-based)"),
     limit: Optional[int] = Query(100, ge=1, le=1000, description="Number of items per page (max 1000)")
 ):
-    from core.guest_session import guest_session_service
-    
-    if not user_id:
-        guest_session_id = request.headers.get('X-Guest-Session')
-        if guest_session_id:
-            if isinstance(guest_session_id, list):
-                guest_session_id = guest_session_id[0]
-
-            session = await guest_session_service.get_or_create_session(request, guest_session_id)
-            user_id = session['session_id']
-            logger.info(f"Guest user fetching threads: {user_id}")
-        else:
-            raise HTTPException(status_code=401, detail="Authentication required")
-    
     logger.debug(f"Fetching threads with project data for user: {user_id} (page={page}, limit={limit})")
     client = await utils.db.client
     try:
         offset = (page - 1) * limit
         
-        count_result = await client.table('threads').select('*', count='exact').eq('account_id', user_id).execute()
+        # Optimized count query - only count, don't select columns
+        count_result = await client.table('threads').select('thread_id', count='exact').eq('account_id', user_id).execute()
         total_count = count_result.count or 0
         
         if total_count == 0:
@@ -55,8 +43,9 @@ async def get_user_threads(
                 }
             }
         
+        # Optimized: Select only needed columns from threads table
         threads_result = await client.table('threads')\
-            .select('*')\
+            .select('thread_id,project_id,metadata,is_public,created_at,updated_at')\
             .eq('account_id', user_id)\
             .order('created_at', desc=True)\
             .range(offset, offset + limit - 1)\
@@ -74,10 +63,11 @@ async def get_user_threads(
         if unique_project_ids:
             from core.utils.query_utils import batch_query_in
             
+            # Optimized: Select only needed columns from projects table (exclude sandbox, description - they're large and only needed when viewing specific project)
             projects_data = await batch_query_in(
                 client=client,
                 table_name='projects',
-                select_fields='*',
+                select_fields='project_id,name,icon_name,is_public,created_at,updated_at',
                 in_field='project_id',
                 in_values=unique_project_ids
             )
@@ -93,14 +83,13 @@ async def get_user_threads(
             if thread.get('project_id') and thread['project_id'] in projects_by_id:
                 project = projects_by_id[thread['project_id']]
                 
+                # Optimized: Only include fields needed for list view (exclude sandbox, description - they're large and only needed when viewing specific project)
                 project_data = {
                     "project_id": project['project_id'],
                     "name": project.get('name', ''),
                     "icon_name": project.get('icon_name'),
-                    "description": project.get('description', ''),
-                    "sandbox": project.get('sandbox', {}),
                     "is_public": project.get('is_public', False),
-                    "created_at": project['created_at'],
+                    "created_at": project.get('created_at'),
                     "updated_at": project['updated_at']
                 }
 
@@ -240,6 +229,23 @@ async def get_thread(
                     "created_at": project['created_at'],
                     "updated_at": project['updated_at']
                 }
+                
+                # If thread has an existing sandbox, start it proactively in background
+                sandbox_info = project.get('sandbox', {})
+                if sandbox_info and sandbox_info.get('id'):
+                    sandbox_id = sandbox_info.get('id')
+                    logger.info(f"Thread {thread_id} has existing sandbox {sandbox_id}, starting it in background...")
+                    
+                    async def start_sandbox_background():
+                        try:
+                            from core.sandbox.sandbox import get_or_start_sandbox
+                            await get_or_start_sandbox(sandbox_id)
+                            logger.info(f"Successfully started sandbox {sandbox_id} for thread {thread_id}")
+                        except Exception as e:
+                            # Don't fail thread loading if sandbox start fails, just log it
+                            logger.warning(f"Failed to start sandbox {sandbox_id} for thread {thread_id}: {str(e)}")
+                    
+                    asyncio.create_task(start_sandbox_background())
         
         message_count_result = await client.table('messages').select('message_id', count='exact').eq('thread_id', thread_id).execute()
         message_count = message_count_result.count if message_count_result.count is not None else 0
@@ -372,6 +378,21 @@ async def create_thread(
                     logger.error(f"Error deleting sandbox: {str(e)}")
             raise Exception("Database update failed")
 
+        # Update project metadata cache with sandbox data (instead of invalidate)
+        try:
+            from core.runtime_cache import set_cached_project_metadata
+            sandbox_cache_data = {
+                'id': sandbox_id,
+                'pass': sandbox_pass,
+                'vnc_preview': vnc_url,
+                'sandbox_url': website_url,
+                'token': token
+            }
+            await set_cached_project_metadata(project_id, sandbox_cache_data)
+            logger.debug(f"✅ Updated project cache with sandbox data: {project_id}")
+        except Exception as cache_error:
+            logger.warning(f"Failed to update project cache: {cache_error}")
+
         thread_data = {
             "thread_id": str(uuid.uuid4()), 
             "project_id": project_id, 
@@ -389,6 +410,13 @@ async def create_thread(
         thread = await client.table('threads').insert(thread_data).execute()
         thread_id = thread.data[0]['thread_id']
         logger.debug(f"Created new thread: {thread_id}")
+
+        # Increment thread count cache (fire-and-forget)
+        try:
+            from core.runtime_cache import increment_thread_count_cache
+            asyncio.create_task(increment_thread_count_cache(account_id))
+        except Exception:
+            pass
 
         logger.debug(f"Successfully created thread {thread_id} with project {project_id}")
         return {"thread_id": thread_id, "project_id": project_id}
@@ -412,71 +440,17 @@ async def get_thread_messages(
     
     await verify_and_authorize_thread_access(client, thread_id, user_id)
     try:
-        batch_size = 1000
-        offset = 0
-        all_messages = []
+        from core.utils.message_migration import migrate_thread_messages, needs_migration
         
-        while True:
-            if optimized:
-                # Optimized mode: filter types and select only essential fields
-                allowed_types = ['user', 'tool', 'assistant']
-                query = client.table('messages').select(
-                    'message_id,thread_id,type,is_llm_message,content,metadata,created_at,updated_at,agent_id'
-                ).eq('thread_id', thread_id).in_('type', allowed_types)
-            else:
-                # Full mode: get all types and all fields
-                query = client.table('messages').select('*').eq('thread_id', thread_id)
-            
-            query = query.order('created_at', desc=(order == "desc"))
-            query = query.range(offset, offset + batch_size - 1)
-            messages_result = await query.execute()
-            batch = messages_result.data or []
-            
-            if optimized:
-                # Optimize messages: remove content for assistant/tool (use metadata only)
-                optimized_batch = []
-                for msg in batch:
-                    msg_type = msg.get('type')
-                    optimized_msg = {
-                        'message_id': msg.get('message_id'),
-                        'thread_id': msg.get('thread_id'),
-                        'type': msg_type,
-                        'is_llm_message': msg.get('is_llm_message'),
-                        'metadata': msg.get('metadata', {}),
-                        'created_at': msg.get('created_at'),
-                        'updated_at': msg.get('updated_at'),
-                        'agent_id': msg.get('agent_id'),
-                    }
-                    # Only include content for user messages (needed for displaying user input)
-                    if msg_type == 'user':
-                        optimized_msg['content'] = msg.get('content')
-                    # For assistant/tool, content is in metadata, so we exclude it to reduce payload
-                    
-                    optimized_batch.append(optimized_msg)
-                all_messages.extend(optimized_batch)
-                logger.debug(f"Fetched batch of {len(batch)} messages (offset {offset}), optimized to {len(optimized_batch)}")
-            else:
-                # Full mode: return all messages as-is
-                all_messages.extend(batch)
-            
-            # Break if we've fetched all messages
-            if len(batch) < batch_size:
-                break
-            offset += batch_size
-        
-        # LAZY MIGRATION: Migrate messages to new structure if needed
-        from core.utils.message_migration import migrate_thread_messages
-        
-        # Migrate messages in database (idempotent - only migrates if needed)
-        stats = await migrate_thread_messages(client, thread_id, save=True)
-        if stats['migrated'] > 0:
-            logger.info(f"Migrated {stats['migrated']} messages for thread {thread_id}")
-            # Re-fetch messages to get migrated versions
-            all_messages = []
+        # Helper to fetch all messages (with content for migration check)
+        async def fetch_all_messages_raw():
+            batch_size = 1000
             offset = 0
+            messages = []
+            allowed_types = ['user', 'tool', 'assistant']
             while True:
                 if optimized:
-                    allowed_types = ['user', 'tool', 'assistant']
+                    # Need content for migration check, will strip later
                     query = client.table('messages').select(
                         'message_id,thread_id,type,is_llm_message,content,metadata,created_at,updated_at,agent_id'
                     ).eq('thread_id', thread_id).in_('type', allowed_types)
@@ -485,33 +459,57 @@ async def get_thread_messages(
                 
                 query = query.order('created_at', desc=(order == "desc"))
                 query = query.range(offset, offset + batch_size - 1)
-                messages_result = await query.execute()
-                batch = messages_result.data or []
-                
-                if optimized:
-                    optimized_batch = []
-                    for msg in batch:
-                        msg_type = msg.get('type')
-                        optimized_msg = {
-                            'message_id': msg.get('message_id'),
-                            'thread_id': msg.get('thread_id'),
-                            'type': msg_type,
-                            'is_llm_message': msg.get('is_llm_message'),
-                            'metadata': msg.get('metadata', {}),
-                            'created_at': msg.get('created_at'),
-                            'updated_at': msg.get('updated_at'),
-                            'agent_id': msg.get('agent_id'),
-                        }
-                        if msg_type == 'user':
-                            optimized_msg['content'] = msg.get('content')
-                        optimized_batch.append(optimized_msg)
-                    all_messages.extend(optimized_batch)
-                else:
-                    all_messages.extend(batch)
-                
+                result = await query.execute()
+                batch = result.data or []
+                messages.extend(batch)
                 if len(batch) < batch_size:
                     break
                 offset += batch_size
+            return messages
+        
+        # Helper to optimize messages (strip content for non-user messages)
+        def optimize_messages(raw_messages):
+            if not optimized:
+                return raw_messages
+            optimized_list = []
+            for msg in raw_messages:
+                msg_type = msg.get('type')
+                optimized_msg = {
+                    'message_id': msg.get('message_id'),
+                    'thread_id': msg.get('thread_id'),
+                    'type': msg_type,
+                    'is_llm_message': msg.get('is_llm_message'),
+                    'metadata': msg.get('metadata', {}),
+                    'created_at': msg.get('created_at'),
+                    'updated_at': msg.get('updated_at'),
+                    'agent_id': msg.get('agent_id'),
+                }
+                # Only include content for user messages
+                if msg_type == 'user':
+                    optimized_msg['content'] = msg.get('content')
+                optimized_list.append(optimized_msg)
+            return optimized_list
+        
+        # STEP 1: Fetch messages ONCE
+        raw_messages = await fetch_all_messages_raw()
+        
+        # STEP 2: Check in-memory if any messages need migration
+        migration_needed = any(
+            needs_migration(msg) 
+            for msg in raw_messages 
+            if msg.get('type') in ['assistant', 'tool']
+        )
+        
+        # STEP 3: If migration needed, migrate and re-fetch fresh data
+        if migration_needed:
+            stats = await migrate_thread_messages(client, thread_id, save=True)
+            if stats['migrated'] > 0:
+                logger.info(f"Migrated {stats['migrated']} messages for thread {thread_id}")
+                # Re-fetch to get fresh migrated data
+                raw_messages = await fetch_all_messages_raw()
+        
+        # STEP 4: Apply optimization and return
+        all_messages = optimize_messages(raw_messages)
         
         return {"messages": all_messages}
     except Exception as e:
@@ -523,46 +521,26 @@ async def add_message_to_thread(
     thread_id: str,
     request: Request,
     message: str = Body(..., embed=True),
-    user_id: Optional[str] = Depends(get_optional_user_id_from_jwt),
+    user_id: str = Depends(verify_and_get_user_id_from_jwt),
 ):
-    from core.guest_session import guest_session_service
-    
     logger.debug(f"Adding message to thread: {thread_id}")
+    
+    # Validate that message is not empty
+    if not message or not message.strip():
+        raise HTTPException(status_code=400, detail="Message content cannot be empty")
+    
     client = await utils.db.client
     
-    if not user_id:
-        guest_session_id = request.headers.get('X-Guest-Session')
-        if guest_session_id:
-            raise HTTPException(
-                status_code=403,
-                detail={
-                    'error': 'guest_chat_disabled',
-                    'message': 'Chat is not available in guest mode. Please sign up or log in to continue.',
-                    'action': 'signup_required'
-                }
-            )
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    thread_result = await client.table('threads').select('*').eq('thread_id', thread_id).execute()
+    thread_result = await client.table('threads').select('account_id').eq('thread_id', thread_id).execute()
     if not thread_result.data:
         raise HTTPException(status_code=404, detail="Thread not found")
     
     thread_data = thread_result.data[0]
     
-    if thread_data['account_id'] == user_id:
-        logger.debug(f"User {user_id} owns thread {thread_id}")
-    else:
-        agent_runs_result = await client.table('agent_runs').select('metadata').eq('thread_id', thread_id).order('created_at', desc=True).limit(1).execute()
-        if agent_runs_result.data:
-            metadata = agent_runs_result.data[0].get('metadata', {})
-            actual_user_id = metadata.get('actual_user_id')
-            if actual_user_id != user_id:
-                logger.error(f"Guest {user_id} unauthorized for thread {thread_id} (belongs to {actual_user_id})")
-                raise HTTPException(status_code=403, detail="Not authorized to access this thread")
-            logger.debug(f"Guest {user_id} authorized for thread {thread_id}")
-        else:
-            logger.error(f"No agent runs found for thread {thread_id}")
-            raise HTTPException(status_code=403, detail="Not authorized to access this thread")
+    # Verify ownership or team access
+    if thread_data['account_id'] != user_id:
+        from core.utils.auth_utils import verify_and_authorize_thread_access
+        await verify_and_authorize_thread_access(client, thread_id, user_id)
     
     try:
         message_result = await client.table('messages').insert({
@@ -586,6 +564,11 @@ async def create_message(
     user_id: str = Depends(verify_and_get_user_id_from_jwt)
 ):
     logger.debug(f"Creating message in thread: {thread_id}")
+    
+    # Validate that user messages have content
+    if message_data.type == "user" and (not message_data.content or not message_data.content.strip()):
+        raise HTTPException(status_code=400, detail="Message content cannot be empty")
+    
     client = await utils.db.client
     
     try:
@@ -742,9 +725,23 @@ async def delete_thread(
         if not thread_delete_result.data:
             raise HTTPException(status_code=500, detail="Failed to delete thread")
         
+        # Invalidate thread count cache for this user
+        try:
+            from core.runtime_cache import invalidate_thread_count_cache
+            await invalidate_thread_count_cache(auth.user_id)
+        except Exception:
+            pass
+        
         if project_id:
             logger.debug(f"Deleting project {project_id}")
             await client.table('projects').delete().eq('project_id', project_id).execute()
+            
+            # Invalidate project cache
+            try:
+                from core.runtime_cache import invalidate_project_cache
+                await invalidate_project_cache(project_id)
+            except Exception:
+                pass
         
         logger.debug(f"Successfully deleted thread {thread_id} and all associated data")
         return {"message": "Thread deleted successfully", "thread_id": thread_id}

@@ -2,7 +2,6 @@ import * as React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAgents } from '@/lib/agents';
 import { useAuthContext } from './AuthContext';
-import { useGuestMode } from './GuestModeContext';
 import type { Agent } from '@/api/types';
 
 interface AgentContextType {
@@ -26,7 +25,6 @@ const AgentContext = React.createContext<AgentContextType | undefined>(undefined
 
 export function AgentProvider({ children }: { children: React.ReactNode }) {
   const { session } = useAuthContext();
-  const { isGuestMode } = useGuestMode();
   
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | undefined>(undefined);
   const [selectedModelId, setSelectedModelId] = React.useState<string | undefined>(undefined);
@@ -41,44 +39,31 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
       sort_order: 'asc'
     },
     {
-      enabled: !!session || isGuestMode,
+      // Only fetch if user is authenticated
+      enabled: !!session,
+      // Don't refetch on window focus - avoid unnecessary requests
+      refetchOnWindowFocus: false,
+      // Don't refetch on reconnect - we'll handle this manually
+      refetchOnReconnect: false,
     }
   );
   
-  const agents = agentsResponse?.agents || [];
+  const agents = React.useMemo(() => agentsResponse?.agents || [], [agentsResponse?.agents]);
   
   React.useEffect(() => {
     const hadSession = !!prevSessionRef.current;
     const hasSession = !!session;
+    const prevUserId = prevSessionRef.current?.user?.id;
+    const currentUserId = session?.user?.id;
     
-    if (!hadSession && hasSession) {
-      console.log('🔄 Session established, refetching agents...');
-      refetch();
-    }
-    
-    if (hadSession && hasSession && prevSessionRef.current?.user?.id !== session?.user?.id) {
-      console.log('🔄 Session user changed, refetching agents...');
+    // Only refetch when user actually changes (login/logout/user switch)
+    if ((!hadSession && hasSession) || (hadSession && hasSession && prevUserId !== currentUserId)) {
+      console.log('🔄 Session changed, refetching agents...');
       refetch();
     }
     
     prevSessionRef.current = session;
   }, [session, refetch]);
-  
-  React.useEffect(() => {
-    console.log('🤖 AgentContext State:', {
-      isAuthenticated: !!session,
-      isGuestMode,
-      hasSession: !!session,
-      sessionUserId: session?.user?.id,
-      isLoading,
-      error: error?.message,
-      agentsCount: agents.length,
-      selectedAgentId,
-      selectedModelId,
-      hasInitialized,
-      agentsResponse: agentsResponse ? 'present' : 'null'
-    });
-  }, [session, isGuestMode, isLoading, error, agents.length, selectedAgentId, selectedModelId, hasInitialized, agentsResponse]);
   
   const AGENT_STORAGE_KEY = '@selected_agent_id';
   const MODEL_STORAGE_KEY = '@selected_model_id';
@@ -185,7 +170,7 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
   
-  const value: AgentContextType = {
+  const value: AgentContextType = React.useMemo(() => ({
     selectedAgentId,
     selectedModelId,
     agents,
@@ -199,7 +184,21 @@ export function AgentProvider({ children }: { children: React.ReactNode }) {
     getCurrentAgent,
     isSunaAgent,
     clearSelection,
-  };
+  }), [
+    selectedAgentId,
+    selectedModelId,
+    agents,
+    isLoading,
+    error,
+    hasInitialized,
+    selectAgent,
+    selectModel,
+    loadAgents,
+    getDefaultAgent,
+    getCurrentAgent,
+    isSunaAgent,
+    clearSelection,
+  ]);
   
   return (
     <AgentContext.Provider value={value}>

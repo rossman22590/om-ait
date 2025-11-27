@@ -16,6 +16,7 @@ import { useGitHubStars } from '@/hooks/utils';
 import { useRouter, usePathname } from 'next/navigation';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
 import { useTranslations } from 'next-intl';
+import { Button } from '@/components/ui/button';
 
 const INITIAL_WIDTH = "70rem";
 const MAX_WIDTH = "800px";

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { billingKeys } from '@/hooks/billing/use-subscription';
@@ -22,26 +22,40 @@ import { useIsMobile } from '@/hooks/utils';
 import { useAuth } from '@/components/AuthProvider';
 import { config, isLocalMode, isStagingMode } from '@/lib/config';
 import { useInitiateAgentWithInvalidation } from '@/hooks/dashboard/use-initiate-agent';
-
+import { useCreditBalance } from '@/hooks/billing';
 import { useAgents } from '@/hooks/agents/use-agents';
-import { PlanSelectionModal } from '@/components/billing/pricing';
 import { usePricingModalStore } from '@/stores/pricing-modal-store';
 import { useAgentSelection } from '@/stores/agent-selection-store';
-import { SunaModesPanel } from './suna-modes-panel';
 import { useThreadQuery } from '@/hooks/threads/use-threads';
 import { normalizeFilenameToNFC } from '@/lib/utils/unicode';
-import { AgentRunLimitDialog } from '@/components/thread/agent-run-limit-dialog';
-import { CustomAgentsSection } from './custom-agents-section';
 import { toast } from 'sonner';
-import { AgentConfigurationDialog } from '@/components/agents/agent-configuration-dialog';
 import { useSunaModePersistence } from '@/stores/suna-modes-store';
-import { CreditsDisplay } from '@/components/billing/credits-display';
 import { Button } from '../ui/button';
 import { Info, X } from 'lucide-react';
 import { useLimits } from '@/hooks/dashboard/use-limits';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Progress } from '../ui/progress';
 import { useTranslations } from 'next-intl';
+
+// Lazy load heavy components that aren't immediately visible
+const PlanSelectionModal = lazy(() => 
+  import('@/components/billing/pricing').then(mod => ({ default: mod.PlanSelectionModal }))
+);
+const SunaModesPanel = lazy(() => 
+  import('./suna-modes-panel').then(mod => ({ default: mod.SunaModesPanel }))
+);
+const AgentRunLimitDialog = lazy(() => 
+  import('@/components/thread/agent-run-limit-dialog').then(mod => ({ default: mod.AgentRunLimitDialog }))
+);
+const CustomAgentsSection = lazy(() => 
+  import('./custom-agents-section').then(mod => ({ default: mod.CustomAgentsSection }))
+);
+const AgentConfigurationDialog = lazy(() => 
+  import('@/components/agents/agent-configuration-dialog').then(mod => ({ default: mod.AgentConfigurationDialog }))
+);
+const CreditsDisplay = lazy(() => 
+  import('@/components/billing/credits-display').then(mod => ({ default: mod.CreditsDisplay }))
+);
 
 const PENDING_PROMPT_KEY = 'pendingAgentPrompt';
 
@@ -112,11 +126,30 @@ export function DashboardContent() {
 
   const threadQuery = useThreadQuery(initiatedThreadId || '');
   const { data: limits, isLoading: isLimitsLoading } = useLimits();
+  const { data: balance } = useCreditBalance(!!user);
   const canCreateThread = limits?.thread_count?.can_create || false;
   
   const isDismissed = typeof window !== 'undefined' && sessionStorage.getItem('threadLimitAlertDismissed') === 'true';
-  // Only show alert after loading is complete and limit is actually exceeded
-  const showAlert = !isLimitsLoading && !canCreateThread && !isDismissed;
+  const threadLimitExceeded = !isLimitsLoading && !canCreateThread && !isDismissed;
+  
+  const dailyCreditsInfo = balance?.daily_credits_info;
+  const hasLowCredits = (balance?.balance || 0) <= 10;
+  const hasDailyRefresh = dailyCreditsInfo?.enabled && dailyCreditsInfo?.seconds_until_refresh;
+  
+  const alertType = hasLowCredits && hasDailyRefresh 
+    ? 'daily_refresh' 
+    : threadLimitExceeded 
+    ? 'thread_limit' 
+    : null;
+  
+  const formatTimeUntilRefresh = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
 
   React.useEffect(() => {
     if (agents.length > 0) {
@@ -310,12 +343,16 @@ export function DashboardContent() {
 
   return (
     <>
-      <PlanSelectionModal />
+      <Suspense fallback={null}>
+        <PlanSelectionModal />
+      </Suspense>
 
       <div className="flex flex-col h-screen w-full overflow-hidden relative">
         {/* Credits Display - Top right corner */}
         <div className="absolute flex items-center gap-2 top-4 right-4 z-10">
-          <CreditsDisplay />
+          <Suspense fallback={<div className="h-8 w-20 bg-muted/30 rounded animate-pulse" />}>
+            <CreditsDisplay />
+          </Suspense>
           <Popover>
             <PopoverTrigger asChild>
               <Button size='icon' variant='outline'>
@@ -450,11 +487,34 @@ export function DashboardContent() {
                           selectedTemplate={selectedTemplate}
                         />
 
-                        {showAlert && (
+                        {alertType === 'daily_refresh' && (
+                          <div 
+                            className='w-full h-16 p-2 px-4 dark:bg-blue-500/5 bg-blue-500/10 dark:border-blue-500/10 border-blue-700/10 border rounded-b-3xl flex items-center justify-between overflow-hidden'
+                            style={{
+                              marginTop: '-40px',
+                              transition: 'margin-top 300ms ease-in-out, opacity 300ms ease-in-out',
+                            }}
+                          >
+                            <span className='-mb-3.5 dark:text-blue-400 text-blue-700 text-sm'>
+                              {tBilling('creditsExhausted', { time: formatTimeUntilRefresh(dailyCreditsInfo!.seconds_until_refresh!) })}
+                            </span>
+                            <div className='flex items-center -mb-3.5'>
+                              <Button 
+                                size='sm' 
+                                className='h-6 text-xs'
+                                onClick={() => pricingModalStore.openPricingModal()}
+                              >
+                              {tCommon('upgrade')}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
+                        {alertType === 'thread_limit' && (
                           <div 
                             className='w-full h-16 p-2 px-4 dark:bg-amber-500/5 bg-amber-500/10 dark:border-amber-500/10 border-amber-700/10 border text-white rounded-b-3xl flex items-center justify-between overflow-hidden'
                             style={{
-                              marginTop: '-32px',
+                              marginTop: '-40px',
                               transition: 'margin-top 300ms ease-in-out, opacity 300ms ease-in-out',
                             }}
                           >
@@ -471,18 +531,7 @@ export function DashboardContent() {
                                 onClick={() => pricingModalStore.openPricingModal()}
                               >
                                 {tCommon('upgrade')}
-                                </Button>
-                              {/* <Button 
-                                size='icon' 
-                                variant='ghost' 
-                                className='h-6 text-muted-foreground'
-                                onClick={() => {
-                                  sessionStorage.setItem('threadLimitAlertDismissed', 'true');
-                                  window.dispatchEvent(new Event('storage'));
-                                }}
-                              >
-                                <X/>
-                              </Button> */}
+                              </Button>
                             </div>
                           </div>
                         )}
@@ -494,18 +543,20 @@ export function DashboardContent() {
                   {isSunaAgent && (
                     <div className="px-4 pb-8">
                       <div className="max-w-3xl mx-auto">
-                        <SunaModesPanel
-                          selectedMode={selectedMode}
-                          onModeSelect={setSelectedMode}
-                          onSelectPrompt={setInputValue}
-                          isMobile={isMobile}
-                          selectedCharts={selectedCharts}
-                          onChartsChange={setSelectedCharts}
-                          selectedOutputFormat={selectedOutputFormat}
-                          onOutputFormatChange={setSelectedOutputFormat}
-                          selectedTemplate={selectedTemplate}
-                          onTemplateChange={setSelectedTemplate}
-                        />
+                        <Suspense fallback={<div className="h-24 bg-muted/10 rounded-lg animate-pulse" />}>
+                          <SunaModesPanel
+                            selectedMode={selectedMode}
+                            onModeSelect={setSelectedMode}
+                            onSelectPrompt={setInputValue}
+                            isMobile={isMobile}
+                            selectedCharts={selectedCharts}
+                            onChartsChange={setSelectedCharts}
+                            selectedOutputFormat={selectedOutputFormat}
+                            onOutputFormatChange={setSelectedOutputFormat}
+                            selectedTemplate={selectedTemplate}
+                            onTemplateChange={setSelectedTemplate}
+                          />
+                        </Suspense>
                       </div>
                     </div>
                   )}
@@ -528,25 +579,29 @@ export function DashboardContent() {
       </div>
 
       {agentLimitData && (
-        <AgentRunLimitDialog
-          open={showAgentLimitDialog}
-          onOpenChange={setShowAgentLimitDialog}
-          runningCount={agentLimitData.runningCount}
-          runningThreadIds={agentLimitData.runningThreadIds}
-          projectId={undefined}
-        />
+        <Suspense fallback={null}>
+          <AgentRunLimitDialog
+            open={showAgentLimitDialog}
+            onOpenChange={setShowAgentLimitDialog}
+            runningCount={agentLimitData.runningCount}
+            runningThreadIds={agentLimitData.runningThreadIds}
+            projectId={undefined}
+          />
+        </Suspense>
       )}
 
       {configAgentId && (
-        <AgentConfigurationDialog
-          open={showConfigDialog}
-          onOpenChange={setShowConfigDialog}
-          agentId={configAgentId}
-          onAgentChange={(newAgentId) => {
-            setConfigAgentId(newAgentId);
-            setSelectedAgent(newAgentId);
-          }}
-        />
+        <Suspense fallback={null}>
+          <AgentConfigurationDialog
+            open={showConfigDialog}
+            onOpenChange={setShowConfigDialog}
+            agentId={configAgentId}
+            onAgentChange={(newAgentId) => {
+              setConfigAgentId(newAgentId);
+              setSelectedAgent(newAgentId);
+            }}
+          />
+        </Suspense>
       )}
     </>
   );

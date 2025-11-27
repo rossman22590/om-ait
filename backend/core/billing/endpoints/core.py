@@ -1,10 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query # type: ignore
 from typing import Optional, Dict
 from decimal import Decimal
 from datetime import datetime, timezone, timedelta
 from core.credits import credit_service
 from core.services.supabase import DBConnection
-from core.utils.auth_utils import verify_and_get_user_id_from_jwt, get_optional_user_id_from_jwt
+from core.utils.auth_utils import verify_and_get_user_id_from_jwt
 from core.utils.config import config, EnvMode
 from core.utils.logger import logger
 from core.ai_models import model_manager
@@ -60,7 +60,14 @@ async def check_status(
             }
         
         from ..subscriptions import subscription_service
-        balance = await credit_service.get_balance(account_id)
+        
+        await credit_service.check_and_refresh_daily_credits(account_id)
+        
+        balance_result = await credit_service.get_balance(account_id)
+        if isinstance(balance_result, dict):
+            balance = Decimal(str(balance_result.get('total', 0)))
+        else:
+            balance = balance_result
             
         summary = await credit_service.get_account_summary(account_id)
         tier = await subscription_service.get_user_subscription_tier(account_id)
@@ -123,12 +130,10 @@ async def check_status(
 
 @router.get("/balance")
 async def get_credit_balance(
-    account_id: Optional[str] = Depends(get_optional_user_id_from_jwt)
+    account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
     from ..shared.config import CREDITS_PER_DOLLAR
-    
-    if not account_id:
-        return {"balance": 0.0, "message": "Guest user"}
+    from datetime import datetime, timezone, timedelta
     
     # Use the same structure as the legacy API
     from core.services.supabase import DBConnection
@@ -136,7 +141,7 @@ async def get_credit_balance(
     client = await db.client
     
     result = await client.from_('credit_accounts').select(
-        'balance, expiring_credits, non_expiring_credits, tier, next_credit_grant, trial_status, trial_ends_at'
+        'balance, expiring_credits, non_expiring_credits, tier, next_credit_grant, trial_status, trial_ends_at, last_daily_refresh'
     ).eq('account_id', account_id).execute()
     
     if result.data and len(result.data) > 0:
@@ -151,6 +156,30 @@ async def get_credit_balance(
         balance_dollars = float(account.get('balance', 0))
         expiring_dollars = float(account.get('expiring_credits', 0))
         non_expiring_dollars = float(account.get('non_expiring_credits', 0))
+        last_daily_refresh = account.get('last_daily_refresh')
+        
+        daily_credits_info = None
+        if tier_info and tier_info.daily_credit_config and tier_info.daily_credit_config.get('enabled'):
+            next_refresh_at = None
+            seconds_until_refresh = None
+            refresh_interval_hours = tier_info.daily_credit_config.get('refresh_interval_hours', 24)
+            
+            if last_daily_refresh:
+                last_refresh_dt = datetime.fromisoformat(last_daily_refresh.replace('Z', '+00:00'))
+                next_refresh_dt = last_refresh_dt + timedelta(hours=refresh_interval_hours)
+                next_refresh_at = next_refresh_dt.isoformat()
+                
+                time_diff = next_refresh_dt - datetime.now(timezone.utc)
+                seconds_until_refresh = max(0, int(time_diff.total_seconds()))
+            
+            daily_credits_info = {
+                'enabled': True,
+                'daily_amount': float(tier_info.daily_credit_config.get('amount', 0)) * CREDITS_PER_DOLLAR,
+                'refresh_interval_hours': refresh_interval_hours,
+                'last_refresh': last_daily_refresh,
+                'next_refresh_at': next_refresh_at,
+                'seconds_until_refresh': seconds_until_refresh
+            }
     
         return {
             'balance': balance_dollars * CREDITS_PER_DOLLAR,
@@ -163,6 +192,7 @@ async def get_credit_balance(
             'trial_ends_at': trial_ends_at,
             'can_purchase_credits': tier_info.can_purchase_credits if tier_info else False,
             'next_credit_grant': account.get('next_credit_grant'),
+            'daily_credits_info': daily_credits_info,
             'breakdown': {
                 'expiring': expiring_dollars * CREDITS_PER_DOLLAR,
                 'non_expiring': non_expiring_dollars * CREDITS_PER_DOLLAR,
@@ -312,7 +342,7 @@ async def get_tier_configurations() -> Dict:
 
 @router.get("/available-models")
 async def get_available_models(
-    account_id: Optional[str] = Depends(get_optional_user_id_from_jwt)
+    account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
     if config.ENV_MODE == EnvMode.LOCAL:
         all_models = model_manager.list_available_models(include_disabled=True)
@@ -331,12 +361,9 @@ async def get_available_models(
             'local_mode': True
         }
     
-    if not account_id:
-        tier_name = 'free'
-    else:
-        from ..subscriptions import subscription_service
-        tier_info = await subscription_service.get_user_subscription_tier(account_id)
-        tier_name = tier_info.get('name', 'free')
+    from ..subscriptions import subscription_service
+    tier_info = await subscription_service.get_user_subscription_tier(account_id)
+    tier_name = tier_info.get('name', 'free')
     
     all_models = model_manager.list_available_models(include_disabled=True)
     

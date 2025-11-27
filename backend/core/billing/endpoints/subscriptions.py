@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query # type: ignore
 from typing import Optional, Dict
 from datetime import datetime, timezone
-from core.utils.auth_utils import verify_and_get_user_id_from_jwt, get_optional_user_id_from_jwt
+from core.utils.auth_utils import verify_and_get_user_id_from_jwt
 from core.utils.logger import logger
+from core.credits import credit_service
 from ..shared.models import (
     CreateCheckoutSessionRequest,
     CreatePortalSessionRequest,
@@ -19,30 +20,21 @@ router = APIRouter(tags=["billing-subscriptions"])
 
 @router.get("/subscription")
 async def get_subscription(
-    account_id: Optional[str] = Depends(get_optional_user_id_from_jwt)
+    account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
     try:
-        if not account_id:
-            return {
-                'has_subscription': False,
-                'tier': 'guest',
-                'tier_name': 'Guest',
-                'status': None,
-                'plan_name': None
-            }
-        
         subscription_info = await subscription_service.get_subscription(account_id)
         
-        from core.credits import credit_service
         from decimal import Decimal
+        from ..shared.config import CREDITS_PER_DOLLAR, get_price_type
         
         try:
             balance_result = await credit_service.get_balance(account_id)
-            logger.debug(f"[BILLING DEBUG] balance_result type: {type(balance_result)}, value: {balance_result}")
+            logger.info(f"[BILLING SUBSCRIPTION] balance_result type: {type(balance_result)}, value: {balance_result}")
             
             if isinstance(balance_result, dict):
                 total_value = balance_result.get('total', 0)
-                logger.debug(f"[BILLING DEBUG] total_value type: {type(total_value)}, value: {total_value}")
+                logger.info(f"[BILLING SUBSCRIPTION] total_value type: {type(total_value)}, value: {total_value}")
                 
                 if isinstance(total_value, dict):
                     logger.warning(f"[BILLING] Unexpected nested dict in balance total: {total_value}")
@@ -54,6 +46,8 @@ async def get_subscription(
             else:
                 logger.warning(f"[BILLING] Unexpected balance_result type: {type(balance_result)}, defaulting to 0")
                 balance = Decimal('0')
+            
+            logger.info(f"[BILLING SUBSCRIPTION] Final balance for {account_id}: ${balance} (will return {float(balance) * CREDITS_PER_DOLLAR} credits)")
         except Exception as e:
             logger.error(f"[BILLING] Error processing balance: {e}, defaulting to 0")
             balance = Decimal('0')
@@ -106,8 +100,6 @@ async def get_subscription(
         else:
             display_plan_name = tier_info.get('display_name', tier_info['name'])
             is_trial = False
-        
-        from ..shared.config import CREDITS_PER_DOLLAR, get_price_type
                
         try:
             credit_account = subscription_info.get('credit_account', {})
@@ -309,11 +301,8 @@ async def create_portal_session(
     account_id: str = Depends(verify_and_get_user_id_from_jwt)
 ) -> Dict:
     try:
-        return {
-            'url': f'https://billing.stripe.com/session/create?return_url={request.return_url}',
-            'success': True,
-            'message': 'Portal session created (simplified)'
-        }
+        from ..subscriptions.handlers.portal import PortalHandler
+        result = await PortalHandler.create_portal_session(account_id, request.return_url)
         return result
     except Exception as e:
         logger.error(f"[BILLING] Error creating portal session: {e}")

@@ -279,7 +279,7 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const pageLimit = 50;
+  const pageLimit = 20; // Reduced from 50 to 20 to reduce API response size
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -292,6 +292,7 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
   const {
     data: threadsResponse,
     isLoading: isThreadsLoading,
+    isFetching: isThreadsFetching,
     error: threadsError
   } = useThreads({
     page: currentPage,
@@ -337,19 +338,24 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
       const projectId = thread.project_id;
       const project = thread.project; // Backend already provides this!
       
-      if (!projectId || !project) {
+      // Handle threads without project data gracefully
+      // This can happen if the project was deleted or thread created without project
+      if (!projectId) {
+        // Thread has no project_id - skip these orphan threads
+        console.debug('Thread without project_id:', thread.thread_id);
         continue;
       }
       
-      const displayName = project.name || 'Unnamed Project';
-      const iconName = project.icon_name;
+      // Use fallback values if project data is missing (e.g., deleted project)
+      const displayName = project?.name || 'Unnamed Project';
+      const iconName = project?.icon_name;
       
       processed.push({
         threadId: thread.thread_id,
         projectId: projectId,
         projectName: displayName,
         url: `/projects/${projectId}/thread/${thread.thread_id}`,
-        updatedAt: thread.updated_at || project.updated_at || new Date().toISOString(),
+        updatedAt: thread.updated_at || project?.updated_at || new Date().toISOString(),
         iconName: iconName,
       });
     }
@@ -362,12 +368,8 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
 
   // Server-side search is now handled in useThreads hook
   // No need for client-side filtering anymore
-  // Separate trigger threads from regular threads
-  const regularThreads = combinedThreads.filter(thread => !thread.projectName?.startsWith('Trigger: '));
-  const triggerThreads = combinedThreads.filter(thread => thread.projectName?.startsWith('Trigger: '));
-
-  const groupedThreads: GroupedThreads = groupThreadsByDate(regularThreads);
-  const groupedTriggerThreads: GroupedThreads = groupThreadsByDate(triggerThreads);
+  // Group all threads by date (no longer filtering out triggers - they're shown together)
+  const groupedThreads: GroupedThreads = groupThreadsByDate(combinedThreads);
 
   // Pagination helpers
   const pagination = threadsResponse?.pagination;
@@ -837,10 +839,10 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
                     <div className="flex items-center justify-center gap-3">
                       <button
                         onClick={handlePreviousPage}
-                        disabled={!canGoPrevious || isThreadsLoading}
+                        disabled={!canGoPrevious || isThreadsFetching}
                         className={cn(
                           "p-1.5 text-xs transition-opacity",
-                          canGoPrevious && !isThreadsLoading
+                          canGoPrevious && !isThreadsFetching
                             ? "text-muted-foreground hover:text-foreground opacity-70 hover:opacity-100"
                             : "text-muted-foreground/30 cursor-not-allowed"
                         )}
@@ -848,16 +850,19 @@ export function NavAgents({ onOpenSearch }: { onOpenSearch?: () => void }) {
                         <ChevronLeft className="h-3.5 w-3.5" />
                       </button>
                       
-                      <span className="text-xs text-muted-foreground/70">
+                      <span className="text-xs text-muted-foreground/70 flex items-center gap-1">
+                        {isThreadsFetching && (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        )}
                         {currentPage}/{totalPages}
                       </span>
                       
                       <button
                         onClick={handleNextPage}
-                        disabled={!canGoNext || isThreadsLoading}
+                        disabled={!canGoNext || isThreadsFetching}
                         className={cn(
                           "p-1.5 text-xs transition-opacity",
-                          canGoNext && !isThreadsLoading
+                          canGoNext && !isThreadsFetching
                             ? "text-muted-foreground hover:text-foreground opacity-70 hover:opacity-100"
                             : "text-muted-foreground/30 cursor-not-allowed"
                         )}
