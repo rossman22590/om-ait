@@ -17,10 +17,9 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('returnUrl') || searchParams.get('redirect') || '/dashboard'
   const termsAccepted = searchParams.get('terms_accepted') === 'true'
   
-  // Use request origin for redirects (most reliable for local dev)
-  // This ensures localhost:3000 redirects stay on localhost, not staging
-  const requestOrigin = request.nextUrl.origin
-  const baseUrl = requestOrigin || process.env.NEXT_PUBLIC_URL || 'http://localhost:3001'
+  // FORCE NEXT_PUBLIC_APP_URL - Railway uses internal port 8080 which breaks redirects
+  // NEVER use request.nextUrl.origin in production - it returns internal ports
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL || 'https://machine-alpha-app.up.railway.app'
   const error = searchParams.get('error')
   const errorDescription = searchParams.get('error_description')
 
@@ -104,8 +103,10 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Web redirect
-      return NextResponse.redirect(`${baseUrl}${finalDestination}`)
+      // If next is an absolute URL, redirect to it directly to avoid concatenating origins
+      const isAbsolute = /^https?:\/\//i.test(finalDestination)
+      const target = isAbsolute ? finalDestination : `${baseUrl}${finalDestination.startsWith('/') ? '' : '/'}${finalDestination}`
+      return NextResponse.redirect(target)
     } catch (error) {
       console.error('❌ Unexpected error in auth callback:', error)
       return NextResponse.redirect(`${baseUrl}/auth?error=unexpected_error`)

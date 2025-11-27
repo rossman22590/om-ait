@@ -50,9 +50,11 @@ export async function signIn(prevState: any, formData: FormData) {
   const supabase = await createClient();
 
   // Use magic link (passwordless) authentication
+  // Prefer forced app URL when provided to keep domain consistent across flows
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || origin;
   // Pass terms acceptance as query parameter so callback can save it
   const termsParam = acceptedTerms ? `&terms_accepted=true` : '';
-  const emailRedirectTo = `${origin}/auth/callback?returnUrl=${encodeURIComponent(returnUrl || '/dashboard')}${termsParam}`;
+  const emailRedirectTo = `${appUrl}/auth/callback?returnUrl=${encodeURIComponent(returnUrl || '/dashboard')}${termsParam}`;
 
   const { error } = await supabase.auth.signInWithOtp({
     email: email.trim().toLowerCase(),
@@ -91,9 +93,11 @@ export async function signUp(prevState: any, formData: FormData) {
   const supabase = await createClient();
 
   // Use magic link (passwordless) authentication - auto-creates account
+  // Prefer forced app URL when provided to keep domain consistent across flows
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || origin;
   // Pass terms acceptance as query parameter so callback can save it
   const termsParam = acceptedTerms ? `&terms_accepted=true` : '';
-  const emailRedirectTo = `${origin}/auth/callback?returnUrl=${encodeURIComponent(returnUrl || '/dashboard')}${termsParam}`;
+  const emailRedirectTo = `${appUrl}/auth/callback?returnUrl=${encodeURIComponent(returnUrl || '/dashboard')}${termsParam}`;
 
   const { error } = await supabase.auth.signInWithOtp({
     email: email.trim().toLowerCase(),

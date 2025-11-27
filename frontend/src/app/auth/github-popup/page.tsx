@@ -124,7 +124,7 @@ export default function GitHubOAuthPopup() {
           const { error } = await supabase.auth.signInWithOAuth({
             provider: 'github',
             options: {
-              redirectTo: `${window.location.origin}/auth/github-popup`,
+              redirectTo: `${(process.env.NEXT_PUBLIC_APP_URL || window.location.origin)}/auth/github-popup`,
               queryParams: {
                 access_type: 'online',
                 prompt: 'select_account',
