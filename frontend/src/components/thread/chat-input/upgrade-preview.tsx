@@ -46,7 +46,7 @@ export const UpgradePreview: React.FC<UpgradePreviewProps> = ({
             <div className="flex-1 min-w-0">
                 <motion.div className="flex items-center gap-2 mb-1">
                     <h4 className="text-sm font-medium text-foreground truncate">
-                        Upgrade now to get the full Kortix experience
+                        Upgrade now to get the full Machine experience
                     </h4>
                 </motion.div>
 
