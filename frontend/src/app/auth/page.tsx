@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useMediaQuery } from '@/hooks/utils';
 import { useState, useEffect, Suspense, lazy } from 'react';
-import { signUp } from './actions';
+import { signUp, signIn } from './actions';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { MailCheck } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
@@ -39,7 +39,8 @@ function LoginContent() {
   const message = searchParams.get('message');
   const t = useTranslations('auth');
 
-  const isSignUp = mode !== 'signin';
+  // Default to sign-in unless explicitly in sign-up mode
+  const isSignUp = mode === 'signup';
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [mounted, setMounted] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false); // GDPR requires explicit opt-in
@@ -84,7 +85,9 @@ function LoginContent() {
     formData.append('origin', window.location.origin);
     formData.append('acceptedTerms', acceptedTerms.toString());
 
-    const result = await signUp(prevState, formData);
+    const result = isSignUp
+      ? await signUp(prevState, formData)
+      : await signIn(prevState, formData);
 
     // Magic link always returns success with message (no immediate redirect)
     if (result && typeof result === 'object' && 'success' in result && result.success) {
@@ -211,24 +214,9 @@ function LoginContent() {
                 className=""
                 required
               />
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder={t('password')}
-                className=""
-                required
-              />
+              {/* For magic link sign-in, no password fields are needed */}
               {isSignUp && (
                 <>
-                  <Input
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type="password"
-                    placeholder={t('confirmPassword')}
-                    className=""
-                    required
-                  />
                   
                   {/* GDPR Consent Checkbox */}
                   <div className="flex items-center gap-3 my-4">

@@ -155,7 +155,7 @@ export function Navbar({ tabs }: NavbarProps = {}) {
               ) : (
                 <Link
                   className="bg-pink-500 hover:bg-pink-600 dark:bg-pink-600 dark:hover:bg-pink-700 h-8 hidden md:flex items-center justify-center text-sm font-medium tracking-wide rounded-full text-white dark:text-white w-fit px-4 shadow-[inset_0_1px_2px_rgba(255,255,255,0.25),0_3px_3px_-1.5px_rgba(16,24,40,0.06),0_1px_1px_rgba(16,24,40,0.08)] border border-transparent dark:border-white/20"
-                  href="/auth"
+                  href="/auth?mode=signin"
                 >
                   Sign In
                 </Link>

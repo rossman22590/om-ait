@@ -474,7 +474,7 @@ export function HeroSection() {
           {/* Sign in options */}
           <div className="space-y-4 pt-4">
             <Link
-              href={`/auth?returnUrl=${encodeURIComponent('/dashboard')}`}
+              href={`/auth?mode=signin&returnUrl=${encodeURIComponent('/dashboard')}`}
               className="flex h-12 items-center justify-center w-full text-center rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-all shadow-md"
               onClick={() => setAuthDialogOpen(false)}
             >
