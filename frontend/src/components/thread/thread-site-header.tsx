@@ -222,12 +222,14 @@ export function SiteHeader({
               </TooltipContent>
             </Tooltip>
 
-{/* Thread Usage next to "View Files in Task" */}
-            <UsageDisplay
-              threadId={threadId}
-              projectId={projectId}
-              className="ml-1"
-            />
+{/* Thread Usage next to "View Files in Task" - hide on shared pages (requires auth) */}
+            {variant !== 'shared' && (
+              <UsageDisplay
+                threadId={threadId}
+                projectId={projectId}
+                className="ml-1"
+              />
+            )}
 
 
             <Tooltip>
