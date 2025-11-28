@@ -458,13 +458,12 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     const isExpected =
       lower.includes('not found') || lower.includes('agent run is not running');
 
-    // Check if this is a billing error
+    // Check if this is a billing error - must be specific, not just any message with "credit"
     const isBillingError =
       lower.includes('insufficient credits') ||
-      lower.includes('credit') ||
-      lower.includes('balance') ||
       lower.includes('out of credits') ||
-      lower.includes('no credits');
+      lower.includes('no credits') ||
+      (lower.includes('balance') && lower.includes('insufficient'));
 
     if (isBillingError) {
       console.error(`[PAGE] Agent stopped due to billing error: ${errorMessage}`);

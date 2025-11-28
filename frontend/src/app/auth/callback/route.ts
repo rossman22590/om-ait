@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   
   // FORCE NEXT_PUBLIC_APP_URL - Railway uses internal port 8080 which breaks redirects
   // NEVER use request.nextUrl.origin in production - it returns internal ports
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL || 'https://machine-alpha-app.up.railway.app'
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_URL || 'http://localhost:3001'
   const error = searchParams.get('error')
   const errorDescription = searchParams.get('error_description')
 

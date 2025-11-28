@@ -19,12 +19,20 @@ class BillingIntegration:
         except Exception as e:
             logger.warning(f"[DAILY_CREDITS] Failed to check/refresh daily credits for {account_id}: {e}")
         
-        balance_info = await credit_manager.get_balance(account_id)
+        # CRITICAL: Fetch balance directly from DB to avoid stale cache issues
+        # Users with credits were being blocked due to cached $0 balances
+        from core.services.supabase import DBConnection
+        db = DBConnection()
+        client = await db.client
         
-        if isinstance(balance_info, dict):
-            balance = Decimal(str(balance_info.get('total', 0)))
+        result = await client.from_('credit_accounts').select('balance').eq('account_id', account_id).execute()
+        
+        if result.data and len(result.data) > 0:
+            balance = Decimal(str(result.data[0].get('balance', 0)))
         else:
-            balance = Decimal(str(balance_info or 0))
+            balance = Decimal('0')
+        
+        logger.info(f"[BILLING] Direct DB balance check for {account_id}: ${balance:.2f}")
         
         if balance < 0:
             return False, f"Insufficient credits. Your balance is ${balance:.2f}. Please add credits to continue.", None

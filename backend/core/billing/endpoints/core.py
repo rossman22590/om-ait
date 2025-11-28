@@ -63,21 +63,27 @@ async def check_status(
         
         await credit_service.check_and_refresh_daily_credits(account_id)
         
-        balance_result = await credit_service.get_balance(account_id)
-        if isinstance(balance_result, dict):
-            balance = Decimal(str(balance_result.get('total', 0)))
+        # CRITICAL: Read balance directly from DB to avoid stale cache
+        # Users with credits were seeing "out of credits" due to cached $0 balances
+        db = DBConnection()
+        client = await db.client
+        
+        balance_result = await client.from_('credit_accounts')\
+            .select('balance, trial_status, trial_ends_at')\
+            .eq('account_id', account_id)\
+            .execute()
+        
+        if balance_result.data and len(balance_result.data) > 0:
+            balance = Decimal(str(balance_result.data[0].get('balance', 0)))
         else:
-            balance = balance_result
+            balance = Decimal('0')
+        
+        logger.info(f"[BILLING] check-status for {account_id}: balance=${balance}")
             
         summary = await credit_service.get_account_summary(account_id)
         tier = await subscription_service.get_user_subscription_tier(account_id)
         
-        db = DBConnection()
-        client = await db.client
-        credit_account = await client.from_('credit_accounts')\
-            .select('trial_status, trial_ends_at')\
-            .eq('account_id', account_id)\
-            .execute()
+        credit_account = balance_result  # Reuse the query result
         
         trial_status = None
         trial_ends_at = None

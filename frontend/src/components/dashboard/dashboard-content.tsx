@@ -287,17 +287,10 @@ export function DashboardContent() {
           alertTitle: `${tBilling('reachedLimit')} ${tBilling('threadLimit', { current: error.detail.current_count, limit: error.detail.limit })}` 
         });
       } else if (error instanceof BillingError) {
-        const message = error.detail?.message?.toLowerCase() || '';
-        const isCreditsExhausted = 
-          message.includes('credit') ||
-          message.includes('balance') ||
-          message.includes('insufficient') ||
-          message.includes('out of credits') ||
-          message.includes('no credits');
-        
+        // BillingError only thrown for actual billing failures
         pricingModalStore.openPricingModal({ 
           isAlert: true,
-          alertTitle: isCreditsExhausted ? 'You ran out of credits. Upgrade now.' : 'Pick the plan that works for you.'
+          alertTitle: 'You ran out of credits. Upgrade now.'
         });
       } else if (error instanceof AgentRunLimitError) {
         const { running_thread_ids, running_count } = error.detail;
