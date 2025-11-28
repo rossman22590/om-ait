@@ -570,6 +570,14 @@ export function useAgentStream(
         finalizeStream('error');
         return;
       }
+      
+      // CRITICAL: Always finalize the stream on error, even for "expected" errors
+      // This prevents the stream from getting stuck in a broken state
+      if (isExpected) {
+        finalizeStream('agent_not_running', runId);
+      } else {
+        finalizeStream('error', runId);
+      }
     },
     [finalizeStream],
   );

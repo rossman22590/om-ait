@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/client';
 import { handleApiError } from '../error-handler';
 import { backendApi } from '../api-client';
 import { BillingError, AgentRunLimitError, ProjectLimitError, NoAccessTokenAvailableError } from './errors';
-import { nonRunningAgentRuns, activeStreams, cleanupEventSource } from './streaming';
+import { nonRunningAgentRuns, activeStreams, cleanupEventSource, clearNonRunningAgent, pruneNonRunningCache } from './streaming';
 import { Message } from './threads';
 
 const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || '';
@@ -327,6 +327,13 @@ export const streamAgent = (
     onClose: () => void;
   },
 ): (() => void) => {
+  // Prune old entries from the cache to prevent memory leaks
+  pruneNonRunningCache();
+  
+  // IMPORTANT: Clear this specific run ID from the non-running cache
+  // This ensures we don't block a fresh agent run due to stale cache state
+  clearNonRunningAgent(agentRunId);
+  
   if (nonRunningAgentRuns.has(agentRunId)) {
     setTimeout(() => {
       callbacks.onError(`Agent run ${agentRunId} is not running`);

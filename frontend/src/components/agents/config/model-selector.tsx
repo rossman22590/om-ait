@@ -213,7 +213,7 @@ export function AgentModelSelector({
       const isPowerModel = modelId === 'kortix/power';
       openPricingModal({
         isAlert: true,
-        alertTitle: isPowerModel ? 'Upgrade to access Kortix Power mode' : 'Upgrade to access this model',
+        alertTitle: isPowerModel ? 'Upgrade to access Machine Power mode' : 'Upgrade to access this model',
       });
     }
   };
@@ -388,7 +388,7 @@ export function AgentModelSelector({
           </TooltipTrigger>
           {!accessible && !isLocalMode() ? (
             <TooltipContent side="left" className="text-xs max-w-xs">
-              <p>{isPowerModel ? 'Upgrade to access Kortix Power mode' : 'Upgrade to access this model'}</p>
+              <p>{isPowerModel ? 'Upgrade to access Machine Power mode' : 'Upgrade to access this model'}</p>
             </TooltipContent>
           ) : isLowQuality ? (
             <TooltipContent side="left" className="text-xs max-w-xs">

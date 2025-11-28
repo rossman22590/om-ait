@@ -53,7 +53,7 @@ export const UpgradePreview: React.FC<UpgradePreviewProps> = ({
                 </motion.div>
 
                 <span className="text-xs text-muted-foreground truncate block">
-                    Kortix Power mode, 100+ Integrations, Triggers, Custom AI Workers & more
+                    Machine Power mode, 100+ Integrations, Triggers, Custom AI Workers & more
                 </span>
             </div>
 
