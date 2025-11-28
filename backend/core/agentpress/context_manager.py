@@ -76,11 +76,15 @@ class ContextManager:
         Returns:
             Token count (with caching overhead if apply_caching=True)
         """
+        # Resolve vanity model names (kortix/power -> openrouter/anthropic/claude-sonnet-4.5)
+        # for token counting, since LiteLLM's token_counter doesn't know our aliases
+        resolved_model = model_manager.registry.get_litellm_model_id(model)
+        
         # Apply caching transformation if requested (to match API reality)
         messages_to_count = messages
         system_to_count = system_prompt
         
-        if apply_caching and ('claude' in model.lower() or 'anthropic' in model.lower()):
+        if apply_caching and ('claude' in resolved_model.lower() or 'anthropic' in resolved_model.lower()):
             try:
                 # Temporarily apply caching transformation
                 prepared = await apply_anthropic_caching_strategy(
@@ -99,13 +103,13 @@ class ContextManager:
                 # Continue with uncached messages
         
         # Check if this is an Anthropic model
-        if 'claude' in model.lower() or 'anthropic' in model.lower():
+        if 'claude' in resolved_model.lower() or 'anthropic' in resolved_model.lower():
             # Use Anthropic's official tokenizer
             try:
                 client = self._get_anthropic_client()
                 if client:
                     # Strip provider prefix
-                    clean_model = model.split('/')[-1] if '/' in model else model
+                    clean_model = resolved_model.split('/')[-1] if '/' in resolved_model else resolved_model
                     
                     # Clean messages - only role and content
                     clean_messages = []
@@ -133,7 +137,7 @@ class ContextManager:
                 logger.debug(f"Anthropic token counting failed, falling back to LiteLLM: {e}")
         
         # Check if this is a Bedrock model
-        elif 'bedrock' in model.lower():
+        elif 'bedrock' in resolved_model.lower():
             try:
                 bedrock_client = self._get_bedrock_client()
                 if bedrock_client:
@@ -146,8 +150,8 @@ class ContextManager:
                     
                     # Extract profile ID from ARN
                     bedrock_model_id = None
-                    if "application-inference-profile" in model:
-                        profile_id = model.split("/")[-1]
+                    if "application-inference-profile" in resolved_model:
+                        profile_id = resolved_model.split("/")[-1]
                         bedrock_model_id = model_id_mapping.get(profile_id)
                     
                     if not bedrock_model_id:
@@ -205,11 +209,11 @@ class ContextManager:
             except Exception as e:
                 logger.debug(f"Bedrock token counting failed, falling back to LiteLLM: {e}")
         
-        # Fallback to LiteLLM token_counter
+        # Fallback to LiteLLM token_counter (use resolved model name)
         if system_to_count:
-            return token_counter(model=model, messages=[system_to_count] + messages_to_count)
+            return token_counter(model=resolved_model, messages=[system_to_count] + messages_to_count)
         else:
-            return token_counter(model=model, messages=messages_to_count)
+            return token_counter(model=resolved_model, messages=messages_to_count)
 
     async def estimate_token_usage(self, prompt_messages: List[Dict[str, Any]], completion_content: str, model: str) -> Dict[str, Any]:
         """
@@ -227,6 +231,9 @@ class ContextManager:
         Returns:
             Dict with prompt_tokens, completion_tokens, total_tokens, estimated=True
         """
+        # Resolve vanity model names for token counting
+        resolved_model = model_manager.registry.get_litellm_model_id(model)
+        
         try:
             # Count prompt tokens using accurate provider APIs
             prompt_tokens = await self.count_tokens(model, prompt_messages, apply_caching=False)
@@ -234,7 +241,7 @@ class ContextManager:
             # Count completion tokens (just the text)
             completion_tokens = 0
             if completion_content:
-                completion_tokens = token_counter(model=model, text=completion_content)
+                completion_tokens = token_counter(model=resolved_model, text=completion_content)
             
             total_tokens = prompt_tokens + completion_tokens
             
@@ -250,8 +257,8 @@ class ContextManager:
             logger.error(f"Context manager estimation failed: {e}, falling back to LiteLLM")
             # Fallback to LiteLLM
             try:
-                prompt_tokens = token_counter(model=model, messages=prompt_messages)
-                completion_tokens = token_counter(model=model, text=completion_content) if completion_content else 0
+                prompt_tokens = token_counter(model=resolved_model, messages=prompt_messages)
+                completion_tokens = token_counter(model=resolved_model, text=completion_content) if completion_content else 0
                 
                 logger.warning(f"⚠️ ESTIMATED TOKEN USAGE (LiteLLM): prompt={prompt_tokens}, completion={completion_tokens}")
                 
@@ -1162,13 +1169,15 @@ class ContextManager:
         max_tokens_value = max_tokens or (100 * 1000)
 
         if uncompressed_total_token_count > max_tokens_value:
+            # Resolve vanity names for token counting
+            resolved_model = model_manager.registry.get_litellm_model_id(llm_model)
             _i = 0  # Count the number of ToolResult messages
             for msg in reversed(messages):  # Start from the end and work backwards
                 if not isinstance(msg, dict):
                     continue  # Skip non-dict messages
                 if self.is_tool_result_message(msg):  # Only compress ToolResult messages
                     _i += 1  # Count the number of ToolResult messages
-                    msg_token_count = token_counter(messages=[msg])  # Count the number of tokens in the message
+                    msg_token_count = token_counter(model=resolved_model, messages=[msg])  # Count the number of tokens in the message
                     if msg_token_count > token_threshold:  # If the message is too long
                         if _i > self.keep_recent_tool_outputs:  # If this is not one of the most recent N ToolResult messages
                             message_id = msg.get('message_id')  # Get the message_id
@@ -1192,13 +1201,15 @@ class ContextManager:
         max_tokens_value = max_tokens or (100 * 1000)
 
         if uncompressed_total_token_count > max_tokens_value:
+            # Resolve vanity names for token counting
+            resolved_model = model_manager.registry.get_litellm_model_id(llm_model)
             _i = 0  # Count the number of User messages
             for msg in reversed(messages):  # Start from the end and work backwards
                 if not isinstance(msg, dict):
                     continue  # Skip non-dict messages
                 if msg.get('role') == 'user':  # Only compress User messages
                     _i += 1  # Count the number of User messages
-                    msg_token_count = token_counter(messages=[msg])  # Count the number of tokens in the message
+                    msg_token_count = token_counter(model=resolved_model, messages=[msg])  # Count the number of tokens in the message
                     if msg_token_count > token_threshold:  # If the message is too long
                         if _i > self.keep_recent_user_messages:  # If this is not one of the most recent N User messages
                             message_id = msg.get('message_id')  # Get the message_id
@@ -1222,13 +1233,15 @@ class ContextManager:
         max_tokens_value = max_tokens or (100 * 1000)
         
         if uncompressed_total_token_count > max_tokens_value:
+            # Resolve vanity names for token counting
+            resolved_model = model_manager.registry.get_litellm_model_id(llm_model)
             _i = 0  # Count the number of Assistant messages
             for msg in reversed(messages):  # Start from the end and work backwards
                 if not isinstance(msg, dict):
                     continue  # Skip non-dict messages
                 if msg.get('role') == 'assistant':  # Only compress Assistant messages
                     _i += 1  # Count the number of Assistant messages
-                    msg_token_count = token_counter(messages=[msg])  # Count the number of tokens in the message
+                    msg_token_count = token_counter(model=resolved_model, messages=[msg])  # Count the number of tokens in the message
                     if msg_token_count > token_threshold:  # If the message is too long
                         if _i > self.keep_recent_assistant_messages:  # If this is not one of the most recent N Assistant messages
                             message_id = msg.get('message_id')  # Get the message_id

@@ -18,8 +18,8 @@ CREATE TABLE IF NOT EXISTS device_tokens (
     UNIQUE(user_id, device_token)
 );
 
-CREATE INDEX IF NOT EXISTS idx_device_tokens_user_id ON device_tokens(user_id);
-CREATE INDEX IF NOT EXISTS idx_device_tokens_active ON device_tokens(user_id, is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_device_tokens_account_id ON device_tokens(account_id);
+CREATE INDEX IF NOT EXISTS idx_device_tokens_active ON device_tokens(account_id, is_active) WHERE is_active = true;
 
 CREATE OR REPLACE FUNCTION update_updated_at()
 RETURNS TRIGGER AS $$
@@ -45,9 +45,9 @@ ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Users can manage own notification settings" ON notification_settings;
 CREATE POLICY "Users can manage own notification settings"
     ON notification_settings FOR ALL
-    USING (auth.uid() = user_id);
+    USING (auth.uid() = account_id);
 
 DROP POLICY IF EXISTS "Users can manage own device tokens" ON device_tokens;
 CREATE POLICY "Users can manage own device tokens"
     ON device_tokens FOR ALL
-    USING (auth.uid() = user_id);
+    USING (auth.uid() = account_id);

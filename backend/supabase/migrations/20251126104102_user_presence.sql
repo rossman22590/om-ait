@@ -6,8 +6,8 @@ CREATE TABLE IF NOT EXISTS user_presence (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_user_presence_active_thread ON user_presence(user_id, active_thread_id);
-CREATE INDEX idx_user_presence_last_seen ON user_presence(last_seen);
+CREATE INDEX IF NOT EXISTS idx_user_presence_active_thread ON user_presence(user_id, active_thread_id);
+CREATE INDEX IF NOT EXISTS idx_user_presence_last_seen ON user_presence(last_seen);
 
 CREATE OR REPLACE FUNCTION update_user_presence_timestamp()
 RETURNS TRIGGER AS $$

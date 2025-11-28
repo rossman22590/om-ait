@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { billingApi, type UsageLogsResponse } from '@/lib/api/billing';
+import { getTransactions } from '@/lib/api/billing';
 
 interface UseUsageLogsParams {
   page?: number;
@@ -16,10 +16,40 @@ export function useUsageLogs({
 }: UseUsageLogsParams) {
   return useQuery<UsageLogsResponse>({
     queryKey: ['billing', 'usage-logs', { page, itemsPerPage, threadId }],
-    queryFn: () => billingApi.getUsageLogs(page, itemsPerPage, threadId),
+    queryFn: async () => {
+      const safeLimit = Math.min(itemsPerPage, 100);
+      const offset = page * safeLimit;
+      const resp: any = await getTransactions(safeLimit, offset);
+      const transactions = resp?.transactions || [];
+      const pagination = resp?.pagination || {};
+      const usage_logs = transactions
+        .filter((t: any) => t?.type === 'usage')
+        .filter((t: any) => (threadId ? (t?.metadata?.thread_id === threadId) : true))
+        .map((t: any) => ({
+          amount: Math.abs(Number(t.amount)) || 0,
+          timestamp: t.created_at,
+          reference_type: t?.metadata?.thread_id ? `thread:${t.metadata.thread_id}` : undefined,
+        }));
+
+      return {
+        usage_logs,
+        has_more: Boolean(pagination?.has_more ?? (transactions.length === safeLimit)),
+        total_count: pagination?.total,
+      };
+    },
     enabled,
     staleTime: 30_000,
   });
 }
 
-export type { UsageLogsResponse };
+// Data shape expected by consumers (e.g., UsageDisplay)
+export interface UsageLogsResponse {
+  usage_logs: Array<{
+    amount: number;
+    timestamp?: string;
+    balance_after?: number;
+    reference_type?: string;
+  }>;
+  has_more?: boolean;
+  total_count?: number;
+}

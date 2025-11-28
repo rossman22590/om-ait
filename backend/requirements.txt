@@ -22,10 +22,7 @@ exa-py==1.9.1
 e2b-code-interpreter==1.2.0
 certifi==2024.2.2
 python-ripgrep==0.0.6
-daytona-sdk>=0.115.0
-daytona-api-client>=0.115.0
-daytona-api-client-async>=0.115.0
-daytona>=0.21.6
+daytona-sdk==0.115.0
 boto3==1.37.3
 openai==1.90.0
 nest-asyncio==1.6.0
@@ -39,7 +36,7 @@ prometheus-client==0.21.1
 langfuse==2.60.5
 Pillow>=10.4.0
 mcp==1.9.4
-httpx==0.28.0
+httpx>=0.28.1
 aiohttp==3.12.0
 email-validator==2.0.0
 mailtrap==2.0.1
@@ -72,3 +69,4 @@ reportlab>=4.0.0
 chunkr-ai>=0.3.7
 freestyle>=0.0.1
 anthropic
+novu-py

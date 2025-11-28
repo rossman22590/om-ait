@@ -276,6 +276,9 @@ async def _get_effective_model(model_name: Optional[str], agent_config: Optional
     """
     Get the effective model to use, considering user input, agent config, and defaults.
     
+    CRITICAL: This function MUST return the actual LiteLLM model ID (e.g., openrouter/anthropic/claude-haiku-4.5),
+    NOT vanity IDs like kortix/basic or kortix/power which LiteLLM doesn't recognize.
+    
     Args:
         model_name: Model name from request (may be None)
         agent_config: Agent configuration dict
@@ -283,20 +286,30 @@ async def _get_effective_model(model_name: Optional[str], agent_config: Optional
         account_id: Account ID for tier-based defaults
     
     Returns:
-        Effective model name to use
+        Effective model name to use (real LiteLLM model ID)
     """
+    from core.ai_models import model_manager
+    
+    registry_model_id = None
+    
     if model_name:
         logger.debug(f"Using user-selected model: {model_name}")
-        return model_name
+        registry_model_id = model_manager.resolve_model_id(model_name) or model_name
     elif agent_config and agent_config.get('model'):
         effective_model = agent_config['model']
         logger.debug(f"No model specified by user, using agent's configured model: {effective_model}")
-        return effective_model
+        registry_model_id = model_manager.resolve_model_id(effective_model) or effective_model
     else:
         # No model from user or agent, use default for user's tier
         effective_model = await model_manager.get_default_model_for_user(client, account_id)
         logger.debug(f"Using default model for user: {effective_model}")
-        return effective_model
+        registry_model_id = model_manager.resolve_model_id(effective_model) or effective_model
+    
+    # CRITICAL: Convert registry ID (kortix/basic) to real LiteLLM model ID (openrouter/anthropic/claude-haiku-4.5)
+    litellm_model_id = model_manager.registry.get_litellm_model_id(registry_model_id)
+    logger.info(f"🔄 Model resolution: {model_name} -> registry:{registry_model_id} -> litellm:{litellm_model_id}")
+    
+    return litellm_model_id
 
 
 async def _create_agent_run_record(

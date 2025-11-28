@@ -66,7 +66,6 @@ export default function SubscriptionRequiredPage() {
         hasPaidTier ||
         (hasActiveSubscription && hasValidTier) ||
         (hasActiveTrial && hasValidTier) ||
-        trialConverted ||
         isFreeTier
       ) {
         router.push('/dashboard');

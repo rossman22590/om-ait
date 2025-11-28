@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Clock, DollarSign } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUsageLogs } from '@/hooks/billing/use-usage-logs';
-import { useCreditBalance } from '@/hooks/billing/use-subscription';
+import { useAccountState } from '@/hooks/billing/use-account-state';
 import { useMessagesQuery } from '@/hooks/threads/use-messages';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -42,7 +42,7 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
   const { data: usageLogsData, isLoading } = useUsageLogs({ page: 0, itemsPerPage: 1000, threadId });
   
   // Fetch account balance
-  const { data: balanceData, isLoading: isBalanceLoading } = useCreditBalance();
+  const { data: accountState, isLoading: isBalanceLoading } = useAccountState();
   
   // Fetch thread messages to count them for fallback estimation
   const { data: messagesData } = useMessagesQuery(threadId);
@@ -131,7 +131,7 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
             <Badge variant="highlight" className="flex items-center gap-1 px-2 py-1 text-xs">
               <DollarSign className="h-3 w-3" />
               Credits:
-              {isBalanceLoading ? '—' : ` ${formatCredits(balanceData?.balance || 0)}`}
+              {isBalanceLoading ? '—' : ` ${formatCredits(accountState?.credits?.total || 0)}`}
             </Badge>
           </TooltipTrigger>
           <TooltipContent side="bottom">

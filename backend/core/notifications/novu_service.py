@@ -9,7 +9,7 @@ from .models import NotificationChannel, NotificationEvent, NotificationPayload
 
 class NovuService:
     def __init__(self):
-        self.enabled = config.ENV_MODE in [EnvMode.STAGING, EnvMode.PRODUCTION]
+        self.enabled = config.ENV_MODE in [EnvMode.LOCAL, EnvMode.STAGING, EnvMode.PRODUCTION]
         self.api_key = os.getenv('NOVU_SECRET_KEY')
         self.backend_url = os.getenv('NOVU_BACKEND_URL', 'https://api.novu.co')
         

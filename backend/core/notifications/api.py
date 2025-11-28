@@ -11,10 +11,10 @@ router = APIRouter(tags=["notifications"], prefix="/notifications")
 
 
 def check_notifications_enabled():
-    if config.ENV_MODE != EnvMode.STAGING:
+    if config.ENV_MODE not in (EnvMode.STAGING, EnvMode.LOCAL):
         raise HTTPException(
             status_code=403, 
-            detail=f"Notifications are only available in staging mode (current mode: {config.ENV_MODE.value})"
+            detail=f"Notifications are only available in staging/local mode (current mode: {config.ENV_MODE.value})"
         )
 
 

@@ -153,8 +153,10 @@ def estimate_token_count(text: str, model: str = "claude-3-5-sonnet-20240620") -
     
     try:
         from litellm import token_counter
-        # Use LiteLLM's token counter with the specific model
-        return token_counter(model=model, text=str(text))
+        from core.ai_models import model_manager
+        # Resolve vanity names (kortix/power -> openrouter/anthropic/claude-sonnet-4.5)
+        resolved_model = model_manager.registry.get_litellm_model_id(model)
+        return token_counter(model=resolved_model, text=str(text))
     except Exception as e:
         logger.warning(f"LiteLLM token counting failed: {e}, using fallback estimation")
         # Fallback to word-based estimation
@@ -380,7 +382,10 @@ async def apply_anthropic_caching_strategy(
         # Include system prompt tokens in calculation for accurate density (like compression does)
         # Use token_counter on combined messages to match compression's calculation method
         from litellm import token_counter
-        total_tokens = token_counter(model=model_name, messages=[working_system_prompt] + conversation_messages) if conversation_messages else 0
+        from core.ai_models import model_manager
+        # Resolve vanity names (kortix/power -> openrouter/anthropic/claude-sonnet-4.5)
+        resolved_model = model_manager.registry.get_litellm_model_id(model_name)
+        total_tokens = token_counter(model=resolved_model, messages=[working_system_prompt] + conversation_messages) if conversation_messages else 0
         
         cache_threshold_tokens = calculate_optimal_cache_threshold(
             context_window_tokens, 

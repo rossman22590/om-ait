@@ -379,6 +379,10 @@ class ThreadManager:
                     from litellm.utils import token_counter
                     client = await self.db.client
                     
+                    # Resolve vanity model names (kortix/power -> openrouter/anthropic/claude-sonnet-4.5)
+                    # for token counting, since LiteLLM's token_counter doesn't know our aliases
+                    token_count_model = model_manager.registry.get_litellm_model_id(llm_model)
+                    
                     # Query last llm_response_end message from messages table (already stored there!)
                     last_usage_result = await client.table('messages')\
                         .select('content')\
@@ -421,7 +425,7 @@ class ThreadManager:
                             elif latest_user_message_content:
                                 # First turn: Use passed content (avoids DB query)
                                 new_msg_tokens = token_counter(
-                                    model=llm_model, 
+                                    model=token_count_model, 
                                     messages=[{"role": "user", "content": latest_user_message_content}]
                                 )
                                 logger.debug(f"First turn: counting {new_msg_tokens} tokens from latest_user_message_content")
@@ -440,7 +444,7 @@ class ThreadManager:
                                     new_msg_content = latest_msg_result.data.get('content', '')
                                     if new_msg_content:
                                         new_msg_tokens = token_counter(
-                                            model=llm_model, 
+                                            model=token_count_model, 
                                             messages=[{"role": "user", "content": new_msg_content}]
                                         )
                                         logger.debug(f"First turn (DB fallback): counting {new_msg_tokens} tokens from DB query")
@@ -624,8 +628,11 @@ class ThreadManager:
                 # Check xml_tool_calling directly - it's independent of native_tool_calling
                 stop_sequences = ["|||STOP_AGENT|||"] if config.xml_tool_calling else None
                 
+                # Normalize model again right before calling
+                from core.ai_models import model_manager as _mm
+                _resolved_for_call = _mm.resolve_model_id(llm_model)
                 llm_response = await make_llm_api_call(
-                    prepared_messages, llm_model,
+                    prepared_messages, _resolved_for_call,
                     temperature=llm_temperature,
                     max_tokens=llm_max_tokens,
                     tools=openapi_tool_schemas,
@@ -760,7 +767,15 @@ class ThreadManager:
                 
                 if "AnthropicException - Overloaded" in error_str:
                     logger.error(f"Anthropic overloaded, falling back to OpenRouter")
-                    llm_model = f"openrouter/{llm_model.replace('-20250514', '')}"
+                    try:
+                        from core.ai_models import model_manager
+                        # Always map vanity -> provider id via registry; never construct openrouter/<vanity>
+                        resolved = model_manager.resolve_model_id(llm_model)
+                        mapped = model_manager.registry.get_litellm_model_id(resolved)
+                        llm_model = mapped if isinstance(mapped, str) else resolved
+                    except Exception:
+                        # As a last resort, keep using current resolved mapping
+                        pass
                     auto_continue_state['active'] = True
                     continue
                 else:

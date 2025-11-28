@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Zap, Server, Store, Settings, Lock } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MCPConfigurationProps, MCPConfiguration as MCPConfigurationType } from './types';
@@ -16,6 +17,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAccountState } from '@/hooks/billing';
 import { usePricingModalStore } from '@/stores/pricing-modal-store';
 import { isLocalMode } from '@/lib/config';
+import type { PipedreamApp } from '@/hooks/react-query/pipedream/utils';
 
 export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
   configuredMCPs,
@@ -45,6 +47,10 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
     accountState.subscription?.tier_key === 'free' ||
     accountState.tier?.name === 'free'
   ) && !isLocalMode();
+
+  const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
+  const composioMCPs = configuredMCPs.filter(m => m.customType === 'composio');
+  const otherMCPs = configuredMCPs.filter(m => m.customType !== 'composio' && m.customType !== 'pipedream');
 
   const handleAgentChange = (newAgentId: string | undefined) => {
     setSelectedAgentId(newAgentId);
@@ -212,13 +218,7 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
         </div>
       </div>
 
-      {configuredMCPs.length === 0 && (
-        <div className="text-center py-12 px-6 ">
-          <div className="mx-auto w-12 h-12">
-            <Server className="h-6 w-6 text-muted-foreground" />
-          </div>
-
-          {configuredMCPs.length === 0 ? (
+      {configuredMCPs.length === 0 ? (
             <div className="text-center py-16 px-6">
               <div className="mx-auto w-16 h-16 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl flex items-center justify-center mb-6">
                 <Zap className="h-8 w-8 text-primary" />
@@ -257,7 +257,7 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
               </div>
             </div>
           ) : (
-      <>
+      <Tabs defaultValue="all">
               <TabsContent value="all" className="space-y-6">
                 <ConfiguredMcpList
                   configuredMCPs={configuredMCPs}
@@ -337,10 +337,8 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
                   />
                 </TabsContent>
               )}
-            </>
+            </Tabs>
           )}
-        </Tabs>
-      </div>
 
       <Dialog open={showRegistryDialog} onOpenChange={setShowRegistryDialog}>
         <DialogContent className="p-0 max-w-6xl h-[90vh] overflow-hidden">

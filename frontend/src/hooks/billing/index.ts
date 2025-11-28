@@ -43,6 +43,16 @@ export {
 } from './use-account-state';
 
 // =============================================================================
+// BACKWARD COMPATIBILITY HOOKS
+// =============================================================================
+
+// Subscription hooks (wraps useAccountState)
+export { useSubscription, useSubscriptionCommitment, subscriptionKeys } from './use-subscription';
+
+// Credit balance hook (wraps useAccountState)
+export { useCreditBalance } from './use-credit-balance';
+
+// =============================================================================
 // SPECIALIZED HOOKS - Use the unified data internally
 // =============================================================================
 

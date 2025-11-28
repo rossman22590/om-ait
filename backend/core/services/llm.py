@@ -40,6 +40,27 @@ class LLMError(Exception):
     """Exception for LLM-related errors."""
     pass
 
+
+# CRITICAL: Vanity model ID mapping - these MUST be converted before ANY LiteLLM call
+_VANITY_TO_REAL_MODEL = {
+    "kortix/basic": "openrouter/anthropic/claude-haiku-4.5",
+    "kortix/power": "openrouter/anthropic/claude-sonnet-4.5",
+}
+
+def _ensure_real_model_id(model_id: str) -> str:
+    """
+    CRITICAL: Convert vanity model IDs to real LiteLLM model IDs.
+    
+    This function MUST be called before ANY LiteLLM API call.
+    Vanity IDs like 'kortix/basic' and 'kortix/power' are internal aliases
+    that LiteLLM does not recognize - they MUST be converted to real provider models.
+    """
+    if model_id in _VANITY_TO_REAL_MODEL:
+        real_model = _VANITY_TO_REAL_MODEL[model_id]
+        logger.warning(f"🚨 VANITY ID INTERCEPTED: {model_id} -> {real_model}")
+        return real_model
+    return model_id
+
 def setup_api_keys() -> None:
     """Set up API keys from environment variables."""
     if not config:
@@ -129,6 +150,10 @@ def setup_provider_router(openai_compatible_api_key: str = None, openai_compatib
             ]
         }
     ]
+
+    # Context window specific fallbacks: used only when the model raises a context window exceeded error
+    # Keep empty by default; can be extended to map models to larger-context alternatives
+    context_window_fallbacks = []
     
     # Configure Router with specific retry settings:
     # - num_retries=0: Disable router-level retries - we handle errors at our layer
@@ -149,6 +174,29 @@ def setup_provider_router(openai_compatible_api_key: str = None, openai_compatib
         logger.info(f"Configured LiteLLM Router with {len(fallbacks)} Bedrock-only fallback rules")
     else:
         logger.info("Configured LiteLLM Router with Bedrock fallbacks disabled")
+
+def _should_sanitize(model_name: str) -> bool:
+    """Check if a model requires JSON schema sanitization.
+    
+    Some providers don't support advanced JSON Schema features like anyOf, oneOf, allOf.
+    Returns True if the model's schemas should be sanitized.
+    """
+    if not model_name:
+        return True
+    
+    model_lower = model_name.lower()
+    
+    # Models that DON'T need sanitization (support full JSON Schema)
+    no_sanitize_patterns = [
+        'gpt-4', 'gpt-5', 'openai',  # OpenAI models support full schema
+    ]
+    
+    for pattern in no_sanitize_patterns:
+        if pattern in model_lower:
+            return False
+    
+    # Default: sanitize for safety (Anthropic, Bedrock, etc. need sanitization)
+    return True
 
 def _configure_openai_compatible(params: Dict[str, Any], model_name: str, api_key: Optional[str], api_base: Optional[str]) -> None:
     """Configure OpenAI-compatible provider setup."""
@@ -284,7 +332,16 @@ async def make_llm_api_call(
     
     # Prepare parameters using centralized model configuration
     from core.ai_models import model_manager
+    # Resolve vanity names to registry ids, then to provider-native ids for LiteLLM
     resolved_model_name = model_manager.resolve_model_id(model_name)
+    try:
+        # Always get the actual provider model id before building params
+        provider_model_name = model_manager.registry.get_litellm_model_id(resolved_model_name)
+    except Exception:
+        provider_model_name = resolved_model_name
+    # CRITICAL: Ensure we NEVER pass vanity IDs to LiteLLM
+    provider_model_name = _ensure_real_model_id(provider_model_name)
+    logger.info(f"🔄 Resolved model: {model_name} -> {resolved_model_name} -> {provider_model_name}")
     
     # Only pass headers/extra_headers if they are not None to avoid overriding model config
     override_params = {
@@ -322,7 +379,10 @@ async def make_llm_api_call(
     if rf_to_send is not None:
         override_params["response_format"] = rf_to_send
 
+    # Build params using registry config and forcibly set the provider id
     params = model_manager.get_litellm_params(resolved_model_name, **override_params)
+    # CRITICAL: Always use the real model ID, never vanity
+    params["model"] = _ensure_real_model_id(provider_model_name)
     
     # Ensure stop sequences are in final params
     if stop is not None:
@@ -374,6 +434,9 @@ async def make_llm_api_call(
             except Exception as e:
                 logger.warning(f"⚠️ Error saving debug input: {e}")
         
+        # CRITICAL: Final safety - ALWAYS convert vanity IDs before ANY LiteLLM call
+        params["model"] = _ensure_real_model_id(params.get("model", ""))
+        logger.info(f"🔍 Calling LiteLLM Router with model: {params.get('model')}")
         response = await provider_router.acompletion(**params)
         
         # For streaming responses, we need to handle errors that occur during iteration
@@ -407,6 +470,7 @@ async def make_llm_api_call(
                 if retry_rf is not None:
                     retry_override["response_format"] = retry_rf
                 retry_params = model_manager.get_litellm_params(resolved_model_name, **retry_override)
+                retry_params["model"] = _ensure_real_model_id(provider_model_name)
                 _configure_openai_compatible(retry_params, model_name, api_key, api_base)
                 _add_tools_config(retry_params, tools, tool_choice, sanitize=True)
                 if stop is not None:
@@ -423,6 +487,7 @@ async def make_llm_api_call(
                     retry_override2 = dict(override_params)
                     retry_override2.pop("response_format", None)
                     retry_params2 = model_manager.get_litellm_params(resolved_model_name, **retry_override2)
+                    retry_params2["model"] = _ensure_real_model_id(provider_model_name)
                     _configure_openai_compatible(retry_params2, model_name, api_key, api_base)
                     # Do not include tools
                     if "tools" in retry_params2:
@@ -448,6 +513,7 @@ async def make_llm_api_call(
                 simple_override = dict(override_params)
                 simple_override.pop("response_format", None)
                 simple_params = model_manager.get_litellm_params(resolved_model_name, **simple_override)
+                simple_params["model"] = _ensure_real_model_id(provider_model_name)
                 _configure_openai_compatible(simple_params, model_name, api_key, api_base)
                 # remove tools
                 if "tools" in simple_params:

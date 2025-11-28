@@ -73,17 +73,23 @@ class ModelManager:
     
     def get_litellm_params(self, model_id: str, **override_params) -> Dict[str, Any]:
         """Get complete LiteLLM parameters for a model from the registry."""
+        # Always resolve the model ID to the actual LiteLLM model ID
+        litellm_model_id = self.registry.get_litellm_model_id(model_id)
+        logger.info(f"🔧 get_litellm_params: model_id={model_id} -> litellm_model_id={litellm_model_id}")
+        
         model = self.get_model(model_id)
         if not model:
+            logger.debug(f"get_litellm_params: model not found, using litellm_model_id directly")
             return {
-                "model": model_id,
+                "model": litellm_model_id,
                 "num_retries": 5,
                 **override_params
             }
         
         # Get config from model, then override the model ID with the actual LiteLLM model ID
         params = model.get_litellm_params(**override_params)
-        params["model"] = self.registry.get_litellm_model_id(model_id)
+        params["model"] = litellm_model_id
+        logger.info(f"🔧 get_litellm_params: final model in params={params.get('model')}")
         
         return params
     

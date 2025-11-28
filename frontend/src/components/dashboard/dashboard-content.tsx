@@ -34,7 +34,6 @@ import { useSunaModePersistence } from '@/stores/suna-modes-store';
 import { Button } from '../ui/button';
 import { X } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { NotificationDropdown } from '../notifications/notification-dropdown';
 import { UsageLimitsPopover } from './usage-limits-popover';
 import { useSidebar } from '@/components/ui/sidebar';
 
@@ -371,7 +370,6 @@ export function DashboardContent() {
 
       <div className="flex flex-col h-screen w-full overflow-hidden relative">
         <div className="absolute flex items-center gap-2 top-4 right-4">
-        <NotificationDropdown />
           <Suspense fallback={<div className="h-8 w-20 bg-muted/30 rounded animate-pulse" />}>
             <CreditsDisplay />
           </Suspense>

@@ -357,7 +357,9 @@ async def process_agent_responses(
             complete_tool_called = True
             logger.info(f"Complete tool was called in agent run {agent_run_id}")
         elif terminating_tool == 'ask':
-            logger.debug(f"Ask tool was called in agent run {agent_run_id} (terminating but no notification)")
+            # Treat 'ask' as a completed task for notification purposes
+            complete_tool_called = True
+            logger.info(f"Ask tool was called in agent run {agent_run_id} (treating as completion for notifications)")
 
         if response.get('type') == 'status':
             status_val = response.get('status')
