@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Zap, Server, Store, Settings } from 'lucide-react'
+import { Zap, Server, Store, Settings, Lock } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { MCPConfigurationProps, MCPConfiguration as MCPConfigurationType } from './types';
 import { ConfiguredMcpList } from './configured-mcp-list';
@@ -13,8 +13,9 @@ import { ToolsManager } from './tools-manager';
 import { PipedreamToolsManager } from './pipedream-tools-manager';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { PipedreamApp } from '@/hooks/react-query/pipedream/utils';
+import { useAccountState } from '@/hooks/billing';
+import { usePricingModalStore } from '@/stores/pricing-modal-store';
+import { isLocalMode } from '@/lib/config';
 
 export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
   configuredMCPs,
@@ -36,6 +37,14 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
   const [selectedMCPForTools, setSelectedMCPForTools] = useState<MCPConfigurationType | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>(agentId);
   const queryClient = useQueryClient();
+  
+  const { data: accountState } = useAccountState();
+  const { openPricingModal } = usePricingModalStore();
+  
+  const isFreeTier = accountState && (
+    accountState.subscription?.tier_key === 'free' ||
+    accountState.tier?.name === 'free'
+  ) && !isLocalMode();
 
   const handleAgentChange = (newAgentId: string | undefined) => {
     setSelectedAgentId(newAgentId);
@@ -180,110 +189,33 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
     onConfigurationChange(updatedMCPs);
     setShowCustomToolsManager(false);
     setSelectedMCPForTools(null);
-    
-    // Show success message
-    toast.success(`Updated ${enabledTools.length} tools for ${selectedMCPForTools.name}`);
-  };
-
-  // Categorize MCPs by type
-  const composioMCPs = configuredMCPs.filter(mcp => mcp.customType === 'composio');
-  const pipedreamMCPs = configuredMCPs.filter(mcp => mcp.customType === 'pipedream');
-  const otherMCPs = configuredMCPs.filter(mcp =>
-    mcp.customType !== 'composio' && mcp.customType !== 'pipedream'
-  );
-
-  const [activeTab, setActiveTab] = useState('all');
-  const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
-
-  const renderTabActions = (tab: string) => {
-    switch (tab) {
-      case 'composio':
-        return (
-          <Button
-            onClick={() => setShowRegistryDialog(true)}
-            variant="outline"
-            size="sm"
-            className="gap-1 h-9 px-3 text-xs sm:text-sm sm:gap-2 sm:px-4 flex-shrink-0"
-          >
-            <Store className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-            <span className="hidden sm:inline">Browse Composio</span>
-            <span className="sm:hidden">Add App</span>
-          </Button>
-        );
-      case 'pipedream':
-        return showPipedreamUI ? (
-          <Button
-            onClick={() => setShowPipedreamRegistry(true)}
-            variant="outline"
-            size="sm"
-            className="gap-1 h-9 px-3 text-xs sm:text-sm sm:gap-2 sm:px-4 flex-shrink-0"
-          >
-            <Zap className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-            <span className="hidden sm:inline">Browse Pipedream</span>
-            <span className="sm:hidden">Add App</span>
-          </Button>
-        ) : null;
-      case 'other':
-        return (
-          <Button
-            onClick={() => setShowCustomDialog(true)}
-            variant="outline"
-            size="sm"
-            className="gap-1 h-9 px-3 text-xs sm:text-sm sm:gap-2 sm:px-4 flex-shrink-0"
-          >
-            <Server className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
-            <span className="hidden sm:inline">Add Custom MCP</span>
-            <span className="sm:hidden">Add MCP</span>
-          </Button>
-        );
-      default: // 'all' tab
-        return (
-          <div className="flex gap-2">
-            <Button
-              onClick={() => setShowRegistryDialog(true)}
-              size="sm"
-              variant="default"
-              className="gap-2" type="button"
-            >
-              <Store className="h-4 w-4" />
-              Browse Apps
-            </Button>
-            <Button
-              onClick={() => setShowCustomDialog(true)}
-              size="sm"
-              variant="outline"
-              className="gap-2" type="button"
-            >
-              <Server className="h-4 w-4" />
-              Custom MCP
-            </Button>
-          </div>
-        );
-    }
   };
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex-1 overflow-y-auto">
-        <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="space-y-4 mb-6">
-            <div className="space-y-4">
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <TabsList className="h-10 p-1 bg-muted/50 flex-shrink-0 overflow-x-auto">
-                  <TabsTrigger value="all" className="px-2 py-2 text-xs sm:text-sm sm:px-3 whitespace-nowrap">All</TabsTrigger>
-                  <TabsTrigger value="composio" className="px-2 py-2 text-xs sm:text-sm sm:px-3 whitespace-nowrap">Composio</TabsTrigger>
-                  {showPipedreamUI && (
-                    <TabsTrigger value="pipedream" className="px-2 py-2 text-xs sm:text-sm sm:px-3 whitespace-nowrap">Pipedream</TabsTrigger>
-                  )}
-                  {otherMCPs.length > 0 && (
-                    <TabsTrigger value="other" className="px-2 py-2 text-xs sm:text-sm sm:px-3 whitespace-nowrap">Other</TabsTrigger>
-                  )}
-                </TabsList>
-                <div className="flex-shrink-0 min-w-0">
-                  {renderTabActions(activeTab)}
-                </div>
-              </div>
-            </div>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          <Button 
+            onClick={() => setShowRegistryDialog(true)} 
+            size="sm" 
+            variant={isFreeTier ? "outline" : "default"} 
+            className={isFreeTier ? "gap-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground" : "gap-2"} 
+            type="button"
+          >
+            {isFreeTier ? <Lock className="h-4 w-4" /> : <Store className="h-4 w-4" />}
+            Browse Apps
+          </Button>
+          <Button onClick={() => setShowCustomDialog(true)} size="sm" variant="outline" className="gap-2" type="button">
+            <Server className="h-4 w-4" />
+            Custom MCP
+          </Button>
+        </div>
+      </div>
+
+      {configuredMCPs.length === 0 && (
+        <div className="text-center py-12 px-6 ">
+          <div className="mx-auto w-12 h-12">
+            <Server className="h-6 w-6 text-muted-foreground" />
           </div>
 
           {configuredMCPs.length === 0 ? (
@@ -426,6 +358,8 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
                 queryClient.invalidateQueries({ queryKey: ['agents', 'detail', selectedAgentId] });
               }
             }}
+            isBlocked={isFreeTier}
+            onBlockedClick={() => openPricingModal()}
           />
         </DialogContent>
       </Dialog>

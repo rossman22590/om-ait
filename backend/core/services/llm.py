@@ -107,42 +107,40 @@ def setup_provider_router(openai_compatible_api_key: str = None, openai_compatib
         },
     ]
     
-    # Configure fallbacks: disable Bedrock unless explicitly enabled
-    fallbacks: List[Dict[str, List[str]]] = []
-    if ENABLE_BEDROCK:
-        fallbacks = [
-            {
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48": [
-                    "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf",
-                    "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/few7z4l830xh",
-                    "anthropic/claude-haiku-4-5-20251001",
-                    "anthropic/claude-sonnet-4-20250514"
-                ]
-            },
-            {
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/few7z4l830xh": [
-                    "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf",
-                    "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48",
-                    "anthropic/claude-sonnet-4-5-20250929",
-                    "anthropic/claude-sonnet-4-20250514"
-                ]
-            },
-            {
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf": [
-                    "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48",
-                    "anthropic/claude-sonnet-4-20250514"
-                ]
-            }
-        ]
+    fallbacks = [
+        # MAP-tagged Haiku 4.5 (default) -> Sonnet 4 -> Sonnet 4.5
+        {
+            "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48": [
+                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf",
+                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/few7z4l830xh",
+            ]
+        },
+        # MAP-tagged Sonnet 4.5 -> Sonnet 4 -> Haiku 4.5
+        {
+            "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/few7z4l830xh": [
+                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf",
+                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48",
+            ]
+        },
+        # MAP-tagged Sonnet 4 -> Haiku 4.5
+        {
+            "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf": [
+                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48",
+            ]
+        }
+    ]
     
     # Configure Router with specific retry settings:
     # - num_retries=0: Disable router-level retries - we handle errors at our layer
     # - fallbacks: ONLY for rate limits and overloaded errors, NOT for 400 errors
+    # - context_window_fallbacks: Automatically fallback to models with larger context windows when context is exceeded
     # CRITICAL: 400 Bad Request errors must NOT retry or fallback - they're permanent failures
+    # EXCEPTION: ContextWindowExceededError is a special case where fallback to larger context models is appropriate
     provider_router = Router(
         model_list=model_list,
         num_retries=0,  # CRITICAL: Disable all router-level retries to prevent infinite loops
         fallbacks=fallbacks,
+        context_window_fallbacks=context_window_fallbacks,  # Handle context window exceeded errors
         # Only use fallbacks for rate limits (429) and server errors (5xx), NOT client errors (4xx)
         # context_window_fallbacks are separate and only triggered by context length issues
     )
@@ -287,13 +285,6 @@ async def make_llm_api_call(
     # Prepare parameters using centralized model configuration
     from core.ai_models import model_manager
     resolved_model_name = model_manager.resolve_model_id(model_name)
-
-    def _should_sanitize(model: str) -> bool:
-        if not isinstance(model, str):
-            return False
-        model_l = model.lower()
-        # Only sanitize for Anthropic via OpenRouter and OpenRouter OpenAI (e.g., gpt-5-codex)
-        return model_l.startswith("openrouter/anthropic/") or model_l.startswith("openrouter/openai/")
     
     # Only pass headers/extra_headers if they are not None to avoid overriding model config
     override_params = {

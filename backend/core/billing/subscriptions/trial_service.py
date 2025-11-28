@@ -307,6 +307,7 @@ class TrialService:
                 mode='subscription',
                 success_url=success_url,
                 cancel_url=cancel_url,
+                allow_promotion_codes=True,
                 metadata={
                     'account_id': account_id,
                     'trial_start': 'true'
@@ -328,9 +329,8 @@ class TrialService:
             
             logger.info(f"[TRIAL SUCCESS] Checkout session created for account {account_id}: {session.id}")
             
-            # Return hosted Stripe checkout URL
             return {
-                'checkout_url': session.url,  # Direct Stripe hosted checkout URL
+                'checkout_url': session.url,  # Stripe's hosted checkout URL
                 'session_id': session.id,
             }
             
