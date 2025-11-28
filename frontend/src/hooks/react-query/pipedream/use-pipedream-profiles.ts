@@ -11,7 +11,17 @@ import { toast } from 'sonner';
 export const usePipedreamProfiles = (params?: { app_slug?: string; is_active?: boolean }) => {
   return useQuery({
     queryKey: pipedreamKeys.profiles.list(params),
-    queryFn: () => pipedreamApi.getProfiles(params),
+    queryFn: async () => {
+      try {
+        return await pipedreamApi.getProfiles(params);
+      } catch (error: any) {
+        // Silently return empty array if Pipedream is not configured (404)
+        if (error?.status === 404) {
+          return [];
+        }
+        throw error;
+      }
+    },
     staleTime: 5 * 60 * 1000,
   });
 };

@@ -50,6 +50,7 @@ export const MCPConfigurationNew: React.FC<MCPConfigurationProps> = ({
 
   const showPipedreamUI = process.env.NEXT_PUBLIC_ENABLE_PIPEDREAM_UI !== 'false';
   const composioMCPs = configuredMCPs.filter(m => m.customType === 'composio');
+  const pipedreamMCPs = configuredMCPs.filter(m => m.customType === 'pipedream');
   const otherMCPs = configuredMCPs.filter(m => m.customType !== 'composio' && m.customType !== 'pipedream');
 
   const handleAgentChange = (newAgentId: string | undefined) => {
