@@ -8,21 +8,20 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-RUN apk add --no-cache \
-    build-base \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     curl \
     git \
-    pkgconfig \
-    cairo-dev \
-    gobject-introspection-dev \
-    freetype-dev \
+    pkg-config \
+    libcairo2-dev \
+    libgirepository1.0-dev \
+    libfreetype6-dev \
     gcc \
-    linux-headers \
-    musl-dev \
-    python3-dev
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user and set up directories
-RUN adduser -D -u 1000 appuser && \
+RUN useradd -m -u 1000 appuser && \
     mkdir -p /app/logs && \
     chown -R appuser:appuser /app
 

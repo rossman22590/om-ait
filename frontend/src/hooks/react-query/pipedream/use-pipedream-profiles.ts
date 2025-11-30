@@ -16,13 +16,17 @@ export const usePipedreamProfiles = (params?: { app_slug?: string; is_active?: b
         return await pipedreamApi.getProfiles(params);
       } catch (error: any) {
         // Silently return empty array if Pipedream is not configured (404)
-        if (error?.status === 404) {
+        // This is expected since Pipedream is deprecated
+        if (error?.status === 404 || error?.message?.includes('404')) {
           return [];
         }
-        throw error;
+        // For any other errors, also return empty array to avoid console spam
+        console.debug('Pipedream profiles not available (deprecated feature)');
+        return [];
       }
     },
     staleTime: 5 * 60 * 1000,
+    retry: false, // Don't retry failed requests for deprecated Pipedream feature
   });
 };
 

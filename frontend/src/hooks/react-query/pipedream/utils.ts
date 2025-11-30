@@ -298,11 +298,16 @@ export const pipedreamApi = {
     const result = await backendApi.get<PipedreamProfile[]>(
       `/pipedream/profiles${queryParams.toString() ? `?${queryParams.toString()}` : ''}`,
       {
-        errorContext: { operation: 'get profiles', resource: 'Pipedream credential profiles' },
+        showErrors: false, // Suppress errors since Pipedream is deprecated
+        errorContext: { operation: 'get profiles', resource: 'Pipedream credential profiles', silent: true },
       }
     );
 
     if (!result.success) {
+      // Silently return empty array if endpoint doesn't exist (Pipedream is deprecated)
+      if (result.error?.status === 404) {
+        return [];
+      }
       throw new Error(result.error?.message || 'Failed to get profiles');
     }
 

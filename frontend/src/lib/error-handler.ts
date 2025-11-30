@@ -128,6 +128,20 @@ const shouldShowError = (error: any, context?: ErrorContext): boolean => {
     return false;
   }
 
+  // Suppress Pipedream 404 errors (deprecated feature)
+  if (error?.status === 404 && context?.resource?.toLowerCase().includes('pipedream')) {
+    return false;
+  }
+
+  return true;
+};
+
+const shouldLogError = (error: any, context?: ErrorContext): boolean => {
+  // Don't log Pipedream errors as the feature is no longer used
+  if (context?.resource?.toLowerCase().includes('pipedream')) {
+    return false;
+  }
+  
   return true;
 };
 
@@ -157,7 +171,9 @@ const formatErrorMessage = (message: string, context?: ErrorContext): string => 
 
 
 export const handleApiError = (error: any, context?: ErrorContext): void => {
-  console.error('API Error:', error, context);
+  if (shouldLogError(error, context)) {
+    console.error('API Error:', error, context);
+  }
 
   if (!shouldShowError(error, context)) {
     return;
