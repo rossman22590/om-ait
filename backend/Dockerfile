@@ -8,13 +8,23 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-RUN apk add --no-cache curl git \
-    # Dependencies for Python package compilation
+RUN apk add --no-cache \
+    build-base \
+    curl \
+    git \
+    pkgconfig \
+    cairo-dev \
+    gobject-introspection-dev \
     freetype-dev \
     gcc \
     linux-headers \
     musl-dev \
     python3-dev
+
+# Create non-root user and set up directories
+RUN adduser -D -u 1000 appuser && \
+    mkdir -p /app/logs && \
+    chown -R appuser:appuser /app
 
 # Install Python dependencies
 COPY --chown=appuser:appuser requirements.txt .
