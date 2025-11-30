@@ -213,12 +213,35 @@ export const handleApiError = (error: any, context?: ErrorContext): void => {
   }
 
   if (error instanceof BillingError) {
-    // Open pricing modal - this only fires for actual BillingError instances
-    const alertTitle = 'You ran out of credits. Upgrade now.';
+    // Extract billing error message and determine if credits are exhausted
+    const message = error.detail?.message?.toLowerCase() || '';
+    const originalMessage = error.detail?.message || '';
+    const isCreditsExhausted = 
+      message.includes('credit') ||
+      message.includes('balance') ||
+      message.includes('insufficient') ||
+      message.includes('out of credits') ||
+      message.includes('no credits');
+    
+    // Try to extract balance from message (e.g., "Your balance is -284 credits")
+    const balanceMatch = originalMessage.match(/balance is (-?\d+)\s*credits/i);
+    const balance = balanceMatch ? balanceMatch[1] : null;
+    
+    // Open pricing modal with appropriate alert title and subtitle
+    const alertTitle = isCreditsExhausted 
+      ? 'You ran out of credits'
+      : 'Billing check failed';
+    
+    const alertSubtitle = balance 
+      ? `Your current balance is ${balance} credits. Upgrade your plan to continue.`
+      : isCreditsExhausted 
+        ? 'Upgrade your plan to get more credits and continue using the AI assistant.'
+        : 'Please upgrade to continue.';
     
     usePricingModalStore.getState().openPricingModal({ 
       isAlert: true, 
-      alertTitle 
+      alertTitle,
+      alertSubtitle
     });
     return;
   }

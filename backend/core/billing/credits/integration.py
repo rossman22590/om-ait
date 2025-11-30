@@ -36,9 +36,9 @@ class BillingIntegration:
         logger.info(f"[BILLING] Direct DB balance check for {account_id}: ${balance:.2f}")
         
         if balance < 0:
-            return False, f"Insufficient credits. Your balance is ${balance:.2f}. Please add credits to continue.", None
+            return False, f"Insufficient credits. Your balance is {int(balance * 100)} credits. Please add credits to continue.", None
         
-        return True, f"Credits available: ${balance:.2f}", None
+        return True, f"Credits available: {int(balance * 100)} credits", None
     
     @staticmethod
     async def check_model_and_billing_access(

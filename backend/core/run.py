@@ -1144,6 +1144,13 @@ class AgentRunner:
             if generation:
                 generation.end()
 
+        # Cleanup ThreadManager resources to help with memory management
+        try:
+            if hasattr(self, 'thread_manager') and self.thread_manager:
+                await self.thread_manager.cleanup()
+        except Exception as e:
+            logger.warning(f"Failed to cleanup ThreadManager: {e}")
+
         try:
             asyncio.create_task(asyncio.to_thread(lambda: langfuse.flush()))
         except Exception as e:

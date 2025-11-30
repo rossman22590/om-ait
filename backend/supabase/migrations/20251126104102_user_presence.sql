@@ -17,12 +17,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS user_presence_updated_at ON user_presence;
 CREATE TRIGGER user_presence_updated_at
     BEFORE UPDATE ON user_presence
     FOR EACH ROW EXECUTE FUNCTION update_user_presence_timestamp();
 
 ALTER TABLE user_presence ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can manage own presence" ON user_presence;
 CREATE POLICY "Users can manage own presence"
     ON user_presence FOR ALL
     USING (auth.uid() = user_id);

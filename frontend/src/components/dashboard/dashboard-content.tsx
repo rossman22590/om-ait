@@ -67,6 +67,7 @@ export function DashboardContent() {
   const t = useTranslations('dashboard');
   const tCommon = useTranslations('common');
   const tBilling = useTranslations('billing');
+  const tAuth = useTranslations('auth');
   const [inputValue, setInputValue] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfigDialog, setShowConfigDialog] = useState(false);
@@ -236,6 +237,22 @@ export function DashboardContent() {
     }
   }, [searchParams, queryClient, router, setSidebarOpen]);
 
+  // Handle expired link notification for logged-in users
+  React.useEffect(() => {
+    const linkExpired = searchParams.get('linkExpired');
+    if (linkExpired === 'true') {
+      toast.info(tAuth('magicLinkExpired'), {
+        description: tAuth('magicLinkExpiredDescription'),
+        duration: 5000,
+      });
+      
+      // Clean up URL param
+      const url = new URL(window.location.href);
+      url.searchParams.delete('linkExpired');
+      router.replace(url.pathname + url.search, { scroll: false });
+    }
+  }, [searchParams, router, tAuth]);
+
   const handleSubmit = async (
     message: string,
     options?: {
@@ -314,10 +331,33 @@ export function DashboardContent() {
           alertTitle: `${tBilling('reachedLimit')} ${tBilling('threadLimit', { current: error.detail.current_count, limit: error.detail.limit })}` 
         });
       } else if (error instanceof BillingError) {
-        // BillingError only thrown for actual billing failures
+        const message = error.detail?.message?.toLowerCase() || '';
+        const originalMessage = error.detail?.message || '';
+        const isCreditsExhausted = 
+          message.includes('credit') ||
+          message.includes('balance') ||
+          message.includes('insufficient') ||
+          message.includes('out of credits') ||
+          message.includes('no credits');
+        
+        // Extract balance from message if present
+        const balanceMatch = originalMessage.match(/balance is (-?\d+)\s*credits/i);
+        const balance = balanceMatch ? balanceMatch[1] : null;
+        
+        const alertTitle = isCreditsExhausted 
+          ? 'You ran out of credits'
+          : 'Pick the plan that works for you';
+        
+        const alertSubtitle = balance 
+          ? `Your current balance is ${balance} credits. Upgrade your plan to continue.`
+          : isCreditsExhausted 
+            ? 'Upgrade your plan to get more credits and continue using the AI assistant.'
+            : undefined;
+        
         pricingModalStore.openPricingModal({ 
           isAlert: true,
-          alertTitle: 'You ran out of credits. Upgrade now.'
+          alertTitle,
+          alertSubtitle
         });
       } else if (error instanceof AgentRunLimitError) {
         const { running_thread_ids, running_count } = error.detail;
@@ -417,14 +457,14 @@ export function DashboardContent() {
             )} */}
             
 
-            <div className="flex-1 flex items-start justify-center pt-[30vh]">
+            <div className="flex-1 flex items-start justify-center pt-[25vh] sm:pt-[30vh]">
               {viewMode === 'super-worker' && (
                 <div className="w-full animate-in fade-in-0 duration-300">
-                  <div className="px-4 py-8">
-                    <div className="w-full max-w-3xl mx-auto flex flex-col items-center space-y-6 md:space-y-8">
+                  <div className="px-4 py-6 sm:py-8">
+                    <div className="w-full max-w-3xl mx-auto flex flex-col items-center space-y-5 sm:space-y-6 md:space-y-8">
                       <div className="flex flex-col items-center text-center w-full">
                         <p
-                          className="tracking-tight text-2xl md:text-3xl font-normal text-foreground/90"
+                          className="tracking-tight text-2xl sm:text-2xl md:text-3xl font-normal text-foreground/90"
                         >
                           {t('whatWouldYouLike')}
                         </p>
@@ -508,7 +548,7 @@ export function DashboardContent() {
 
                   {/* Modes Panel - Below chat input, doesn't affect its position */}
                   {isSunaAgent && (
-                    <div className="px-4 pb-8">
+                    <div className="px-4 pb-6 sm:pb-8">
                       <div className="max-w-3xl mx-auto">
                         <Suspense fallback={<div className="h-24 bg-muted/10 rounded-lg animate-pulse" />}>
                           <SunaModesPanel
