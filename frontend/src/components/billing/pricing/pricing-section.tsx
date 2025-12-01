@@ -1088,14 +1088,7 @@ export function PricingSection({
   return (
     <section
       id="pricing"
-      className={cn(
-        "flex flex-col items-center justify-center w-full relative",
-        insideDialog
-          ? "pt-6 pb-6"
-          : noPadding 
-            ? "pb-0 pt-8 sm:pt-12" 
-            : "pb-6 sm:pb-12 pt-8 sm:pt-12"
-      )}
+      className={cn("scale-90 flex flex-col items-center justify-center w-full relative", noPadding ? "pb-0" : "pb-12")}
     >
       <div className="w-full mx-auto px-4 sm:px-6 flex flex-col">
         {/* Compact Header for Mobile */}
