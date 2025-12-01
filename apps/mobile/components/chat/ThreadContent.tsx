@@ -487,7 +487,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(({
   onToolPress,
   streamHookStatus = "idle",
   sandboxId,
-  agentName = 'Suna',
+  agentName = 'Machine',
 }) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';

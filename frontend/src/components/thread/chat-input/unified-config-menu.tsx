@@ -37,6 +37,7 @@ import { usePricingModalStore } from '@/stores/pricing-modal-store';
 import { useAccountState, accountStateSelectors } from '@/hooks/billing';
 import { isLocalMode } from '@/lib/config';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
+import { ModelProviderIcon } from '@/lib/model-provider-icons';
 
 // Helper to render model labels with special styling for Kortix modes
 const ModelLabel = ({ label, className }: { label: string; className?: string }) => {
@@ -381,6 +382,16 @@ const LoggedInMenu: React.FC<UnifiedConfigMenuProps> = memo(function LoggedInMen
         const canAccessPower = powerModel ? canAccessModel(powerModel.id) : false;
         const isPowerSelected = powerModel && selectedModel === powerModel.id;
         const isBasicSelected = basicModel && selectedModel === basicModel.id;
+        const isCustomSelected = !isBasicSelected && !isPowerSelected;
+        
+        // Get available models for Custom mode
+        const customModels = accountState?.models?.filter(m => 
+            m.id !== 'kortix/basic' && m.id !== 'kortix/power'
+        ) || [];
+        
+        const selectedCustomModel = isCustomSelected 
+            ? customModels.find(m => m.id === selectedModel)
+            : null;
         
         return (
             <div className={cn(
@@ -396,7 +407,7 @@ const LoggedInMenu: React.FC<UnifiedConfigMenuProps> = memo(function LoggedInMen
                     }}
                     className={cn(
                         "flex-1 flex items-center justify-center gap-1.5 rounded-lg transition-all",
-                        compact ? "px-3 py-1.5" : "px-4 py-2",
+                        compact ? "px-2 py-1.5" : "px-3 py-2",
                         isBasicSelected 
                             ? "bg-background shadow-sm text-foreground" 
                             : "text-muted-foreground hover:text-foreground"
@@ -425,7 +436,7 @@ const LoggedInMenu: React.FC<UnifiedConfigMenuProps> = memo(function LoggedInMen
                     }}
                     className={cn(
                         "flex-1 flex items-center justify-center gap-1.5 rounded-lg transition-all",
-                        compact ? "px-3 py-1.5" : "px-4 py-2",
+                        compact ? "px-2 py-1.5" : "px-3 py-2",
                         isPowerSelected 
                             ? "bg-background shadow-sm" 
                             : canAccessPower 
@@ -446,9 +457,82 @@ const LoggedInMenu: React.FC<UnifiedConfigMenuProps> = memo(function LoggedInMen
                         )} />
                     )}
                 </button>
+                
+                {/* Custom Mode - Shows model selector in submenu */}
+                <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className={cn(
+                        "flex-1 flex items-center justify-center gap-1.5 rounded-lg transition-all p-0 h-auto",
+                        compact ? "px-2 py-1.5" : "px-3 py-2",
+                        isCustomSelected 
+                            ? "bg-background shadow-sm text-foreground" 
+                            : "text-muted-foreground hover:text-foreground hover:bg-muted/30"
+                    )}>
+                        {isCustomSelected && selectedCustomModel ? (
+                            <>
+                                <ModelProviderIcon modelId={selectedModel} size={compact ? 14 : 16} />
+                                <span className={cn(
+                                    "font-medium truncate max-w-[50px]",
+                                    compact ? "text-[10px]" : "text-xs"
+                                )}>{selectedCustomModel.name}</span>
+                            </>
+                        ) : (
+                            <span className={cn(
+                                "font-medium",
+                                compact ? "text-xs" : "text-sm"
+                            )}>Custom</span>
+                        )}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuPortal>
+                        <DropdownMenuSubContent className="w-[280px] px-0 py-2 border-[1.5px] border-border rounded-2xl max-h-[400px] overflow-y-auto" sideOffset={8}>
+                            <div className="px-3 pb-2">
+                                <span className="text-xs font-medium text-muted-foreground">Select Model</span>
+                            </div>
+                            
+                            {/* Simple Model List - No pricing columns */}
+                            <div className="space-y-0.5 px-2">
+                                {customModels.map((model) => {
+                                    const isSelected = selectedModel === model.id;
+                                    const hasAccess = model.allowed;
+                                    
+                                    return (
+                                        <div
+                                            key={model.id}
+                                            onClick={() => {
+                                                if (hasAccess || isLocalMode()) {
+                                                    onModelChange(model.id);
+                                                    setIsOpen(false);
+                                                } else {
+                                                    setIsOpen(false);
+                                                    openPricingModal({
+                                                        isAlert: true,
+                                                        alertTitle: 'Upgrade to access this model'
+                                                    });
+                                                }
+                                            }}
+                                            className={cn(
+                                                "flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-all",
+                                                isSelected ? "bg-primary/10" : "hover:bg-muted/50",
+                                                !hasAccess && !isLocalMode() && "opacity-60"
+                                            )}
+                                        >
+                                            <ModelProviderIcon modelId={model.id} size={20} />
+                                            <span className="flex-1 truncate font-medium text-sm">{model.name}</span>
+                                            {!hasAccess && !isLocalMode() && (
+                                                <Lock className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                            )}
+                                            {isSelected && (
+                                                <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </DropdownMenuSubContent>
+                    </DropdownMenuPortal>
+                </DropdownMenuSub>
             </div>
         );
-    }, [modelOptions, selectedModel, canAccessModel, onModelChange]);
+    }, [modelOptions, selectedModel, canAccessModel, onModelChange, accountState, openPricingModal]);
 
     const WorkerSettingsButtons = useCallback(({ compact = false }: { compact?: boolean }) => (
         onAgentSelect && (selectedAgentId || displayAgent?.agent_id) ? (
@@ -564,7 +648,7 @@ const LoggedInMenu: React.FC<UnifiedConfigMenuProps> = memo(function LoggedInMen
                                     {renderAgentIcon(isLoading && !displayAgent ? placeholderSunaAgent : displayAgent, 40)}
                                 </div>
                                 <span className="flex-1 truncate text-base font-medium text-left min-w-0">
-                                    {displayAgent?.name || 'Suna'}
+                                    {displayAgent?.name || 'Machine'}
                                 </span>
                                 <ChevronDown className="h-5 w-5 text-muted-foreground rotate-[-90deg] flex-shrink-0" />
                             </button>
@@ -603,7 +687,7 @@ const LoggedInMenu: React.FC<UnifiedConfigMenuProps> = memo(function LoggedInMen
                 <div className="flex items-center gap-2 min-w-0 max-w-[180px]">
                     {renderAgentIcon(isLoading && !displayAgent ? placeholderSunaAgent : displayAgent)}
                     <span className="truncate text-sm font-medium">
-                        {displayAgent?.name || 'Suna'}
+                        {displayAgent?.name || 'Machine'}
                     </span>
                     <ChevronDown size={12} className="opacity-60 flex-shrink-0" />
                 </div>
@@ -660,7 +744,7 @@ const LoggedInMenu: React.FC<UnifiedConfigMenuProps> = memo(function LoggedInMen
                                                 <div className="flex items-center justify-center w-8 h-8 bg-card border-[1.5px] border-border flex-shrink-0" style={{ borderRadius: '10.4px' }}>
                                                     {renderAgentIcon(isLoading && !displayAgent ? placeholderSunaAgent : displayAgent)}
                                                 </div>
-                                                <span className="flex-1 truncate font-medium text-left">{displayAgent?.name || 'Suna'}</span>
+                                                <span className="flex-1 truncate font-medium text-left">{displayAgent?.name || 'Machine'}</span>
                                             </DropdownMenuSubTrigger>
                                             <DropdownMenuPortal>
                                                 <DropdownMenuSubContent className="w-[320px] px-0 py-3 border-[1.5px] border-border rounded-2xl max-h-[500px] overflow-hidden" sideOffset={8}>
