@@ -29,6 +29,7 @@ import { usePricingModalStore } from '@/stores/pricing-modal-store';
 import { useAgentSelection } from '@/stores/agent-selection-store';
 import { useThreadQuery } from '@/hooks/threads/use-threads';
 import { normalizeFilenameToNFC } from '@/lib/utils/unicode';
+import { NotificationDropdown } from '../notifications/notification-dropdown';
 import { toast } from 'sonner';
 import { useSunaModePersistence } from '@/stores/suna-modes-store';
 import { Button } from '../ui/button';
@@ -410,6 +411,7 @@ export function DashboardContent() {
 
       <div className="flex flex-col h-screen w-full overflow-hidden relative">
         <div className="absolute flex items-center gap-2 top-4 right-4">
+          <NotificationDropdown />
           <Suspense fallback={<div className="h-8 w-20 bg-muted/30 rounded animate-pulse" />}>
             <CreditsDisplay />
           </Suspense>
