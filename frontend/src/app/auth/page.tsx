@@ -51,7 +51,7 @@ function LoginContent() {
   const [showReferralDialog, setShowReferralDialog] = useState(false);
   const isMobile = useMediaQuery('(max-width: 768px)');
   const [mounted, setMounted] = useState(false);
-  const [acceptedTerms, setAcceptedTerms] = useState(false); // GDPR requires explicit opt-in
+  const [acceptedTerms, setAcceptedTerms] = useState(true); // Pre-selected for better UX
 
   const { wasLastMethod: wasEmailLastMethod, markAsUsed: markEmailAsUsed } = useAuthMethodTracking('email');
 
