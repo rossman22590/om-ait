@@ -7,7 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { useMediaQuery } from '@/hooks/utils';
 import { useState, useEffect, Suspense, lazy } from 'react';
-import { signUp, resendMagicLink } from './actions';
+import { signUp, signIn, resendMagicLink } from './actions';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { MailCheck, Clock, ExternalLink } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';

@@ -154,7 +154,7 @@ export default function GitHubSignIn({ returnUrl, referralCode }: GitHubSignInPr
 
   return (
     <div className="relative">
-      <Button
+      {/* <Button
         onClick={handleGitHubSignIn}
         disabled={isLoading}
         variant="outline"
@@ -173,7 +173,7 @@ export default function GitHubSignIn({ returnUrl, referralCode }: GitHubSignInPr
         <span>
           {isLoading ? t('signingIn') : t('continueWithGitHub')}
         </span>
-      </Button>
+      </Button> */}
 
       {wasLastMethod && (
         <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-background shadow-sm">
