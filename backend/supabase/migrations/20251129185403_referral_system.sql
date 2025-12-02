@@ -69,61 +69,38 @@ ALTER TABLE referral_codes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE referrals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE referral_stats ENABLE ROW LEVEL SECURITY;
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'referral_codes' AND policyname = 'Users can view own referral code') THEN
-        CREATE POLICY "Users can view own referral code" ON referral_codes
-            FOR SELECT USING (auth.uid() = account_id);
-    END IF;
-END $$;
+-- RLS Policies - Always drop and recreate for updates
+DROP POLICY IF EXISTS "Users can view own referral code" ON referral_codes;
+CREATE POLICY "Users can view own referral code" ON referral_codes
+    FOR SELECT USING (auth.uid() = account_id);
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'referral_codes' AND policyname = 'Users can create own referral code') THEN
-        CREATE POLICY "Users can create own referral code" ON referral_codes
-            FOR INSERT WITH CHECK (auth.uid() = account_id);
-    END IF;
-END $$;
+DROP POLICY IF EXISTS "Users can create own referral code" ON referral_codes;
+CREATE POLICY "Users can create own referral code" ON referral_codes
+    FOR INSERT WITH CHECK (auth.uid() = account_id);
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'referral_codes' AND policyname = 'Service role manages referral codes') THEN
-        CREATE POLICY "Service role manages referral codes" ON referral_codes
-            FOR ALL USING (auth.role() = 'service_role');
-    END IF;
-END $$;
+DROP POLICY IF EXISTS "Service role manages referral codes" ON referral_codes;
+CREATE POLICY "Service role manages referral codes" ON referral_codes
+    FOR ALL USING (auth.role() = 'service_role');
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'referrals' AND policyname = 'Users can view own referrals as referrer') THEN
-        CREATE POLICY "Users can view own referrals as referrer" ON referrals
-            FOR SELECT USING (auth.uid() = referrer_id);
-    END IF;
-END $$;
+DROP POLICY IF EXISTS "Users can view own referrals as referrer" ON referrals;
+CREATE POLICY "Users can view own referrals as referrer" ON referrals
+    FOR SELECT USING (auth.uid() = referrer_id);
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'referrals' AND policyname = 'Users can view own referrals as referred') THEN
-        CREATE POLICY "Users can view own referrals as referred" ON referrals
-            FOR SELECT USING (auth.uid() = referred_account_id);
-    END IF;
-END $$;
+DROP POLICY IF EXISTS "Users can view own referrals as referred" ON referrals;
+CREATE POLICY "Users can view own referrals as referred" ON referrals
+    FOR SELECT USING (auth.uid() = referred_account_id);
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'referrals' AND policyname = 'Service role manages referrals') THEN
-        CREATE POLICY "Service role manages referrals" ON referrals
-            FOR ALL USING (auth.role() = 'service_role');
-    END IF;
-END $$;
+DROP POLICY IF EXISTS "Service role manages referrals" ON referrals;
+CREATE POLICY "Service role manages referrals" ON referrals
+    FOR ALL USING (auth.role() = 'service_role');
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'referral_stats' AND policyname = 'Users can view own referral stats') THEN
-        CREATE POLICY "Users can view own referral stats" ON referral_stats
-            FOR SELECT USING (auth.uid() = account_id);
-    END IF;
-END $$;
+DROP POLICY IF EXISTS "Users can view own referral stats" ON referral_stats;
+CREATE POLICY "Users can view own referral stats" ON referral_stats
+    FOR SELECT USING (auth.uid() = account_id);
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'referral_stats' AND policyname = 'Service role manages referral stats') THEN
-        CREATE POLICY "Service role manages referral stats" ON referral_stats
-            FOR ALL USING (auth.role() = 'service_role');
-    END IF;
-END $$;
+DROP POLICY IF EXISTS "Service role manages referral stats" ON referral_stats;
+CREATE POLICY "Service role manages referral stats" ON referral_stats
+    FOR ALL USING (auth.role() = 'service_role');
 
 DROP FUNCTION IF EXISTS generate_referral_code(UUID);
 DROP FUNCTION IF EXISTS get_or_create_referral_code(UUID);
@@ -132,7 +109,7 @@ DROP FUNCTION IF EXISTS process_referral(UUID, UUID, TEXT, DECIMAL);
 DROP FUNCTION IF EXISTS get_referral_stats(UUID);
 DROP FUNCTION IF EXISTS get_user_referrals(UUID, INTEGER, INTEGER);
 
-CREATE FUNCTION generate_referral_code(
+CREATE OR REPLACE FUNCTION generate_referral_code(
     p_account_id UUID
 ) RETURNS TEXT
 LANGUAGE plpgsql
@@ -167,7 +144,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION get_or_create_referral_code(
+CREATE OR REPLACE FUNCTION get_or_create_referral_code(
     p_account_id UUID
 ) RETURNS TEXT
 LANGUAGE plpgsql
@@ -188,7 +165,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION validate_referral_code(
+CREATE OR REPLACE FUNCTION validate_referral_code(
     p_code TEXT
 ) RETURNS UUID
 LANGUAGE plpgsql
@@ -205,7 +182,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION process_referral(
+CREATE OR REPLACE FUNCTION process_referral(
     p_referrer_id UUID,
     p_referred_account_id UUID,
     p_referral_code TEXT,
@@ -288,7 +265,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION get_referral_stats(
+CREATE OR REPLACE FUNCTION get_referral_stats(
     p_account_id UUID
 ) RETURNS JSONB
 LANGUAGE plpgsql
@@ -326,7 +303,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION get_user_referrals(
+CREATE OR REPLACE FUNCTION get_user_referrals(
     p_account_id UUID,
     p_limit INTEGER DEFAULT 50,
     p_offset INTEGER DEFAULT 0

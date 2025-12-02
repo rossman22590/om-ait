@@ -60,7 +60,7 @@ BEGIN
 END;
 $$;
 
--- Create function to get all Suna default agents
+-- CREATE OR REPLACE FUNCTION to get all Suna default agents
 CREATE OR REPLACE FUNCTION get_all_suna_default_agents()
 RETURNS TABLE (
     agent_id UUID,
@@ -110,7 +110,7 @@ BEGIN
 END;
 $$;
 
--- Create function to count agents by management version
+-- CREATE OR REPLACE FUNCTION to count agents by management version
 CREATE OR REPLACE FUNCTION count_suna_agents_by_version(p_version TEXT)
 RETURNS INTEGER
 SECURITY DEFINER
@@ -128,7 +128,7 @@ BEGIN
 END;
 $$;
 
--- Create function to get Suna default agent statistics
+-- CREATE OR REPLACE FUNCTION to get Suna default agent statistics
 CREATE OR REPLACE FUNCTION get_suna_default_agent_stats()
 RETURNS TABLE (
     total_agents INTEGER,
@@ -200,7 +200,7 @@ BEGIN
 END;
 $$;
 
--- Create function to find agents needing updates to a specific version
+-- CREATE OR REPLACE FUNCTION to find agents needing updates to a specific version
 CREATE OR REPLACE FUNCTION find_suna_agents_needing_update(p_target_version TEXT)
 RETURNS TABLE (
     agent_id UUID,

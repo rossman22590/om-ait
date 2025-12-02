@@ -7,13 +7,21 @@ CREATE TABLE IF NOT EXISTS admin_actions_log (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_admin_actions_admin ON admin_actions_log(admin_user_id, created_at DESC);
-CREATE INDEX idx_admin_actions_target ON admin_actions_log(target_user_id, created_at DESC);
-CREATE INDEX idx_admin_actions_type ON admin_actions_log(action_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_actions_admin ON admin_actions_log(admin_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_actions_target ON admin_actions_log(target_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_admin_actions_type ON admin_actions_log(action_type, created_at DESC);
 
 ALTER TABLE admin_actions_log ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Only admins can view logs" ON admin_actions_log
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'admin_actions_log' 
+        AND policyname = 'Only admins can view logs'
+    ) THEN
+        CREATE POLICY "Only admins can view logs" ON admin_actions_log
     FOR SELECT USING (
         EXISTS (
             SELECT 1 FROM user_roles 
@@ -21,9 +29,21 @@ CREATE POLICY "Only admins can view logs" ON admin_actions_log
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
-CREATE POLICY "Service role manages logs" ON admin_actions_log
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'admin_actions_log' 
+        AND policyname = 'Service role manages logs'
+    ) THEN
+        CREATE POLICY "Service role manages logs" ON admin_actions_log
     FOR ALL USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION migrate_user_to_credits(p_user_id UUID)
 RETURNS BOOLEAN AS $$

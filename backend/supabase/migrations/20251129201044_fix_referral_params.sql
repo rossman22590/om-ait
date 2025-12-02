@@ -2,7 +2,7 @@ DROP FUNCTION IF EXISTS get_or_create_referral_code(UUID);
 DROP FUNCTION IF EXISTS get_referral_stats(UUID);
 DROP FUNCTION IF EXISTS get_user_referrals(UUID, INTEGER, INTEGER);
 
-CREATE FUNCTION get_or_create_referral_code(
+CREATE OR REPLACE FUNCTION get_or_create_referral_code(
     p_account_id UUID
 ) RETURNS TEXT
 LANGUAGE plpgsql
@@ -28,7 +28,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION get_referral_stats(
+CREATE OR REPLACE FUNCTION get_referral_stats(
     p_account_id UUID
 ) RETURNS JSONB
 LANGUAGE plpgsql
@@ -66,7 +66,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION get_user_referrals(
+CREATE OR REPLACE FUNCTION get_user_referrals(
     p_account_id UUID,
     p_limit INTEGER DEFAULT 50,
     p_offset INTEGER DEFAULT 0

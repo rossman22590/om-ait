@@ -99,23 +99,63 @@ END;
 $$ language 'plpgsql';
 
 -- Create triggers for updated_at
-CREATE TRIGGER update_agent_triggers_updated_at 
-    BEFORE UPDATE ON agent_triggers
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'update_agent_triggers_updated_at'
+    ) THEN
+        CREATE TRIGGER update_agent_triggers_updated_at
+        BEFORE UPDATE ON agent_triggers
+    FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
 
-CREATE TRIGGER update_custom_trigger_providers_updated_at 
-    BEFORE UPDATE ON custom_trigger_providers
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'update_custom_trigger_providers_updated_at'
+    ) THEN
+        CREATE TRIGGER update_custom_trigger_providers_updated_at
+        BEFORE UPDATE ON custom_trigger_providers
+    FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
 
-CREATE TRIGGER update_oauth_installations_updated_at 
-    BEFORE UPDATE ON oauth_installations
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'update_oauth_installations_updated_at'
+    ) THEN
+        CREATE TRIGGER update_oauth_installations_updated_at
+        BEFORE UPDATE ON oauth_installations
+    FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
 
 -- Enable RLS on all tables
 ALTER TABLE agent_triggers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE trigger_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE custom_trigger_providers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE oauth_installations ENABLE ROW LEVEL SECURITY;
+
+-- Clean up any existing policies to prevent duplicates
+DROP POLICY IF EXISTS agent_triggers_select_policy ON agent_triggers;
+DROP POLICY IF EXISTS agent_triggers_insert_policy ON agent_triggers;
+DROP POLICY IF EXISTS agent_triggers_update_policy ON agent_triggers;
+DROP POLICY IF EXISTS agent_triggers_delete_policy ON agent_triggers;
+DROP POLICY IF EXISTS trigger_events_select_policy ON trigger_events;
+DROP POLICY IF EXISTS trigger_events_insert_policy ON trigger_events;
+DROP POLICY IF EXISTS custom_trigger_providers_select_policy ON custom_trigger_providers;
+DROP POLICY IF EXISTS custom_trigger_providers_insert_policy ON custom_trigger_providers;
+DROP POLICY IF EXISTS custom_trigger_providers_update_policy ON custom_trigger_providers;
+DROP POLICY IF EXISTS custom_trigger_providers_delete_policy ON custom_trigger_providers;
+DROP POLICY IF EXISTS oauth_installations_select_policy ON oauth_installations;
+DROP POLICY IF EXISTS oauth_installations_insert_policy ON oauth_installations;
+DROP POLICY IF EXISTS oauth_installations_update_policy ON oauth_installations;
+DROP POLICY IF EXISTS oauth_installations_delete_policy ON oauth_installations;
 
 -- RLS Policies for agent_triggers
 -- Users can only see triggers for agents they own
@@ -137,6 +177,7 @@ CREATE POLICY agent_triggers_insert_policy ON agent_triggers
         )
     );
 
+DROP POLICY IF EXISTS agent_triggers_update_policy ON agent_triggers;
 CREATE POLICY agent_triggers_update_policy ON agent_triggers
     FOR UPDATE USING (
         EXISTS (
@@ -146,6 +187,7 @@ CREATE POLICY agent_triggers_update_policy ON agent_triggers
         )
     );
 
+DROP POLICY IF EXISTS agent_triggers_delete_policy ON agent_triggers;
 CREATE POLICY agent_triggers_delete_policy ON agent_triggers
     FOR DELETE USING (
         EXISTS (

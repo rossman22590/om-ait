@@ -1,6 +1,6 @@
 BEGIN;
 
-CREATE TABLE user_mcp_credential_profiles (
+CREATE TABLE IF NOT EXISTS user_mcp_credential_profiles (
     profile_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id UUID NOT NULL,
     mcp_qualified_name TEXT NOT NULL,
@@ -21,19 +21,20 @@ CREATE TABLE user_mcp_credential_profiles (
         ON DELETE CASCADE
 );
 
-CREATE INDEX idx_credential_profiles_account_mcp 
+CREATE INDEX IF NOT EXISTS idx_credential_profiles_account_mcp 
     ON user_mcp_credential_profiles(account_id, mcp_qualified_name);
 
-CREATE INDEX idx_credential_profiles_account_active 
+CREATE INDEX IF NOT EXISTS idx_credential_profiles_account_active 
     ON user_mcp_credential_profiles(account_id, is_active) 
     WHERE is_active = true;
 
-CREATE INDEX idx_credential_profiles_default 
+CREATE INDEX IF NOT EXISTS idx_credential_profiles_default 
     ON user_mcp_credential_profiles(account_id, mcp_qualified_name, is_default) 
     WHERE is_default = true;
 
 ALTER TABLE user_mcp_credential_profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS credential_profiles_user_access ON user_mcp_credential_profiles;
 CREATE POLICY credential_profiles_user_access 
     ON user_mcp_credential_profiles 
     FOR ALL 
@@ -95,10 +96,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_ensure_single_default_profile
-    BEFORE INSERT OR UPDATE ON user_mcp_credential_profiles
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_ensure_single_default_profile'
+    ) THEN
+        CREATE TRIGGER trigger_ensure_single_default_profile
+        BEFORE INSERT OR UPDATE ON user_mcp_credential_profiles
     FOR EACH ROW
-    EXECUTE FUNCTION ensure_single_default_profile();
+        EXECUTE FUNCTION ensure_single_default_profile();
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION update_credential_profile_timestamp()
 RETURNS TRIGGER AS $$
@@ -108,9 +116,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_update_credential_profile_timestamp
-    BEFORE UPDATE ON user_mcp_credential_profiles
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_update_credential_profile_timestamp'
+    ) THEN
+        CREATE TRIGGER trigger_update_credential_profile_timestamp
+        BEFORE UPDATE ON user_mcp_credential_profiles
     FOR EACH ROW
-    EXECUTE FUNCTION update_credential_profile_timestamp();
+        EXECUTE FUNCTION update_credential_profile_timestamp();
+    END IF;
+END $$;
 
 COMMIT; 

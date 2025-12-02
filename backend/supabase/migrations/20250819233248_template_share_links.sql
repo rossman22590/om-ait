@@ -16,12 +16,28 @@ CREATE INDEX IF NOT EXISTS idx_template_share_links_created_at ON template_share
 
 ALTER TABLE template_share_links ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Share links are publicly viewable" 
-    ON template_share_links FOR SELECT
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'template_share_links' 
+        AND policyname = 'Share links are publicly viewable'
+    ) THEN
+        CREATE POLICY "Share links are publicly viewable" ON template_share_links FOR SELECT
     USING (true);
+    END IF;
+END $$;
 
-CREATE POLICY "Template creators can create share links" 
-    ON template_share_links FOR INSERT
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'template_share_links' 
+        AND policyname = 'Template creators can create share links'
+    ) THEN
+        CREATE POLICY "Template creators can create share links" ON template_share_links FOR INSERT
     WITH CHECK (
         created_by = auth.uid() 
         AND EXISTS (
@@ -30,13 +46,33 @@ CREATE POLICY "Template creators can create share links"
             AND creator_id = auth.uid()
         )
     );
+    END IF;
+END $$;
 
-CREATE POLICY "Share link creators can update their links" 
-    ON template_share_links FOR UPDATE
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'template_share_links' 
+        AND policyname = 'Share link creators can update their links'
+    ) THEN
+        CREATE POLICY "Share link creators can update their links" ON template_share_links FOR UPDATE
     USING (created_by = auth.uid());
+    END IF;
+END $$;
 
-CREATE POLICY "Share link creators can delete their links" 
-    ON template_share_links FOR DELETE
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'template_share_links' 
+        AND policyname = 'Share link creators can delete their links'
+    ) THEN
+        CREATE POLICY "Share link creators can delete their links" ON template_share_links FOR DELETE
     USING (created_by = auth.uid());
+    END IF;
+END $$;
 
 COMMIT; 

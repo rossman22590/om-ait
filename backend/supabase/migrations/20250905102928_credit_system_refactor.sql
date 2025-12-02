@@ -37,26 +37,113 @@ CREATE TABLE IF NOT EXISTS credit_grants (
     period_end TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX idx_credit_ledger_user_id ON credit_ledger(user_id, created_at DESC);
-CREATE INDEX idx_credit_ledger_type ON credit_ledger(type);
-CREATE INDEX idx_credit_ledger_reference ON credit_ledger(reference_id, reference_type);
-CREATE INDEX idx_credit_grants_user_period ON credit_grants(user_id, period_start, period_end);
+-- Create indexes conditionally based on column existence
+DO $$
+BEGIN
+    -- Check if user_id or account_id column exists and create appropriate index
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = 'credit_ledger'
+        AND column_name = 'user_id'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_credit_ledger_user_id ON credit_ledger(user_id, created_at DESC);
+        RAISE NOTICE 'Created idx_credit_ledger_user_id index';
+    ELSIF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = 'credit_ledger'
+        AND column_name = 'account_id'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_credit_ledger_account_id ON credit_ledger(account_id, created_at DESC);
+        RAISE NOTICE 'Created idx_credit_ledger_account_id index (using account_id)';
+    ELSE
+        RAISE NOTICE 'Skipping credit_ledger user index - no user_id or account_id column found';
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_credit_ledger_type ON credit_ledger(type);
+CREATE INDEX IF NOT EXISTS idx_credit_ledger_reference ON credit_ledger(reference_id, reference_type);
+
+-- Create grants index conditionally
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = 'credit_grants'
+        AND column_name = 'user_id'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_credit_grants_user_period ON credit_grants(user_id, period_start, period_end);
+        RAISE NOTICE 'Created idx_credit_grants_user_period index';
+    ELSIF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = 'credit_grants'
+        AND column_name = 'account_id'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_credit_grants_account_period ON credit_grants(account_id, period_start, period_end);
+        RAISE NOTICE 'Created idx_credit_grants_account_period index (using account_id)';
+    ELSE
+        RAISE NOTICE 'Skipping credit_grants user index - no user_id or account_id column found';
+    END IF;
+END $$;
 
 ALTER TABLE credit_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE credit_ledger ENABLE ROW LEVEL SECURITY;
 ALTER TABLE credit_grants ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own credit account" ON credit_accounts
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_accounts' 
+        AND policyname = 'Users can view own credit account'
+    ) THEN
+        CREATE POLICY "Users can view own credit account" ON credit_accounts
     FOR SELECT USING (auth.uid() = user_id);
+    END IF;
+END $$;
 
-CREATE POLICY "Service role manages credit accounts" ON credit_accounts
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_accounts' 
+        AND policyname = 'Service role manages credit accounts'
+    ) THEN
+        CREATE POLICY "Service role manages credit accounts" ON credit_accounts
     FOR ALL USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
-CREATE POLICY "Users can view own ledger" ON credit_ledger
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_ledger' 
+        AND policyname = 'Users can view own ledger'
+    ) THEN
+        CREATE POLICY "Users can view own ledger" ON credit_ledger
     FOR SELECT USING (auth.uid() = user_id);
+    END IF;
+END $$;
 
-CREATE POLICY "Service role manages ledger" ON credit_ledger
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_ledger' 
+        AND policyname = 'Service role manages ledger'
+    ) THEN
+        CREATE POLICY "Service role manages ledger" ON credit_ledger
     FOR ALL USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION deduct_credits(
     p_user_id UUID,

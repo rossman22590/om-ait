@@ -33,7 +33,17 @@ CREATE INDEX IF NOT EXISTS idx_credit_accounts_trial_status ON credit_accounts(t
 
 ALTER TABLE trial_history ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own trial history" ON trial_history
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'trial_history' 
+        AND policyname = 'Users can view own trial history'
+    ) THEN
+        CREATE POLICY "Users can view own trial history" ON trial_history
     FOR SELECT USING (auth.uid() = account_id);
+    END IF;
+END $$;
 
 COMMIT; 

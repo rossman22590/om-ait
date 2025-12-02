@@ -41,16 +41,56 @@ GRANT ALL ON audit_log TO service_role;
 ALTER TABLE credit_purchases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own credit purchases" ON credit_purchases
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_purchases' 
+        AND policyname = 'Users can view own credit purchases'
+    ) THEN
+        CREATE POLICY "Users can view own credit purchases" ON credit_purchases
     FOR SELECT USING (auth.uid() = account_id);
+    END IF;
+END $$;
 
-CREATE POLICY "Service role manages credit purchases" ON credit_purchases
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_purchases' 
+        AND policyname = 'Service role manages credit purchases'
+    ) THEN
+        CREATE POLICY "Service role manages credit purchases" ON credit_purchases
     FOR ALL USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
-CREATE POLICY "Users can view own audit log" ON audit_log
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'audit_log' 
+        AND policyname = 'Users can view own audit log'
+    ) THEN
+        CREATE POLICY "Users can view own audit log" ON audit_log
     FOR SELECT USING (auth.uid() = account_id);
+    END IF;
+END $$;
 
-CREATE POLICY "Service role manages audit log" ON audit_log
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'audit_log' 
+        AND policyname = 'Service role manages audit log'
+    ) THEN
+        CREATE POLICY "Service role manages audit log" ON audit_log
     FOR ALL USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 COMMIT;

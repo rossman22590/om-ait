@@ -66,9 +66,16 @@ $$;
 -- Ensure trigger exists and is active
 DROP TRIGGER IF EXISTS auto_create_free_tier_on_account ON basejump.accounts;
 
-CREATE TRIGGER auto_create_free_tier_on_account
-    AFTER INSERT ON basejump.accounts
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'auto_create_free_tier_on_account'
+    ) THEN
+        CREATE TRIGGER auto_create_free_tier_on_account
+        AFTER INSERT ON basejump.accounts
     FOR EACH ROW
-    EXECUTE FUNCTION initialize_free_tier_credits();
+        EXECUTE FUNCTION initialize_free_tier_credits();
+    END IF;
+END $$;
 
 COMMIT;

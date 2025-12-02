@@ -1,6 +1,6 @@
 DROP FUNCTION IF EXISTS expire_referral_code(UUID);
 
-CREATE FUNCTION expire_referral_code(
+CREATE OR REPLACE FUNCTION expire_referral_code(
     p_account_id UUID
 ) RETURNS JSONB
 LANGUAGE plpgsql

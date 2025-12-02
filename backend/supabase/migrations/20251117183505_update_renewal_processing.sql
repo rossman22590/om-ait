@@ -1,9 +1,15 @@
 ALTER TABLE public.renewal_processing 
 DROP CONSTRAINT IF EXISTS renewal_processing_processed_by_check;
 
-ALTER TABLE public.renewal_processing 
-ADD CONSTRAINT renewal_processing_processed_by_check 
-CHECK (processed_by IN ('webhook_invoice', 'webhook_subscription', 'manual', 'revenuecat_webhook'));
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'renewal_processing_processed_by_check'
+    ) THEN
+        ALTER TABLE public.renewal_processing
+            ADD CONSTRAINT renewal_processing_processed_by_check CHECK (processed_by IN ('webhook_invoice', 'webhook_subscription', 'manual', 'revenuecat_webhook'));
+    END IF;
+END $$;
 
 ALTER TABLE public.renewal_processing
 ADD COLUMN IF NOT EXISTS provider TEXT DEFAULT 'stripe' CHECK (provider IN ('stripe', 'revenuecat'));

@@ -119,18 +119,36 @@ COMMENT ON FUNCTION reset_circuit_breaker IS
 
 ALTER TABLE circuit_breaker_state ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Service role has full access to circuit breaker"
-    ON circuit_breaker_state
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'circuit_breaker_state' 
+        AND policyname = 'Service role has full access to circuit breaker'
+    ) THEN
+        CREATE POLICY "Service role has full access to circuit breaker" ON circuit_breaker_state
     FOR ALL
     TO service_role
     USING (true)
     WITH CHECK (true);
+    END IF;
+END $$;
 
-CREATE POLICY "Authenticated users can read circuit breaker state"
-    ON circuit_breaker_state
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'circuit_breaker_state' 
+        AND policyname = 'Authenticated users can read circuit breaker state'
+    ) THEN
+        CREATE POLICY "Authenticated users can read circuit breaker state" ON circuit_breaker_state
     FOR SELECT
     TO authenticated
     USING (true);
+    END IF;
+END $$;
 
 COMMENT ON POLICY "Service role has full access to circuit breaker" ON circuit_breaker_state IS
 'Backend service needs full read/write access to update circuit state';

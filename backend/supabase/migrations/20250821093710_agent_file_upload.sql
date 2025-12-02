@@ -34,9 +34,17 @@ END;
 $$ language 'plpgsql';
 
 DROP TRIGGER IF EXISTS update_file_uploads_updated_at ON public.file_uploads;
-CREATE TRIGGER update_file_uploads_updated_at
-    BEFORE UPDATE ON public.file_uploads
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'update_file_uploads_updated_at'
+    ) THEN
+        CREATE TRIGGER update_file_uploads_updated_at
+        BEFORE UPDATE ON public.file_uploads
+    FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_file_uploads_account_id ON public.file_uploads(account_id);
 CREATE INDEX IF NOT EXISTS idx_file_uploads_thread_id ON public.file_uploads(thread_id);
@@ -53,9 +61,15 @@ VALUES (
 )
 ON CONFLICT (id) DO UPDATE SET public = false;
 
-ALTER TABLE public.file_uploads 
-ADD CONSTRAINT file_uploads_user_storage_unique 
-UNIQUE(user_id, bucket_name, storage_path);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'file_uploads_user_storage_unique'
+    ) THEN
+        ALTER TABLE public.file_uploads
+            ADD CONSTRAINT file_uploads_user_storage_unique UNIQUE(user_id, bucket_name, storage_path);
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_file_uploads_user_id ON public.file_uploads(user_id);
 CREATE INDEX IF NOT EXISTS idx_file_uploads_expires ON public.file_uploads(url_expires_at) WHERE url_expires_at IS NOT NULL;
@@ -65,55 +79,135 @@ DROP POLICY IF EXISTS "file-uploads are publicly readable" ON storage.objects;
 DROP POLICY IF EXISTS "Users can delete from file-uploads" ON storage.objects;
 DROP POLICY IF EXISTS "Users can update file-uploads" ON storage.objects;
 
-CREATE POLICY "Users can upload to file-uploads" ON storage.objects
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Users can upload to file-uploads'
+    ) THEN
+        CREATE POLICY "Users can upload to file-uploads" ON storage.objects
 FOR INSERT WITH CHECK (
     bucket_id = 'file-uploads' 
     AND auth.role() = 'authenticated'
 );
+    END IF;
+END $$;
 
-CREATE POLICY "Users can view their own files in file-uploads" ON storage.objects
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Users can view their own files in file-uploads'
+    ) THEN
+        CREATE POLICY "Users can view their own files in file-uploads" ON storage.objects
 FOR SELECT USING (
     bucket_id = 'file-uploads' 
     AND auth.role() = 'authenticated'
     AND (storage.foldername(name))[1] = auth.uid()::text
 );
+    END IF;
+END $$;
 
-CREATE POLICY "Users can delete their own files in file-uploads" ON storage.objects
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Users can delete their own files in file-uploads'
+    ) THEN
+        CREATE POLICY "Users can delete their own files in file-uploads" ON storage.objects
 FOR DELETE USING (
     bucket_id = 'file-uploads' 
     AND auth.role() = 'authenticated'
     AND (storage.foldername(name))[1] = auth.uid()::text
 );
+    END IF;
+END $$;
 
-CREATE POLICY "Users can update their own files in file-uploads" ON storage.objects
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'storage' 
+        AND tablename = 'objects' 
+        AND policyname = 'Users can update their own files in file-uploads'
+    ) THEN
+        CREATE POLICY "Users can update their own files in file-uploads" ON storage.objects
 FOR UPDATE USING (
     bucket_id = 'file-uploads' 
     AND auth.role() = 'authenticated'
     AND (storage.foldername(name))[1] = auth.uid()::text
 );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can view their own file uploads" ON public.file_uploads;
 DROP POLICY IF EXISTS "Users can create their own file uploads" ON public.file_uploads;
 DROP POLICY IF EXISTS "Users can update their own file uploads" ON public.file_uploads;
 DROP POLICY IF EXISTS "Users can delete their own file uploads" ON public.file_uploads;
 
-CREATE POLICY "Users can view their own file uploads" ON public.file_uploads
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'file_uploads' 
+        AND policyname = 'Users can view their own file uploads'
+    ) THEN
+        CREATE POLICY "Users can view their own file uploads" ON public.file_uploads
 FOR SELECT USING (
     user_id = auth.uid()
     OR basejump.has_role_on_account(account_id) = true
 );
+    END IF;
+END $$;
 
-CREATE POLICY "Users can create their own file uploads" ON public.file_uploads
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'file_uploads' 
+        AND policyname = 'Users can create their own file uploads'
+    ) THEN
+        CREATE POLICY "Users can create their own file uploads" ON public.file_uploads
 FOR INSERT WITH CHECK (
     user_id = auth.uid()
     AND basejump.has_role_on_account(account_id) = true
 );
+    END IF;
+END $$;
 
-CREATE POLICY "Users can update their own file uploads" ON public.file_uploads
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'file_uploads' 
+        AND policyname = 'Users can update their own file uploads'
+    ) THEN
+        CREATE POLICY "Users can update their own file uploads" ON public.file_uploads
 FOR UPDATE USING (user_id = auth.uid());
+    END IF;
+END $$;
 
-CREATE POLICY "Users can delete their own file uploads" ON public.file_uploads
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'file_uploads' 
+        AND policyname = 'Users can delete their own file uploads'
+    ) THEN
+        CREATE POLICY "Users can delete their own file uploads" ON public.file_uploads
 FOR DELETE USING (user_id = auth.uid());
+    END IF;
+END $$;
 
 
 COMMENT ON COLUMN public.file_uploads.user_id IS 'The authenticated user who owns the file';

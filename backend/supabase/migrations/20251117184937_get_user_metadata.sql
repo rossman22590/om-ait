@@ -1,6 +1,6 @@
 BEGIN;
 
--- Create function to get user metadata (including locale) from auth.users
+-- CREATE OR REPLACE FUNCTION to get user metadata (including locale) from auth.users
 CREATE OR REPLACE FUNCTION public.get_user_metadata(user_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql

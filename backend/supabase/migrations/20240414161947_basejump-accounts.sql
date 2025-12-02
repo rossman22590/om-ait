@@ -65,11 +65,20 @@ CREATE TABLE IF NOT EXISTS basejump.accounts
 
 -- constraint that conditionally allows nulls on the slug ONLY if personal_account is true
 -- remove this if you want to ignore accounts slugs entirely
-ALTER TABLE basejump.accounts
-    ADD CONSTRAINT basejump_accounts_slug_null_if_personal_account_true CHECK (
-            (personal_account = true AND slug is null)
-            OR (personal_account = false AND slug is not null)
-        );
+-- Add constraint only if it doesn't exist (production-safe)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint 
+        WHERE conname = 'basejump_accounts_slug_null_if_personal_account_true'
+    ) THEN
+        ALTER TABLE basejump.accounts
+            ADD CONSTRAINT basejump_accounts_slug_null_if_personal_account_true CHECK (
+                (personal_account = true AND slug is null)
+                OR (personal_account = false AND slug is not null)
+            );
+    END IF;
+END $$;
 
 -- Open up access to accounts
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE basejump.accounts TO authenticated, service_role;
@@ -98,12 +107,27 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
--- trigger to protect account fields
-CREATE TRIGGER basejump_protect_account_fields
-    BEFORE UPDATE
-    ON basejump.accounts
-    FOR EACH ROW
-EXECUTE FUNCTION basejump.protect_account_fields();
+-- trigger to protect account fields (production-safe)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger 
+        WHERE tgname = 'basejump_protect_account_fields'
+    ) THEN
+        DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'basejump_protect_account_fields'
+    ) THEN
+        CREATE TRIGGER basejump_protect_account_fields
+        BEFORE UPDATE
+            ON basejump.accounts
+            FOR EACH ROW
+        EXECUTE FUNCTION basejump.protect_account_fields();
+    END IF;
+END $$;
+    END IF;
+END $$;
 
 -- convert any character in the slug that's not a letter, number, or dash to a dash on insert/update for accounts
 CREATE OR REPLACE FUNCTION basejump.slugify_account_slug()
@@ -118,30 +142,75 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
--- trigger to slugify the account slug
-CREATE TRIGGER basejump_slugify_account_slug
-    BEFORE INSERT OR UPDATE
-    ON basejump.accounts
-    FOR EACH ROW
-EXECUTE FUNCTION basejump.slugify_account_slug();
+-- trigger to slugify the account slug (production-safe)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger 
+        WHERE tgname = 'basejump_slugify_account_slug'
+    ) THEN
+        DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'basejump_slugify_account_slug'
+    ) THEN
+        CREATE TRIGGER basejump_slugify_account_slug
+        BEFORE INSERT OR UPDATE
+            ON basejump.accounts
+            FOR EACH ROW
+        EXECUTE FUNCTION basejump.slugify_account_slug();
+    END IF;
+END $$;
+    END IF;
+END $$;
 
 -- enable RLS for accounts
 alter table basejump.accounts
     enable row level security;
 
--- protect the timestamps
-CREATE TRIGGER basejump_set_accounts_timestamp
-    BEFORE INSERT OR UPDATE
-    ON basejump.accounts
-    FOR EACH ROW
-EXECUTE PROCEDURE basejump.trigger_set_timestamps();
+-- protect the timestamps (production-safe)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger 
+        WHERE tgname = 'basejump_set_accounts_timestamp'
+    ) THEN
+        DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'basejump_set_accounts_timestamp'
+    ) THEN
+        CREATE TRIGGER basejump_set_accounts_timestamp
+        BEFORE INSERT OR UPDATE
+            ON basejump.accounts
+            FOR EACH ROW
+        EXECUTE PROCEDURE basejump.trigger_set_timestamps();
+    END IF;
+END $$;
+    END IF;
+END $$;
 
--- set the user tracking
-CREATE TRIGGER basejump_set_accounts_user_tracking
-    BEFORE INSERT OR UPDATE
-    ON basejump.accounts
-    FOR EACH ROW
-EXECUTE PROCEDURE basejump.trigger_set_user_tracking();
+-- set the user tracking (production-safe)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger 
+        WHERE tgname = 'basejump_set_accounts_user_tracking'
+    ) THEN
+        DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'basejump_set_accounts_user_tracking'
+    ) THEN
+        CREATE TRIGGER basejump_set_accounts_user_tracking
+        BEFORE INSERT OR UPDATE
+            ON basejump.accounts
+            FOR EACH ROW
+        EXECUTE PROCEDURE basejump.trigger_set_user_tracking();
+    END IF;
+END $$;
+    END IF;
+END $$;
 
 /**
   * Account users are the users that are associated with an account.
@@ -187,12 +256,27 @@ begin
 end;
 $$;
 
--- trigger the function whenever a new account is created
-CREATE TRIGGER basejump_add_current_user_to_new_account
-    AFTER INSERT
-    ON basejump.accounts
-    FOR EACH ROW
-EXECUTE FUNCTION basejump.add_current_user_to_new_account();
+-- trigger the function whenever a new account is created (production-safe)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger 
+        WHERE tgname = 'basejump_add_current_user_to_new_account'
+    ) THEN
+        DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'basejump_add_current_user_to_new_account'
+    ) THEN
+        CREATE TRIGGER basejump_add_current_user_to_new_account
+        AFTER INSERT
+            ON basejump.accounts
+            FOR EACH ROW
+        EXECUTE FUNCTION basejump.add_current_user_to_new_account();
+    END IF;
+END $$;
+    END IF;
+END $$;
 
 /**
   * When a user signs up, we need to create a personal account for them
@@ -228,12 +312,27 @@ begin
 end;
 $$;
 
--- trigger the function every time a user is created
-create trigger on_auth_user_created
-    after insert
-    on auth.users
-    for each row
-execute procedure basejump.run_new_user_setup();
+-- trigger the function every time a user is created (production-safe)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger 
+        WHERE tgname = 'on_auth_user_created'
+    ) THEN
+        DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'on_auth_user_created'
+    ) THEN
+        CREATE TRIGGER on_auth_user_created
+        after insert
+            on auth.users
+            for each row
+        execute procedure basejump.run_new_user_setup();
+    END IF;
+END $$;
+    END IF;
+END $$;
 
 /**
   * -------------------------------------------------------
@@ -300,61 +399,114 @@ grant execute on function basejump.get_accounts_with_role(basejump.account_role)
   * This is where we define access to tables in the basejump schema
  */
 
-create policy "users can view their own account_users" on basejump.account_user
-    for select
-    to authenticated
-    using (
-    user_id = auth.uid()
-    );
+-- Create policies only if they don't exist (production-safe)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' AND tablename = 'account_user' 
+        AND policyname = 'users can view their own account_users'
+    ) THEN
+        create policy "users can view their own account_users" on basejump.account_user
+            for select
+            to authenticated
+            using (user_id = auth.uid());
+    END IF;
+END $$;
 
-create policy "users can view their teammates" on basejump.account_user
-    for select
-    to authenticated
-    using (
-    basejump.has_role_on_account(account_id) = true
-    );
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' AND tablename = 'account_user' 
+        AND policyname = 'users can view their teammates'
+    ) THEN
+        create policy "users can view their teammates" on basejump.account_user
+            for select
+            to authenticated
+            using (basejump.has_role_on_account(account_id) = true);
+    END IF;
+END $$;
 
-create policy "Account users can be deleted by owners except primary account owner" on basejump.account_user
-    for delete
-    to authenticated
-    using (
-        (basejump.has_role_on_account(account_id, 'owner') = true)
-        AND
-        user_id != (select primary_owner_user_id
-                    from basejump.accounts
-                    where account_id = accounts.id)
-    );
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' AND tablename = 'account_user' 
+        AND policyname = 'Account users can be deleted by owners except primary account owner'
+    ) THEN
+        create policy "Account users can be deleted by owners except primary account owner" on basejump.account_user
+            for delete
+            to authenticated
+            using (
+                (basejump.has_role_on_account(account_id, 'owner') = true)
+                AND
+                user_id != (select primary_owner_user_id
+                            from basejump.accounts
+                            where account_id = accounts.id)
+            );
+    END IF;
+END $$;
 
-create policy "Accounts are viewable by members" on basejump.accounts
-    for select
-    to authenticated
-    using (
-    basejump.has_role_on_account(id) = true
-    );
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' AND tablename = 'accounts' 
+        AND policyname = 'Accounts are viewable by members'
+    ) THEN
+        create policy "Accounts are viewable by members" on basejump.accounts
+            for select
+            to authenticated
+            using (basejump.has_role_on_account(id) = true);
+    END IF;
+END $$;
 
 -- Primary owner should always have access to the account
-create policy "Accounts are viewable by primary owner" on basejump.accounts
-    for select
-    to authenticated
-    using (
-    primary_owner_user_id = auth.uid()
-    );
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' AND tablename = 'accounts' 
+        AND policyname = 'Accounts are viewable by primary owner'
+    ) THEN
+        create policy "Accounts are viewable by primary owner" on basejump.accounts
+            for select
+            to authenticated
+            using (primary_owner_user_id = auth.uid());
+    END IF;
+END $$;
 
-create policy "Team accounts can be created by any user" on basejump.accounts
-    for insert
-    to authenticated
-    with check (
-            basejump.is_set('enable_team_accounts') = true
-        and personal_account = false
-    );
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' AND tablename = 'accounts' 
+        AND policyname = 'Team accounts can be created by any user'
+    ) THEN
+        create policy "Team accounts can be created by any user" on basejump.accounts
+            for insert
+            to authenticated
+            with check (
+                basejump.is_set('enable_team_accounts') = true
+                and personal_account = false
+            );
+    END IF;
+END $$;
 
-
-create policy "Accounts can be edited by owners" on basejump.accounts
-    for update
-    to authenticated
-    using (
-    basejump.has_role_on_account(id, 'owner') = true
-    );
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' AND tablename = 'accounts' 
+        AND policyname = 'Accounts can be edited by owners'
+    ) THEN
+        create policy "Accounts can be edited by owners" on basejump.accounts
+            for update
+            to authenticated
+            using (basejump.has_role_on_account(id, 'owner') = true);
+    END IF;
+END $$;
 
 /**
   * -------------------------------------------------------

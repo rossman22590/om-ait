@@ -6,7 +6,7 @@ BEGIN;
 -- Add is_kortix_team column to agent_templates table
 ALTER TABLE agent_templates ADD COLUMN IF NOT EXISTS is_kortix_team BOOLEAN DEFAULT false;
 
--- Create index for better performance
+-- CREATE INDEX IF NOT EXISTS for better performance
 CREATE INDEX IF NOT EXISTS idx_agent_templates_is_kortix_team ON agent_templates(is_kortix_team);
 
 -- Add comment

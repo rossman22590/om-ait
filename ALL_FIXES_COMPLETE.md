@@ -53,6 +53,9 @@ Production database throwing duplicate errors on migration re-runs
 #### `20240414162131_basejump-billing.sql`
 - ✅ 2 policies - IF NOT EXISTS
 
+#### `20250409212058_initial.sql`
+- ✅ 4 storage policies - IF NOT EXISTS (recordings bucket)
+
 ### Pattern Used (Production-Safe):
 ```sql
 DO $$
@@ -138,11 +141,12 @@ fallback: ["ui-monospace", "monospace"],
 6. `src/components/thread/chat-input/upgrade-preview.tsx` - Bigger text
 7. `src/components/billing/plan-utils.ts` - PNG icons
 
-### Backend (4 migrations):
+### Backend (5 migrations):
 1. `supabase/migrations/20240414161707_basejump-setup.sql`
 2. `supabase/migrations/20240414161947_basejump-accounts.sql`
 3. `supabase/migrations/20240414162100_basejump-invitations.sql`
 4. `supabase/migrations/20240414162131_basejump-billing.sql`
+5. `supabase/migrations/20250409212058_initial.sql`
 
 ---
 

@@ -9,86 +9,112 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- First, ensure all agents and agent_versions have proper config data
 -- by running a final migration of legacy data to config if needed
 
--- Update ALL agents to ensure config has proper structure
-UPDATE agents 
-SET config = jsonb_build_object(
-    'system_prompt', COALESCE(
-        CASE 
-            WHEN config ? 'system_prompt' THEN config->>'system_prompt'
-            ELSE system_prompt
-        END, 
-        ''
-    ),
-    'tools', COALESCE(
-        CASE 
-            WHEN config ? 'tools' THEN config->'tools'
-            ELSE jsonb_build_object(
-                'agentpress', (
-                    SELECT jsonb_object_agg(
-                        key, 
-                        (value->>'enabled')::boolean
-                    )
-                    FROM jsonb_each(COALESCE(agentpress_tools, '{}'::jsonb))
-                    WHERE value IS NOT NULL AND value != 'null'::jsonb
+-- Update ALL agents to ensure config has proper structure (only if legacy columns exist)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agents' 
+        AND column_name = 'system_prompt'
+    ) THEN
+        EXECUTE '
+            UPDATE agents 
+            SET config = jsonb_build_object(
+                ''system_prompt'', COALESCE(
+                    CASE 
+                        WHEN config ? ''system_prompt'' THEN config->>''system_prompt''
+                        ELSE system_prompt
+                    END, 
+                    ''''
                 ),
-                'mcp', COALESCE(configured_mcps, '[]'::jsonb),
-                'custom_mcp', COALESCE(custom_mcps, '[]'::jsonb)
+                ''tools'', COALESCE(
+                    CASE 
+                        WHEN config ? ''tools'' THEN config->''tools''
+                        ELSE jsonb_build_object(
+                            ''agentpress'', (
+                                SELECT jsonb_object_agg(
+                                    key, 
+                                    (value->>''enabled'')::boolean
+                                )
+                                FROM jsonb_each(COALESCE(agentpress_tools, ''{}''::jsonb))
+                                WHERE value IS NOT NULL AND value != ''null''::jsonb
+                            ),
+                            ''mcp'', COALESCE(configured_mcps, ''[]''::jsonb),
+                            ''custom_mcp'', COALESCE(custom_mcps, ''[]''::jsonb)
+                        )
+                    END,
+                    jsonb_build_object(
+                        ''agentpress'', ''{}''::jsonb,
+                        ''mcp'', ''[]''::jsonb,
+                        ''custom_mcp'', ''[]''::jsonb
+                    )
+                ),
+                ''metadata'', COALESCE(
+                    CASE 
+                        WHEN config ? ''metadata'' THEN config->''metadata''
+                        ELSE jsonb_build_object(
+                            ''avatar'', avatar,
+                            ''avatar_color'', avatar_color
+                        )
+                    END,
+                    jsonb_build_object(
+                        ''avatar'', null,
+                        ''avatar_color'', null
+                    )
+                )
             )
-        END,
-        jsonb_build_object(
-            'agentpress', '{}'::jsonb,
-            'mcp', '[]'::jsonb,
-            'custom_mcp', '[]'::jsonb
-        )
-    ),
-    'metadata', COALESCE(
-        CASE 
-            WHEN config ? 'metadata' THEN config->'metadata'
-            ELSE jsonb_build_object(
-                'avatar', avatar,
-                'avatar_color', avatar_color
-            )
-        END,
-        jsonb_build_object(
-            'avatar', null,
-            'avatar_color', null
-        )
-    )
-);
+        ';
+    ELSE
+        RAISE NOTICE 'Skipping agents config migration - legacy columns already dropped';
+    END IF;
+END $$;
 
--- Update ALL agent_versions to ensure config has proper structure
-UPDATE agent_versions 
-SET config = jsonb_build_object(
-    'system_prompt', COALESCE(
-        CASE 
-            WHEN config ? 'system_prompt' THEN config->>'system_prompt'
-            ELSE system_prompt
-        END, 
-        ''
-    ),
-    'tools', COALESCE(
-        CASE 
-            WHEN config ? 'tools' THEN config->'tools'
-            ELSE jsonb_build_object(
-                'agentpress', (
-                    SELECT jsonb_object_agg(
-                        key, 
-                        (value->>'enabled')::boolean
-                    )
-                    FROM jsonb_each(COALESCE(agentpress_tools, '{}'::jsonb))
-                    WHERE value IS NOT NULL AND value != 'null'::jsonb
+-- Update ALL agent_versions to ensure config has proper structure (only if legacy columns exist)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agent_versions' 
+        AND column_name = 'system_prompt'
+    ) THEN
+        EXECUTE '
+            UPDATE agent_versions 
+            SET config = jsonb_build_object(
+                ''system_prompt'', COALESCE(
+                    CASE 
+                        WHEN config ? ''system_prompt'' THEN config->>''system_prompt''
+                        ELSE system_prompt
+                    END, 
+                    ''''
                 ),
-                'mcp', COALESCE(configured_mcps, '[]'::jsonb),
-                'custom_mcp', COALESCE(custom_mcps, '[]'::jsonb)
+                ''tools'', COALESCE(
+                    CASE 
+                        WHEN config ? ''tools'' THEN config->''tools''
+                        ELSE jsonb_build_object(
+                            ''agentpress'', (
+                                SELECT jsonb_object_agg(
+                                    key, 
+                                    (value->>''enabled'')::boolean
+                                )
+                                FROM jsonb_each(COALESCE(agentpress_tools, ''{}''::jsonb))
+                                WHERE value IS NOT NULL AND value != ''null''::jsonb
+                            ),
+                            ''mcp'', COALESCE(configured_mcps, ''[]''::jsonb),
+                            ''custom_mcp'', COALESCE(custom_mcps, ''[]''::jsonb)
+                        )
+                    END,
+                    jsonb_build_object(
+                        ''agentpress'', ''{}''::jsonb,
+                        ''mcp'', ''[]''::jsonb,
+                        ''custom_mcp'', ''[]''::jsonb
+                    )
+                )
             )
-        END,
-        jsonb_build_object(
-            'agentpress', '{}'::jsonb,
-            'mcp', '[]'::jsonb,
-            'custom_mcp', '[]'::jsonb
-        )
-    )
-);
+        ';
+    ELSE
+        RAISE NOTICE 'Skipping agent_versions config migration - legacy columns already dropped';
+    END IF;
+END $$;
 
 -- Drop the deprecated columns from agents table
 ALTER TABLE agents DROP COLUMN IF EXISTS system_prompt;
@@ -165,18 +191,113 @@ CREATE INDEX IF NOT EXISTS idx_agents_config_tools ON agents USING gin((config->
 CREATE INDEX IF NOT EXISTS idx_agent_versions_config_system_prompt ON agent_versions USING gin((config->>'system_prompt') gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_agent_versions_config_tools ON agent_versions USING gin((config->'tools'));
 
+-- Ensure all agents have proper config structure (fallback for any rows that weren't updated)
+-- Process in batches to avoid timeout
+DO $$
+DECLARE
+    v_count INTEGER := 1;
+    v_batch_size INTEGER := 1000;
+BEGIN
+    RAISE NOTICE 'Starting agents config structure optimization...';
+    
+    WHILE v_count > 0 LOOP
+        UPDATE agents 
+        SET config = jsonb_build_object(
+            'system_prompt', COALESCE(config->>'system_prompt', ''),
+            'tools', COALESCE(config->'tools', jsonb_build_object(
+                'agentpress', '{}'::jsonb,
+                'mcp', '[]'::jsonb,
+                'custom_mcp', '[]'::jsonb
+            )),
+            'metadata', COALESCE(config->'metadata', jsonb_build_object(
+                'avatar', null,
+                'avatar_color', null
+            ))
+        )
+        WHERE NOT (
+            config ? 'system_prompt' AND 
+            config ? 'tools' AND 
+            config ? 'metadata'
+        ) OR config IS NULL OR config = '{}'::jsonb
+        LIMIT v_batch_size;
+        
+        GET DIAGNOSTICS v_count = ROW_COUNT;
+        
+        IF v_count > 0 THEN
+            RAISE NOTICE 'Updated % agent records in this batch', v_count;
+            COMMIT; -- Commit the batch
+            -- Small delay to prevent overwhelming the system
+            PERFORM pg_sleep(0.01);
+        END IF;
+    END LOOP;
+    
+    RAISE NOTICE 'Completed agents config structure optimization';
+END $$;
+
 -- Add constraints to ensure config has basic structure
-ALTER TABLE agents ADD CONSTRAINT agents_config_structure_check 
-CHECK (
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'agents_config_structure_check'
+    ) THEN
+        ALTER TABLE agents
+            ADD CONSTRAINT agents_config_structure_check CHECK (
     config ? 'system_prompt' AND 
     config ? 'tools' AND 
     config ? 'metadata'
 );
+    END IF;
+END $$;
 
-ALTER TABLE agent_versions ADD CONSTRAINT agent_versions_config_structure_check 
-CHECK (
+-- Ensure all agent_versions have proper config structure (fallback for any rows that weren't updated)
+-- Process in batches to avoid timeout
+DO $$
+DECLARE
+    v_count INTEGER := 1;
+    v_batch_size INTEGER := 1000;
+BEGIN
+    RAISE NOTICE 'Starting agent_versions config structure optimization...';
+    
+    WHILE v_count > 0 LOOP
+        UPDATE agent_versions 
+        SET config = jsonb_build_object(
+            'system_prompt', COALESCE(config->>'system_prompt', ''),
+            'tools', COALESCE(config->'tools', jsonb_build_object(
+                'agentpress', '{}'::jsonb,
+                'mcp', '[]'::jsonb,
+                'custom_mcp', '[]'::jsonb
+            ))
+        )
+        WHERE NOT (
+            config ? 'system_prompt' AND 
+            config ? 'tools'
+        ) OR config IS NULL OR config = '{}'::jsonb
+        LIMIT v_batch_size;
+        
+        GET DIAGNOSTICS v_count = ROW_COUNT;
+        
+        IF v_count > 0 THEN
+            RAISE NOTICE 'Updated % agent_version records in this batch', v_count;
+            COMMIT; -- Commit the batch
+            -- Small delay to prevent overwhelming the system
+            PERFORM pg_sleep(0.01);
+        END IF;
+    END LOOP;
+    
+    RAISE NOTICE 'Completed agent_versions config structure optimization';
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'agent_versions_config_structure_check'
+    ) THEN
+        ALTER TABLE agent_versions
+            ADD CONSTRAINT agent_versions_config_structure_check CHECK (
     config ? 'system_prompt' AND 
     config ? 'tools'
 );
+    END IF;
+END $$;
 
 COMMIT; 

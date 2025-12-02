@@ -52,10 +52,30 @@ CREATE INDEX IF NOT EXISTS idx_commitment_history_active ON commitment_history(e
 
 ALTER TABLE commitment_history ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view own commitment history" ON commitment_history
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'commitment_history' 
+        AND policyname = 'Users can view own commitment history'
+    ) THEN
+        CREATE POLICY "Users can view own commitment history" ON commitment_history
     FOR SELECT USING (auth.uid() = account_id);
+    END IF;
+END $$;
 
-CREATE POLICY "Service role can manage commitment history" ON commitment_history
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'commitment_history' 
+        AND policyname = 'Service role can manage commitment history'
+    ) THEN
+        CREATE POLICY "Service role can manage commitment history" ON commitment_history
     FOR ALL USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 COMMIT;

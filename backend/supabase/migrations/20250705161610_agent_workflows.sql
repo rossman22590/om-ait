@@ -115,40 +115,88 @@ DROP POLICY IF EXISTS "Service role can manage executions" ON workflow_execution
 DROP POLICY IF EXISTS "Users can view step executions for their workflows" ON workflow_step_executions;
 DROP POLICY IF EXISTS "Service role can manage step executions" ON workflow_step_executions;
 
-CREATE POLICY "Users can view workflows for their agents" ON agent_workflows
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_workflows' 
+        AND policyname = 'Users can view workflows for their agents'
+    ) THEN
+        CREATE POLICY "Users can view workflows for their agents" ON agent_workflows
     FOR SELECT USING (
         agent_id IN (
             SELECT agent_id FROM agents 
             WHERE basejump.has_role_on_account(account_id)
         )
     );
+    END IF;
+END $$;
 
-CREATE POLICY "Users can create workflows for their agents" ON agent_workflows
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_workflows' 
+        AND policyname = 'Users can create workflows for their agents'
+    ) THEN
+        CREATE POLICY "Users can create workflows for their agents" ON agent_workflows
     FOR INSERT WITH CHECK (
         agent_id IN (
             SELECT agent_id FROM agents 
             WHERE basejump.has_role_on_account(account_id)
         )
     );
+    END IF;
+END $$;
 
-CREATE POLICY "Users can update workflows for their agents" ON agent_workflows
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_workflows' 
+        AND policyname = 'Users can update workflows for their agents'
+    ) THEN
+        CREATE POLICY "Users can update workflows for their agents" ON agent_workflows
     FOR UPDATE USING (
         agent_id IN (
             SELECT agent_id FROM agents 
             WHERE basejump.has_role_on_account(account_id)
         )
     );
+    END IF;
+END $$;
 
-CREATE POLICY "Users can delete workflows for their agents" ON agent_workflows
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_workflows' 
+        AND policyname = 'Users can delete workflows for their agents'
+    ) THEN
+        CREATE POLICY "Users can delete workflows for their agents" ON agent_workflows
     FOR DELETE USING (
         agent_id IN (
             SELECT agent_id FROM agents 
             WHERE basejump.has_role_on_account(account_id)
         )
     );
+    END IF;
+END $$;
 
 -- Workflow steps policies
-CREATE POLICY "Users can view steps for their workflows" ON workflow_steps
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_steps' 
+        AND policyname = 'Users can view steps for their workflows'
+    ) THEN
+        CREATE POLICY "Users can view steps for their workflows" ON workflow_steps
     FOR SELECT USING (
         workflow_id IN (
             SELECT id FROM agent_workflows 
@@ -158,8 +206,18 @@ CREATE POLICY "Users can view steps for their workflows" ON workflow_steps
             )
         )
     );
+    END IF;
+END $$;
 
-CREATE POLICY "Users can manage steps for their workflows" ON workflow_steps
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_steps' 
+        AND policyname = 'Users can manage steps for their workflows'
+    ) THEN
+        CREATE POLICY "Users can manage steps for their workflows" ON workflow_steps
     FOR ALL USING (
         workflow_id IN (
             SELECT id FROM agent_workflows 
@@ -169,9 +227,19 @@ CREATE POLICY "Users can manage steps for their workflows" ON workflow_steps
             )
         )
     );
+    END IF;
+END $$;
 
 -- Workflow executions policies
-CREATE POLICY "Users can view executions for their workflows" ON workflow_executions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_executions' 
+        AND policyname = 'Users can view executions for their workflows'
+    ) THEN
+        CREATE POLICY "Users can view executions for their workflows" ON workflow_executions
     FOR SELECT USING (
         workflow_id IN (
             SELECT id FROM agent_workflows 
@@ -181,12 +249,32 @@ CREATE POLICY "Users can view executions for their workflows" ON workflow_execut
             )
         )
     );
+    END IF;
+END $$;
 
-CREATE POLICY "Service role can manage executions" ON workflow_executions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_executions' 
+        AND policyname = 'Service role can manage executions'
+    ) THEN
+        CREATE POLICY "Service role can manage executions" ON workflow_executions
     FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+    END IF;
+END $$;
 
 -- Workflow step executions policies
-CREATE POLICY "Users can view step executions for their workflows" ON workflow_step_executions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_step_executions' 
+        AND policyname = 'Users can view step executions for their workflows'
+    ) THEN
+        CREATE POLICY "Users can view step executions for their workflows" ON workflow_step_executions
     FOR SELECT USING (
         execution_id IN (
             SELECT id FROM workflow_executions
@@ -199,11 +287,23 @@ CREATE POLICY "Users can view step executions for their workflows" ON workflow_s
             )
         )
     );
+    END IF;
+END $$;
 
-CREATE POLICY "Service role can manage step executions" ON workflow_step_executions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_step_executions' 
+        AND policyname = 'Service role can manage step executions'
+    ) THEN
+        CREATE POLICY "Service role can manage step executions" ON workflow_step_executions
     FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+    END IF;
+END $$;
 
--- Create function to update updated_at timestamp if it doesn't exist
+-- CREATE OR REPLACE FUNCTION to update updated_at timestamp if it doesn't exist
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -216,13 +316,29 @@ $$ LANGUAGE plpgsql;
 DROP TRIGGER IF EXISTS update_agent_workflows_updated_at ON agent_workflows;
 DROP TRIGGER IF EXISTS update_workflow_steps_updated_at ON workflow_steps;
 
-CREATE TRIGGER update_agent_workflows_updated_at 
-    BEFORE UPDATE ON agent_workflows
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'update_agent_workflows_updated_at'
+    ) THEN
+        CREATE TRIGGER update_agent_workflows_updated_at
+        BEFORE UPDATE ON agent_workflows
+    FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
 
-CREATE TRIGGER update_workflow_steps_updated_at 
-    BEFORE UPDATE ON workflow_steps
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'update_workflow_steps_updated_at'
+    ) THEN
+        CREATE TRIGGER update_workflow_steps_updated_at
+        BEFORE UPDATE ON workflow_steps
+    FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
 
 -- Grant permissions
 GRANT ALL PRIVILEGES ON TABLE agent_workflows TO authenticated, service_role;

@@ -24,47 +24,71 @@ DROP TABLE IF EXISTS user_mcp_credentials CASCADE;
 
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS config JSONB DEFAULT '{}'::jsonb;
 
-UPDATE agents 
-SET config = jsonb_build_object(
-    'system_prompt', COALESCE(system_prompt, ''),
-    'tools', jsonb_build_object(
-        'agentpress', (
-            SELECT jsonb_object_agg(
-                key, 
-                (value->>'enabled')::boolean
+-- Update agents config only if individual columns exist (might already be migrated)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agents' 
+        AND column_name = 'system_prompt'
+    ) THEN
+        UPDATE agents 
+        SET config = jsonb_build_object(
+            'system_prompt', COALESCE(system_prompt, ''),
+            'tools', jsonb_build_object(
+                'agentpress', (
+                    SELECT jsonb_object_agg(
+                        key, 
+                        (value->>'enabled')::boolean
+                    )
+                    FROM jsonb_each(COALESCE(agentpress_tools, '{}'::jsonb))
+                    WHERE value IS NOT NULL AND value != 'null'::jsonb
+                ),
+                'mcp', COALESCE(configured_mcps, '[]'::jsonb),
+                'custom_mcp', COALESCE(custom_mcps, '[]'::jsonb)
+            ),
+            'metadata', jsonb_build_object(
+                'avatar', avatar,
+                'avatar_color', avatar_color
             )
-            FROM jsonb_each(COALESCE(agentpress_tools, '{}'::jsonb))
-            WHERE value IS NOT NULL AND value != 'null'::jsonb
-        ),
-        'mcp', COALESCE(configured_mcps, '[]'::jsonb),
-        'custom_mcp', COALESCE(custom_mcps, '[]'::jsonb)
-    ),
-    'metadata', jsonb_build_object(
-        'avatar', avatar,
-        'avatar_color', avatar_color
-    )
-)
-WHERE config = '{}'::jsonb OR config IS NULL;
+        )
+        WHERE config = '{}'::jsonb OR config IS NULL;
+    ELSE
+        RAISE NOTICE 'Skipping agents config migration - columns already migrated';
+    END IF;
+END $$;
 
 ALTER TABLE agent_versions ADD COLUMN IF NOT EXISTS config JSONB DEFAULT '{}'::jsonb;
 
-UPDATE agent_versions 
-SET config = jsonb_build_object(
-    'system_prompt', COALESCE(system_prompt, ''),
-    'tools', jsonb_build_object(
-        'agentpress', (
-            SELECT jsonb_object_agg(
-                key, 
-                (value->>'enabled')::boolean
+-- Update agent_versions config only if individual columns exist (might already be migrated)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agent_versions' 
+        AND column_name = 'system_prompt'
+    ) THEN
+        UPDATE agent_versions 
+        SET config = jsonb_build_object(
+            'system_prompt', COALESCE(system_prompt, ''),
+            'tools', jsonb_build_object(
+                'agentpress', (
+                    SELECT jsonb_object_agg(
+                        key, 
+                        (value->>'enabled')::boolean
+                    )
+                    FROM jsonb_each(COALESCE(agentpress_tools, '{}'::jsonb))
+                    WHERE value IS NOT NULL AND value != 'null'::jsonb
+                ),
+                'mcp', COALESCE(configured_mcps, '[]'::jsonb),
+                'custom_mcp', COALESCE(custom_mcps, '[]'::jsonb)
             )
-            FROM jsonb_each(COALESCE(agentpress_tools, '{}'::jsonb))
-            WHERE value IS NOT NULL AND value != 'null'::jsonb
-        ),
-        'mcp', COALESCE(configured_mcps, '[]'::jsonb),
-        'custom_mcp', COALESCE(custom_mcps, '[]'::jsonb)
-    )
-)
-WHERE config = '{}'::jsonb OR config IS NULL;
+        )
+        WHERE config = '{}'::jsonb OR config IS NULL;
+    ELSE
+        RAISE NOTICE 'Skipping agent_versions config migration - columns already migrated';
+    END IF;
+END $$;
 
 ALTER TABLE agent_versions ADD COLUMN IF NOT EXISTS change_description TEXT;
 ALTER TABLE agent_versions ADD COLUMN IF NOT EXISTS previous_version_id UUID REFERENCES agent_versions(version_id);
@@ -76,17 +100,93 @@ ALTER TABLE agent_triggers ADD COLUMN IF NOT EXISTS workflow_id UUID REFERENCES 
 
 ALTER TABLE trigger_events ADD COLUMN IF NOT EXISTS workflow_execution_id UUID REFERENCES workflow_executions(id) ON DELETE SET NULL;
 
-COMMENT ON COLUMN agents.system_prompt IS 'DEPRECATED: Use config->>system_prompt instead';
-COMMENT ON COLUMN agents.configured_mcps IS 'DEPRECATED: Use config->>tools->>mcp instead';
-COMMENT ON COLUMN agents.agentpress_tools IS 'DEPRECATED: Use config->>tools->>agentpress instead';
-COMMENT ON COLUMN agents.custom_mcps IS 'DEPRECATED: Use config->>tools->>custom_mcp instead';
-COMMENT ON COLUMN agents.avatar IS 'DEPRECATED: Use config->>metadata->>avatar instead';
-COMMENT ON COLUMN agents.avatar_color IS 'DEPRECATED: Use config->>metadata->>avatar_color instead';
+-- Add deprecated comments only if columns still exist
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agents' 
+        AND column_name = 'system_prompt'
+    ) THEN
+        COMMENT ON COLUMN agents.system_prompt IS 'DEPRECATED: Use config->>system_prompt instead';
+    END IF;
+    
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agents' 
+        AND column_name = 'configured_mcps'
+    ) THEN
+        COMMENT ON COLUMN agents.configured_mcps IS 'DEPRECATED: Use config->>tools->>mcp instead';
+    END IF;
+    
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agents' 
+        AND column_name = 'agentpress_tools'
+    ) THEN
+        COMMENT ON COLUMN agents.agentpress_tools IS 'DEPRECATED: Use config->>tools->>agentpress instead';
+    END IF;
+    
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agents' 
+        AND column_name = 'custom_mcps'
+    ) THEN
+        COMMENT ON COLUMN agents.custom_mcps IS 'DEPRECATED: Use config->>tools->>custom_mcp instead';
+    END IF;
+    
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agents' 
+        AND column_name = 'avatar'
+    ) THEN
+        COMMENT ON COLUMN agents.avatar IS 'DEPRECATED: Use config->>metadata->>avatar instead';
+    END IF;
+    
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agents' 
+        AND column_name = 'avatar_color'
+    ) THEN
+        COMMENT ON COLUMN agents.avatar_color IS 'DEPRECATED: Use config->>metadata->>avatar_color instead';
+    END IF;
+END $$;
 
-COMMENT ON COLUMN agent_versions.system_prompt IS 'DEPRECATED: Use config->>system_prompt instead';
-COMMENT ON COLUMN agent_versions.configured_mcps IS 'DEPRECATED: Use config->>tools->>mcp instead';
-COMMENT ON COLUMN agent_versions.agentpress_tools IS 'DEPRECATED: Use config->>tools->>agentpress instead';
-COMMENT ON COLUMN agent_versions.custom_mcps IS 'DEPRECATED: Use config->>tools->>custom_mcp instead';
+-- Add deprecated comments for agent_versions only if columns still exist
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agent_versions' 
+        AND column_name = 'system_prompt'
+    ) THEN
+        COMMENT ON COLUMN agent_versions.system_prompt IS 'DEPRECATED: Use config->>system_prompt instead';
+    END IF;
+    
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agent_versions' 
+        AND column_name = 'configured_mcps'
+    ) THEN
+        COMMENT ON COLUMN agent_versions.configured_mcps IS 'DEPRECATED: Use config->>tools->>mcp instead';
+    END IF;
+    
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agent_versions' 
+        AND column_name = 'agentpress_tools'
+    ) THEN
+        COMMENT ON COLUMN agent_versions.agentpress_tools IS 'DEPRECATED: Use config->>tools->>agentpress instead';
+    END IF;
+    
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agent_versions' 
+        AND column_name = 'custom_mcps'
+    ) THEN
+        COMMENT ON COLUMN agent_versions.custom_mcps IS 'DEPRECATED: Use config->>tools->>custom_mcp instead';
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION get_agent_config(p_agent_id UUID)
 RETURNS JSONB

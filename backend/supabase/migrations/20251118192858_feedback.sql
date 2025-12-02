@@ -34,32 +34,68 @@ ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Users can only see their own feedback
 DROP POLICY IF EXISTS "Users can view their own feedback" ON feedback;
-CREATE POLICY "Users can view their own feedback"
-    ON feedback
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'feedback' 
+        AND policyname = 'Users can view their own feedback'
+    ) THEN
+        CREATE POLICY "Users can view their own feedback" ON feedback
     FOR SELECT
     USING (auth.uid() = account_id);
+    END IF;
+END $$;
 
 -- Policy: Users can insert their own feedback
 DROP POLICY IF EXISTS "Users can insert their own feedback" ON feedback;
-CREATE POLICY "Users can insert their own feedback"
-    ON feedback
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'feedback' 
+        AND policyname = 'Users can insert their own feedback'
+    ) THEN
+        CREATE POLICY "Users can insert their own feedback" ON feedback
     FOR INSERT
     WITH CHECK (auth.uid() = account_id);
+    END IF;
+END $$;
 
 -- Policy: Users can update their own feedback
 DROP POLICY IF EXISTS "Users can update their own feedback" ON feedback;
-CREATE POLICY "Users can update their own feedback"
-    ON feedback
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'feedback' 
+        AND policyname = 'Users can update their own feedback'
+    ) THEN
+        CREATE POLICY "Users can update their own feedback" ON feedback
     FOR UPDATE
     USING (auth.uid() = account_id)
     WITH CHECK (auth.uid() = account_id);
+    END IF;
+END $$;
 
 -- Policy: Users can delete their own feedback
 DROP POLICY IF EXISTS "Users can delete their own feedback" ON feedback;
-CREATE POLICY "Users can delete their own feedback"
-    ON feedback
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'feedback' 
+        AND policyname = 'Users can delete their own feedback'
+    ) THEN
+        CREATE POLICY "Users can delete their own feedback" ON feedback
     FOR DELETE
     USING (auth.uid() = account_id);
+    END IF;
+END $$;
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_feedback_updated_at()
@@ -72,10 +108,17 @@ $$ LANGUAGE plpgsql;
 
 -- Trigger to automatically update updated_at
 DROP TRIGGER IF EXISTS update_feedback_updated_at ON feedback;
-CREATE TRIGGER update_feedback_updated_at
-    BEFORE UPDATE ON feedback
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'update_feedback_updated_at'
+    ) THEN
+        CREATE TRIGGER update_feedback_updated_at
+        BEFORE UPDATE ON feedback
     FOR EACH ROW
-    EXECUTE FUNCTION update_feedback_updated_at();
+        EXECUTE FUNCTION update_feedback_updated_at();
+    END IF;
+END $$;
 
 -- Comments
 COMMENT ON TABLE feedback IS 'Stores user feedback (ratings and comments). Can be associated with messages/threads or standalone.';

@@ -154,19 +154,27 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'kb_folders_updated_at') THEN
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'kb_folders_updated_at'
+    ) THEN
         CREATE TRIGGER kb_folders_updated_at
-            BEFORE UPDATE ON knowledge_base_folders
-            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        BEFORE UPDATE ON knowledge_base_folders
+            FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
     END IF;
 END $$;
 
-DO $$ BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'kb_entries_updated_at') THEN
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'kb_entries_updated_at'
+    ) THEN
         CREATE TRIGGER kb_entries_updated_at
-            BEFORE UPDATE ON knowledge_base_entries
-            FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        BEFORE UPDATE ON knowledge_base_entries
+            FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
     END IF;
 END $$;
 

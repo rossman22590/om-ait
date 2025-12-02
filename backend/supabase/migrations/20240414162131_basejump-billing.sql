@@ -16,7 +16,7 @@ $$
                                JOIN pg_namespace n ON n.oid = t.typnamespace
                       WHERE t.typname = 'subscription_status'
                         AND n.nspname = 'basejump') THEN
-            create type basejump.subscription_status as enum (
+            CREATE TYPE basejump.subscription_status as enum (
                 'trialing',
                 'active',
                 'canceled',
@@ -114,18 +114,32 @@ alter table
   * This is where we define access to tables in the basejump schema
  */
 
-create policy "Can only view own billing customer data." on basejump.billing_customers for
-    select
-    using (
-    basejump.has_role_on_account(account_id) = true
-    );
+-- Create policies only if they don't exist (production-safe)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' AND tablename = 'billing_customers' 
+        AND policyname = 'Can only view own billing customer data.'
+    ) THEN
+        create policy "Can only view own billing customer data." on basejump.billing_customers for
+            select
+            using (basejump.has_role_on_account(account_id) = true);
+    END IF;
+END $$;
 
-
-create policy "Can only view own billing subscription data." on basejump.billing_subscriptions for
-    select
-    using (
-    basejump.has_role_on_account(account_id) = true
-    );
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' AND tablename = 'billing_subscriptions' 
+        AND policyname = 'Can only view own billing subscription data.'
+    ) THEN
+        create policy "Can only view own billing subscription data." on basejump.billing_subscriptions for
+            select
+            using (basejump.has_role_on_account(account_id) = true);
+    END IF;
+END $$;
 
 /**
   * -------------------------------------------------------

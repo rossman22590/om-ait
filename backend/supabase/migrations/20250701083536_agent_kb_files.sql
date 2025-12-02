@@ -23,7 +23,7 @@ ADD COLUMN extracted_from_zip_id UUID REFERENCES agent_knowledge_base_entries(en
 CREATE INDEX IF NOT EXISTS idx_agent_kb_entries_source_type ON agent_knowledge_base_entries(source_type);
 CREATE INDEX IF NOT EXISTS idx_agent_kb_entries_extracted_from_zip ON agent_knowledge_base_entries(extracted_from_zip_id);
 
--- Create table for tracking file processing jobs
+-- CREATE TABLE IF NOT EXISTS for tracking file processing jobs
 CREATE TABLE IF NOT EXISTS agent_kb_file_processing_jobs (
     job_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     agent_id UUID NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,

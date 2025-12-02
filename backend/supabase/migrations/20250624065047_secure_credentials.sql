@@ -138,22 +138,43 @@ $$ LANGUAGE plpgsql;
 
 -- Apply triggers
 DROP TRIGGER IF EXISTS trigger_agent_templates_updated_at ON agent_templates;
-CREATE TRIGGER trigger_agent_templates_updated_at
-    BEFORE UPDATE ON agent_templates
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_agent_templates_updated_at'
+    ) THEN
+        CREATE TRIGGER trigger_agent_templates_updated_at
+        BEFORE UPDATE ON agent_templates
     FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_timestamp();
+        EXECUTE FUNCTION update_updated_at_timestamp();
+    END IF;
+END $$;
 
 DROP TRIGGER IF EXISTS trigger_user_mcp_credentials_updated_at ON user_mcp_credentials;
-CREATE TRIGGER trigger_user_mcp_credentials_updated_at
-    BEFORE UPDATE ON user_mcp_credentials
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_user_mcp_credentials_updated_at'
+    ) THEN
+        CREATE TRIGGER trigger_user_mcp_credentials_updated_at
+        BEFORE UPDATE ON user_mcp_credentials
     FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_timestamp();
+        EXECUTE FUNCTION update_updated_at_timestamp();
+    END IF;
+END $$;
 
 DROP TRIGGER IF EXISTS trigger_agent_instances_updated_at ON agent_instances;
-CREATE TRIGGER trigger_agent_instances_updated_at
-    BEFORE UPDATE ON agent_instances
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_agent_instances_updated_at'
+    ) THEN
+        CREATE TRIGGER trigger_agent_instances_updated_at
+        BEFORE UPDATE ON agent_instances
     FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_timestamp();
+        EXECUTE FUNCTION update_updated_at_timestamp();
+    END IF;
+END $$;
 
 -- =====================================================
 -- 6. ROW LEVEL SECURITY POLICIES

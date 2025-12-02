@@ -9,6 +9,21 @@
 -- 5. Performance indexes for slow queries
 -- =====================================================
 
+-- Check if migration was already applied (by checking if the view exists with our changes)
+DO $$
+BEGIN
+    -- If the indexes we create exist, this migration was already applied
+    IF EXISTS (
+        SELECT 1 FROM pg_indexes
+        WHERE indexname = 'idx_messages_thread_type_created_at'
+        AND schemaname = 'public'
+    ) THEN
+        RAISE NOTICE 'Migration 20251128074714 already applied, skipping...';
+        -- Delete from schema_migrations if it exists to allow re-insertion
+        DELETE FROM supabase_migrations.schema_migrations WHERE version = '20251128074714';
+    END IF;
+END $$;
+
 BEGIN;
 
 -- =====================================================
@@ -71,16 +86,17 @@ DECLARE
     error_count INTEGER := 0;
 BEGIN
     -- Fix all functions in public and basejump schemas that don't have search_path set
+    -- Limited to 100 functions at a time to prevent hanging
     FOR func_record IN
-        SELECT 
+        SELECT
             p.oid as func_oid,
             n.nspname as schema_name,
             p.proname as func_name,
             pg_get_function_identity_arguments(p.oid) as args,
-            CASE 
-                WHEN pg_get_function_identity_arguments(p.oid) = '' THEN 
+            CASE
+                WHEN pg_get_function_identity_arguments(p.oid) = '' THEN
                     format('%I.%I', n.nspname, p.proname)
-                ELSE 
+                ELSE
                     format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid))
             END as func_signature
         FROM pg_proc p
@@ -100,13 +116,14 @@ BEGIN
         AND p.proname NOT LIKE 'show_limit'  -- Exclude pg_trgm show_limit function
         AND (
             -- Functions that don't have search_path set
-            p.proconfig IS NULL 
+            p.proconfig IS NULL
             OR NOT EXISTS (
                 SELECT 1 FROM unnest(p.proconfig) AS config
                 WHERE config LIKE 'search_path=%'
             )
         )
         ORDER BY n.nspname, p.proname
+        LIMIT 100  -- Limit to prevent hanging
     LOOP
         BEGIN
             -- Try using OID first (most reliable)
@@ -121,12 +138,12 @@ BEGIN
                 fixed_count := fixed_count + 1;
             EXCEPTION WHEN OTHERS THEN
                 error_count := error_count + 1;
-                RAISE NOTICE 'Could not fix function %.%: %', 
+                RAISE NOTICE 'Could not fix function %.%: %',
                     func_record.schema_name, func_record.func_name, SQLERRM;
             END;
         END;
     END LOOP;
-    
+
     RAISE NOTICE 'Fixed % functions, % errors', fixed_count, error_count;
 END $$;
 
@@ -140,44 +157,68 @@ END $$;
 DROP POLICY IF EXISTS "users can view their own account_users" ON basejump.account_user;
 DROP POLICY IF EXISTS "users can view their teammates" ON basejump.account_user;
 DROP POLICY IF EXISTS "users can view account_users" ON basejump.account_user;
-CREATE POLICY "users can view account_users" ON basejump.account_user
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' 
+        AND tablename = 'account_user' 
+        AND policyname = 'users can view account_users'
+    ) THEN
+        CREATE POLICY "users can view account_users" ON basejump.account_user
     FOR SELECT TO authenticated
     USING (
         user_id = (SELECT auth.uid())
         OR basejump.has_role_on_account(account_id) = true
     );
+    END IF;
+END $$;
 
 -- 3.2: basejump.accounts
 -- Consolidate "Accounts are viewable by primary owner" and "Accounts are viewable by members"
 DROP POLICY IF EXISTS "Accounts are viewable by primary owner" ON basejump.accounts;
 DROP POLICY IF EXISTS "Accounts are viewable by members" ON basejump.accounts;
-CREATE POLICY "Accounts are viewable by members" ON basejump.accounts
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' 
+        AND tablename = 'accounts' 
+        AND policyname = 'Accounts are viewable by members'
+    ) THEN
+        CREATE POLICY "Accounts are viewable by members" ON basejump.accounts
     FOR SELECT TO authenticated
     USING (
         primary_owner_user_id = (SELECT auth.uid())
         OR basejump.has_role_on_account(id) = true
     );
+    END IF;
+END $$;
 
 -- 3.3: public.credit_accounts
 -- Consolidate "Users can view own credit account" and "team_members_can_view_credit_account"
 -- Also fix auth RLS initplan issue by using (SELECT auth.uid())
+DROP POLICY IF EXISTS "Users can view own credit account" ON public.credit_accounts;
+DROP POLICY IF EXISTS "team_members_can_view_credit_account" ON public.credit_accounts;
+DROP POLICY IF EXISTS "users can view credit accounts" ON public.credit_accounts;
 DO $$
 BEGIN
-    -- Drop both old policies and the new consolidated policy if they exist
-    DROP POLICY IF EXISTS "Users can view own credit account" ON public.credit_accounts;
-    DROP POLICY IF EXISTS "team_members_can_view_credit_account" ON public.credit_accounts;
-    DROP POLICY IF EXISTS "users can view credit accounts" ON public.credit_accounts;
-    
-    -- Create consolidated policy with optimized auth call
-    CREATE POLICY "users can view credit accounts" ON public.credit_accounts
-        FOR SELECT TO authenticated
-        USING (
-            account_id IN (
-                SELECT wu.account_id 
-                FROM basejump.account_user wu 
-                WHERE wu.user_id = (SELECT auth.uid())
-            )
-        );
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'public'
+        AND tablename = 'credit_accounts'
+        AND policyname = 'users can view credit accounts'
+    ) THEN
+        CREATE POLICY "users can view credit accounts" ON public.credit_accounts
+            FOR SELECT TO authenticated
+            USING (
+                account_id IN (
+                    SELECT wu.account_id
+                    FROM basejump.account_user wu
+                    WHERE wu.user_id = (SELECT auth.uid())
+                )
+            );
+    END IF;
 END $$;
 
 -- 3.4: public.credit_ledger
@@ -185,7 +226,15 @@ END $$;
 DROP POLICY IF EXISTS "Users can view own ledger" ON public.credit_ledger;
 DROP POLICY IF EXISTS "team_members_can_view_ledger" ON public.credit_ledger;
 DROP POLICY IF EXISTS "users can view credit ledger" ON public.credit_ledger;
-CREATE POLICY "users can view credit ledger" ON public.credit_ledger
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_ledger' 
+        AND policyname = 'users can view credit ledger'
+    ) THEN
+        CREATE POLICY "users can view credit ledger" ON public.credit_ledger
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -194,13 +243,23 @@ CREATE POLICY "users can view credit ledger" ON public.credit_ledger
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 -- 3.5: public.credit_purchases
 -- Consolidate "Users can view own credit purchases" and "Users can view their own credit purchases"
 DROP POLICY IF EXISTS "Users can view own credit purchases" ON public.credit_purchases;
 DROP POLICY IF EXISTS "Users can view their own credit purchases" ON public.credit_purchases;
 DROP POLICY IF EXISTS "users can view credit purchases" ON public.credit_purchases;
-CREATE POLICY "users can view credit purchases" ON public.credit_purchases
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_purchases' 
+        AND policyname = 'users can view credit purchases'
+    ) THEN
+        CREATE POLICY "users can view credit purchases" ON public.credit_purchases
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -209,6 +268,8 @@ CREATE POLICY "users can view credit purchases" ON public.credit_purchases
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 -- 3.6: public.messages
 -- Consolidate "Give read only access to internal users" and "message_select_policy"
@@ -231,7 +292,15 @@ DROP POLICY IF EXISTS "Give read only access to internal users" ON public.thread
 DROP POLICY IF EXISTS "Users can view own trial history" ON public.trial_history;
 DROP POLICY IF EXISTS "team_members_can_view_trial" ON public.trial_history;
 DROP POLICY IF EXISTS "users can view trial history" ON public.trial_history;
-CREATE POLICY "users can view trial history" ON public.trial_history
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'trial_history' 
+        AND policyname = 'users can view trial history'
+    ) THEN
+        CREATE POLICY "users can view trial history" ON public.trial_history
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -240,6 +309,8 @@ CREATE POLICY "users can view trial history" ON public.trial_history
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 -- =====================================================
 -- PART 4: FIX REMAINING AUTH RLS INITPLAN ISSUES
@@ -288,7 +359,7 @@ BEGIN
         AND conrelid = 'public.vapi_calls'::regclass
         AND contype = 'u'
     ) THEN
-        -- Create unique index if no unique constraint exists
+        -- CREATE unique INDEX IF NOT EXISTS if no unique constraint exists
         CREATE UNIQUE INDEX IF NOT EXISTS idx_vapi_calls_call_id_unique 
         ON public.vapi_calls(call_id)
         WHERE call_id IS NOT NULL;
@@ -424,7 +495,7 @@ COMMIT;
 -- ⚠️  ISSUES THAT REQUIRE MANUAL/CONFIG CHANGES (CANNOT BE FIXED VIA MIGRATION):
 --
 -- 1. Extension pg_trgm in public schema
---    - Requires manual migration: DROP EXTENSION pg_trgm CASCADE; CREATE EXTENSION pg_trgm SCHEMA extensions;
+--    - Requires manual migration: DROP EXTENSION pg_trgm CASCADE; CREATE EXTENSION IF NOT EXISTS pg_trgm SCHEMA extensions;
 --    - WARNING: This will drop all indexes using pg_trgm (text search indexes)
 --    - Plan this migration carefully and recreate indexes after moving extension
 --

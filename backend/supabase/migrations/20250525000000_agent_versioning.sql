@@ -5,10 +5,7 @@ CREATE TABLE IF NOT EXISTS agent_versions (
     agent_id UUID NOT NULL REFERENCES agents(agent_id) ON DELETE CASCADE,
     version_number INTEGER NOT NULL,
     version_name VARCHAR(50) NOT NULL,
-    system_prompt TEXT NOT NULL,
-    configured_mcps JSONB DEFAULT '[]'::jsonb,
-    custom_mcps JSONB DEFAULT '[]'::jsonb,
-    agentpress_tools JSONB DEFAULT '{}'::jsonb,
+    config JSONB DEFAULT '{}'::jsonb,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -64,10 +61,17 @@ $$ LANGUAGE plpgsql;
 
 -- Drop trigger if it exists, then create it
 DROP TRIGGER IF EXISTS trigger_agent_versions_updated_at ON agent_versions;
-CREATE TRIGGER trigger_agent_versions_updated_at
-    BEFORE UPDATE ON agent_versions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_agent_versions_updated_at'
+    ) THEN
+        CREATE TRIGGER trigger_agent_versions_updated_at
+        BEFORE UPDATE ON agent_versions
     FOR EACH ROW
-    EXECUTE FUNCTION update_agent_versions_updated_at();
+        EXECUTE FUNCTION update_agent_versions_updated_at();
+    END IF;
+END $$;
 
 -- Enable RLS on new tables
 ALTER TABLE agent_versions ENABLE ROW LEVEL SECURITY;
@@ -150,29 +154,75 @@ AS $$
 DECLARE
     v_agent RECORD;
     v_version_id UUID;
+    v_agent_config JSONB;
+    v_has_config_column BOOLEAN;
 BEGIN
+    -- Check if agents table has config column
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'agents' 
+        AND column_name = 'config'
+    ) INTO v_has_config_column;
+    
     -- For each existing agent, create a v1 version
     FOR v_agent IN SELECT * FROM agents WHERE current_version_id IS NULL
     LOOP
+        -- Build config based on what columns exist
+        IF v_has_config_column THEN
+            -- Use existing config column and ensure it has required structure
+            v_agent_config := COALESCE(v_agent.config, '{}'::jsonb);
+            -- Ensure required fields exist for agent_versions constraint
+            IF NOT (v_agent_config ? 'system_prompt') THEN
+                v_agent_config := jsonb_set(v_agent_config, '{system_prompt}', to_jsonb(''::text));
+            END IF;
+            IF NOT (v_agent_config ? 'tools') THEN
+                v_agent_config := jsonb_set(v_agent_config, '{tools}', '{}'::jsonb);
+            END IF;
+        ELSE
+            -- Build config from individual columns
+            BEGIN
+                v_agent_config := jsonb_build_object(
+                    'system_prompt', COALESCE(v_agent.system_prompt, ''),
+                    'tools', jsonb_build_object(
+                        'agentpress', COALESCE(v_agent.agentpress_tools, '{}'::jsonb),
+                        'mcp', COALESCE(v_agent.configured_mcps, '[]'::jsonb)
+                    ),
+                    'metadata', jsonb_build_object(
+                        'avatar', v_agent.avatar,
+                        'avatar_color', v_agent.avatar_color
+                    )
+                );
+            EXCEPTION
+                WHEN others THEN
+                    -- Fallback with minimal required structure for constraint
+                    v_agent_config := jsonb_build_object(
+                        'system_prompt', '',
+                        'tools', '{}'::jsonb
+                    );
+            END;
+        END IF;
+        
+        -- Ensure the config meets the agent_versions constraint requirements
+        IF NOT (v_agent_config ? 'system_prompt') THEN
+            v_agent_config := jsonb_set(v_agent_config, '{system_prompt}', to_jsonb(''::text));
+        END IF;
+        IF NOT (v_agent_config ? 'tools') THEN
+            v_agent_config := jsonb_set(v_agent_config, '{tools}', '{}'::jsonb);
+        END IF;
+        
         -- Create v1 version with current agent data
         INSERT INTO agent_versions (
             agent_id,
             version_number,
             version_name,
-            system_prompt,
-            configured_mcps,
-            custom_mcps,
-            agentpress_tools,
+            config,
             is_active,
             created_by
         ) VALUES (
             v_agent.agent_id,
             1,
             'v1',
-            v_agent.system_prompt,
-            v_agent.configured_mcps,
-            '[]'::jsonb, -- agents table doesn't have custom_mcps column
-            v_agent.agentpress_tools,
+            v_agent_config,
             TRUE,
             v_agent.account_id
         ) RETURNING version_id INTO v_version_id;
@@ -204,10 +254,7 @@ $$;
 -- Function to create a new version of an agent
 CREATE OR REPLACE FUNCTION create_agent_version(
     p_agent_id UUID,
-    p_system_prompt TEXT,
-    p_configured_mcps JSONB DEFAULT '[]'::jsonb,
-    p_custom_mcps JSONB DEFAULT '[]'::jsonb,
-    p_agentpress_tools JSONB DEFAULT '{}'::jsonb,
+    p_config JSONB,
     p_created_by UUID DEFAULT NULL
 )
 RETURNS UUID
@@ -241,20 +288,14 @@ BEGIN
         agent_id,
         version_number,
         version_name,
-        system_prompt,
-        configured_mcps,
-        custom_mcps,
-        agentpress_tools,
+        config,
         is_active,
         created_by
     ) VALUES (
         p_agent_id,
         v_version_number,
         v_version_name,
-        p_system_prompt,
-        p_configured_mcps,
-        p_custom_mcps,
-        p_agentpress_tools,
+        p_config,
         TRUE,
         p_created_by
     ) RETURNING version_id INTO v_version_id;

@@ -235,10 +235,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_agent_kb_entries_updated_at
-    BEFORE UPDATE ON agent_knowledge_base_entries
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_agent_kb_entries_updated_at'
+    ) THEN
+        CREATE TRIGGER trigger_agent_kb_entries_updated_at
+        BEFORE UPDATE ON agent_knowledge_base_entries
     FOR EACH ROW
-    EXECUTE FUNCTION update_agent_kb_entry_timestamp();
+        EXECUTE FUNCTION update_agent_kb_entry_timestamp();
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION calculate_agent_kb_entry_tokens()
 RETURNS TRIGGER AS $$
@@ -248,10 +255,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_agent_kb_entries_calculate_tokens
-    BEFORE INSERT ON agent_knowledge_base_entries
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_agent_kb_entries_calculate_tokens'
+    ) THEN
+        CREATE TRIGGER trigger_agent_kb_entries_calculate_tokens
+        BEFORE INSERT ON agent_knowledge_base_entries
     FOR EACH ROW
-    EXECUTE FUNCTION calculate_agent_kb_entry_tokens();
+        EXECUTE FUNCTION calculate_agent_kb_entry_tokens();
+    END IF;
+END $$;
 
 -- Grant permissions
 GRANT ALL PRIVILEGES ON TABLE agent_knowledge_base_entries TO authenticated, service_role;

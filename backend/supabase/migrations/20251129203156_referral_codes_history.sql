@@ -1,14 +1,27 @@
-ALTER TABLE referral_codes 
-DROP CONSTRAINT IF EXISTS referral_codes_account_id_key;
 
+-- Drop and recreate constraint if newer
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'referral_codes_account_id_key'
+        AND table_name = 'referral_codes'
+    ) THEN
+        ALTER TABLE referral_codes DROP CONSTRAINT referral_codes_account_id_key;
+    END IF;
+END;
+$$;
+
+-- Create index if not exists
 CREATE INDEX IF NOT EXISTS idx_referral_codes_account_active 
 ON referral_codes(account_id, expired_at) 
 WHERE expired_at IS NULL;
 
+-- Drop and recreate functions
 DROP FUNCTION IF EXISTS get_or_create_referral_code(UUID);
 DROP FUNCTION IF EXISTS expire_referral_code(UUID);
 
-CREATE FUNCTION get_or_create_referral_code(
+CREATE OR REPLACE FUNCTION get_or_create_referral_code(
     p_account_id UUID
 ) RETURNS TEXT
 LANGUAGE plpgsql
@@ -37,7 +50,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION expire_referral_code(
+CREATE OR REPLACE FUNCTION expire_referral_code(
     p_account_id UUID
 ) RETURNS JSONB
 LANGUAGE plpgsql

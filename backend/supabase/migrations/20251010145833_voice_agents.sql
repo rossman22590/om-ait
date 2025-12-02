@@ -28,10 +28,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_update_vapi_calls_updated_at
-    BEFORE UPDATE ON public.vapi_calls
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_update_vapi_calls_updated_at'
+    ) THEN
+        CREATE TRIGGER trigger_update_vapi_calls_updated_at
+        BEFORE UPDATE ON public.vapi_calls
     FOR EACH ROW
-    EXECUTE FUNCTION public.update_vapi_calls_updated_at();
+        EXECUTE FUNCTION public.update_vapi_calls_updated_at();
+    END IF;
+END $$;
 
 COMMENT ON TABLE public.vapi_calls IS 'Stores Vapi AI voice call metadata and transcripts';
 COMMENT ON COLUMN public.vapi_calls.call_id IS 'Unique identifier from Vapi API';

@@ -80,12 +80,21 @@ GRANT SELECT ON basejump.config TO authenticated, service_role;
 ALTER TABLE basejump.config
     ENABLE ROW LEVEL SECURITY;
 
-create policy "Basejump settings can be read by authenticated users" on basejump.config
-    for select
-    to authenticated
-    using (
-    true
-    );
+-- Create policy only if it doesn't exist (production-safe)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' 
+        AND tablename = 'config' 
+        AND policyname = 'Basejump settings can be read by authenticated users'
+    ) THEN
+        create policy "Basejump settings can be read by authenticated users" on basejump.config
+            for select
+            to authenticated
+            using (true);
+    END IF;
+END $$;
 
 /**
   * -------------------------------------------------------

@@ -2,8 +2,6 @@
 -- This migration safely updates agent_templates to use the unified config structure
 -- with proper existence checks for production environments
 
-BEGIN;
-
 -- Function to check if column exists
 CREATE OR REPLACE FUNCTION column_exists(p_table_name text, p_column_name text) 
 RETURNS boolean AS $$
@@ -36,7 +34,7 @@ $$ LANGUAGE plpgsql;
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'agent_templates_backup') THEN
-        CREATE TABLE agent_templates_backup AS SELECT * FROM agent_templates;
+        CREATE TABLE IF NOT EXISTS agent_templates_backup AS SELECT * FROM agent_templates;
     END IF;
 END
 $$;
@@ -104,21 +102,29 @@ $$;
 DO $$
 BEGIN
     IF NOT constraint_exists('agent_templates', 'agent_templates_config_structure_check') THEN
-        ALTER TABLE agent_templates ADD CONSTRAINT agent_templates_config_structure_check 
-        CHECK (
-            config ? 'system_prompt' AND 
-            config ? 'tools' AND 
-            config ? 'metadata'
-        );
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'agent_templates_config_structure_check'
+        ) THEN
+            ALTER TABLE agent_templates
+                ADD CONSTRAINT agent_templates_config_structure_check CHECK (
+                config ? 'system_prompt' AND 
+                config ? 'tools' AND 
+                config ? 'metadata'
+            );
+        END IF;
     END IF;
     
     IF NOT constraint_exists('agent_templates', 'agent_templates_tools_structure_check') THEN
-        ALTER TABLE agent_templates ADD CONSTRAINT agent_templates_tools_structure_check 
-        CHECK (
-            config->'tools' ? 'agentpress' AND
-            config->'tools' ? 'mcp' AND
-            config->'tools' ? 'custom_mcp'
-        );
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'agent_templates_tools_structure_check'
+        ) THEN
+            ALTER TABLE agent_templates
+                ADD CONSTRAINT agent_templates_tools_structure_check CHECK (
+                config->'tools' ? 'agentpress' AND
+                config->'tools' ? 'mcp' AND
+                config->'tools' ? 'custom_mcp'
+            );
+        END IF;
     END IF;
 END
 $$;
@@ -204,7 +210,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create function to increment download count
+-- CREATE OR REPLACE FUNCTION to increment download count
 CREATE OR REPLACE FUNCTION increment_template_download_count(template_id_param UUID)
 RETURNS void AS $$
 BEGIN
@@ -220,26 +226,64 @@ ALTER TABLE agent_templates ENABLE ROW LEVEL SECURITY;
 
 -- Drop and recreate RLS policies to ensure they're current
 DROP POLICY IF EXISTS "Users can view public templates or their own templates" ON agent_templates;
-CREATE POLICY "Users can view public templates or their own templates" ON agent_templates
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_templates' 
+        AND policyname = 'Users can view public templates or their own templates'
+    ) THEN
+        CREATE POLICY "Users can view public templates or their own templates" ON agent_templates
     FOR SELECT USING (
         is_public = true OR 
         creator_id = (auth.jwt() ->> 'sub')::uuid
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can create their own templates" ON agent_templates;
-CREATE POLICY "Users can create their own templates" ON agent_templates
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_templates' 
+        AND policyname = 'Users can create their own templates'
+    ) THEN
+        CREATE POLICY "Users can create their own templates" ON agent_templates
     FOR INSERT WITH CHECK (creator_id = (auth.jwt() ->> 'sub')::uuid);
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can update their own templates" ON agent_templates;
-CREATE POLICY "Users can update their own templates" ON agent_templates
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_templates' 
+        AND policyname = 'Users can update their own templates'
+    ) THEN
+        CREATE POLICY "Users can update their own templates" ON agent_templates
     FOR UPDATE USING (creator_id = (auth.jwt() ->> 'sub')::uuid);
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can delete their own templates" ON agent_templates;
-CREATE POLICY "Users can delete their own templates" ON agent_templates
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_templates' 
+        AND policyname = 'Users can delete their own templates'
+    ) THEN
+        CREATE POLICY "Users can delete their own templates" ON agent_templates
     FOR DELETE USING (creator_id = (auth.jwt() ->> 'sub')::uuid);
+    END IF;
+END $$;
 
 -- Clean up helper functions
 DROP FUNCTION IF EXISTS column_exists(text, text);
-DROP FUNCTION IF EXISTS constraint_exists(text, text);
-
-COMMIT; 
+DROP FUNCTION IF EXISTS constraint_exists(text, text); 

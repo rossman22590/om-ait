@@ -24,7 +24,7 @@ CREATE INDEX IF NOT EXISTS idx_agents_created_at ON agents(created_at);
 -- Add unique constraint to ensure only one default agent per account
 CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_account_default ON agents(account_id, is_default) WHERE is_default = true;
 
--- Create function to update updated_at timestamp
+-- CREATE OR REPLACE FUNCTION to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_agents_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -35,10 +35,17 @@ $$ LANGUAGE plpgsql;
 
 -- Create trigger for updated_at (drop first if exists to avoid conflicts)
 DROP TRIGGER IF EXISTS trigger_agents_updated_at ON agents;
-CREATE TRIGGER trigger_agents_updated_at
-    BEFORE UPDATE ON agents
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_agents_updated_at'
+    ) THEN
+        CREATE TRIGGER trigger_agents_updated_at
+        BEFORE UPDATE ON agents
     FOR EACH ROW
-    EXECUTE FUNCTION update_agents_updated_at();
+        EXECUTE FUNCTION update_agents_updated_at();
+    END IF;
+END $$;
 
 -- Enable RLS on agents table
 ALTER TABLE agents ENABLE ROW LEVEL SECURITY;
@@ -77,7 +84,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                    WHERE table_name='threads' AND column_name='agent_id') THEN
         ALTER TABLE threads ADD COLUMN agent_id UUID REFERENCES agents(agent_id) ON DELETE SET NULL;
-        CREATE INDEX idx_threads_agent_id ON threads(agent_id);
+        CREATE INDEX IF NOT EXISTS idx_threads_agent_id ON threads(agent_id);
         COMMENT ON COLUMN threads.agent_id IS 'ID of the agent used for this conversation thread. If NULL, uses account default agent.';
     END IF;
 END $$;

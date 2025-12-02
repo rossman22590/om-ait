@@ -11,9 +11,9 @@ CREATE TABLE IF NOT EXISTS public.webhook_events (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_webhook_events_event_id ON public.webhook_events(event_id);
-CREATE INDEX idx_webhook_events_created_at ON public.webhook_events(created_at DESC);
-CREATE INDEX idx_webhook_events_status ON public.webhook_events(status) WHERE status IN ('pending', 'failed');
+CREATE INDEX IF NOT EXISTS idx_webhook_events_event_id ON public.webhook_events(event_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_created_at ON public.webhook_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_status ON public.webhook_events(status) WHERE status IN ('pending', 'failed');
 
 COMMENT ON TABLE public.webhook_events IS 'Tracks all Stripe webhook events for idempotency and debugging';
 
@@ -31,17 +31,24 @@ CREATE TABLE IF NOT EXISTS public.renewal_processing (
     UNIQUE(account_id, period_start)
 );
 
-CREATE INDEX idx_renewal_processing_account ON public.renewal_processing(account_id);
-CREATE INDEX idx_renewal_processing_period ON public.renewal_processing(account_id, period_start);
-CREATE INDEX idx_renewal_processing_subscription ON public.renewal_processing(subscription_id);
+CREATE INDEX IF NOT EXISTS idx_renewal_processing_account ON public.renewal_processing(account_id);
+CREATE INDEX IF NOT EXISTS idx_renewal_processing_period ON public.renewal_processing(account_id, period_start);
+CREATE INDEX IF NOT EXISTS idx_renewal_processing_subscription ON public.renewal_processing(subscription_id);
 
 COMMENT ON TABLE public.renewal_processing IS 'Tracks renewal credit grants to prevent duplicates';
 
 ALTER TABLE public.trial_history 
     DROP CONSTRAINT IF EXISTS unique_account_trial;
 
-ALTER TABLE public.trial_history
-    ADD CONSTRAINT unique_account_trial UNIQUE (account_id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'unique_account_trial'
+    ) THEN
+        ALTER TABLE public.trial_history
+            ADD CONSTRAINT unique_account_trial UNIQUE (account_id);
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_trial_history_account_id ON public.trial_history(account_id);
 CREATE INDEX IF NOT EXISTS idx_trial_history_started_at ON public.trial_history(started_at DESC);
@@ -62,9 +69,9 @@ CREATE TABLE IF NOT EXISTS public.refund_history (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_refund_history_account ON public.refund_history(account_id);
-CREATE INDEX idx_refund_history_stripe_refund ON public.refund_history(stripe_refund_id);
-CREATE INDEX idx_refund_history_status ON public.refund_history(status) WHERE status IN ('pending', 'failed');
+CREATE INDEX IF NOT EXISTS idx_refund_history_account ON public.refund_history(account_id);
+CREATE INDEX IF NOT EXISTS idx_refund_history_stripe_refund ON public.refund_history(stripe_refund_id);
+CREATE INDEX IF NOT EXISTS idx_refund_history_status ON public.refund_history(status) WHERE status IN ('pending', 'failed');
 
 COMMENT ON TABLE public.refund_history IS 'Tracks all refunds and associated credit deductions';
 
@@ -76,7 +83,7 @@ CREATE TABLE IF NOT EXISTS public.distributed_locks (
     metadata JSONB DEFAULT '{}'
 );
 
-CREATE INDEX idx_distributed_locks_expires ON public.distributed_locks(expires_at);
+CREATE INDEX IF NOT EXISTS idx_distributed_locks_expires ON public.distributed_locks(expires_at);
 
 COMMENT ON TABLE public.distributed_locks IS 'Distributed locking for critical operations (fallback if Redis unavailable)';
 
@@ -178,25 +185,75 @@ ALTER TABLE public.refund_history ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.distributed_locks ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "Service role full access on webhook_events" ON public.webhook_events
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'webhook_events' 
+        AND policyname = 'Service role full access on webhook_events'
+    ) THEN
+        CREATE POLICY "Service role full access on webhook_events" ON public.webhook_events
     FOR ALL USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
-CREATE POLICY "Service role full access on renewal_processing" ON public.renewal_processing
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'renewal_processing' 
+        AND policyname = 'Service role full access on renewal_processing'
+    ) THEN
+        CREATE POLICY "Service role full access on renewal_processing" ON public.renewal_processing
     FOR ALL USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
-CREATE POLICY "Service role full access on refund_history" ON public.refund_history
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'refund_history' 
+        AND policyname = 'Service role full access on refund_history'
+    ) THEN
+        CREATE POLICY "Service role full access on refund_history" ON public.refund_history
     FOR ALL USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
-CREATE POLICY "Service role full access on distributed_locks" ON public.distributed_locks
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'distributed_locks' 
+        AND policyname = 'Service role full access on distributed_locks'
+    ) THEN
+        CREATE POLICY "Service role full access on distributed_locks" ON public.distributed_locks
     FOR ALL USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
-CREATE POLICY "Users can view own refund history" ON public.refund_history
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'refund_history' 
+        AND policyname = 'Users can view own refund history'
+    ) THEN
+        CREATE POLICY "Users can view own refund history" ON public.refund_history
     FOR SELECT USING (
         account_id IN (
             SELECT id FROM basejump.accounts 
             WHERE primary_owner_user_id = auth.uid()
         )
     );
+    END IF;
+END $$;
 
 
 DROP VIEW IF EXISTS public.billing_health_check CASCADE;

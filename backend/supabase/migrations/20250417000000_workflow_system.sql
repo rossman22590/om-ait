@@ -231,9 +231,15 @@ ALTER TABLE workflow_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workflow_execution_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workflow_variables ENABLE ROW LEVEL SECURITY;
 
--- Workflows policies (using basejump pattern)
-DO $$ BEGIN
-    CREATE POLICY "Users can view workflows in their accounts" ON workflows
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflows' 
+        AND policyname = 'Users can view workflows in their accounts'
+    ) THEN
+        CREATE POLICY "Users can view workflows in their accounts" ON workflows
         FOR SELECT USING (
             basejump.has_role_on_account(account_id) = true OR
             EXISTS (
@@ -242,40 +248,76 @@ DO $$ BEGIN
                 AND projects.is_public = TRUE
             )
         );
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
     
-DO $$ BEGIN
-    CREATE POLICY "Users can create workflows in their accounts" ON workflows
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflows' 
+        AND policyname = 'Users can create workflows in their accounts'
+    ) THEN
+        CREATE POLICY "Users can create workflows in their accounts" ON workflows
         FOR INSERT WITH CHECK (
             basejump.has_role_on_account(account_id) = true
         );
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
-DO $$ BEGIN
-    CREATE POLICY "Users can update workflows in their accounts" ON workflows
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflows' 
+        AND policyname = 'Users can update workflows in their accounts'
+    ) THEN
+        CREATE POLICY "Users can update workflows in their accounts" ON workflows
         FOR UPDATE USING (
             basejump.has_role_on_account(account_id) = true
         );
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
-DO $$ BEGIN
-    CREATE POLICY "Users can delete workflows in their accounts" ON workflows
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflows' 
+        AND policyname = 'Users can delete workflows in their accounts'
+    ) THEN
+        CREATE POLICY "Users can delete workflows in their accounts" ON workflows
         FOR DELETE USING (
             basejump.has_role_on_account(account_id) = true
         );
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 -- Workflow executions policies
-DO $$ BEGIN
-    CREATE POLICY "Users can view executions in their accounts" ON workflow_executions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_executions' 
+        AND policyname = 'Users can view executions in their accounts'
+    ) THEN
+        CREATE POLICY "Users can view executions in their accounts" ON workflow_executions
         FOR SELECT USING (
             basejump.has_role_on_account(account_id) = true OR
             EXISTS (
@@ -285,27 +327,45 @@ DO $$ BEGIN
                 AND p.is_public = TRUE
             )
         );
-EXCEPTION
-    WHEN duplicate_object THEN null;
+    END IF;
 END $$;
 
-DO $$ BEGIN
-    CREATE POLICY "Service role can insert executions" ON workflow_executions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_executions' 
+        AND policyname = 'Service role can insert executions'
+    ) THEN
+        CREATE POLICY "Service role can insert executions" ON workflow_executions
         FOR INSERT WITH CHECK (auth.jwt() ->> 'role' = 'service_role');
-EXCEPTION
-    WHEN duplicate_object THEN null;
+    END IF;
 END $$;
 
-DO $$ BEGIN
-    CREATE POLICY "Service role can update executions" ON workflow_executions
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_executions' 
+        AND policyname = 'Service role can update executions'
+    ) THEN
+        CREATE POLICY "Service role can update executions" ON workflow_executions
         FOR UPDATE USING (auth.jwt() ->> 'role' = 'service_role');
-EXCEPTION
-    WHEN duplicate_object THEN null;
+    END IF;
 END $$;
 
 -- Triggers policies
-DO $$ BEGIN
-    CREATE POLICY "Users can view triggers in their workflows" ON triggers
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'triggers' 
+        AND policyname = 'Users can view triggers in their workflows'
+    ) THEN
+        CREATE POLICY "Users can view triggers in their workflows" ON triggers
         FOR SELECT USING (
             EXISTS (
                 SELECT 1 FROM workflows 
@@ -313,40 +373,75 @@ DO $$ BEGIN
                 AND basejump.has_role_on_account(workflows.account_id) = true
             )
         );
-EXCEPTION
-    WHEN duplicate_object THEN null;
+    END IF;
 END $$;
 
-DO $$ BEGIN
-    CREATE POLICY "Service role full access to webhook_registrations" ON webhook_registrations
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'webhook_registrations' 
+        AND policyname = 'Service role full access to webhook_registrations'
+    ) THEN
+        CREATE POLICY "Service role full access to webhook_registrations" ON webhook_registrations
         FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
-EXCEPTION
-    WHEN duplicate_object THEN null;
+    END IF;
 END $$;
 
 DO $$ BEGIN
-    CREATE POLICY "Service role full access to scheduled_jobs" ON scheduled_jobs
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'scheduled_jobs' 
+        AND policyname = 'Service role full access to scheduled_jobs'
+    ) THEN
+        CREATE POLICY "Service role full access to scheduled_jobs" ON scheduled_jobs
         FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
-    CREATE POLICY "Public can view workflow templates" ON workflow_templates
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_templates' 
+        AND policyname = 'Public can view workflow templates'
+    ) THEN
+        CREATE POLICY "Public can view workflow templates" ON workflow_templates
         FOR SELECT USING (true);
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
-    CREATE POLICY "Service role can manage workflow templates" ON workflow_templates
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_templates' 
+        AND policyname = 'Service role can manage workflow templates'
+    ) THEN
+        CREATE POLICY "Service role can manage workflow templates" ON workflow_templates
         FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
-    CREATE POLICY "Users can view execution logs in their accounts" ON workflow_execution_logs
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_execution_logs' 
+        AND policyname = 'Users can view execution logs in their accounts'
+    ) THEN
+        CREATE POLICY "Users can view execution logs in their accounts" ON workflow_execution_logs
         FOR SELECT USING (
             EXISTS (
                 SELECT 1 FROM workflow_executions 
@@ -354,19 +449,35 @@ DO $$ BEGIN
                 AND basejump.has_role_on_account(workflow_executions.account_id) = true
             )
         );
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
-    CREATE POLICY "Service role can insert execution logs" ON workflow_execution_logs
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_execution_logs' 
+        AND policyname = 'Service role can insert execution logs'
+    ) THEN
+        CREATE POLICY "Service role can insert execution logs" ON workflow_execution_logs
         FOR INSERT WITH CHECK (auth.jwt() ->> 'role' = 'service_role');
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
-    CREATE POLICY "Users can manage variables for their workflows" ON workflow_variables
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_variables' 
+        AND policyname = 'Users can manage variables for their workflows'
+    ) THEN
+        CREATE POLICY "Users can manage variables for their workflows" ON workflow_variables
         FOR ALL USING (
             EXISTS (
                 SELECT 1 FROM workflows 
@@ -374,48 +485,85 @@ DO $$ BEGIN
                 AND basejump.has_role_on_account(workflows.account_id) = true
             )
         );
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 -- Functions for automatic timestamp updates
 -- Note: update_updated_at_column function already exists from previous migrations
 
 -- Create triggers for updated_at
 DO $$ BEGIN
-    CREATE TRIGGER update_workflows_updated_at BEFORE UPDATE ON workflows
-        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'update_workflows_updated_at'
+    ) THEN
+        CREATE TRIGGER update_workflows_updated_at
+        BEFORE UPDATE ON workflows
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
-    CREATE TRIGGER update_triggers_updated_at BEFORE UPDATE ON triggers
-        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'update_triggers_updated_at'
+    ) THEN
+        CREATE TRIGGER update_triggers_updated_at
+        BEFORE UPDATE ON triggers
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
-    CREATE TRIGGER update_scheduled_jobs_updated_at BEFORE UPDATE ON scheduled_jobs
-        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'update_scheduled_jobs_updated_at'
+    ) THEN
+        CREATE TRIGGER update_scheduled_jobs_updated_at
+        BEFORE UPDATE ON scheduled_jobs
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
-    CREATE TRIGGER update_workflow_templates_updated_at BEFORE UPDATE ON workflow_templates
-        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'update_workflow_templates_updated_at'
+    ) THEN
+        CREATE TRIGGER update_workflow_templates_updated_at
+        BEFORE UPDATE ON workflow_templates
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 DO $$ BEGIN
-    CREATE TRIGGER update_workflow_variables_updated_at BEFORE UPDATE ON workflow_variables
-        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'update_workflow_variables_updated_at'
+    ) THEN
+        CREATE TRIGGER update_workflow_variables_updated_at
+        BEFORE UPDATE ON workflow_variables
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
-END $$;
+END;
+$$;
 
 -- Function to clean up old execution logs (can be called periodically)
 CREATE OR REPLACE FUNCTION cleanup_old_execution_logs(days_to_keep INTEGER DEFAULT 30)

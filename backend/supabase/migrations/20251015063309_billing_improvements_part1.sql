@@ -35,27 +35,51 @@ END $$;
 
 ALTER TABLE credit_accounts 
 DROP CONSTRAINT IF EXISTS check_no_negative_balance;
-ALTER TABLE credit_accounts 
-ADD CONSTRAINT check_no_negative_balance 
-CHECK (balance >= 0);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'check_no_negative_balance'
+    ) THEN
+        ALTER TABLE credit_accounts
+            ADD CONSTRAINT check_no_negative_balance CHECK (balance >= 0);
+    END IF;
+END $$;
 
 ALTER TABLE credit_accounts 
 DROP CONSTRAINT IF EXISTS check_no_negative_credits;
-ALTER TABLE credit_accounts 
-ADD CONSTRAINT check_no_negative_credits 
-CHECK (expiring_credits >= 0 AND non_expiring_credits >= 0);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'check_no_negative_credits'
+    ) THEN
+        ALTER TABLE credit_accounts
+            ADD CONSTRAINT check_no_negative_credits CHECK (expiring_credits >= 0 AND non_expiring_credits >= 0);
+    END IF;
+END $$;
 
 ALTER TABLE credit_accounts 
 DROP CONSTRAINT IF EXISTS check_balance_consistency;
-ALTER TABLE credit_accounts 
-ADD CONSTRAINT check_balance_consistency 
-CHECK (ABS(balance - (expiring_credits + non_expiring_credits)) < 0.01);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'check_balance_consistency'
+    ) THEN
+        ALTER TABLE credit_accounts
+            ADD CONSTRAINT check_balance_consistency CHECK (ABS(balance - (expiring_credits + non_expiring_credits)) < 0.01);
+    END IF;
+END $$;
 
 ALTER TABLE trial_history 
 DROP CONSTRAINT IF EXISTS unique_account_trial;
-ALTER TABLE trial_history 
-ADD CONSTRAINT unique_account_trial 
-UNIQUE(account_id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'unique_account_trial'
+    ) THEN
+        ALTER TABLE trial_history
+            ADD CONSTRAINT unique_account_trial UNIQUE(account_id);
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_credit_ledger_recent_ops 
 ON credit_ledger(account_id, created_at DESC, amount, description);

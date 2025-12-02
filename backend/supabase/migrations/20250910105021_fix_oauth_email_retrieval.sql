@@ -79,9 +79,16 @@ END;
 $$;
 
 DROP TRIGGER IF EXISTS ensure_billing_customer_email_trigger ON basejump.billing_customers;
-CREATE TRIGGER ensure_billing_customer_email_trigger
-    BEFORE INSERT OR UPDATE ON basejump.billing_customers
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'ensure_billing_customer_email_trigger'
+    ) THEN
+        CREATE TRIGGER ensure_billing_customer_email_trigger
+        BEFORE INSERT OR UPDATE ON basejump.billing_customers
     FOR EACH ROW
-    EXECUTE FUNCTION basejump.ensure_billing_customer_email();
+        EXECUTE FUNCTION basejump.ensure_billing_customer_email();
+    END IF;
+END $$;
 
 COMMIT; 

@@ -34,9 +34,18 @@ END $$;
 
 DROP POLICY IF EXISTS "Users can manage own notification settings" ON notification_settings;
 DROP POLICY IF EXISTS "Account members can manage notification settings" ON notification_settings;
-CREATE POLICY "Account members can manage notification settings"
-    ON notification_settings FOR ALL
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'notification_settings' 
+        AND policyname = 'Account members can manage notification settings'
+    ) THEN
+        CREATE POLICY "Account members can manage notification settings" ON notification_settings FOR ALL
     USING (basejump.has_role_on_account(account_id));
+    END IF;
+END $$;
 
 -- Handle device_tokens: rename user_id to account_id only if user_id exists
 DO $$
@@ -82,6 +91,15 @@ CREATE INDEX IF NOT EXISTS idx_device_tokens_active ON device_tokens(account_id,
 
 DROP POLICY IF EXISTS "Users can manage own device tokens" ON device_tokens;
 DROP POLICY IF EXISTS "Account members can manage device tokens" ON device_tokens;
-CREATE POLICY "Account members can manage device tokens"
-    ON device_tokens FOR ALL
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'device_tokens' 
+        AND policyname = 'Account members can manage device tokens'
+    ) THEN
+        CREATE POLICY "Account members can manage device tokens" ON device_tokens FOR ALL
     USING (basejump.has_role_on_account(account_id));
+    END IF;
+END $$;

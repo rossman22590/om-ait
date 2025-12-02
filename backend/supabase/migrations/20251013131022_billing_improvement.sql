@@ -3,8 +3,15 @@ BEGIN;
 ALTER TABLE credit_ledger 
 ADD COLUMN IF NOT EXISTS stripe_event_id VARCHAR(255);
 
-ALTER TABLE credit_ledger 
-ADD CONSTRAINT unique_stripe_event UNIQUE(stripe_event_id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'unique_stripe_event'
+    ) THEN
+        ALTER TABLE credit_ledger
+            ADD CONSTRAINT unique_stripe_event UNIQUE(stripe_event_id);
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_credit_ledger_stripe_event 
 ON credit_ledger(stripe_event_id) 

@@ -21,14 +21,27 @@ DO $$
 BEGIN
     IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'migration_log') THEN
         ALTER TABLE public.migration_log ENABLE ROW LEVEL SECURITY;
-        
-        -- Add restrictive policy - only service role can access
+    END IF;
+END $$;
+
+-- Add restrictive policy - only service role can access
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'migration_log') THEN
         DROP POLICY IF EXISTS "Service role only access" ON public.migration_log;
-        CREATE POLICY "Service role only access" ON public.migration_log
-            FOR ALL
-            TO service_role
-            USING (true)
-            WITH CHECK (true);
+
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public'
+            AND tablename = 'migration_log'
+            AND policyname = 'Service role only access'
+        ) THEN
+            CREATE POLICY "Service role only access" ON public.migration_log
+                FOR ALL
+                TO service_role
+                USING (true)
+                WITH CHECK (true);
+        END IF;
     END IF;
 END $$;
 
@@ -37,25 +50,43 @@ ALTER TABLE IF EXISTS public.daily_refresh_tracking ENABLE ROW LEVEL SECURITY;
 
 -- Add restrictive policy for daily_refresh_tracking - only service role can access
 DROP POLICY IF EXISTS "Service role only access" ON public.daily_refresh_tracking;
-CREATE POLICY "Service role only access" ON public.daily_refresh_tracking
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'daily_refresh_tracking' 
+        AND policyname = 'Service role only access'
+    ) THEN
+        CREATE POLICY "Service role only access" ON public.daily_refresh_tracking
     FOR ALL
     TO service_role
     USING (true)
     WITH CHECK (true);
+    END IF;
+END $$;
 
 -- Enable RLS on agent_workflows_backup (if it exists)
 DO $$
 BEGIN
     IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'agent_workflows_backup') THEN
         ALTER TABLE public.agent_workflows_backup ENABLE ROW LEVEL SECURITY;
-        
+
         -- Add restrictive policy - only service role can access
         DROP POLICY IF EXISTS "Service role only access" ON public.agent_workflows_backup;
-        CREATE POLICY "Service role only access" ON public.agent_workflows_backup
-            FOR ALL
-            TO service_role
-            USING (true)
-            WITH CHECK (true);
+
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public'
+            AND tablename = 'agent_workflows_backup'
+            AND policyname = 'Service role only access'
+        ) THEN
+            CREATE POLICY "Service role only access" ON public.agent_workflows_backup
+                FOR ALL
+                TO service_role
+                USING (true)
+                WITH CHECK (true);
+        END IF;
     END IF;
 END $$;
 
@@ -302,7 +333,7 @@ BEGIN
         -- Note: This requires dropping and recreating the extension
         -- which may affect existing indexes - handle with care
         RAISE NOTICE 'pg_trgm extension found in public schema - consider moving to extensions schema';
-        RAISE NOTICE 'This requires manual intervention: DROP EXTENSION pg_trgm CASCADE; CREATE EXTENSION pg_trgm SCHEMA extensions;';
+        RAISE NOTICE 'This requires manual intervention: DROP EXTENSION pg_trgm CASCADE; CREATE EXTENSION IF NOT EXISTS pg_trgm SCHEMA extensions;';
     END IF;
 END $$;
 
@@ -318,14 +349,34 @@ END $$;
 
 -- Example fix for user_roles table
 DROP POLICY IF EXISTS "Users can view their own role" ON public.user_roles;
-CREATE POLICY "Users can view their own role" ON public.user_roles
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'user_roles' 
+        AND policyname = 'Users can view their own role'
+    ) THEN
+        CREATE POLICY "Users can view their own role" ON public.user_roles
     FOR SELECT
     USING ((SELECT auth.uid()) = user_id);
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Service role can manage all roles" ON public.user_roles;
-CREATE POLICY "Service role can manage all roles" ON public.user_roles
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'user_roles' 
+        AND policyname = 'Service role can manage all roles'
+    ) THEN
+        CREATE POLICY "Service role can manage all roles" ON public.user_roles
     FOR ALL
     USING ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 -- Note: credit_accounts policies are handled in the comprehensive RLS optimization section below
 -- This example section is skipped to avoid conflicts
@@ -557,45 +608,101 @@ $$ LANGUAGE plpgsql;
 
 -- google_oauth_tokens
 DROP POLICY IF EXISTS "service_role_only" ON public.google_oauth_tokens;
-CREATE POLICY "service_role_only" ON public.google_oauth_tokens
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'google_oauth_tokens' 
+        AND policyname = 'service_role_only'
+    ) THEN
+        CREATE POLICY "service_role_only" ON public.google_oauth_tokens
     FOR ALL TO service_role
     USING (true) WITH CHECK (true);
+    END IF;
+END $$;
 
 -- user_roles (already fixed in previous migration, but ensuring consistency)
 DROP POLICY IF EXISTS "Users can view their own role" ON public.user_roles;
-CREATE POLICY "Users can view their own role" ON public.user_roles
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'user_roles' 
+        AND policyname = 'Users can view their own role'
+    ) THEN
+        CREATE POLICY "Users can view their own role" ON public.user_roles
     FOR SELECT TO authenticated
     USING ((SELECT auth.uid()) = user_id);
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Service role can manage all roles" ON public.user_roles;
-CREATE POLICY "Service role can manage all roles" ON public.user_roles
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'user_roles' 
+        AND policyname = 'Service role can manage all roles'
+    ) THEN
+        CREATE POLICY "Service role can manage all roles" ON public.user_roles
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 -- credit_accounts
 -- Only create user_id-based policy if user_id column exists (table might have account_id instead)
 DO $$
 BEGIN
     IF EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'credit_accounts' 
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = 'credit_accounts'
         AND column_name = 'user_id'
     ) THEN
         DROP POLICY IF EXISTS "Users can view own credit account" ON public.credit_accounts;
-        CREATE POLICY "Users can view own credit account" ON public.credit_accounts
-            FOR SELECT TO authenticated
-            USING ((SELECT auth.uid()) = user_id);
+
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public'
+            AND tablename = 'credit_accounts'
+            AND policyname = 'Users can view own credit account'
+        ) THEN
+            CREATE POLICY "Users can view own credit account" ON public.credit_accounts
+                FOR SELECT TO authenticated
+                USING ((SELECT auth.uid()) = user_id);
+        END IF;
     END IF;
 END $$;
 
 DROP POLICY IF EXISTS "Service role manages credit accounts" ON public.credit_accounts;
-CREATE POLICY "Service role manages credit accounts" ON public.credit_accounts
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_accounts' 
+        AND policyname = 'Service role manages credit accounts'
+    ) THEN
+        CREATE POLICY "Service role manages credit accounts" ON public.credit_accounts
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "team_members_can_view_credit_account" ON public.credit_accounts;
-CREATE POLICY "team_members_can_view_credit_account" ON public.credit_accounts
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_accounts' 
+        AND policyname = 'team_members_can_view_credit_account'
+    ) THEN
+        CREATE POLICY "team_members_can_view_credit_account" ON public.credit_accounts
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -604,9 +711,19 @@ CREATE POLICY "team_members_can_view_credit_account" ON public.credit_accounts
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "team_owners_can_manage_credits" ON public.credit_accounts;
-CREATE POLICY "team_owners_can_manage_credits" ON public.credit_accounts
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_accounts' 
+        AND policyname = 'team_owners_can_manage_credits'
+    ) THEN
+        CREATE POLICY "team_owners_can_manage_credits" ON public.credit_accounts
     FOR UPDATE TO authenticated
     USING (
         account_id IN (
@@ -616,10 +733,20 @@ CREATE POLICY "team_owners_can_manage_credits" ON public.credit_accounts
             AND wu.account_role = 'owner'
         )
     );
+    END IF;
+END $$;
 
 -- credit_ledger
 DROP POLICY IF EXISTS "Users can view own ledger" ON public.credit_ledger;
-CREATE POLICY "Users can view own ledger" ON public.credit_ledger
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_ledger' 
+        AND policyname = 'Users can view own ledger'
+    ) THEN
+        CREATE POLICY "Users can view own ledger" ON public.credit_ledger
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -628,14 +755,34 @@ CREATE POLICY "Users can view own ledger" ON public.credit_ledger
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Service role manages ledger" ON public.credit_ledger;
-CREATE POLICY "Service role manages ledger" ON public.credit_ledger
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_ledger' 
+        AND policyname = 'Service role manages ledger'
+    ) THEN
+        CREATE POLICY "Service role manages ledger" ON public.credit_ledger
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "team_members_can_view_ledger" ON public.credit_ledger;
-CREATE POLICY "team_members_can_view_ledger" ON public.credit_ledger
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_ledger' 
+        AND policyname = 'team_members_can_view_ledger'
+    ) THEN
+        CREATE POLICY "team_members_can_view_ledger" ON public.credit_ledger
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -644,10 +791,20 @@ CREATE POLICY "team_members_can_view_ledger" ON public.credit_ledger
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 -- admin_actions_log
 DROP POLICY IF EXISTS "Only admins can view logs" ON public.admin_actions_log;
-CREATE POLICY "Only admins can view logs" ON public.admin_actions_log
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'admin_actions_log' 
+        AND policyname = 'Only admins can view logs'
+    ) THEN
+        CREATE POLICY "Only admins can view logs" ON public.admin_actions_log
     FOR SELECT TO authenticated
     USING (
         EXISTS (
@@ -656,15 +813,35 @@ CREATE POLICY "Only admins can view logs" ON public.admin_actions_log
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Service role manages logs" ON public.admin_actions_log;
-CREATE POLICY "Service role manages logs" ON public.admin_actions_log
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'admin_actions_log' 
+        AND policyname = 'Service role manages logs'
+    ) THEN
+        CREATE POLICY "Service role manages logs" ON public.admin_actions_log
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 -- trial_history
 DROP POLICY IF EXISTS "Users can view own trial history" ON public.trial_history;
-CREATE POLICY "Users can view own trial history" ON public.trial_history
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'trial_history' 
+        AND policyname = 'Users can view own trial history'
+    ) THEN
+        CREATE POLICY "Users can view own trial history" ON public.trial_history
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -673,9 +850,19 @@ CREATE POLICY "Users can view own trial history" ON public.trial_history
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "team_members_can_view_trial" ON public.trial_history;
-CREATE POLICY "team_members_can_view_trial" ON public.trial_history
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'trial_history' 
+        AND policyname = 'team_members_can_view_trial'
+    ) THEN
+        CREATE POLICY "team_members_can_view_trial" ON public.trial_history
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -684,10 +871,20 @@ CREATE POLICY "team_members_can_view_trial" ON public.trial_history
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 -- projects
 DROP POLICY IF EXISTS "project_update_policy" ON public.projects;
-CREATE POLICY "project_update_policy" ON public.projects
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'projects' 
+        AND policyname = 'project_update_policy'
+    ) THEN
+        CREATE POLICY "project_update_policy" ON public.projects
     FOR UPDATE TO authenticated
     USING (
         basejump.has_role_on_account(account_id) = true
@@ -697,9 +894,19 @@ CREATE POLICY "project_update_policy" ON public.projects
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "project_delete_policy" ON public.projects;
-CREATE POLICY "project_delete_policy" ON public.projects
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'projects' 
+        AND policyname = 'project_delete_policy'
+    ) THEN
+        CREATE POLICY "project_delete_policy" ON public.projects
     FOR DELETE TO authenticated
     USING (
         basejump.has_role_on_account(account_id) = true
@@ -709,9 +916,19 @@ CREATE POLICY "project_delete_policy" ON public.projects
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "project_select_policy" ON public.projects;
-CREATE POLICY "project_select_policy" ON public.projects
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'projects' 
+        AND policyname = 'project_select_policy'
+    ) THEN
+        CREATE POLICY "project_select_policy" ON public.projects
     FOR SELECT TO authenticated, anon
     USING (
         is_public = TRUE 
@@ -722,9 +939,19 @@ CREATE POLICY "project_select_policy" ON public.projects
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Give read only access to internal users" ON public.projects;
-CREATE POLICY "Give read only access to internal users" ON public.projects
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'projects' 
+        AND policyname = 'Give read only access to internal users'
+    ) THEN
+        CREATE POLICY "Give read only access to internal users" ON public.projects
     FOR SELECT TO authenticated
     USING (
         EXISTS (
@@ -733,10 +960,20 @@ CREATE POLICY "Give read only access to internal users" ON public.projects
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 -- threads
 DROP POLICY IF EXISTS "thread_update_policy" ON public.threads;
-CREATE POLICY "thread_update_policy" ON public.threads
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'threads' 
+        AND policyname = 'thread_update_policy'
+    ) THEN
+        CREATE POLICY "thread_update_policy" ON public.threads
     FOR UPDATE TO authenticated
     USING (
         basejump.has_role_on_account(account_id) = true
@@ -746,9 +983,19 @@ CREATE POLICY "thread_update_policy" ON public.threads
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "thread_delete_policy" ON public.threads;
-CREATE POLICY "thread_delete_policy" ON public.threads
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'threads' 
+        AND policyname = 'thread_delete_policy'
+    ) THEN
+        CREATE POLICY "thread_delete_policy" ON public.threads
     FOR DELETE TO authenticated
     USING (
         basejump.has_role_on_account(account_id) = true
@@ -758,9 +1005,19 @@ CREATE POLICY "thread_delete_policy" ON public.threads
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "thread_select_policy" ON public.threads;
-CREATE POLICY "thread_select_policy" ON public.threads
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'threads' 
+        AND policyname = 'thread_select_policy'
+    ) THEN
+        CREATE POLICY "thread_select_policy" ON public.threads
     FOR SELECT TO authenticated, anon
     USING (
         is_public IS TRUE
@@ -779,9 +1036,19 @@ CREATE POLICY "thread_select_policy" ON public.threads
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Give read only access to internal users" ON public.threads;
-CREATE POLICY "Give read only access to internal users" ON public.threads
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'threads' 
+        AND policyname = 'Give read only access to internal users'
+    ) THEN
+        CREATE POLICY "Give read only access to internal users" ON public.threads
     FOR SELECT TO authenticated
     USING (
         EXISTS (
@@ -790,10 +1057,20 @@ CREATE POLICY "Give read only access to internal users" ON public.threads
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 -- messages
 DROP POLICY IF EXISTS "message_insert_policy" ON public.messages;
-CREATE POLICY "message_insert_policy" ON public.messages
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'messages' 
+        AND policyname = 'message_insert_policy'
+    ) THEN
+        CREATE POLICY "message_insert_policy" ON public.messages
     FOR INSERT TO authenticated
     WITH CHECK (
         EXISTS (
@@ -809,9 +1086,19 @@ CREATE POLICY "message_insert_policy" ON public.messages
             )
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "message_update_policy" ON public.messages;
-CREATE POLICY "message_update_policy" ON public.messages
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'messages' 
+        AND policyname = 'message_update_policy'
+    ) THEN
+        CREATE POLICY "message_update_policy" ON public.messages
     FOR UPDATE TO authenticated
     USING (
         EXISTS (
@@ -827,9 +1114,19 @@ CREATE POLICY "message_update_policy" ON public.messages
             )
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "message_delete_policy" ON public.messages;
-CREATE POLICY "message_delete_policy" ON public.messages
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'messages' 
+        AND policyname = 'message_delete_policy'
+    ) THEN
+        CREATE POLICY "message_delete_policy" ON public.messages
     FOR DELETE TO authenticated
     USING (
         EXISTS (
@@ -845,9 +1142,19 @@ CREATE POLICY "message_delete_policy" ON public.messages
             )
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "message_select_policy" ON public.messages;
-CREATE POLICY "message_select_policy" ON public.messages
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'messages' 
+        AND policyname = 'message_select_policy'
+    ) THEN
+        CREATE POLICY "message_select_policy" ON public.messages
     FOR SELECT TO authenticated, anon
     USING (
         EXISTS (
@@ -872,9 +1179,19 @@ CREATE POLICY "message_select_policy" ON public.messages
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Give read only access to internal users" ON public.messages;
-CREATE POLICY "Give read only access to internal users" ON public.messages
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'messages' 
+        AND policyname = 'Give read only access to internal users'
+    ) THEN
+        CREATE POLICY "Give read only access to internal users" ON public.messages
     FOR SELECT TO authenticated
     USING (
         EXISTS (
@@ -883,10 +1200,20 @@ CREATE POLICY "Give read only access to internal users" ON public.messages
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 -- user_mcp_credential_profiles
 DROP POLICY IF EXISTS "credential_profiles_user_access" ON public.user_mcp_credential_profiles;
-CREATE POLICY "credential_profiles_user_access" ON public.user_mcp_credential_profiles
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'user_mcp_credential_profiles' 
+        AND policyname = 'credential_profiles_user_access'
+    ) THEN
+        CREATE POLICY "credential_profiles_user_access" ON public.user_mcp_credential_profiles
     FOR ALL TO authenticated
     USING (
         account_id IN (
@@ -902,32 +1229,82 @@ CREATE POLICY "credential_profiles_user_access" ON public.user_mcp_credential_pr
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 -- basejump.account_user
 DROP POLICY IF EXISTS "users can view their own account_users" ON basejump.account_user;
-CREATE POLICY "users can view their own account_users" ON basejump.account_user
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' 
+        AND tablename = 'account_user' 
+        AND policyname = 'users can view their own account_users'
+    ) THEN
+        CREATE POLICY "users can view their own account_users" ON basejump.account_user
     FOR SELECT TO authenticated
     USING (user_id = (SELECT auth.uid()));
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "users can view their teammates" ON basejump.account_user;
-CREATE POLICY "users can view their teammates" ON basejump.account_user
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' 
+        AND tablename = 'account_user' 
+        AND policyname = 'users can view their teammates'
+    ) THEN
+        CREATE POLICY "users can view their teammates" ON basejump.account_user
     FOR SELECT TO authenticated
     USING (basejump.has_role_on_account(account_id) = true);
+    END IF;
+END $$;
 
 -- basejump.accounts
 DROP POLICY IF EXISTS "Accounts are viewable by primary owner" ON basejump.accounts;
-CREATE POLICY "Accounts are viewable by primary owner" ON basejump.accounts
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' 
+        AND tablename = 'accounts' 
+        AND policyname = 'Accounts are viewable by primary owner'
+    ) THEN
+        CREATE POLICY "Accounts are viewable by primary owner" ON basejump.accounts
     FOR SELECT TO authenticated
     USING (primary_owner_user_id = (SELECT auth.uid()));
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Accounts are viewable by members" ON basejump.accounts;
-CREATE POLICY "Accounts are viewable by members" ON basejump.accounts
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' 
+        AND tablename = 'accounts' 
+        AND policyname = 'Accounts are viewable by members'
+    ) THEN
+        CREATE POLICY "Accounts are viewable by members" ON basejump.accounts
     FOR SELECT TO authenticated
     USING (basejump.has_role_on_account(id) = true);
+    END IF;
+END $$;
 
 -- commitment_history
 DROP POLICY IF EXISTS "Users can view own commitment history" ON public.commitment_history;
-CREATE POLICY "Users can view own commitment history" ON public.commitment_history
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'commitment_history' 
+        AND policyname = 'Users can view own commitment history'
+    ) THEN
+        CREATE POLICY "Users can view own commitment history" ON public.commitment_history
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -936,30 +1313,80 @@ CREATE POLICY "Users can view own commitment history" ON public.commitment_histo
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Service role can manage commitment history" ON public.commitment_history;
-CREATE POLICY "Service role can manage commitment history" ON public.commitment_history
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'commitment_history' 
+        AND policyname = 'Service role can manage commitment history'
+    ) THEN
+        CREATE POLICY "Service role can manage commitment history" ON public.commitment_history
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 -- agent_runs
 DROP POLICY IF EXISTS "agent_runs_insert_policy" ON public.agent_runs;
-CREATE POLICY "agent_runs_insert_policy" ON public.agent_runs
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_runs' 
+        AND policyname = 'agent_runs_insert_policy'
+    ) THEN
+        CREATE POLICY "agent_runs_insert_policy" ON public.agent_runs
     FOR INSERT TO authenticated, anon
     WITH CHECK (true);
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "agent_runs_update_policy" ON public.agent_runs;
-CREATE POLICY "agent_runs_update_policy" ON public.agent_runs
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_runs' 
+        AND policyname = 'agent_runs_update_policy'
+    ) THEN
+        CREATE POLICY "agent_runs_update_policy" ON public.agent_runs
     FOR UPDATE TO authenticated, anon
     USING (true);
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "agent_runs_delete_policy" ON public.agent_runs;
-CREATE POLICY "agent_runs_delete_policy" ON public.agent_runs
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_runs' 
+        AND policyname = 'agent_runs_delete_policy'
+    ) THEN
+        CREATE POLICY "agent_runs_delete_policy" ON public.agent_runs
     FOR DELETE TO authenticated, anon
     USING (true);
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "agent_runs_select_policy" ON public.agent_runs;
-CREATE POLICY "agent_runs_select_policy" ON public.agent_runs
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_runs' 
+        AND policyname = 'agent_runs_select_policy'
+    ) THEN
+        CREATE POLICY "agent_runs_select_policy" ON public.agent_runs
     FOR SELECT TO authenticated, anon
     USING (
         EXISTS (
@@ -976,10 +1403,20 @@ CREATE POLICY "agent_runs_select_policy" ON public.agent_runs
             )
         )
     );
+    END IF;
+END $$;
 
 -- api_keys
 DROP POLICY IF EXISTS "Users can manage their own API keys" ON public.api_keys;
-CREATE POLICY "Users can manage their own API keys" ON public.api_keys
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'api_keys' 
+        AND policyname = 'Users can manage their own API keys'
+    ) THEN
+        CREATE POLICY "Users can manage their own API keys" ON public.api_keys
     FOR ALL TO authenticated
     USING (
         account_id IN (
@@ -988,10 +1425,20 @@ CREATE POLICY "Users can manage their own API keys" ON public.api_keys
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 -- vapi_calls
 DROP POLICY IF EXISTS "Users can view their own calls" ON public.vapi_calls;
-CREATE POLICY "Users can view their own calls" ON public.vapi_calls
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'vapi_calls' 
+        AND policyname = 'Users can view their own calls'
+    ) THEN
+        CREATE POLICY "Users can view their own calls" ON public.vapi_calls
     FOR SELECT TO authenticated
     USING (
         thread_id IN (
@@ -1000,10 +1447,20 @@ CREATE POLICY "Users can view their own calls" ON public.vapi_calls
             WHERE basejump.has_role_on_account(account_id) = true
         )
     );
+    END IF;
+END $$;
 
 -- credit_purchases
 DROP POLICY IF EXISTS "Users can view their own credit purchases" ON public.credit_purchases;
-CREATE POLICY "Users can view their own credit purchases" ON public.credit_purchases
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_purchases' 
+        AND policyname = 'Users can view their own credit purchases'
+    ) THEN
+        CREATE POLICY "Users can view their own credit purchases" ON public.credit_purchases
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -1012,9 +1469,19 @@ CREATE POLICY "Users can view their own credit purchases" ON public.credit_purch
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can view own credit purchases" ON public.credit_purchases;
-CREATE POLICY "Users can view own credit purchases" ON public.credit_purchases
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_purchases' 
+        AND policyname = 'Users can view own credit purchases'
+    ) THEN
+        CREATE POLICY "Users can view own credit purchases" ON public.credit_purchases
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -1023,16 +1490,38 @@ CREATE POLICY "Users can view own credit purchases" ON public.credit_purchases
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Service role manages credit purchases" ON public.credit_purchases;
-CREATE POLICY "Service role manages credit purchases" ON public.credit_purchases
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_purchases' 
+        AND policyname = 'Service role manages credit purchases'
+    ) THEN
+        CREATE POLICY "Service role manages credit purchases" ON public.credit_purchases
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Service role can manage all credit purchases" ON public.credit_purchases;
-CREATE POLICY "Service role can manage all credit purchases" ON public.credit_purchases
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_purchases' 
+        AND policyname = 'Service role can manage all credit purchases'
+    ) THEN
+        CREATE POLICY "Service role can manage all credit purchases" ON public.credit_purchases
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 -- audit_log
 -- Note: audit_log has account_id (references auth.users), not user_id
@@ -1040,34 +1529,66 @@ DROP POLICY IF EXISTS "Users can view own audit log" ON public.audit_log;
 DO $$
 BEGIN
     IF EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'audit_log' 
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = 'audit_log'
         AND column_name = 'user_id'
     ) THEN
-        EXECUTE 'CREATE POLICY "Users can view own audit log" ON public.audit_log
-            FOR SELECT TO authenticated
-            USING (user_id = (SELECT auth.uid()))';
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public'
+            AND tablename = 'audit_log'
+            AND policyname = 'Users can view own audit log'
+        ) THEN
+            EXECUTE 'CREATE POLICY "Users can view own audit log" ON public.audit_log
+                FOR SELECT TO authenticated
+                USING (user_id = (SELECT auth.uid()))';
+        END IF;
     ELSIF EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'audit_log' 
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = 'audit_log'
         AND column_name = 'account_id'
     ) THEN
-        EXECUTE 'CREATE POLICY "Users can view own audit log" ON public.audit_log
-            FOR SELECT TO authenticated
-            USING (account_id = (SELECT auth.uid()))';
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public'
+            AND tablename = 'audit_log'
+            AND policyname = 'Users can view own audit log'
+        ) THEN
+            EXECUTE 'CREATE POLICY "Users can view own audit log" ON public.audit_log
+                FOR SELECT TO authenticated
+                USING (account_id = (SELECT auth.uid()))';
+        END IF;
     END IF;
 END $$;
 
 DROP POLICY IF EXISTS "Service role manages audit log" ON public.audit_log;
-CREATE POLICY "Service role manages audit log" ON public.audit_log
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'audit_log' 
+        AND policyname = 'Service role manages audit log'
+    ) THEN
+        CREATE POLICY "Service role manages audit log" ON public.audit_log
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 -- credit_balance
 DROP POLICY IF EXISTS "Users can view their own credit balance" ON public.credit_balance;
-CREATE POLICY "Users can view their own credit balance" ON public.credit_balance
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_balance' 
+        AND policyname = 'Users can view their own credit balance'
+    ) THEN
+        CREATE POLICY "Users can view their own credit balance" ON public.credit_balance
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -1076,15 +1597,35 @@ CREATE POLICY "Users can view their own credit balance" ON public.credit_balance
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Service role can manage all credit balances" ON public.credit_balance;
-CREATE POLICY "Service role can manage all credit balances" ON public.credit_balance
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_balance' 
+        AND policyname = 'Service role can manage all credit balances'
+    ) THEN
+        CREATE POLICY "Service role can manage all credit balances" ON public.credit_balance
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 -- credit_usage
 DROP POLICY IF EXISTS "Users can view their own credit usage" ON public.credit_usage;
-CREATE POLICY "Users can view their own credit usage" ON public.credit_usage
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_usage' 
+        AND policyname = 'Users can view their own credit usage'
+    ) THEN
+        CREATE POLICY "Users can view their own credit usage" ON public.credit_usage
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -1093,16 +1634,36 @@ CREATE POLICY "Users can view their own credit usage" ON public.credit_usage
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Service role can manage all credit usage" ON public.credit_usage;
-CREATE POLICY "Service role can manage all credit usage" ON public.credit_usage
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'credit_usage' 
+        AND policyname = 'Service role can manage all credit usage'
+    ) THEN
+        CREATE POLICY "Service role can manage all credit usage" ON public.credit_usage
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 -- feedback
 -- Note: feedback has account_id (references basejump.accounts), not user_id
 DROP POLICY IF EXISTS "Users can view their own feedback" ON public.feedback;
-CREATE POLICY "Users can view their own feedback" ON public.feedback
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'feedback' 
+        AND policyname = 'Users can view their own feedback'
+    ) THEN
+        CREATE POLICY "Users can view their own feedback" ON public.feedback
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -1111,9 +1672,19 @@ CREATE POLICY "Users can view their own feedback" ON public.feedback
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can insert their own feedback" ON public.feedback;
-CREATE POLICY "Users can insert their own feedback" ON public.feedback
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'feedback' 
+        AND policyname = 'Users can insert their own feedback'
+    ) THEN
+        CREATE POLICY "Users can insert their own feedback" ON public.feedback
     FOR INSERT TO authenticated
     WITH CHECK (
         account_id IN (
@@ -1122,9 +1693,19 @@ CREATE POLICY "Users can insert their own feedback" ON public.feedback
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can update their own feedback" ON public.feedback;
-CREATE POLICY "Users can update their own feedback" ON public.feedback
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'feedback' 
+        AND policyname = 'Users can update their own feedback'
+    ) THEN
+        CREATE POLICY "Users can update their own feedback" ON public.feedback
     FOR UPDATE TO authenticated
     USING (
         account_id IN (
@@ -1140,9 +1721,19 @@ CREATE POLICY "Users can update their own feedback" ON public.feedback
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can delete their own feedback" ON public.feedback;
-CREATE POLICY "Users can delete their own feedback" ON public.feedback
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'feedback' 
+        AND policyname = 'Users can delete their own feedback'
+    ) THEN
+        CREATE POLICY "Users can delete their own feedback" ON public.feedback
     FOR DELETE TO authenticated
     USING (
         account_id IN (
@@ -1151,10 +1742,20 @@ CREATE POLICY "Users can delete their own feedback" ON public.feedback
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 -- agent_templates
 DROP POLICY IF EXISTS "Users can view public templates or their own templates" ON public.agent_templates;
-CREATE POLICY "Users can view public templates or their own templates" ON public.agent_templates
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_templates' 
+        AND policyname = 'Users can view public templates or their own templates'
+    ) THEN
+        CREATE POLICY "Users can view public templates or their own templates" ON public.agent_templates
     FOR SELECT TO authenticated, anon
     USING (
         is_public = TRUE
@@ -1164,9 +1765,19 @@ CREATE POLICY "Users can view public templates or their own templates" ON public
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can create their own templates" ON public.agent_templates;
-CREATE POLICY "Users can create their own templates" ON public.agent_templates
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_templates' 
+        AND policyname = 'Users can create their own templates'
+    ) THEN
+        CREATE POLICY "Users can create their own templates" ON public.agent_templates
     FOR INSERT TO authenticated
     WITH CHECK (
         creator_id IN (
@@ -1175,9 +1786,19 @@ CREATE POLICY "Users can create their own templates" ON public.agent_templates
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can update their own templates" ON public.agent_templates;
-CREATE POLICY "Users can update their own templates" ON public.agent_templates
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_templates' 
+        AND policyname = 'Users can update their own templates'
+    ) THEN
+        CREATE POLICY "Users can update their own templates" ON public.agent_templates
     FOR UPDATE TO authenticated
     USING (
         creator_id IN (
@@ -1193,9 +1814,19 @@ CREATE POLICY "Users can update their own templates" ON public.agent_templates
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can delete their own templates" ON public.agent_templates;
-CREATE POLICY "Users can delete their own templates" ON public.agent_templates
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agent_templates' 
+        AND policyname = 'Users can delete their own templates'
+    ) THEN
+        CREATE POLICY "Users can delete their own templates" ON public.agent_templates
     FOR DELETE TO authenticated
     USING (
         creator_id IN (
@@ -1204,30 +1835,70 @@ CREATE POLICY "Users can delete their own templates" ON public.agent_templates
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 -- webhook_events
 DROP POLICY IF EXISTS "Service role full access on webhook_events" ON public.webhook_events;
-CREATE POLICY "Service role full access on webhook_events" ON public.webhook_events
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'webhook_events' 
+        AND policyname = 'Service role full access on webhook_events'
+    ) THEN
+        CREATE POLICY "Service role full access on webhook_events" ON public.webhook_events
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role')
     WITH CHECK ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 -- renewal_processing
 DROP POLICY IF EXISTS "Service role full access on renewal_processing" ON public.renewal_processing;
-CREATE POLICY "Service role full access on renewal_processing" ON public.renewal_processing
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'renewal_processing' 
+        AND policyname = 'Service role full access on renewal_processing'
+    ) THEN
+        CREATE POLICY "Service role full access on renewal_processing" ON public.renewal_processing
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role')
     WITH CHECK ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 -- refund_history
 DROP POLICY IF EXISTS "Service role full access on refund_history" ON public.refund_history;
-CREATE POLICY "Service role full access on refund_history" ON public.refund_history
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'refund_history' 
+        AND policyname = 'Service role full access on refund_history'
+    ) THEN
+        CREATE POLICY "Service role full access on refund_history" ON public.refund_history
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role')
     WITH CHECK ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can view own refund history" ON public.refund_history;
-CREATE POLICY "Users can view own refund history" ON public.refund_history
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'refund_history' 
+        AND policyname = 'Users can view own refund history'
+    ) THEN
+        CREATE POLICY "Users can view own refund history" ON public.refund_history
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -1236,30 +1907,70 @@ CREATE POLICY "Users can view own refund history" ON public.refund_history
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 -- distributed_locks
 DROP POLICY IF EXISTS "Service role full access on distributed_locks" ON public.distributed_locks;
-CREATE POLICY "Service role full access on distributed_locks" ON public.distributed_locks
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'distributed_locks' 
+        AND policyname = 'Service role full access on distributed_locks'
+    ) THEN
+        CREATE POLICY "Service role full access on distributed_locks" ON public.distributed_locks
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role')
     WITH CHECK ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 -- account_deletion_requests
 DROP POLICY IF EXISTS "Users can view their own deletion requests" ON public.account_deletion_requests;
-CREATE POLICY "Users can view their own deletion requests" ON public.account_deletion_requests
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'account_deletion_requests' 
+        AND policyname = 'Users can view their own deletion requests'
+    ) THEN
+        CREATE POLICY "Users can view their own deletion requests" ON public.account_deletion_requests
     FOR SELECT TO authenticated
     USING (user_id = (SELECT auth.uid()));
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Service role can manage deletion requests" ON public.account_deletion_requests;
-CREATE POLICY "Service role can manage deletion requests" ON public.account_deletion_requests
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'account_deletion_requests' 
+        AND policyname = 'Service role can manage deletion requests'
+    ) THEN
+        CREATE POLICY "Service role can manage deletion requests" ON public.account_deletion_requests
     FOR ALL TO service_role
     USING ((SELECT auth.role()) = 'service_role')
     WITH CHECK ((SELECT auth.role()) = 'service_role');
+    END IF;
+END $$;
 
 -- file_uploads
 -- Note: file_uploads has account_id (references basejump.accounts), use account-based access
 DROP POLICY IF EXISTS "Users can view their own file uploads" ON public.file_uploads;
-CREATE POLICY "Users can view their own file uploads" ON public.file_uploads
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'file_uploads' 
+        AND policyname = 'Users can view their own file uploads'
+    ) THEN
+        CREATE POLICY "Users can view their own file uploads" ON public.file_uploads
     FOR SELECT TO authenticated
     USING (
         account_id IN (
@@ -1268,9 +1979,19 @@ CREATE POLICY "Users can view their own file uploads" ON public.file_uploads
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can create their own file uploads" ON public.file_uploads;
-CREATE POLICY "Users can create their own file uploads" ON public.file_uploads
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'file_uploads' 
+        AND policyname = 'Users can create their own file uploads'
+    ) THEN
+        CREATE POLICY "Users can create their own file uploads" ON public.file_uploads
     FOR INSERT TO authenticated
     WITH CHECK (
         account_id IN (
@@ -1279,9 +2000,19 @@ CREATE POLICY "Users can create their own file uploads" ON public.file_uploads
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can update their own file uploads" ON public.file_uploads;
-CREATE POLICY "Users can update their own file uploads" ON public.file_uploads
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'file_uploads' 
+        AND policyname = 'Users can update their own file uploads'
+    ) THEN
+        CREATE POLICY "Users can update their own file uploads" ON public.file_uploads
     FOR UPDATE TO authenticated
     USING (
         account_id IN (
@@ -1297,9 +2028,19 @@ CREATE POLICY "Users can update their own file uploads" ON public.file_uploads
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "Users can delete their own file uploads" ON public.file_uploads;
-CREATE POLICY "Users can delete their own file uploads" ON public.file_uploads
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'file_uploads' 
+        AND policyname = 'Users can delete their own file uploads'
+    ) THEN
+        CREATE POLICY "Users can delete their own file uploads" ON public.file_uploads
     FOR DELETE TO authenticated
     USING (
         account_id IN (
@@ -1308,72 +2049,108 @@ CREATE POLICY "Users can delete their own file uploads" ON public.file_uploads
             WHERE wu.user_id = (SELECT auth.uid())
         )
     );
+    END IF;
+END $$;
 
 -- notifications
 -- Note: Check if table exists and what columns it has
 DO $$
 BEGIN
     IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'notifications') THEN
+        DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
+        DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
+        DROP POLICY IF EXISTS "Service role can manage all notifications" ON public.notifications;
+
         -- Check if it has account_id or user_id
         IF EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_schema = 'public' 
-            AND table_name = 'notifications' 
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+            AND table_name = 'notifications'
             AND column_name = 'account_id'
         ) THEN
             -- Use account-based access
-            DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
-            EXECUTE 'CREATE POLICY "Users can view their own notifications" ON public.notifications
-                FOR SELECT TO authenticated
-                USING (
-                    account_id IN (
-                        SELECT wu.account_id 
-                        FROM basejump.account_user wu 
-                        WHERE wu.user_id = (SELECT auth.uid())
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_policies
+                WHERE schemaname = 'public'
+                AND tablename = 'notifications'
+                AND policyname = 'Users can view their own notifications'
+            ) THEN
+                CREATE POLICY "Users can view their own notifications" ON public.notifications
+                    FOR SELECT TO authenticated
+                    USING (
+                        account_id IN (
+                            SELECT wu.account_id
+                            FROM basejump.account_user wu
+                            WHERE wu.user_id = (SELECT auth.uid())
+                        )
+                    );
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_policies
+                WHERE schemaname = 'public'
+                AND tablename = 'notifications'
+                AND policyname = 'Users can update their own notifications'
+            ) THEN
+                CREATE POLICY "Users can update their own notifications" ON public.notifications
+                    FOR UPDATE TO authenticated
+                    USING (
+                        account_id IN (
+                            SELECT wu.account_id
+                            FROM basejump.account_user wu
+                            WHERE wu.user_id = (SELECT auth.uid())
+                        )
                     )
-                )';
-            
-            DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
-            EXECUTE 'CREATE POLICY "Users can update their own notifications" ON public.notifications
-                FOR UPDATE TO authenticated
-                USING (
-                    account_id IN (
-                        SELECT wu.account_id 
-                        FROM basejump.account_user wu 
-                        WHERE wu.user_id = (SELECT auth.uid())
-                    )
-                )
-                WITH CHECK (
-                    account_id IN (
-                        SELECT wu.account_id 
-                        FROM basejump.account_user wu 
-                        WHERE wu.user_id = (SELECT auth.uid())
-                    )
-                )';
+                    WITH CHECK (
+                        account_id IN (
+                            SELECT wu.account_id
+                            FROM basejump.account_user wu
+                            WHERE wu.user_id = (SELECT auth.uid())
+                        )
+                    );
+            END IF;
         ELSIF EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_schema = 'public' 
-            AND table_name = 'notifications' 
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+            AND table_name = 'notifications'
             AND column_name = 'user_id'
         ) THEN
             -- Use user_id
-            DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
-            EXECUTE 'CREATE POLICY "Users can view their own notifications" ON public.notifications
-                FOR SELECT TO authenticated
-                USING (user_id = (SELECT auth.uid()))';
-            
-            DROP POLICY IF EXISTS "Users can update their own notifications" ON public.notifications;
-            EXECUTE 'CREATE POLICY "Users can update their own notifications" ON public.notifications
-                FOR UPDATE TO authenticated
-                USING (user_id = (SELECT auth.uid()))
-                WITH CHECK (user_id = (SELECT auth.uid()))';
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_policies
+                WHERE schemaname = 'public'
+                AND tablename = 'notifications'
+                AND policyname = 'Users can view their own notifications'
+            ) THEN
+                CREATE POLICY "Users can view their own notifications" ON public.notifications
+                    FOR SELECT TO authenticated
+                    USING (user_id = (SELECT auth.uid()));
+            END IF;
+
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_policies
+                WHERE schemaname = 'public'
+                AND tablename = 'notifications'
+                AND policyname = 'Users can update their own notifications'
+            ) THEN
+                CREATE POLICY "Users can update their own notifications" ON public.notifications
+                    FOR UPDATE TO authenticated
+                    USING (user_id = (SELECT auth.uid()))
+                    WITH CHECK (user_id = (SELECT auth.uid()));
+            END IF;
         END IF;
-        
-        DROP POLICY IF EXISTS "Service role can manage all notifications" ON public.notifications;
-        EXECUTE 'CREATE POLICY "Service role can manage all notifications" ON public.notifications
-            FOR ALL TO service_role
-            USING ((SELECT auth.role()) = ''service_role'')
-            WITH CHECK ((SELECT auth.role()) = ''service_role'')';
+
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public'
+            AND tablename = 'notifications'
+            AND policyname = 'Service role can manage all notifications'
+        ) THEN
+            CREATE POLICY "Service role can manage all notifications" ON public.notifications
+                FOR ALL TO service_role
+                USING ((SELECT auth.role()) = 'service_role')
+                WITH CHECK ((SELECT auth.role()) = 'service_role');
+        END IF;
     END IF;
 END $$;
 
@@ -1382,47 +2159,68 @@ END $$;
 DO $$
 BEGIN
     IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'user_notification_preferences') THEN
+        DROP POLICY IF EXISTS "Users can manage their own notification preferences" ON public.user_notification_preferences;
+        DROP POLICY IF EXISTS "Service role can manage all notification preferences" ON public.user_notification_preferences;
+
         IF EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_schema = 'public' 
-            AND table_name = 'user_notification_preferences' 
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+            AND table_name = 'user_notification_preferences'
             AND column_name = 'account_id'
         ) THEN
-            DROP POLICY IF EXISTS "Users can manage their own notification preferences" ON public.user_notification_preferences;
-            EXECUTE 'CREATE POLICY "Users can manage their own notification preferences" ON public.user_notification_preferences
-                FOR ALL TO authenticated
-                USING (
-                    account_id IN (
-                        SELECT wu.account_id 
-                        FROM basejump.account_user wu 
-                        WHERE wu.user_id = (SELECT auth.uid())
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_policies
+                WHERE schemaname = 'public'
+                AND tablename = 'user_notification_preferences'
+                AND policyname = 'Users can manage their own notification preferences'
+            ) THEN
+                CREATE POLICY "Users can manage their own notification preferences" ON public.user_notification_preferences
+                    FOR ALL TO authenticated
+                    USING (
+                        account_id IN (
+                            SELECT wu.account_id
+                            FROM basejump.account_user wu
+                            WHERE wu.user_id = (SELECT auth.uid())
+                        )
                     )
-                )
-                WITH CHECK (
-                    account_id IN (
-                        SELECT wu.account_id 
-                        FROM basejump.account_user wu 
-                        WHERE wu.user_id = (SELECT auth.uid())
-                    )
-                )';
+                    WITH CHECK (
+                        account_id IN (
+                            SELECT wu.account_id
+                            FROM basejump.account_user wu
+                            WHERE wu.user_id = (SELECT auth.uid())
+                        )
+                    );
+            END IF;
         ELSIF EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_schema = 'public' 
-            AND table_name = 'user_notification_preferences' 
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+            AND table_name = 'user_notification_preferences'
             AND column_name = 'user_id'
         ) THEN
-            DROP POLICY IF EXISTS "Users can manage their own notification preferences" ON public.user_notification_preferences;
-            EXECUTE 'CREATE POLICY "Users can manage their own notification preferences" ON public.user_notification_preferences
-                FOR ALL TO authenticated
-                USING (user_id = (SELECT auth.uid()))
-                WITH CHECK (user_id = (SELECT auth.uid()))';
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_policies
+                WHERE schemaname = 'public'
+                AND tablename = 'user_notification_preferences'
+                AND policyname = 'Users can manage their own notification preferences'
+            ) THEN
+                CREATE POLICY "Users can manage their own notification preferences" ON public.user_notification_preferences
+                    FOR ALL TO authenticated
+                    USING (user_id = (SELECT auth.uid()))
+                    WITH CHECK (user_id = (SELECT auth.uid()));
+            END IF;
         END IF;
-        
-        DROP POLICY IF EXISTS "Service role can manage all notification preferences" ON public.user_notification_preferences;
-        EXECUTE 'CREATE POLICY "Service role can manage all notification preferences" ON public.user_notification_preferences
-            FOR ALL TO service_role
-            USING ((SELECT auth.role()) = ''service_role'')
-            WITH CHECK ((SELECT auth.role()) = ''service_role'')';
+
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public'
+            AND tablename = 'user_notification_preferences'
+            AND policyname = 'Service role can manage all notification preferences'
+        ) THEN
+            CREATE POLICY "Service role can manage all notification preferences" ON public.user_notification_preferences
+                FOR ALL TO service_role
+                USING ((SELECT auth.role()) = 'service_role')
+                WITH CHECK ((SELECT auth.role()) = 'service_role');
+        END IF;
     END IF;
 END $$;
 
@@ -1505,7 +2303,15 @@ DROP POLICY IF EXISTS "agents_select_own" ON public.agents;
 
 -- Create consolidated optimized policy
 -- Note: basejump.has_role_on_account already handles auth internally, so we just need to wrap it
-CREATE POLICY "agents_select_policy" ON public.agents
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agents' 
+        AND policyname = 'agents_select_policy'
+    ) THEN
+        CREATE POLICY "agents_select_policy" ON public.agents
     FOR SELECT TO authenticated, anon
     USING (
         -- Public marketplace agents OR user's own agents (via has_role_on_account)
@@ -1519,6 +2325,8 @@ CREATE POLICY "agents_select_policy" ON public.agents
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 -- =====================================================
 -- PART 5: Ensure all remaining policies are optimized
@@ -1564,7 +2372,15 @@ BEGIN;
 
 -- Optimize agents INSERT policy
 DROP POLICY IF EXISTS "agents_insert_own" ON public.agents;
-CREATE POLICY "agents_insert_own" ON public.agents
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agents' 
+        AND policyname = 'agents_insert_own'
+    ) THEN
+        CREATE POLICY "agents_insert_own" ON public.agents
     FOR INSERT TO authenticated
     WITH CHECK (
         basejump.has_role_on_account(account_id, 'owner') = true
@@ -1574,10 +2390,20 @@ CREATE POLICY "agents_insert_own" ON public.agents
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 -- Optimize agents UPDATE policy
 DROP POLICY IF EXISTS "agents_update_own" ON public.agents;
-CREATE POLICY "agents_update_own" ON public.agents
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agents' 
+        AND policyname = 'agents_update_own'
+    ) THEN
+        CREATE POLICY "agents_update_own" ON public.agents
     FOR UPDATE TO authenticated
     USING (
         basejump.has_role_on_account(account_id, 'owner') = true
@@ -1595,10 +2421,20 @@ CREATE POLICY "agents_update_own" ON public.agents
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 -- Optimize agents DELETE policy
 DROP POLICY IF EXISTS "agents_delete_own" ON public.agents;
-CREATE POLICY "agents_delete_own" ON public.agents
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'agents' 
+        AND policyname = 'agents_delete_own'
+    ) THEN
+        CREATE POLICY "agents_delete_own" ON public.agents
     FOR DELETE TO authenticated
     USING (
         basejump.has_role_on_account(account_id, 'owner') = true
@@ -1608,6 +2444,8 @@ CREATE POLICY "agents_delete_own" ON public.agents
             AND role IN ('admin', 'super_admin')
         )
     );
+    END IF;
+END $$;
 
 -- =====================================================
 -- 5.2: Verify function search_path fixes

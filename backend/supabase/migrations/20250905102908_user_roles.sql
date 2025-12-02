@@ -1,4 +1,13 @@
-CREATE TYPE user_role AS ENUM ('user', 'admin', 'super_admin');
+-- Create user_role enum if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+        CREATE TYPE user_role AS ENUM ('user', 'admin', 'super_admin');
+        RAISE NOTICE 'Created user_role enum type';
+    ELSE
+        RAISE NOTICE 'Skipping user_role enum - already exists';
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS user_roles (
     user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -8,15 +17,35 @@ CREATE TABLE IF NOT EXISTS user_roles (
     metadata JSONB DEFAULT '{}'
 );
 
-CREATE INDEX idx_user_roles_role ON user_roles(role);
+CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role);
 
 ALTER TABLE user_roles ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own role" ON user_roles
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'user_roles' 
+        AND policyname = 'Users can view their own role'
+    ) THEN
+        CREATE POLICY "Users can view their own role" ON user_roles
     FOR SELECT USING (auth.uid() = user_id);
+    END IF;
+END $$;
 
-CREATE POLICY "Service role can manage all roles" ON user_roles
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'user_roles' 
+        AND policyname = 'Service role can manage all roles'
+    ) THEN
+        CREATE POLICY "Service role can manage all roles" ON user_roles
     FOR ALL USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION public.check_user_role(required_role user_role)
 RETURNS BOOLEAN AS $$

@@ -40,47 +40,108 @@ CREATE TABLE IF NOT EXISTS knowledge_base_usage_log (
     used_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_kb_entries_thread_id ON knowledge_base_entries(thread_id);
+-- Create indexes only if columns exist (handle case where table was recreated with different schema)
+DO $$
+BEGIN
+    -- Check if thread_id column exists before creating index
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'knowledge_base_entries' 
+        AND column_name = 'thread_id'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_kb_entries_thread_id ON knowledge_base_entries(thread_id);
+    END IF;
+    
+    -- Check if folder_id column exists before creating relevant indexes
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'knowledge_base_entries' 
+        AND column_name = 'folder_id'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_kb_entries_folder_id ON knowledge_base_entries(folder_id);
+    END IF;
+END $$;
+
+-- These indexes should be safe as the columns should exist in both old and new schemas
 CREATE INDEX IF NOT EXISTS idx_kb_entries_account_id ON knowledge_base_entries(account_id);
 CREATE INDEX IF NOT EXISTS idx_kb_entries_is_active ON knowledge_base_entries(is_active);
 CREATE INDEX IF NOT EXISTS idx_kb_entries_usage_context ON knowledge_base_entries(usage_context);
 CREATE INDEX IF NOT EXISTS idx_kb_entries_created_at ON knowledge_base_entries(created_at);
 
-CREATE INDEX IF NOT EXISTS idx_kb_usage_entry_id ON knowledge_base_usage_log(entry_id);
-CREATE INDEX IF NOT EXISTS idx_kb_usage_thread_id ON knowledge_base_usage_log(thread_id);
+-- Create usage log indexes only if thread_id exists
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'knowledge_base_usage_log' 
+        AND column_name = 'thread_id'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_kb_usage_entry_id ON knowledge_base_usage_log(entry_id);
+        CREATE INDEX IF NOT EXISTS idx_kb_usage_thread_id ON knowledge_base_usage_log(thread_id);
+    END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_kb_usage_used_at ON knowledge_base_usage_log(used_at);
 
 ALTER TABLE knowledge_base_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE knowledge_base_usage_log ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY kb_entries_user_access ON knowledge_base_entries
-    FOR ALL
-    USING (
-        EXISTS (
-            SELECT 1 FROM threads t
-            LEFT JOIN projects p ON t.project_id = p.project_id
-            WHERE t.thread_id = knowledge_base_entries.thread_id
-            AND (
-                basejump.has_role_on_account(t.account_id) = true OR 
-                basejump.has_role_on_account(p.account_id) = true OR
-                basejump.has_role_on_account(knowledge_base_entries.account_id) = true
-            )
-        )
-    );
-
-CREATE POLICY kb_usage_log_user_access ON knowledge_base_usage_log
-    FOR ALL
-    USING (
-        EXISTS (
-            SELECT 1 FROM threads t
-            LEFT JOIN projects p ON t.project_id = p.project_id
-            WHERE t.thread_id = knowledge_base_usage_log.thread_id
-            AND (
-                basejump.has_role_on_account(t.account_id) = true OR 
-                basejump.has_role_on_account(p.account_id) = true
-            )
-        )
-    );
+-- Create policies only if thread_id column exists (for old schema)
+-- Otherwise skip policies for new schema (let later migration handle them)
+DO $$
+BEGIN
+    -- Check if knowledge_base_entries has thread_id column
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'knowledge_base_entries' 
+        AND column_name = 'thread_id'
+    ) THEN
+        -- Old schema: create original policies
+        EXECUTE '
+        CREATE POLICY kb_entries_user_access ON knowledge_base_entries
+            FOR ALL
+            USING (
+                EXISTS (
+                    SELECT 1 FROM threads t
+                    LEFT JOIN projects p ON t.project_id = p.project_id
+                    WHERE t.thread_id = knowledge_base_entries.thread_id
+                    AND (
+                        basejump.has_role_on_account(t.account_id) = true OR 
+                        basejump.has_role_on_account(p.account_id) = true OR
+                        basejump.has_role_on_account(knowledge_base_entries.account_id) = true
+                    )
+                )
+            )';
+    ELSE
+        -- Skip policy creation for new schema (handled by later migration)
+        RAISE NOTICE 'Skipping kb_entries_user_access policy - new schema detected';
+    END IF;
+    
+    -- Check if knowledge_base_usage_log has thread_id column
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'knowledge_base_usage_log' 
+        AND column_name = 'thread_id'
+    ) THEN
+        -- Old schema: create original usage log policy
+        EXECUTE '
+        CREATE POLICY kb_usage_log_user_access ON knowledge_base_usage_log
+            FOR ALL
+            USING (
+                EXISTS (
+                    SELECT 1 FROM threads t
+                    LEFT JOIN projects p ON t.project_id = p.project_id
+                    WHERE t.thread_id = knowledge_base_usage_log.thread_id
+                    AND (
+                        basejump.has_role_on_account(t.account_id) = true OR 
+                        basejump.has_role_on_account(p.account_id) = true
+                    )
+                )
+            )';
+    ELSE
+        -- Skip policy creation for new schema (handled by later migration)
+        RAISE NOTICE 'Skipping kb_usage_log_user_access policy - new schema detected';
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION get_thread_knowledge_base(
     p_thread_id UUID,
@@ -182,10 +243,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_kb_entries_updated_at
-    BEFORE UPDATE ON knowledge_base_entries
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_kb_entries_updated_at'
+    ) THEN
+        CREATE TRIGGER trigger_kb_entries_updated_at
+        BEFORE UPDATE ON knowledge_base_entries
     FOR EACH ROW
-    EXECUTE FUNCTION update_kb_entry_timestamp();
+        EXECUTE FUNCTION update_kb_entry_timestamp();
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION calculate_kb_entry_tokens()
 RETURNS TRIGGER AS $$
@@ -195,10 +263,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_kb_entries_calculate_tokens
-    BEFORE INSERT ON knowledge_base_entries
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'trigger_kb_entries_calculate_tokens'
+    ) THEN
+        CREATE TRIGGER trigger_kb_entries_calculate_tokens
+        BEFORE INSERT ON knowledge_base_entries
     FOR EACH ROW
-    EXECUTE FUNCTION calculate_kb_entry_tokens();
+        EXECUTE FUNCTION calculate_kb_entry_tokens();
+    END IF;
+END $$;
 
 GRANT ALL PRIVILEGES ON TABLE knowledge_base_entries TO authenticated, service_role;
 GRANT ALL PRIVILEGES ON TABLE knowledge_base_usage_log TO authenticated, service_role;

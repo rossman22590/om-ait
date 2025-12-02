@@ -34,12 +34,27 @@ create table if not exists basejump.invitations
 -- Open up access to invitations
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE basejump.invitations TO authenticated, service_role;
 
--- manage timestamps
-CREATE TRIGGER basejump_set_invitations_timestamp
-    BEFORE INSERT OR UPDATE
-    ON basejump.invitations
-    FOR EACH ROW
-EXECUTE FUNCTION basejump.trigger_set_timestamps();
+-- manage timestamps (production-safe)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger 
+        WHERE tgname = 'basejump_set_invitations_timestamp'
+    ) THEN
+        DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'basejump_set_invitations_timestamp'
+    ) THEN
+        CREATE TRIGGER basejump_set_invitations_timestamp
+        BEFORE INSERT OR UPDATE
+            ON basejump.invitations
+            FOR EACH ROW
+        EXECUTE FUNCTION basejump.trigger_set_timestamps();
+    END IF;
+END $$;
+    END IF;
+END $$;
 
 /**
   * This funciton fills in account info and inviting user email
@@ -56,11 +71,26 @@ BEGIN
 END
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER basejump_trigger_set_invitation_details
-    BEFORE INSERT
-    ON basejump.invitations
-    FOR EACH ROW
-EXECUTE FUNCTION basejump.trigger_set_invitation_details();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger 
+        WHERE tgname = 'basejump_trigger_set_invitation_details'
+    ) THEN
+        DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'basejump_trigger_set_invitation_details'
+    ) THEN
+        CREATE TRIGGER basejump_trigger_set_invitation_details
+        BEFORE INSERT
+            ON basejump.invitations
+            FOR EACH ROW
+        EXECUTE FUNCTION basejump.trigger_set_invitation_details();
+    END IF;
+END $$;
+    END IF;
+END $$;
 
 -- enable RLS on invitations
 alter table basejump.invitations
@@ -73,37 +103,55 @@ alter table basejump.invitations
   * This is where we define access to tables in the basejump schema
  */
 
- create policy "Invitations viewable by account owners" on basejump.invitations
-    for select
-    to authenticated
-    using (
-            created_at > (now() - interval '24 hours')
-        and
-            basejump.has_role_on_account(account_id, 'owner') = true
-    );
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' AND tablename = 'invitations' 
+        AND policyname = 'Invitations viewable by account owners'
+    ) THEN
+        create policy "Invitations viewable by account owners" on basejump.invitations
+            for select
+            to authenticated
+            using (
+                created_at > (now() - interval '24 hours')
+                and
+                basejump.has_role_on_account(account_id, 'owner') = true
+            );
+    END IF;
+END $$;
 
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' AND tablename = 'invitations' 
+        AND policyname = 'Invitations can be created by account owners'
+    ) THEN
+        create policy "Invitations can be created by account owners" on basejump.invitations
+            for insert
+            to authenticated
+            with check (
+                basejump.is_set('enable_team_accounts') = true
+                and (SELECT personal_account FROM basejump.accounts WHERE id = account_id) = false
+                and (basejump.has_role_on_account(account_id, 'owner') = true)
+            );
+    END IF;
+END $$;
 
-create policy "Invitations can be created by account owners" on basejump.invitations
-    for insert
-    to authenticated
-    with check (
-    -- team accounts should be enabled
-            basejump.is_set('enable_team_accounts') = true
-        -- this should not be a personal account
-        and (SELECT personal_account
-             FROM basejump.accounts
-             WHERE id = account_id) = false
-        -- the inserting user should be an owner of the account
-        and
-            (basejump.has_role_on_account(account_id, 'owner') = true)
-    );
-
-create policy "Invitations can be deleted by account owners" on basejump.invitations
-    for delete
-    to authenticated
-    using (
-    basejump.has_role_on_account(account_id, 'owner') = true
-    );
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'basejump' AND tablename = 'invitations' 
+        AND policyname = 'Invitations can be deleted by account owners'
+    ) THEN
+        create policy "Invitations can be deleted by account owners" on basejump.invitations
+            for delete
+            to authenticated
+            using (basejump.has_role_on_account(account_id, 'owner') = true);
+    END IF;
+END $$;
 
 
 

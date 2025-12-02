@@ -4,7 +4,7 @@ DROP TABLE IF EXISTS account_deletion_requests CASCADE;
 DROP FUNCTION IF EXISTS delete_user_data(UUID, UUID);
 DROP FUNCTION IF EXISTS process_scheduled_account_deletions();
 
-CREATE TABLE account_deletion_requests (
+CREATE TABLE IF NOT EXISTS account_deletion_requests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     account_id UUID NOT NULL REFERENCES basejump.accounts(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -19,23 +19,43 @@ CREATE TABLE account_deletion_requests (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX idx_account_deletion_requests_account_id ON account_deletion_requests(account_id);
-CREATE INDEX idx_account_deletion_requests_user_id ON account_deletion_requests(user_id);
-CREATE INDEX idx_account_deletion_requests_scheduled ON account_deletion_requests(deletion_scheduled_for) 
+CREATE INDEX IF NOT EXISTS idx_account_deletion_requests_account_id ON account_deletion_requests(account_id);
+CREATE INDEX IF NOT EXISTS idx_account_deletion_requests_user_id ON account_deletion_requests(user_id);
+CREATE INDEX IF NOT EXISTS idx_account_deletion_requests_scheduled ON account_deletion_requests(deletion_scheduled_for) 
     WHERE is_cancelled = FALSE AND is_deleted = FALSE;
-CREATE INDEX idx_account_deletion_requests_status ON account_deletion_requests(is_cancelled, is_deleted);
+CREATE INDEX IF NOT EXISTS idx_account_deletion_requests_status ON account_deletion_requests(is_cancelled, is_deleted);
 
-CREATE UNIQUE INDEX unique_active_deletion_request 
+CREATE UNIQUE INDEX IF NOT EXISTS unique_active_deletion_request 
 ON account_deletion_requests (account_id) 
 WHERE is_cancelled = FALSE AND is_deleted = FALSE;
 
 ALTER TABLE account_deletion_requests ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can view their own deletion requests" ON account_deletion_requests
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'account_deletion_requests' 
+        AND policyname = 'Users can view their own deletion requests'
+    ) THEN
+        CREATE POLICY "Users can view their own deletion requests" ON account_deletion_requests
     FOR SELECT USING (auth.uid() = user_id);
+    END IF;
+END $$;
 
-CREATE POLICY "Service role can manage deletion requests" ON account_deletion_requests
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'account_deletion_requests' 
+        AND policyname = 'Service role can manage deletion requests'
+    ) THEN
+        CREATE POLICY "Service role can manage deletion requests" ON account_deletion_requests
     FOR ALL USING (auth.role() = 'service_role');
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION delete_user_data(p_account_id UUID, p_user_id UUID)
 RETURNS BOOLEAN

@@ -22,17 +22,29 @@ ALTER TABLE agent_templates
 -- Consider removing in future if description becomes primary categorization method
 
 -- 4. Add constraints to ensure icon system integrity
-ALTER TABLE agents 
-    ADD CONSTRAINT agents_icon_color_format 
-        CHECK (icon_color IS NULL OR icon_color ~ '^#[0-9A-Fa-f]{6}$'),
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'agents_icon_color_format'
+    ) THEN
+        ALTER TABLE agents
+            ADD CONSTRAINT agents_icon_color_format CHECK (icon_color IS NULL OR icon_color ~ '^#[0-9A-Fa-f]{6}$'),
     ADD CONSTRAINT agents_icon_background_format 
         CHECK (icon_background IS NULL OR icon_background ~ '^#[0-9A-Fa-f]{6}$');
+    END IF;
+END $$;
 
-ALTER TABLE agent_templates
-    ADD CONSTRAINT agent_templates_icon_color_format 
-        CHECK (icon_color IS NULL OR icon_color ~ '^#[0-9A-Fa-f]{6}$'),
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'agent_templates_icon_color_format'
+    ) THEN
+        ALTER TABLE agent_templates
+            ADD CONSTRAINT agent_templates_icon_color_format CHECK (icon_color IS NULL OR icon_color ~ '^#[0-9A-Fa-f]{6}$'),
     ADD CONSTRAINT agent_templates_icon_background_format 
         CHECK (icon_background IS NULL OR icon_background ~ '^#[0-9A-Fa-f]{6}$');
+    END IF;
+END $$;
 
 -- 5. Update any NULL icon values to sensible defaults
 UPDATE agents 

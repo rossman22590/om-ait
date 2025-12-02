@@ -38,7 +38,15 @@ CREATE INDEX IF NOT EXISTS idx_api_keys_public_key ON api_keys(public_key);
 ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
 
 -- RLS policy with explicit schema qualification (avoids basejump function issues)
-CREATE POLICY "Users can manage their own API keys" ON api_keys
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'api_keys' 
+        AND policyname = 'Users can manage their own API keys'
+    ) THEN
+        CREATE POLICY "Users can manage their own API keys" ON api_keys
     FOR ALL USING (
         account_id IN (
             SELECT wu.account_id 
@@ -46,6 +54,8 @@ CREATE POLICY "Users can manage their own API keys" ON api_keys
             WHERE wu.user_id = auth.uid()
         )
     );
+    END IF;
+END $$;
 
 -- Grant necessary permissions
 GRANT SELECT, INSERT, UPDATE, DELETE ON api_keys TO authenticated;

@@ -13,8 +13,15 @@ CREATE TABLE IF NOT EXISTS workflow_flows (
 ALTER TABLE workflow_flows ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies
-DO $$ BEGIN
-    CREATE POLICY "Users can view flows for their workflows" ON workflow_flows
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_flows' 
+        AND policyname = 'Users can view flows for their workflows'
+    ) THEN
+        CREATE POLICY "Users can view flows for their workflows" ON workflow_flows
         FOR SELECT USING (
             EXISTS (
                 SELECT 1 FROM workflows 
@@ -22,12 +29,18 @@ DO $$ BEGIN
             AND basejump.has_role_on_account(workflows.account_id) = true
         )
     );
-EXCEPTION
-    WHEN duplicate_object THEN null;
+    END IF;
 END $$;
 
-DO $$ BEGIN
-    CREATE POLICY "Users can manage flows for their workflows" ON workflow_flows
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'workflow_flows' 
+        AND policyname = 'Users can manage flows for their workflows'
+    ) THEN
+        CREATE POLICY "Users can manage flows for their workflows" ON workflow_flows
         FOR ALL USING (
             EXISTS (
                 SELECT 1 FROM workflows 
@@ -35,16 +48,20 @@ DO $$ BEGIN
                 AND basejump.has_role_on_account(workflows.account_id) = true
             )
         );
-EXCEPTION
-    WHEN duplicate_object THEN null;
+    END IF;
 END $$;
 
 -- Create trigger for updated_at
-DO $$ BEGIN
-    CREATE TRIGGER update_workflow_flows_updated_at BEFORE UPDATE ON workflow_flows
-        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-EXCEPTION
-    WHEN duplicate_object THEN null;
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'update_workflow_flows_updated_at'
+    ) THEN
+        CREATE TRIGGER update_workflow_flows_updated_at
+        BEFORE UPDATE ON workflow_flows
+        FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at_column();
+    END IF;
 END $$;
 
 -- Grant permissions

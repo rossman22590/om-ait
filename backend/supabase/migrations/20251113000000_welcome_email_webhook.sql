@@ -53,19 +53,37 @@ CREATE TABLE IF NOT EXISTS public.webhook_config (
 ALTER TABLE public.webhook_config ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Service role can manage webhook config" ON public.webhook_config;
-CREATE POLICY "Service role can manage webhook config"
-  ON public.webhook_config
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'webhook_config' 
+        AND policyname = 'Service role can manage webhook config'
+    ) THEN
+        CREATE POLICY "Service role can manage webhook config" ON public.webhook_config
   FOR ALL
   TO service_role
   USING (true)
   WITH CHECK (true);
+    END IF;
+END $$;
 
 DROP POLICY IF EXISTS "No public access" ON public.webhook_config;
-CREATE POLICY "No public access"
-  ON public.webhook_config
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'webhook_config' 
+        AND policyname = 'No public access'
+    ) THEN
+        CREATE POLICY "No public access" ON public.webhook_config
   FOR ALL
   TO anon, authenticated
   USING (false);
+    END IF;
+END $$;
 
 -- Allow the trigger function to read
 GRANT SELECT ON public.webhook_config TO postgres;
@@ -93,7 +111,7 @@ Configure via: INSERT INTO public.webhook_config (backend_url, webhook_secret) V
 -- SELECT * FROM public.webhook_config;
 -- ============================================================================
 
--- Create function to trigger welcome email webhook
+-- CREATE OR REPLACE FUNCTION to trigger welcome email webhook
 CREATE OR REPLACE FUNCTION public.trigger_welcome_email()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -163,10 +181,17 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Create trigger on auth.users table
 DROP TRIGGER IF EXISTS on_auth_user_created_webhook ON auth.users;
-CREATE TRIGGER on_auth_user_created_webhook
-  AFTER INSERT ON auth.users
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'on_auth_user_created_webhook'
+    ) THEN
+        CREATE TRIGGER on_auth_user_created_webhook
+        AFTER INSERT ON auth.users
   FOR EACH ROW
-  EXECUTE FUNCTION public.trigger_welcome_email();
+        EXECUTE FUNCTION public.trigger_welcome_email();
+    END IF;
+END $$;
 
 -- Grant necessary permissions
 GRANT USAGE ON SCHEMA net TO postgres, service_role;

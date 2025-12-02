@@ -38,19 +38,48 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
-UPDATE credit_accounts ca
-SET 
-    stripe_subscription_id = bs.id,
-    billing_cycle_anchor = bs.created::timestamptz,
-    next_credit_grant = CASE
-        WHEN ca.last_grant_date IS NOT NULL 
-            AND ca.last_grant_date > NOW() - INTERVAL '25 days'
-        THEN calculate_next_billing_date(bs.created::timestamptz, ca.last_grant_date)
-        ELSE calculate_next_billing_date(bs.created::timestamptz, NOW())
-    END
-FROM basejump.billing_subscriptions bs
-WHERE bs.account_id = ca.user_id
-  AND bs.status IN ('active', 'trialing');
+DO $$
+DECLARE
+    v_column_name TEXT;
+BEGIN
+    -- Determine which column name to use (user_id or account_id)
+    SELECT column_name INTO v_column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+    AND table_name = 'credit_accounts'
+    AND column_name IN ('user_id', 'account_id')
+    LIMIT 1;
+
+    IF v_column_name = 'user_id' THEN
+        UPDATE credit_accounts ca
+        SET
+            stripe_subscription_id = bs.id,
+            billing_cycle_anchor = bs.created::timestamptz,
+            next_credit_grant = CASE
+                WHEN ca.last_grant_date IS NOT NULL
+                    AND ca.last_grant_date > NOW() - INTERVAL '25 days'
+                THEN calculate_next_billing_date(bs.created::timestamptz, ca.last_grant_date)
+                ELSE calculate_next_billing_date(bs.created::timestamptz, NOW())
+            END
+        FROM basejump.billing_subscriptions bs
+        WHERE bs.account_id = ca.user_id
+          AND bs.status IN ('active', 'trialing');
+    ELSIF v_column_name = 'account_id' THEN
+        UPDATE credit_accounts ca
+        SET
+            stripe_subscription_id = bs.id,
+            billing_cycle_anchor = bs.created::timestamptz,
+            next_credit_grant = CASE
+                WHEN ca.last_grant_date IS NOT NULL
+                    AND ca.last_grant_date > NOW() - INTERVAL '25 days'
+                THEN calculate_next_billing_date(bs.created::timestamptz, ca.last_grant_date)
+                ELSE calculate_next_billing_date(bs.created::timestamptz, NOW())
+            END
+        FROM basejump.billing_subscriptions bs
+        WHERE bs.account_id = ca.account_id
+          AND bs.status IN ('active', 'trialing');
+    END IF;
+END $$;
 
 DO $$
 DECLARE

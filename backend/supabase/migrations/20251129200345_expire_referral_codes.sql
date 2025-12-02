@@ -9,7 +9,7 @@ DROP FUNCTION IF EXISTS validate_referral_code(TEXT);
 DROP FUNCTION IF EXISTS get_or_create_referral_code(UUID);
 DROP FUNCTION IF EXISTS expire_referral_code(UUID);
 
-CREATE FUNCTION validate_referral_code(
+CREATE OR REPLACE FUNCTION validate_referral_code(
     p_code TEXT
 ) RETURNS UUID
 LANGUAGE plpgsql
@@ -35,7 +35,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION get_or_create_referral_code(
+CREATE OR REPLACE FUNCTION get_or_create_referral_code(
     p_user_id UUID
 ) RETURNS TEXT
 LANGUAGE plpgsql
@@ -61,7 +61,7 @@ BEGIN
 END;
 $$;
 
-CREATE FUNCTION expire_referral_code(
+CREATE OR REPLACE FUNCTION expire_referral_code(
     p_account_id UUID
 ) RETURNS JSONB
 LANGUAGE plpgsql

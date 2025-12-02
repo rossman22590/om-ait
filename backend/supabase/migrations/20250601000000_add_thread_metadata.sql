@@ -1,7 +1,7 @@
 -- Add metadata column to threads table to store additional context
 ALTER TABLE threads ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb;
 
--- Create index for metadata queries
+-- CREATE INDEX IF NOT EXISTS for metadata queries
 CREATE INDEX IF NOT EXISTS idx_threads_metadata ON threads USING GIN (metadata);
 
 -- Comment on the column
@@ -10,7 +10,7 @@ COMMENT ON COLUMN threads.metadata IS 'Stores additional thread context like age
 -- Add agent_id to messages table to support per-message agent selection
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS agent_id UUID REFERENCES agents(agent_id) ON DELETE SET NULL;
 
--- Create index for message agent queries
+-- CREATE INDEX IF NOT EXISTS for message agent queries
 CREATE INDEX IF NOT EXISTS idx_messages_agent_id ON messages(agent_id);
 
 -- Comment on the new column

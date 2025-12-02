@@ -24,16 +24,33 @@ END;
 $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS user_presence_sessions_updated_at ON user_presence_sessions;
-CREATE TRIGGER user_presence_sessions_updated_at
-    BEFORE UPDATE ON user_presence_sessions
-    FOR EACH ROW EXECUTE FUNCTION update_user_presence_sessions_timestamp();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'user_presence_sessions_updated_at'
+    ) THEN
+        CREATE TRIGGER user_presence_sessions_updated_at
+        BEFORE UPDATE ON user_presence_sessions
+    FOR EACH ROW
+        EXECUTE FUNCTION update_user_presence_sessions_timestamp();
+    END IF;
+END $$;
 
 ALTER TABLE user_presence_sessions ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Account members can manage presence sessions" ON user_presence_sessions;
-CREATE POLICY "Account members can manage presence sessions"
-    ON user_presence_sessions FOR ALL
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE schemaname = 'public' 
+        AND tablename = 'user_presence_sessions' 
+        AND policyname = 'Account members can manage presence sessions'
+    ) THEN
+        CREATE POLICY "Account members can manage presence sessions" ON user_presence_sessions FOR ALL
     USING (basejump.has_role_on_account(account_id));
+    END IF;
+END $$;
 
 CREATE OR REPLACE FUNCTION cleanup_stale_presence_sessions()
 RETURNS void AS $$

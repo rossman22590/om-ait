@@ -3,7 +3,7 @@ BEGIN;
 -- Add steps column to agent_workflows table as flexible JSON
 ALTER TABLE agent_workflows ADD COLUMN IF NOT EXISTS steps JSONB DEFAULT NULL;
 
--- Create index for steps column (GIN index for flexible JSON queries)
+-- CREATE INDEX IF NOT EXISTS for steps column (GIN index for flexible JSON queries)
 CREATE INDEX IF NOT EXISTS idx_agent_workflows_steps ON agent_workflows USING gin(steps);
 
 UPDATE agent_workflows 

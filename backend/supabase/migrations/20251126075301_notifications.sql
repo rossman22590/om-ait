@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS notification_settings (
 );
 
 CREATE TABLE IF NOT EXISTS device_tokens (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     device_token TEXT NOT NULL,
     device_type TEXT NOT NULL,
@@ -41,46 +41,76 @@ END;
 $$ LANGUAGE plpgsql;
 
 DROP TRIGGER IF EXISTS notification_settings_updated_at ON notification_settings;
-CREATE TRIGGER notification_settings_updated_at
-    BEFORE UPDATE ON notification_settings
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'notification_settings_updated_at'
+    ) THEN
+        CREATE TRIGGER notification_settings_updated_at
+        BEFORE UPDATE ON notification_settings
+    FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at();
+    END IF;
+END $$;
 
 DROP TRIGGER IF EXISTS device_tokens_updated_at ON device_tokens;
-CREATE TRIGGER device_tokens_updated_at
-    BEFORE UPDATE ON device_tokens
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_trigger WHERE tgname = 'device_tokens_updated_at'
+    ) THEN
+        CREATE TRIGGER device_tokens_updated_at
+        BEFORE UPDATE ON device_tokens
+    FOR EACH ROW
+        EXECUTE FUNCTION update_updated_at();
+    END IF;
+END $$;
 
 ALTER TABLE notification_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policy for notification_settings only if user_id column exists
+DROP POLICY IF EXISTS "Users can manage own notification settings" ON notification_settings;
+
 DO $$
 BEGIN
     IF EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'notification_settings' 
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = 'notification_settings'
         AND column_name = 'user_id'
     ) THEN
-DROP POLICY IF EXISTS "Users can manage own notification settings" ON notification_settings;
-CREATE POLICY "Users can manage own notification settings"
-    ON notification_settings FOR ALL
-    USING (auth.uid() = user_id);
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public'
+            AND tablename = 'notification_settings'
+            AND policyname = 'Users can manage own notification settings'
+        ) THEN
+            CREATE POLICY "Users can manage own notification settings" ON notification_settings FOR ALL
+            USING (auth.uid() = user_id);
+        END IF;
     END IF;
 END $$;
 
 -- Create RLS policy for device_tokens only if user_id column exists
+DROP POLICY IF EXISTS "Users can manage own device tokens" ON device_tokens;
+
 DO $$
 BEGIN
     IF EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_schema = 'public' 
-        AND table_name = 'device_tokens' 
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+        AND table_name = 'device_tokens'
         AND column_name = 'user_id'
     ) THEN
-DROP POLICY IF EXISTS "Users can manage own device tokens" ON device_tokens;
-CREATE POLICY "Users can manage own device tokens"
-    ON device_tokens FOR ALL
-    USING (auth.uid() = user_id);
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_policies
+            WHERE schemaname = 'public'
+            AND tablename = 'device_tokens'
+            AND policyname = 'Users can manage own device tokens'
+        ) THEN
+            CREATE POLICY "Users can manage own device tokens" ON device_tokens FOR ALL
+            USING (auth.uid() = user_id);
+        END IF;
     END IF;
 END $$;
