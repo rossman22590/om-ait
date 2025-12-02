@@ -216,5 +216,10 @@
     "lightningcss-linux-x64-gnu": "^1.28.2",
     "lightningcss-linux-x64-musl": "^1.28.2",
     "lightningcss-win32-x64-msvc": "^1.28.2"
+  },
+  "overrides": {
+    "htmlparser2": {
+      "entities": "^2.2.0"
+    }
   }
 }
