@@ -530,35 +530,19 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
       pendingMessageRef.current = message;
 
       try {
-        const messagePromise = addUserMessageMutation.mutateAsync({
-          threadId,
-          message,
-        });
+        // SEQUENTIAL CALLS: Start agent first (creates thread), then add message
+        // This prevents foreign key constraint violation on new threads
 
-        const agentPromise = startAgentMutation.mutateAsync({
-          threadId,
-          options: {
-            ...options,
-            agent_id: selectedAgentId,
-          },
-        });
-
-        const results = await Promise.allSettled([
-          messagePromise,
-          agentPromise,
-        ]);
-
-        if (results[0].status === 'rejected') {
-          const reason = results[0].reason;
-          console.error('Failed to send message:', reason);
-          pendingMessageRef.current = null;
-          throw new Error(
-            `Failed to send message: ${reason?.message || reason}`,
-          );
-        }
-
-        if (results[1].status === 'rejected') {
-          const error = results[1].reason;
+        let agentResult;
+        try {
+          agentResult = await startAgentMutation.mutateAsync({
+            threadId,
+            options: {
+              ...options,
+              agent_id: selectedAgentId,
+            },
+          });
+        } catch (error: any) {
           console.error('Failed to start agent:', error);
           pendingMessageRef.current = null;
 
@@ -586,10 +570,23 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
           throw new Error(`Failed to start agent: ${error?.message || error}`);
         }
 
+        // Now that thread exists, add the user message
+        try {
+          await addUserMessageMutation.mutateAsync({
+            threadId,
+            message,
+          });
+        } catch (error: any) {
+          console.error('Failed to send message:', error);
+          pendingMessageRef.current = null;
+          throw new Error(
+            `Failed to send message: ${error?.message || error}`,
+          );
+        }
+
         // Message sent successfully - now clear the input
         setChatInputValue('');
 
-        const agentResult = results[1].value;
         setUserInitiatedRun(true);
         setAgentRunId(agentResult.agent_run_id);
       } catch (err) {
@@ -783,17 +780,29 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
   ]);
 
   useEffect(() => {
-    if (
-      (streamHookStatus === 'completed' ||
-        streamHookStatus === 'stopped' ||
-        streamHookStatus === 'agent_not_running' ||
-        streamHookStatus === 'error') &&
-      (agentStatus === 'running' || agentStatus === 'connecting')
-    ) {
-      setAgentStatus('idle');
-      setAgentRunId(null);
-      // Reset the stream tracking ref when stream completes
+    // Check if stream is in a terminal state
+    const isStreamTerminal =
+      streamHookStatus === 'completed' ||
+      streamHookStatus === 'stopped' ||
+      streamHookStatus === 'agent_not_running' ||
+      streamHookStatus === 'error';
+
+    if (isStreamTerminal) {
+      // Always reset the stream tracking ref when stream completes
+      // regardless of agentStatus to prevent stuck state
       lastStreamStartedRef.current = null;
+
+      // Clear any pending message that wasn't added
+      pendingMessageRef.current = null;
+
+      // Reset sending state in case it got stuck
+      setIsSending(false);
+
+      // Only update agent status if it's still showing as active
+      if (agentStatus === 'running' || agentStatus === 'connecting') {
+        setAgentStatus('idle');
+        setAgentRunId(null);
+      }
     }
   }, [streamHookStatus, agentStatus, setAgentStatus, setAgentRunId]);
 
