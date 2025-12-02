@@ -721,6 +721,9 @@ async def start_agent_run(
             raise Exception(f"Failed to create thread {thread_id} - no data returned from database")
 
         logger.debug(f"⏱️ [TIMING] Thread created: {(time.time() - t_thread) * 1000:.1f}ms")
+
+        # Small delay to ensure thread is fully committed/replicated in Supabase
+        await asyncio.sleep(0.1)
         
         structlog.contextvars.bind_contextvars(thread_id=thread_id, project_id=project_id, account_id=account_id)
         
@@ -766,10 +769,8 @@ async def start_agent_run(
     async def create_agent_run():
         return await _create_agent_run_record(client, thread_id, agent_config, effective_model, account_id, metadata)
 
-    # Run sequentially - message first, then agent_run
-    # (Parallel was causing FK errors in some edge cases with Supabase REST API)
-    await create_message()
-    agent_run_id = await create_agent_run()
+    # Run message creation and agent run creation in parallel for speed
+    _, agent_run_id = await asyncio.gather(create_message(), create_agent_run())
     logger.debug(f"⏱️ [TIMING] Parallel message+agent_run: {(time.time() - t_parallel2) * 1000:.1f}ms")
     
     # Trigger background execution
