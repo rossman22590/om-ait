@@ -79,7 +79,7 @@ class NotificationService:
             thread_result = await client.table('threads').select('project_id').eq('thread_id', thread_id).maybe_single().execute()
             project_id = thread_result.data.get('project_id') if thread_result and thread_result.data else None
             
-            task_url = f"https://machine-alpha-app.up.railway.app/projects/{project_id}/thread/{thread_id}" if project_id else f"https://machine-alpha-app.up.railway.app/thread/{thread_id}"
+            task_url = f"https://beta.machine.myapps.ai/projects/{project_id}/thread/{thread_id}" if project_id else f"https://beta.machine.myapps.ai/thread/{thread_id}"
             
             payload = {
                 "first_name": account_info.get("first_name"),
