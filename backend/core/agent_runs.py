@@ -398,29 +398,45 @@ async def _trigger_agent_background(
     request_id = structlog.contextvars.get_contextvars().get('request_id')
 
     # Ensure DB visibility for newly created records before enqueue (avoids race conditions)
-    try:
-        from core.services.supabase import DBConnection
-        db_conn = DBConnection()
-        db_client = await db_conn.client
+    # This is CRITICAL for Supabase which uses PgBouncer and may have replication lag
+    from core.services.supabase import DBConnection
+    db_conn = DBConnection()
+    db_client = await db_conn.client
 
-        async def ensure_exists(table: str, col: str, val: str):
-            for attempt in range(5):
-                try:
-                    res = await db_client.table(table).select(col).eq(col, val).limit(1).execute()
-                    if res.data:
-                        return True
-                except Exception:
-                    pass
-                await asyncio.sleep(0.2 * (attempt + 1))
-            return False
+    async def ensure_exists(table: str, col: str, val: str, max_attempts: int = 10):
+        """Wait until record is visible in database. Returns True if found, False if exhausted retries."""
+        for attempt in range(max_attempts):
+            try:
+                res = await db_client.table(table).select(col).eq(col, val).limit(1).execute()
+                if res.data:
+                    return True
+            except Exception as e:
+                logger.debug(f"Visibility check attempt {attempt + 1} for {table}.{col}={val} failed: {e}")
+            # Exponential backoff: 100ms, 200ms, 400ms, 800ms, ...
+            await asyncio.sleep(0.1 * (2 ** attempt))
+        return False
 
-        ok_thread = await ensure_exists('threads', 'thread_id', thread_id)
-        ok_project = await ensure_exists('projects', 'project_id', project_id)
-        ok_run = await ensure_exists('agent_runs', 'id', agent_run_id)
-        if not (ok_thread and ok_project and ok_run):
-            logger.warning(f"Visibility check before enqueue failed (thread={ok_thread}, project={ok_project}, run={ok_run}) for run {agent_run_id}")
-    except Exception as vis_err:
-        logger.debug(f"Pre-enqueue visibility check skipped due to error: {vis_err}")
+    # Wait for all records to be visible - this is BLOCKING and REQUIRED
+    ok_thread = await ensure_exists('threads', 'thread_id', thread_id)
+    ok_project = await ensure_exists('projects', 'project_id', project_id)
+    ok_run = await ensure_exists('agent_runs', 'id', agent_run_id)
+
+    if not ok_thread:
+        error_msg = f"Thread {thread_id} not visible in database after retries - cannot start agent"
+        logger.error(error_msg)
+        raise Exception(error_msg)
+
+    if not ok_project:
+        error_msg = f"Project {project_id} not visible in database after retries - cannot start agent"
+        logger.error(error_msg)
+        raise Exception(error_msg)
+
+    if not ok_run:
+        error_msg = f"Agent run {agent_run_id} not visible in database after retries - cannot start agent"
+        logger.error(error_msg)
+        raise Exception(error_msg)
+
+    logger.debug(f"✅ Visibility check passed for thread={thread_id}, project={project_id}, run={agent_run_id}")
 
     logger.info(f"🚀 Sending agent run {agent_run_id} to Dramatiq queue (thread: {thread_id}, model: {effective_model})")
     
@@ -777,10 +793,11 @@ async def start_agent_run(
                 logger.debug(f"No prompt provided for existing thread {thread_id} - assuming message already exists")
             return
 
-        # Retry logic to handle potential database replication lag
+        # Insert message - retry on FK error as safety net for Supabase pooler edge cases
+        # Sequential execution should prevent most FK issues, but pooler can still route
+        # queries to different backends where thread might not be visible yet
         max_retries = 3
-        retry_delay = 0.1  # 100ms initial delay
-        last_error = None
+        retry_delay = 0.15  # 150ms - shorter since sequential approach should mostly work
 
         for attempt in range(max_retries):
             try:
@@ -795,27 +812,24 @@ async def start_agent_run(
                 logger.debug(f"Created user message for thread {thread_id}")
                 return
             except Exception as e:
-                last_error = e
                 error_msg = str(e).lower()
-                # Check if it's a foreign key constraint error
                 if 'foreign key constraint' in error_msg or 'messages_thread_id_fkey' in error_msg:
                     if attempt < max_retries - 1:
-                        logger.warning(f"Foreign key error on attempt {attempt + 1}/{max_retries} for thread {thread_id}, retrying in {retry_delay}s: {e}")
+                        logger.warning(f"FK error (Supabase pooler race) attempt {attempt + 1}/{max_retries} for thread {thread_id}, retrying: {e}")
                         await asyncio.sleep(retry_delay)
-                        retry_delay *= 2  # Exponential backoff
+                        retry_delay *= 2
                         continue
-                # For non-FK errors or last attempt, raise immediately
                 raise
-
-        # If we get here, all retries failed
-        logger.error(f"Failed to create message for thread {thread_id} after {max_retries} attempts: {last_error}")
-        raise Exception(f"Failed to create message after {max_retries} attempts: {last_error}")
     
     async def create_agent_run():
         return await _create_agent_run_record(client, thread_id, agent_config, effective_model, account_id, metadata)
     
-    _, agent_run_id = await asyncio.gather(create_message(), create_agent_run())
-    logger.debug(f"⏱️ [TIMING] Parallel message+agent_run: {(time.time() - t_parallel2) * 1000:.1f}ms")
+    # Create message FIRST (sequentially) to avoid FK race condition with Supabase pooler
+    # The thread must be fully visible before we insert a message referencing it
+    # Then create agent_run which doesn't have this FK dependency issue
+    await create_message()
+    agent_run_id = await create_agent_run()
+    logger.debug(f"⏱️ [TIMING] Sequential message+agent_run: {(time.time() - t_parallel2) * 1000:.1f}ms")
     
     # Trigger background execution
     t_dispatch = time.time()

@@ -102,22 +102,42 @@ class ThreadManager:
         if agent_version_id:
             data_to_insert['agent_version_id'] = agent_version_id
 
-        try:
-            result = await client.table('messages').insert(data_to_insert).execute()
+        # Retry logic to handle potential database replication lag
+        max_retries = 5
+        retry_delay = 0.2  # 200ms initial delay
+        last_error = None
 
-            if result.data and len(result.data) > 0 and 'message_id' in result.data[0]:
-                saved_message = result.data[0]
-                
-                if type == "llm_response_end" and isinstance(content, dict):
-                    await self._handle_billing(thread_id, content, saved_message)
-                
-                return saved_message
-            else:
-                logger.error(f"Insert operation failed for thread {thread_id}")
-                return None
-        except Exception as e:
-            logger.error(f"Failed to add message to thread {thread_id}: {str(e)}", exc_info=True)
-            raise
+        for attempt in range(max_retries):
+            try:
+                result = await client.table('messages').insert(data_to_insert).execute()
+
+                if result.data and len(result.data) > 0 and 'message_id' in result.data[0]:
+                    saved_message = result.data[0]
+
+                    if type == "llm_response_end" and isinstance(content, dict):
+                        await self._handle_billing(thread_id, content, saved_message)
+
+                    return saved_message
+                else:
+                    logger.error(f"Insert operation failed for thread {thread_id}")
+                    return None
+            except Exception as e:
+                last_error = e
+                error_msg = str(e).lower()
+                # Check if it's a foreign key constraint error
+                if 'foreign key constraint' in error_msg or 'messages_thread_id_fkey' in error_msg:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Foreign key error on attempt {attempt + 1}/{max_retries} for thread {thread_id}, retrying in {retry_delay}s: {e}")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        continue
+                # For non-FK errors or last attempt, raise
+                logger.error(f"Failed to add message to thread {thread_id}: {str(e)}", exc_info=True)
+                raise
+
+        # If we exhausted all retries
+        logger.error(f"Failed to add message to thread {thread_id} after {max_retries} attempts: {last_error}")
+        raise Exception(f"Failed to add message after {max_retries} attempts: {last_error}")
 
     async def _handle_billing(self, thread_id: str, content: dict, saved_message: dict):
         try:

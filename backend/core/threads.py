@@ -543,8 +543,8 @@ async def add_message_to_thread(
         await verify_and_authorize_thread_access(client, thread_id, user_id)
     
     # Retry logic to handle potential database replication lag
-    max_retries = 3
-    retry_delay = 0.1  # 100ms initial delay
+    max_retries = 5
+    retry_delay = 0.2  # 200ms initial delay
     last_error = None
 
     for attempt in range(max_retries):
@@ -589,12 +589,12 @@ async def create_message(
     
     try:
         await verify_and_authorize_thread_access(client, thread_id, user_id)
-        
+
         message_payload = {
             "role": "user" if message_data.type == "user" else "assistant",
             "content": message_data.content
         }
-        
+
         insert_data = {
             "message_id": str(uuid.uuid4()),
             "thread_id": thread_id,
@@ -603,15 +603,41 @@ async def create_message(
             "content": message_payload,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        
-        message_result = await client.table('messages').insert(insert_data).execute()
-        
-        if not message_result.data:
-            raise HTTPException(status_code=500, detail="Failed to create message")
-        
-        logger.debug(f"Created message: {message_result.data[0]['message_id']}")
-        return message_result.data[0]
-        
+
+        # Retry logic to handle potential database replication lag
+        max_retries = 5
+        retry_delay = 0.2  # 200ms initial delay
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                message_result = await client.table('messages').insert(insert_data).execute()
+
+                if not message_result.data:
+                    raise HTTPException(status_code=500, detail="Failed to create message")
+
+                logger.debug(f"Created message: {message_result.data[0]['message_id']}")
+                return message_result.data[0]
+            except HTTPException:
+                raise
+            except Exception as e:
+                last_error = e
+                error_msg = str(e).lower()
+                # Check if it's a foreign key constraint error
+                if 'foreign key constraint' in error_msg or 'messages_thread_id_fkey' in error_msg:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Foreign key error on attempt {attempt + 1}/{max_retries} for thread {thread_id}, retrying in {retry_delay}s: {e}")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        continue
+                # For non-FK errors or last attempt, raise
+                logger.error(f"Error creating message in thread {thread_id}: {str(e)}")
+                raise HTTPException(status_code=500, detail=f"Failed to create message: {str(e)}")
+
+        # If we exhausted all retries
+        logger.error(f"Failed to create message for thread {thread_id} after {max_retries} attempts: {last_error}")
+        raise HTTPException(status_code=500, detail=f"Failed to create message after {max_retries} attempts")
+
     except HTTPException:
         raise
     except Exception as e:
