@@ -1217,7 +1217,7 @@ export function KnowledgeBaseManager({
                                                                 {folder.name}
                                                             </p>
                                                             <p className="text-xs text-muted-foreground">
-                                                                {folder.children?.length || 0} files
+                                                                {(folder.data as Folder)?.entry_count || folder.children?.length || 0} files
                                                             </p>
                                                         </div>
                                                     </div>
