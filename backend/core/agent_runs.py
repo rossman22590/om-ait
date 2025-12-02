@@ -766,8 +766,10 @@ async def start_agent_run(
     async def create_agent_run():
         return await _create_agent_run_record(client, thread_id, agent_config, effective_model, account_id, metadata)
 
-    # Run message creation and agent run creation in parallel for speed
-    _, agent_run_id = await asyncio.gather(create_message(), create_agent_run())
+    # Run sequentially - message first, then agent_run
+    # (Parallel was causing FK errors in some edge cases with Supabase REST API)
+    await create_message()
+    agent_run_id = await create_agent_run()
     logger.debug(f"⏱️ [TIMING] Parallel message+agent_run: {(time.time() - t_parallel2) * 1000:.1f}ms")
     
     # Trigger background execution
