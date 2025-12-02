@@ -19,28 +19,31 @@ interface CodeRendererProps {
 // Map of language aliases to CodeMirror language support
 const languageMap: Record<string, any> = {
   js: langs.javascript,
-  jsx: langs.jsx,
+  jsx: langs.javascript, // JSX support is included in javascript()
   ts: langs.typescript,
-  tsx: langs.tsx,
+  tsx: langs.typescript, // TSX support is included in typescript()
   html: langs.html,
   css: langs.css,
   json: langs.json,
   md: langs.markdown,
+  markdown: langs.markdown,
   python: langs.python,
   py: langs.python,
   rust: langs.rust,
   go: langs.go,
   java: langs.java,
-  c: langs.c,
   cpp: langs.cpp,
+  'c++': langs.cpp,
   cs: langs.csharp,
+  csharp: langs.csharp,
   php: langs.php,
-  ruby: langs.ruby,
   sh: langs.shell,
   bash: langs.shell,
+  shell: langs.shell,
   sql: langs.sql,
   yaml: langs.yaml,
   yml: langs.yaml,
+  xml: langs.xml,
   // Add more languages as needed
 };
 
