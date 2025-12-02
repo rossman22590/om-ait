@@ -102,13 +102,20 @@ class ThreadManager:
         if agent_version_id:
             data_to_insert['agent_version_id'] = agent_version_id
 
-        # Retry logic to handle potential database replication lag
-        max_retries = 5
-        retry_delay = 0.2  # 200ms initial delay
+        # Aggressive retry logic for Supabase pooler/replica lag
+        max_retries = 10
+        retry_delay = 0.3  # 300ms initial delay
         last_error = None
 
         for attempt in range(max_retries):
             try:
+                # On retry, force a read to prime the connection/replica
+                if attempt > 0:
+                    try:
+                        await client.table('threads').select('thread_id').eq('thread_id', thread_id).limit(1).execute()
+                    except Exception:
+                        pass  # Ignore - just trying to prime the connection
+
                 result = await client.table('messages').insert(data_to_insert).execute()
 
                 if result.data and len(result.data) > 0 and 'message_id' in result.data[0]:
@@ -127,17 +134,17 @@ class ThreadManager:
                 # Check if it's a foreign key constraint error
                 if 'foreign key constraint' in error_msg or 'messages_thread_id_fkey' in error_msg:
                     if attempt < max_retries - 1:
-                        logger.warning(f"Foreign key error on attempt {attempt + 1}/{max_retries} for thread {thread_id}, retrying in {retry_delay}s: {e}")
+                        logger.warning(f"FK error attempt {attempt + 1}/{max_retries} for thread {thread_id}, waiting {retry_delay}s: {e}")
                         await asyncio.sleep(retry_delay)
-                        retry_delay *= 2  # Exponential backoff
+                        retry_delay = min(retry_delay * 1.5, 2.0)  # Cap at 2 seconds
                         continue
                 # For non-FK errors or last attempt, raise
                 logger.error(f"Failed to add message to thread {thread_id}: {str(e)}", exc_info=True)
                 raise
 
         # If we exhausted all retries
-        logger.error(f"Failed to add message to thread {thread_id} after {max_retries} attempts: {last_error}")
-        raise Exception(f"Failed to add message after {max_retries} attempts: {last_error}")
+        logger.error(f"CRITICAL: Thread {thread_id} not visible after {max_retries} attempts - Supabase replication issue")
+        raise Exception(f"Failed to add message after {max_retries} attempts - thread not visible in database: {last_error}")
 
     async def _handle_billing(self, thread_id: str, content: dict, saved_message: dict):
         try:
