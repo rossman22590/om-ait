@@ -80,9 +80,9 @@ export function WorkspaceIntroModal({ sandboxId }: WorkspaceIntroModalProps) {
         hideCloseButton
         onInteractOutside={() => { closeReasonRef.current = 'outside'; }}
         onEscapeKeyDown={() => { closeReasonRef.current = 'escape'; }}
-        className="max-w-xl p-0 overflow-hidden"
+        className="max-w-xl max-h-[85vh] p-0 overflow-hidden flex flex-col"
       >
-        <div className="bg-gradient-to-r from-indigo-500/15 via-purple-500/10 to-pink-500/15 px-5 py-4 border-b border-border">
+        <div className="bg-gradient-to-r from-indigo-500/15 via-purple-500/10 to-pink-500/15 px-5 py-3 border-b border-border flex-shrink-0">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <Sparkles className="w-4 h-4 text-primary" />
@@ -91,7 +91,7 @@ export function WorkspaceIntroModal({ sandboxId }: WorkspaceIntroModalProps) {
           </DialogHeader>
         </div>
 
-        <div className="px-5 py-4 space-y-4">
+        <div className="px-5 py-4 space-y-3 overflow-y-auto flex-1">
           <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-100/40 dark:bg-amber-900/10 p-3">
             <Info className="w-4 h-4 mt-0.5 text-amber-600 dark:text-amber-400" />
             <p className="text-xs text-amber-700 dark:text-amber-300">
@@ -185,19 +185,19 @@ export function WorkspaceIntroModal({ sandboxId }: WorkspaceIntroModalProps) {
               ))}
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <Button
-              className="rounded-lg bg-pink-500 hover:bg-pink-500/90 text-white"
-              onClick={() => {
-                closeReasonRef.current = 'button';
-                if (dontShowAgain) setCookie('workspace_intro_shown', '1', 60 * 60 * 24 * 30);
-                setOpen(false);
-              }}
-            >
-              Got it
-            </Button>
-          </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border flex-shrink-0 bg-background">
+          <Button
+            className="rounded-lg bg-pink-500 hover:bg-pink-500/90 text-white"
+            onClick={() => {
+              closeReasonRef.current = 'button';
+              if (dontShowAgain) setCookie('workspace_intro_shown', '1', 60 * 60 * 24 * 30);
+              setOpen(false);
+            }}
+          >
+            Got it
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
