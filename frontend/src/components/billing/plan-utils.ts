@@ -41,10 +41,10 @@ export function getPlanName(subscriptionData: any, isLocal: boolean = false): st
  * 
  * @param planName - The plan name (e.g., 'Basic', 'Plus', 'Pro', 'Ultra')
  * @param isLocal - Whether running in local mode
- * @returns The path to the plan icon SVG, or null if no icon exists (e.g., Basic tier)
+ * @returns The path to the plan icon SVG/PNG, or null if no icon exists (e.g., Basic tier)
  */
 export function getPlanIcon(planName: string, isLocal: boolean = false): string | null {
-  if (isLocal) return '/plan-icons/ultra.svg';
+  if (isLocal) return '/plan-icons/ultra.png';
 
   const plan = planName?.toLowerCase();
 
@@ -55,7 +55,7 @@ export function getPlanIcon(planName: string, isLocal: boolean = false): string 
 
   // Ultra tier
   if (plan?.includes('ultra')) {
-    return '/plan-icons/ultra.svg';
+    return '/plan-icons/ultra.png';
   }
 
   // Pro tier (Pro, Business, Enterprise, Scale, Max)
@@ -65,7 +65,7 @@ export function getPlanIcon(planName: string, isLocal: boolean = false): string 
 
   // Plus tier
   if (plan?.includes('plus')) {
-    return '/plan-icons/plus.svg';
+    return '/plan-icons/plus.png';
   }
 
   // Default to null for any unrecognized plans
