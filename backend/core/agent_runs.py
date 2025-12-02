@@ -733,12 +733,17 @@ async def start_agent_run(
         # Create Thread
         t_thread = time.time()
         thread_id = str(uuid.uuid4())
-        await client.table('threads').insert({
+        thread_result = await client.table('threads').insert({
             "thread_id": thread_id,
             "project_id": project_id,
             "account_id": account_id,
             "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
+
+        # Verify thread was created successfully before proceeding
+        if not thread_result.data or len(thread_result.data) == 0:
+            raise Exception(f"Failed to create thread {thread_id} - no data returned from database")
+
         logger.debug(f"⏱️ [TIMING] Thread created: {(time.time() - t_thread) * 1000:.1f}ms")
         
         structlog.contextvars.bind_contextvars(thread_id=thread_id, project_id=project_id, account_id=account_id)
@@ -759,7 +764,7 @@ async def start_agent_run(
         - NEW thread: Always create message (prompt is required at endpoint validation)
         - EXISTING thread + prompt provided: Create message (user wants to add message + start agent)
         - EXISTING thread + NO prompt: Skip (user already added message via /threads/{id}/messages/add)
-        
+
         This prevents duplicate/empty messages when clients use the two-step flow:
         1. /threads/{id}/messages/add (with message)
         2. /agent/start (without prompt, just to start the agent)
@@ -771,16 +776,40 @@ async def start_agent_run(
             else:
                 logger.debug(f"No prompt provided for existing thread {thread_id} - assuming message already exists")
             return
-            
-        await client.table('messages').insert({
-            "message_id": str(uuid.uuid4()),
-            "thread_id": thread_id,
-            "type": "user",
-            "is_llm_message": True,
-            "content": {"role": "user", "content": final_message_content},
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }).execute()
-        logger.debug(f"Created user message for thread {thread_id}")
+
+        # Retry logic to handle potential database replication lag
+        max_retries = 3
+        retry_delay = 0.1  # 100ms initial delay
+        last_error = None
+
+        for attempt in range(max_retries):
+            try:
+                await client.table('messages').insert({
+                    "message_id": str(uuid.uuid4()),
+                    "thread_id": thread_id,
+                    "type": "user",
+                    "is_llm_message": True,
+                    "content": {"role": "user", "content": final_message_content},
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }).execute()
+                logger.debug(f"Created user message for thread {thread_id}")
+                return
+            except Exception as e:
+                last_error = e
+                error_msg = str(e).lower()
+                # Check if it's a foreign key constraint error
+                if 'foreign key constraint' in error_msg or 'messages_thread_id_fkey' in error_msg:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Foreign key error on attempt {attempt + 1}/{max_retries} for thread {thread_id}, retrying in {retry_delay}s: {e}")
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        continue
+                # For non-FK errors or last attempt, raise immediately
+                raise
+
+        # If we get here, all retries failed
+        logger.error(f"Failed to create message for thread {thread_id} after {max_retries} attempts: {last_error}")
+        raise Exception(f"Failed to create message after {max_retries} attempts: {last_error}")
     
     async def create_agent_run():
         return await _create_agent_run_record(client, thread_id, agent_config, effective_model, account_id, metadata)
