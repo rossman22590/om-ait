@@ -397,6 +397,30 @@ async def _trigger_agent_background(
     """
     request_id = structlog.contextvars.get_contextvars().get('request_id')
 
+    # Ensure DB visibility for newly created records before enqueue (avoids race conditions)
+    try:
+        from core.services.supabase import DBConnection
+        db_conn = DBConnection()
+        db_client = await db_conn.client
+
+        async def ensure_exists(table: str, col: str, val: str):
+            for attempt in range(5):
+                try:
+                    res = await db_client.table(table).select(col).eq(col, val).limit(1).execute()
+                    if res.data:
+                        return True
+                except Exception:
+                    pass
+                await asyncio.sleep(0.2 * (attempt + 1))
+            return False
+
+        ok_thread = await ensure_exists('threads', 'thread_id', thread_id)
+        ok_project = await ensure_exists('projects', 'project_id', project_id)
+        ok_run = await ensure_exists('agent_runs', 'id', agent_run_id)
+        if not (ok_thread and ok_project and ok_run):
+            logger.warning(f"Visibility check before enqueue failed (thread={ok_thread}, project={ok_project}, run={ok_run}) for run {agent_run_id}")
+    except Exception as vis_err:
+        logger.debug(f"Pre-enqueue visibility check skipped due to error: {vis_err}")
 
     logger.info(f"🚀 Sending agent run {agent_run_id} to Dramatiq queue (thread: {thread_id}, model: {effective_model})")
     
@@ -706,61 +730,50 @@ async def start_agent_run(
             # Background naming task
             asyncio.create_task(generate_and_update_project_name(project_id=project_id, prompt=prompt))
         
-        # Create Thread (and optionally message) atomically using RPC
-        # This prevents FK constraint violations caused by Supabase REST API eventual consistency
+        # Create Thread + Message atomically using RPC (prevents FK errors from eventual consistency)
         t_thread = time.time()
         thread_id = str(uuid.uuid4())
-
-        # Prepare message params if we have content for a new thread
         message_id = str(uuid.uuid4()) if final_message_content and final_message_content.strip() else None
         message_content = {"role": "user", "content": final_message_content} if message_id else None
 
-        # Track if message was created atomically (for skipping later)
-        message_created_atomically = False
-
-        # Try atomic RPC first, fallback to sequential inserts if RPC doesn't exist
         try:
-            rpc_result = await client.rpc('create_thread_with_message', {
+            await client.rpc('create_thread_with_message', {
                 'p_thread_id': thread_id,
                 'p_project_id': project_id,
                 'p_account_id': account_id,
                 'p_message_id': message_id,
                 'p_message_content': message_content
             }).execute()
-
-            if not rpc_result.data:
-                raise Exception(f"RPC returned no data")
-
-            message_created_atomically = message_id is not None
-            logger.debug(f"⏱️ [TIMING] Thread{'+ message' if message_id else ''} created atomically: {(time.time() - t_thread) * 1000:.1f}ms")
-
+            logger.debug(f"⏱️ [TIMING] Thread+message created atomically: {(time.time() - t_thread) * 1000:.1f}ms")
         except Exception as rpc_err:
-            # Fallback: RPC doesn't exist yet, use sequential inserts with verification
-            logger.warning(f"Atomic RPC failed ({rpc_err}), falling back to sequential inserts")
-
-            # Create thread
-            thread_result = await client.table('threads').insert({
-                "thread_id": thread_id,
-                "project_id": project_id,
-                "account_id": account_id,
-                "created_at": datetime.now(timezone.utc).isoformat()
-            }).execute()
-
-            if not thread_result.data or len(thread_result.data) == 0:
-                raise Exception(f"Failed to create thread {thread_id}")
-
-            # Verify thread is visible before creating message (eventual consistency workaround)
-            for attempt in range(5):
-                verify_result = await client.table('threads').select('thread_id').eq('thread_id', thread_id).execute()
-                if verify_result.data and len(verify_result.data) > 0:
-                    logger.debug(f"Thread {thread_id} verified visible after {attempt + 1} attempt(s)")
-                    break
-                await asyncio.sleep(0.1 * (attempt + 1))
+            # RPC may have succeeded but response parsing failed - check if thread exists
+            check = await client.table('threads').select('thread_id').eq('thread_id', thread_id).execute()
+            if check.data and len(check.data) > 0:
+                # Thread exists - RPC actually worked
+                logger.info(f"RPC succeeded despite error ({rpc_err}), thread exists")
             else:
-                raise Exception(f"Thread {thread_id} not visible after 5 attempts")
+                # Thread doesn't exist - actually need fallback
+                logger.warning(f"RPC failed ({rpc_err}), using fallback")
+                await client.table('threads').insert({
+                    "thread_id": thread_id,
+                    "project_id": project_id,
+                    "account_id": account_id,
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }).execute()
+                await asyncio.sleep(0.3)
+                if message_id:
+                    await client.table('messages').insert({
+                        "message_id": message_id,
+                        "thread_id": thread_id,
+                        "type": "user",
+                        "is_llm_message": True,
+                        "content": message_content,
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }).execute()
+            logger.debug(f"⏱️ [TIMING] Thread+message created: {(time.time() - t_thread) * 1000:.1f}ms")
 
-            # Create message if needed (will be done below in create_message())
-            logger.debug(f"⏱️ [TIMING] Thread created (fallback): {(time.time() - t_thread) * 1000:.1f}ms")
+        # Mark that message was already created for new threads
+        new_thread_message_created = message_id is not None
 
         structlog.contextvars.bind_contextvars(thread_id=thread_id, project_id=project_id, account_id=account_id)
 
@@ -771,25 +784,23 @@ async def start_agent_run(
         except Exception:
             pass
 
-    # Create agent run (and conditionally create message for EXISTING threads or fallback)
+    # Create agent run (and conditionally create message)
     t_parallel2 = time.time()
 
     async def create_message():
         """
         Message creation logic:
-        - NEW thread + atomic success: Message already created (skip)
-        - NEW thread + fallback: Create message here
-        - EXISTING thread + prompt: Create message
-        - EXISTING thread + NO prompt: Skip (user already added message)
+        - NEW thread: Message already created atomically above (skip)
+        - EXISTING thread + prompt provided: Create message (user wants to add message + start agent)
+        - EXISTING thread + NO prompt: Skip (user already added message via /threads/{id}/messages/add)
         """
-        # For new threads where message was created atomically, skip
-        if is_new_thread and message_created_atomically:
+        # For new threads, message was already created atomically
+        if is_new_thread:
             return
 
         # Skip if no content to add
         if not final_message_content or not final_message_content.strip():
-            if not is_new_thread:
-                logger.debug(f"No prompt provided for existing thread {thread_id} - assuming message already exists")
+            logger.debug(f"No prompt provided for existing thread {thread_id} - assuming message already exists")
             return
 
         await client.table('messages').insert({
@@ -804,8 +815,7 @@ async def start_agent_run(
     
     async def create_agent_run():
         return await _create_agent_run_record(client, thread_id, agent_config, effective_model, account_id, metadata)
-
-    # Run message creation and agent run creation in parallel for speed
+    
     _, agent_run_id = await asyncio.gather(create_message(), create_agent_run())
     logger.debug(f"⏱️ [TIMING] Parallel message+agent_run: {(time.time() - t_parallel2) * 1000:.1f}ms")
     

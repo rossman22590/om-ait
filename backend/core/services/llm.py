@@ -221,13 +221,23 @@ def _configure_openai_compatible(params: Dict[str, Any], model_name: str, api_ke
 def _sanitize_json_schema(obj: Any) -> Any:
     """Sanitize JSON Schemas for providers that don't support combinators or union types.
     - Removes anyOf/oneOf/allOf recursively
+    - Removes $schema, $id, $ref and other meta fields that Claude rejects
     - Ensures parameters/properties are valid with a concrete 'type'
     - Collapses list types like ["string","null"] to a single permissive type
     """
+    # Fields that are not valid in Claude's tool schema format
+    FIELDS_TO_REMOVE = {
+        "anyOf", "oneOf", "allOf", "if", "then", "else",
+        "$schema", "$id", "$ref", "$defs", "definitions",
+        "additionalItems", "contains", "patternProperties",
+        "unevaluatedProperties", "unevaluatedItems",
+        "contentEncoding", "contentMediaType", "examples"
+    }
+
     def _sanitize(o: Any) -> Any:
         if isinstance(o, dict):
-            # Drop unsupported combinators
-            o = {k: _sanitize(v) for k, v in o.items() if k not in ("anyOf", "oneOf", "allOf", "if", "then", "else")}
+            # Drop unsupported fields
+            o = {k: _sanitize(v) for k, v in o.items() if k not in FIELDS_TO_REMOVE}
 
             # Ensure objects have correct structure
             if o.get("type") == "object" or "properties" in o or "required" in o:

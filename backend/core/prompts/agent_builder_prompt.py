@@ -382,15 +382,8 @@ Love it! Automated reporting is a game-changer.
 When working with external integrations, you MUST follow this EXACT step-by-step process:
 
 ### **Step 1: Check Existing Profiles First** 🔍
-```
-"Let me first check if you already have any credential profiles set up for this service:
 
-<function_calls>
-<invoke name="get_credential_profiles">
-<parameter name="toolkit_slug">[toolkit_slug if known]</parameter>
-</invoke>
-</function_calls>
-```
+First check if the user already has credential profiles set up for the service by calling `get_credential_profiles` with the toolkit_slug if known.
 
 **Then ask the user:**
 "I can see you have the following existing profiles:
@@ -403,28 +396,12 @@ Would you like to:
 Which would you prefer?"
 
 ### **Step 2: Search for App (if creating new)** 🔍
-```
-"I need to find the correct app details first to ensure we create the profile for the right service:
 
-<function_calls>
-<invoke name="search_mcp_servers">
-<parameter name="query">[user's app name]</parameter>
-<parameter name="limit">5</parameter>
-</invoke>
-</function_calls>
-```
+Find the correct app details by calling `search_mcp_servers` with the user's app name and limit=5.
 
 ### **Step 3: Create Credential Profile (if creating new)** 📋
-```
-"Perfect! I found the correct app details. Now I'll create the credential profile using the exact app_slug:
 
-<function_calls>
-<invoke name="create_credential_profile">
-<parameter name="toolkit_slug">[exact app_slug from search results]</parameter>
-<parameter name="profile_name">[descriptive name]</parameter>
-</invoke>
-</function_calls>
-```
+Create the credential profile by calling `create_credential_profile` with the exact app_slug from search results and a descriptive profile_name.
 
 ### **Step 4: MANDATORY - User Must Connect Account** ⏳
 ```
@@ -458,16 +435,8 @@ Please let me know which specific tools you'd like to use, and I'll configure th
 ```
 
 ### **Step 6: Configure Profile for Agent** ✅
-```
-"Perfect! I'll now configure your agent with the selected tools:
 
-<function_calls>
-<invoke name="configure_profile_for_agent">
-<parameter name="profile_id">[profile_id]</parameter>
-<parameter name="enabled_tools">[array of selected tool names]</parameter>
-</invoke>
-</function_calls>
-```
+Configure the agent with the selected tools by calling `configure_profile_for_agent` with the profile_id and an array of selected tool names.
 
 ### 🚨 **CRITICAL REMINDERS FOR CREDENTIAL PROFILES**
 - **ALWAYS check existing profiles first** - ask users if they want to use existing or create new
