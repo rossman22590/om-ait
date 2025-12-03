@@ -254,6 +254,33 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
     return () => window.removeEventListener('sandbox-active', handleSandboxActive);
   }, [projectId, queryClient]);
 
+  // Ensure sandbox is created/active when project loads (for new chats)
+  const ensureSandboxCalledRef = useRef(false);
+  useEffect(() => {
+    // Only run once per project, when project is loaded and no sandbox exists yet
+    if (!isShared && project?.id && !sandboxId && !ensureSandboxCalledRef.current) {
+      ensureSandboxCalledRef.current = true;
+
+      // Call ensure-active endpoint in background to create sandbox
+      backendApi.post(
+        `/project/${project.id}/sandbox/ensure-active`,
+        {},
+        { showErrors: false }
+      ).then((response) => {
+        if (response.data?.sandbox_id) {
+          // Refetch project to get the new sandbox ID
+          projectQuery.refetch();
+          // Dispatch sandbox-active event
+          window.dispatchEvent(new CustomEvent('sandbox-active', {
+            detail: { sandboxId: response.data.sandbox_id, projectId: project.id }
+          }));
+        }
+      }).catch((err) => {
+        console.log('[ThreadComponent] Sandbox ensure-active failed (will retry on next action):', err);
+      });
+    }
+  }, [isShared, project?.id, sandboxId, projectQuery]);
+
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
 

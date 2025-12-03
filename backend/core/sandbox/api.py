@@ -385,21 +385,38 @@ async def ensure_project_sandbox_active(
     try:
         # Get sandbox ID from project data
         sandbox_info = project_data.get('sandbox', {})
-        if not sandbox_info.get('id'):
-            raise HTTPException(status_code=404, detail="No sandbox found for this project")
-            
-        sandbox_id = sandbox_info['id']
-        
-        # Get or start the sandbox
-        logger.debug(f"Ensuring sandbox is active for project {project_id}")
-        sandbox = await get_or_start_sandbox(sandbox_id)
-        
+        sandbox_id = sandbox_info.get('id') if sandbox_info else None
+        sandbox_created = False
+
+        if not sandbox_id:
+            # No sandbox exists - create one
+            logger.info(f"No sandbox found for project {project_id}, creating new one")
+            sandbox_pass = str(uuid.uuid4())
+            sandbox = await create_sandbox(sandbox_pass, project_id)
+            sandbox_id = sandbox.id
+            sandbox_created = True
+
+            # Update project with new sandbox info
+            await client.table('projects').update({
+                'sandbox': {
+                    'id': sandbox_id,
+                    'pass': sandbox_pass
+                }
+            }).eq('project_id', project_id).execute()
+
+            logger.info(f"Created new sandbox {sandbox_id} for project {project_id}")
+        else:
+            # Get or start the existing sandbox
+            logger.debug(f"Ensuring sandbox is active for project {project_id}")
+            sandbox = await get_or_start_sandbox(sandbox_id)
+
         logger.debug(f"Successfully ensured sandbox {sandbox_id} is active for project {project_id}")
-        
+
         return {
-            "status": "success", 
+            "status": "success",
             "sandbox_id": sandbox_id,
-            "message": "Sandbox is active"
+            "message": "Sandbox is active",
+            "created": sandbox_created
         }
     except Exception as e:
         logger.error(f"Error ensuring sandbox is active for project {project_id}: {str(e)}")

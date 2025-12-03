@@ -93,25 +93,26 @@ export const listSandboxFiles = async (
   if (!sandboxId || sandboxId.trim() === '') {
     return [];
   }
-  
-  try {
-    const normalizedPath = normalizePathWithUnicode(path);
-    const response = await backendApi.get<{ files: FileInfo[] }>(
-      `/sandboxes/${sandboxId}/files?path=${encodeURIComponent(normalizedPath)}`,
-      { showErrors: true }
-    );
 
-    if (response.error) {
-      throw new Error(
-        `Error listing sandbox files: ${response.error.message} (${response.error.status})`,
-      );
+  const normalizedPath = normalizePathWithUnicode(path);
+  const response = await backendApi.get<{ files: FileInfo[] }>(
+    `/sandboxes/${sandboxId}/files?path=${encodeURIComponent(normalizedPath)}`,
+    { showErrors: false }  // Don't show errors - sandbox may not exist yet
+  );
+
+  // Return empty array if sandbox doesn't exist yet (404/500)
+  if (response.error) {
+    const status = response.error.status;
+    if (status === 404 || status === 500) {
+      // Sandbox not ready yet - return empty array silently
+      return [];
     }
-
-    return response.data?.files || [];
-  } catch (error) {
-    console.error('Failed to list sandbox files:', error);
-    throw error;
+    throw new Error(
+      `Error listing sandbox files: ${response.error.message} (${response.error.status})`,
+    );
   }
+
+  return response.data?.files || [];
 };
 
 export const getSandboxFileContent = async (

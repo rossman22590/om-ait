@@ -428,7 +428,15 @@ async def make_llm_api_call(
         # CRITICAL: Final safety - ALWAYS convert vanity IDs before ANY LiteLLM call
         params["model"] = _ensure_real_model_id(params.get("model", ""))
         logger.info(f"🔍 Calling LiteLLM Router with model: {params.get('model')}")
-        response = await provider_router.acompletion(**params)
+
+        # Add timeout to prevent hanging connections (120 seconds)
+        try:
+            response = await asyncio.wait_for(
+                provider_router.acompletion(**params),
+                timeout=120.0
+            )
+        except asyncio.TimeoutError:
+            raise LLMError("LLM request timed out after 120 seconds")
         
         # For streaming responses, we need to handle errors that occur during iteration
         if hasattr(response, '__aiter__') and stream:
