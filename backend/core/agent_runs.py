@@ -795,13 +795,14 @@ async def start_agent_run(
                 logger.debug(f"No prompt provided for existing thread {thread_id} - assuming message already exists")
             return
 
-        # Use RPC to avoid Supabase replication lag FK constraint issues
-        await client.rpc('insert_message_safe', {
-            'p_thread_id': thread_id,
-            'p_type': 'user',
-            'p_content': {"role": "user", "content": final_message_content},
-            'p_is_llm_message': True,
-            'p_metadata': {}
+        # Direct INSERT - FK constraint was removed to fix Supabase replication lag issues
+        await client.table('messages').insert({
+            "message_id": str(uuid.uuid4()),
+            "thread_id": thread_id,
+            "type": "user",
+            "is_llm_message": True,
+            "content": {"role": "user", "content": final_message_content},
+            "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
         logger.debug(f"Created user message for thread {thread_id}")
     

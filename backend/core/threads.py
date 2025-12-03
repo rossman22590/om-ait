@@ -549,15 +549,14 @@ async def add_message_to_thread(
         await verify_and_authorize_thread_access(client, thread_id, user_id)
     
     try:
-        # Use RPC to avoid Supabase replication lag FK constraint issues
-        result = await client.rpc('insert_message_safe', {
-            'p_thread_id': thread_id,
-            'p_type': 'user',
-            'p_content': {"role": "user", "content": message},
-            'p_is_llm_message': True,
-            'p_metadata': {}
+        # Direct INSERT - FK constraint was removed to fix Supabase replication lag issues
+        result = await client.table('messages').insert({
+            'thread_id': thread_id,
+            'type': 'user',
+            'is_llm_message': True,
+            'content': {"role": "user", "content": message}
         }).execute()
-        return result.data if not isinstance(result.data, list) else result.data[0] if result.data else None
+        return result.data[0] if result.data else None
     except Exception as e:
         logger.error(f"Error adding message to thread {thread_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to add message: {str(e)}")
@@ -584,19 +583,18 @@ async def create_message(
             "content": message_data.content
         }
         
-        # Use RPC to avoid Supabase replication lag FK constraint issues
-        result = await client.rpc('insert_message_safe', {
-            'p_thread_id': thread_id,
-            'p_type': message_data.type,
-            'p_content': message_payload,
-            'p_is_llm_message': message_data.is_llm_message,
-            'p_metadata': {}
+        # Direct INSERT - FK constraint was removed to fix Supabase replication lag issues
+        result = await client.table('messages').insert({
+            'thread_id': thread_id,
+            'type': message_data.type,
+            'content': message_payload,
+            'is_llm_message': message_data.is_llm_message
         }).execute()
 
         if not result.data:
             raise HTTPException(status_code=500, detail="Failed to create message")
 
-        saved_message = result.data if not isinstance(result.data, list) else result.data[0] if result.data else None
+        saved_message = result.data[0] if result.data else None
         logger.debug(f"Created message: {saved_message.get('message_id') if saved_message else 'unknown'}")
         return saved_message
         

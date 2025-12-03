@@ -110,13 +110,13 @@ class TaskListTool(SandboxToolsBase):
                 await client.table('messages').update({'content': content})\
                     .eq('message_id', result.data[0]['message_id']).execute()
             else:
-                # Create new - use RPC to avoid Supabase FK constraint issues
-                await client.rpc('insert_message_safe', {
-                    'p_thread_id': self.thread_id,
-                    'p_type': self.task_list_message_type,
-                    'p_content': content,
-                    'p_is_llm_message': False,
-                    'p_metadata': {}
+                # Direct INSERT - FK constraint was removed to fix Supabase replication lag issues
+                await client.table('messages').insert({
+                    'thread_id': self.thread_id,
+                    'type': self.task_list_message_type,
+                    'content': content,
+                    'is_llm_message': False,
+                    'metadata': {}
                 }).execute()
             
         except Exception as e:

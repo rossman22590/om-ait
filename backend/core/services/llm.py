@@ -313,7 +313,14 @@ async def make_llm_api_call(
         stop: Optional list of stop sequences
     """
     logger.info(f"Making LLM API call to model: {model_name} with {len(messages)} messages")
-    
+
+    # Clean messages - remove internal fields that shouldn't go to LLM
+    cleaned_messages = []
+    for msg in messages:
+        clean_msg = {k: v for k, v in msg.items() if k != 'message_id'}
+        cleaned_messages.append(clean_msg)
+    messages = cleaned_messages
+
     # Prepare parameters using centralized model configuration
     from core.ai_models import model_manager
     # Resolve vanity names to registry ids, then to provider-native ids for LiteLLM

@@ -323,46 +323,46 @@ class ModelRegistry:
         ))
 
         # Llama 4 Scout (Auto)
-        self.register(Model(
-            id="openrouter/meta-llama/llama-4-scout",
-            name="Llama 4 Scout",
-            provider=ModelProvider.OPENROUTER,
-            aliases=["llama-4-scout", "llama"],
-            context_window=128_000,
-            capabilities=[
-                ModelCapability.CHAT,
-                ModelCapability.FUNCTION_CALLING,
-            ],
-            pricing=ModelPricing(
-                input_cost_per_million_tokens=0.50 * pricing_multiplier,
-                output_cost_per_million_tokens=1.50 * pricing_multiplier
-            ),
-            tier_availability=["paid"],
-            priority=91,
-            enabled=True,
-            config=ModelConfig(extra_headers=_openrouter_headers())
-        ))
+        # self.register(Model(
+        #     id="openrouter/meta-llama/llama-4-scout",
+        #     name="Llama 4 Scout",
+        #     provider=ModelProvider.OPENROUTER,
+        #     aliases=["llama-4-scout", "llama"],
+        #     context_window=128_000,
+        #     capabilities=[
+        #         ModelCapability.CHAT,
+        #         ModelCapability.FUNCTION_CALLING,
+        #     ],
+        #     pricing=ModelPricing(
+        #         input_cost_per_million_tokens=0.50 * pricing_multiplier,
+        #         output_cost_per_million_tokens=1.50 * pricing_multiplier
+        #     ),
+        #     tier_availability=["paid"],
+        #     priority=91,
+        #     enabled=True,
+        #     config=ModelConfig(extra_headers=_openrouter_headers())
+        # ))
 
         # Minimax M2
-        self.register(Model(
-            id="openrouter/minimax/minimax-m2",
-            name="Minimax M2",
-            provider=ModelProvider.OPENROUTER,
-            aliases=["minimax-m2"],
-            context_window=200_000,
-            capabilities=[
-                ModelCapability.CHAT,
-                ModelCapability.FUNCTION_CALLING,
-            ],
-            pricing=ModelPricing(
-                input_cost_per_million_tokens=0.60 * pricing_multiplier,
-                output_cost_per_million_tokens=2.00 * pricing_multiplier
-            ),
-            tier_availability=["paid"],
-            priority=90,
-            enabled=True,
-            config=ModelConfig(extra_headers=_openrouter_headers())
-        ))
+        # self.register(Model(
+        #     id="openrouter/minimax/minimax-m2",
+        #     name="Minimax M2",
+        #     provider=ModelProvider.OPENROUTER,
+        #     aliases=["minimax-m2"],
+        #     context_window=200_000,
+        #     capabilities=[
+        #         ModelCapability.CHAT,
+        #         ModelCapability.FUNCTION_CALLING,
+        #     ],
+        #     pricing=ModelPricing(
+        #         input_cost_per_million_tokens=0.60 * pricing_multiplier,
+        #         output_cost_per_million_tokens=2.00 * pricing_multiplier
+        #     ),
+        #     tier_availability=["paid"],
+        #     priority=90,
+        #     enabled=True,
+        #     config=ModelConfig(extra_headers=_openrouter_headers())
+        # ))
 
     def register(self, model: Model) -> None:
         self._models[model.id] = model

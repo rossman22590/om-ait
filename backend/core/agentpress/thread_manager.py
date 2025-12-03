@@ -105,39 +105,23 @@ class ThreadManager:
         if agent_version_id:
             data_to_insert['agent_version_id'] = agent_version_id
 
-        # Use RPC function to insert message safely (avoids Supabase replication lag FK issues)
-        # The RPC runs SELECT + INSERT in same transaction, ensuring FK check sees the thread
+        # Direct INSERT - FK constraint was removed to fix Supabase replication lag issues
         try:
-            result = await client.rpc('insert_message_safe', {
-                'p_thread_id': thread_id,
-                'p_type': type,
-                'p_content': content if isinstance(content, dict) else {'data': content},
-                'p_is_llm_message': is_llm_message,
-                'p_metadata': metadata or {},
-                'p_agent_id': agent_id,
-                'p_agent_version_id': agent_version_id
-            }).execute()
+            result = await client.table('messages').insert(data_to_insert).execute()
 
-            if result.data:
-                saved_message = result.data
-                # RPC returns JSONB directly, not wrapped in array
-                if isinstance(saved_message, list) and len(saved_message) > 0:
-                    saved_message = saved_message[0]
+            if result.data and len(result.data) > 0 and 'message_id' in result.data[0]:
+                saved_message = result.data[0]
 
                 if type == "llm_response_end" and isinstance(content, dict):
                     await self._handle_billing(thread_id, content, saved_message)
 
                 return saved_message
             else:
-                logger.error(f"RPC insert_message_safe returned no data for thread {thread_id}")
+                logger.error(f"Insert operation failed for thread {thread_id}")
                 return None
 
         except Exception as e:
             error_str = str(e)
-            # Check if thread was deleted (RPC raises custom exception)
-            if 'does not exist' in error_str or '23503' in error_str or 'messages_thread_id_fkey' in error_str:
-                logger.warning(f"Thread {thread_id} does not exist. Raising ThreadDeletedException.")
-                raise ThreadDeletedException(thread_id)
             logger.error(f"Failed to add message to thread {thread_id}: {error_str}", exc_info=True)
             raise
 
@@ -707,12 +691,16 @@ class ThreadManager:
         """Generator that handles auto-continue logic."""
         logger.debug(f"Starting auto-continue generator, max: {native_max_auto_continues}")
         # logger.debug(f"Config type in auto-continue generator: {type(config)}")
-        
+
         # Ensure config is valid ProcessorConfig
         if not isinstance(config, ProcessorConfig):
             logger.error(f"Invalid config type in auto-continue: {type(config)}, creating new one")
             config = ProcessorConfig()
-        
+
+        # Loop detection: track recent tool calls to detect repetitive patterns
+        recent_tool_calls = []  # List of (function_name, arguments_hash) tuples
+        MAX_REPEATED_CALLS = 3  # Break if same tool called 3+ times in a row
+
         # Get account_id once for billing checks
         account_id = None
         try:
@@ -769,12 +757,51 @@ class ThreadManager:
                         if cancellation_event and cancellation_event.is_set():
                             logger.info(f"Cancellation signal received while processing stream in auto-continue for thread {thread_id}")
                             break
-                        
+
+                        # Loop detection: track tool calls to detect repetitive patterns
+                        # Check both tool messages and tool_started status messages
+                        func_name = None
+                        if chunk.get('type') == 'tool':
+                            try:
+                                chunk_content = chunk.get('content', {})
+                                if isinstance(chunk_content, str):
+                                    chunk_content = json.loads(chunk_content)
+                                func_name = chunk_content.get('name', '')
+                            except (json.JSONDecodeError, TypeError, KeyError):
+                                pass
+                        elif chunk.get('type') == 'status':
+                            try:
+                                chunk_content = chunk.get('content', {})
+                                if isinstance(chunk_content, str):
+                                    chunk_content = json.loads(chunk_content)
+                                if chunk_content.get('status_type') == 'tool_started':
+                                    func_name = chunk_content.get('function_name', '')
+                            except (json.JSONDecodeError, TypeError, KeyError):
+                                pass
+
+                        if func_name:
+                            recent_tool_calls.append(func_name)
+                            # Keep only last N calls
+                            if len(recent_tool_calls) > MAX_REPEATED_CALLS:
+                                recent_tool_calls.pop(0)
+                            # Check if same tool called repeatedly
+                            if len(recent_tool_calls) >= MAX_REPEATED_CALLS and len(set(recent_tool_calls)) == 1:
+                                logger.warning(f"🔄 Loop detected: {func_name} called {MAX_REPEATED_CALLS}+ times in a row. Breaking loop.")
+                                auto_continue_state['active'] = False
+                                yield {
+                                    "type": "status",
+                                    "content": json.dumps({
+                                        "status_type": "info",
+                                        "message": f"Tool '{func_name}' was called multiple times. Stopping to prevent infinite loop."
+                                    })
+                                }
+                                break
+
                         # Check for auto-continue triggers
                         should_continue = self._check_auto_continue_trigger(
                             chunk, auto_continue_state, native_max_auto_continues
                         )
-                        
+
                         # Skip finish chunks that trigger auto-continue (but NOT tool execution, FE needs those)
                         if should_continue:
                             if chunk.get('type') == 'status':
@@ -785,7 +812,7 @@ class ThreadManager:
                                         continue
                                 except (json.JSONDecodeError, TypeError):
                                     pass
-                        
+
                         yield chunk
                 else:
                     yield response_gen
