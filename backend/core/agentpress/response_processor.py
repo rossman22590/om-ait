@@ -32,7 +32,6 @@ from core.agentpress.native_tool_parser import (
     convert_buffer_to_metadata_tool_calls
 )
 from core.agentpress.error_processor import ErrorProcessor
-from core.agentpress.exceptions import ThreadDeletedException
 from langfuse.client import StatefulTraceClient
 from core.services.langfuse import langfuse
 from core.utils.json_helpers import (
@@ -496,24 +495,20 @@ class ResponseProcessor:
 
                     # --- Process Native Tool Call Chunks ---
                     if config.native_tool_calling and delta and hasattr(delta, 'tool_calls') and delta.tool_calls:
-                        logger.debug(f"🔧 Received tool_calls delta: {delta.tool_calls}")
                         for tool_call_chunk in delta.tool_calls:
                             # --- Buffer and Update Tool Call Chunks ---
                             if not hasattr(tool_call_chunk, 'function'): continue
                             idx = tool_call_chunk.index if hasattr(tool_call_chunk, 'index') else 0
-                            # Skip chunks with invalid index (some providers send index=-1 for empty tool calls)
-                            if idx < 0:
-                                continue
-
-                            # Initialize buffer entry if needed - generate ID upfront for providers that don't send one
+                            
+                            # Initialize buffer entry if needed
                             if idx not in tool_calls_buffer:
                                 tool_calls_buffer[idx] = {
-                                    'id': f"tool_{idx}_{str(uuid.uuid4())[:8]}",  # Generate ID if provider doesn't send one
+                                    'id': None,
                                     'type': 'function',
                                     'function': {'name': None, 'arguments': ''}
                                 }
-
-                            # Update buffer with chunk data (overwrite generated ID if provider sends one)
+                            
+                            # Update buffer with chunk data
                             if hasattr(tool_call_chunk, 'id') and tool_call_chunk.id:
                                 tool_calls_buffer[idx]['id'] = tool_call_chunk.id
                             if hasattr(tool_call_chunk, 'type') and tool_call_chunk.type:
@@ -524,10 +519,9 @@ class ResponseProcessor:
                                 tool_calls_buffer[idx]['function']['arguments'] += tool_call_chunk.function.arguments
                             
                             native_tool_calls_updated = True
-
+                            
                             # Check if tool call is complete
                             has_complete_tool_call = is_tool_call_complete(tool_calls_buffer.get(idx))
-                            logger.debug(f"🔧 Tool call buffer[{idx}]: {tool_calls_buffer.get(idx)}, complete={has_complete_tool_call}")
 
                             if has_complete_tool_call and config.execute_tools and config.execute_on_stream and idx not in executed_native_tool_indices:
                                 # Mark this index as executed to prevent duplicate executions
@@ -740,7 +734,6 @@ class ResponseProcessor:
             has_native_tool_calls = config.native_tool_calling and len(tool_calls_buffer) > 0
             has_xml_tool_calls = config.xml_tool_calling and xml_tool_call_count > 0
             has_any_tool_calls = has_native_tool_calls or has_xml_tool_calls
-            logger.info(f"🔧 End of stream - tool_calls_buffer: {tool_calls_buffer}, has_native={has_native_tool_calls}, has_xml={has_xml_tool_calls}")
             
             # Save if: (not auto-continuing) OR (has tool calls - always save these)
             should_save_message = (
@@ -1102,35 +1095,18 @@ class ResponseProcessor:
                         logger.error(f"Error saving llm_response_end: {str(e)}")
                         self.trace.event(name="error_saving_llm_response_end", level="ERROR", status_message=(f"Error saving llm_response_end: {str(e)}"))
 
-        except ThreadDeletedException:
-            # Thread was deleted during agent run - terminate gracefully without error
-            logger.warning(f"Thread {thread_id} was deleted during agent run. Terminating gracefully.")
-            return
-
         except Exception as e:
-            error_str = str(e)
-
-            # Check if this is an FK constraint error (thread deleted during run)
-            # In this case, we should NOT re-raise - just log and terminate gracefully
-            is_thread_deleted = '23503' in error_str or 'messages_thread_id_fkey' in error_str
-
-            if is_thread_deleted:
-                logger.warning(f"Thread {thread_id} was deleted during agent run. Terminating gracefully.")
-                # Don't try to save error message (thread doesn't exist)
-                # Don't re-raise - just exit the generator
-                return
-
             # Use ErrorProcessor for consistent error handling
             processed_error = ErrorProcessor.process_system_error(e, context={"thread_id": thread_id})
             ErrorProcessor.log_error(processed_error)
-
+            
             # Save and yield error status message
             err_content = {"status_type": "error", "error": processed_error.message}
             err_msg_obj = await self.add_message(
-                thread_id=thread_id, type="status", content=err_content,
+                thread_id=thread_id, type="status", content=err_content, 
                 is_llm_message=False, metadata={"thread_run_id": thread_run_id if 'thread_run_id' in locals() else None}
             )
-            if err_msg_obj:
+            if err_msg_obj: 
                 yield format_for_yield(err_msg_obj)
             raise
 
@@ -1232,6 +1208,41 @@ class ResponseProcessor:
                     )
             elif llm_response_end_saved:
                 logger.debug(f"✅ Billing already handled for call #{auto_continue_count + 1} (llm_response_end was saved earlier)")
+            
+            # Cleanup orphaned tool calls if run was cancelled
+            if cancellation_event and cancellation_event.is_set() and last_assistant_message_object:
+                try:
+                    # Check if the last assistant message has tool_calls
+                    message_content = last_assistant_message_object.get('content', {})
+                    tool_calls = message_content.get('tool_calls', []) if isinstance(message_content, dict) else []
+                    
+                    if tool_calls:
+                        # Check if tool results were saved for these tool calls
+                        tool_call_ids = [tc.get('id') for tc in tool_calls if isinstance(tc, dict) and tc.get('id')]
+                        
+                        # Tool results are in tool_results_map (if not yet saved) or already saved to DB
+                        # If we're in cancellation, tool results likely weren't saved yet
+                        # Check if tool_results_map exists in local scope
+                        results_saved = 'tool_results_map' in locals() and bool(tool_results_map)
+                        
+                        if tool_call_ids and not results_saved:
+                            logger.warning(f"🧹 Cancellation detected with {len(tool_call_ids)} unanswered tool_calls - cleaning up message {last_assistant_message_object.get('message_id')}")
+                            
+                            # Remove tool_calls from the message
+                            updated_content = message_content.copy() if isinstance(message_content, dict) else {}
+                            updated_content.pop('tool_calls', None)
+                            
+                            # Update in database
+                            from core.services.supabase import DBConnection
+                            db = DBConnection()
+                            client = await db.client
+                            await client.table('messages').update({
+                                'content': updated_content
+                            }).eq('message_id', last_assistant_message_object['message_id']).execute()
+                            
+                            logger.info(f"✅ Removed {len(tool_call_ids)} orphaned tool_calls from message {last_assistant_message_object['message_id']}: {tool_call_ids}")
+                except Exception as cleanup_e:
+                    logger.error(f"Error cleaning up orphaned tool calls in finally block: {str(cleanup_e)}", exc_info=True)
             
             if should_auto_continue:
                 continuous_state['accumulated_content'] = accumulated_content
@@ -1499,31 +1510,19 @@ class ResponseProcessor:
                     self.trace.event(name="error_saving_assistant_response_end_for_non_stream", level="ERROR", status_message=(f"Error saving assistant response end for non-stream: {str(e)}"))
 
         except Exception as e:
-             error_str = str(e)
-
-             # Check if this is an FK constraint error (thread deleted during run)
-             # In this case, we should NOT re-raise - just log and terminate gracefully
-             is_thread_deleted = '23503' in error_str or 'messages_thread_id_fkey' in error_str
-
-             if is_thread_deleted:
-                 logger.warning(f"Thread {thread_id} was deleted during agent run (non-stream). Terminating gracefully.")
-                 # Don't try to save error message (thread doesn't exist)
-                 # Don't re-raise - just exit the generator
-                 return
-
              # Use ErrorProcessor for consistent error handling
              processed_error = ErrorProcessor.process_system_error(e, context={"thread_id": thread_id})
              ErrorProcessor.log_error(processed_error)
-
+             
              # Save and yield error status
              err_content = {"status_type": "error", "error": processed_error.message}
              err_msg_obj = await self.add_message(
-                 thread_id=thread_id, type="status", content=err_content,
+                 thread_id=thread_id, type="status", content=err_content, 
                  is_llm_message=False, metadata={"thread_run_id": thread_run_id if 'thread_run_id' in locals() else None}
              )
-             if err_msg_obj:
+             if err_msg_obj: 
                  yield format_for_yield(err_msg_obj)
-
+             
              raise
 
         finally:
@@ -1569,13 +1568,6 @@ class ResponseProcessor:
             # Get available functions from tool registry
             logger.debug(f"🔍 Looking up tool function: {function_name}")
             available_functions = self.tool_registry.get_available_functions()
-            
-            # Debug for avatar tool methods
-            if 'argil' in function_name:
-                logger.info(f"🎬 EXECUTE_TOOL: Trying to execute {function_name}")
-                logger.info(f"🎬 EXECUTE_TOOL: Is it in available_functions? {function_name in available_functions}")
-                avatar_methods = [f for f in available_functions.keys() if 'argil' in f]
-                logger.info(f"🎬 EXECUTE_TOOL: All argil methods in registry: {avatar_methods}")
             # logger.debug(f"📋 Available functions: {list(available_functions.keys())}")
 
             # Look up the function by name
@@ -2060,16 +2052,8 @@ class ResponseProcessor:
             )
             return message_obj # Return the full message object
         except Exception as e:
-            error_str = str(e)
-            # Check if this is an FK constraint error (thread deleted during run)
-            is_thread_deleted = '23503' in error_str or 'messages_thread_id_fkey' in error_str
-            
-            if is_thread_deleted:
-                logger.warning(f"Thread {thread_id} deleted while adding tool result - skipping")
-                return None  # Silently skip, thread was deleted
-            
-            logger.error(f"Error adding tool result: {error_str}", exc_info=True)
-            self.trace.event(name="error_adding_tool_result", level="ERROR", status_message=(f"Error adding tool result: {error_str}"), metadata={"tool_call": tool_call, "result": result, "assistant_message_id": assistant_message_id})
+            logger.error(f"Error adding tool result: {str(e)}", exc_info=True)
+            self.trace.event(name="error_adding_tool_result", level="ERROR", status_message=(f"Error adding tool result: {str(e)}"), metadata={"tool_call": tool_call, "result": result, "assistant_message_id": assistant_message_id})
             # Fallback to a simple message
             try:
                 fallback_message = {
@@ -2085,16 +2069,8 @@ class ResponseProcessor:
                 )
                 return message_obj # Return the full message object
             except Exception as e2:
-                error_str2 = str(e2)
-                # Check again for FK constraint in fallback
-                is_thread_deleted2 = '23503' in error_str2 or 'messages_thread_id_fkey' in error_str2
-                
-                if is_thread_deleted2:
-                    logger.warning(f"Thread {thread_id} deleted during fallback - skipping")
-                    return None
-                
-                logger.error(f"Failed even with fallback message: {error_str2}", exc_info=True)
-                self.trace.event(name="failed_even_with_fallback_message", level="ERROR", status_message=(f"Failed even with fallback message: {error_str2}"), metadata={"tool_call": tool_call, "result": result, "assistant_message_id": assistant_message_id})
+                logger.error(f"Failed even with fallback message: {str(e2)}", exc_info=True)
+                self.trace.event(name="failed_even_with_fallback_message", level="ERROR", status_message=(f"Failed even with fallback message: {str(e2)}"), metadata={"tool_call": tool_call, "result": result, "assistant_message_id": assistant_message_id})
                 return None # Return None on error
 
     def _format_tool_result(self, tool_call: Dict[str, Any], result: ToolResult, for_llm: bool = False):

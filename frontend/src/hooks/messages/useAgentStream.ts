@@ -491,9 +491,14 @@ export function useAgentStream(
           if (parsedMetadata.stream_status === 'tool_call_chunk') {
             // Handle tool call chunks - extract from metadata.tool_calls
             const toolCalls = parsedMetadata.tool_calls || [];
+            console.log('[useAgentStream] 🔧 Received tool_call_chunk:', {
+              toolCallsCount: toolCalls.length,
+              toolNames: toolCalls.map((tc: any) => tc.function_name)
+            });
             if (toolCalls.length > 0) {
               // Set toolCall state with the UnifiedMessage
               setToolCall(message);
+              console.log('[useAgentStream] ✅ Set toolCall state for pill display');
               // Call the callback with the full message (includes all tool calls in metadata)
               callbacks.onToolCallChunk?.(message);
             }
@@ -510,10 +515,11 @@ export function useAgentStream(
           } else if (parsedMetadata.stream_status === 'complete') {
             // Flush any pending content before completing
             flushPendingContent();
-            
+
             React.startTransition(() => {
               setTextContent([]);
-              setToolCall(null);
+              // Don't clear toolCall here - keep the loader pill visible until tool results arrive
+              // It will be cleared when type='tool' message arrives (line 527) or type='status' with tool_completed (line 538)
             });
             if (message.message_id) callbacks.onMessage(message);
           } else if (!parsedMetadata.stream_status) {
@@ -523,6 +529,7 @@ export function useAgentStream(
           }
           break;
         case 'tool':
+          console.log('[useAgentStream] 🧹 Clearing toolCall pill (type=tool message received)');
           React.startTransition(() => {
             setToolCall(null); // Clear any streaming tool call
           });
@@ -530,10 +537,27 @@ export function useAgentStream(
           break;
         case 'status':
           switch (parsedContent.status_type) {
+            case 'tool_started':
+              // Show pill when tool starts executing
+              console.log(`[useAgentStream] 🔧 Tool started: ${parsedContent.function_name}`);
+              React.startTransition(() => {
+                // Create a fake message with tool info for the pill
+                setToolCall({
+                  ...message,
+                  metadata: JSON.stringify({
+                    tool_calls: [{
+                      function_name: parsedContent.function_name,
+                      arguments: parsedContent.arguments || {}
+                    }]
+                  })
+                });
+              });
+              break;
             case 'tool_completed':
             case 'tool_failed':
             case 'tool_error':
               // Clear streaming tool call when tool completes/fails
+              console.log(`[useAgentStream] 🧹 Clearing toolCall pill (status=${parsedContent.status_type})`);
               React.startTransition(() => {
                 setToolCall(null);
               });

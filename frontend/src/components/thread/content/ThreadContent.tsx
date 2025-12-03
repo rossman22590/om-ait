@@ -281,7 +281,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                                         }
                                         // Create a new user message group
                                         groupedMessages.push({ type: 'user', messages: [message], key });
-                                    } else if (messageType === 'assistant' || messageType === 'tool' || messageType === 'browser_state') {
+                                    } else if (messageType === 'assistant' || messageType === 'tool' || messageType === 'browser_state' || messageType === 'status') {
                                         // Check if we can add to existing assistant group (same agent)
                                         const canAddToExistingGroup = currentGroup &&
                                             currentGroup.type === 'assistant_group' &&
@@ -550,6 +550,28 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                                                                         );
 
                                                                         assistantMessageCount++; // Increment after adding the element
+                                                                    } else if (message.type === 'status') {
+                                                                        // Render status messages (tool_started, tool_completed, etc.)
+                                                                        const msgKey = message.message_id || `submsg-status-${msgIndex}`;
+                                                                        const parsedContent = safeJsonParse<ParsedContent>(message.content, {});
+                                                                        const statusType = parsedContent.status_type;
+                                                                        const functionName = parsedContent.function_name;
+
+                                                                        if (statusType === 'tool_started' && functionName) {
+                                                                            const toolName = functionName.replace(/_/g, '-');
+                                                                            elements.push(
+                                                                                <div key={msgKey} className="my-1">
+                                                                                    <div className="inline-flex items-center gap-1.5 py-1 px-1 pr-1.5 text-xs text-muted-foreground bg-muted rounded-lg border border-neutral-200 dark:border-neutral-700/50">
+                                                                                        <div className='border-2 bg-gradient-to-br from-neutral-200 to-neutral-300 dark:from-neutral-700 dark:to-neutral-800 flex items-center justify-center p-0.5 rounded-sm border-neutral-400/20 dark:border-neutral-600'>
+                                                                                            <CircleDashed className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0 animate-spin animation-duration-2000" />
+                                                                                        </div>
+                                                                                        <span className="font-mono text-xs text-foreground">
+                                                                                            {getUserFriendlyToolName(toolName)}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        }
                                                                     }
                                                                 });
 
