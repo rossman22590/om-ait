@@ -268,11 +268,15 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
         { showErrors: false }
       ).then((response) => {
         if (response.data?.sandbox_id) {
-          // Refetch project to get the new sandbox ID
+          // Refetch project to get the new sandbox ID and URLs
           projectQuery.refetch();
-          // Dispatch sandbox-active event
+          // Dispatch sandbox-active event with sandbox_url if available
           window.dispatchEvent(new CustomEvent('sandbox-active', {
-            detail: { sandboxId: response.data.sandbox_id, projectId: project.id }
+            detail: {
+              sandboxId: response.data.sandbox_id,
+              sandboxUrl: response.data.sandbox_url,
+              projectId: project.id
+            }
           }));
         }
       }).catch((err) => {
