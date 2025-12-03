@@ -80,7 +80,7 @@ export function WorkspaceIntroModal({ sandboxId }: WorkspaceIntroModalProps) {
         hideCloseButton
         onInteractOutside={() => { closeReasonRef.current = 'outside'; }}
         onEscapeKeyDown={() => { closeReasonRef.current = 'escape'; }}
-        className="max-w-xl p-0 overflow-hidden"
+        className="max-w-xl w-[calc(100vw-2rem)] max-h-[90vh] p-0 overflow-y-auto overflow-x-hidden mx-4"
       >
         <div className="bg-gradient-to-r from-indigo-500/15 via-purple-500/10 to-pink-500/15 px-5 py-4 border-b border-border">
           <DialogHeader>
@@ -98,24 +98,24 @@ export function WorkspaceIntroModal({ sandboxId }: WorkspaceIntroModalProps) {
               Tip: Press <span className="font-medium">Got it</span> to stop seeing this message in the future. Clicking outside will close it only for this visit.
             </p>
           </div>
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground" />
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 flex-wrap">
+              <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
               <span className="text-muted-foreground">Status:</span>
-              <span className="text-foreground font-medium">
+              <span className="text-foreground font-medium break-words">
                 {!sandboxId ? 'Sandbox will be created on first action' : (isLoading ? 'Checking files…' : (files && files.length > 0 ? `${files.filter(f=>!f.is_dir).length} files • ${files.filter(f=>f.is_dir).length} folders` : 'No files found'))}
               </span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <Checkbox id="dontshow" checked={dontShowAgain} onCheckedChange={(v)=>setDontShowAgain(!!v)} />
-              <label htmlFor="dontshow" className="text-muted-foreground select-none cursor-pointer">Don’t show again</label>
+              <label htmlFor="dontshow" className="text-muted-foreground select-none cursor-pointer whitespace-nowrap">Don't show again</label>
             </div>
           </div>
           <p className="text-sm text-muted-foreground">
             Your project workspace is empty. Features like file previews, downloads, and many tools unlock after you add at least one file under <span className="font-medium text-foreground">/workspace</span>.
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="rounded-xl border border-border p-3 bg-card/50">
               <div className="flex items-center gap-2 text-sm font-medium mb-1.5">
                 <FilePlus2 className="w-4 h-4" />
@@ -145,15 +145,15 @@ export function WorkspaceIntroModal({ sandboxId }: WorkspaceIntroModalProps) {
           </div>
 
           <div className="rounded-lg border border-border bg-muted/40 p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="text-xs text-muted-foreground flex-1">
+            <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
+              <div className="text-xs text-muted-foreground flex-1 w-full">
                 <div className="text-foreground font-medium mb-1">Quick starter prompt</div>
                 <div className="select-text break-words">{starterPrompt}</div>
               </div>
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 px-2 rounded-lg"
+                className="h-8 px-2 rounded-lg flex-shrink-0 w-full sm:w-auto"
                 onClick={async () => {
                   try {
                     await navigator.clipboard.writeText(starterPrompt);
@@ -173,7 +173,7 @@ export function WorkspaceIntroModal({ sandboxId }: WorkspaceIntroModalProps) {
               <FileText className="w-4 h-4" />
               Workflow examples
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {workflowPrompts.map((p, idx) => (
                 <div key={idx} className="rounded-lg border border-border p-3 bg-card/40">
                   <div className="text-xs font-medium mb-1">{p.title}</div>
