@@ -526,17 +526,14 @@ class VapiWebhookHandler:
                 for msg in transcript
             ])
             
-            message_data = {
-                "thread_id": thread_id,
-                "role": "assistant",
-                "content": f"Call completed (ID: {call_id})\n\nTranscript:\n{conversation_text}",
-                "metadata": {
-                    "type": "voice_call_transcript",
-                    "call_id": call_id
-                }
-            }
-            
-            await client.table("messages").insert(message_data).execute()
+            # Use RPC to avoid Supabase replication lag FK constraint issues
+            await client.rpc('insert_message_safe', {
+                'p_thread_id': thread_id,
+                'p_type': 'assistant',
+                'p_content': {"role": "assistant", "content": f"Call completed (ID: {call_id})\n\nTranscript:\n{conversation_text}"},
+                'p_is_llm_message': False,
+                'p_metadata': {"type": "voice_call_transcript", "call_id": call_id}
+            }).execute()
         except Exception as e:
             logger.error(f"Error saving transcript to thread: {e}")
 

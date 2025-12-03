@@ -68,6 +68,12 @@ class ErrorProcessor:
     """Centralized error processing using LiteLLM's exception hierarchy."""
     
     @staticmethod
+    def is_thread_deleted_error(error: Exception) -> bool:
+        """Check if error is a FK constraint violation from thread deletion."""
+        error_str = str(error)
+        return '23503' in error_str and 'messages_thread_id_fkey' in error_str
+    
+    @staticmethod
     def process_llm_error(error: Exception, context: Optional[Dict[str, Any]] = None) -> ProcessedError:
         """Process LLM-related errors using LiteLLM's exception types."""
         error_message = ErrorProcessor.safe_error_to_string(error)
@@ -183,8 +189,13 @@ class ErrorProcessor:
         )
     
     @staticmethod
-    def process_system_error(error: Exception, context: Optional[Dict[str, Any]] = None) -> ProcessedError:
-        """Process general system errors."""
+    def process_system_error(error: Exception, context: Optional[Dict[str, Any]] = None) -> Optional[ProcessedError]:
+        """Process general system errors. Returns None for errors that should be silently suppressed."""
+        # Check if this is a thread deletion error (FK constraint) - these should be silently handled
+        if ErrorProcessor.is_thread_deleted_error(error):
+            logger.warning(f"Thread deleted during execution - suppressing error from stream")
+            return None  # Signal to caller to skip this error
+        
         return ProcessedError(
             error_type="system_error",
             message=f"System error: {ErrorProcessor.safe_error_to_string(error)}",

@@ -23,6 +23,9 @@ import litellm
 
 ToolChoice = Literal["auto", "required", "none"]
 
+from core.agentpress.exceptions import ThreadDeletedException
+
+
 class ThreadManager:
     """Manages conversation threads with LLM models and tool execution."""
 
@@ -102,21 +105,40 @@ class ThreadManager:
         if agent_version_id:
             data_to_insert['agent_version_id'] = agent_version_id
 
+        # Use RPC function to insert message safely (avoids Supabase replication lag FK issues)
+        # The RPC runs SELECT + INSERT in same transaction, ensuring FK check sees the thread
         try:
-            result = await client.table('messages').insert(data_to_insert).execute()
+            result = await client.rpc('insert_message_safe', {
+                'p_thread_id': thread_id,
+                'p_type': type,
+                'p_content': content if isinstance(content, dict) else {'data': content},
+                'p_is_llm_message': is_llm_message,
+                'p_metadata': metadata or {},
+                'p_agent_id': agent_id,
+                'p_agent_version_id': agent_version_id
+            }).execute()
 
-            if result.data and len(result.data) > 0 and 'message_id' in result.data[0]:
-                saved_message = result.data[0]
-                
+            if result.data:
+                saved_message = result.data
+                # RPC returns JSONB directly, not wrapped in array
+                if isinstance(saved_message, list) and len(saved_message) > 0:
+                    saved_message = saved_message[0]
+
                 if type == "llm_response_end" and isinstance(content, dict):
                     await self._handle_billing(thread_id, content, saved_message)
-                
+
                 return saved_message
             else:
-                logger.error(f"Insert operation failed for thread {thread_id}")
+                logger.error(f"RPC insert_message_safe returned no data for thread {thread_id}")
                 return None
+
         except Exception as e:
-            logger.error(f"Failed to add message to thread {thread_id}: {str(e)}", exc_info=True)
+            error_str = str(e)
+            # Check if thread was deleted (RPC raises custom exception)
+            if 'does not exist' in error_str or '23503' in error_str or 'messages_thread_id_fkey' in error_str:
+                logger.warning(f"Thread {thread_id} does not exist. Raising ThreadDeletedException.")
+                raise ThreadDeletedException(thread_id)
+            logger.error(f"Failed to add message to thread {thread_id}: {error_str}", exc_info=True)
             raise
 
     async def _handle_billing(self, thread_id: str, content: dict, saved_message: dict):
@@ -235,13 +257,12 @@ class ThreadManager:
                         parsed_item = json.loads(content)
                         parsed_item['message_id'] = item['message_id']
                         
-                        # Skip empty user messages (defensive filter for legacy data)
-                        if parsed_item.get('role') == 'user':
-                            msg_content = parsed_item.get('content', '')
-                            if isinstance(msg_content, str) and not msg_content.strip():
-                                logger.warning(f"Skipping empty user message {item['message_id']} from LLM context")
-                                continue
-                        
+                        # Skip empty messages (defensive filter for legacy/corrupted data)
+                        msg_content = parsed_item.get('content', '')
+                        if isinstance(msg_content, str) and not msg_content.strip():
+                            logger.warning(f"Skipping empty {parsed_item.get('role', 'unknown')} message {item['message_id']} from LLM context")
+                            continue
+
                         messages.append(parsed_item)
                     except json.JSONDecodeError:
                         # If compressed (legacy string format), assume user role (not ideal but backwards compat)
@@ -258,16 +279,15 @@ class ThreadManager:
                     # Content is already a dict (e.g., from JSON/JSONB column type)
                     content['message_id'] = item['message_id']
                     
-                    # Skip empty user messages (defensive filter for legacy data)
-                    if content.get('role') == 'user':
-                        msg_content = content.get('content', '')
-                        if isinstance(msg_content, str) and not msg_content.strip():
-                            logger.warning(f"Skipping empty user message {item['message_id']} from LLM context")
-                            continue
-                    
+                    # Skip empty messages (defensive filter for legacy/corrupted data)
+                    msg_content = content.get('content', '')
+                    if isinstance(msg_content, str) and not msg_content.strip():
+                        logger.warning(f"Skipping empty {content.get('role', 'unknown')} message {item['message_id']} from LLM context")
+                        continue
+
                     # Tool messages: content field is already a JSON string from success_response
                     # No conversion needed - it's already in the correct format for Bedrock
-                    
+
                     messages.append(content)
                 else:
                     # Fallback for other types
@@ -670,6 +690,9 @@ class ThreadManager:
 
         except Exception as e:
             processed_error = ErrorProcessor.process_system_error(e, context={"thread_id": thread_id})
+            if processed_error is None:
+                # Error was suppressed (e.g., thread deleted), return empty dict to skip streaming
+                return {}
             ErrorProcessor.log_error(processed_error)
             return processed_error.to_stream_dict()
 
@@ -806,8 +829,9 @@ class ThreadManager:
                     continue
                 else:
                     processed_error = ErrorProcessor.process_system_error(e, context={"thread_id": thread_id})
-                    ErrorProcessor.log_error(processed_error)
-                    yield processed_error.to_stream_dict()
+                    if processed_error is not None:  # Only yield if error wasn't suppressed
+                        ErrorProcessor.log_error(processed_error)
+                        yield processed_error.to_stream_dict()
                     return
 
         # Handle max iterations reached

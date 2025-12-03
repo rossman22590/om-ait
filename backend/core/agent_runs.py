@@ -707,18 +707,27 @@ async def start_agent_run(
     
     # Resolve effective model
     effective_model = await _get_effective_model(model_name, agent_config, client, account_id)
-    
+
+    # Validate existing thread exists before proceeding
+    if not is_new_thread:
+        thread_check = await client.table('threads').select('thread_id, project_id').eq('thread_id', thread_id).maybe_single().execute()
+        if not thread_check.data:
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+        # Use the project_id from the thread if not provided
+        if not project_id:
+            project_id = thread_check.data.get('project_id')
+
     if is_new_thread:
         # ================================================================
         # NEW THREAD PATH
         # ================================================================
-        
+
         # Create project only if not already provided (e.g., pre-created for file uploads)
         if not project_id:
             t_project = time.time()
             project_id = str(uuid.uuid4())
             placeholder_name = f"{prompt[:30]}..." if len(prompt) > 30 else prompt
-            
+
             await client.table('projects').insert({
                 "project_id": project_id,
                 "account_id": account_id,
@@ -726,47 +735,54 @@ async def start_agent_run(
                 "created_at": datetime.now(timezone.utc).isoformat()
             }).execute()
             logger.debug(f"⏱️ [TIMING] Project created: {(time.time() - t_project) * 1000:.1f}ms")
-            
+
             # Pre-cache project metadata
             try:
                 from core.runtime_cache import set_cached_project_metadata
                 await set_cached_project_metadata(project_id, {})
             except Exception:
                 pass
-            
+
             # Background naming task
             asyncio.create_task(generate_and_update_project_name(project_id=project_id, prompt=prompt))
-        
+
         # Create Thread
         t_thread = time.time()
         thread_id = str(uuid.uuid4())
-        await client.table('threads').insert({
+        thread_result = await client.table('threads').insert({
             "thread_id": thread_id,
             "project_id": project_id,
             "account_id": account_id,
             "created_at": datetime.now(timezone.utc).isoformat()
         }).execute()
+
+        # Verify thread was actually created
+        if not thread_result.data:
+            logger.error(f"❌ Thread creation returned no data! thread_id={thread_id}")
+            raise HTTPException(status_code=500, detail="Failed to create thread - no data returned")
+
+        logger.info(f"✅ Thread created successfully: {thread_id}, result: {thread_result.data}")
         logger.debug(f"⏱️ [TIMING] Thread created: {(time.time() - t_thread) * 1000:.1f}ms")
-        
+
         structlog.contextvars.bind_contextvars(thread_id=thread_id, project_id=project_id, account_id=account_id)
-        
+
         # Update thread count cache
         try:
             from core.runtime_cache import increment_thread_count_cache
             asyncio.create_task(increment_thread_count_cache(account_id))
         except Exception:
             pass
-    
+
     # Create agent run (and conditionally create message)
     t_parallel2 = time.time()
-    
+
     async def create_message():
         """
         Message creation logic:
         - NEW thread: Always create message (prompt is required at endpoint validation)
         - EXISTING thread + prompt provided: Create message (user wants to add message + start agent)
         - EXISTING thread + NO prompt: Skip (user already added message via /threads/{id}/messages/add)
-        
+
         This prevents duplicate/empty messages when clients use the two-step flow:
         1. /threads/{id}/messages/add (with message)
         2. /agent/start (without prompt, just to start the agent)
@@ -778,14 +794,14 @@ async def start_agent_run(
             else:
                 logger.debug(f"No prompt provided for existing thread {thread_id} - assuming message already exists")
             return
-            
-        await client.table('messages').insert({
-            "message_id": str(uuid.uuid4()),
-            "thread_id": thread_id,
-            "type": "user",
-            "is_llm_message": True,
-            "content": {"role": "user", "content": final_message_content},
-            "created_at": datetime.now(timezone.utc).isoformat()
+
+        # Use RPC to avoid Supabase replication lag FK constraint issues
+        await client.rpc('insert_message_safe', {
+            'p_thread_id': thread_id,
+            'p_type': 'user',
+            'p_content': {"role": "user", "content": final_message_content},
+            'p_is_llm_message': True,
+            'p_metadata': {}
         }).execute()
         logger.debug(f"Created user message for thread {thread_id}")
     

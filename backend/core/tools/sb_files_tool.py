@@ -116,11 +116,12 @@ class SandboxFilesTool(SandboxToolsBase):
         try:
             # Ensure sandbox is initialized
             await self._ensure_sandbox()
-            
+
             file_path = self.clean_path(file_path)
             full_path = f"{self.workspace_path}/{file_path}"
-            if await self._file_exists(full_path):
-                return self.fail_response(f"File '{file_path}' already exists. Use update_file to modify existing files.")
+
+            # If file already exists, overwrite it (idempotent behavior to prevent retry loops)
+            file_exists = await self._file_exists(full_path)
             
             # Create parent directories if needed
             parent_dir = '/'.join(full_path.split('/')[:-1])
@@ -134,8 +135,11 @@ class SandboxFilesTool(SandboxToolsBase):
             # Write the file content
             await self.sandbox.fs.upload_file(file_contents.encode(), full_path)
             await self.sandbox.fs.set_file_permissions(full_path, permissions)
-            
-            message = f"File '{file_path}' created successfully."
+
+            if file_exists:
+                message = f"File '{file_path}' updated successfully."
+            else:
+                message = f"File '{file_path}' created successfully."
             
             # Check if index.html was created and add 8080 server info (only in root workspace)
             if file_path.lower() == 'index.html':

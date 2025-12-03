@@ -41,24 +41,8 @@ class LLMError(Exception):
     pass
 
 
-# CRITICAL: Vanity model ID mapping - these MUST be converted before ANY LiteLLM call
-_VANITY_TO_REAL_MODEL = {
-    "kortix/basic": "openrouter/anthropic/claude-haiku-4.5",
-    "kortix/power": "openrouter/anthropic/claude-sonnet-4.5",
-}
-
 def _ensure_real_model_id(model_id: str) -> str:
-    """
-    CRITICAL: Convert vanity model IDs to real LiteLLM model IDs.
-    
-    This function MUST be called before ANY LiteLLM API call.
-    Vanity IDs like 'kortix/basic' and 'kortix/power' are internal aliases
-    that LiteLLM does not recognize - they MUST be converted to real provider models.
-    """
-    if model_id in _VANITY_TO_REAL_MODEL:
-        real_model = _VANITY_TO_REAL_MODEL[model_id]
-        logger.warning(f"🚨 VANITY ID INTERCEPTED: {model_id} -> {real_model}")
-        return real_model
+    """Pass through model ID - no vanity ID conversion needed anymore."""
     return model_id
 
 def setup_api_keys() -> None:

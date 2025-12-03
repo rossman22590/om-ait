@@ -9,57 +9,46 @@ export type ModelProvider =
   | 'google'
   | 'xai'
   | 'moonshotai'
+  | 'zhipu'
+  | 'meta'
+  | 'minimax'
   | 'bedrock'
-  | 'openrouter'
-  | 'kortix';
-
-/**
- * Check if a model ID corresponds to a Kortix mode (Basic or POWER)
- */
-export function isKortixMode(modelId: string): boolean {
-  // New Kortix registry IDs
-  if (modelId === 'kortix/basic' || modelId === 'kortix/power' || 
-      modelId === 'kortix-basic' || modelId === 'kortix-power') {
-    return true;
-  }
-  // Legacy: Kortix Basic (Haiku 4.5)
-  if (modelId.includes('claude-haiku-4-5') || modelId.includes('heol2zyy5v48')) {
-    return true;
-  }
-  // Legacy: Kortix POWER Mode (Sonnet 4.5)
-  if (modelId.includes('claude-sonnet-4-5') || modelId.includes('few7z4l830xh')) {
-    return true;
-  }
-  return false;
-}
+  | 'openrouter';
 
 /**
  * Get the provider from a model ID
  */
 export function getModelProvider(modelId: string): ModelProvider {
-  // Check for Kortix modes first
-  if (isKortixMode(modelId)) {
-    return 'kortix';
-  }
-  if (modelId.includes('anthropic') || modelId.includes('claude')) {
+  const lower = modelId.toLowerCase();
+
+  if (lower.includes('anthropic') || lower.includes('claude')) {
     return 'anthropic';
   }
-  if (modelId.includes('openai') || modelId.includes('gpt')) {
+  if (lower.includes('openai') || lower.includes('gpt')) {
     return 'openai';
   }
-  if (modelId.includes('google') || modelId.includes('gemini')) {
+  if (lower.includes('google') || lower.includes('gemini')) {
     return 'google';
   }
-  if (modelId.includes('xai') || modelId.includes('grok')) {
+  if (lower.includes('xai') || lower.includes('grok')) {
     return 'xai';
   }
-  if (modelId.includes('moonshotai') || modelId.includes('kimi')) {
+  if (lower.includes('moonshotai') || lower.includes('kimi')) {
     return 'moonshotai';
   }
-  if (modelId.includes('bedrock')) {
+  if (lower.includes('z-ai') || lower.includes('glm')) {
+    return 'zhipu';
+  }
+  if (lower.includes('meta-llama') || lower.includes('llama')) {
+    return 'meta';
+  }
+  if (lower.includes('minimax')) {
+    return 'minimax';
+  }
+  if (lower.includes('bedrock')) {
     return 'bedrock';
   }
-  if (modelId.includes('openrouter')) {
+  if (lower.includes('openrouter')) {
     return 'openrouter';
   }
 
@@ -67,7 +56,7 @@ export function getModelProvider(modelId: string): ModelProvider {
   const parts = modelId.split('/');
   if (parts.length > 1) {
     const provider = parts[0].toLowerCase();
-    if (['openai', 'anthropic', 'google', 'xai', 'moonshotai', 'bedrock', 'openrouter'].includes(provider)) {
+    if (['openai', 'anthropic', 'google', 'xai', 'moonshotai'].includes(provider)) {
       return provider as ModelProvider;
     }
   }
@@ -87,31 +76,30 @@ interface ModelProviderIconProps {
 
 export function ModelProviderIcon({
   modelId,
-  size = 24, // Default to 24px for better visibility
+  size = 24,
   className = '',
   variant = 'default'
 }: ModelProviderIconProps) {
   const provider = getModelProvider(modelId);
 
   const iconMap: Record<ModelProvider, string> = {
-    kortix: '/kortix-symbol.svg', // Kortix modes use the Kortix symbol
     anthropic: '/images/models/Anthropic.svg',
     openai: '/images/models/OAI.svg',
     google: '/images/models/Gemini.svg',
     xai: '/images/models/Grok.svg',
     moonshotai: '/images/models/Moonshot.svg',
-    bedrock: '/images/models/Anthropic.svg', // Bedrock uses Anthropic models primarily
-    openrouter: '/images/models/OAI.svg', // Default to OpenAI icon for OpenRouter
+    zhipu: '/images/models/OAI.svg', // Use default for now
+    meta: '/images/models/OAI.svg', // Use default for now
+    minimax: '/images/models/OAI.svg', // Use default for now
+    bedrock: '/images/models/Anthropic.svg',
+    openrouter: '/images/models/OAI.svg',
   };
-
-  // Special handling for Kortix symbol - needs different invert behavior
-  const isKortix = provider === 'kortix';
 
   const iconSrc = iconMap[provider];
 
-  // Calculate responsive border radius - proportional to size (matching AgentAvatar)
+  // Calculate responsive border radius
   const borderRadiusStyle = {
-    borderRadius: `${Math.min(size * 0.25, 16)}px` // 25% of size, max 16px
+    borderRadius: `${Math.min(size * 0.25, 16)}px`
   };
 
   if (!iconSrc) {
@@ -139,14 +127,9 @@ export function ModelProviderIcon({
       <Image
         src={iconSrc}
         alt={`${provider} icon`}
-        width={size * 0.6} // Match agent avatar spacing
+        width={size * 0.6}
         height={size * 0.6}
-        className={cn(
-          "object-contain",
-          // Kortix symbol: invert in dark mode (black symbol → white)
-          // Other icons: invert in dark mode (black icons → white)
-          isKortix ? "dark:invert" : "dark:brightness-0 dark:invert"
-        )}
+        className="object-contain dark:brightness-0 dark:invert"
         style={{ width: size * 0.6, height: size * 0.6 }}
       />
     </div>
@@ -160,12 +143,14 @@ export function getModelProviderName(modelId: string): string {
   const provider = getModelProvider(modelId);
 
   const nameMap: Record<ModelProvider, string> = {
-    kortix: 'Kortix',
     anthropic: 'Anthropic',
     openai: 'OpenAI',
     google: 'Google',
     xai: 'xAI',
     moonshotai: 'Moonshot AI',
+    zhipu: 'Zhipu AI',
+    meta: 'Meta',
+    minimax: 'Minimax',
     bedrock: 'AWS Bedrock',
     openrouter: 'OpenRouter',
   };

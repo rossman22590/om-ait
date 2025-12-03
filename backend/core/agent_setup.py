@@ -63,7 +63,28 @@ Example:
             model_name=model_name,
             max_tokens=2000,
             temperature=0.7,
-            response_format={"type": "json_object"},
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "agent_config",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Agent name (2-4 words)"
+                            },
+                            "system_prompt": {
+                                "type": "string",
+                                "description": "Detailed instructions for the agent's role and behavior"
+                            }
+                        },
+                        "required": ["name", "system_prompt"],
+                        "additionalProperties": False
+                    }
+                }
+            },
             stream=False
         )
 

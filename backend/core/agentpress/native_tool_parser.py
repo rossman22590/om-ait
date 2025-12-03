@@ -51,25 +51,32 @@ def extract_tool_call_chunk_data(tool_call_chunk: Any) -> Dict[str, Any]:
 def is_tool_call_complete(tool_call_buffer_entry: Dict[str, Any]) -> bool:
     """
     Check if a buffered tool call is complete (has all required fields and valid JSON arguments).
-    
+
     Args:
         tool_call_buffer_entry: Dictionary from tool_calls_buffer with 'id', 'function' keys
-        
+
     Returns:
         True if tool call is complete and ready to execute
     """
     if not tool_call_buffer_entry:
         return False
-    
-    if not (tool_call_buffer_entry.get('id') and 
-            tool_call_buffer_entry.get('function', {}).get('name') and
-            tool_call_buffer_entry.get('function', {}).get('arguments')):
+
+    # Must have id and function name
+    if not (tool_call_buffer_entry.get('id') and
+            tool_call_buffer_entry.get('function', {}).get('name')):
         return False
-    
+
+    # Get arguments - can be empty string, "{}", or actual JSON
+    arguments = tool_call_buffer_entry.get('function', {}).get('arguments', '')
+
+    # Empty string or "{}" means no parameters - treat as valid empty dict
+    if arguments == '' or arguments == '{}':
+        return True
+
     # Verify JSON arguments are complete and parse to a dict
     try:
         from core.utils.json_helpers import safe_json_parse
-        parsed = safe_json_parse(tool_call_buffer_entry['function']['arguments'])
+        parsed = safe_json_parse(arguments)
         # Must parse to a dict (not a string) to be considered complete
         return isinstance(parsed, dict)
     except (json.JSONDecodeError, TypeError):
@@ -79,18 +86,22 @@ def is_tool_call_complete(tool_call_buffer_entry: Dict[str, Any]) -> bool:
 def parse_native_tool_call_arguments(arguments: Any) -> Dict[str, Any]:
     """
     Parse native tool call arguments, handling both string and dict formats.
-    
+
     Args:
         arguments: Arguments as string (JSON) or dict
-        
+
     Returns:
-        Parsed arguments as dict, or original value if parsing fails
+        Parsed arguments as dict, or empty dict if no arguments
     """
     from core.utils.json_helpers import safe_json_parse
-    
+
+    # Handle None or empty string - return empty dict for no-param tools
+    if arguments is None or arguments == '' or arguments == '{}':
+        return {}
+
     if isinstance(arguments, dict):
         return arguments
-    
+
     if isinstance(arguments, str):
         parsed = safe_json_parse(arguments)
         if isinstance(parsed, dict):
@@ -99,9 +110,10 @@ def parse_native_tool_call_arguments(arguments: Any) -> Dict[str, Any]:
         try:
             return json.loads(arguments)
         except (json.JSONDecodeError, ValueError):
-            return arguments
-    
-    return arguments
+            # If it's not valid JSON, return empty dict rather than the string
+            return {}
+
+    return {}
 
 
 def convert_to_exec_tool_call(

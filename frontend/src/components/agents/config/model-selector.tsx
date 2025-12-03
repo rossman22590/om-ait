@@ -209,11 +209,9 @@ export function AgentModelSelector({
     } else {
       // If user doesn't have access, open pricing modal
       setIsOpen(false);
-      const model = enhancedModelOptions.find(m => m.id === modelId);
-      const isPowerModel = modelId === 'kortix/power';
       openPricingModal({
         isAlert: true,
-        alertTitle: isPowerModel ? 'Upgrade to access Machine Power mode' : 'Upgrade to access this model',
+        alertTitle: 'Upgrade to access this model',
       });
     }
   };
@@ -313,7 +311,6 @@ export function AgentModelSelector({
     const isPremium = model.requiresSubscription;
     const isLowQuality = false; // API models are quality controlled
     const isRecommended = false; // Remove recommended badges
-    const isPowerModel = model.id === 'kortix/power';
 
     // Format cost display
     const formatCost = (cost: number | null | undefined) => {
@@ -388,7 +385,7 @@ export function AgentModelSelector({
           </TooltipTrigger>
           {!accessible && !isLocalMode() ? (
             <TooltipContent side="left" className="text-xs max-w-xs">
-              <p>{isPowerModel ? 'Upgrade to access Machine Power mode' : 'Upgrade to access this model'}</p>
+              <p>Upgrade to access this model</p>
             </TooltipContent>
           ) : isLowQuality ? (
             <TooltipContent side="left" className="text-xs max-w-xs">
