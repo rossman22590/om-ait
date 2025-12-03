@@ -316,7 +316,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
                                                 key: `assistant-group-${assistantGroupCounter}`
                                             };
                                         }
-                                    } else if (messageType !== 'status') {
+                                    } else {
                                         // For any other message types, finalize current group
                                         if (currentGroup) {
                                             groupedMessages.push(currentGroup);
