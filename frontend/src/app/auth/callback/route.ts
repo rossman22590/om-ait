@@ -17,10 +17,11 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('returnUrl') || searchParams.get('redirect') || '/dashboard'
   const termsAccepted = searchParams.get('terms_accepted') === 'true'
   
-  // Use request origin for redirects (most reliable for local dev)
-  // This ensures localhost:3000 redirects stay on localhost, not staging
+  // Prioritize NEXT_PUBLIC_URL in production for reliable redirects
+  // Only use request origin as fallback for local development
   const requestOrigin = request.nextUrl.origin
-  const baseUrl = requestOrigin || process.env.NEXT_PUBLIC_URL || 'http://localhost:3000'
+  const isLocalDev = requestOrigin?.includes('localhost') || requestOrigin?.includes('127.0.0.1')
+  const baseUrl = (isLocalDev ? requestOrigin : process.env.NEXT_PUBLIC_URL) || requestOrigin || 'http://localhost:3000'
   const error = searchParams.get('error')
   const errorCode = searchParams.get('error_code')
   const errorDescription = searchParams.get('error_description')
