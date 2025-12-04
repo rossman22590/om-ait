@@ -97,14 +97,14 @@ class Configuration:
     SYSTEM_ADMIN_USER_ID: Optional[str] = None  # User ID that owns shared/fallback agents
 
     # Subscription tier IDs - Production
-    STRIPE_FREE_TIER_ID_PROD: Optional[str] = 'price_1RILb4G6l1KZGqIrK4QLrx9i'
-    STRIPE_TIER_2_20_ID_PROD: Optional[str] = 'price_1RILb4G6l1KZGqIrhomjgDnO'
-    STRIPE_TIER_6_50_ID_PROD: Optional[str] = 'price_1RILb4G6l1KZGqIr5q0sybWn'
-    STRIPE_TIER_12_100_ID_PROD: Optional[str] = 'price_1RILb4G6l1KZGqIr5Y20ZLHm'
-    STRIPE_TIER_25_200_ID_PROD: Optional[str] = 'price_1RILb4G6l1KZGqIrGAD8rNjb'
-    STRIPE_TIER_50_400_ID_PROD: Optional[str] = 'price_1RILb4G6l1KZGqIruNBUMTF1'
-    STRIPE_TIER_125_800_ID_PROD: Optional[str] = 'price_1RILb3G6l1KZGqIrbJA766tN'
-    STRIPE_TIER_200_1000_ID_PROD: Optional[str] = 'price_1RILb3G6l1KZGqIrmauYPOiN'
+    STRIPE_FREE_TIER_ID_PROD: str = 'price_1RLwBMG23sSyONuFrhkNh9fe'
+    STRIPE_TIER_2_20_ID_PROD: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'
+    STRIPE_TIER_6_50_ID_PROD: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'
+    STRIPE_TIER_12_100_ID_PROD: str = 'price_1RLyE5G23sSyONuFHJiqvoLo'
+    STRIPE_TIER_25_200_ID_PROD: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
+    STRIPE_TIER_50_400_ID_PROD: str = 'price_1RLyEhG23sSyONuFioU064nT'
+    STRIPE_TIER_125_800_ID_PROD: str = 'price_1RLyEnG23sSyONuFE9wBSfvN'
+    STRIPE_TIER_200_1000_ID_PROD: str = 'price_1RLyErG23sSyONuFjGphWKjB'
     
     # Yearly subscription tier IDs - Production (15% discount)
     STRIPE_TIER_2_20_YEARLY_ID_PROD: Optional[str] = 'price_1ReHB5G6l1KZGqIrD70I1xqM'
@@ -121,14 +121,14 @@ class Configuration:
     STRIPE_TIER_25_170_YEARLY_COMMITMENT_ID_PROD: Optional[str] = 'price_1RqtrUG6l1KZGqIrEb8hLsk3'  # $170/month
 
     # Subscription tier IDs - Staging
-    STRIPE_FREE_TIER_ID_STAGING: Optional[str] = 'price_1RIGvuG6l1KZGqIrw14abxeL'
-    STRIPE_TIER_2_20_ID_STAGING: Optional[str] = 'price_1RIGvuG6l1KZGqIrCRu0E4Gi'
-    STRIPE_TIER_6_50_ID_STAGING: Optional[str] = 'price_1RIGvuG6l1KZGqIrvjlz5p5V'
-    STRIPE_TIER_12_100_ID_STAGING: Optional[str] = 'price_1RIGvuG6l1KZGqIrT6UfgblC'
-    STRIPE_TIER_25_200_ID_STAGING: Optional[str] = 'price_1RIGvuG6l1KZGqIrOVLKlOMj'
-    STRIPE_TIER_50_400_ID_STAGING: Optional[str] = 'price_1RIKNgG6l1KZGqIrvsat5PW7'
-    STRIPE_TIER_125_800_ID_STAGING: Optional[str] = 'price_1RIKNrG6l1KZGqIrjKT0yGvI'
-    STRIPE_TIER_200_1000_ID_STAGING: Optional[str] = 'price_1RIKQ2G6l1KZGqIrum9n8SI7'
+    STRIPE_FREE_TIER_ID_PROD: str = 'price_1RLwBMG23sSyONuFrhkNh9fe'
+    STRIPE_TIER_2_20_ID_PROD: str = 'price_1RLy9QG23sSyONuFzh2zB9Cj'
+    STRIPE_TIER_6_50_ID_PROD: str = 'price_1RLyBWG23sSyONuFwZNIjbgJ'
+    STRIPE_TIER_12_100_ID_PROD: str = 'price_1RLyE5G23sSyONuFHJiqvoLo'
+    STRIPE_TIER_25_200_ID_PROD: str = 'price_1RLwBgG23sSyONuFCzzo83e6'
+    STRIPE_TIER_50_400_ID_PROD: str = 'price_1RLyEhG23sSyONuFioU064nT'
+    STRIPE_TIER_125_800_ID_PROD: str = 'price_1RLyEnG23sSyONuFE9wBSfvN'
+    STRIPE_TIER_200_1000_ID_PROD: str = 'price_1RLyErG23sSyONuFjGphWKjB'
     
     # Yearly subscription tier IDs - Staging (15% discount)
     STRIPE_TIER_2_20_YEARLY_ID_STAGING: Optional[str] = 'price_1ReGogG6l1KZGqIrEyBTmtPk'
@@ -513,7 +513,7 @@ class Configuration:
         Get the frontend URL based on environment.
         
         Returns:
-        - Production: 'https://kortix.com' (or FRONTEND_URL_ENV if set)
+        - Production: 'https://om-ait-production.up.railway.app' (or FRONTEND_URL_ENV if set)
         - Staging: 'https://staging.kortix.com' (or FRONTEND_URL_ENV if set)
         - Local: FRONTEND_URL_ENV or 'http://localhost:3000'
         """
@@ -523,7 +523,7 @@ class Configuration:
         
         # Environment-based defaults
         if self.ENV_MODE == EnvMode.PRODUCTION:
-            return 'https://kortix.com'
+            return 'https://om-ait-production.up.railway.app'
         elif self.ENV_MODE == EnvMode.STAGING:
             return 'http://localhost:3000'
         else:
