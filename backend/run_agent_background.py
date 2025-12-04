@@ -273,6 +273,78 @@ async def send_failure_notification(client, thread_id: str, error_message: str):
         logger.warning(f"Failed to send failure notification: {notif_error}")
 
 
+# Maximum size for individual Redis responses (8 MB, under Upstash's 10 MB limit)
+MAX_RESPONSE_SIZE_BYTES = 8 * 1024 * 1024  # 8 MB
+
+
+def compress_response_for_redis(response: Dict[str, Any], response_json: str) -> str:
+    """
+    Compress response content to stay under Redis size limits.
+
+    Upstash Redis has a 10 MB request limit. This function ensures individual
+    responses stay well under that limit (8 MB) by truncating large content.
+
+    Args:
+        response: The response dict
+        response_json: The JSON-serialized response
+
+    Returns:
+        Compressed JSON string that's under the size limit
+    """
+    json_size = len(response_json.encode('utf-8'))
+
+    if json_size <= MAX_RESPONSE_SIZE_BYTES:
+        return response_json  # No compression needed
+
+    # Response is too large - need to compress
+    logger.warning(f"Response size ({json_size} bytes) exceeds limit ({MAX_RESPONSE_SIZE_BYTES} bytes), compressing...")
+
+    # Create a copy to modify
+    compressed_response = response.copy()
+
+    # Compress the content field (usually where large data lives)
+    content = compressed_response.get('content')
+
+    if isinstance(content, str) and len(content) > 10000:
+        # Keep first 5000 and last 5000 characters
+        compressed_content = (
+            content[:5000] +
+            f"\n\n... [Content truncated due to size limits. Original size: {len(content)} chars. " +
+            f"This is a streaming response - full content is in the database.] ...\n\n" +
+            content[-5000:]
+        )
+        compressed_response['content'] = compressed_content
+        logger.debug(f"Compressed content from {len(content)} to {len(compressed_content)} chars")
+
+    elif isinstance(content, dict):
+        # Handle structured content
+        if 'content' in content and isinstance(content['content'], str) and len(content['content']) > 10000:
+            original_len = len(content['content'])
+            content_copy = content.copy()
+            content_copy['content'] = (
+                content['content'][:5000] +
+                f"\n\n... [Truncated. Original: {original_len} chars] ...\n\n" +
+                content['content'][-5000:]
+            )
+            compressed_response['content'] = content_copy
+            logger.debug(f"Compressed structured content from {original_len} to {len(content_copy['content'])} chars")
+
+    # Re-serialize and check size
+    compressed_json = json.dumps(compressed_response)
+    compressed_size = len(compressed_json.encode('utf-8'))
+
+    # If still too large, truncate more aggressively
+    if compressed_size > MAX_RESPONSE_SIZE_BYTES:
+        compressed_response['content'] = f"[Response truncated - exceeded {MAX_RESPONSE_SIZE_BYTES / 1024 / 1024:.1f} MB limit]"
+        compressed_json = json.dumps(compressed_response)
+        compressed_size = len(compressed_json.encode('utf-8'))
+        logger.warning(f"Aggressively truncated response to {compressed_size} bytes")
+
+    logger.info(f"✅ Compressed response: {json_size} → {compressed_size} bytes ({compressed_size / json_size * 100:.1f}%)")
+
+    return compressed_json
+
+
 def create_redis_keys(agent_run_id: str, instance_id: str) -> Dict[str, str]:
     return {
         'response_list': f"agent_run:{agent_run_id}:responses",
@@ -351,8 +423,10 @@ async def process_agent_responses(
             break
 
         response_json = json.dumps(response)
+        # Compress response if needed to stay under Redis size limits
+        compressed_response_json = compress_response_for_redis(response, response_json)
         pending_redis_operations.append(
-            asyncio.create_task(redis.rpush(redis_keys['response_list'], response_json))
+            asyncio.create_task(redis.rpush(redis_keys['response_list'], compressed_response_json))
         )
         pending_redis_operations.append(
             asyncio.create_task(redis.publish(redis_keys['response_channel'], "new"))
@@ -401,7 +475,9 @@ async def handle_normal_completion(
     logger.info(f"Agent run {agent_run_id} completed normally (duration: {duration:.2f}s, responses: {total_responses})")
     completion_message = {"type": "status", "status": "completed", "message": "Agent run completed successfully"}
     trace.span(name="agent_run_completed").end(status_message="agent_run_completed")
-    await redis.rpush(redis_keys['response_list'], json.dumps(completion_message))
+    completion_json = json.dumps(completion_message)
+    compressed_completion_json = compress_response_for_redis(completion_message, completion_json)
+    await redis.rpush(redis_keys['response_list'], compressed_completion_json)
     await redis.publish(redis_keys['response_channel'], "new")
     return completion_message
 
@@ -608,7 +684,9 @@ async def run_agent_background(
 
         error_response = {"type": "status", "status": "error", "message": error_message}
         try:
-            await redis.rpush(redis_keys['response_list'], json.dumps(error_response))
+            error_json = json.dumps(error_response)
+            compressed_error_json = compress_response_for_redis(error_response, error_json)
+            await redis.rpush(redis_keys['response_list'], compressed_error_json)
             await redis.publish(redis_keys['response_channel'], "new")
         except Exception as redis_err:
             logger.error(f"Failed to push error response to Redis for {agent_run_id}: {redis_err}")
