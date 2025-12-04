@@ -22,15 +22,16 @@ import time
 from core.services.redis import get_redis_config as _get_redis_config
 
 redis_config = _get_redis_config()
-redis_host = redis_config["host"]
-redis_port = redis_config["port"]
-redis_password = redis_config["password"]
-redis_username = redis_config["username"]
+redis_url = redis_config.get("url")
+redis_host = redis_config.get("host")
+redis_port = redis_config.get("port")
+redis_password = redis_config.get("password")
+redis_username = redis_config.get("username")
 
-if redis_config["url"]:
+if redis_url:
     auth_info = f" (user={redis_username})" if redis_username else ""
-    logger.info(f"🔧 Configuring Dramatiq broker with Redis at {redis_host}:{redis_port}{auth_info}")
-    redis_broker = RedisBroker(url=redis_config["url"], middleware=[dramatiq.middleware.AsyncIO()])
+    logger.info(f"🔧 Configuring Dramatiq broker with Redis at {redis_host}:{redis_port}{auth_info} (using REDIS_URL)")
+    redis_broker = RedisBroker(url=redis_url, middleware=[dramatiq.middleware.AsyncIO()])
 else:
     logger.info(f"🔧 Configuring Dramatiq broker with Redis at {redis_host}:{redis_port}")
     redis_broker = RedisBroker(host=redis_host, port=redis_port, middleware=[dramatiq.middleware.AsyncIO()])

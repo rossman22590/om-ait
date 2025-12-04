@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE IF NOT EXISTS notification_settings (
     user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email_enabled BOOLEAN DEFAULT true,
@@ -8,7 +10,7 @@ CREATE TABLE IF NOT EXISTS notification_settings (
 );
 
 CREATE TABLE IF NOT EXISTS device_tokens (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
     device_token TEXT NOT NULL,
     device_type TEXT NOT NULL,

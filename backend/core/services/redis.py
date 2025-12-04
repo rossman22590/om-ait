@@ -5,6 +5,7 @@ import asyncio
 from core.utils.logger import logger
 from typing import List, Any
 from core.utils.retry import retry
+from urllib.parse import urlparse
 
 # Redis client and connection pool
 client: redis.Redis | None = None
@@ -29,13 +30,32 @@ def get_redis_config():
     redis_password = os.getenv("REDIS_PASSWORD", "")
     redis_username = os.getenv("REDIS_USERNAME", None)
     
-    # Build Redis URL for clients that support it (like Dramatiq)
-    if redis_username and redis_password:
-        redis_url = f"redis://{redis_username}:{redis_password}@{redis_host}:{redis_port}"
-    elif redis_password:
-        redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}"
+    # Prefer explicit REDIS_URL when provided (supports rediss:// for Upstash)
+    redis_url_env = os.getenv("REDIS_URL")
+    redis_url = None
+    if redis_url_env:
+        try:
+            parsed = urlparse(redis_url_env)
+            # Populate host/port/credentials from URL for logging/compat
+            if parsed.hostname:
+                redis_host = parsed.hostname
+            if parsed.port:
+                redis_port = parsed.port
+            if parsed.password:
+                redis_password = parsed.password
+            if parsed.username:
+                redis_username = parsed.username
+            redis_url = redis_url_env
+        except Exception:
+            redis_url = redis_url_env
     else:
-        redis_url = None
+        # Build Redis URL for clients that support it (like Dramatiq)
+        if redis_username and redis_password:
+            redis_url = f"redis://{redis_username}:{redis_password}@{redis_host}:{redis_port}"
+        elif redis_password:
+            redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}"
+        else:
+            redis_url = None
     
     return {
         "host": redis_host,
@@ -69,27 +89,37 @@ def initialize():
     retry_on_timeout = not (os.getenv("REDIS_RETRY_ON_TIMEOUT", "True").lower() != "true")
 
     auth_info = f"user={redis_username} " if redis_username else ""
-    logger.info(f"Initializing Redis connection pool to {redis_host}:{redis_port} {auth_info}with max {max_connections} connections")
-
-    # Create connection pool with production-optimized settings
-    pool_kwargs = {
-        "host": redis_host,
-        "port": redis_port,
-        "password": redis_password,
-        "decode_responses": True,
-        "socket_timeout": socket_timeout,
-        "socket_connect_timeout": connect_timeout,
-        "socket_keepalive": True,
-        "retry_on_timeout": retry_on_timeout,
-        "health_check_interval": 30,
-        "max_connections": max_connections,
-    }
-    
-    # Add username if provided (required for Redis Cloud)
-    if redis_username:
-        pool_kwargs["username"] = redis_username
-    
-    pool = redis.ConnectionPool(**pool_kwargs)
+    if config.get("url"):
+        logger.info(f"Initializing Redis connection pool from URL to {redis_host}:{redis_port} {auth_info}with max {max_connections} connections")
+        pool = redis.ConnectionPool.from_url(
+            config.get("url"),
+            decode_responses=True,
+            socket_timeout=socket_timeout,
+            socket_connect_timeout=connect_timeout,
+            socket_keepalive=True,
+            retry_on_timeout=retry_on_timeout,
+            health_check_interval=30,
+            max_connections=max_connections,
+        )
+    else:
+        logger.info(f"Initializing Redis connection pool to {redis_host}:{redis_port} {auth_info}with max {max_connections} connections")
+        # Create connection pool with production-optimized settings
+        pool_kwargs = {
+            "host": redis_host,
+            "port": redis_port,
+            "password": redis_password,
+            "decode_responses": True,
+            "socket_timeout": socket_timeout,
+            "socket_connect_timeout": connect_timeout,
+            "socket_keepalive": True,
+            "retry_on_timeout": retry_on_timeout,
+            "health_check_interval": 30,
+            "max_connections": max_connections,
+        }
+        # Add username if provided (required for Redis Cloud)
+        if redis_username:
+            pool_kwargs["username"] = redis_username
+        pool = redis.ConnectionPool(**pool_kwargs)
 
     # Create Redis client from connection pool
     client = redis.Redis(connection_pool=pool)
