@@ -99,7 +99,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
     sandboxId,
     project,
     isPreviewMode = false,
-    agentName = 'Suna',
+    agentName = 'Machine',
     agentAvatar = <KortixLogo size={16} />,
     emptyStateComponent,
     threadMetadata,
@@ -165,7 +165,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = ({
             };
         }
         return {
-            name: agentName || 'Suna',
+            name: agentName || 'Machine',
             avatar: agentAvatar
         };
     }, [threadMetadata, displayMessages, agentName, agentAvatar]);

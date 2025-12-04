@@ -10,6 +10,23 @@ from core.utils.logger import logger
 from core.services.supabase import DBConnection
 
 
+def _map_bedrock_to_anthropic(model: Optional[str]) -> Optional[str]:
+    """
+    Map Bedrock ARNs to direct Anthropic models.
+
+    We don't use AWS Bedrock - translate any Bedrock ARNs to direct Anthropic API.
+    """
+    if not model:
+        return model
+
+    # If it's a Bedrock ARN, replace with direct Anthropic
+    if "bedrock" in model.lower() or "arn:aws" in model:
+        logger.warning(f"Converting Bedrock model '{model}' to direct Anthropic")
+        return "anthropic/claude-sonnet-4-5-20250929"
+
+    return model
+
+
 @dataclass
 class AgentData:
     """
@@ -314,7 +331,7 @@ class AgentLoader:
             metadata=metadata,
             # Template config is directly available
             system_prompt=template_row.get('system_prompt', ''),
-            model=metadata.get('model'),
+            model=_map_bedrock_to_anthropic(metadata.get('model')),
             configured_mcps=template_row.get('mcp_requirements', []),
             custom_mcps=[],
             agentpress_tools=template_row.get('agentpress_tools', {}),
@@ -349,7 +366,7 @@ class AgentLoader:
             version_count=data.get('version_count', 1),
             metadata=data.get('metadata', {}),
             system_prompt=data.get('system_prompt'),
-            model=data.get('model'),
+            model=_map_bedrock_to_anthropic(data.get('model')),
             configured_mcps=data.get('configured_mcps', []),
             custom_mcps=data.get('custom_mcps', []),
             agentpress_tools=data.get('agentpress_tools', {}),
@@ -415,7 +432,7 @@ class AgentLoader:
             static_config = load_static_suna_config()
         
         agent.system_prompt = static_config['system_prompt']
-        agent.model = static_config['model']
+        agent.model = _map_bedrock_to_anthropic(static_config['model'])
         agent.agentpress_tools = static_config['agentpress_tools']
         agent.centrally_managed = static_config['centrally_managed']
         agent.restrictions = static_config['restrictions']
@@ -501,7 +518,7 @@ class AgentLoader:
                 tools = config.get('tools', {})
                 
                 agent.system_prompt = config.get('system_prompt', '')
-                agent.model = config.get('model')
+                agent.model = _map_bedrock_to_anthropic(config.get('model'))
                 agent.configured_mcps = tools.get('mcp', [])
                 agent.custom_mcps = tools.get('custom_mcp', [])
                 
@@ -512,7 +529,7 @@ class AgentLoader:
             else:
                 # Old format compatibility
                 agent.system_prompt = version_dict.get('system_prompt', '')
-                agent.model = version_dict.get('model')
+                agent.model = _map_bedrock_to_anthropic(version_dict.get('model'))
                 agent.configured_mcps = version_dict.get('configured_mcps', [])
                 agent.custom_mcps = version_dict.get('custom_mcps', [])
                 
@@ -608,7 +625,7 @@ class AgentLoader:
         from core.config_helper import _extract_agentpress_tools_for_run
         
         agent.system_prompt = config.get('system_prompt', '')
-        agent.model = config.get('model')
+        agent.model = _map_bedrock_to_anthropic(config.get('model'))
         agent.configured_mcps = tools.get('mcp', [])
         agent.custom_mcps = tools.get('custom_mcp', [])
         agent.agentpress_tools = _extract_agentpress_tools_for_run(tools.get('agentpress', {}))

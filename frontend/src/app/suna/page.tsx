@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   title: 'Suna is now Kortix | Kortix Suna - Open Source AI Worker',
   description: 'Suna has rebranded to Kortix. Kortix (formerly Suna) is the same powerful open source AI assistant and generalist AI worker you know and love, now with a new name and bigger vision.',
   keywords: [
-    'Suna',
+    'Machine',
     'Kortix Suna',
     'Suna AI',
     'Suna assistant',
@@ -63,7 +63,7 @@ export default function SunaPage() {
             '@context': 'https://schema.org',
             '@type': 'Organization',
             name: 'Kortix',
-            alternateName: ['Suna', 'Kortix Suna', 'Suna AI'],
+            alternateName: ['Machine', 'Kortix Suna', 'Suna AI'],
             url: 'https://www.kortix.com',
             logo: 'https://www.kortix.com/favicon.png',
             sameAs: [

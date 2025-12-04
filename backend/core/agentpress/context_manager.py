@@ -31,7 +31,11 @@ def _get_anthropic_client_singleton():
     if _anthropic_client is None and not _clients_initialized:
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if api_key:
+            logger.info(f"Anthropic API key found, length: {len(api_key)}")
             _anthropic_client = Anthropic(api_key=api_key)
+        else:
+            logger.warning("ANTHROPIC_API_KEY not found in environment variables")
+            logger.debug(f"Available env vars starting with 'ANTHROPIC': {[k for k in os.environ.keys() if k.startswith('ANTHROPIC')]}")
         _clients_initialized = True
     return _anthropic_client
 

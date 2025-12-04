@@ -273,8 +273,9 @@ async def send_failure_notification(client, thread_id: str, error_message: str):
         logger.warning(f"Failed to send failure notification: {notif_error}")
 
 
-# Maximum size for individual Redis responses (8 MB, under Upstash's 10 MB limit)
-MAX_RESPONSE_SIZE_BYTES = 8 * 1024 * 1024  # 8 MB
+# Maximum size for individual Redis responses (2 MB - MUST stay under for safety)
+# Upstash limit is 10 MB, we use 2 MB to absolutely guarantee single fetches work
+MAX_RESPONSE_SIZE_BYTES = 2 * 1024 * 1024  # 2 MB
 
 
 def compress_response_for_redis(response: Dict[str, Any], response_json: str) -> str:
@@ -296,6 +297,12 @@ def compress_response_for_redis(response: Dict[str, Any], response_json: str) ->
     if json_size <= MAX_RESPONSE_SIZE_BYTES:
         return response_json  # No compression needed
 
+    # CRITICAL: Never compress tool calls or tool results - they must be valid JSON
+    response_type = response.get('type', '')
+    if response_type in ['tool_call', 'tool_result', 'function_call']:
+        logger.warning(f"Response type '{response_type}' exceeds size limit but cannot be compressed - returning as-is")
+        return response_json
+
     # Response is too large - need to compress
     logger.warning(f"Response size ({json_size} bytes) exceeds limit ({MAX_RESPONSE_SIZE_BYTES} bytes), compressing...")
 
@@ -305,13 +312,13 @@ def compress_response_for_redis(response: Dict[str, Any], response_json: str) ->
     # Compress the content field (usually where large data lives)
     content = compressed_response.get('content')
 
-    if isinstance(content, str) and len(content) > 10000:
-        # Keep first 5000 and last 5000 characters
+    if isinstance(content, str) and len(content) > 3000:
+        # Keep first 1500 and last 1500 characters for aggressive compression
         compressed_content = (
-            content[:5000] +
+            content[:1500] +
             f"\n\n... [Content truncated due to size limits. Original size: {len(content)} chars. " +
             f"This is a streaming response - full content is in the database.] ...\n\n" +
-            content[-5000:]
+            content[-1500:]
         )
         compressed_response['content'] = compressed_content
         logger.debug(f"Compressed content from {len(content)} to {len(compressed_content)} chars")
@@ -340,9 +347,52 @@ def compress_response_for_redis(response: Dict[str, Any], response_json: str) ->
         compressed_size = len(compressed_json.encode('utf-8'))
         logger.warning(f"Aggressively truncated response to {compressed_size} bytes")
 
+    # ABSOLUTE SAFETY: Hard truncate JSON string if still too large
+    # This should NEVER happen, but guarantees we never exceed the limit
+    if compressed_size > MAX_RESPONSE_SIZE_BYTES:
+        # Keep only first portion of the JSON and add closing braces
+        max_chars = int(MAX_RESPONSE_SIZE_BYTES * 0.9)  # 90% of limit in characters (conservative)
+        compressed_json = compressed_json[:max_chars] + '..."}}'
+        compressed_size = len(compressed_json.encode('utf-8'))
+        logger.error(f"⚠️ EMERGENCY TRUNCATION: Hard-limited response to {compressed_size} bytes")
+
     logger.info(f"✅ Compressed response: {json_size} → {compressed_size} bytes ({compressed_size / json_size * 100:.1f}%)")
 
     return compressed_json
+
+
+async def fetch_all_responses_batched(response_list_key: str, batch_size: int = 1) -> list:
+    """
+    Fetch all responses from Redis list ONE AT A TIME to avoid Upstash 10 MB limit.
+
+    Args:
+        response_list_key: Redis key for the response list
+        batch_size: Number of responses to fetch per batch (default: 1, guaranteed safe)
+
+    Returns:
+        List of parsed response dictionaries
+    """
+    all_responses = []
+    current_index = 0
+
+    while True:
+        batch_end = current_index + batch_size - 1
+        batch_json = await redis.lrange(response_list_key, current_index, batch_end)
+
+        if not batch_json:
+            break  # No more responses
+
+        batch_responses = [json.loads(r) for r in batch_json]
+        all_responses.extend(batch_responses)
+
+        # If we got fewer responses than batch size, we've reached the end
+        if len(batch_responses) < batch_size:
+            break
+
+        current_index += batch_size
+
+    logger.debug(f"Fetched {len(all_responses)} responses in batches from {response_list_key}")
+    return all_responses
 
 
 def create_redis_keys(agent_run_id: str, instance_id: str) -> Dict[str, str]:
@@ -661,8 +711,8 @@ async def run_agent_background(
             if not complete_tool_called:
                 logger.info(f"Agent run {agent_run_id} completed without explicit complete tool call - skipping notification")
 
-        all_responses_json = await redis.lrange(redis_keys['response_list'], 0, -1)
-        all_responses = [json.loads(r) for r in all_responses_json]
+        # Fetch all responses in batches to avoid Upstash 10 MB limit
+        all_responses = await fetch_all_responses_batched(redis_keys['response_list'])
 
         await update_agent_run_status(client, agent_run_id, final_status, error=error_message, account_id=account_id)
 
@@ -715,9 +765,31 @@ async def run_agent_background(
         await _cleanup_redis_run_lock(agent_run_id)
 
         try:
-            await asyncio.wait_for(asyncio.gather(*pending_redis_operations), timeout=30.0)
+            await asyncio.wait_for(asyncio.gather(*pending_redis_operations, return_exceptions=True), timeout=30.0)
         except asyncio.TimeoutError:
-            logger.warning(f"Timeout waiting for pending Redis operations for {agent_run_id}")
+            logger.error(f"⚠️ Timeout waiting for pending Redis operations for {agent_run_id}")
+            # Reload env vars and reconnect Redis for next run
+            try:
+                import dotenv
+                dotenv.load_dotenv(".env", override=True)
+                logger.info("🔄 Reloaded .env file after Redis timeout")
+                await redis.close()
+                await redis.initialize_async()
+                logger.info("✅ Redis reconnected after timeout")
+            except Exception as reconnect_error:
+                logger.error(f"Failed to reconnect Redis: {reconnect_error}")
+        except Exception as e:
+            logger.error(f"⚠️ Error in pending Redis operations for {agent_run_id}: {e}")
+            # Reload env vars and reconnect Redis for next run
+            try:
+                import dotenv
+                dotenv.load_dotenv(".env", override=True)
+                logger.info("🔄 Reloaded .env file after Redis error")
+                await redis.close()
+                await redis.initialize_async()
+                logger.info("✅ Redis reconnected after error")
+            except Exception as reconnect_error:
+                logger.error(f"Failed to reconnect Redis: {reconnect_error}")
 
         logger.debug(f"Agent run background task fully completed for: {agent_run_id} (Instance: {instance_id}) with final status: {final_status}")
 

@@ -1970,6 +1970,16 @@ class ResponseProcessor:
                 else:
                     # Fallback to string representation
                     content = str(result)
+
+                # CRITICAL: Ensure content is JSON-safe to prevent "unterminated string" errors
+                # Replace problematic control characters and null bytes that break JSON
+                if isinstance(content, str):
+                    # Remove null bytes and other control characters that break JSON
+                    content = content.replace('\x00', '').replace('\r', '\\r')
+                    # Ensure the string isn't too long (LiteLLM has limits)
+                    if len(content) > 100000:  # 100KB limit for tool results
+                        logger.warning(f"Tool result content too long ({len(content)} chars), truncating to 100KB")
+                        content = content[:100000] + "... [truncated due to size]"
                 
                 logger.debug(f"Formatted tool result content: {content[:100]}...")
                 self.trace.event(name="formatted_tool_result_content", level="DEFAULT", status_message=(f"Formatted tool result content: {content[:100]}..."))

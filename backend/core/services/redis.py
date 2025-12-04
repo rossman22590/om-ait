@@ -301,6 +301,12 @@ async def lrange(key: str, start: int, end: int) -> List[str]:
     return await redis_client.lrange(key, start, end)
 
 
+async def ltrim(key: str, start: int, end: int):
+    """Trim a list to only keep elements in the specified range."""
+    redis_client = await get_client()
+    return await redis_client.ltrim(key, start, end)
+
+
 # Key management
 
 

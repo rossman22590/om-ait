@@ -7,6 +7,40 @@ from ..utils.logger import logger
 from run_agent_background import update_agent_run_status, _cleanup_redis_response_list
 
 
+async def fetch_all_responses_batched(response_list_key: str, batch_size: int = 1) -> list:
+    """
+    Fetch all responses from Redis list ONE AT A TIME to avoid Upstash 10 MB limit.
+
+    Args:
+        response_list_key: Redis key for the response list
+        batch_size: Number of responses to fetch per batch (default: 1, guaranteed safe)
+
+    Returns:
+        List of parsed response dictionaries
+    """
+    all_responses = []
+    current_index = 0
+
+    while True:
+        batch_end = current_index + batch_size - 1
+        batch_json = await redis.lrange(response_list_key, current_index, batch_end)
+
+        if not batch_json:
+            break  # No more responses
+
+        batch_responses = [json.loads(r) for r in batch_json]
+        all_responses.extend(batch_responses)
+
+        # If we got fewer responses than batch size, we've reached the end
+        if len(batch_responses) < batch_size:
+            break
+
+        current_index += batch_size
+
+    logger.debug(f"Fetched {len(all_responses)} responses in batches from {response_list_key}")
+    return all_responses
+
+
 async def stop_agent_run_with_helpers(agent_run_id: str, error_message: Optional[str] = None, stop_source: str = "api_request"):
     """
     Stop an agent run and clean up all associated resources.
@@ -30,12 +64,11 @@ async def stop_agent_run_with_helpers(agent_run_id: str, error_message: Optional
     client = await db.client
     final_status = "failed" if error_message else "stopped"
 
-    # Attempt to fetch final responses from Redis
+    # Attempt to fetch final responses from Redis (in batches to avoid size limits)
     response_list_key = f"agent_run:{agent_run_id}:responses"
     all_responses = []
     try:
-        all_responses_json = await redis.lrange(response_list_key, 0, -1)
-        all_responses = [json.loads(r) for r in all_responses_json]
+        all_responses = await fetch_all_responses_batched(response_list_key)
         logger.debug(f"Fetched {len(all_responses)} responses from Redis for DB update on stop/fail: {agent_run_id}")
     except Exception as e:
         logger.error(f"Failed to fetch responses from Redis for {agent_run_id} during stop/fail: {e}")

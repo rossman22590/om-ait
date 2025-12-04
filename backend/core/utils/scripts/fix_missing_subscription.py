@@ -19,69 +19,83 @@ from core.billing.credits.manager import credit_manager
 
 stripe.api_key = config.STRIPE_SECRET_KEY
 
-async def fix_missing_subscription(user_email: str):
+async def fix_missing_subscription(user_email: str, force_subscription_id: str = None, force_customer_id: str = None):
     logger.info("="*80)
     logger.info(f"FIXING SUBSCRIPTION FOR {user_email}")
     logger.info("="*80)
-    
+
     db = DBConnection()
     await db.initialize()
     client = await db.client
-    
+
     result = await client.rpc('get_user_account_by_email', {
         'email_input': user_email.lower()
     }).execute()
-    
+
     if not result.data:
         logger.error(f"❌ User {user_email} not found in database")
         return
-    
+
     account_id = result.data['id']
     logger.info(f"✅ Found user: {user_email}")
     logger.info(f"   Account ID: {account_id}")
     logger.info(f"   Account name: {result.data.get('name', 'N/A')}")
-    
-    billing_customer_result = await client.schema('basejump').from_('billing_customers').select('id, account_id').eq('account_id', account_id).execute()
-    
-    if not billing_customer_result.data:
-        logger.error(f"❌ No billing customer found for account {account_id}")
-        return
-    
-    stripe_customer_id = billing_customer_result.data[0]['id']
-    logger.info(f"✅ Found Stripe customer: {stripe_customer_id}")
+
+    # Use forced customer ID if provided
+    if force_customer_id:
+        stripe_customer_id = force_customer_id
+        logger.info(f"✅ Using forced Stripe customer: {stripe_customer_id}")
+    else:
+        billing_customer_result = await client.schema('basejump').from_('billing_customers').select('id, account_id').eq('account_id', account_id).execute()
+
+        if not billing_customer_result.data:
+            logger.error(f"❌ No billing customer found for account {account_id}")
+            return
+
+        stripe_customer_id = billing_customer_result.data[0]['id']
+        logger.info(f"✅ Found Stripe customer: {stripe_customer_id}")
     
     logger.info("\n" + "="*80)
     logger.info("FETCHING STRIPE SUBSCRIPTION & SCHEDULES")
     logger.info("="*80)
-    
-    subscriptions = await stripe.Subscription.list_async(
-        customer=stripe_customer_id,
-        status='all',
-        limit=10
-    )
-    
-    if not subscriptions.data:
-        logger.error(f"❌ No subscriptions found in Stripe for customer {stripe_customer_id}")
-        return
-    
-    logger.info(f"Found {len(subscriptions.data)} subscription(s) in Stripe")
-    
-    active_sub = None
-    for sub in subscriptions.data:
-        if sub.status in ['active', 'trialing', 'past_due']:
-            full_sub = await stripe.Subscription.retrieve_async(
-                sub.id,
-                expand=['items.data.price', 'schedule']
-            )
-            active_sub = full_sub
-            break
-    
-    if not active_sub:
-        logger.error("❌ No active, trialing, or past_due subscription found")
-        logger.info("\nAll subscriptions:")
+
+    # Use forced subscription ID if provided
+    if force_subscription_id:
+        logger.info(f"Using forced subscription ID: {force_subscription_id}")
+        active_sub = await stripe.Subscription.retrieve_async(
+            force_subscription_id,
+            expand=['items.data.price', 'schedule']
+        )
+        logger.info(f"✅ Retrieved forced subscription: {active_sub.id} (status: {active_sub.status})")
+    else:
+        subscriptions = await stripe.Subscription.list_async(
+            customer=stripe_customer_id,
+            status='all',
+            limit=10
+        )
+
+        if not subscriptions.data:
+            logger.error(f"❌ No subscriptions found in Stripe for customer {stripe_customer_id}")
+            return
+
+        logger.info(f"Found {len(subscriptions.data)} subscription(s) in Stripe")
+
+        active_sub = None
         for sub in subscriptions.data:
-            logger.info(f"  - {sub.id}: {sub.status}")
-        return
+            if sub.status in ['active', 'trialing', 'past_due']:
+                full_sub = await stripe.Subscription.retrieve_async(
+                    sub.id,
+                    expand=['items.data.price', 'schedule']
+                )
+                active_sub = full_sub
+                break
+
+        if not active_sub:
+            logger.error("❌ No active, trialing, or past_due subscription found")
+            logger.info("\nAll subscriptions:")
+            for sub in subscriptions.data:
+                logger.info(f"  - {sub.id}: {sub.status}")
+            return
     
     subscription = active_sub
     
@@ -91,7 +105,10 @@ async def fix_missing_subscription(user_email: str):
     if subscription.status == 'past_due':
         logger.info(f"  ⚠️  GRACE PERIOD: Payment failed, Stripe will retry automatically")
     logger.info(f"  Created: {datetime.fromtimestamp(subscription.created).isoformat()}")
-    logger.info(f"  Current period: {datetime.fromtimestamp(subscription.current_period_start).isoformat()} to {datetime.fromtimestamp(subscription.current_period_end).isoformat()}")
+    if hasattr(subscription, 'current_period_start') and hasattr(subscription, 'current_period_end'):
+        logger.info(f"  Current period: {datetime.fromtimestamp(subscription.current_period_start).isoformat()} to {datetime.fromtimestamp(subscription.current_period_end).isoformat()}")
+    else:
+        logger.info(f"  Current period: Not available (scheduled subscription)")
     
     if hasattr(subscription, 'schedule') and subscription.schedule:
         logger.info(f"  Has schedule: {subscription.schedule}")
@@ -156,14 +173,36 @@ async def fix_missing_subscription(user_email: str):
                 if invoice.lines.data and len(invoice.lines.data) > 0:
                     line = invoice.lines.data[0]
                     logger.info(f"   Line item: {line.description}")
-                    
+
+                    # Try multiple ways to get the price ID
+                    price_id = None
                     if hasattr(line, 'price') and line.price:
                         price_id = line.price.id if hasattr(line.price, 'id') else line.price
+                    elif hasattr(line, 'plan') and line.plan:
+                        price_id = line.plan.id if hasattr(line.plan, 'id') else line.plan
+                    elif hasattr(line, 'pricing') and line.pricing:
+                        # Try the pricing object
+                        if hasattr(line.pricing, 'price_id'):
+                            price_id = line.pricing.price_id
+
+                    # If still no price_id, try to get it from subscription metadata or period
+                    if not price_id and hasattr(line, 'subscription_item'):
+                        try:
+                            sub_item = await stripe.SubscriptionItem.retrieve_async(line.subscription_item)
+                            if hasattr(sub_item, 'price'):
+                                price_id = sub_item.price.id if hasattr(sub_item.price, 'id') else sub_item.price
+                        except:
+                            pass
+
+                    if price_id:
                         logger.info(f"✅ Found price ID from invoice: {price_id}")
-                        
                         price = await stripe.Price.retrieve_async(price_id)
                     else:
-                        logger.error("❌ Invoice line has no price")
+                        logger.error("❌ Could not extract price ID from invoice line")
+                        logger.info("   Checking subscription metadata...")
+                        # Last resort: check if subscription has metadata with price info
+                        if hasattr(subscription, 'metadata') and subscription.metadata:
+                            logger.info(f"   Subscription metadata: {subscription.metadata}")
                         return
                 else:
                     logger.error("❌ Invoice has no lines")
@@ -224,9 +263,28 @@ async def fix_missing_subscription(user_email: str):
     logger.info("\n" + "="*80)
     logger.info("UPDATING DATABASE")
     logger.info("="*80)
-    
-    start_date = datetime.fromtimestamp(subscription.current_period_start, tz=timezone.utc)
-    next_grant = datetime.fromtimestamp(subscription.current_period_end, tz=timezone.utc)
+
+    # Get period dates - either from subscription or from latest invoice
+    if hasattr(subscription, 'current_period_start') and hasattr(subscription, 'current_period_end'):
+        start_date = datetime.fromtimestamp(subscription.current_period_start, tz=timezone.utc)
+        next_grant = datetime.fromtimestamp(subscription.current_period_end, tz=timezone.utc)
+    else:
+        logger.info("Getting period dates from latest invoice...")
+        invoices = await stripe.Invoice.list_async(
+            subscription=subscription.id,
+            limit=1
+        )
+        if invoices.data and len(invoices.data) > 0:
+            invoice = invoices.data[0]
+            # Use the invoice period
+            start_date = datetime.fromtimestamp(invoice.period_start, tz=timezone.utc) if hasattr(invoice, 'period_start') else datetime.now(timezone.utc)
+            next_grant = datetime.fromtimestamp(invoice.period_end, tz=timezone.utc) if hasattr(invoice, 'period_end') else datetime.now(timezone.utc) + timedelta(days=30)
+            logger.info(f"Using invoice period: {start_date.date()} to {next_grant.date()}")
+        else:
+            # Fallback to now + 30 days
+            start_date = datetime.now(timezone.utc)
+            next_grant = start_date + timedelta(days=30)
+            logger.info(f"No invoice found, using fallback dates")
     
     update_data = {
         'tier': tier.name,
@@ -354,9 +412,21 @@ def main():
         type=str,
         help='Email address of the user to fix subscription for'
     )
-    
+    parser.add_argument(
+        '--subscription-id',
+        type=str,
+        default=None,
+        help='Force a specific Stripe subscription ID (optional)'
+    )
+    parser.add_argument(
+        '--customer-id',
+        type=str,
+        default=None,
+        help='Force a specific Stripe customer ID (optional)'
+    )
+
     args = parser.parse_args()
-    asyncio.run(fix_missing_subscription(args.email))
+    asyncio.run(fix_missing_subscription(args.email, args.subscription_id, args.customer_id))
 
 if __name__ == "__main__":
     main()

@@ -176,12 +176,38 @@ async def get_client():
 
 
 async def _with_concurrency_limit(coro):
-    """Execute a Redis operation with concurrency limiting."""
+    """Execute a Redis operation with concurrency limiting and auto-retry on connection errors."""
     if _operation_semaphore is None:
         # Fallback if semaphore not initialized
         return await coro
+
     async with _operation_semaphore:
-        return await coro
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                return await coro
+            except ConnectionError as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Redis connection error (attempt {attempt + 1}/{max_retries}): {e}")
+                    # Wait a bit and try to reconnect
+                    await asyncio.sleep(0.5)
+                    # Try to get a fresh client
+                    try:
+                        global client, _initialized
+                        client = None
+                        _initialized = False
+                        await get_client()  # This will reinitialize
+                        logger.info("Reconnected to Redis after connection error")
+                    except Exception as reconnect_err:
+                        logger.error(f"Failed to reconnect Redis: {reconnect_err}")
+                        if attempt == max_retries - 1:
+                            raise  # Re-raise on final attempt
+                else:
+                    logger.error(f"Redis connection error after {max_retries} attempts: {e}")
+                    raise
+            except Exception as e:
+                # For other exceptions, just raise immediately
+                raise
 
 
 # Basic Redis operations with concurrency limiting
@@ -238,6 +264,14 @@ async def lrange(key: str, start: int, end: int) -> List[str]:
     async def _op():
         redis_client = await get_client()
         return await redis_client.lrange(key, start, end)
+    return await _with_concurrency_limit(_op())
+
+
+async def ltrim(key: str, start: int, end: int):
+    """Trim a list to only keep elements in the specified range."""
+    async def _op():
+        redis_client = await get_client()
+        return await redis_client.ltrim(key, start, end)
     return await _with_concurrency_limit(_op())
 
 

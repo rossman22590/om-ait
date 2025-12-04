@@ -44,7 +44,7 @@ def setup_api_keys() -> None:
     if not config:
         logger.warning("Config not loaded - skipping API key setup")
         return
-        
+
     providers = [
         "OPENAI",
         "ANTHROPIC",
@@ -55,7 +55,7 @@ def setup_api_keys() -> None:
         "GEMINI",
         "OPENAI_COMPATIBLE",
     ]
-    
+
     for provider in providers:
         try:
             key = getattr(config, f"{provider}_API_KEY", None)
@@ -66,6 +66,13 @@ def setup_api_keys() -> None:
                 logger.debug(f"No API key found for provider: {provider} (this is normal if not using this provider)")
         except AttributeError as e:
             logger.debug(f"Could not access {provider}_API_KEY: {e}")
+
+    # CRITICAL: Always verify Anthropic API key from environment
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+    if anthropic_key:
+        logger.info("✅ Anthropic API key verified from environment")
+    else:
+        logger.error("❌ CRITICAL: ANTHROPIC_API_KEY not found in environment!")
 
     # Set up OpenRouter API base if not already set
     if hasattr(config, 'OPENROUTER_API_KEY') and hasattr(config, 'OPENROUTER_API_BASE'):
@@ -106,53 +113,24 @@ def setup_provider_router(openai_compatible_api_key: str = None, openai_compatib
         },
     ]
     
+    # Anthropic-only fallbacks: Retry same model on rate limits/errors
+    # No Bedrock - we use direct Anthropic API only
     fallbacks = [
-        # MAP-tagged Haiku 4.5 (default) -> Sonnet 4 -> Sonnet 4.5
         {
-            "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48": [
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf",
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/few7z4l830xh",
-            ]
-        },
-        # MAP-tagged Sonnet 4.5 -> Sonnet 4 -> Haiku 4.5
-        {
-            "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/few7z4l830xh": [
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf",
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48",
-            ]
-        },
-        # MAP-tagged Sonnet 4 -> Haiku 4.5
-        {
-            "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf": [
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48",
+            "anthropic/claude-sonnet-4-5-20250929": [
+                "anthropic/claude-sonnet-4-5-20250929",  # Retry same model
             ]
         }
     ]
-    
-    # Context window fallbacks: When context window is exceeded, fallback to models with larger context windows
-    # Order: Smaller context models -> Larger context models
-    # Note: All Bedrock models here have 1M context, but this allows LiteLLM to handle the error gracefully
-    context_window_fallbacks = [
-        # Haiku 4.5 (200k) -> Sonnet 4 (1M) -> Sonnet 4.5 (1M)
-        {
-            "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/heol2zyy5v48": [
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf",
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/few7z4l830xh",
-            ]
-        },
-        # Sonnet 4.5 (1M) -> Sonnet 4 (1M) - both have same context, but allows retry
-        {
-            "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/few7z4l830xh": [
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf",
-            ]
-        },
-        # Sonnet 4 (1M) -> Sonnet 4.5 (1M) - both have same context, but allows retry
-        {
-            "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/tyj1ks3nj9qf": [
-                "bedrock/converse/arn:aws:bedrock:us-west-2:935064898258:application-inference-profile/few7z4l830xh",
-            ]
-        }
-    ]
+
+    # CRITICAL LOGGING: Verify fallbacks are Anthropic-only
+    logger.info(f"🔒 Setting up LiteLLM Router with fallbacks: {fallbacks}")
+    for fb in fallbacks:
+        for model, fb_list in fb.items():
+            logger.info(f"   Model {model} → Fallbacks: {fb_list}")
+
+    # No context window fallbacks needed - single model handles all
+    context_window_fallbacks = []
     
     # Configure Router with specific retry settings:
     # - num_retries=0: Disable router-level retries - we handle errors at our layer
@@ -169,7 +147,7 @@ def setup_provider_router(openai_compatible_api_key: str = None, openai_compatib
         # context_window_fallbacks are separate and only triggered by context length issues
     )
     
-    logger.info(f"Configured LiteLLM Router with {len(fallbacks)} Bedrock-only fallback rules")
+    logger.info(f"Configured LiteLLM Router with {len(fallbacks)} Anthropic-only fallback rules")
 
 def _configure_openai_compatible(params: Dict[str, Any], model_name: str, api_key: Optional[str], api_base: Optional[str]) -> None:
     """Configure OpenAI-compatible provider setup."""
@@ -220,7 +198,7 @@ async def make_llm_api_call(
     stop: Optional[List[str]] = None,
 ) -> Union[Dict[str, Any], AsyncGenerator, ModelResponse]:
     """Make an API call to a language model using LiteLLM.
-    
+
     Args:
         messages: List of message dictionaries
         model_name: Name of the model to use
@@ -238,6 +216,17 @@ async def make_llm_api_call(
         extra_headers: Optional extra headers to send with request
         stop: Optional list of stop sequences
     """
+    # CRITICAL: Verify Anthropic API key is available before making calls
+    # Always check os.environ directly to avoid config caching issues
+    if model_name and "anthropic" in model_name.lower():
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY") or (config.ANTHROPIC_API_KEY if config else None)
+        if not anthropic_key:
+            logger.error("❌ CRITICAL: Anthropic API key not found in environment or config!")
+            raise LLMError("Anthropic API key is not configured. Please check your environment variables.")
+        # Ensure LiteLLM has access to the key
+        os.environ["ANTHROPIC_API_KEY"] = anthropic_key
+        logger.debug(f"✅ Anthropic API key verified and set for model: {model_name}")
+
     logger.info(f"Making LLM API call to model: {model_name} with {len(messages)} messages")
     
     # Prepare parameters using centralized model configuration

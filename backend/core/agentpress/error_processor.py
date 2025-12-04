@@ -89,6 +89,14 @@ class ErrorProcessor:
             )
         
         elif isinstance(error, AuthenticationError):
+            # Try reloading env vars in case they were lost
+            try:
+                from dotenv import load_dotenv
+                load_dotenv(".env", override=True)
+                logger.warning("🔄 Reloaded .env after AuthenticationError")
+            except Exception as reload_err:
+                logger.error(f"Failed to reload .env: {reload_err}")
+
             return ProcessedError(
                 error_type="authentication_error",
                 message=f"Authentication failed: Please check your API credentials. {error_message}",

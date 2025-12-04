@@ -277,28 +277,33 @@ async def _check_billing_and_limits(client, account_id: str, model_name: Optiona
 async def _get_effective_model(model_name: Optional[str], agent_config: Optional[dict], client, account_id: str) -> str:
     """
     Get the effective model to use, considering user input, agent config, and defaults.
-    
+
     Args:
         model_name: Model name from request (may be None)
         agent_config: Agent configuration dict
         client: Database client
         account_id: Account ID for tier-based defaults
-    
+
     Returns:
         Effective model name to use
     """
     if model_name:
         logger.debug(f"Using user-selected model: {model_name}")
-        return model_name
+        effective_model = model_name
     elif agent_config and agent_config.get('model'):
         effective_model = agent_config['model']
         logger.debug(f"No model specified by user, using agent's configured model: {effective_model}")
-        return effective_model
     else:
         # No model from user or agent, use default for user's tier
         effective_model = await model_manager.get_default_model_for_user(client, account_id)
         logger.debug(f"Using default model for user: {effective_model}")
-        return effective_model
+
+    # CRITICAL: NEVER allow Bedrock models - always map to Anthropic
+    if effective_model and ("bedrock" in effective_model.lower() or "arn:aws" in effective_model):
+        logger.warning(f"🛑 BLOCKING BEDROCK MODEL: {effective_model} → anthropic/claude-sonnet-4-5-20250929")
+        effective_model = "anthropic/claude-sonnet-4-5-20250929"
+
+    return effective_model
 
 
 async def _create_agent_run_record(
@@ -1172,15 +1177,34 @@ async def stream_agent_run(
         initial_yield_complete = False
 
         try:
-            # 1. Fetch and yield initial responses from Redis list
-            initial_responses_json = await redis.lrange(response_list_key, 0, -1)
-            initial_responses = []
-            if initial_responses_json:
-                initial_responses = [json.loads(r) for r in initial_responses_json]
-                logger.debug(f"Sending {len(initial_responses)} initial responses for {agent_run_id}")
-                for response in initial_responses:
+            # 1. Fetch and yield initial responses from Redis list ONE AT A TIME
+            # Upstash has a 10 MB limit, fetch individually to guarantee safety
+            BATCH_SIZE = 1
+            current_index = 0
+            total_responses_sent = 0
+
+            while True:
+                batch_end = current_index + BATCH_SIZE - 1
+                initial_responses_json = await redis.lrange(response_list_key, current_index, batch_end)
+
+                if not initial_responses_json:
+                    break  # No more responses
+
+                batch_responses = [json.loads(r) for r in initial_responses_json]
+                logger.debug(f"Sending batch of {len(batch_responses)} responses (index {current_index}-{current_index + len(batch_responses) - 1}) for {agent_run_id}")
+
+                for response in batch_responses:
                     yield f"data: {json.dumps(response)}\n\n"
-                last_processed_index = len(initial_responses) - 1
+                    total_responses_sent += 1
+
+                # If we got fewer responses than batch size, we've reached the end
+                if len(batch_responses) < BATCH_SIZE:
+                    break
+
+                current_index += BATCH_SIZE
+
+            last_processed_index = total_responses_sent - 1 if total_responses_sent > 0 else -1
+            logger.debug(f"Sent {total_responses_sent} initial responses for {agent_run_id}")
             initial_yield_complete = True
 
             # 2. Check run status
