@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback } from 'react';
-import { View, Pressable, Linking } from 'react-native';
+import { View, Pressable, Linking, Text as RNText, TextInput } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { Icon } from '@/components/ui/icon';
 import type { UnifiedMessage, ParsedContent, ParsedMetadata } from '@/api/types';
@@ -21,7 +21,7 @@ import {
 } from '@/lib/utils/streaming-utils';
 import { useColorScheme } from 'nativewind';
 import Markdown from 'react-native-markdown-display';
-import { markdownStyles, markdownStylesDark } from '@/lib/utils/markdown-styles';
+import { markdownStyles, markdownStylesDark, selectableRenderRules } from '@/lib/utils/markdown-styles';
 import { AgentIdentifier } from '@/components/agents';
 import {
   FileAttachmentsGrid,
@@ -31,6 +31,7 @@ import { CircleDashed, CheckCircle2, AlertCircle, Info } from 'lucide-react-nati
 import { StreamingToolCard } from './StreamingToolCard';
 import { TaskCompletedFeedback } from './tool-views/complete-tool/TaskCompletedFeedback';
 import { renderAssistantMessage } from './assistant-message-renderer';
+import { PromptExamples } from '@/components/shared';
 
 export interface ToolMessagePair {
   assistantMessage: UnifiedMessage | null;
@@ -107,9 +108,10 @@ interface MarkdownContentProps {
   onFilePress?: (filePath: string) => void;
   sandboxId?: string;
   isLatestMessage?: boolean;
+  onPromptFill?: (prompt: string) => void;
 }
 
-const MarkdownContent = React.memo(function MarkdownContent({ content, handleToolClick, messageId, threadId, onFilePress, sandboxId, isLatestMessage }: MarkdownContentProps) {
+const MarkdownContent = React.memo(function MarkdownContent({ content, handleToolClick, messageId, threadId, onFilePress, sandboxId, isLatestMessage, onPromptFill }: MarkdownContentProps) {
   const { colorScheme } = useColorScheme();
 
   const processedContent = useMemo(() => {
@@ -156,12 +158,9 @@ const MarkdownContent = React.memo(function MarkdownContent({ content, handleToo
             <View key={`md-${lastIndex}`}>
               <Markdown
                 style={colorScheme === 'dark' ? markdownStylesDark : markdownStyles}
-                onLinkPress={(url) => {
-                  Linking.openURL(url).catch(console.error);
-                  return false;
-                }}
+                rules={selectableRenderRules}
               >
-                {textBeforeBlock}
+                {textBeforeBlock.replace(/<((https?:\/\/|mailto:)[^>\s]+)>/g, (_: string, url: string) => `[${url}](${url})`)}
               </Markdown>
             </View>
           );
@@ -176,28 +175,39 @@ const MarkdownContent = React.memo(function MarkdownContent({ content, handleToo
         if (toolName === 'ask') {
           const askText = toolCall.parameters.text || '';
           const attachments = toolCall.parameters.attachments || [];
+          const followUpAnswers = toolCall.parameters.follow_up_answers || [];
 
           const attachmentArray = Array.isArray(attachments) ? attachments :
             (typeof attachments === 'string' ? attachments.split(',').map(a => a.trim()) : []);
+          const answersArray = Array.isArray(followUpAnswers) ? followUpAnswers :
+            (typeof followUpAnswers === 'string' ? followUpAnswers.split(',').map(a => a.trim()).filter(Boolean) : []);
 
           contentParts.push(
-            <View key={`ask-${match?.index}-${index}`} className="space-y-3">
+            <View key={`ask-${match?.index}-${index}`} className="gap-3">
               <Markdown
                 style={colorScheme === 'dark' ? markdownStylesDark : markdownStyles}
-                onLinkPress={(url) => {
-                  Linking.openURL(url).catch(console.error);
-                  return false;
-                }}
+                rules={selectableRenderRules}
               >
-                {askText}
+                {askText.replace(/<((https?:\/\/|mailto:)[^>\s]+)>/g, (_: string, url: string) => `[${url}](${url})`)}
               </Markdown>
 
-              <View className="flex-row items-start gap-2.5 rounded-xl border border-border bg-muted/40 dark:bg-muted/20 px-3 py-2.5 mt-2">
+              <View className="flex-row items-start gap-2.5 rounded-xl border border-border bg-muted/40 dark:bg-muted/20 px-3 py-2.5">
                 <Icon as={Info} size={16} className="text-muted-foreground mt-0.5 flex-shrink-0" />
                 <Text className="text-sm font-roobert text-muted-foreground flex-1 leading-relaxed">
                   Kortix will automatically continue working once you provide your response.
                 </Text>
               </View>
+
+              {/* Follow-up Answers - Suggested responses using shared PromptExamples */}
+              {answersArray.length > 0 && (
+                <PromptExamples
+                  prompts={answersArray}
+                  onPromptClick={onPromptFill}
+                  title="Suggested responses"
+                  showTitle={true}
+                  maxPrompts={4}
+                />
+              )}
             </View>
           );
 
@@ -212,27 +222,31 @@ const MarkdownContent = React.memo(function MarkdownContent({ content, handleToo
         } else if (toolName === 'complete') {
           const completeText = toolCall.parameters.text || '';
           const attachments = toolCall.parameters.attachments || '';
+          const followUpPrompts = toolCall.parameters.follow_up_prompts || [];
 
           const attachmentArray = Array.isArray(attachments) ? attachments :
             (typeof attachments === 'string' ? attachments.split(',').map(a => a.trim()) : []);
+          const promptsArray = Array.isArray(followUpPrompts) ? followUpPrompts :
+            (typeof followUpPrompts === 'string' ? followUpPrompts.split(',').map(a => a.trim()).filter(Boolean) : []);
+
           contentParts.push(
-            <View key={`complete-${match?.index}-${index}`} className="space-y-3">
+            <View key={`complete-${match?.index}-${index}`} className="gap-3">
               <Markdown
                 style={colorScheme === 'dark' ? markdownStylesDark : markdownStyles}
-                onLinkPress={(url) => {
-                  Linking.openURL(url).catch(console.error);
-                  return false;
-                }}
+                rules={selectableRenderRules}
               >
-                {completeText}
+                {completeText.replace(/<((https?:\/\/|mailto:)[^>\s]+)>/g, (_: string, url: string) => `[${url}](${url})`)}
               </Markdown>
 
               <TaskCompletedFeedback
                 taskSummary={completeText}
+                followUpPrompts={promptsArray.length > 0 ? promptsArray : undefined}
                 threadId={threadId || ''}
                 messageId={messageId || ''}
+                samplePromptsTitle="Sample prompts"
                 onFollowUpClick={(prompt) => {
-                  // TODO: Handle follow-up click - could trigger a new message
+                  console.log('📝 Inline follow-up clicked:', prompt);
+                  onPromptFill?.(prompt);
                 }}
               />
             </View>
@@ -273,12 +287,9 @@ const MarkdownContent = React.memo(function MarkdownContent({ content, handleToo
           <View key={`md-${lastIndex}`}>
             <Markdown
               style={colorScheme === 'dark' ? markdownStylesDark : markdownStyles}
-              onLinkPress={(url) => {
-                Linking.openURL(url).catch(console.error);
-                return false;
-              }}
+              rules={selectableRenderRules}
             >
-              {remainingText}
+              {remainingText.replace(/<((https?:\/\/|mailto:)[^>\s]+)>/g, (_: string, url: string) => `[${url}](${url})`)}
             </Markdown>
           </View>
         );
@@ -288,12 +299,9 @@ const MarkdownContent = React.memo(function MarkdownContent({ content, handleToo
     return <View>{contentParts.length > 0 ? contentParts : (
       <Markdown
         style={colorScheme === 'dark' ? markdownStylesDark : markdownStyles}
-        onLinkPress={(url) => {
-          Linking.openURL(url).catch(console.error);
-          return false;
-        }}
+        rules={selectableRenderRules}
       >
-        {processedContent}
+        {processedContent.replace(/<((https?:\/\/|mailto:)[^>\s]+)>/g, (_: string, url: string) => `[${url}](${url})`)}
       </Markdown>
     )}</View>;
   }
@@ -301,12 +309,9 @@ const MarkdownContent = React.memo(function MarkdownContent({ content, handleToo
   return (
     <Markdown
       style={colorScheme === 'dark' ? markdownStylesDark : markdownStyles}
-      onLinkPress={(url) => {
-        Linking.openURL(url).catch(console.error);
-        return false;
-      }}
+      rules={selectableRenderRules}
     >
-      {processedContent}
+      {processedContent.replace(/<((https?:\/\/|mailto:)[^>\s]+)>/g, (_: string, url: string) => `[${url}](${url})`)}
     </Markdown>
   );
 });
@@ -469,6 +474,8 @@ interface ThreadContentProps {
   streamHookStatus?: string;
   sandboxId?: string;
   agentName?: string;
+  /** Handler to auto-fill chat input with a prompt (for follow-up prompts) */
+  onPromptFill?: (prompt: string) => void;
 }
 
 interface MessageGroup {
@@ -488,6 +495,7 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(({
   streamHookStatus = "idle",
   sandboxId,
   agentName = 'Suna',
+  onPromptFill,
 }) => {
   const { colorScheme } = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -790,12 +798,9 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(({
                   >
                     <Markdown
                       style={colorScheme === 'dark' ? markdownStylesDark : markdownStyles}
-                      onLinkPress={(url) => {
-                        Linking.openURL(url).catch(console.error);
-                        return false;
-                      }}
+                      rules={selectableRenderRules}
                     >
-                      {cleanContent}
+                      {cleanContent.replace(/<((https?:\/\/|mailto:)[^>\s]+)>/g, (_: string, url: string) => `[${url}](${url})`)}
                     </Markdown>
                   </View>
                 </View>
@@ -823,12 +828,12 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(({
               <View className="gap-3">
                 {assistantMessages.map((message, msgIndex) => {
                   const msgKey = message.message_id || `submsg-assistant-${msgIndex}`;
-                  
+
                   // Parse metadata to check for tool calls and text content
                   const metadata = safeJsonParse<ParsedMetadata>(message.metadata, {});
                   const toolCalls = metadata.tool_calls || [];
                   const textContent = metadata.text_content || '';
-                  
+
                   // Skip if no content (no text and no tool calls)
                   if (!textContent && toolCalls.length === 0) {
                     // Fallback: try parsing content for legacy messages
@@ -846,12 +851,12 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(({
                   // Use metadata-based rendering (new approach)
                   const renderedContent = renderAssistantMessage({
                     message,
-                    onToolClick: handleToolClick || (() => {}),
+                    onToolClick: handleToolClick || (() => { }),
                     onFileClick: onFilePress,
                     sandboxId,
                     isLatestMessage,
-                    threadId: undefined, // TODO: pass threadId if available
-                    onPromptFill: undefined, // TODO: add prompt fill handler if needed
+                    threadId: message.thread_id,
+                    onPromptFill,
                     isDark, // Pass color scheme from parent
                   });
 
@@ -920,12 +925,9 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(({
                           {processedTextBeforeTag.trim() && (
                             <Markdown
                               style={colorScheme === 'dark' ? markdownStylesDark : markdownStyles}
-                              onLinkPress={(url) => {
-                                Linking.openURL(url).catch(console.error);
-                                return false;
-                              }}
+                              rules={selectableRenderRules}
                             >
-                              {processedTextBeforeTag}
+                              {processedTextBeforeTag.replace(/<((https?:\/\/|mailto:)[^>\s]+)>/g, (_: string, url: string) => `[${url}](${url})`)}
                             </Markdown>
                           )}
                           {detectedTag && (
@@ -938,22 +940,22 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(({
                 )}
 
                 {/* Render streaming native tool call (ask/complete) */}
-                {groupIndex === groupedMessages.length - 1 && 
-                  (streamHookStatus === 'streaming' || streamHookStatus === 'connecting') && 
-                  streamingToolCall && 
+                {groupIndex === groupedMessages.length - 1 &&
+                  (streamHookStatus === 'streaming' || streamHookStatus === 'connecting') &&
+                  streamingToolCall &&
                   (() => {
                     // Check if this is ask/complete - render as text instead of tool indicator
                     const parsedMetadata = safeJsonParse<ParsedMetadata>(streamingToolCall.metadata, {});
                     const toolCalls = parsedMetadata.tool_calls || [];
-                    
+
                     const askOrCompleteTool = findAskOrCompleteTool(toolCalls);
-                    
+
                     // For ask/complete, render the text content directly
                     if (askOrCompleteTool) {
                       // Check if the last assistant message already has completed ask/complete
                       const currentGroupAssistantMessages = group.messages.filter(m => m.type === 'assistant');
-                      const lastAssistantMessage = currentGroupAssistantMessages.length > 0 
-                        ? currentGroupAssistantMessages[currentGroupAssistantMessages.length - 1] 
+                      const lastAssistantMessage = currentGroupAssistantMessages.length > 0
+                        ? currentGroupAssistantMessages[currentGroupAssistantMessages.length - 1]
                         : null;
                       if (lastAssistantMessage) {
                         const lastMsgMetadata = safeJsonParse<ParsedMetadata>(lastAssistantMessage.metadata, {});
@@ -962,74 +964,71 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(({
                           return null;
                         }
                       }
-                      
+
                       // Extract text from arguments
                       const toolArgs: any = askOrCompleteTool.arguments;
                       let askCompleteText = '';
                       if (toolArgs) {
                         askCompleteText = extractTextFromArguments(toolArgs);
                       }
-                      
+
                       const toolName = askOrCompleteTool.function_name?.replace(/_/g, '-').toLowerCase() || '';
                       const textToShow = askCompleteText || (toolName === 'ask' ? 'Asking...' : 'Completing...');
-                      
+
                       return (
                         <View className="mt-3">
                           <Markdown
                             style={colorScheme === 'dark' ? markdownStylesDark : markdownStyles}
-                            onLinkPress={(url) => {
-                              Linking.openURL(url).catch(console.error);
-                              return false;
-                            }}
+                            rules={selectableRenderRules}
                           >
-                            {textToShow}
+                            {textToShow.replace(/<((https?:\/\/|mailto:)[^>\s]+)>/g, (_: string, url: string) => `[${url}](${url})`)}
                           </Markdown>
                         </View>
                       );
                     }
-                    
+
                     // For non-ask/complete tools, check if any tool calls exist
                     const isAskOrComplete = toolCalls.some(tc => isAskOrCompleteTool(tc.function_name));
-                    
+
                     // Don't render tool call indicator for ask/complete - they're handled above
                     if (isAskOrComplete) {
                       return null;
                     }
-                    
+
                     // For other tools, render tool call indicator with spinning icon
                     // Only hide if we can confirm the completed tool call is already rendered
                     if (toolCalls.length > 0) {
                       const firstToolCall = toolCalls[0];
                       const toolName = firstToolCall.function_name?.replace(/_/g, '-') || '';
                       const toolCallId = firstToolCall.tool_call_id;
-                      
+
                       // Check if this tool call has already been completed and rendered
                       // Look for a tool message in the current group with matching tool_call_id
                       const currentGroupToolMessages = group.messages.filter(m => m.type === 'tool');
-                      
+
                       // Check if any tool message in this group matches the streaming tool call
                       const matchingCompletedTool = currentGroupToolMessages.some((toolMsg: UnifiedMessage) => {
                         const toolMetadata = safeJsonParse<ParsedMetadata>(toolMsg.metadata, {});
                         return toolMetadata.tool_call_id === toolCallId;
                       });
-                      
+
                       // Only show streaming indicator if no matching completed tool is found
                       if (!matchingCompletedTool) {
                         return (
-                          <StreamingToolCallIndicator 
+                          <StreamingToolCallIndicator
                             toolCall={firstToolCall}
                             toolName={toolName}
                           />
                         );
                       }
-                      
+
                       // If matching completed tool exists, don't render streaming indicator
                       return null;
                     }
-                    
+
                     // Fallback if no tool calls found
                     return (
-                      <StreamingToolCallIndicator 
+                      <StreamingToolCallIndicator
                         toolCall={null}
                         toolName=""
                       />
@@ -1037,15 +1036,15 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(({
                   })()}
 
                 {/* Show loader when agent is running but not streaming, inside the last assistant group */}
-                {groupIndex === groupedMessages.length - 1 && 
-                  (agentStatus === 'running' || agentStatus === 'connecting') && 
-                  !streamingTextContent && 
+                {groupIndex === groupedMessages.length - 1 &&
+                  (agentStatus === 'running' || agentStatus === 'connecting') &&
+                  !streamingTextContent &&
                   !streamingToolCall &&
                   (streamHookStatus === 'streaming' || streamHookStatus === 'connecting') && (
-                  <View className="mt-3">
-                    <AgentLoader />
-                  </View>
-                )}
+                    <View className="mt-3">
+                      <AgentLoader />
+                    </View>
+                  )}
 
               </View>
             </View>
