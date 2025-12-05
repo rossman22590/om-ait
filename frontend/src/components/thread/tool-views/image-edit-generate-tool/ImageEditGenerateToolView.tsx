@@ -397,8 +397,8 @@ export function ImageEditGenerateToolView({
                         </div>
                       )}
                     </div>
-                  ) : (
-                    /* Failure: Show Error */
+                  ) : !isStreaming ? (
+                    /* Failure: Show Error (only if not streaming) */
                     <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
                       <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 bg-gradient-to-b from-rose-100 to-rose-50 dark:from-rose-800/40 dark:to-rose-900/60">
                         <AlertTriangle className="h-8 w-8 text-rose-500 dark:text-rose-400" />
@@ -416,7 +416,7 @@ export function ImageEditGenerateToolView({
                         </div>
                       )}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               )}
             </div>
