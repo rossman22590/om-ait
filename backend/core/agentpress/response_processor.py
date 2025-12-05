@@ -1972,14 +1972,22 @@ class ResponseProcessor:
                     content = str(result)
 
                 # CRITICAL: Ensure content is JSON-safe to prevent "unterminated string" errors
-                # Replace problematic control characters and null bytes that break JSON
+                # This is THE most important safety check - prevents agent crashes
                 if isinstance(content, str):
-                    # Remove null bytes and other control characters that break JSON
-                    content = content.replace('\x00', '').replace('\r', '\\r')
-                    # Ensure the string isn't too long (LiteLLM has limits)
-                    if len(content) > 100000:  # 100KB limit for tool results
-                        logger.warning(f"Tool result content too long ({len(content)} chars), truncating to 100KB")
-                        content = content[:100000] + "... [truncated due to size]"
+                    # Remove null bytes that break JSON
+                    content = content.replace('\x00', '')
+                    # Escape backslashes first (must be done before other escaping)
+                    content = content.replace('\\', '\\\\')
+                    # Escape quotes to prevent unterminated strings
+                    content = content.replace('"', '\\"')
+                    content = content.replace("'", "\\'")
+                    # Normalize line endings
+                    content = content.replace('\r\n', '\\n').replace('\r', '\\n').replace('\n', '\\n')
+                    # Truncate oversized content
+                    if len(content) > 100000:  # 100KB limit
+                        logger.warning(f"Tool result content too long ({len(content)} chars), truncating")
+                        content = content[:100000] + "... [truncated]"
+                    logger.debug(f"✅ Content sanitized for JSON safety")
                 
                 logger.debug(f"Formatted tool result content: {content[:100]}...")
                 self.trace.event(name="formatted_tool_result_content", level="DEFAULT", status_message=(f"Formatted tool result content: {content[:100]}..."))
