@@ -1,5 +1,5 @@
 <div align="center">
-
+ 
 # Kortix
 
 **The complete platform for creating autonomous AI agents that work for you**
