@@ -770,6 +770,8 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
       options?: { model_name?: string; file_ids?: string[] },
     ) => {
       if (!message.trim() || isShared || !addUserMessageMutation || !startAgentMutation) return;
+
+      // Message queue feature flag - when disabled, don't queue messages while agent is running
       const ENABLE_MESSAGE_QUEUE = false;
       if (ENABLE_MESSAGE_QUEUE && (agentStatus === 'running' || agentStatus === 'connecting')) {
         const queuedId = queueMessage(threadId, message, {
@@ -845,7 +847,9 @@ export function ThreadComponent({ projectId, threadId, compact = false, configur
           throw new Error(`Failed to start agent: ${error?.message || error}`);
         }
 
+        // Clear input text and uploaded files after successful submission
         chatInputRef.current?.setValue('');
+        chatInputRef.current?.clearUploadedFiles();
 
         const agentResult = results[1].value;
         setUserInitiatedRun(true);

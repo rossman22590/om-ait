@@ -204,7 +204,11 @@ export function HeroSection() {
         message: string,
         options?: { model_name?: string; enable_thinking?: boolean }
     ) => {
-        if ((!message.trim() && !chatInputRef.current?.getPendingFiles().length) || isSubmitting) return;
+        const pendingFiles = chatInputRef.current?.getPendingFiles() || [];
+        
+        if ((!message.trim() && !pendingFiles.length) || isSubmitting) {
+            return;
+        }
         if (!user && !isLoading) {
             localStorage.setItem(PENDING_PROMPT_KEY, message.trim());
             setAuthDialogOpen(true);
@@ -213,7 +217,7 @@ export function HeroSection() {
 
         setIsSubmitting(true);
         try {
-            const files = chatInputRef.current?.getPendingFiles() || [];
+            const files = pendingFiles;
             localStorage.removeItem(PENDING_PROMPT_KEY);
             
             const normalizedFiles = files.map((file) => {
@@ -225,15 +229,14 @@ export function HeroSection() {
             const projectId = crypto.randomUUID();
             const trimmedMessage = message.trim();
             
-            chatInputRef.current?.clearPendingFiles();
-            setInputValue('');
+            // Note: No need to clear files/input here - navigation to new page will unmount this component
             
             let promptWithFiles = trimmedMessage;
             if (normalizedFiles.length > 0) {
                 addOptimisticFiles(threadId, projectId, normalizedFiles);
                 sessionStorage.setItem('optimistic_files', 'true');
                 const fileRefs = normalizedFiles.map((f) => 
-                    `[Uploaded File: /workspace/uploads/${f.name}]`
+                    `[Uploaded File: uploads/${f.name}]`
                 ).join('\n');
                 promptWithFiles = `${trimmedMessage}\n\n${fileRefs}`;
             }
@@ -394,13 +397,12 @@ export function HeroSection() {
 
                 <div className="relative z-10 pt-20 sm:pt-24 md:pt-32 mx-auto h-full w-full max-w-6xl flex flex-col items-center justify-center min-h-[60vh] sm:min-h-0">
 
-                    <PromoBanner />
-
-                    <div className="flex flex-col items-center justify-center gap-3 sm:gap-4 pt-12 sm:pt-20 max-w-4xl mx-auto pb-6 sm:pb-7">
-                        <DynamicGreeting className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-medium text-balance text-center px-4 sm:px-2" />
+                    <div className="flex flex-col items-center justify-center gap-4 sm:gap-5 pt-12 sm:pt-20 max-w-4xl mx-auto pb-4 sm:pb-5">
+                        <DynamicGreeting className="text-2xl sm:text-3xl md:text-3xl lg:text-4xl font-medium text-balance text-center px-4 sm:px-2" />
+                        <PromoBanner />
                     </div>
 
-                    <div className="flex flex-col items-center w-full max-w-3xl mx-auto gap-2 flex-wrap justify-center px-4 sm:px-0 animate-in fade-in-0 slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both">
+                    <div className="flex flex-col items-center w-full max-w-3xl mx-auto gap-2 flex-wrap justify-center px-4 sm:px-0 mt-1 animate-in fade-in-0 slide-in-from-bottom-4 duration-500 delay-100 fill-mode-both">
                         <div className="w-full relative">
                             <div className="relative z-10">
                                 <ChatInput

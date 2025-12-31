@@ -1040,23 +1040,11 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
       }
     }, [autoFocus]);
 
-    // Track previous isAgentRunning value to detect when agent starts
-    // Used only for clearing files, NOT for clearing text input
-    // Text input clearing is handled explicitly in handleSubmit to avoid race conditions
+    // Track previous isAgentRunning state (used for detecting transitions)
     const prevIsAgentRunning = useRef(isAgentRunning);
     
-    // Clear files when agent STARTS running (transitions from false to true)
-    // Note: We do NOT clear text here - that's handled explicitly after successful submit
-    // This prevents the bug where input would sometimes clear when agent stops
     useEffect(() => {
-      const wasRunning = prevIsAgentRunning.current;
       prevIsAgentRunning.current = isAgentRunning;
-      
-      // Only clear files when agent actually starts (false → true transition)
-      if (isAgentRunning && !wasRunning) {
-        setUploadedFiles([]);
-        setHasSubmitted(false);
-      }
     }, [isAgentRunning]);
 
     const handleSubmit = useCallback(async (e: React.FormEvent) => {
@@ -1070,8 +1058,9 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
         loading ||
         (disabled && !isAgentRunning) ||
         isUploading // Prevent submission while files are uploading
-      )
+      ) {
         return;
+      }
 
       // Only stop agent if there's no content (empty input)
       // If there's content, onSubmit will queue the message (handled in ThreadComponent)
@@ -1086,7 +1075,13 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
 
       if (currentUploadedFiles.length > 0) {
         const fileInfo = currentUploadedFiles
-          .map((file) => `[Uploaded File: ${file.path}]`)
+          .map((file) => {
+            // Convert absolute path to relative (strip /workspace/ prefix)
+            const relativePath = file.path.startsWith('/workspace/') 
+              ? file.path.replace('/workspace/', '') 
+              : file.path;
+            return `[Uploaded File: ${relativePath}]`;
+          })
           .join('\n');
         message = message ? `${message}\n\n${fileInfo}` : fileInfo;
       }
@@ -1125,14 +1120,24 @@ export const ChatInput = memo(forwardRef<ChatInputHandles, ChatInputProps>(
       if (!e.clipboardData) return;
       const items = Array.from(e.clipboardData.items);
       const imageFiles: File[] = [];
+      
+      // Check if there's any text content in the paste
+      const hasTextContent = items.some(item => item.kind === 'string' && item.type === 'text/plain');
+      
       for (const item of items) {
         if (item.kind === 'file' && item.type.startsWith('image/')) {
           const file = item.getAsFile();
           if (file) imageFiles.push(file);
         }
       }
+      
       if (imageFiles.length > 0) {
-        e.preventDefault();
+        // If there's also text content, don't prevent default - let the text be pasted normally
+        // and just add the images as attachments
+        if (!hasTextContent) {
+          e.preventDefault();
+        }
+        
         handleFiles(
           imageFiles,
           sandboxId,
