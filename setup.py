@@ -212,6 +212,9 @@ def load_existing_env_vars():
             "LANGFUSE_SECRET_KEY": backend_env.get("LANGFUSE_SECRET_KEY", ""),
             "LANGFUSE_HOST": backend_env.get("LANGFUSE_HOST", ""),
         },
+        "braintrust": {
+            "BRAINTRUST_API_KEY": backend_env.get("BRAINTRUST_API_KEY", ""),
+        },
         "monitoring": {
             "SENTRY_DSN": backend_env.get("SENTRY_DSN", ""),
             "FREESTYLE_API_KEY": backend_env.get("FREESTYLE_API_KEY", ""),
@@ -337,6 +340,7 @@ class SetupWizard:
             "vapi": existing_env_vars.get("vapi", {}),
             "stripe": existing_env_vars.get("stripe", {}),
             "langfuse": existing_env_vars.get("langfuse", {}),
+            "braintrust": existing_env_vars.get("braintrust", {}),
             "monitoring": existing_env_vars.get("monitoring", {}),
             "storage": existing_env_vars.get("storage", {}),
             "email": existing_env_vars.get("email", {}),
@@ -1086,9 +1090,9 @@ class SetupWizard:
         )
         print_info("Create a snapshot with these exact settings:")
         print_info(
-            f"   - Name:\t\t{Colors.GREEN}kortix/suna:0.1.3.25{Colors.ENDC}")
+            f"   - Name:\t\t{Colors.GREEN}kortix/suna:0.1.3.28{Colors.ENDC}")
         print_info(
-            f"   - Snapshot name:\t{Colors.GREEN}kortix/suna:0.1.3.25{Colors.ENDC}")
+            f"   - Snapshot name:\t{Colors.GREEN}kortix/suna:0.1.3.28{Colors.ENDC}")
         print_info(
             f"   - Entrypoint:\t{Colors.GREEN}/usr/bin/supervisord -n -c /etc/supervisor/conf.d/supervisord.conf{Colors.ENDC}"
         )
@@ -1565,6 +1569,7 @@ class SetupWizard:
             **self.env_vars.get("vapi", {}),
             **self.env_vars.get("stripe", {}),
             **self.env_vars.get("langfuse", {}),
+            **self.env_vars.get("braintrust", {}),
             **self.env_vars.get("monitoring", {}),
             **self.env_vars.get("storage", {}),
             **self.env_vars.get("email", {}),
