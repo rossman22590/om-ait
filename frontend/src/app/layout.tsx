@@ -25,6 +25,7 @@ const PlanSelectionModal = lazy(() => import('@/components/billing/pricing/plan-
 const AnnouncementDialog = lazy(() => import('@/components/announcements/announcement-dialog').then(mod => ({ default: mod.AnnouncementDialog })));
 const CookieConsent = lazy(() => import('@/components/cookie-consent').then(mod => ({ default: mod.CookieConsent })));
 const RouteChangeTracker = lazy(() => import('@/components/analytics/route-change-tracker').then(mod => ({ default: mod.RouteChangeTracker })));
+const AuthEventTracker = lazy(() => import('@/components/analytics/auth-event-tracker').then(mod => ({ default: mod.AuthEventTracker })));
 
 
 export const viewport: Viewport = {
@@ -118,6 +119,54 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://connect.facebook.net" />
         <link rel="dns-prefetch" href="https://eu.i.posthog.com" />
         
+        {/* Container Load - Initialize dataLayer with page context BEFORE GTM loads */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                window.dataLayer = window.dataLayer || [];
+                var pathname = window.location.pathname;
+                
+                // Get language from localStorage, cookie, or default to 'en'
+                var lang = 'en';
+                try {
+                  // Check localStorage first
+                  var stored = localStorage.getItem('locale');
+                  if (stored) {
+                    lang = stored;
+                  } else {
+                    // Check cookie
+                    var cookies = document.cookie.split(';');
+                    for (var i = 0; i < cookies.length; i++) {
+                      var cookie = cookies[i].trim();
+                      if (cookie.indexOf('locale=') === 0) {
+                        lang = cookie.substring(7);
+                        break;
+                      }
+                    }
+                  }
+                } catch (e) {}
+                
+                var context = { master_group: 'General', content_group: 'Other', page_type: 'other', language: lang };
+                
+                if (pathname === '/' || pathname === '') {
+                  context = { master_group: 'General', content_group: 'Other', page_type: 'home', language: lang };
+                } else if (pathname.indexOf('/auth') === 0) {
+                  context = { master_group: 'General', content_group: 'User', page_type: 'auth', language: lang };
+                } else if (pathname === '/dashboard') {
+                  context = { master_group: 'Platform', content_group: 'Dashboard', page_type: 'home', language: lang };
+                } else if (pathname.indexOf('/projects') === 0 || pathname.indexOf('/thread') === 0) {
+                  context = { master_group: 'Platform', content_group: 'Dashboard', page_type: 'thread', language: lang };
+                } else if (pathname.indexOf('/settings') === 0) {
+                  context = { master_group: 'Platform', content_group: 'User', page_type: 'settings', language: lang };
+                }
+                
+                window.dataLayer.push(context);
+              })();
+            `,
+          }}
+        />
+        
         {/* Static SEO meta tags - rendered in initial HTML */}
         <title>Kortix: Your Autonomous AI Worker</title>
         <meta name="description" content="Built for complex tasks, designed for everything. The ultimate AI assistant that handles it all—from simple requests to mega-complex projects." />
@@ -143,29 +192,29 @@ export default function RootLayout({
         {/* Facebook Pixel - Will be blocked by cookie consent service until marketing consent is given */}
         {process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID && (
           <>
-            <Script id="facebook-pixel" strategy="lazyOnload" data-cookieconsent="marketing">
-              {`
-                !function(f,b,e,v,n,t,s)
-                {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-                n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-                if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-                n.queue=[];t=b.createElement(e);t.async=!0;
-                t.src=v;s=b.getElementsByTagName(e)[0];
-                s.parentNode.insertBefore(t,s)}(window, document,'script',
-                'https://connect.facebook.net/en_US/fbevents.js');
+        <Script id="facebook-pixel" strategy="lazyOnload" data-cookieconsent="marketing">
+          {`
+            !function(f,b,e,v,n,t,s)
+            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+            if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+            n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}(window, document,'script',
+            'https://connect.facebook.net/en_US/fbevents.js');
 
                 fbq('init', '${process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID}');
-                fbq('track', 'PageView');
-              `}
-            </Script>
-            <noscript>
-              <img
-                height="1"
-                width="1"
-                style={{ display: "none" }}
+            fbq('track', 'PageView');
+          `}
+        </Script>
+        <noscript>
+          <img
+            height="1"
+            width="1"
+            style={{ display: "none" }}
                 src={`https://www.facebook.com/tr?id=${process.env.NEXT_PUBLIC_FACEBOOK_PIXEL_ID}&ev=PageView&noscript=1`}
-              />
-            </noscript>
+          />
+        </noscript>
           </>
         )}
 
@@ -252,14 +301,14 @@ export default function RootLayout({
             </Suspense>
           )}
           {process.env.NEXT_PUBLIC_GA_ID_2 && (
-            <Suspense fallback={null}>
+          <Suspense fallback={null}>
               <GoogleAnalytics gaId={process.env.NEXT_PUBLIC_GA_ID_2} />
-            </Suspense>
+          </Suspense>
           )}
           {process.env.NEXT_PUBLIC_GTM_ID && (
-            <Suspense fallback={null}>
+          <Suspense fallback={null}>
               <GoogleTagManager gtmId={process.env.NEXT_PUBLIC_GTM_ID} />
-            </Suspense>
+          </Suspense>
           )}
           <Suspense fallback={null}>
             <SpeedInsights />
@@ -272,6 +321,9 @@ export default function RootLayout({
           </Suspense>
           <Suspense fallback={null}>
             <RouteChangeTracker />
+          </Suspense>
+          <Suspense fallback={null}>
+            <AuthEventTracker />
           </Suspense>
         </ThemeProvider>
       </body>
