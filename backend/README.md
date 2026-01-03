@@ -1,59 +1,51 @@
 
 **1. Launching the backend**
 
-```
-cd /backend
+```bash
+cd backend
 ```
 
-1.1 Launching REDIS for data caching
-
+**1.1 Launching Redis**
 
 ```bash
+# Option A: Use Docker
 docker compose up redis
+
+# Option B: Run locally (if installed)
+redis-server
 ```
 
+**1.2 Running the Worker**
 
-1.2 Running Temporal worker for workflow execution
-
-**IMPORTANT**: Make sure you have Temporal Cloud credentials set in your `.env` file:
-- `TEMPORAL_ADDRESS=us-west-2.aws.api.temporal.io:7233`
-- `TEMPORAL_NAMESPACE=kortix-1.d5grr`
-- `TEMPORAL_API_KEY=<your-api-key>`
+The worker processes background tasks (agent runs, memory extraction, etc.)
 
 ```bash
-uv run python -m core.temporal.worker
+uv run dramatiq --processes 2 --threads 2 run_agent_background
 ```
 
-Or alternatively:
-```bash
-uv run core/temporal/worker.py
+You should see:
+```
+⚡ Dramatiq worker_timeout patched to 200ms (faster message pickup)
+✅ Worker process ready, tool cache warmed
 ```
 
-1.3 Running the main API server
+> **Note**: Worker timeout is patched to 200ms (vs 1000ms default) to reduce task pickup latency.
+> Configure via `DRAMATIQ_WORKER_TIMEOUT` env var.
+
+**1.3 Running the API**
 
 ```bash
 uv run api.py
 ```
 
-Or using uvicorn directly:
-```bash
-uv run uvicorn api:app --host 0.0.0.0 --port 8000 --reload
-```
-
-1.4 Running worker health check
-
-```bash
-uv run worker_health.py
-```
+---
 
 **2. Launching the frontend**
 
 ```bash
-
-cd frontend && npm install
-
+cd frontend
+npm install
 npm run dev
 ```
 
-
-Access the main app via `http://localhost:3000`
+Access the app at `http://localhost:3000`

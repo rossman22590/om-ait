@@ -11,14 +11,114 @@ from core.services import redis
 from core.run import run_agent
 from core.utils.logger import logger, structlog
 from core.utils.tool_discovery import warm_up_tools_cache
+import dramatiq
+from dramatiq import Worker as _OriginalWorker, Middleware
 import uuid
 from core.services.supabase import DBConnection
+from dramatiq.brokers.redis import RedisBroker
 from core.services.langfuse import langfuse
 from core.utils.retry import retry
 import time
 
-# Note: This file contains helper functions used by Temporal activities
-# The actual worker entry point is now in core/temporal/worker.py
+from core.services.redis import get_redis_config as _get_redis_config
+import os
+
+# Patch Dramatiq Worker to use faster polling (200ms instead of 1000ms default)
+_WORKER_TIMEOUT = int(os.getenv("DRAMATIQ_WORKER_TIMEOUT", "200"))
+_original_worker_init = _OriginalWorker.__init__
+
+def _patched_worker_init(self, broker, *, queues=None, worker_timeout=_WORKER_TIMEOUT, worker_threads=8, **kwargs):
+    return _original_worker_init(self, broker, queues=queues, worker_timeout=worker_timeout, worker_threads=worker_threads, **kwargs)
+
+_OriginalWorker.__init__ = _patched_worker_init
+logger.info(f"⚡ Dramatiq worker_timeout patched to {_WORKER_TIMEOUT}ms (faster message pickup)")
+
+
+class MessageLatencyMiddleware(Middleware):
+    """
+    Tracks message latency through the Dramatiq pipeline to diagnose delays.
+    
+    Measures:
+    - enqueue_ts: When .send() is called (set by caller in message options)
+    - consumer_ts: When consumer fetches from Redis (before_process_message)
+    - actor_ts: When actor starts executing (logged in actor)
+    
+    Gaps:
+    - enqueue → consumer = Redis polling delay (Dramatiq backoff issue)
+    - consumer → actor = Internal work queue delay
+    """
+    
+    def before_enqueue(self, broker, message, delay):
+        # Add timestamp when message is being enqueued
+        message.options["enqueue_ts"] = time.time()
+        message.options["enqueue_iso"] = datetime.now(timezone.utc).isoformat()
+    
+    def before_process_message(self, broker, message):
+        # This is called when consumer picks up message from Redis
+        consumer_ts = time.time()
+        enqueue_ts = message.options.get("enqueue_ts")
+        
+        if enqueue_ts:
+            redis_delay_ms = (consumer_ts - enqueue_ts) * 1000
+            # Log if delay > 500ms (significant)
+            if redis_delay_ms > 500:
+                logger.warning(
+                    f"🐌 [LATENCY] Redis polling delay: {redis_delay_ms:.0f}ms | "
+                    f"actor={message.actor_name} | message_id={message.message_id} | "
+                    f"enqueued={message.options.get('enqueue_iso')}"
+                )
+            elif redis_delay_ms > 100:
+                logger.info(
+                    f"⏱️ [LATENCY] Redis polling delay: {redis_delay_ms:.0f}ms | "
+                    f"actor={message.actor_name}"
+                )
+        
+        # Store consumer timestamp for actor to measure internal delay
+        message.options["consumer_ts"] = consumer_ts
+
+redis_config = _get_redis_config()
+redis_host = redis_config["host"]
+redis_port = redis_config["port"]
+redis_password = redis_config["password"]
+redis_username = redis_config["username"]
+
+# Get queue prefix from environment (for preview deployments)
+QUEUE_PREFIX = os.getenv("DRAMATIQ_QUEUE_PREFIX", "")
+
+def get_queue_name(base_name: str) -> str:
+    """Get queue name with optional prefix for preview deployments."""
+    if QUEUE_PREFIX:
+        return f"{QUEUE_PREFIX}{base_name}"
+    return base_name
+
+if redis_config["url"]:
+    auth_info = f" (user={redis_username})" if redis_username else ""
+    queue_info = f" (queue prefix: '{QUEUE_PREFIX}')" if QUEUE_PREFIX else ""
+    logger.info(f"🔧 Configuring Dramatiq broker with Redis at {redis_host}:{redis_port}{auth_info}{queue_info}")
+    redis_broker = RedisBroker(
+        url=redis_config["url"], 
+        middleware=[MessageLatencyMiddleware(), dramatiq.middleware.CurrentMessage(), dramatiq.middleware.AsyncIO()]
+    )
+else:
+    queue_info = f" (queue prefix: '{QUEUE_PREFIX}')" if QUEUE_PREFIX else ""
+    logger.info(f"🔧 Configuring Dramatiq broker with Redis at {redis_host}:{redis_port}{queue_info}")
+    redis_broker = RedisBroker(
+        host=redis_host, 
+        port=redis_port, 
+        middleware=[MessageLatencyMiddleware(), dramatiq.middleware.CurrentMessage(), dramatiq.middleware.AsyncIO()]
+    )
+
+dramatiq.set_broker(redis_broker)
+
+from core.memory import background_jobs as memory_jobs
+from core.categorization import background_jobs as categorization_jobs
+
+# CRITICAL: Import thread_init_service at module level so Dramatiq discovers its actors
+# Without this, the worker won't consume messages for initialize_thread_background
+from core import thread_init_service
+
+warm_up_tools_cache()
+logger.info("✅ Worker process ready, tool cache warmed")
 
 _initialized = False
 db = DBConnection()
@@ -68,7 +168,7 @@ async def initialize():
     if not instance_id:
         instance_id = str(uuid.uuid4())[:8]
     
-    logger.info(f"Initializing worker async resources (instance: {instance_id})")
+    logger.info(f"Initializing worker async resources with Redis at {redis_host}:{redis_port}")
     await retry(lambda: redis.initialize_async())
     
     await redis.verify_connection()
@@ -95,7 +195,10 @@ async def initialize():
     _initialized = True
     logger.info(f"✅ Worker async resources initialized successfully (instance: {instance_id})")
 
-# check_health function removed - health checks now handled by worker_health.py
+@dramatiq.actor(queue_name=get_queue_name("default"))
+async def check_health(key: str):
+    structlog.contextvars.clear_contextvars()
+    await redis.set(key, "healthy", ex=redis.REDIS_KEY_TTL)
 
 
 async def acquire_run_lock(agent_run_id: str, instance_id: str, client) -> bool:
@@ -272,6 +375,37 @@ def create_redis_keys(agent_run_id: str, instance_id: str) -> Dict[str, str]:
 
 MAX_PENDING_REDIS_OPS = 500
 
+async def stream_status_message(
+    stream_key: str,
+    status: str,
+    message: str,
+    metadata: Optional[Dict[str, Any]] = None
+) -> None:
+    """Helper function to write status messages to Redis stream."""
+    try:
+        status_msg = {
+            "type": "status",
+            "status": status,
+            "message": message
+        }
+        if metadata:
+            status_msg["metadata"] = metadata
+        
+        status_json = json.dumps(status_msg)
+        await asyncio.wait_for(
+            redis.stream_add(
+                stream_key,
+                {"data": status_json},
+                maxlen=200,
+                approximate=True
+            ),
+            timeout=2.0
+        )
+    except asyncio.TimeoutError:
+        logger.debug(f"Timeout writing status message to stream (non-critical)")
+    except Exception as e:
+        logger.debug(f"Failed to write status message to stream (non-critical): {e}")
+
 async def process_agent_responses(
     agent_gen,
     agent_run_id: str,
@@ -407,9 +541,10 @@ async def publish_final_control_signal(agent_run_id: str, final_status: str, sto
 
 
 
+from core import thread_init_service
 from core.tool_output_streaming_context import set_tool_output_streaming_context, clear_tool_output_streaming_context
 
-
+@dramatiq.actor(queue_name=get_queue_name("default"), priority=0)  # Priority 0 = highest priority
 async def run_agent_background(
     agent_run_id: str,
     thread_id: str,
@@ -420,8 +555,28 @@ async def run_agent_background(
     account_id: Optional[str] = None,
     request_id: Optional[str] = None
 ):
-    worker_start = time.time()
+    actor_start = time.time()
     timings = {}
+    
+    # Measure end-to-end latency from enqueue to actor start
+    from dramatiq.middleware import CurrentMessage
+    current_message = CurrentMessage.get_current_message()
+    if current_message:
+        enqueue_ts = current_message.options.get("enqueue_ts")
+        consumer_ts = current_message.options.get("consumer_ts")
+        if enqueue_ts:
+            total_delay_ms = (actor_start - enqueue_ts) * 1000
+            redis_delay_ms = (consumer_ts - enqueue_ts) * 1000 if consumer_ts else 0
+            internal_delay_ms = (actor_start - consumer_ts) * 1000 if consumer_ts else 0
+            
+            # Always log for run_agent_background since it's critical
+            logger.info(
+                f"📊 [LATENCY] run_agent_background | "
+                f"total={total_delay_ms:.0f}ms | "
+                f"redis_poll={redis_delay_ms:.0f}ms | "
+                f"internal_queue={internal_delay_ms:.0f}ms | "
+                f"agent_run_id={agent_run_id}"
+            )
     
     structlog.contextvars.clear_contextvars()
     structlog.contextvars.bind_contextvars(
@@ -430,7 +585,8 @@ async def run_agent_background(
         request_id=request_id,
     )
     
-    logger.info(f"⏱️ [TIMING] Worker received job at {worker_start}")
+    worker_start = actor_start  # Keep for backward compatibility with timing code
+    logger.info(f"⏱️ [TIMING] Worker received job at {actor_start}")
 
     t = time.time()
     try:
@@ -454,18 +610,32 @@ async def run_agent_background(
         logger.info(f"⏱️ [TIMING] Worker init: {timings['initialize']:.1f}ms | Lock: {timings['lock_acquisition']:.1f}ms")
         logger.info(f"Starting background agent run: {agent_run_id} for thread: {thread_id} (Instance: {instance_id})")
         
-        from core.ai_models import model_manager
-        effective_model = model_manager.resolve_model_id(model_name)
-        logger.info(f"🚀 Using model: {effective_model}")
-        
         start_time = datetime.now(timezone.utc)
         stop_checker = None
         cancellation_event = asyncio.Event()
 
         redis_keys = create_redis_keys(agent_run_id, instance_id)
         
+        # Send initial status message
+        await stream_status_message(
+            redis_keys['response_stream'],
+            "initializing",
+            "Worker started, initializing resources..."
+        )
+        
         await redis.verify_stream_writable(redis_keys['response_stream'])
         logger.info(f"✅ Verified Redis stream {redis_keys['response_stream']} is writable")
+        
+        # Send stream verified message
+        await stream_status_message(
+            redis_keys['response_stream'],
+            "initializing",
+            "Redis stream verified, loading agent configuration..."
+        )
+        
+        from core.ai_models import model_manager
+        effective_model = model_manager.resolve_model_id(model_name)
+        logger.info(f"🚀 Using model: {effective_model}")
         
         trace = langfuse.trace(
             name="agent_run",
@@ -533,6 +703,13 @@ async def run_agent_background(
             logger.warning(f"Redis error setting instance_active key for {agent_run_id}: {e} - continuing without")
 
         agent_config = await load_agent_config(agent_id, account_id)
+        
+        # Send agent config loaded message
+        await stream_status_message(
+            redis_keys['response_stream'],
+            "initializing",
+            "Agent configuration loaded, setting up tools..."
+        )
 
         # Set tool output streaming context for tools to publish real-time output
         set_tool_output_streaming_context(
@@ -547,7 +724,7 @@ async def run_agent_background(
             agent_config=agent_config,
             trace=trace,
             cancellation_event=cancellation_event,
-            account_id=account_id,
+            account_id=account_id
         )
         
         total_to_ready = (time.time() - worker_start) * 1000
@@ -619,24 +796,18 @@ async def run_agent_background(
 
         if final_status == "completed" and account_id:
             try:
-                from core.temporal.client import get_temporal_client
-                from core.temporal.workflows import MemoryExtractionWorkflow
+                from core.memory.background_jobs import extract_memories_from_conversation
                 messages_result = await client.table('messages').select('message_id').eq('thread_id', thread_id).order('created_at', desc=False).execute()
                 if messages_result.data:
                     message_ids = [m['message_id'] for m in messages_result.data]
-                    temporal_client = await get_temporal_client()
-                    # Temporal SDK requires multiple args passed via 'args' parameter
-                    # Use background queue for memory extraction (lower priority)
-                    from core.temporal.workflows import MemoryExtractionWorkflow, TASK_QUEUE_BACKGROUND
-                    await temporal_client.start_workflow(
-                        MemoryExtractionWorkflow.run,
-                        args=[thread_id, account_id, message_ids],
-                        id=f"memory-extraction-{thread_id}",
-                        task_queue=TASK_QUEUE_BACKGROUND,
+                    extract_memories_from_conversation.send(
+                        thread_id=thread_id,
+                        account_id=account_id,
+                        message_ids=message_ids
                     )
-                    logger.debug(f"Started memory extraction workflow for thread {thread_id}")
+                    logger.debug(f"Queued memory extraction for thread {thread_id}")
             except Exception as mem_error:
-                logger.warning(f"Failed to start memory extraction workflow: {mem_error}")
+                logger.warning(f"Failed to queue memory extraction: {mem_error}")
 
         # MEMORY CLEANUP: Explicitly release memory after agent run completes
         try:
