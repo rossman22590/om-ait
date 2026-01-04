@@ -17,20 +17,19 @@ redis-server
 
 **1.2 Running the Worker**
 
-The worker processes background tasks (agent runs, memory extraction, etc.)
+The worker processes background tasks (agent runs, memory extraction, etc.) using Redis Streams.
 
 ```bash
-uv run dramatiq --processes 2 --threads 2 run_agent_background
+uv run python run_worker.py --concurrency 8
 ```
 
 You should see:
 ```
-⚡ Dramatiq worker_timeout patched to 200ms (faster message pickup)
-✅ Worker process ready, tool cache warmed
+🚀 Starting Redis Streams Worker
+✅ Worker resources initialized
+📡 Consumer loop started
 ```
 
-> **Note**: Worker timeout is patched to 200ms (vs 1000ms default) to reduce task pickup latency.
-> Configure via `DRAMATIQ_WORKER_TIMEOUT` env var.
 
 **1.3 Running the API**
 
@@ -49,3 +48,15 @@ npm run dev
 ```
 
 Access the app at `http://localhost:3000`
+
+## Build Verification
+
+Run `make verify` or `uv run python core/utils/scripts/verify_build.py` to check:
+- All imports work
+- No syntax errors
+- No undefined names
+- API can be imported
+- Worker can be imported
+
+See `core/utils/scripts/README.md` for more details on available scripts.
+
