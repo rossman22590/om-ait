@@ -51,15 +51,8 @@ class Configuration:
     AGENT_TOOL_EXECUTION_STRATEGY: str = "parallel"  # "parallel" or "sequential"
     # ============================================
     
-
-    ENABLE_BOOTSTRAP_MODE: bool = True        # Use two-phase bootstrap+enrichment (faster startup)
-    ENABLE_MINIMAL_PROMPT: bool = True        # Use minimal prompt for first turn (no DB queries)
-    BOOTSTRAP_SLO_WARNING_MS: int = 750       # Emit warning if Phase A exceeds this threshold
-    BOOTSTRAP_SLO_CRITICAL_MS: int = 1500     # Hard timeout for Phase A (fail if exceeded)
-    # =========================================
-    
     # ===== PRESENCE CONFIGURATION =====
-    DISABLE_PRESENCE: bool = False  # Disable presence tracking entirely
+    DISABLE_PRESENCE: bool = True  # Disable presence tracking entirely
     # ==================================
     
     SYSTEM_ADMIN_USER_ID: Optional[str] = None  # User ID that owns shared/fallback agents
@@ -287,6 +280,9 @@ class Configuration:
     ANTHROPIC_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     
+    ENABLE_MEMORY: bool = False
+    ENABLE_KNOWLEDGE_BASE: bool = True
+    ENABLE_USER_CONTEXT: bool = True
     MEMORY_EMBEDDING_PROVIDER: Optional[str] = "openai"
     MEMORY_EMBEDDING_MODEL: Optional[str] = "text-embedding-3-small"
     MEMORY_EXTRACTION_MODEL: Optional[str] = "kortix/basic"
