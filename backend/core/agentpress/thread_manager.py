@@ -26,6 +26,58 @@ import litellm
 
 ToolChoice = Literal["auto", "required", "none"]
 
+
+async def set_thread_has_images(thread_id: str, client=None) -> bool:
+    """
+    Set has_images=True in thread metadata and Redis cache.
+    
+    Called when an image is added to a thread (user upload or agent load_image).
+    This flag is read by thread_has_images() to determine if vision model is needed.
+    
+    Args:
+        thread_id: The thread ID
+        client: Optional Supabase client (fetched if not provided)
+        
+    Returns:
+        True if successfully set, False otherwise
+    """
+    from core.services import redis
+    
+    cache_key = f"thread_has_images:{thread_id}"
+    
+    try:
+        # Check Redis first - if already set, skip DB write
+        cached = await redis.get(cache_key)
+        if cached == "1":
+            return True
+        
+        if client is None:
+            db = DBConnection()
+            client = await db.client
+        
+        # Get current metadata
+        result = await client.table('threads').select('metadata').eq('thread_id', thread_id).single().execute()
+        if not result.data:
+            logger.warning(f"Thread {thread_id} not found when setting has_images flag")
+            return False
+        
+        metadata = result.data.get('metadata') or {}
+        
+        # Skip DB write if already set
+        if not metadata.get('has_images'):
+            metadata['has_images'] = True
+            await client.table('threads').update({'metadata': metadata}).eq('thread_id', thread_id).execute()
+        
+        # Set in Redis with 2 hour TTL (refreshed on each access)
+        await redis.set(cache_key, "1", ex=7200)
+        
+        logger.info(f"🖼️ Set has_images=True for thread {thread_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to set has_images flag for thread {thread_id}: {e}")
+        return False
+
+
 class ThreadManager:
     def __init__(self, trace: Optional[StatefulTraceClient] = None, agent_config: Optional[dict] = None, 
                  project_id: Optional[str] = None, thread_id: Optional[str] = None, account_id: Optional[str] = None,
@@ -268,6 +320,7 @@ class ThreadManager:
         """
         logger.debug(f"Getting messages for thread {thread_id} (lightweight={lightweight})")
         
+        
         # Check cache first (only for non-lightweight mode)
         if not lightweight:
             from core.cache.runtime_cache import get_cached_message_history
@@ -283,13 +336,23 @@ class ThreadManager:
                     validated_cached.append(msg)
                 return validated_cached
         
-        client = await self.db.client
-
+        from core.services.supabase import execute_with_reconnect
+        import asyncio
+        
+        # Timeout for message queries (seconds) - fail fast on connection issues
+        MESSAGE_QUERY_TIMEOUT = 10.0
+        
         try:
             all_messages = []
             
             if lightweight:
-                result = await client.table('messages').select('message_id, type, content').eq('thread_id', thread_id).eq('is_llm_message', True).order('created_at').limit(100).execute()
+                result = await asyncio.wait_for(
+                    execute_with_reconnect(
+                        self.db,
+                        lambda client: client.table('messages').select('message_id, type, content').eq('thread_id', thread_id).eq('is_llm_message', True).order('created_at').limit(100).execute()
+                    ),
+                    timeout=MESSAGE_QUERY_TIMEOUT
+                )
                 
                 if result.data:
                     all_messages = result.data
@@ -298,7 +361,14 @@ class ThreadManager:
                 offset = 0
                 
                 while True:
-                    result = await client.table('messages').select('message_id, type, content, metadata').eq('thread_id', thread_id).eq('is_llm_message', True).order('created_at').range(offset, offset + batch_size - 1).execute()
+                    # Capture offset in lambda default arg to avoid closure issues
+                    result = await asyncio.wait_for(
+                        execute_with_reconnect(
+                            self.db,
+                            lambda client, _offset=offset: client.table('messages').select('message_id, type, content, metadata').eq('thread_id', thread_id).eq('is_llm_message', True).order('created_at').range(_offset, _offset + batch_size - 1).execute()
+                        ),
+                        timeout=MESSAGE_QUERY_TIMEOUT
+                    )
                     
                     if not result.data:
                         break
@@ -379,13 +449,16 @@ class ThreadManager:
 
             return messages
 
+        except asyncio.TimeoutError:
+            logger.error(f"⏱️ Timeout getting messages for thread {thread_id} after {MESSAGE_QUERY_TIMEOUT}s - connection pool likely exhausted")
+            raise
         except Exception as e:
             logger.error(f"Failed to get messages for thread {thread_id}: {str(e)}", exc_info=True)
-            return []
+            raise
     
     async def thread_has_images(self, thread_id: str) -> bool:
         """
-        Check if a thread has any image_context messages.
+        Check if a thread has images. First checks Redis cache, falls back to DB.
         
         Used to determine if the LLM model should be switched to one that supports
         image input (e.g., Bedrock) instead of the default (e.g., MiniMax).
@@ -394,48 +467,62 @@ class ThreadManager:
             thread_id: The thread ID to check
             
         Returns:
-            True if the thread has at least one image_context message, False otherwise
+            True if the thread has images, False otherwise
         """
         import asyncio
         import time
+        from core.services import redis
         
         start = time.time()
-        client_time = 0
-        query_time = 0
+        cache_key = f"thread_has_images:{thread_id}"
         
         try:
-            t1 = time.time()
+            # Check Redis first (fast path)
+            try:
+                cached = await asyncio.wait_for(redis.get(cache_key), timeout=0.5)
+                if cached == "1":
+                    elapsed = (time.time() - start) * 1000
+                    logger.info(f"🖼️ Thread {thread_id} has_images: True (from Redis, {elapsed:.1f}ms)")
+                    return True
+            except Exception:
+                pass  # Redis miss or error, fall through to DB
+            
+            # Fall back to DB
             try:
                 client = await asyncio.wait_for(self.db.client, timeout=3.0)
             except asyncio.TimeoutError:
-                client_time = (time.time() - t1) * 1000
-                logger.warning(f"⚠️ thread_has_images CLIENT timeout after {client_time:.1f}ms for {thread_id} - assuming no images")
+                elapsed = (time.time() - start) * 1000
+                logger.warning(f"⚠️ thread_has_images CLIENT timeout after {elapsed:.1f}ms for {thread_id} - assuming no images")
                 return False
-            client_time = (time.time() - t1) * 1000
             
-            if client_time > 100:
-                logger.warning(f"⚠️ [SLOW] DB client acquired in {client_time:.1f}ms for thread_has_images")
-            
-            t2 = time.time()
             try:
                 result = await asyncio.wait_for(
-                    client.table('messages').select('message_id').eq('thread_id', thread_id).eq('type', 'image_context').limit(1).execute(),
-                    timeout=5.0
+                    client.table('threads').select('metadata').eq('thread_id', thread_id).single().execute(),
+                    timeout=2.0
                 )
             except asyncio.TimeoutError:
-                query_time = (time.time() - t2) * 1000
-                total_time = (time.time() - start) * 1000
-                logger.warning(f"⚠️ thread_has_images QUERY timeout after {query_time:.1f}ms (client:{client_time:.0f}ms, total:{total_time:.0f}ms) for {thread_id} - assuming no images")
+                elapsed = (time.time() - start) * 1000
+                logger.warning(f"⚠️ thread_has_images QUERY timeout after {elapsed:.1f}ms for {thread_id} - assuming no images")
                 return False
-            query_time = (time.time() - t2) * 1000
             
-            has_images = bool(result.data and len(result.data) > 0)
-            total_time = (time.time() - start) * 1000
-            logger.info(f"🖼️ Thread {thread_id} has_images: {has_images} (total:{total_time:.1f}ms, client:{client_time:.0f}ms, query:{query_time:.0f}ms)")
+            has_images = False
+            if result.data:
+                metadata = result.data.get('metadata') or {}
+                has_images = metadata.get('has_images', False)
+            
+            # Cache in Redis if True (2 hour TTL, refreshed on each access)
+            if has_images:
+                try:
+                    await redis.set(cache_key, "1", ex=7200)
+                except Exception:
+                    pass  # Best effort caching
+            
+            elapsed = (time.time() - start) * 1000
+            logger.info(f"🖼️ Thread {thread_id} has_images: {has_images} (from DB, {elapsed:.1f}ms)")
             return has_images
         except Exception as e:
             elapsed = (time.time() - start) * 1000
-            logger.error(f"Error checking thread for images after {elapsed:.1f}ms (client:{client_time:.0f}ms): {str(e)}")
+            logger.error(f"Error checking thread for images after {elapsed:.1f}ms: {str(e)}")
             return False
     
     async def run_thread(
