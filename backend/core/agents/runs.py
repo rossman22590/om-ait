@@ -24,69 +24,6 @@ from core.services.supabase import DBConnection
 
 db = DBConnection()
 
-# Try to import psutil for memory detection, fallback if not available
-try:
-    import psutil
-    _HAS_PSUTIL = True
-except ImportError:
-    _HAS_PSUTIL = False
-
-# Concurrency control - auto-detect optimal concurrency based on CPU count and memory
-# Agent runs are I/O-bound (LLM API calls, DB queries), so we can handle way more than CPU count
-def _calculate_optimal_concurrency() -> int:
-    """Calculate optimal concurrency based on CPU count and available memory."""
-    import multiprocessing
-    
-    cpu_count = multiprocessing.cpu_count()
-    
-    # Try to detect available memory
-    if _HAS_PSUTIL:
-        try:
-            available_memory_gb = psutil.virtual_memory().total / (1024**3)
-        except Exception:
-            # Fallback: assume high-memory VPS if CPU count is high
-            available_memory_gb = cpu_count * 4  # Assume 4GB per CPU as minimum
-    else:
-        # Fallback: assume high-memory VPS if CPU count is high
-        available_memory_gb = cpu_count * 4  # Assume 4GB per CPU as minimum
-    
-    # Memory-based calculation: each run uses ~50-200MB (use 200MB for safety)
-    memory_per_run_gb = 0.2  # 200MB per run
-    max_by_memory = int(available_memory_gb / memory_per_run_gb)
-    
-    # Use 75% of memory limit to leave headroom for:
-    # - OS, Redis, PostgreSQL, and other system processes
-    # - Traffic spikes and burst handling
-    # - Error recovery and retries
-    # This is a good balance between performance and stability
-    safety_factor = 0.75
-    max_concurrency = int(max_by_memory * safety_factor)
-    
-    # Cap at 1500 for safety (even with huge VPS, leave headroom)
-    max_concurrency = min(max_concurrency, 1500)
-    
-    # Minimum of 10 for small instances
-    return max(max_concurrency, 10)
-
-# Allow override via env var, otherwise auto-calculate
-MAX_CONCURRENT_RUNS = int(os.getenv('MAX_CONCURRENT_AGENT_RUNS', str(_calculate_optimal_concurrency())))
-_run_semaphore = asyncio.Semaphore(MAX_CONCURRENT_RUNS)
-
-# Log the concurrency setting on startup
-if not os.getenv('MAX_CONCURRENT_AGENT_RUNS'):
-    import multiprocessing
-    cpu_count = multiprocessing.cpu_count()
-    if _HAS_PSUTIL:
-        try:
-            available_memory_gb = psutil.virtual_memory().total / (1024**3)
-            logger.info(f"🚀 Auto-detected concurrency: {MAX_CONCURRENT_RUNS} concurrent runs (CPU: {cpu_count}, RAM: {available_memory_gb:.1f}GB)")
-        except Exception:
-            logger.info(f"🚀 Auto-detected concurrency: {MAX_CONCURRENT_RUNS} concurrent runs (CPU count: {cpu_count})")
-    else:
-        logger.info(f"🚀 Auto-detected concurrency: {MAX_CONCURRENT_RUNS} concurrent runs (CPU count: {cpu_count})")
-else:
-    logger.info(f"🚀 Using configured concurrency: {MAX_CONCURRENT_RUNS} concurrent runs")
-
 # Store cancellation events for stop mechanism (in-memory, per instance)
 _cancellation_events: Dict[str, asyncio.Event] = {}
 
@@ -101,18 +38,19 @@ async def _get_version_service():
 
 router = APIRouter(tags=["agent-runs"])
 
-async def _get_agent_run_with_access_check(client, agent_run_id: str, user_id: str):
+async def _get_agent_run_with_access_check(agent_run_id: str, user_id: str):
+    """Get agent run with access check using direct SQL."""
     from core.utils.auth_utils import verify_and_authorize_thread_access
+    from core.agents import repo as agents_repo
     
-    agent_run = await client.table('agent_runs').select('*, threads(account_id)').eq('id', agent_run_id).execute()
-    if not agent_run.data:
+    agent_run_data = await agents_repo.get_agent_run_with_thread(agent_run_id)
+    if not agent_run_data:
         raise HTTPException(status_code=404, detail="Worker run not found")
 
-    agent_run_data = agent_run.data[0]
     thread_id = agent_run_data['thread_id']
-    account_id = agent_run_data['threads']['account_id']
+    account_id = agent_run_data['thread_account_id']
     
-    metadata = agent_run_data.get('metadata', {})
+    metadata = agent_run_data.get('metadata', {}) or {}
     actual_user_id = metadata.get('actual_user_id')
     
     if actual_user_id and actual_user_id == user_id:
@@ -120,7 +58,9 @@ async def _get_agent_run_with_access_check(client, agent_run_id: str, user_id: s
     
     if account_id == user_id:
         return agent_run_data
-        
+    
+    # Need client for team access check (uses RPC)
+    client = await db.client
     await verify_and_authorize_thread_access(client, thread_id, user_id)
     return agent_run_data
 
@@ -178,9 +118,12 @@ async def _check_billing_and_limits(client, account_id: str, model_name: Optiona
             raise HTTPException(status_code=500, detail={"message": error_message})
     
     if not agent_run_result.get('can_start', True):
+        # Convert UUIDs to strings for JSON serialization
+        running_thread_ids = agent_run_result.get('running_thread_ids', [])
+        running_thread_ids_str = [str(tid) for tid in running_thread_ids] if running_thread_ids else []
         error_detail = {
             "message": f"Maximum of {agent_run_result['limit']} concurrent agent runs allowed. You currently have {agent_run_result['running_count']} running.",
-            "running_thread_ids": agent_run_result.get('running_thread_ids', []),
+            "running_thread_ids": running_thread_ids_str,
             "running_count": agent_run_result['running_count'],
             "limit": agent_run_result['limit'],
             "error_code": "AGENT_RUN_LIMIT_EXCEEDED"
@@ -226,13 +169,15 @@ async def _get_effective_model(model_name: Optional[str], agent_config: Optional
 
 
 async def _create_agent_run_record(
-    client, 
     thread_id: str, 
     agent_config: Optional[dict], 
     effective_model: str, 
     actual_user_id: str,
     extra_metadata: Optional[Dict[str, Any]] = None
 ) -> str:
+    """Create agent run record using direct SQL."""
+    from core.agents import repo as agents_repo
+    
     run_metadata = {
         "model_name": effective_model,
         "actual_user_id": actual_user_id
@@ -241,16 +186,14 @@ async def _create_agent_run_record(
     if extra_metadata:
         run_metadata.update(extra_metadata)
     
-    agent_run = await client.table('agent_runs').insert({
-        "thread_id": thread_id,
-        "status": "running",
-        "started_at": datetime.now(timezone.utc).isoformat(),
-        "agent_id": agent_config.get('agent_id') if agent_config else None,
-        "agent_version_id": agent_config.get('current_version_id') if agent_config else None,
-        "metadata": run_metadata
-    }).execute()
+    agent_run = await agents_repo.create_agent_run(
+        thread_id=thread_id,
+        agent_id=agent_config.get('agent_id') if agent_config else None,
+        agent_version_id=agent_config.get('current_version_id') if agent_config else None,
+        metadata=run_metadata
+    )
 
-    agent_run_id = agent_run.data[0]['id']
+    agent_run_id = agent_run['id']
     structlog.contextvars.bind_contextvars(agent_run_id=agent_run_id)
     logger.debug(f"Created new agent run: {agent_run_id}")
 
@@ -554,15 +497,15 @@ async def _handle_staged_files_for_thread(
 
 async def _ensure_sandbox_for_thread(client, project_id: str, files: Optional[List[Any]] = None):
     from core.resources import ResourceService, ResourceType, ResourceStatus
+    from core.threads import repo as threads_repo
     
-    project_result = await client.table('projects').select('project_id, account_id, sandbox_resource_id').eq('project_id', project_id).execute()
+    project_data = await threads_repo.get_project_for_sandbox(project_id)
     
-    if not project_result.data:
+    if not project_data:
         logger.warning(f"Project {project_id} not found when checking for sandbox")
         return None, None
     
-    project_data = project_result.data[0]
-    account_id = project_data.get('account_id')
+    account_id = str(project_data.get('account_id')) if project_data.get('account_id') else None
     sandbox_resource_id = project_data.get('sandbox_resource_id')
     
     resource_service = ResourceService(client)
@@ -721,11 +664,11 @@ async def start_agent_run(
     
     # For existing threads, fetch project_id if not provided
     if not is_new_thread and not project_id:
-        thread_result = await client.table('threads').select('project_id').eq('thread_id', thread_id).execute()
-        if thread_result.data:
-            project_id = thread_result.data[0]['project_id']
+        from core.threads import repo as threads_repo
+        project_id = await threads_repo.get_thread_project_id(thread_id)
     
     if is_new_thread:
+        from core.threads import repo as threads_repo
         project_created_here = False
         
         # Generate or use provided project_id
@@ -736,12 +679,11 @@ async def start_agent_run(
         t_project = time.time()
         placeholder_name = f"{prompt[:30]}..." if len(prompt) > 30 else prompt
         
-        await client.table('projects').insert({
-            "project_id": project_id,
-            "account_id": account_id,
-            "name": placeholder_name,
-            "created_at": datetime.now(timezone.utc).isoformat()
-        }).execute()
+        await threads_repo.create_project(
+            project_id=project_id,
+            account_id=account_id,
+            name=placeholder_name
+        )
         project_created_here = True
         logger.debug(f"⏱️ [TIMING] Project created: {(time.time() - t_project) * 1000:.1f}ms")
         
@@ -759,18 +701,14 @@ async def start_agent_run(
             thread_id = str(uuid.uuid4())
         try:
             # Create thread with default name, will be updated by LLM in background
-            thread_data = {
-                "thread_id": thread_id,
-                "project_id": project_id,
-                "account_id": account_id,
-                "name": "New Chat",
-                "created_at": now_iso,
-                "status": "pending"
-            }
-            if memory_enabled is not None:
-                thread_data["memory_enabled"] = memory_enabled
-            
-            await client.table('threads').insert(thread_data).execute()
+            await threads_repo.create_thread_full(
+                thread_id=thread_id,
+                project_id=project_id,
+                account_id=account_id,
+                name="New Chat",
+                status="pending",
+                memory_enabled=memory_enabled
+            )
             logger.debug(f"⏱️ [TIMING] Thread created: {(time.time() - t_thread) * 1000:.1f}ms")
             
             # Generate proper thread name in background using LLM (fire-and-forget)
@@ -793,7 +731,7 @@ async def start_agent_run(
             if project_created_here:
                 logger.warning(f"Thread creation failed, rolling back project {project_id}: {str(thread_error)}")
                 try:
-                    await client.table('projects').delete().eq('project_id', project_id).execute()
+                    await threads_repo.delete_project(project_id)
                     logger.debug(f"✅ Rolled back orphan project {project_id}")
                 except Exception as rollback_error:
                     logger.error(f"Failed to rollback orphan project {project_id}: {str(rollback_error)}")
@@ -855,6 +793,7 @@ async def start_agent_run(
     t_parallel2 = time.time()
     
     async def create_message():
+        from core.threads import repo as threads_repo
         if not final_message_content or not final_message_content.strip():
             if is_new_thread:
                 logger.warning(f"Attempted to create empty message for new thread - this shouldn't happen (validation should catch this)")
@@ -862,26 +801,27 @@ async def start_agent_run(
                 logger.debug(f"No prompt provided for existing thread {thread_id} - assuming message already exists")
             return
             
-        await client.table('messages').insert({
-            "message_id": str(uuid.uuid4()),
-            "thread_id": thread_id,
-            "type": "user",
-            "is_llm_message": True,
-            "content": {"role": "user", "content": final_message_content},
-            "created_at": now_iso
-        }).execute()
+        await threads_repo.create_message_full(
+            message_id=str(uuid.uuid4()),
+            thread_id=thread_id,
+            message_type="user",
+            content={"role": "user", "content": final_message_content},
+            is_llm_message=True
+        )
         logger.debug(f"Created user message for thread {thread_id}")
     
     async def create_agent_run():
-        return await _create_agent_run_record(client, thread_id, agent_config, effective_model, account_id, metadata)
+        return await _create_agent_run_record(thread_id, agent_config, effective_model, account_id, metadata)
     
     async def update_thread_status():
+        from core.threads import repo as threads_repo
         # Update thread status to "ready" (consistent for both optimistic and non-optimistic paths)
-        await client.table('threads').update({
-            "status": "ready",
-            "initialization_started_at": now_iso,
-            "initialization_completed_at": now_iso
-        }).eq('thread_id', thread_id).execute()
+        await threads_repo.update_thread_status(
+            thread_id=thread_id,
+            status="ready",
+            initialization_started_at=now_iso,
+            initialization_completed_at=now_iso
+        )
     
     _, agent_run_id, _ = await asyncio.gather(create_message(), create_agent_run(), update_thread_status())
     logger.debug(f"⏱️ [TIMING] Parallel message+agent_run+status: {(time.time() - t_parallel2) * 1000:.1f}ms")
@@ -889,31 +829,30 @@ async def start_agent_run(
     # Insert image context messages in background (don't block)
     if image_contexts_to_inject:
         async def insert_image_contexts():
+            from core.threads import repo as threads_repo
             # Set has_images flag on thread metadata (once, before inserting messages)
-            from core.agentpress.thread_manager import set_thread_has_images
-            await set_thread_has_images(thread_id, client)
+            await threads_repo.set_thread_has_images(thread_id)
             
             for img_info in image_contexts_to_inject:
                 try:
-                    await client.table('messages').insert({
-                        "message_id": str(uuid.uuid4()),
-                        "thread_id": thread_id,
-                        "type": "image_context",
-                        "is_llm_message": True,
-                        "content": {
+                    await threads_repo.create_message_full(
+                        message_id=str(uuid.uuid4()),
+                        thread_id=thread_id,
+                        message_type="image_context",
+                        content={
                             "role": "user",
                             "content": [
                                 {"type": "text", "text": f"[Image: {img_info['filename']}]"},
                                 {"type": "image_url", "image_url": {"url": img_info['url']}}
                             ]
                         },
-                        "metadata": {
+                        is_llm_message=True,
+                        metadata={
                             "file_path": img_info['filename'],
                             "mime_type": img_info['mime_type'],
                             "source": "user_upload"
-                        },
-                        "created_at": now_iso
-                    }).execute()
+                        }
+                    )
                     logger.info(f"📷 Injected image context for {img_info['filename']} into thread {thread_id}")
                 except Exception as e:
                     logger.warning(f"Failed to inject image context: {e}")
@@ -924,25 +863,24 @@ async def start_agent_run(
     cancellation_event = asyncio.Event()
     _cancellation_events[agent_run_id] = cancellation_event
     
-    async def execute_with_semaphore():
-        """Execute agent run with concurrency control."""
-        async with _run_semaphore:
-            try:
-                await execute_agent_run_direct(
-                    agent_run_id=agent_run_id,
-                    thread_id=thread_id,
-                    project_id=project_id,
-                    model_name=effective_model,
-                    agent_config=agent_config,
-                    account_id=account_id,
-                    cancellation_event=cancellation_event
-                )
-            finally:
-                # Clean up cancellation event
-                _cancellation_events.pop(agent_run_id, None)
+    async def execute_run():
+        """Execute agent run as background task."""
+        try:
+            await execute_agent_run_direct(
+                agent_run_id=agent_run_id,
+                thread_id=thread_id,
+                project_id=project_id,
+                model_name=effective_model,
+                agent_config=agent_config,
+                account_id=account_id,
+                cancellation_event=cancellation_event
+            )
+        finally:
+            # Clean up cancellation event
+            _cancellation_events.pop(agent_run_id, None)
     
     # Create background task - runs independently
-    execution_task = asyncio.create_task(execute_with_semaphore())
+    execution_task = asyncio.create_task(execute_run())
     logger.info(f"✅ Started agent run {agent_run_id} as background task")
     logger.debug(f"⏱️ [TIMING] Task creation: {(time.time() - t_execute) * 1000:.1f}ms")
     
@@ -1026,13 +964,13 @@ async def unified_agent_start(
     try:
         # For existing threads, verify access
         if thread_id and not is_optimistic:
+            from core.threads import repo as threads_repo
             structlog.contextvars.bind_contextvars(thread_id=thread_id)
             
-            thread_result = await client.table('threads').select('project_id, account_id').eq('thread_id', thread_id).execute()
-            if not thread_result.data:
+            thread_data = await threads_repo.get_thread_with_project(thread_id)
+            if not thread_data:
                 raise HTTPException(status_code=404, detail="Thread not found")
             
-            thread_data = thread_result.data[0]
             project_id = thread_data['project_id']
             
             if thread_data['account_id'] != user_id:
@@ -1081,8 +1019,7 @@ async def stop_agent(agent_run_id: str, user_id: str = Depends(verify_and_get_us
         agent_run_id=agent_run_id,
     )
     logger.debug(f"Received request to stop agent run: {agent_run_id}")
-    client = await db.client
-    await _get_agent_run_with_access_check(client, agent_run_id, user_id)
+    await _get_agent_run_with_access_check(agent_run_id, user_id)
     await stop_agent_run(agent_run_id)
     return {"status": "stopped"}
 
@@ -1093,8 +1030,7 @@ async def get_agent_run_status(agent_run_id: str, user_id: str = Depends(verify_
         agent_run_id=agent_run_id,
     )
     logger.debug(f"Fetching agent run status: {agent_run_id}")
-    client = await db.client
-    agent_run_data = await _get_agent_run_with_access_check(client, agent_run_id, user_id)
+    agent_run_data = await _get_agent_run_with_access_check(agent_run_id, user_id)
     return {
         "status": agent_run_data['status'],
         "error": agent_run_data.get('error')
@@ -1103,62 +1039,13 @@ async def get_agent_run_status(agent_run_id: str, user_id: str = Depends(verify_
 @router.get("/agent-runs/active", summary="List All Active Agent Runs", operation_id="list_active_agent_runs")
 async def get_active_agent_runs(user_id: str = Depends(verify_and_get_user_id_from_jwt)):
     try:
+        from core.agents.repo import get_active_agent_runs as repo_get_active_runs
+        
         logger.debug(f"Fetching all active agent runs for user: {user_id}")
-        client = await db.client
+        active_runs = await repo_get_active_runs(user_id)
+        logger.debug(f"Found {len(active_runs)} active agent runs for user: {user_id}")
         
-        try:
-            user_threads = await client.table('threads').select('thread_id').eq('account_id', user_id).execute()
-        except Exception as db_error:
-            logger.error(f"Database error fetching threads for user {user_id}: {str(db_error)}")
-            return {"active_runs": []}
-        
-        if not user_threads.data:
-            return {"active_runs": []}
-        
-        thread_ids = [
-            str(thread['thread_id']) 
-            for thread in user_threads.data 
-            if thread.get('thread_id') and str(thread['thread_id']).strip()
-        ]
-        
-        logger.debug(f"Found {len(thread_ids)} valid thread_ids for user {user_id} (from {len(user_threads.data)} total threads)")
-        
-        if not thread_ids:
-            logger.debug(f"No valid thread_ids found for user: {user_id}")
-            return {"active_runs": []}
-        
-        from core.utils.query_utils import batch_query_in
-        
-        try:
-            agent_runs_data = await batch_query_in(
-                client=client,
-                table_name='agent_runs',
-                select_fields='id, thread_id, status, started_at',
-                in_field='thread_id',
-                in_values=thread_ids,
-                additional_filters={'status': 'running'}
-            )
-        except Exception as query_error:
-            logger.error(f"Query error fetching agent runs for user {user_id}: {str(query_error)}")
-            return {"active_runs": []}
-        
-        if not agent_runs_data:
-            return {"active_runs": []}
-        
-        accessible_runs = [
-            {
-                'id': run.get('id'),
-                'thread_id': run.get('thread_id'),
-                'status': run.get('status'),
-                'started_at': run.get('started_at')
-            }
-            for run in agent_runs_data
-            if run and run.get('id')
-        ]
-        
-        logger.debug(f"Found {len(accessible_runs)} active agent runs for user: {user_id}")
-        
-        return {"active_runs": accessible_runs}
+        return {"active_runs": active_runs}
     except HTTPException:
         raise
     except Exception as e:
@@ -1167,31 +1054,48 @@ async def get_active_agent_runs(user_id: str = Depends(verify_and_get_user_id_fr
 
 @router.get("/thread/{thread_id}/agent-runs", summary="List Thread Agent Runs", operation_id="list_thread_agent_runs")
 async def get_agent_runs(thread_id: str, user_id: str = Depends(verify_and_get_user_id_from_jwt)):
+    from core.agents.repo import get_thread_agent_runs as repo_get_thread_runs
+    
     structlog.contextvars.bind_contextvars(
         thread_id=thread_id,
     )
     logger.debug(f"Fetching agent runs for thread: {thread_id}")
     client = await db.client
     await verify_and_authorize_thread_access(client, thread_id, user_id)
-    agent_runs = await client.table('agent_runs').select('id, thread_id, status, started_at, completed_at, error, created_at, updated_at').eq("thread_id", thread_id).order('created_at', desc=True).execute()
-    logger.debug(f"Found {len(agent_runs.data)} agent runs for thread: {thread_id}")
-    return {"agent_runs": agent_runs.data}
+    
+    agent_runs = await repo_get_thread_runs(thread_id)
+    logger.debug(f"Found {len(agent_runs)} agent runs for thread: {thread_id}")
+    return {"agent_runs": agent_runs}
 
 @router.get("/agent-run/{agent_run_id}", summary="Get Agent Run", operation_id="get_agent_run")
 async def get_agent_run(agent_run_id: str, user_id: str = Depends(verify_and_get_user_id_from_jwt)):
+    from core.agents.repo import get_agent_run_by_id as repo_get_run
+    
     structlog.contextvars.bind_contextvars(
         agent_run_id=agent_run_id,
     )
     logger.debug(f"Fetching agent run details: {agent_run_id}")
-    client = await db.client
-    agent_run_data = await _get_agent_run_with_access_check(client, agent_run_id, user_id)
+    
+    agent_run_data = await repo_get_run(agent_run_id)
+    if not agent_run_data:
+        raise HTTPException(status_code=404, detail="Worker run not found")
+    
+    # Authorization check
+    thread_account_id = agent_run_data.get('thread_account_id')
+    metadata = agent_run_data.get('metadata', {}) or {}
+    actual_user_id = metadata.get('actual_user_id')
+    
+    if not (actual_user_id == user_id or thread_account_id == user_id):
+        client = await db.client
+        await verify_and_authorize_thread_access(client, agent_run_data['thread_id'], user_id)
+    
     return {
         "id": agent_run_data['id'],
         "threadId": agent_run_data['thread_id'],
         "status": agent_run_data['status'],
-        "startedAt": agent_run_data['started_at'],
-        "completedAt": agent_run_data['completed_at'],
-        "error": agent_run_data['error']
+        "startedAt": agent_run_data.get('started_at'),
+        "completedAt": agent_run_data.get('completed_at'),
+        "error": agent_run_data.get('error')
     }
 
 @router.get("/agent-run/{agent_run_id}/stream", summary="Stream Agent Run", operation_id="stream_agent_run")
@@ -1204,7 +1108,7 @@ async def stream_agent_run(
     client = await db.client
 
     user_id = await get_user_id_from_stream_auth(request, token)
-    agent_run_data = await _get_agent_run_with_access_check(client, agent_run_id, user_id)
+    agent_run_data = await _get_agent_run_with_access_check(agent_run_id, user_id)
 
     structlog.contextvars.bind_contextvars(
         agent_run_id=agent_run_id,
@@ -1280,7 +1184,6 @@ async def stream_agent_run(
         terminate_stream = False
         initial_yield_complete = False
         last_id = "0"  # Start from beginning for initial read
-        pubsub = None
 
         try:
             # === INITIAL CATCH-UP (unchanged) ===
@@ -1341,91 +1244,88 @@ async def stream_agent_run(
                 thread_id=agent_run_data.get('thread_id'),
             )
 
-            # === NEW: PUB/SUB BASED REAL-TIME STREAMING ===
-            notify_channel = f"{stream_key}:notify"
-            pubsub = await redis.get_pubsub()
-            await pubsub.subscribe(notify_channel)
-            
-            # After catch-up, keep using the actual last entry ID to read entries after it
-            # NOTE: Do NOT use "$" here! "$" means "entries after this XREAD command", not "entries after this ID"
-            # Since worker writes entries BEFORE publishing notifications, using "$" would miss those entries
+            # === POLLING-BASED STREAMING (no PubSub - saves Redis connections) ===
+            # Poll every 200ms for new entries. This trades ~200ms latency for not holding
+            # a dedicated PubSub connection per SSE client (which exhausts connection pools).
+            # Use Redis XREAD BLOCK for efficient long-polling:
+            # - Blocks server-side (no busy waiting)
+            # - Returns INSTANTLY when new data arrives
+            # - 100ms max wait balances responsiveness vs Redis load
+            BLOCK_MS = 100
+            POLLS_PER_PING = 50  # 50 polls * 100ms = 5 seconds between pings
             
             # Startup timeout: if no real data received after N pings, check if worker is stuck
+            polls_since_ping = 0
             consecutive_pings = 0
             received_real_data = len(initial_entries) > 0 if initial_entries else False
-            MAX_STARTUP_PINGS = 4  # 4 pings * 5 seconds = 20 second startup timeout (should start in ms)
+            MAX_STARTUP_PINGS = 4  # 4 pings * 5 seconds = 20 second startup timeout
             
             while not terminate_stream:
                 try:
-                    # Wait for pub/sub notification or timeout
-                    message = await asyncio.wait_for(
-                        pubsub.get_message(ignore_subscribe_messages=True),
-                        timeout=5.0
-                    )
+                    # Efficient blocking read - returns instantly on new data, or after BLOCK_MS
+                    entries = await redis.stream_read(stream_key, last_id, block_ms=BLOCK_MS)
                     
-                    if message:
-                        # Notification received - read new entries immediately
+                    if entries:
                         received_real_data = True
                         consecutive_pings = 0
+                        polls_since_ping = 0
                         
-                        entries = await redis.stream_read(stream_key, last_id, block_ms=0)
-                        if entries:
-                            for entry_id, fields in entries:
-                                data = fields.get('data', '{}')
-                                yield f"data: {data}\n\n"
-                                last_id = entry_id
-                                
-                                # Check for completion status
+                        for entry_id, fields in entries:
+                            data = fields.get('data', '{}')
+                            yield f"data: {data}\n\n"
+                            last_id = entry_id
+                            
+                            # Check for completion status
+                            try:
+                                response = json.loads(data)
+                                if response.get('type') == 'status' and response.get('status') in ['completed', 'failed', 'stopped', 'error']:
+                                    logger.debug(f"Detected completion via stream: {response.get('status')}")
+                                    terminate_stream = True
+                                    break
+                            except json.JSONDecodeError:
+                                pass
+                    else:
+                        # XREAD timed out (no new data) - increment poll counter
+                        polls_since_ping += 1
+                        
+                        # Send periodic ping to keep SSE connection alive
+                        if polls_since_ping >= POLLS_PER_PING:
+                            polls_since_ping = 0
+                            consecutive_pings += 1
+                            
+                            # Startup timeout check
+                            if not received_real_data and consecutive_pings >= MAX_STARTUP_PINGS:
+                                logger.warning(f"Startup timeout for agent run {agent_run_id}: no data received after {consecutive_pings * 5}s")
                                 try:
-                                    response = json.loads(data)
-                                    if response.get('type') == 'status' and response.get('status') in ['completed', 'failed', 'stopped', 'error']:
-                                        logger.debug(f"Detected completion via stream: {response.get('status')}")
+                                    from core.agents import repo as agents_repo
+                                    run_check = await agents_repo.get_agent_run_status(agent_run_id)
+                                    db_status = run_check.get('status') if run_check else None
+                                    if db_status == 'running':
+                                        logger.error(f"Agent run {agent_run_id} stuck: status is 'running' but worker never produced output")
+                                        await agents_repo.update_agent_run_status(
+                                            agent_run_id,
+                                            'failed',
+                                            error='Worker failed to start within timeout period'
+                                        )
+                                        yield f"data: {json.dumps({'type': 'status', 'status': 'error', 'message': 'Agent worker failed to start. Please try again.'})}\n\n"
                                         terminate_stream = True
                                         break
-                                except json.JSONDecodeError:
-                                    pass
-                    else:
-                        # No message (None returned) - continue waiting
-                        pass
-                        
-                except asyncio.TimeoutError:
-                    consecutive_pings += 1
-                    
-                    # Startup timeout check: if we haven't received any real data and hit the limit
-                    if not received_real_data and consecutive_pings >= MAX_STARTUP_PINGS:
-                        logger.warning(f"Startup timeout for agent run {agent_run_id}: no data received after {consecutive_pings * 5}s")
-                        # Check DB status to see if run is still supposed to be running
-                        try:
-                            run_check = await client.table('agent_runs').select('status').eq('id', agent_run_id).maybe_single().execute()
-                            db_status = run_check.data.get('status') if run_check.data else None
-                            if db_status == 'running':
-                                # Worker never started - mark as failed
-                                logger.error(f"Agent run {agent_run_id} stuck: status is 'running' but worker never produced output")
-                                await client.table('agent_runs').update({
-                                    'status': 'failed',
-                                    'error': 'Worker failed to start within timeout period',
-                                    'completed_at': datetime.now(timezone.utc).isoformat()
-                                }).eq('id', agent_run_id).execute()
-                                yield f"data: {json.dumps({'type': 'status', 'status': 'error', 'message': 'Agent worker failed to start. Please try again.'})}\n\n"
-                                terminate_stream = True
-                                break
-                            elif db_status in ['completed', 'failed', 'stopped']:
-                                logger.debug(f"Agent run {agent_run_id} already finished with status: {db_status}")
-                                yield f"data: {json.dumps({'type': 'status', 'status': db_status})}\n\n"
-                                terminate_stream = True
-                                break
-                        except Exception as db_err:
-                            logger.warning(f"Failed to check agent_run status during timeout: {db_err}")
-                    
-                    # Send ping to keep connection alive
-                    yield f"data: {json.dumps({'type': 'ping'})}\n\n"
+                                    elif db_status in ['completed', 'failed', 'stopped']:
+                                        logger.debug(f"Agent run {agent_run_id} already finished with status: {db_status}")
+                                        yield f"data: {json.dumps({'type': 'status', 'status': db_status})}\n\n"
+                                        terminate_stream = True
+                                        break
+                                except Exception as db_err:
+                                    logger.warning(f"Failed to check agent_run status during timeout: {db_err}")
+                            
+                            yield f"data: {json.dumps({'type': 'ping'})}\n\n"
 
                 except asyncio.CancelledError:
                     logger.debug(f"Stream generator cancelled for {agent_run_id}")
                     terminate_stream = True
                     break
                 except Exception as e:
-                    logger.error(f"Error processing message for {agent_run_id}: {e}", exc_info=True)
+                    logger.error(f"Error polling stream for {agent_run_id}: {e}", exc_info=True)
                     yield f"data: {json.dumps({'type': 'status', 'status': 'error', 'message': f'Stream failed: {e}'})}\n\n"
                     terminate_stream = True
                     break
@@ -1437,13 +1337,6 @@ async def stream_agent_run(
 
         finally:
             terminate_stream = True
-            # Clean up pub/sub subscription
-            if pubsub:
-                try:
-                    await pubsub.unsubscribe(notify_channel)
-                    await pubsub.close()
-                except Exception:
-                    pass
             logger.debug(f"Streaming cleanup complete for agent run: {agent_run_id}")
 
     return StreamingResponse(stream_generator(agent_run_data), media_type="text/event-stream", headers={

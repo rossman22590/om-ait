@@ -74,7 +74,6 @@ async def cleanup_orphaned_agent_runs(db_client) -> int:
                 
                 # Mark as failed
                 await update_agent_run_status(
-                    db_client,
                     agent_run_id,
                     "failed",
                     error="Orphaned run - instance crashed or was restarted",
@@ -169,37 +168,73 @@ async def cleanup_orphaned_redis_streams(db_client) -> int:
                 stream_run_ids.append(parts[1])
         
         if not stream_run_ids:
+            logger.debug("✅ No valid stream run IDs found")
             return 0
         
-        # Check which of these runs are actually still 'running' in DB
-        running_runs = await db_client.table('agent_runs')\
-            .select('id')\
-            .eq('status', 'running')\
-            .in_('id', stream_run_ids)\
-            .execute()
+        logger.info(f"🔍 Extracted {len(stream_run_ids)} run IDs from streams")
         
-        running_run_ids = {run['id'] for run in (running_runs.data or [])}
+        # Check which of these runs are actually still 'running' in DB
+        # Process in batches to avoid query length limits (Supabase has URL length limits)
+        BATCH_SIZE = 50
+        running_run_ids = set()
+        
+        for i in range(0, len(stream_run_ids), BATCH_SIZE):
+            batch = stream_run_ids[i:i + BATCH_SIZE]
+            batch_num = (i // BATCH_SIZE) + 1
+            total_batches = (len(stream_run_ids) + BATCH_SIZE - 1) // BATCH_SIZE
+            
+            logger.debug(f"🔍 Querying DB batch {batch_num}/{total_batches} ({len(batch)} IDs)")
+            
+            try:
+                running_runs = await db_client.table('agent_runs')\
+                    .select('id')\
+                    .eq('status', 'running')\
+                    .in_('id', batch)\
+                    .execute()
+                
+                if running_runs.data:
+                    running_run_ids.update(run['id'] for run in running_runs.data)
+            except Exception as e:
+                logger.warning(f"Failed to query batch {batch_num}: {e}")
+                # Continue with other batches even if one fails
+        
+        logger.info(f"🔍 Found {len(running_run_ids)} actually running agents in DB")
         
         # Delete streams that don't have a corresponding 'running' DB record
         deleted_count = 0
-        for run_id in stream_run_ids:
-            if run_id not in running_run_ids:
+        orphans_to_delete = [rid for rid in stream_run_ids if rid not in running_run_ids]
+        
+        logger.info(f"🧹 Cleaning up {len(orphans_to_delete)} orphaned streams...")
+        
+        if not orphans_to_delete:
+            logger.debug("✅ All Redis streams have corresponding running DB records")
+            return 0
+        
+        # Batch delete for performance (avoid N network calls)
+        # Collect all keys to delete
+        keys_to_delete = []
+        for run_id in orphans_to_delete:
+            keys_to_delete.append(f"agent_run:{run_id}:stream")
+            keys_to_delete.append(f"stop:{run_id}")
+        
+        # Delete all keys in one batch operation
+        try:
+            deleted_count = await redis_client.delete(*keys_to_delete)
+            logger.info(f"🧹 Deleted {deleted_count} Redis keys ({len(orphans_to_delete)} orphaned streams)")
+        except Exception as e:
+            logger.error(f"Failed to batch delete orphaned streams: {e}")
+            # Fallback to individual deletion if batch fails
+            for run_id in orphans_to_delete:
                 try:
                     stream_key = f"agent_run:{run_id}:stream"
                     stop_key = f"stop:{run_id}"
                     await redis_client.delete(stream_key)
                     await redis_client.delete(stop_key)
-                    deleted_count += 1
-                    logger.debug(f"🧹 Deleted orphaned Redis stream for {run_id}")
-                except Exception as e:
-                    logger.warning(f"Failed to delete orphaned stream for {run_id}: {e}")
+                    deleted_count += 2
+                except Exception as e2:
+                    logger.warning(f"Failed to delete orphaned stream for {run_id}: {e2}")
         
-        if deleted_count > 0:
-            logger.info(f"🧹 Cleaned up {deleted_count} orphaned Redis streams")
-        else:
-            logger.debug("✅ All Redis streams have corresponding running DB records")
-        
-        return deleted_count
+        return len(orphans_to_delete)
             
     except Exception as e:
         logger.error(f"Failed to cleanup orphaned Redis streams: {e}")

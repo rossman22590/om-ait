@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/suna-ai/suna-backend:latest
+    image: ghcr.io/kortix-ai/suna/suna-backend:latest
     platform: linux/amd64
     build:
       context: .
@@ -20,9 +20,8 @@ services:
     networks:
       - app-network
     environment:
-      - LOG_LEVEL=INFO
-      - WORKERS=16
-      - SUPABASE_MAX_CONNECTIONS=50
+      - LOG_LEVEL=DEBUG
+      - WORKERS=${WORKERS:-16}
     logging:
       driver: "json-file"
       options:
@@ -38,7 +37,7 @@ services:
   # Worker service removed - agent runs now execute directly in API process
   # Memory/categorization tasks also run directly as async background tasks
   # worker:
-  #   image: ghcr.io/suna-ai/suna-backend:latest
+  #   image: ghcr.io/kortix-ai/suna/suna-backend:latest
   #   platform: linux/amd64
   #   build:
   #     context: .

@@ -21,12 +21,6 @@ import psutil
 from pydantic import BaseModel
 import uuid
 
-from core.utils.rate_limiter import (
-    auth_rate_limiter,
-    api_key_rate_limiter,
-    admin_rate_limiter,
-    get_client_identifier,
-)
 
 from core.versioning.api import router as versioning_router
 from core.agents.runs import router as agent_runs_router
@@ -83,6 +77,9 @@ async def lifespan(app: FastAPI):
     logger.debug(f"Starting up FastAPI application with instance ID: {instance_id} in {env_mode} mode")
     try:
         await db.initialize()
+        
+        from core.services.db import init_db
+        await init_db()
         
         # Pre-load tool classes and schemas to avoid first-request delay
         from core.utils.tool_discovery import warm_up_tools_cache
@@ -160,12 +157,10 @@ async def lifespan(app: FastAPI):
             await asyncio.sleep(1)
             
             # Force update DB status for any runs that didn't clean up
-            shutdown_client = await db.client
             for agent_run_id in active_run_ids:
                 try:
                     # Update status to stopped with shutdown message
                     await update_agent_run_status(
-                        shutdown_client,
                         agent_run_id,
                         "stopped",
                         error=f"Instance shutdown: {instance_id}"
@@ -209,6 +204,10 @@ async def lifespan(app: FastAPI):
 
         logger.debug("Disconnecting from database")
         await db.disconnect()
+        
+        # Close direct Postgres connection pool
+        from core.services.db import close_db
+        await close_db()
     except Exception as e:
         logger.error(f"Error during application startup: {e}")
         raise
@@ -222,41 +221,6 @@ app = FastAPI(
 
 # Configure OpenAPI docs with API Key and Bearer token auth
 configure_openapi(app)
-
-@app.middleware("http")
-async def rate_limit_middleware(request: Request, call_next):
-    """Apply rate limiting to sensitive endpoints."""
-    path = request.url.path
-    
-    # Skip rate limiting for health checks and OPTIONS requests
-    if path in ["/v1/health", "/v1/health-docker"] or request.method == "OPTIONS":
-        return await call_next(request)
-    
-    # Get client identifier
-    client_id = get_client_identifier(request)
-    
-    # Apply appropriate rate limiter based on path
-    rate_limiter = None
-    
-    if "/v1/api-keys" in path:
-        rate_limiter = api_key_rate_limiter
-    elif "/v1/admin" in path:
-        rate_limiter = admin_rate_limiter
-    elif any(sensitive in path for sensitive in ["/v1/setup/initialize", "/v1/billing/webhook"]):
-        rate_limiter = auth_rate_limiter
-    
-    if rate_limiter:
-        is_limited, retry_after = rate_limiter.is_rate_limited(client_id)
-        if is_limited:
-            logger.warning(f"Rate limited: {path} from {client_id[:8]}...")
-            return JSONResponse(
-                status_code=429,
-                content={"detail": "Too many requests. Please try again later."},
-                headers={"Retry-After": str(retry_after)}
-            )
-    
-    return await call_next(request)
-
 
 @app.middleware("http")
 async def log_requests_middleware(request: Request, call_next):
@@ -380,8 +344,9 @@ from core.memory.api import router as memory_router
 api_router.include_router(referrals_router)
 api_router.include_router(memory_router)
 
-from core.test_harness.api import router as test_harness_router
+from core.test_harness.api import router as test_harness_router, e2e_router
 api_router.include_router(test_harness_router)
+api_router.include_router(e2e_router)
 
 from core.files import staged_files_router
 api_router.include_router(staged_files_router, prefix="/files")
@@ -418,11 +383,9 @@ async def metrics_endpoint():
     Get API instance metrics for monitoring.
     
     Returns:
-        - concurrent_agent_runs: Current concurrent agent runs
-        - max_concurrent_runs: Maximum concurrent runs per instance
-        - utilization_percent: Current utilization
-    
-    Note: All tasks execute directly in API process (no queues).
+        - active_agent_runs: Total active runs across all instances (from DB)
+        - active_redis_streams: Active Redis stream keys
+        - orphaned_streams: Streams without DB records (should be 0)
     """
     from core.services import worker_metrics
     
@@ -433,72 +396,16 @@ async def metrics_endpoint():
         raise HTTPException(status_code=500, detail=f"Failed to get metrics: {str(e)}")
 
 @api_router.get("/debug", summary="Debug Information", operation_id="debug", tags=["system"])
-async def debug_endpoint(
-    type: str = Query("streams", description="Debug type: 'streams' (queue) or 'worker'")
-):
-    """
-    Get detailed debug information for troubleshooting.
+async def debug_endpoint():
+    """Get basic debug information for troubleshooting."""
+    from core.agents.runs import _cancellation_events
     
-    - **streams**: Detailed Redis Streams status with all consumer groups and keys
-    - **worker**: Stream worker status and health check
-    """
-    try:
-        from core.worker.stream_info import get_stream_info, CONSUMER_GROUP
-        from core.worker.tasks import StreamName
-        
-        if type == "worker":
-            # Worker status (simplified)
-            info = await get_stream_info()
-            return {
-                "status": "healthy" if not info.get("error") else "error",
-                **info,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
-        else:  # type == "streams" or default
-            # Detailed queue debug info
-            client = await redis.get_client()
-            stream_info = await get_stream_info()
-            
-            # Get all stream-related keys for debugging
-            all_stream_keys = await client.keys("suna:*")
-            
-            # Get pending messages summary
-            streams_summary = {}
-            total_pending = 0
-            total_length = 0
-            
-            for stream_name in StreamName:
-                stream_data = stream_info.get("streams", {}).get(stream_name.value, {})
-                pending = stream_data.get("pending_count", 0)
-                length = stream_data.get("length", 0)
-                total_pending += pending
-                total_length += length
-                
-                streams_summary[stream_name.value] = {
-                    "length": length,
-                    "pending": pending,
-                    "consumers": stream_data.get("consumers", []),
-                }
-            
-            return {
-                "consumer_group": CONSUMER_GROUP,
-                "streams": streams_summary,
-                "totals": {
-                    "pending_messages": total_pending,
-                    "total_stream_length": total_length,
-                },
-                "all_stream_keys": [k if isinstance(k, str) else k.decode() for k in all_stream_keys[:20]],
-                "redis_connected": True,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
-    except Exception as e:
-        logger.error(f"Debug endpoint failed: {e}")
-        return {
-            "status": "error",
-            "error": str(e),
-            "redis_connected": False,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
+    return {
+        "instance_id": instance_id,
+        "active_runs_on_instance": len(_cancellation_events),
+        "is_shutting_down": _is_shutting_down,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 @api_router.get("/health-docker", summary="Docker Health Check", operation_id="health_check_docker", tags=["system"])
 async def health_check_docker():
@@ -527,50 +434,51 @@ app.include_router(api_router, prefix="/v1")
 async def _memory_watchdog():
     """Monitor worker memory usage and log warnings when thresholds are exceeded.
     
-    Memory thresholds (for 7.5GB limit):
-    - Critical (>6.5GB / 87%): Immediate action needed, risk of OOM kill
-    - Warning (>6GB / 80%): High memory usage, consider cleanup
-    - Info (>5GB / 67%): Elevated memory usage
+    Dynamically calculates per-worker memory limit based on total RAM and worker count.
+    Thresholds: Critical (>87%), Warning (>80%), Info (>67%)
     """
+    # Calculate per-worker memory limit dynamically
+    workers = int(os.getenv("WORKERS", "16"))
+    total_ram_mb = psutil.virtual_memory().total / 1024 / 1024
+    # Reserve 20% for OS/system, divide rest among workers
+    per_worker_limit_mb = (total_ram_mb * 0.8) / workers
+    
+    critical_threshold_mb = per_worker_limit_mb * 0.87
+    warning_threshold_mb = per_worker_limit_mb * 0.80
+    info_threshold_mb = per_worker_limit_mb * 0.67
+    
+    logger.info(
+        f"Memory watchdog started: {total_ram_mb/1024:.1f}GB total, "
+        f"{per_worker_limit_mb/1024:.1f}GB per worker ({workers} workers)"
+    )
+    
     try:
         while True:
             try:
                 process = psutil.Process()
                 mem_info = process.memory_info()
-                mem_mb = mem_info.rss / 1024 / 1024  # Convert to MB
-                mem_percent = (mem_mb / 7680) * 100  # Percentage of 7.5GB limit
+                mem_mb = mem_info.rss / 1024 / 1024
+                mem_percent = (mem_mb / per_worker_limit_mb) * 100
                 
-                # Critical threshold: >6.5GB (87% of 7.5GB limit) - risk of OOM kill
-                if mem_mb > 6500:
+                if mem_mb > critical_threshold_mb:
                     logger.error(
-                        f"🚨 CRITICAL: Worker memory very high: {mem_mb:.0f}MB ({mem_percent:.1f}%) "
-                        f"(instance: {instance_id}) - Risk of OOM kill!"
-                    )
-                    # Try to force garbage collection when memory is critical
-                    try:
-                        import gc
-                        collected = gc.collect()
-                        if collected > 0:
-                            logger.info(f"Emergency GC collected {collected} objects")
-                    except Exception:
-                        pass
-                # Warning threshold: >6GB (80% of 7.5GB limit)
-                elif mem_mb > 6000:
-                    logger.warning(
-                        f"⚠️ Worker memory high: {mem_mb:.0f}MB ({mem_percent:.1f}%) "
-                        f"(instance: {instance_id}) - Approaching limit"
-                    )
-                # Info threshold: >5GB (67% of 7.5GB limit)
-                elif mem_mb > 5000:
-                    logger.info(
-                        f"Worker memory: {mem_mb:.0f}MB ({mem_percent:.1f}%) "
+                        f"🚨 CRITICAL: Worker memory {mem_mb:.0f}MB ({mem_percent:.1f}% of {per_worker_limit_mb:.0f}MB limit) "
                         f"(instance: {instance_id})"
                     )
+                    import gc
+                    gc.collect()
+                elif mem_mb > warning_threshold_mb:
+                    logger.warning(
+                        f"⚠️ Worker memory high: {mem_mb:.0f}MB ({mem_percent:.1f}%) "
+                        f"(instance: {instance_id})"
+                    )
+                elif mem_mb > info_threshold_mb:
+                    logger.info(f"Worker memory: {mem_mb:.0f}MB ({mem_percent:.1f}%) (instance: {instance_id})")
                 
             except Exception as e:
                 logger.debug(f"Memory watchdog error: {e}")
             
-            await asyncio.sleep(60)  # Check every minute
+            await asyncio.sleep(60)
     except asyncio.CancelledError:
         logger.debug("Memory watchdog cancelled")
     except Exception as e:
