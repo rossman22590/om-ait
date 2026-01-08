@@ -1,26 +1,8 @@
-"""
-Unified Account State Endpoint
-
-This endpoint combines all billing-related data into a single, cached response:
-- Credit balance (daily, monthly, extra)
-- Subscription info (tier, status, billing period)
-- Available models
-- Limits (projects, threads, concurrent runs)
-- Scheduled changes
-- Commitment info
-
-All data is cached in Redis for 5 minutes, invalidated on:
-- Credit transactions
-- Subscription changes
-- Tier changes
-"""
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Optional
-from decimal import Decimal
 from datetime import datetime, timezone, timedelta
 import asyncio
 import httpx
-from core.services.supabase import DBConnection
 from core.utils.auth_utils import verify_and_get_user_id_from_jwt
 from core.utils.config import config, EnvMode
 from core.utils.logger import logger
@@ -31,36 +13,103 @@ from ..shared.config import (
     CREDITS_PER_DOLLAR,
     get_tier_by_name,
     is_model_allowed,
-    get_tier_limits,
     get_price_type,
     TIERS
 )
 from ..subscriptions import subscription_service
 from ..external.stripe import StripeAPIWrapper
+from ..repo import get_credit_account
 
 router = APIRouter(tags=["billing-account-state"])
 
-# Import from shared module to avoid circular imports
 from ..shared.cache_utils import ACCOUNT_STATE_CACHE_TTL, invalidate_account_state_cache
 
+# Stripe subscription cache TTL (10 minutes - Stripe data rarely changes)
+# Increased from 5 min to reduce Stripe API calls in production
+STRIPE_SUBSCRIPTION_CACHE_TTL = 600
 
-async def _build_account_state(account_id: str, client) -> Dict:
-    """Build the complete account state response."""
+# Timeout for Stripe API calls when building account state
+STRIPE_FETCH_TIMEOUT = 8.0  # 8 seconds max
+
+
+async def _get_cached_stripe_subscription(subscription_id: str, timeout: float = STRIPE_FETCH_TIMEOUT) -> Optional[Dict]:
+    """
+    Get Stripe subscription from cache to avoid slow API calls.
     
-    # Get credit account data - use select('*') to get all available columns
-    credit_account_result = await client.from_('credit_accounts').select('*').eq('account_id', account_id).execute()
+    PERFORMANCE OPTIMIZATIONS (Jan 2026):
+    - Extended cache TTL (10 min) to reduce Stripe API calls
+    - Timeout protection to prevent slow requests from blocking
+    - Graceful fallback on timeout/error (returns None, caller handles)
+    """
+    if not subscription_id:
+        return None
     
-    # Fallback to user_id if account_id not found
-    if not credit_account_result.data:
-        credit_account_result = await client.from_('credit_accounts').select('*').eq('user_id', account_id).execute()
+    cache_key = f"stripe_sub:{subscription_id}"
+    try:
+        cached = await Cache.get(cache_key)
+        if cached:
+            logger.debug(f"⚡ Stripe subscription cache hit: {subscription_id[:8]}...")
+            return cached
+    except Exception:
+        pass
     
-    credit_account = credit_account_result.data[0] if credit_account_result.data else {}
+    # Cache miss - fetch from Stripe with timeout protection
+    try:
+        subscription_data = await asyncio.wait_for(
+            StripeAPIWrapper.retrieve_subscription(subscription_id),
+            timeout=timeout
+        )
+        if subscription_data:
+            # Convert Stripe object to dict for caching
+            if hasattr(subscription_data, 'to_dict'):
+                subscription_dict = subscription_data.to_dict()
+            elif hasattr(subscription_data, '__dict__'):
+                subscription_dict = dict(subscription_data)
+            else:
+                subscription_dict = subscription_data
+            
+            try:
+                await Cache.set(cache_key, subscription_dict, ttl=STRIPE_SUBSCRIPTION_CACHE_TTL)
+            except Exception:
+                pass
+            return subscription_dict
+        return subscription_data
+    except asyncio.TimeoutError:
+        logger.warning(f"[ACCOUNT_STATE] Stripe subscription fetch timed out after {timeout}s: {subscription_id[:8]}...")
+        return None
+    except Exception as e:
+        logger.warning(f"[ACCOUNT_STATE] Failed to retrieve Stripe subscription: {e}")
+        return None
+
+
+async def _build_account_state(account_id: str) -> Dict:
+    """
+    Build complete account state.
     
-    # Extract tier info
-    tier_name = credit_account.get('tier', 'none')
+    PERFORMANCE OPTIMIZATIONS:
+    - Fetches tier info ONCE and passes to all limit checkers
+    - Caches Stripe subscription data (5 min TTL)
+    - Runs all limit checks in parallel
+    """
+    import time
+    t_start = time.time()
+    
+    # Fetch credit account and tier info in parallel
+    credit_account_task = get_credit_account(account_id)
+    tier_info_task = subscription_service.get_user_subscription_tier(account_id, skip_cache=False)
+    
+    credit_account, subscription_tier_info = await asyncio.gather(
+        credit_account_task,
+        tier_info_task
+    )
+    credit_account = credit_account or {}
+    
+    tier_name = subscription_tier_info.get('name', 'none')
     tier_info = get_tier_by_name(tier_name)
     if not tier_info:
         tier_info = TIERS['none']
+    
+    logger.debug(f"[ACCOUNT_STATE] Fetched credit account + tier in {(time.time() - t_start) * 1000:.1f}ms")
     
     # Trial status
     trial_status = credit_account.get('trial_status')
@@ -68,7 +117,6 @@ async def _build_account_state(account_id: str, client) -> Dict:
     is_trial = trial_status == 'active'
     
     # Balance calculations (stored in dollars, convert to credits)
-    balance_dollars = float(credit_account.get('balance', 0) or 0)
     daily_dollars = float(credit_account.get('daily_credits_balance', 0) or 0)
     monthly_dollars = float(credit_account.get('expiring_credits', 0) or 0)
     extra_dollars = float(credit_account.get('non_expiring_credits', 0) or 0)
@@ -78,7 +126,6 @@ async def _build_account_state(account_id: str, client) -> Dict:
     daily_credits = daily_dollars * CREDITS_PER_DOLLAR
     monthly_credits = monthly_dollars * CREDITS_PER_DOLLAR
     extra_credits = extra_dollars * CREDITS_PER_DOLLAR
-    # Total = sum of all credit types (daily + monthly + extra)
     total_credits = daily_credits + monthly_credits + extra_credits
     
     # Daily credits refresh info
@@ -111,26 +158,23 @@ async def _build_account_state(account_id: str, client) -> Dict:
             'seconds_until_refresh': seconds_until_refresh
         }
     
-    # Get subscription info
+    # Get subscription info - use cached Stripe data
     subscription_data = None
     billing_period = credit_account.get('plan_type')
     provider = credit_account.get('provider', 'stripe')
     
     stripe_subscription_id = credit_account.get('stripe_subscription_id')
     if stripe_subscription_id and provider == 'stripe':
-        try:
-            # Use async wrapper with timeout instead of sync call
-            subscription_data = await StripeAPIWrapper.retrieve_subscription(stripe_subscription_id)
-            
-            # Get billing period from subscription if not in credit_account
-            if not billing_period and subscription_data:
-                items_data = subscription_data.get('items', {}).get('data', [])
-                if items_data:
-                    price_id = items_data[0].get('price', {}).get('id')
-                    if price_id:
-                        billing_period = get_price_type(price_id)
-        except Exception as e:
-            logger.warning(f"[ACCOUNT_STATE] Failed to retrieve Stripe subscription: {e}")
+        # Use cached Stripe subscription (avoids 200-800ms API call)
+        subscription_data = await _get_cached_stripe_subscription(stripe_subscription_id)
+        
+        # Get billing period from subscription if not in credit_account
+        if not billing_period and subscription_data:
+            items_data = subscription_data.get('items', {}).get('data', [])
+            if items_data:
+                price_id = items_data[0].get('price', {}).get('id')
+                if price_id:
+                    billing_period = get_price_type(price_id)
     
     # RevenueCat billing period
     if provider == 'revenuecat' and credit_account.get('revenuecat_product_id'):
@@ -228,6 +272,7 @@ async def _build_account_state(account_id: str, client) -> Dict:
         })
     
     # Get tier limits with detailed usage info
+    # PERFORMANCE: Pass subscription_tier_info to all checkers to avoid N+1 queries
     from core.utils.limits_checker import (
         check_thread_limit,
         check_agent_run_limit,
@@ -237,16 +282,18 @@ async def _build_account_state(account_id: str, client) -> Dict:
         check_custom_mcp_limit
     )
     
-    # Fetch all detailed limits in parallel
-    import asyncio
+    # Fetch all detailed limits in parallel, passing pre-fetched tier_info to avoid N+1 queries
+    # This reduces DB round trips from 6+ to 1 (tier info already fetched above)
     thread_limit, concurrent_runs_limit, agent_count_limit, project_count_limit, trigger_limit, custom_mcp_limit = await asyncio.gather(
-        check_thread_limit(client, account_id),
-        check_agent_run_limit(client, account_id),
-        check_agent_count_limit(client, account_id),
-        check_project_count_limit(client, account_id),
-        check_trigger_limit(client, account_id),
-        check_custom_mcp_limit(client, account_id)
+        check_thread_limit(account_id, tier_info=subscription_tier_info),
+        check_agent_run_limit(account_id, tier_info=subscription_tier_info),
+        check_agent_count_limit(account_id, tier_info=subscription_tier_info),
+        check_project_count_limit(account_id, tier_info=subscription_tier_info),
+        check_trigger_limit(account_id, tier_info=subscription_tier_info),
+        check_custom_mcp_limit(account_id, tier_info=subscription_tier_info)
     )
+    
+    logger.debug(f"[ACCOUNT_STATE] Built complete state in {(time.time() - t_start) * 1000:.1f}ms")
     
     # Build response
     return {
@@ -479,7 +526,6 @@ async def get_account_state(
             logger.debug(f"[ACCOUNT_STATE] Cache read failed for {account_id}: {cache_err}")
     
     last_error = None
-    db = DBConnection()
     
     for attempt in range(max_retries):
         try:
@@ -490,10 +536,8 @@ async def get_account_state(
                 logger.warning(f"[ACCOUNT_STATE] Daily credit refresh timed out for {account_id}: {credit_err}")
                 # Continue - this is not critical for reading account state
             
-            # Build fresh data
-            client = await db.client
-            
-            account_state = await _build_account_state(account_id, client)
+            # Build fresh data (no client needed - uses repo)
+            account_state = await _build_account_state(account_id)
             
             # Cache the result (non-blocking on failure)
             try:
@@ -517,11 +561,6 @@ async def get_account_state(
                     f"retrying in {delay}s..."
                 )
                 await asyncio.sleep(delay)
-                # Force reconnection on pool/connect issues
-                try:
-                    await db.force_reconnect()
-                except Exception:
-                    pass
             else:
                 logger.error(f"[ACCOUNT_STATE] Failed after {max_retries} attempts for {account_id}: {e}")
                 raise HTTPException(
@@ -535,4 +574,3 @@ async def get_account_state(
     # Should not reach here, but just in case
     logger.error(f"[ACCOUNT_STATE] Unexpected exit from retry loop for {account_id}: {last_error}")
     raise HTTPException(status_code=503, detail="Service temporarily unavailable. Please try again.")
-

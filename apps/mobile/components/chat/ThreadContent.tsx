@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
-import { View, Pressable, Linking, Text as RNText, TextInput, Platform, ScrollView } from 'react-native';
+import { View, Pressable, Linking, Text as RNText, TextInput, Platform, ScrollView, Image } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { useSmoothText } from '@agentpress/shared/animations';
 
 // Only import ContextMenu on native platforms (iOS/Android)
 let ContextMenu: React.ComponentType<any> | null = null;
@@ -35,18 +36,20 @@ import { groupMessagesWithStreaming } from '@agentpress/shared/utils';
 import { preprocessTextOnlyTools } from '@agentpress/shared/tools';
 import { getToolIcon } from '@/lib/icons/tool-icons';
 import { useColorScheme } from 'nativewind';
+import { useAgent } from '@/contexts/AgentContext';
 import { SelectableMarkdownText } from '@/components/ui/selectable-markdown';
 import { autoLinkUrls } from '@/lib/utils/url-autolink';
-import { AgentIdentifier } from '@/components/agents';
 import { FileAttachmentsGrid } from './FileAttachmentRenderer';
-import { AgentLoader } from './AgentLoader';
 import { CheckCircle2, AlertCircle, Info, CircleDashed } from 'lucide-react-native';
 import { KortixLoader } from '@/components/ui/kortix-loader';
+import { KortixLogo } from '@/components/ui/KortixLogo';
+import { AgentLoader } from './AgentLoader';
 import { StreamingToolCard } from './StreamingToolCard';
 import { TaskCompletedFeedback } from './tool-views/complete-tool/TaskCompletedFeedback';
 import { renderAssistantMessage } from './assistant-message-renderer';
 import { PromptExamples } from '@/components/shared';
 import { useKortixComputerStore } from '@/stores/kortix-computer-store';
+import { isKortixDefaultAgentId } from '@/lib/agents';
 
 export interface ToolMessagePair {
   assistantMessage: UnifiedMessage | null;
@@ -653,6 +656,8 @@ interface ThreadContentProps {
   agentName?: string;
   /** Handler to auto-fill chat input with a prompt (for follow-up prompts) */
   onPromptFill?: (prompt: string) => void;
+  /** Whether a message is currently being sent (optimistic state) */
+  isSendingMessage?: boolean;
 }
 
 interface MessageGroup {
@@ -660,6 +665,7 @@ interface MessageGroup {
   messages: UnifiedMessage[];
   key: string;
 }
+
 
 export const ThreadContent: React.FC<ThreadContentProps> = React.memo(
   ({
@@ -675,9 +681,63 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(
     sandboxUrl,
     agentName = 'Kortix',
     onPromptFill,
+    isSendingMessage = false,
   }) => {
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === 'dark';
+    const { agents } = useAgent();
+
+    // Helper to render agent indicator based on agent type
+    const renderAgentIndicator = useCallback((agentId: string | null | undefined) => {
+      // Default Kortix agent or no agent ID - show full logomark
+      const isKortixDefault = isKortixDefaultAgentId(agentId, agents);
+      
+      if (isKortixDefault) {
+        // Full Kortix logomark (icon + text) - same height as symbol+text combo
+        return <KortixLogo size={14} variant="logomark" color={isDark ? 'dark' : 'light'} />;
+      }
+      
+      // Custom agent - show symbol + name
+      const agent = agents.find(a => a.agent_id === agentId);
+      const displayName = agent?.name || 'Agent';
+      
+      return (
+        <View className="flex-row items-center gap-1.5">
+          <KortixLogo size={16} variant="symbol" color={isDark ? 'dark' : 'light'} />
+          <Text className="text-sm font-medium text-muted-foreground">{displayName}</Text>
+        </View>
+      );
+    }, [isDark, agents]);
+
+    // Apply smooth typewriter effect to streaming text (120 chars/sec for snappy feel)
+    const { text: smoothStreamingText, isAnimating: isSmoothAnimating } = useSmoothText(
+      streamingTextContent || '',
+      120,
+      true
+    );
+
+    // Extract ask/complete text from streaming tool call for smooth animation
+    const rawAskCompleteText = useMemo(() => {
+      if (!streamingToolCall) return '';
+      
+      const parsedMetadata = safeJsonParse<ParsedMetadata>(streamingToolCall.metadata, {});
+      const toolCalls = parsedMetadata.tool_calls || [];
+      const askOrCompleteTool = findAskOrCompleteTool(toolCalls);
+      
+      if (!askOrCompleteTool) return '';
+      
+      const toolArgs: any = askOrCompleteTool.arguments;
+      if (!toolArgs) return '';
+      
+      return extractTextFromArguments(toolArgs);
+    }, [streamingToolCall]);
+
+    // Apply smooth text animation to ask/complete streaming content
+    const { text: smoothAskCompleteText, isAnimating: isAskCompleteAnimating } = useSmoothText(
+      rawAskCompleteText,
+      120,
+      true
+    );
 
     const displayMessages = useMemo(() => {
       const displayableTypes = ['user', 'assistant', 'tool', 'system', 'status', 'browser_state'];
@@ -1079,20 +1139,85 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(
               }
             })();
 
-            const attachmentsMatch = messageContent.match(/\[Uploaded File: (.*?)\]/g);
-            const attachments = attachmentsMatch
-              ? attachmentsMatch
-                .map((match: string) => {
-                  const pathMatch = match.match(/\[Uploaded File: (.*?)\]/);
-                  return pathMatch ? pathMatch[1] : null;
-                })
-                .filter(Boolean)
-              : [];
+            // Match all attachment formats:
+            // 1. [Uploaded File: path] - from existing thread uploads
+            // 2. [Attached: filename (size) -> path] - from new thread creation with files
+            // 3. [Pending Attachment: name] - optimistic messages (local URIs in metadata)
+            const uploadedFileMatches = messageContent.match(/\[Uploaded File: (.*?)\]/g) || [];
+            const attachedFileMatches = messageContent.match(/\[Attached: .*? -> (.*?)\]/g) || [];
+            
+            const attachments = [
+              ...uploadedFileMatches.map((match: string) => {
+                const pathMatch = match.match(/\[Uploaded File: (.*?)\]/);
+                return pathMatch ? pathMatch[1] : null;
+              }),
+              ...attachedFileMatches.map((match: string) => {
+                const pathMatch = match.match(/\[Attached: .*? -> (.*?)\]/);
+                return pathMatch ? pathMatch[1] : null;
+              }),
+            ].filter(Boolean);
 
-            const cleanContent = messageContent.replace(/\[Uploaded File: .*?\]/g, '').trim();
+            // Parse pending attachments from metadata (for optimistic messages)
+            let pendingAttachments: Array<{ uri: string; name: string; type: string; size?: number }> = [];
+            try {
+              const metadata = typeof message.metadata === 'string' 
+                ? JSON.parse(message.metadata) 
+                : message.metadata;
+              if (metadata?.pendingAttachments) {
+                pendingAttachments = metadata.pendingAttachments;
+              }
+            } catch {
+              // Ignore parse errors
+            }
+
+            const cleanContent = messageContent
+              .replace(/\[Uploaded File: .*?\]/g, '')
+              .replace(/\[Attached: .*? -> .*?\]/g, '')
+              .replace(/\[Pending Attachment: .*?\]/g, '')
+              .trim();
 
             return (
               <View key={group.key} className="mb-6">
+                {/* Render pending attachments (local URIs from optimistic messages) */}
+                {pendingAttachments.length > 0 && (
+                  <View className="flex-row flex-wrap justify-end gap-2 mb-2">
+                    {pendingAttachments.map((attachment, idx) => (
+                      <View
+                        key={`pending-${idx}`}
+                        className="rounded-2xl overflow-hidden border border-border"
+                        style={{ width: 120, height: 120 }}
+                      >
+                        {attachment.type === 'image' || attachment.type === 'video' ? (
+                          <>
+                            <Image
+                              source={{ uri: attachment.uri }}
+                              style={{ width: '100%', height: '100%' }}
+                              resizeMode="cover"
+                            />
+                            {/* Uploading overlay */}
+                            <View 
+                              className="absolute inset-0 bg-black/40 items-center justify-center"
+                              style={{ borderRadius: 16 }}
+                            >
+                              <View className="bg-white/20 rounded-full p-2">
+                                <KortixLoader size="small" />
+                              </View>
+                            </View>
+                          </>
+                        ) : (
+                          <View className="flex-1 items-center justify-center bg-card">
+                            <KortixLoader size="small" />
+                            <Text className="text-xs text-muted-foreground text-center px-2 mt-2" numberOfLines={2}>
+                              {attachment.name}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Render server-side attachments */}
                 {renderStandaloneAttachments(
                   attachments as string[],
                   sandboxId,
@@ -1180,8 +1305,8 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(
 
             return (
               <View key={group.key} className="mb-6">
-                <View className="mb-3 flex-row items-center">
-                  <AgentIdentifier agentId={groupAgentId} size={24} showName />
+                <View className="mb-2 flex-row items-center">
+                  {renderAgentIndicator(groupAgentId)}
                 </View>
 
                 <View className="gap-3">
@@ -1242,10 +1367,13 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(
                   {/* Render streaming text content (XML tool calls or regular text) */}
                   {groupIndex === groupedMessages.length - 1 &&
                     (streamHookStatus === 'streaming' || streamHookStatus === 'connecting') &&
-                    streamingTextContent && (
+                    (streamingTextContent || isSmoothAnimating) && (
                       <View className="mt-2">
                         {(() => {
+                          // Use raw content for tag detection
                           const rawContent = streamingTextContent || '';
+                          // Use smooth content for display (character-by-character animation)
+                          const displayContent = smoothStreamingText || '';
 
                           let detectedTag: string | null = null;
                           let tagStartIndex = -1;
@@ -1266,10 +1394,11 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(
                             }
                           }
 
+                          // For smooth display: get text before tag, but only show as much as smoothed
                           const textBeforeTag =
                             detectedTag && tagStartIndex >= 0
-                              ? rawContent.substring(0, tagStartIndex)
-                              : rawContent;
+                              ? displayContent.substring(0, Math.min(displayContent.length, tagStartIndex))
+                              : displayContent;
                           const processedTextBeforeTag =
                             preprocessTextOnlyToolsLocal(textBeforeTag);
 
@@ -1329,17 +1458,11 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(
                           }
                         }
 
-                        // Extract text from arguments
-                        const toolArgs: any = askOrCompleteTool.arguments;
-                        let askCompleteText = '';
-                        if (toolArgs) {
-                          askCompleteText = extractTextFromArguments(toolArgs);
-                        }
-
+                        // Use pre-computed smooth ask/complete text
                         const toolName =
                           askOrCompleteTool.function_name?.replace(/_/g, '-').toLowerCase() || '';
                         const textToShow =
-                          askCompleteText || (toolName === 'ask' ? 'Asking...' : 'Completing...');
+                          smoothAskCompleteText || (toolName === 'ask' ? 'Asking...' : 'Completing...');
 
                         return (
                           <View className="mt-2">
@@ -1416,6 +1539,9 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(
                     (agentStatus === 'running' || agentStatus === 'connecting') &&
                     !streamingTextContent &&
                     !streamingToolCall &&
+                    !isSmoothAnimating &&
+                    !smoothAskCompleteText &&
+                    !isAskCompleteAnimating &&
                     (streamHookStatus === 'streaming' || streamHookStatus === 'connecting') &&
                     (() => {
                       // Check if any message in this group already has ASK or COMPLETE
@@ -1443,17 +1569,42 @@ export const ThreadContent: React.FC<ThreadContentProps> = React.memo(
           return null;
         })}
 
-        {(agentStatus === 'running' || agentStatus === 'connecting') &&
-          !streamingTextContent &&
-          !streamingToolCall &&
-          (messages.length === 0 || messages[messages.length - 1].type === 'user') && (
+        {/* Show agent indicator when waiting for response - ONLY when last message is user */}
+        {(() => {
+          const lastMsg = messages[messages.length - 1];
+          
+          // Only show this trailing indicator if the LAST message is a USER message
+          // If last message is assistant, the loader is handled inside groupedMessages
+          if (lastMsg?.type !== 'user') return null;
+          
+          const isAgentActive = agentStatus === 'running' || agentStatus === 'connecting';
+          const hasStreamingContent = Boolean(streamingTextContent || streamingToolCall);
+          
+          // If already streaming, don't show - content will appear in the groupedMessages
+          if (hasStreamingContent) return null;
+          
+          // If nothing is happening and not sending, don't show anything (canceled/idle)
+          if (!isSendingMessage && !isAgentActive) return null;
+          
+          // Contemplating = sending message, waiting for server (before agent starts)
+          // AgentLoader = agent is active but no content yet
+          const isContemplating = isSendingMessage && !isAgentActive;
+          
+          return (
             <View className="mb-6">
-              <View className="mb-3 flex-row items-center">
-                <AgentIdentifier size={24} showName />
+              <View className="mb-2 flex-row items-center">
+                {renderAgentIndicator(null)}
               </View>
-              <AgentLoader />
+              {isContemplating ? (
+                <View className="flex-row py-2 items-center">
+                  <Text className="text-xs text-muted-foreground italic">Contemplating response...</Text>
+                </View>
+              ) : (
+                <AgentLoader />
+              )}
             </View>
-          )}
+          );
+        })()}
 
         <View className="h-2" />
       </View>

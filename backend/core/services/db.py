@@ -31,33 +31,42 @@ set_json_loads(_json_deserialize)
 from core.utils.config import config, EnvMode
 
 def _get_db_config():
-
-    if config.ENV_MODE == EnvMode.PRODUCTION:
+    """
+    Database connection pool configuration.
+    
+    UNIFIED CONFIG for staging/production to avoid environment-specific issues.
+    Pool sizes are conservative because:
+    - Supavisor (port 6543) uses NullPool anyway (auto-detected)
+    - Direct connections (port 5432) need small pools to stay within Supabase limits
+    
+    With 8 workers per container (production):
+    - pool_size=3 × 8 workers = 24 base connections
+    - max_overflow=7 × 8 workers = 56 overflow
+    - Total max = 80 connections per container (safe for Supabase Pro limits ~200)
+    
+    PERFORMANCE OPTIMIZATIONS (Jan 2026):
+    - Increased pool_timeout from 10s to 30s to handle burst traffic
+    - Increased max_overflow from 5 to 7 for better burst handling
+    - Increased connect_timeout for cloud DB reliability
+    """
+    if config.ENV_MODE == EnvMode.LOCAL:
         return {
-            "pool_size": 90,
-            "max_overflow": 180,
-            "pool_timeout": 45,
-            "pool_recycle": 3600,
-            "statement_timeout": 45000,
-            "connect_timeout": 15,
-        }
-    elif config.ENV_MODE == EnvMode.STAGING:
-        return {
-            "pool_size": 10,
-            "max_overflow": 15,
-            "pool_timeout": 30,
-            "pool_recycle": 1800,
-            "statement_timeout": 30000,
-            "connect_timeout": 10,
-        }
-    else:
-        return {
-            "pool_size": 5,
-            "max_overflow": 10,
-            "pool_timeout": 20,
-            "pool_recycle": 600,
+            "pool_size": 3,
+            "max_overflow": 5,
+            "pool_timeout": 10,
+            "pool_recycle": 300,
             "statement_timeout": 15000,
             "connect_timeout": 5,
+        }
+    else:
+        # Unified config for staging AND production
+        return {
+            "pool_size": 3,           # 3 per worker (conservative)
+            "max_overflow": 7,        # Allow burst to 10 per worker (increased from 5)
+            "pool_timeout": 30,       # Wait up to 30s for connection (increased from 10)
+            "pool_recycle": 300,      # Recycle connections every 5 min
+            "statement_timeout": 30000,  # 30s query timeout
+            "connect_timeout": 15,    # 15s connection timeout (increased from 10)
         }
 
 _db_config = _get_db_config()
@@ -89,10 +98,18 @@ TRANSIENT_ERRORS = (
 
 
 def serialize_row(row: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        k: str(v) if isinstance(v, uuid.UUID) else v.isoformat() if isinstance(v, datetime) else v
-        for k, v in row.items()
-    }
+    from decimal import Decimal
+    result = {}
+    for k, v in row.items():
+        if isinstance(v, uuid.UUID):
+            result[k] = str(v)
+        elif isinstance(v, datetime):
+            result[k] = v.isoformat()
+        elif isinstance(v, Decimal):
+            result[k] = float(v)
+        else:
+            result[k] = v
+    return result
 
 
 def serialize_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

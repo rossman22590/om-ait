@@ -26,8 +26,7 @@ import { ToolViewIconTitle } from './shared/ToolViewIconTitle';
 import { ToolViewFooter } from './shared/ToolViewFooter';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import Image from 'next/image';
-import { useSmoothToolField } from '@/hooks/messages/useSmoothToolArguments';
-import { useSmoothText } from '@/hooks/messages/useSmoothText';
+import { useSmoothToolField, useSmoothText } from '@/hooks/messages';
 
 export function WebCrawlToolView({
   toolCall,
@@ -292,7 +291,7 @@ export function WebCrawlToolView({
                                 onClick={copyContent}
                               >
                                 {copiedContent ? (
-                                  <Check className="w-4 h-4 text-green-600" />
+                                  <Check className="w-4 h-4 text-zinc-600 dark:text-zinc-400" />
                                 ) : (
                                   <Copy className="w-4 h-4" />
                                 )}

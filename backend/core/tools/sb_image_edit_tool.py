@@ -2,7 +2,7 @@ from typing import Optional
 from core.agentpress.tool import ToolResult, openapi_schema, tool_metadata
 from core.sandbox.tool_base import SandboxToolsBase
 from core.agentpress.thread_manager import ThreadManager
-import httpx
+from core.services.http_client import get_http_client
 from io import BytesIO
 import uuid
 import replicate
@@ -596,7 +596,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
             else:
                 # Fetch from URL if it's a URL string
                 url = str(first_output.url) if hasattr(first_output, 'url') else str(first_output)
-                async with httpx.AsyncClient() as client:
+                async with get_http_client() as client:
                     response = await client.get(url)
                     response.raise_for_status()
                     result_bytes = response.content
@@ -644,7 +644,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
             if use_mock:
                 logger.warning(f"🎬 Video generation running in MOCK mode for prompt: '{prompt[:50]}...'")
                 # For mock, return a descriptive mock filename
-                return f"mock_video_{uuid.uuid4().hex[:6]}.mp4"
+                return f"Mock Video {uuid.uuid4().hex[:6]}.mp4"
             
             # Ensure Replicate token is set
             self._get_replicate_token()
@@ -722,15 +722,15 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                 result_bytes = output.read()
             elif hasattr(output, 'url'):
                 url = str(output.url)
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    response = await client.get(url)
+                async with get_http_client() as client:
+                    response = await client.get(url, timeout=120.0)
                     response.raise_for_status()
                     result_bytes = response.content
             else:
                 # Try to fetch from string URL
                 url = str(output)
-                async with httpx.AsyncClient(timeout=120.0) as client:
-                    response = await client.get(url)
+                async with get_http_client() as client:
+                    response = await client.get(url, timeout=120.0)
                     response.raise_for_status()
                     result_bytes = response.content
             
@@ -772,7 +772,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
         try:
             if use_mock:
                 logger.warning(f"🔍 Upscale running in MOCK mode for: '{image_path}'")
-                return f"mock_upscaled_{uuid.uuid4().hex[:6]}.webp"
+                return f"Mock Upscaled {uuid.uuid4().hex[:6]}.webp"
             
             # Get image bytes
             if isinstance(image_path, list):
@@ -800,10 +800,13 @@ Generate, edit, upscale, or remove background from images. Video generation supp
             # Generate a descriptive filename based on original file
             from pathlib import Path
             original_stem = Path(image_path).stem
-            # Clean up original name and add upscaled prefix
-            clean_stem = re.sub(r'[^a-z0-9_]', '_', original_stem.lower())
-            clean_stem = re.sub(r'_+', '_', clean_stem).strip('_')[:30]
-            smart_filename = f"{clean_stem}_upscaled_{uuid.uuid4().hex[:4]}.webp"
+            # Clean up original name to Title Case
+            # Remove underscores/hyphens and convert to title case
+            clean_stem = re.sub(r'[_\-]+', ' ', original_stem)
+            clean_stem = ' '.join(word.title() for word in clean_stem.split())[:30]
+            if not clean_stem:
+                clean_stem = "Image"
+            smart_filename = f"{clean_stem} Upscaled.webp"
             sandbox_path = f"{self.workspace_path}/{smart_filename}"
             await self.sandbox.fs.upload_file(result_bytes, sandbox_path)
             
@@ -835,7 +838,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
         try:
             if use_mock:
                 logger.warning(f"✂️ Remove BG running in MOCK mode for: '{image_path}'")
-                return f"mock_transparent_{uuid.uuid4().hex[:6]}.png"
+                return f"Mock Transparent {uuid.uuid4().hex[:6]}.png"
             
             # Get image bytes
             if isinstance(image_path, list):
@@ -863,10 +866,12 @@ Generate, edit, upscale, or remove background from images. Video generation supp
             # Generate a descriptive filename based on original file
             from pathlib import Path
             original_stem = Path(image_path).stem
-            # Clean up original name and add transparent suffix
-            clean_stem = re.sub(r'[^a-z0-9_]', '_', original_stem.lower())
-            clean_stem = re.sub(r'_+', '_', clean_stem).strip('_')[:30]
-            smart_filename = f"{clean_stem}_transparent_{uuid.uuid4().hex[:4]}.png"
+            # Clean up original name to Title Case
+            clean_stem = re.sub(r'[_\-]+', ' ', original_stem)
+            clean_stem = ' '.join(word.title() for word in clean_stem.split())[:30]
+            if not clean_stem:
+                clean_stem = "Image"
+            smart_filename = f"{clean_stem} Transparent.png"
             sandbox_path = f"{self.workspace_path}/{smart_filename}"
             await self.sandbox.fs.upload_file(result_bytes, sandbox_path)
             
@@ -925,7 +930,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
     async def _download_image_from_url(self, url: str) -> bytes | ToolResult:
         """Download image from URL."""
         try:
-            async with httpx.AsyncClient() as client:
+            async with get_http_client() as client:
                 response = await client.get(url)
                 response.raise_for_status()
                 return response.content
@@ -967,7 +972,7 @@ Generate, edit, upscale, or remove background from images. Video generation supp
                     extension="png"
                 )
             else:
-                smart_filename = f"image_{uuid.uuid4().hex[:8]}.png"
+                smart_filename = f"Image {uuid.uuid4().hex[:6]}.png"
             sandbox_path = f"{self.workspace_path}/{smart_filename}"
 
             # Save image to sandbox
@@ -985,13 +990,13 @@ Generate, edit, upscale, or remove background from images. Video generation supp
             placeholder_url = f"https://picsum.photos/1024/1024?random={random_id}"
             
             # Download the image
-            async with httpx.AsyncClient() as client:
+            async with get_http_client() as client:
                 response = await client.get(placeholder_url, follow_redirects=True)
                 response.raise_for_status()
                 image_data = response.content
             
             # Generate descriptive filename for mock image
-            mock_filename = f"mock_image_{uuid.uuid4().hex[:6]}.png"
+            mock_filename = f"Mock Image {uuid.uuid4().hex[:6]}.png"
             sandbox_path = f"{self.workspace_path}/{mock_filename}"
             
             # Save to sandbox

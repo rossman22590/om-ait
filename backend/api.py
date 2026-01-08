@@ -23,7 +23,7 @@ import uuid
 
 
 from core.versioning.api import router as versioning_router
-from core.agents.runs import router as agent_runs_router
+from core.agents.api import router as agent_runs_router
 from core.agents.agent_crud import router as agent_crud_router
 from core.agents.agent_tools import router as agent_tools_router
 from core.agents.agent_json import router as agent_json_router
@@ -40,6 +40,7 @@ from core.admin.billing_admin_api import router as billing_admin_router
 from core.admin.feedback_admin_api import router as feedback_admin_router
 from core.admin.notification_admin_api import router as notification_admin_router
 from core.admin.analytics_admin_api import router as analytics_admin_router
+from core.admin.stress_test_admin_api import router as stress_test_admin_router
 from core.services import transcription as transcription_api
 import sys
 from core.triggers import api as triggers_api
@@ -52,10 +53,9 @@ if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 db = DBConnection()
-# Generate unique instance ID per process/worker
-# This is critical for distributed locking - each worker needs a unique ID
-import uuid
-instance_id = str(uuid.uuid4())[:8]
+# Use shared instance ID for distributed deployments
+from core.utils.instance import get_instance_id, INSTANCE_ID
+instance_id = INSTANCE_ID  # Keep backward compatibility
 
 
 # Rate limiter state
@@ -136,8 +136,8 @@ async def lifespan(app: FastAPI):
         await asyncio.sleep(2)
         
         # ===== CRITICAL: Stop all running agent runs on this instance =====
-        from core.agents.runs import _cancellation_events
-        from core.agents.executor import update_agent_run_status
+        from core.agents.api import _cancellation_events
+        from core.agents.runner.agent_runner import update_agent_run_status
         
         active_run_ids = list(_cancellation_events.keys())
         if active_run_ids:
@@ -259,7 +259,7 @@ async def log_requests_middleware(request: Request, call_next):
         raise
 
 # Define allowed origins based on environment
-allowed_origins = ["https://www.kortix.com", "https://kortix.com"]
+allowed_origins = ["https://www.kortix.com", "https://kortix.com", "https://prod-test.kortix.com"]
 allow_origin_regex = None
 
 # Add staging-specific origins
@@ -307,6 +307,7 @@ api_router.include_router(admin_router)
 api_router.include_router(feedback_admin_router)
 api_router.include_router(notification_admin_router)
 api_router.include_router(analytics_admin_router)
+api_router.include_router(stress_test_admin_router)
 
 from core.mcp_module import api as mcp_api
 from core.credentials import api as credentials_api
@@ -398,7 +399,7 @@ async def metrics_endpoint():
 @api_router.get("/debug", summary="Debug Information", operation_id="debug", tags=["system"])
 async def debug_endpoint():
     """Get basic debug information for troubleshooting."""
-    from core.agents.runs import _cancellation_events
+    from core.agents.api import _cancellation_events
     
     return {
         "instance_id": instance_id,
@@ -413,8 +414,7 @@ async def health_check_docker():
     try:
         client = await redis.get_client()
         await client.ping()
-        db = DBConnection()
-        await db.initialize()
+        # Use the global db singleton instead of creating a new instance
         db_client = await db.client
         await db_client.table("threads").select("thread_id").limit(1).execute()
         logger.debug("Health docker check complete")

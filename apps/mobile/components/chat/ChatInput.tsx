@@ -1,6 +1,5 @@
 import { Icon } from '@/components/ui/icon';
 import { Text } from '@/components/ui/text';
-import { KortixLoader } from '@/components/ui/kortix-loader';
 import { useLanguage } from '@/contexts';
 import { AudioLines, CornerDownLeft, Paperclip, X } from 'lucide-react-native';
 import { StopIcon } from '@/components/ui/StopIcon';
@@ -12,8 +11,10 @@ import Animated, {
   useSharedValue,
   withSpring,
   withTiming,
-  withRepeat
+  withRepeat,
+  runOnJS,
 } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import type { Attachment } from '@/hooks/useChat';
 import { AgentSelector } from '../agents/AgentSelector';
 import { AudioWaveform } from '../attachments/AudioWaveform';
@@ -22,6 +23,9 @@ import { MarkdownToolbar, insertMarkdownFormat, type MarkdownFormat } from './Ma
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const AnimatedView = Animated.createAnimatedComponent(View);
+
+// Threshold for swipe down to dismiss keyboard (in pixels)
+const SWIPE_DOWN_THRESHOLD = 30;
 
 // Spring config - defined once outside component
 const SPRING_CONFIG = { damping: 15, stiffness: 400 };
@@ -116,8 +120,35 @@ export const ChatInput = React.memo(React.forwardRef<ChatInputRef, ChatInputProp
   const [contentHeight, setContentHeight] = React.useState(0);
   const [isFocused, setIsFocused] = React.useState(false);
   const [selection, setSelection] = React.useState({ start: 0, end: 0 });
+  const [isStopping, setIsStopping] = React.useState(false);
   const { colorScheme } = useColorScheme();
   const { t } = useLanguage();
+
+  // Helper to dismiss keyboard - needs to be called from worklet via runOnJS
+  const dismissKeyboard = React.useCallback(() => {
+    Keyboard.dismiss();
+  }, []);
+
+  // Swipe down gesture to dismiss keyboard
+  // Only triggers on downward swipe with enough velocity/distance
+  const swipeDownGesture = React.useMemo(() =>
+    Gesture.Pan()
+      .onEnd((event) => {
+        // Only dismiss if:
+        // 1. Swipe is primarily downward (translationY > threshold)
+        // 2. Swipe is more vertical than horizontal
+        // 3. Velocity is downward
+        const isDownwardSwipe = event.translationY > SWIPE_DOWN_THRESHOLD;
+        const isVertical = Math.abs(event.translationY) > Math.abs(event.translationX);
+        const hasDownwardVelocity = event.velocityY > 0;
+
+        if (isDownwardSwipe && isVertical && hasDownwardVelocity) {
+          runOnJS(dismissKeyboard)();
+        }
+      })
+      .minDistance(SWIPE_DOWN_THRESHOLD)
+      .activeOffsetY(SWIPE_DOWN_THRESHOLD) // Only activate on downward movement
+    , [dismissKeyboard]);
 
   // Derived values - computed once per render
   const hasText = !!(value && value.trim());
@@ -127,6 +158,13 @@ export const ChatInput = React.memo(React.forwardRef<ChatInputRef, ChatInputProp
   // Allow input to be editable during streaming - only disable when sending or transcribing
   const isDisabled = isSendingMessage || isTranscribing;
 
+  // Reset stopping state when activity stops
+  React.useEffect(() => {
+    if (!isAgentRunning && !isSendingMessage && !isTranscribing) {
+      setIsStopping(false);
+    }
+  }, [isAgentRunning, isSendingMessage, isTranscribing]);
+
 
   // Memoized placeholder
   const effectivePlaceholder = React.useMemo(
@@ -134,10 +172,10 @@ export const ChatInput = React.memo(React.forwardRef<ChatInputRef, ChatInputProp
     [placeholder, t]
   );
 
-  // Memoized dynamic height
+  // Memoized dynamic height - cap at ~4-5 lines of text
   const dynamicHeight = React.useMemo(() => {
     const baseHeight = 120;
-    const maxHeight = 200;
+    const maxHeight = 160; // ~4-5 lines max
     const calculatedHeight = contentHeight + 80;
     return Math.max(baseHeight, Math.min(calculatedHeight, maxHeight));
   }, [contentHeight]);
@@ -288,29 +326,43 @@ export const ChatInput = React.memo(React.forwardRef<ChatInputRef, ChatInputProp
 
   // Main button press handler
   const handleButtonPress = React.useCallback(() => {
-    if (isAgentRunning) {
+    console.log('[ChatInput] 🔘 Button pressed!', { isAgentRunning, isRecording, hasContent, hasAgent, isSendingMessage, isTranscribing, isStopping });
+
+    // Priority 1: Stop if agent is running OR if we're in sending/transcribing state
+    if (isAgentRunning || isSendingMessage || isTranscribing) {
+      console.log('[ChatInput] 🛑 Calling onStopAgentRun (isAgentRunning:', isAgentRunning, ', isSendingMessage:', isSendingMessage, ')');
+      setIsStopping(true);
       onStopAgentRun?.();
-    } else if (isRecording) {
+      return;
+    }
+
+    // Priority 2: Handle recording
+    if (isRecording) {
       handleSendAudioMessage();
-    } else if (hasContent) {
+      return;
+    }
+
+    // Priority 3: Send message if has content
+    if (hasContent) {
       if (!hasAgent) {
         console.warn('⚠️ No agent selected - cannot send message');
         return;
       }
       handleSendMessage();
-    } else {
-      // Start audio recording
-      if (!isAuthenticated) {
-        console.warn('⚠️ User not authenticated - cannot record audio');
-        return;
-      }
-      if (!hasAgent) {
-        console.warn('⚠️ No agent selected - cannot record audio');
-        return;
-      }
-      onAudioRecord?.();
+      return;
     }
-  }, [isAgentRunning, isRecording, hasContent, hasAgent, isAuthenticated, onStopAgentRun, handleSendAudioMessage, handleSendMessage, onAudioRecord]);
+
+    // Priority 4: Start audio recording
+    if (!isAuthenticated) {
+      console.warn('⚠️ User not authenticated - cannot record audio');
+      return;
+    }
+    if (!hasAgent) {
+      console.warn('⚠️ No agent selected - cannot record audio');
+      return;
+    }
+    onAudioRecord?.();
+  }, [isAgentRunning, isRecording, hasContent, hasAgent, isSendingMessage, isTranscribing, isStopping, isAuthenticated, onStopAgentRun, handleSendAudioMessage, handleSendMessage, onAudioRecord]);
 
   // Content size change handler - debounced via ref comparison
   const handleContentSizeChange = React.useCallback(
@@ -390,59 +442,62 @@ export const ChatInput = React.memo(React.forwardRef<ChatInputRef, ChatInputProp
   const buttonIconClass = isAgentRunning ? "text-background" : "text-primary-foreground";
 
   return (
-    <View
-      className="relative rounded-[30px] overflow-hidden bg-card border border-border"
-      style={containerStyle}
-      collapsable={false}
-      {...props}
-    >
-      <View className="absolute inset-0" />
-      <View className="p-4 flex-1" collapsable={false}>
-        {isRecording ? (
-          <RecordingMode
-            audioLevels={audioLevels}
-            recordingStatusText={recordingStatusText}
-            cancelAnimatedStyle={cancelAnimatedStyle}
-            stopAnimatedStyle={stopAnimatedStyle}
-            onCancelPressIn={handleCancelPressIn}
-            onCancelPressOut={handleCancelPressOut}
-            onCancelRecording={onCancelRecording}
-            onStopPressIn={handleStopPressIn}
-            onStopPressOut={handleStopPressOut}
-            onSendAudio={handleSendAudioMessage}
-          />
-        ) : (
-          <NormalMode
-            textInputRef={textInputRef}
-            value={value}
-            onChangeText={onChangeText}
-            effectivePlaceholder={effectivePlaceholder}
-            placeholderTextColor={placeholderTextColor}
-            isDisabled={isDisabled}
-            textInputStyle={textInputStyle}
-            handleContentSizeChange={handleContentSizeChange}
-            attachButtonStyle={attachButtonStyle}
-            onAttachPressIn={handleAttachPressIn}
-            onAttachPressOut={handleAttachPressOut}
-            onAttachPress={onAttachPress}
-            onAgentPress={onAgentPress}
-            sendAnimatedStyle={sendAnimatedStyle}
-            rotationAnimatedStyle={rotationAnimatedStyle}
-            onSendPressIn={handleSendPressIn}
-            onSendPressOut={handleSendPressOut}
-            onButtonPress={handleButtonPress}
-            isSendingMessage={isSendingMessage}
-            isTranscribing={isTranscribing}
-            isAgentRunning={isAgentRunning}
-            ButtonIcon={ButtonIcon}
-            buttonIconSize={buttonIconSize}
-            buttonIconClass={buttonIconClass}
-            isAuthenticated={isAuthenticated}
-            hasAgent={hasAgent}
-          />
-        )}
+    <GestureDetector gesture={swipeDownGesture}>
+      <View
+        className="relative rounded-[30px] overflow-hidden bg-card border border-border"
+        style={containerStyle}
+        collapsable={false}
+        {...props}
+      >
+        <View className="absolute inset-0" />
+        <View className="p-4 flex-1" collapsable={false}>
+          {isRecording ? (
+            <RecordingMode
+              audioLevels={audioLevels}
+              recordingStatusText={recordingStatusText}
+              cancelAnimatedStyle={cancelAnimatedStyle}
+              stopAnimatedStyle={stopAnimatedStyle}
+              onCancelPressIn={handleCancelPressIn}
+              onCancelPressOut={handleCancelPressOut}
+              onCancelRecording={onCancelRecording}
+              onStopPressIn={handleStopPressIn}
+              onStopPressOut={handleStopPressOut}
+              onSendAudio={handleSendAudioMessage}
+            />
+          ) : (
+            <NormalMode
+              textInputRef={textInputRef}
+              value={value}
+              onChangeText={onChangeText}
+              effectivePlaceholder={effectivePlaceholder}
+              placeholderTextColor={placeholderTextColor}
+              isDisabled={isDisabled}
+              textInputStyle={textInputStyle}
+              handleContentSizeChange={handleContentSizeChange}
+              attachButtonStyle={attachButtonStyle}
+              onAttachPressIn={handleAttachPressIn}
+              onAttachPressOut={handleAttachPressOut}
+              onAttachPress={onAttachPress}
+              onAgentPress={onAgentPress}
+              sendAnimatedStyle={sendAnimatedStyle}
+              rotationAnimatedStyle={rotationAnimatedStyle}
+              onSendPressIn={handleSendPressIn}
+              onSendPressOut={handleSendPressOut}
+              onButtonPress={handleButtonPress}
+              isSendingMessage={isSendingMessage}
+              isTranscribing={isTranscribing}
+              isAgentRunning={isAgentRunning}
+              isStopping={isStopping}
+              ButtonIcon={ButtonIcon}
+              buttonIconSize={buttonIconSize}
+              buttonIconClass={buttonIconClass}
+              isAuthenticated={isAuthenticated}
+              hasAgent={hasAgent}
+            />
+          )}
+        </View>
       </View>
-    </View>
+    </GestureDetector>
   );
 }));
 
@@ -533,6 +588,7 @@ interface NormalModeProps {
   isSendingMessage: boolean;
   isTranscribing: boolean;
   isAgentRunning: boolean;
+  isStopping: boolean;
   ButtonIcon: React.ComponentType<any>;
   buttonIconSize: number;
   buttonIconClass: string;
@@ -562,6 +618,7 @@ const NormalMode = React.memo(({
   isSendingMessage,
   isTranscribing,
   isAgentRunning,
+  isStopping,
   ButtonIcon,
   buttonIconSize,
   buttonIconClass,
@@ -574,6 +631,7 @@ const NormalMode = React.memo(({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled={true}
+        style={{ maxHeight: 100 }} // Cap at ~4-5 lines
       >
         <TextInput
           ref={textInputRef}
@@ -630,14 +688,14 @@ const NormalMode = React.memo(({
           onPress={() => {
             onButtonPress();
           }}
-          disabled={isSendingMessage || isTranscribing || !hasAgent}
-          style={{ width: 40, height: 40, borderRadius: 18, alignItems: 'center', justifyContent: 'center', opacity: (!hasAgent && !isAgentRunning) ? 0.4 : 1 }}
-          className={isAgentRunning ? 'bg-foreground' : 'bg-primary'}
+          disabled={isStopping || (!hasAgent && !isAgentRunning && !isSendingMessage)}
+          style={{ width: 40, height: 40, borderRadius: 18, alignItems: 'center', justifyContent: 'center', opacity: isStopping ? 0.5 : ((!hasAgent && !isAgentRunning && !isSendingMessage) ? 0.4 : 1) }}
+          className={(isAgentRunning || isSendingMessage || isTranscribing || isStopping) ? 'bg-foreground' : 'bg-primary'}
           hitSlop={ANDROID_HIT_SLOP}
           activeOpacity={0.7}
         >
-          {isSendingMessage || isTranscribing ? (
-            <KortixLoader size="small" customSize={16} forceTheme="dark" />
+          {(isSendingMessage || isTranscribing || isAgentRunning || isStopping) ? (
+            <StopIcon size={14} className="text-background" />
           ) : (
             ButtonIcon === StopIcon ? (
               <StopIcon size={buttonIconSize} className={buttonIconClass} />

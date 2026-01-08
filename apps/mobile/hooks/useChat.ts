@@ -326,11 +326,31 @@ export function useChat(): UseChatReturn {
           );
         } else {
           if (message.type === 'user') {
+            // Helper to extract base content (before attachment references)
+            const getBaseContent = (content: string | object): string => {
+              try {
+                const parsed = typeof content === 'string' ? JSON.parse(content) : content;
+                const textContent = typeof parsed === 'object' && parsed?.content 
+                  ? parsed.content 
+                  : String(parsed);
+                // Remove all attachment reference formats
+                return textContent
+                  .replace(/\[Pending Attachment: .*?\]/g, '')
+                  .replace(/\[Uploaded File: .*?\]/g, '')
+                  .replace(/\[Attached: .*? -> .*?\]/g, '')
+                  .trim();
+              } catch {
+                return String(content);
+              }
+            };
+            
+            const newBaseContent = getBaseContent(message.content);
+            
             const optimisticIndex = prev.findIndex(
               (m) =>
                 m.type === 'user' &&
                 m.message_id?.startsWith('optimistic-') &&
-                m.content === message.content,
+                getBaseContent(m.content) === newBaseContent,
             );
             if (optimisticIndex !== -1) {
               console.log('[STREAM] Replacing optimistic user message with real one');
@@ -435,12 +455,49 @@ export function useChat(): UseChatReturn {
             unifiedMessages.map((m) => m.message_id).filter(Boolean) as string[]
           );
           
-          const localExtras = (prev || []).filter(
-            (m) =>
-              !m.message_id ||
-              (typeof m.message_id === 'string' && m.message_id.startsWith('optimistic-')) ||
-              !serverIds.has(m.message_id as string),
+          // Helper to get base content for matching optimistic to real messages
+          const getBaseContent = (content: string | object): string => {
+            try {
+              const parsed = typeof content === 'string' ? JSON.parse(content) : content;
+              const textContent = typeof parsed === 'object' && parsed?.content 
+                ? parsed.content 
+                : String(parsed);
+              return textContent
+                .replace(/\[Pending Attachment: .*?\]/g, '')
+                .replace(/\[Uploaded File: .*?\]/g, '')
+                .replace(/\[Attached: .*? -> .*?\]/g, '')
+                .trim();
+            } catch {
+              return String(content);
+            }
+          };
+          
+          // Build set of server message base contents for matching
+          const serverBaseContents = new Set(
+            unifiedMessages
+              .filter(m => m.type === 'user')
+              .map(m => getBaseContent(m.content))
           );
+          
+          // Filter out optimistic messages that have matching server messages
+          const localExtras = (prev || []).filter((m) => {
+            // Keep messages without IDs
+            if (!m.message_id) return true;
+            
+            // For optimistic messages, check if a matching server message exists
+            if (typeof m.message_id === 'string' && m.message_id.startsWith('optimistic-')) {
+              const baseContent = getBaseContent(m.content);
+              const hasMatchingServerMessage = serverBaseContents.has(baseContent);
+              if (hasMatchingServerMessage) {
+                console.log('[useChat] Removing optimistic message - server version exists');
+                return false; // Remove - server has the real version
+              }
+              return true; // Keep - still pending
+            }
+            
+            // Keep messages not in server set
+            return !serverIds.has(m.message_id as string);
+          });
           
           const merged = [...unifiedMessages, ...localExtras].sort((a, b) => {
             const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
@@ -665,22 +722,46 @@ export function useChat(): UseChatReturn {
       if (!currentThreadId) {
         console.log('[useChat] Creating new thread via /agent/start with optimistic UI');
         
+        // Store attachments before clearing for optimistic display
+        const pendingAttachments = [...attachments];
+        
+        // Build optimistic content with attachment placeholders for preview
+        let optimisticContent = content;
+        if (pendingAttachments.length > 0) {
+          const attachmentRefs = pendingAttachments
+            .map(a => `[Pending Attachment: ${a.name}]`)
+            .join('\n');
+          optimisticContent = content ? `${content}\n\n${attachmentRefs}` : attachmentRefs;
+        }
+        
         const optimisticUserMessage: UnifiedMessage = {
           message_id: 'optimistic-user-' + Date.now(),
           thread_id: 'optimistic',
           type: 'user',
-          content: JSON.stringify({ content }),
-          metadata: JSON.stringify({}),
+          content: JSON.stringify({ content: optimisticContent }),
+          metadata: JSON.stringify({ 
+            pendingAttachments: pendingAttachments.map(a => ({
+              uri: a.uri,
+              name: a.name,
+              type: a.type,
+              size: a.size,
+            }))
+          }),
           is_llm_message: false,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
         setMessages([optimisticUserMessage]);
         setIsNewThreadOptimistic(true);
-        console.log('✨ [useChat] INSTANT user message display');
+        console.log('✨ [useChat] INSTANT user message display with', pendingAttachments.length, 'attachments');
         
-        const formDataFiles = attachments.length > 0
-          ? await convertAttachmentsToFormDataFiles(attachments)
+        // Clear input and attachments immediately for instant feedback
+        setInputValue('');
+        setAttachments([]);
+        
+        // Convert attachments for upload (we need the data)
+        const formDataFiles = pendingAttachments.length > 0
+          ? await convertAttachmentsToFormDataFiles(pendingAttachments)
           : [];
         
         console.log('[useChat] Converted', formDataFiles.length, 'attachments for FormData');
@@ -758,9 +839,6 @@ export function useChat(): UseChatReturn {
             setUserInitiatedRun(true);
             setAgentRunId(createResult.agent_run_id);
           }
-          
-          setInputValue('');
-          setAttachments([]);
         } catch (agentStartError: any) {
           console.error('[useChat] Error starting agent for new thread:', agentStartError);
           
@@ -798,12 +876,31 @@ export function useChat(): UseChatReturn {
       } else {
         console.log('[useChat] Sending to existing thread:', currentThreadId);
         
+        // Store attachments before clearing for upload
+        const pendingAttachments = [...attachments];
+        
+        // Build optimistic content with attachment placeholders for preview
+        let optimisticContent = content;
+        if (pendingAttachments.length > 0) {
+          const attachmentRefs = pendingAttachments
+            .map(a => `[Pending Attachment: ${a.name}]`)
+            .join('\n');
+          optimisticContent = content ? `${content}\n\n${attachmentRefs}` : attachmentRefs;
+        }
+        
         const optimisticUserMessage: UnifiedMessage = {
           message_id: 'optimistic-user-' + Date.now(),
           thread_id: currentThreadId,
           type: 'user',
-          content: JSON.stringify({ content }),
-          metadata: JSON.stringify({}),
+          content: JSON.stringify({ content: optimisticContent }),
+          metadata: JSON.stringify({ 
+            pendingAttachments: pendingAttachments.map(a => ({
+              uri: a.uri,
+              name: a.name,
+              type: a.type,
+              size: a.size,
+            }))
+          }),
           is_llm_message: false,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -811,6 +908,10 @@ export function useChat(): UseChatReturn {
         
         setMessages((prev) => [...prev, optimisticUserMessage]);
         console.log('✨ [useChat] INSTANT user message display for existing thread');
+        
+        // Clear input and attachments immediately for instant feedback
+        setInputValue('');
+        setAttachments([]);
         
         setIsNewThreadOptimistic(true);
         
@@ -828,7 +929,7 @@ export function useChat(): UseChatReturn {
           console.log('[useChat] Appended image style context:', selectedQuickActionOption);
         }
         
-        if (attachments.length > 0) {
+        if (pendingAttachments.length > 0) {
           const sandboxId = activeSandboxId;
           
           if (!sandboxId) {
@@ -840,10 +941,10 @@ export function useChat(): UseChatReturn {
             return;
           }
           
-          console.log('[useChat] Uploading', attachments.length, 'files to sandbox:', sandboxId);
+          console.log('[useChat] Uploading', pendingAttachments.length, 'files to sandbox:', sandboxId);
           
           try {
-            const filesToUpload = await convertAttachmentsToFormDataFiles(attachments);
+            const filesToUpload = await convertAttachmentsToFormDataFiles(pendingAttachments);
             
             const uploadResults = await uploadFilesMutation.mutateAsync({
               sandboxId,
@@ -901,6 +1002,50 @@ export function useChat(): UseChatReturn {
           
           console.log('[useChat] Message sent, agent run started:', result.agentRunId);
           
+          // Replace optimistic message with real message from server
+          if (result.message) {
+            setMessages((prev) => {
+              // Helper to get base content for matching
+              const getBaseContent = (msgContent: string | object): string => {
+                try {
+                  const parsed = typeof msgContent === 'string' ? JSON.parse(msgContent) : msgContent;
+                  const textContent = typeof parsed === 'object' && parsed?.content 
+                    ? parsed.content 
+                    : String(parsed);
+                  return textContent
+                    .replace(/\[Pending Attachment: .*?\]/g, '')
+                    .replace(/\[Uploaded File: .*?\]/g, '')
+                    .replace(/\[Attached: .*? -> .*?\]/g, '')
+                    .trim();
+                } catch {
+                  return String(msgContent);
+                }
+              };
+              
+              const realMessageContent = getBaseContent(result.message.content);
+              
+              // Find and replace optimistic message
+              const optimisticIndex = prev.findIndex(
+                (m) =>
+                  m.type === 'user' &&
+                  typeof m.message_id === 'string' &&
+                  m.message_id.startsWith('optimistic-') &&
+                  getBaseContent(m.content) === realMessageContent
+              );
+              
+              if (optimisticIndex !== -1) {
+                console.log('[useChat] ✅ Replacing optimistic message with real one');
+                return prev.map((m, index) =>
+                  index === optimisticIndex ? (result.message as UnifiedMessage) : m
+                );
+              }
+              
+              // If no optimistic found, just add the message
+              console.log('[useChat] No optimistic message found to replace, adding new');
+              return [...prev, result.message as UnifiedMessage];
+            });
+          }
+          
           if (result.agentRunId) {
             console.log('[useChat] Starting INSTANT streaming for existing thread:', result.agentRunId);
             setUserInitiatedRun(true);
@@ -908,9 +1053,6 @@ export function useChat(): UseChatReturn {
           }
           
           setIsNewThreadOptimistic(false);
-          
-          setInputValue('');
-          setAttachments([]);
         } catch (sendMessageError: any) {
           console.error('[useChat] Error sending message to existing thread:', sendMessageError);
           
@@ -962,15 +1104,16 @@ export function useChat(): UseChatReturn {
   ]);
 
   const stopAgent = useCallback(async () => {
-    if (agentRunId) {
-      console.log('[useChat] 🛑 Stopping agent run:', agentRunId);
-      
-      const runIdToStop = agentRunId;
-      
-      setAgentRunId(null);
-      
-      await stopStreaming();
-      
+    // Use local agentRunId or fallback to the streaming hook's run ID
+    const runIdToStop = agentRunId || currentHookRunId;
+    
+    console.log('[useChat] 🛑 Stopping agent run:', runIdToStop, '(local:', agentRunId, ', hook:', currentHookRunId, ')');
+    
+    // Always clear local state and stop streaming
+    setAgentRunId(null);
+    await stopStreaming();
+    
+    if (runIdToStop) {
       try {
         await stopAgentRunMutation.mutateAsync(runIdToStop);
         console.log('[useChat] ✅ Backend stop confirmed');
@@ -984,8 +1127,10 @@ export function useChat(): UseChatReturn {
       } catch (error) {
         console.error('[useChat] ❌ Error stopping agent:', error);
       }
+    } else {
+      console.log('[useChat] ⚠️ No run ID to stop, but streaming was stopped');
     }
-  }, [agentRunId, stopStreaming, stopAgentRunMutation, queryClient, activeThreadId, refetchMessages]);
+  }, [agentRunId, currentHookRunId, stopStreaming, stopAgentRunMutation, queryClient, activeThreadId, refetchMessages]);
 
   const addAttachment = useCallback((attachment: Attachment) => {
     setAttachments(prev => [...prev, attachment]);
