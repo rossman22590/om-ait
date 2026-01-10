@@ -3,7 +3,7 @@
 import { ThemeToggle } from '@/components/home/theme-toggle';
 import { siteConfig } from '@/lib/site-config';
 import { cn } from '@/lib/utils';
-import { X } from 'lucide-react';
+import { X, Menu } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
 import { useEffect, useState, useCallback, useRef } from 'react';
@@ -12,6 +12,8 @@ import { useRouter, usePathname } from 'next/navigation';
 import { KortixLogo } from '@/components/sidebar/kortix-logo';
 import { useTranslations } from 'next-intl';
 import { trackCtaSignup } from '@/lib/analytics/gtm';
+import { isMobileDevice } from '@/lib/utils/is-mobile-device';
+import { AppDownloadQR } from '@/components/common/app-download-qr';
 
 // Scroll threshold with hysteresis to prevent flickering
 const SCROLL_THRESHOLD_DOWN = 50;
@@ -57,6 +59,7 @@ export function Navbar() {
   const [hasScrolled, setHasScrolled] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('hero');
+  const [isMobile, setIsMobile] = useState(false);
   const { user } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -64,6 +67,15 @@ export function Navbar() {
   const lastScrollY = useRef(0);
 
   const filteredNavLinks = siteConfig.nav.links;
+
+  // Detect if user is on an actual mobile device (iOS/Android)
+  // Mobile users clicking "Try Free" will be redirected to /app which then redirects to app stores
+  useEffect(() => {
+    setIsMobile(isMobileDevice());
+  }, []);
+
+  // Get the appropriate CTA link based on device type
+  const ctaLink = isMobile ? '/app' : '/auth';
 
   // Single unified scroll handler with hysteresis
   const handleScroll = useCallback(() => {
@@ -142,6 +154,37 @@ export function Navbar() {
                   {item.name}
                 </Link>
               ))}
+              
+              {/* Mobile App Download with QR Popover */}
+              <div className="relative group">
+                <Link
+                  href="/app"
+                  className={cn(
+                    "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors",
+                    pathname === '/app'
+                      ? "text-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Mobile
+                </Link>
+                
+                {/* QR Code Popover - appears on hover */}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                  {/* Arrow */}
+                  <div className="absolute top-0.5 left-1/2 -translate-x-1/2 w-2 h-2 bg-white dark:bg-[#1a1a1a] border-l border-t border-border/60 dark:border-[#2a2a2a] rotate-45" />
+                  
+                  <div className="relative bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl border border-border/60 dark:border-[#2a2a2a] p-4 min-w-[200px]">
+                    <AppDownloadQR size={160} logoSize={24} className="rounded-xl p-3 shadow-md" />
+                    <p className="text-xs text-muted-foreground text-center mt-3">
+                      Scan to download
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/60 text-center mt-0.5">
+                      iOS & Android
+                    </p>
+                  </div>
+                </div>
+              </div>
             </nav>
 
             {/* Right Section - Actions */}
@@ -155,13 +198,22 @@ export function Navbar() {
                 </Link>
               ) : (
                 <Link
-                  href="/auth"
+                  href={ctaLink}
                   onClick={() => trackCtaSignup()}
                   className="h-8 px-4 text-sm font-medium rounded-lg bg-foreground text-background hover:bg-foreground/90 transition-colors inline-flex items-center justify-center"
                 >
                   {t('tryFree')}
                 </Link>
               )}
+              
+              {/* Mobile Menu Button */}
+              <button
+                onClick={toggleDrawer}
+                className="md:hidden p-2 rounded-lg hover:bg-accent transition-colors"
+                aria-label="Open menu"
+              >
+                <Menu className="size-5" />
+              </button>
             </div>
           </div>
         </div>
@@ -247,6 +299,23 @@ export function Navbar() {
                         </a>
                       </motion.li>
                     ))}
+                    {/* Mobile App Link */}
+                    <motion.li
+                      className="p-2.5"
+                      variants={drawerMenuVariants}
+                    >
+                      <Link
+                        href="/app"
+                        onClick={() => setIsDrawerOpen(false)}
+                        className={`underline-offset-4 hover:text-primary/80 transition-colors ${
+                          pathname === '/app'
+                            ? 'text-primary font-medium'
+                            : 'text-primary/60'
+                        }`}
+                      >
+                        Mobile App
+                      </Link>
+                    </motion.li>
                   </AnimatePresence>
                 </motion.ul>
 
@@ -262,7 +331,7 @@ export function Navbar() {
                     </Link>
                   ) : (
                     <Link
-                      href="/auth"
+                      href={ctaLink}
                       onClick={() => {
                         trackCtaSignup();
                         setIsDrawerOpen(false);

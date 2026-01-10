@@ -211,7 +211,9 @@ async def get_thread_messages(
         """
     else:
         sql = f"""
-        SELECT * FROM messages
+        SELECT message_id, thread_id, type, is_llm_message, content, 
+               metadata, created_at, updated_at, agent_id, agent_version_id
+        FROM messages
         WHERE thread_id = :thread_id
         ORDER BY created_at {order_direction}
         """
@@ -371,7 +373,12 @@ async def update_project_visibility(project_id: str, is_public: bool) -> bool:
 
 
 async def get_project_by_id(project_id: str) -> Optional[Dict[str, Any]]:
-    sql = "SELECT * FROM projects WHERE project_id = :project_id"
+    sql = """
+    SELECT project_id, name, description, account_id, is_public, 
+           icon_name, sandbox_resource_id, created_at, updated_at
+    FROM projects 
+    WHERE project_id = :project_id
+    """
     result = await execute_one(sql, {"project_id": project_id})
     return serialize_row(dict(result)) if result else None
 
@@ -422,6 +429,47 @@ async def create_thread_full(
         "project_id": project_id,
         "account_id": account_id,
         "name": name,
+        "status": status,
+        "memory_enabled": memory_enabled,
+        "created_at": now,
+        "updated_at": now
+    }, commit=True)
+    
+    return serialize_row(dict(result)) if result else None
+
+
+async def create_project_and_thread(
+    project_id: str,
+    thread_id: str,
+    account_id: str,
+    project_name: str,
+    thread_name: str = "New Chat",
+    status: str = "pending",
+    memory_enabled: Optional[bool] = None
+) -> Dict[str, Any]:
+    from datetime import datetime, timezone
+    from core.services.db import execute_one
+    
+    sql = """
+    WITH new_project AS (
+        INSERT INTO projects (project_id, account_id, name, created_at)
+        VALUES (:project_id, :account_id, :project_name, :created_at)
+        RETURNING project_id
+    )
+    INSERT INTO threads (thread_id, project_id, account_id, name, status, memory_enabled, created_at, updated_at)
+    SELECT :thread_id, project_id, :account_id, :thread_name, :status, :memory_enabled, :created_at, :updated_at
+    FROM new_project
+    RETURNING thread_id, project_id
+    """
+    
+    now = datetime.now(timezone.utc)
+    
+    result = await execute_one(sql, {
+        "project_id": project_id,
+        "thread_id": thread_id,
+        "account_id": account_id,
+        "project_name": project_name,
+        "thread_name": thread_name,
         "status": status,
         "memory_enabled": memory_enabled,
         "created_at": now,
@@ -777,7 +825,12 @@ async def update_message_content(
 
 
 async def get_message_by_id(message_id: str) -> Optional[Dict[str, Any]]:
-    sql = "SELECT * FROM messages WHERE message_id = :message_id"
+    sql = """
+    SELECT message_id, thread_id, type, is_llm_message, content, 
+           metadata, created_at, updated_at, agent_id, agent_version_id
+    FROM messages 
+    WHERE message_id = :message_id
+    """
     result = await execute_one(sql, {"message_id": message_id})
     return dict(result) if result else None
 
@@ -1111,6 +1164,8 @@ async def get_project_threads_paginated(
 
 
 async def get_thread_with_details(thread_id: str) -> Optional[Dict[str, Any]]:
+    # Use a subquery for message_count instead of LEFT JOIN + COUNT
+    # This avoids scanning the entire messages table for this thread
     sql = """
     SELECT 
         t.*,
@@ -1123,15 +1178,11 @@ async def get_thread_with_details(thread_id: str) -> Optional[Dict[str, Any]]:
         p.sandbox_resource_id,
         r.external_id as sandbox_external_id,
         r.config as sandbox_config,
-        COUNT(m.message_id) as message_count
+        (SELECT COUNT(*) FROM messages m WHERE m.thread_id = t.thread_id) as message_count
     FROM threads t
     LEFT JOIN projects p ON t.project_id = p.project_id
     LEFT JOIN resources r ON p.sandbox_resource_id = r.id
-    LEFT JOIN messages m ON t.thread_id = m.thread_id
     WHERE t.thread_id = :thread_id
-    GROUP BY t.thread_id, p.project_id, p.name, p.description, p.icon_name, 
-             p.is_public, p.created_at, p.updated_at, p.sandbox_resource_id,
-             r.external_id, r.config
     """
     result = await execute_one(sql, {"thread_id": thread_id})
     return serialize_row(dict(result)) if result else None
