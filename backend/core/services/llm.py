@@ -43,7 +43,8 @@ litellm.num_retries = int(os.environ.get("LITELLM_NUM_RETRIES", 1))
 litellm.request_timeout = 1800  # 30 min for long streams
 
 # Stream timeout: max time to wait between stream chunks (prevents indefinite hangs)
-litellm.stream_timeout = int(os.environ.get("LITELLM_STREAM_TIMEOUT", 120))
+# Increased to 300s (5 min) to allow MiniMax reasoning mode to work on complex outputs
+litellm.stream_timeout = int(os.environ.get("LITELLM_STREAM_TIMEOUT", 300))
 
 # Custom callback to track LiteLLM retries and timing
 from litellm.integrations.custom_logger import CustomLogger
@@ -107,8 +108,20 @@ def setup_api_keys() -> None:
     if not config:
         return
     
-    if getattr(config, 'OPENROUTER_API_KEY', None) and getattr(config, 'OPENROUTER_API_BASE', None):
-        os.environ["OPENROUTER_API_BASE"] = config.OPENROUTER_API_BASE
+    # Set Anthropic API key for LiteLLM
+    if getattr(config, 'ANTHROPIC_API_KEY', None):
+        os.environ["ANTHROPIC_API_KEY"] = config.ANTHROPIC_API_KEY
+    
+    # Set OpenAI API key for LiteLLM
+    if getattr(config, 'OPENAI_API_KEY', None):
+        os.environ["OPENAI_API_KEY"] = config.OPENAI_API_KEY
+    
+    # Set OpenRouter API key and base URL for LiteLLM
+    if getattr(config, 'OPENROUTER_API_KEY', None):
+        os.environ["OPENROUTER_API_KEY"] = config.OPENROUTER_API_KEY
+        # Use configured base URL or default to official OpenRouter API
+        openrouter_base = getattr(config, 'OPENROUTER_API_BASE', None) or "https://openrouter.ai/api/v1"
+        os.environ["OPENROUTER_API_BASE"] = openrouter_base
     
     if getattr(config, 'OR_APP_NAME', None):
         os.environ["OR_APP_NAME"] = config.OR_APP_NAME
