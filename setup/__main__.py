@@ -1,16 +1,10 @@
-#!/usr/bin/env python3
 """
-Kortix Suna Setup Wizard
-
-This is a compatibility wrapper that redirects to the new modular setup package.
-Run: python -m setup
-
-For more options, see: python -m setup --help
+Entry point for running setup as a module: python -m setup
 """
 
-import subprocess
 import sys
 import os
+import subprocess
 
 
 def check_and_install_dependencies():
@@ -38,7 +32,8 @@ def check_and_install_dependencies():
     # Try to auto-install
     print("\nInstalling dependencies...")
 
-    requirements_path = os.path.join(os.path.dirname(__file__), "setup", "requirements.txt")
+    setup_dir = os.path.dirname(__file__)
+    requirements_path = os.path.join(setup_dir, "requirements.txt")
 
     # Check if we're in a virtual environment
     in_venv = sys.prefix != sys.base_prefix
@@ -77,19 +72,18 @@ def check_and_install_dependencies():
     return False
 
 
-def main():
-    """Run the new modular setup package."""
-    # Check dependencies first, try to auto-install
+def run():
+    """Run the setup CLI after checking dependencies."""
     if not check_and_install_dependencies():
-        return 1
+        sys.exit(1)
 
-    # Forward all arguments to the setup package
-    result = subprocess.run(
-        [sys.executable, "-m", "setup"] + sys.argv[1:],
-        cwd=".",
-    )
-    return result.returncode
+    # Import only after dependency check passes
+    from setup.cli import main
+    main()
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    run()
+else:
+    # When imported as module (python -m setup), run immediately
+    run()
