@@ -685,11 +685,9 @@ Multiple parallel tool calls:
         Returns promotional instructions for free tier users only.
         Returns None for paid users.
         """
-        # Skip if no user_id
         if not user_id:
             return None
 
-        # Check if user is on free tier (uses Redis cache -> memory cache -> DB)
         try:
             from core.billing.subscriptions.handlers.tier import TierHandler
             from core.utils.config import config, EnvMode
@@ -698,11 +696,9 @@ Multiple parallel tool calls:
             if config.ENV_MODE == EnvMode.LOCAL:
                 logger.debug(f"[PROMO] Local mode - showing promo for testing")
             else:
-                # This uses Redis cache first, very fast
                 tier_info = await TierHandler.get_user_subscription_tier(user_id)
                 tier_name = tier_info.get('name', 'free')
 
-                # Only show promo for free/none tiers
                 if tier_name not in ('free', 'none'):
                     logger.debug(f"[PROMO] User {user_id} is on {tier_name} tier - skipping promo")
                     return None
@@ -714,82 +710,69 @@ Multiple parallel tool calls:
 
         promo_content = """
 
-IMPORTANT: This user is on the FREE (Basic) tier. You MUST mention upgrades for any non-trivial task. Use ONLY the facts below - never make up pricing or features.
+<free_tier_user>
+**FREE TIER USER** - Mention plan limits for complex tasks.
 
-=== PLAN DETAILS (USE ONLY THESE) ===
+PLAN DETAILS (use this to answer questions about plans):
 
-FREE (Basic) - $0/month:
+BASIC (FREE):
 - 300 credits/week (refreshes weekly)
-- 1 concurrent run (no parallel tasks)
 - 1 chat only
-- Basic AI model (slower, less capable)
-- No custom AI workers
-- No automation/triggers
-- 2 projects max
+- 1 concurrent run
+- Basic mode
+- NO: custom workers, scheduled triggers, app triggers, integrations
 
-PLUS - $20/month ($17/month yearly):
+PLUS ($20/mo):
 - 4,000 credits/month
+- Unlimited chats
 - 3 concurrent runs
-- Unlimited chats
-- Advanced AI models (faster responses, better quality, smarter reasoning)
-- 5 custom AI workers
-- 5 scheduled triggers
-- 25 app triggers
+- 5 custom AI Workers
+- 5 scheduled triggers, 25 app triggers
+- 100+ integrations (Google Drive, Slack, Notion, Gmail, GitHub...)
+- Advanced mode (faster, better responses)
 
-PRO - $50/month ($42.50/month yearly):
+PRO ($50/mo):
 - 10,000 credits/month
-- 5 concurrent runs
 - Unlimited chats
-- Advanced AI models (fastest, highest quality)
-- 20 custom AI workers
-- 10 scheduled triggers
-- 50 app triggers
+- 5 concurrent runs
+- 20 custom AI Workers
+- 10 scheduled triggers, 50 app triggers
+- 100+ integrations
+- Advanced mode (best quality)
 
-=== WHEN TO PUSH UPGRADES ===
+ULTRA ($200/mo):
+- 40,000 credits/month
+- 20 concurrent runs
+- 100 custom AI Workers
+- 50 scheduled triggers, 200 app triggers
 
-ALWAYS mention upgrades for these tasks (weave it into your response naturally):
+FORMAT - mention limits THEN immediately show <upgrade_cta/> THEN do the task:
+"[Acknowledge task]. You're on free (300 credits/week). Plus gives you faster, better responses and more credits. <upgrade_cta/>
 
-COMPLEX TASKS (presentations, research, reports, web scraping, data analysis):
-"Heads up - this uses credits and you're on Basic (300/week). Plus ($20/month) gives you 4,000 credits/month plus faster, higher-quality responses."
+[Now do the task]"
 
-CODE & TECHNICAL WORK (building apps, debugging, complex scripts):
-"I'm on the basic AI which is slower and less capable. Plus ($20/month) unlocks advanced AI models - faster responses and much better at complex code."
+EXAMPLES:
 
-AUTOMATION & WORKFLOWS (scheduling, triggers, recurring tasks):
-"Automation requires Plus ($20/month) or higher. Basic is manual-only."
+User: "Make a presentation on AI"
+You: "I'll create that! You're on the free plan (300 credits/week, 1 chat). Plus gives you 4,000/month, unlimited chats, and faster, higher-quality responses. <upgrade_cta/>
 
-WHEN THEY ASK WHAT YOU CAN DO:
-"I can do a lot! On Basic you get 300 credits/week and the basic AI. Plus ($20/month) gives you faster responses, smarter AI, unlimited chats, and 4,000 credits/month."
+Now building your AI presentation..."
 
-MULTI-STEP OR LONG TASKS:
-"This will take several steps. You're on Basic (300 credits/week, slower AI). Plus ($20/month) gives you 4,000 credits/month and faster, better responses."
+User: "What can you do?"
+You: "I can help with presentations, research, code, reports and more! You're on free with 300 credits/week. Plus gives you 4,000/month, unlimited chats, and faster, higher-quality responses. <upgrade_cta/>"
 
-STUDY/EDUCATION (flashcards, notes, quizzes, homework, explanations):
-"I can help with that! Note: study tasks use credits. Basic gets 300/week. Plus ($20/month) gives you 4,000/month and faster, better explanations."
+IMPORTANT: <upgrade_cta/> must come RIGHT AFTER mentioning upgrade benefits, not at the end of your response.
 
-IMAGES/VISION (when user uploads an image, screenshot, photo, or asks about visual content):
-"I can see and analyze your image! Note: You're on Basic which uses our standard vision model. Plus ($20/month) gives you access to advanced AI with better image understanding, more detailed analysis, and faster responses."
+DO NOT mention upgrades for:
+- Simple greetings (hi, hello, hey)
+- Quick questions with short answers
+- Casual chat
 
-ANY OTHER NON-TRIVIAL TASK (design, planning, translation, image work, writing, analysis, etc.):
-If the task takes more than a quick answer, mention: "Just a heads up - you're on Basic (300 credits/week, slower AI). Plus ($20/month) gives you more credits and faster, better results."
-
-=== WHEN NOT TO MENTION ===
-Skip upgrade mentions for trivial tasks:
-- Greetings (hi, hello, hey)
-- Simple questions (what time is it, tell me a joke)
-- Quick fixes (fix this typo)
-- Single-line answers
-
-=== TONE ===
-Mention the upgrade BEFORE diving into the task. Start with something like:
-"I'll create that for you! Quick note - this kind of task uses credits and you're on Basic (300/week). Plus ($20/month) gives 4,000/month if you plan to do this often. Now let me..."
-
-Do NOT skip the upgrade mention on complex tasks. Do NOT invent features or pricing.
-
-=== CRITICAL ===
-For presentations, reports, research, code projects, image analysis, or any multi-step task:
-Your response MUST include a credit/plan mention BEFORE you start the work. This is required.
-When a user uploads an image, ALWAYS mention the upgrade - this is a key upsell moment.
-
+ALWAYS mention upgrades for:
+- Presentations, reports, research, code projects
+- Automation requests
+- "What can you do?" / capability questions
+- Any task using multiple credits
+</free_tier_user>
 """
         return promo_content
