@@ -3,22 +3,23 @@ import json
 import asyncio
 import datetime
 import time
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from core.tools.mcp_tool_wrapper import MCPToolWrapper
 from core.agentpress.tool import SchemaType
-from core.tools.tool_guide_registry import get_minimal_tool_index, get_tool_guide
+from core.tools.tool_guide_registry import get_minimal_tool_index, get_minimal_tool_index_filtered, get_tool_guide
 from core.utils.logger import logger
 
 class PromptManager:
     @staticmethod
-    async def build_system_prompt(model_name: str, agent_config: Optional[dict], 
-                                  thread_id: str, 
+    async def build_system_prompt(model_name: str, agent_config: Optional[dict],
+                                  thread_id: str,
                                   mcp_wrapper_instance: Optional[MCPToolWrapper],
                                   client=None,
                                   tool_registry=None,
                                   xml_tool_calling: bool = False,
                                   user_id: Optional[str] = None,
-                                  mcp_loader=None) -> Tuple[dict, Optional[dict]]:
+                                  mcp_loader=None,
+                                  disabled_tools: Optional[List[str]] = None) -> Tuple[dict, Optional[dict]]:
         
         build_start = time.time()
         
@@ -27,9 +28,14 @@ class PromptManager:
         else:
             from core.prompts.core_prompt import get_core_system_prompt
             system_content = get_core_system_prompt()
-        
+
+        # Filter disabled tools from core prompt (disabled_tools already fetched by caller)
+        if disabled_tools:
+            logger.info(f"🔒 [PROMPT] Filtering {len(disabled_tools)} disabled tools from prompt")
+            system_content = PromptManager._filter_disabled_tools(system_content, disabled_tools)
+
         t1 = time.time()
-        system_content = PromptManager._build_base_prompt(system_content)
+        system_content = PromptManager._build_base_prompt(system_content, disabled_tools)
         logger.debug(f"⏱️ [PROMPT TIMING] _build_base_prompt: {(time.time() - t1) * 1000:.1f}ms")
         
         # Start parallel fetch tasks
@@ -117,9 +123,30 @@ class PromptManager:
             return None
     
     @staticmethod
-    def _build_base_prompt(system_content: str) -> str:
+    def _filter_disabled_tools(content: str, disabled_tools: list) -> str:
+        """Filter out lines mentioning disabled tools from content."""
+        if not disabled_tools:
+            return content
+        lines = content.split('\n')
+        filtered = []
+        for line in lines:
+            skip = False
+            for tool in disabled_tools:
+                if tool in line:
+                    skip = True
+                    break
+            if not skip:
+                filtered.append(line)
+        return '\n'.join(filtered)
+
+    @staticmethod
+    def _build_base_prompt(system_content: str, disabled_tools: list = None) -> str:
         logger.info("🚀 [DYNAMIC TOOLS] Using dynamic tool loading system (minimal index only)")
-        minimal_index = get_minimal_tool_index()
+        if disabled_tools:
+            minimal_index = get_minimal_tool_index_filtered(disabled_tools)
+            logger.info(f"🔒 [DYNAMIC TOOLS] Filtered out {len(disabled_tools)} disabled tools from index")
+        else:
+            minimal_index = get_minimal_tool_index()
         system_content += "\n\n" + minimal_index
         logger.info(f"📊 [DYNAMIC TOOLS] Core prompt + minimal index: {len(system_content):,} chars")
         
@@ -688,6 +715,8 @@ Multiple parallel tool calls:
         if not user_id:
             return None
 
+        logger.info(f"✅ [PROMO] Injecting upgrade promo for user {user_id}")
+
         try:
             from core.billing.subscriptions.handlers.tier import TierHandler
             from core.utils.config import config, EnvMode
@@ -710,69 +739,33 @@ Multiple parallel tool calls:
 
         promo_content = """
 
-<free_tier_user>
-**FREE TIER USER** - Mention plan limits for complex tasks.
+<SYSTEM_CRITICAL_INSTRUCTION>
+## PREMIUM FEATURES (Upgrade Required)
 
-PLAN DETAILS (use this to answer questions about plans):
+These features are NOT available on free plan:
+- **Presentations/Slides** - Creating PPT, slideshows, decks
+- **Spreadsheets** - Creating Excel, CSV, data tables
+- **Canvas/Design** - Visual designs, graphics
 
-BASIC (FREE):
-- 300 credits/week (refreshes weekly)
-- 1 chat only
-- 1 concurrent run
-- Basic mode
-- NO: custom workers, scheduled triggers, app triggers, integrations
+When users ask for these, respond:
+"Creating [presentations/spreadsheets/designs] is a premium feature. Upgrade to unlock it! Use code **KORTIX2026** for 30% off + 2X credits. <upgrade_cta/>"
 
-PLUS ($20/mo):
-- 4,000 credits/month
-- Unlimited chats
-- 3 concurrent runs
-- 5 custom AI Workers
-- 5 scheduled triggers, 25 app triggers
-- 100+ integrations (Google Drive, Slack, Notion, Gmail, GitHub...)
-- Advanced mode (faster, better responses)
+## FOR ALL OTHER TASKS (code, writing, research, etc.)
 
-PRO ($50/mo):
-- 10,000 credits/month
-- Unlimited chats
-- 5 concurrent runs
-- 20 custom AI Workers
-- 10 scheduled triggers, 50 app triggers
-- 100+ integrations
-- Advanced mode (best quality)
+Complete the task normally, then add this signature at the end:
 
-ULTRA ($200/mo):
-- 40,000 credits/month
-- 20 concurrent runs
-- 100 custom AI Workers
-- 50 scheduled triggers, 200 app triggers
+---
+🚀 Upgrade for [relevant benefit]. Code **KORTIX2026** = 30% off + 2X credits! <upgrade_cta/>
 
-FORMAT - mention limits THEN immediately show <upgrade_cta/> THEN do the task:
-"[Acknowledge task]. You're on free (300 credits/week). Plus gives you faster, better responses and more credits. <upgrade_cta/>
+Examples:
+- Code task → "🚀 Upgrade for faster debugging. Code **KORTIX2026** = 30% off + 2X credits! <upgrade_cta/>"
+- Writing task → "🚀 Upgrade for better quality. Code **KORTIX2026** = 30% off + 2X credits! <upgrade_cta/>"
+- Research → "🚀 Upgrade for deeper analysis. Code **KORTIX2026** = 30% off + 2X credits! <upgrade_cta/>"
 
-[Now do the task]"
+❌ SKIP signature FOR: hi, hello, thanks, ok, bye
 
-EXAMPLES:
+The <upgrade_cta/> tag shows the upgrade button. Without it = no button.
 
-User: "Make a presentation on AI"
-You: "I'll create that! You're on the free plan (300 credits/week, 1 chat). Plus gives you 4,000/month, unlimited chats, and faster, higher-quality responses. <upgrade_cta/>
-
-Now building your AI presentation..."
-
-User: "What can you do?"
-You: "I can help with presentations, research, code, reports and more! You're on free with 300 credits/week. Plus gives you 4,000/month, unlimited chats, and faster, higher-quality responses. <upgrade_cta/>"
-
-IMPORTANT: <upgrade_cta/> must come RIGHT AFTER mentioning upgrade benefits, not at the end of your response.
-
-DO NOT mention upgrades for:
-- Simple greetings (hi, hello, hey)
-- Quick questions with short answers
-- Casual chat
-
-ALWAYS mention upgrades for:
-- Presentations, reports, research, code projects
-- Automation requests
-- "What can you do?" / capability questions
-- Any task using multiple credits
-</free_tier_user>
+</SYSTEM_CRITICAL_INSTRUCTION>
 """
         return promo_content
