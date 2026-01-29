@@ -66,9 +66,9 @@ TIERS: Dict[str, Tier] = {
         display_name='Basic',
         can_purchase_credits=False,
         models=['haiku'],
-        project_limit=2,  # 2x thread_limit (safety buffer for orphan projects)
-        thread_limit=1,
-        concurrent_runs=1,
+        project_limit=20,  # 2x thread_limit (safety buffer for orphan projects)
+        thread_limit=10,
+        concurrent_runs=2,
         custom_workers_limit=0,
         scheduled_triggers_limit=0,
         app_triggers_limit=0,
@@ -472,3 +472,12 @@ def get_tier_disabled_tools(tier_name: str) -> List[str]:
     """Get list of tools disabled for a specific tier."""
     tier = TIERS.get(tier_name, TIERS['free'])
     return tier.disabled_tools or []
+
+def get_disabled_tools(tier_name: str) -> List[str]:
+    """Alias for get_tier_disabled_tools."""
+    return get_tier_disabled_tools(tier_name)
+
+def is_tool_disabled(tier_name: str, tool_name: str) -> bool:
+    """Check if a tool is disabled for a specific tier."""
+    disabled = get_disabled_tools(tier_name)
+    return tool_name in disabled

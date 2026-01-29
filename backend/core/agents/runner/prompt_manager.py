@@ -29,10 +29,9 @@ class PromptManager:
             from core.prompts.core_prompt import get_core_system_prompt
             system_content = get_core_system_prompt()
 
-        # Filter disabled tools from core prompt (disabled_tools already fetched by caller)
-        if disabled_tools:
-            logger.info(f"🔒 [PROMPT] Filtering {len(disabled_tools)} disabled tools from prompt")
-            system_content = PromptManager._filter_disabled_tools(system_content, disabled_tools)
+        # Note: Tier-based tool filtering removed - tools are now blocked at execution time
+        # in tool_executor.py via check_tool_access_for_account(). This allows the agent
+        # to see all tools but get a proper upgrade CTA when blocked.
 
         t1 = time.time()
         system_content = PromptManager._build_base_prompt(system_content, disabled_tools)
@@ -141,12 +140,9 @@ class PromptManager:
 
     @staticmethod
     def _build_base_prompt(system_content: str, disabled_tools: list = None) -> str:
+        # Note: Tool filtering removed - all tools shown to agent, blocked at execution time
         logger.info("🚀 [DYNAMIC TOOLS] Using dynamic tool loading system (minimal index only)")
-        if disabled_tools:
-            minimal_index = get_minimal_tool_index_filtered(disabled_tools)
-            logger.info(f"🔒 [DYNAMIC TOOLS] Filtered out {len(disabled_tools)} disabled tools from index")
-        else:
-            minimal_index = get_minimal_tool_index()
+        minimal_index = get_minimal_tool_index()
         system_content += "\n\n" + minimal_index
         logger.info(f"📊 [DYNAMIC TOOLS] Core prompt + minimal index: {len(system_content):,} chars")
         
@@ -210,13 +206,21 @@ class PromptManager:
                     kb_section = f"""
 
                 === AGENT KNOWLEDGE BASE ===
-                NOTICE: The following is your specialized knowledge base. This information should be considered authoritative for your responses and should take precedence over general knowledge when relevant.
+                NOTICE: The following is your specialized knowledge base containing SUMMARIES of your knowledge files.
+                These summaries should be considered authoritative and take precedence over general knowledge when relevant.
 
                 {cached}
 
                 === END AGENT KNOWLEDGE BASE ===
 
-                IMPORTANT: Always reference and utilize the knowledge base information above when it's relevant to user queries. This knowledge is specific to your role and capabilities."""
+                IMPORTANT KNOWLEDGE BASE ACCESS:
+                - The content above shows SUMMARIES only, not the full file contents
+                - To access the FULL content of knowledge base files:
+                  1. First call `global_kb_sync` to download files to sandbox
+                  2. Files will be available at `/workspace/downloads/global-knowledge/[FolderName]/[filename]`
+                  3. Then use `read_file` or `semantic_search` to access content
+                - Use these summaries directly for most queries without needing full file access
+                - Only sync and read full files when the summary is insufficient"""
                     return kb_section
                 return None
             
@@ -248,14 +252,22 @@ class PromptManager:
                 kb_section = f"""
 
                 === AGENT KNOWLEDGE BASE ===
-                NOTICE: The following is your specialized knowledge base. This information should be considered authoritative for your responses and should take precedence over general knowledge when relevant.
+                NOTICE: The following is your specialized knowledge base containing SUMMARIES of your knowledge files.
+                These summaries should be considered authoritative and take precedence over general knowledge when relevant.
 
                 {kb_data}
 
                 === END AGENT KNOWLEDGE BASE ===
 
-                IMPORTANT: Always reference and utilize the knowledge base information above when it's relevant to user queries. This knowledge is specific to your role and capabilities."""
-                
+                IMPORTANT KNOWLEDGE BASE ACCESS:
+                - The content above shows SUMMARIES only, not the full file contents
+                - To access the FULL content of knowledge base files:
+                  1. First call `global_kb_sync` to download files to sandbox
+                  2. Files will be available at `/workspace/downloads/global-knowledge/[FolderName]/[filename]`
+                  3. Then use `read_file` or `semantic_search` to access content
+                - Use these summaries directly for most queries without needing full file access
+                - Only sync and read full files when the summary is insufficient"""
+
                 return kb_section
             else:
                 # Cache empty result
@@ -715,17 +727,15 @@ Multiple parallel tool calls:
         if not user_id:
             return None
 
-        logger.info(f"✅ [PROMO] Injecting upgrade promo for user {user_id}")
-
         try:
-            from core.billing.subscriptions.handlers.tier import TierHandler
+            from core.billing import subscription_service
             from core.utils.config import config, EnvMode
 
             # Skip tier check in local mode (for testing)
             if config.ENV_MODE == EnvMode.LOCAL:
                 logger.debug(f"[PROMO] Local mode - showing promo for testing")
             else:
-                tier_info = await TierHandler.get_user_subscription_tier(user_id)
+                tier_info = await subscription_service.get_user_subscription_tier(user_id)
                 tier_name = tier_info.get('name', 'free')
 
                 if tier_name not in ('free', 'none'):
@@ -735,36 +745,92 @@ Multiple parallel tool calls:
         except Exception as e:
             logger.warning(f"[PROMO] Failed to check tier for {user_id}: {e} - skipping promo (fail safe)")
             return None
+
         logger.info(f"✅ [PROMO] User {user_id} is on free tier - injecting upgrade promo")
 
         promo_content = """
 
 <SYSTEM_CRITICAL_INSTRUCTION>
-## PREMIUM FEATURES (Upgrade Required)
+## SUBSCRIPTION PLANS - COMPLETE COMPARISON
 
-These features are NOT available on free plan:
-- **Presentations/Slides** - Creating PPT, slideshows, decks
-- **Spreadsheets** - Creating Excel, CSV, data tables
-- **Canvas/Design** - Visual designs, graphics
+### Pricing
+| Plan | Monthly | Yearly (15% off) | Credits/month |
+|------|---------|------------------|---------------|
+| **Free** | $0 | - | ~300/week (refreshes weekly) |
+| **Plus** | $20/mo | $17/mo ($204/yr) | 2,000 + 200 daily bonus |
+| **Pro** | $50/mo | $42.50/mo ($510/yr) | 5,000 + 200 daily bonus |
+| **Ultra** | $200/mo | $170/mo ($2,040/yr) | 20,000 + 200 daily bonus |
 
-When users ask for these, respond:
-"Creating [presentations/spreadsheets/designs] is a premium feature. Upgrade to unlock it! Use code **KORTIX2026** for 30% off + 2X credits. <upgrade_cta/>"
+### Features by Tier
+| Feature | Free | Plus | Pro | Ultra |
+|---------|------|------|-----|-------|
+| **Response quality** | Basic | Faster & better | Faster & better | Faster & better |
+| **Chats** | 1 | Unlimited | Unlimited | Unlimited |
+| **Parallel tasks** | 1 | 3 | 5 | 20 |
+| **Custom agents** | 0 | 5 | 20 | 100 |
+| **Scheduled automations** | 0 | 5 | 10 | 50 |
+| **App triggers** | 0 | 25 | 50 | 200 |
+| **Memory (AI remembers)** | 10 items | 100 items | 500 items | 2,000 items |
+| **Buy extra credits** | No | No | No | Yes |
+| **Presentations/Slides** | ❌ | ✅ | ✅ | ✅ |
+| **Spreadsheets** | ❌ | ✅ | ✅ | ✅ |
+| **Canvas/Design** | ❌ | ✅ | ✅ | ✅ |
 
-## FOR ALL OTHER TASKS (code, writing, research, etc.)
+### What are credits?
+Credits are consumed when the AI works on tasks. Simple tasks (quick questions) use few credits. Complex tasks (coding, research, file creation) use more. Credits refresh monthly on paid plans.
 
-Complete the task normally, then add this signature at the end:
+### Recommendations
+- **Free**: Try it out, occasional use
+- **Plus** ($20): Casual users, a few tasks per day
+- **Pro** ($50): Daily users, multiple projects, need automations
+- **Ultra** ($200): Power users, teams, heavy workloads, need to buy extra credits
 
----
-🚀 Upgrade for [relevant benefit]. Code **KORTIX2026** = 30% off + 2X credits! <upgrade_cta/>
+## INLINE CHECKOUT - CRITICAL
 
-Examples:
-- Code task → "🚀 Upgrade for faster debugging. Code **KORTIX2026** = 30% off + 2X credits! <upgrade_cta/>"
-- Writing task → "🚀 Upgrade for better quality. Code **KORTIX2026** = 30% off + 2X credits! <upgrade_cta/>"
-- Research → "🚀 Upgrade for deeper analysis. Code **KORTIX2026** = 30% off + 2X credits! <upgrade_cta/>"
+You MUST output the literal tag `<inline_checkout/>` in your response to show a checkout form.
+This is NOT optional - without the tag, users see nothing!
 
-❌ SKIP signature FOR: hi, hello, thanks, ok, bye
+**When to use:**
+- User asks about plans/pricing/tiers → include `<inline_checkout/>`
+- User wants to upgrade → include `<inline_checkout/>`
+- User says "how to subscribe" → include `<inline_checkout/>`
 
-The <upgrade_cta/> tag shows the upgrade button. Without it = no button.
+**When NOT to use:**
+- NEVER use `<inline_checkout/>` when a tool returns TOOL_ACCESS_DENIED error
+- The UI already shows an upgrade button next to blocked tools - do NOT duplicate it
+- Just acknowledge the limitation and move on, the user can click the upgrade button shown in the UI
+
+**IMPORTANT:** The `<inline_checkout/>` tag only shows a PAYMENT FORM. It does NOT upgrade the user.
+The user must complete payment themselves. NEVER say "I've upgraded you" or "You're now on Plus" - that's false.
+
+**Examples (you must output the tag exactly):**
+
+1. User: "how do I upgrade?" or "what are the plans?"
+   ```
+   Here are your subscription options:
+   <inline_checkout/>
+   ```
+
+2. User: "upgrade me to Plus"
+   ```
+   Here's the checkout form for Plus - complete payment to upgrade:
+   <inline_checkout plan="plus"/>
+   ```
+
+3. User: "I want Pro yearly"
+   ```
+   Here's the Pro yearly checkout - complete payment to upgrade:
+   <inline_checkout plan="pro" period="yearly"/>
+   ```
+
+**Tag format:**
+- `<inline_checkout/>` - shows plan picker (user chooses)
+- `<inline_checkout plan="plus"/>` - shows Plus payment form
+- `<inline_checkout plan="pro"/>` - shows Pro payment form
+- `<inline_checkout plan="ultra"/>` - shows Ultra payment form
+- Add `period="yearly"` or `period="monthly"` optionally
+
+The tag shows a payment form. The user must complete payment to actually upgrade.
 
 </SYSTEM_CRITICAL_INSTRUCTION>
 """

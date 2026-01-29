@@ -14,7 +14,7 @@ import { ToolCard } from '@/components/thread/content/ToolCard';
 import { ApifyApprovalInline } from '@/components/thread/content/ApifyApprovalInline';
 import { MediaGenerationInline } from '@/components/thread/content/MediaGenerationInline';
 import { constructHtmlPreviewUrl } from '@/lib/utils/url';
-import { UpgradeCTA, extractUpgradeCTA } from '@/components/thread/content/UpgradeCTA';
+import { InlineCheckout, extractInlineCheckout } from '@/components/thread/content/InlineCheckout';
 
 export interface AssistantMessageRendererProps {
   message: UnifiedMessage;
@@ -50,8 +50,8 @@ function renderAskToolCall(
   const attachments = normalizeAttachments(toolCall.arguments?.attachments);
   const followUpAnswers = normalizeArrayValue(toolCall.arguments?.follow_up_answers);
 
-  // Extract upgrade CTA if present
-  const { cleanContent, hasCTA } = extractUpgradeCTA(askText);
+  // Extract inline checkout if present
+  const { cleanContent, hasCheckout, options: checkoutOptions } = extractInlineCheckout(askText);
 
   return (
     <div key={`ask-${index}`} className="space-y-3 my-1.5">
@@ -59,7 +59,7 @@ function renderAskToolCall(
         content={cleanContent}
         className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words [&>:first-child]:mt-0 prose-headings:mt-3"
       />
-      {hasCTA && <UpgradeCTA />}
+      {hasCheckout && <InlineCheckout options={checkoutOptions} />}
       {attachments.length > 0 && (
         <div className="mt-3">
           <FileAttachmentGrid
@@ -107,8 +107,8 @@ function renderCompleteToolCall(
   const attachments = normalizeAttachments(toolCall.arguments?.attachments);
   const followUpPrompts = normalizeArrayValue(toolCall.arguments?.follow_up_prompts);
 
-  // Extract upgrade CTA if present
-  const { cleanContent, hasCTA } = extractUpgradeCTA(completeText);
+  // Extract inline checkout if present
+  const { cleanContent, hasCheckout, options: checkoutOptions } = extractInlineCheckout(completeText);
 
   return (
     <div key={`complete-${index}`} className="space-y-3 my-1.5">
@@ -117,7 +117,7 @@ function renderCompleteToolCall(
         content={cleanContent}
         className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words [&>:first-child]:mt-0 prose-headings:mt-3"
       />
-      {hasCTA && <UpgradeCTA />}
+      {hasCheckout && <InlineCheckout options={checkoutOptions} />}
 
       {/* Attachments underneath the text */}
       {attachments.length > 0 && (
@@ -428,10 +428,32 @@ function renderSlideToolCall(
     return trMeta.tool_call_id === toolCall.tool_call_id;
   });
 
+  // Extract tool result data for error detection
+  let toolResultData: any = undefined;
+  let isError = false;
+  let errorMessage: string | undefined;
+
+  if (toolResult) {
+    const rawMeta = toolResult.metadata;
+    const metadata = typeof rawMeta === 'string' ? safeJsonParse<any>(rawMeta, {}) : rawMeta;
+    toolResultData = metadata?.result;
+
+    if (metadata?.result?.success === false) {
+      isError = true;
+      errorMessage = metadata?.result?.error;
+    }
+  }
+
   const slideInfo = extractSlideInfo(toolResult);
   const isLoading = !toolResult || !slideInfo;
   const toolName = toolCall.function_name.replace(/_/g, '-');
   const IconComponent = getToolIcon(toolName);
+
+  // Build enhanced toolCall object with result data for error detection
+  const enhancedToolCall = {
+    ...toolCall,
+    tool_result: toolResultData
+  };
 
   return (
     <div key={`slide-${index}`} className="my-1.5">
@@ -439,19 +461,23 @@ function renderSlideToolCall(
       <ToolCard
         toolName={toolName}
         displayName={getCompletedToolName(toolName)}
-        toolCall={toolCall}
+        toolCall={enhancedToolCall}
         toolCallId={toolCall.tool_call_id}
         isStreaming={isLoading}
+        isError={isError}
+        errorMessage={errorMessage}
         fallbackIcon={IconComponent}
         onClick={() => onToolClick(message.message_id, 'create-slide', toolCall.tool_call_id)}
       />
-      {/* Slide preview below */}
-      <SlideInlineThumbnail
-        slideInfo={slideInfo}
-        project={project}
-        onClick={() => onToolClick(message.message_id, 'create-slide', toolCall.tool_call_id)}
-        isLoading={isLoading}
-      />
+      {/* Slide preview below - only show if not an error */}
+      {!isError && (
+        <SlideInlineThumbnail
+          slideInfo={slideInfo}
+          project={project}
+          onClick={() => onToolClick(message.message_id, 'create-slide', toolCall.tool_call_id)}
+          isLoading={isLoading}
+        />
+      )}
     </div>
   );
 }
@@ -464,61 +490,82 @@ function renderRegularToolCall(
 ): React.ReactNode {
   const { message, onToolClick, toolResults = [] } = props;
   const IconComponent = getToolIcon(toolName);
-  
+
   let websiteUrls: string[] | undefined;
   let imageUrls: string[] | undefined;
   let slideInfo: SlideInfo | undefined;
   let elapsedTime: number | undefined;
   let paramDisplay: string | null = null;
-  
-  const isWebSearch = toolName === 'web-search' || toolName === 'web_search' || 
+  let toolResultData: any = undefined;
+  let isError = false;
+  let errorMessage: string | undefined;
+
+  const isWebSearch = toolName === 'web-search' || toolName === 'web_search' ||
                       toolCall.function_name === 'web_search' || toolCall.function_name === 'web-search';
-  const isImageSearch = toolName === 'image-search' || toolName === 'image_search' || 
+  const isImageSearch = toolName === 'image-search' || toolName === 'image_search' ||
                         toolCall.function_name === 'image_search' || toolCall.function_name === 'image-search';
   const isSlideCreate = toolName === 'create-slide' || toolName === 'create_slide' ||
                         toolCall.function_name === 'create_slide' || toolCall.function_name === 'create-slide';
-  
+
+  // Always find the tool result for any tool (not just specific ones)
+  const toolResult = toolResults.find(tr => {
+    const rawMeta = tr.metadata;
+    const trMeta = typeof rawMeta === 'string' ? safeJsonParse<any>(rawMeta, {}) : rawMeta;
+    return trMeta.tool_call_id === toolCall.tool_call_id;
+  });
+
+  // Extract tool result data for ToolCard (needed for upgrade CTA detection)
+  if (toolResult) {
+    const rawMeta = toolResult.metadata;
+    const metadata = typeof rawMeta === 'string' ? safeJsonParse<any>(rawMeta, {}) : rawMeta;
+    toolResultData = metadata?.result;
+
+    // Check for error status
+    if (metadata?.result?.success === false) {
+      isError = true;
+      errorMessage = metadata?.result?.error;
+    }
+
+    elapsedTime = metadata?.result?.output?.response_time;
+  }
+
   if (isWebSearch || isImageSearch || isSlideCreate) {
-    const toolResult = toolResults.find(tr => {
-      const rawMeta = tr.metadata;
-      const trMeta = typeof rawMeta === 'string' ? safeJsonParse<any>(rawMeta, {}) : rawMeta;
-      return trMeta.tool_call_id === toolCall.tool_call_id;
-    });
-    
     if (isWebSearch) {
       websiteUrls = extractWebSearchUrls(toolResult);
     }
-    
+
     if (isImageSearch) {
       imageUrls = extractImageSearchUrls(toolResult);
     }
-    
+
     if (isSlideCreate) {
       slideInfo = extractSlideInfo(toolResult);
-    }
-    
-    if (toolResult) {
-      const rawMeta = toolResult.metadata;
-      const metadata = typeof rawMeta === 'string' ? safeJsonParse<any>(rawMeta, {}) : rawMeta;
-      elapsedTime = metadata?.result?.output?.response_time;
     }
   } else {
     paramDisplay = getToolCallDisplayParam(toolCall);
   }
 
   const baseDisplayName = (toolCall as any)._display_hint || getCompletedToolName(toolName);
-  const displayName = elapsedTime !== undefined 
+  const displayName = elapsedTime !== undefined
     ? `${baseDisplayName} for ${formatElapsedTime(elapsedTime)}`
     : baseDisplayName;
+
+  // Build enhanced toolCall object with result data for error detection
+  const enhancedToolCall = {
+    ...toolCall,
+    tool_result: toolResultData
+  };
 
   return (
     <div key={`tool-${index}`} className="my-1.5">
       <ToolCard
         toolName={toolName}
         displayName={displayName}
-        toolCall={toolCall}
+        toolCall={enhancedToolCall}
         toolCallId={toolCall.tool_call_id}
         paramDisplay={paramDisplay}
+        isError={isError}
+        errorMessage={errorMessage}
         fallbackIcon={IconComponent}
         onClick={() => onToolClick(message.message_id, toolName, toolCall.tool_call_id)}
         websiteUrls={websiteUrls}
@@ -566,8 +613,8 @@ export function renderAssistantMessage(props: AssistantMessageRendererProps): Re
   const shouldRenderTextContent = textContent.trim() && textContent.trim() !== askCompleteText.trim();
 
   if (shouldRenderTextContent) {
-    // Extract upgrade CTA if present
-    const { cleanContent, hasCTA } = extractUpgradeCTA(textContent);
+    // Extract inline checkout if present
+    const { cleanContent, hasCheckout, options: checkoutOptions } = extractInlineCheckout(textContent);
 
     contentParts.push(
       <div key="text-content" className="my-1.5">
@@ -575,7 +622,7 @@ export function renderAssistantMessage(props: AssistantMessageRendererProps): Re
           content={cleanContent}
           className="text-sm prose prose-sm dark:prose-invert chat-markdown max-w-none break-words"
         />
-        {hasCTA && <UpgradeCTA />}
+        {hasCheckout && <InlineCheckout options={checkoutOptions} />}
       </div>
     );
   }

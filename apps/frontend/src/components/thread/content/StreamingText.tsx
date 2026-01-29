@@ -1,6 +1,6 @@
 import React from 'react';
 import { ComposioUrlDetector } from './composio-url-detector';
-import { UpgradeCTA, extractUpgradeCTA } from './UpgradeCTA';
+import { InlineCheckout, extractInlineCheckout } from './InlineCheckout';
 
 export interface StreamingTextProps {
   content: string;
@@ -11,13 +11,13 @@ export const StreamingText: React.FC<StreamingTextProps> = ({
   content,
   isStreaming = false,
 }) => {
-  // Extract upgrade CTA if present
-  const { cleanContent, hasCTA } = extractUpgradeCTA(content);
+  // Extract inline checkout if present
+  const { cleanContent, hasCheckout, options } = extractInlineCheckout(content);
 
   return (
     <>
       <ComposioUrlDetector content={cleanContent} isStreaming={isStreaming} />
-      {hasCTA && !isStreaming && <UpgradeCTA />}
+      {hasCheckout && !isStreaming && <InlineCheckout options={options} />}
     </>
   );
 };
