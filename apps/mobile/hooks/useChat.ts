@@ -5,7 +5,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as Haptics from 'expo-haptics';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import type { UnifiedMessage } from '@/api/types';
+import type { UnifiedMessage, Message, ActiveAgentRun } from '@/api/types';
 import { useLanguage } from '@/contexts';
 import type { ToolMessagePair } from '@/components/chat';
 import {
@@ -42,6 +42,24 @@ import {
   type TierLimitErrorState,
 } from '@agentpress/shared/errors';
 import { usePricingModalStore } from '@/stores/billing-modal-store';
+
+/**
+ * Convert API Message type to UnifiedMessage type
+ * Handles the difference where Message.metadata is Record<string, any>
+ * but UnifiedMessage.metadata is string (JSON)
+ */
+function messageToUnifiedMessage(msg: Message): UnifiedMessage {
+  return {
+    message_id: msg.message_id,
+    thread_id: msg.thread_id,
+    type: msg.type as UnifiedMessage['type'],
+    is_llm_message: msg.is_llm_message,
+    content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+    metadata: typeof msg.metadata === 'string' ? msg.metadata : JSON.stringify(msg.metadata),
+    created_at: msg.created_at,
+    updated_at: msg.updated_at,
+  };
+}
 
 export interface Attachment {
   type: 'image' | 'video' | 'document';
@@ -235,6 +253,27 @@ export function useChat(): UseChatReturn {
   const accessibleModelIds = useMemo(() => accessibleModels.map(m => m.id).join(','), [accessibleModels]);
   const accessibleModelsLength = accessibleModels.length;
   
+  // Helper to get default model - matching frontend logic
+  // Prioritizes kortix/basic, then kortix/power, then first accessible model
+  const getDefaultModelId = useCallback((models: typeof accessibleModels): string | undefined => {
+    // kortix/basic should be first for free users since power is not accessible
+    const basicModel = models.find(m => m.id === 'kortix/basic');
+    if (basicModel) return basicModel.id;
+
+    const powerModel = models.find(m => m.id === 'kortix/power');
+    if (powerModel) return powerModel.id;
+
+    // Fallback: pick from accessible models sorted by priority
+    if (models.length > 0) {
+      return models[0].id;
+    }
+
+    return undefined;
+  }, []);
+
+  // Valid model IDs that mobile app should use (matching frontend)
+  const VALID_MODEL_IDS = useMemo(() => new Set(['kortix/basic', 'kortix/power']), []);
+
   // Auto-select model when models first load and none is selected
   useEffect(() => {
     // Skip if still loading or no accessible models
@@ -244,28 +283,29 @@ export function useChat(): UseChatReturn {
 
     // If no model is selected, auto-select the best available model
     if (!selectedModelId) {
-      const recommendedModel = accessibleModels.find(m => m.recommended);
-      const fallbackModel = recommendedModel || accessibleModels[0];
-      if (fallbackModel) {
-        log.log('🔄 [useChat] Auto-selecting model (none selected):', fallbackModel.id);
-        selectModel(fallbackModel.id);
+      const defaultModelId = getDefaultModelId(accessibleModels);
+      if (defaultModelId) {
+        log.log('🔄 [useChat] Auto-selecting model (none selected):', defaultModelId);
+        selectModel(defaultModelId);
       }
       return;
     }
 
-    // If selected model is not accessible, switch to an accessible one
+    // CRITICAL: Only allow kortix/basic or kortix/power models
+    // Other models (like kortix/kimi-k2.5) are internal and should not be used
+    const isValidModel = VALID_MODEL_IDS.has(selectedModelId);
     const isModelAccessible = accessibleModels.some(m => m.id === selectedModelId);
-    if (!isModelAccessible) {
-      log.warn('⚠️ [useChat] Selected model is not accessible, switching:', selectedModelId);
-      const recommendedModel = accessibleModels.find(m => m.recommended);
-      const fallbackModel = recommendedModel || accessibleModels[0];
-      if (fallbackModel) {
-        log.log('🔄 [useChat] Auto-selecting accessible model:', fallbackModel.id);
-        selectModel(fallbackModel.id);
+
+    if (!isValidModel || !isModelAccessible) {
+      log.warn('⚠️ [useChat] Selected model is invalid or not accessible, switching:', selectedModelId);
+      const defaultModelId = getDefaultModelId(accessibleModels);
+      if (defaultModelId) {
+        log.log('🔄 [useChat] Auto-selecting valid model:', defaultModelId);
+        selectModel(defaultModelId);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedModelId, accessibleModelIds, accessibleModelsLength, selectModel, modelsLoading]);
+  }, [selectedModelId, accessibleModelIds, accessibleModelsLength, selectModel, modelsLoading, getDefaultModelId, VALID_MODEL_IDS]);
   
   // Determine current model to use
   const currentModel = useMemo(() => {
@@ -273,22 +313,26 @@ export function useChat(): UseChatReturn {
     if (modelsLoading) {
       return undefined;
     }
-    
-    // If a model is selected and accessible, use it
-    if (selectedModelId) {
+
+    // CRITICAL: Only use kortix/basic or kortix/power
+    // Never use other models like kortix/kimi-k2.5 (internal/legacy)
+    if (selectedModelId && VALID_MODEL_IDS.has(selectedModelId)) {
       const model = accessibleModels.find(m => m.id === selectedModelId);
       if (model) {
         return model.id;
       }
     }
-    
-    // Fallback to recommended model or first accessible model
-    const recommendedModel = accessibleModels.find(m => m.recommended);
-    const firstAccessibleModel = accessibleModels[0];
-    const fallbackModel = recommendedModel?.id || firstAccessibleModel?.id;
-    
-    return fallbackModel;
-  }, [selectedModelId, accessibleModels, modelsLoading]);
+
+    // Fallback: prioritize kortix/basic, then kortix/power
+    const basicModel = accessibleModels.find(m => m.id === 'kortix/basic');
+    if (basicModel) return basicModel.id;
+
+    const powerModel = accessibleModels.find(m => m.id === 'kortix/power');
+    if (powerModel) return powerModel.id;
+
+    // Last resort fallback to first accessible model
+    return accessibleModels[0]?.id;
+  }, [selectedModelId, accessibleModels, modelsLoading, VALID_MODEL_IDS]);
   
   // Log model selection only when it actually changes
   const prevModelSelectionRef = useRef<string>('');
@@ -457,9 +501,11 @@ export function useChat(): UseChatReturn {
     error: streamError,
     agentRunId: currentHookRunId,
     retryCount: streamRetryCount,
-    startStreaming,
-    stopStreaming,
+    startStreaming: rawStartStreaming,
+    stopStreaming: rawStopStreaming,
+    disconnectStream: rawDisconnectStream,
     resumeStream,
+    forceReconnect, // Mobile-specific: Always reconnect after app backgrounds
     clearError: clearStreamError,
     setError: setStreamError,
   } = useAgentStream(
@@ -475,24 +521,99 @@ export function useChat(): UseChatReturn {
     undefined,
   );
 
+  // Wrap streaming functions with logging
+  const startStreaming = useCallback((runId: string) => {
+    log.log('🟢 [useChat] START_STREAMING called:', { runId, activeThreadId, currentHookRunId });
+    return rawStartStreaming(runId);
+  }, [rawStartStreaming, activeThreadId, currentHookRunId]);
+
+  const stopStreaming = useCallback(async () => {
+    log.log('🔴 [useChat] STOP_STREAMING called:', { activeThreadId, agentRunId, currentHookRunId });
+    return rawStopStreaming();
+  }, [rawStopStreaming, activeThreadId, agentRunId, currentHookRunId]);
+
+  const disconnectStream = useCallback(() => {
+    log.log('🟡 [useChat] DISCONNECT_STREAM called:', { activeThreadId, agentRunId, currentHookRunId });
+    return rawDisconnectStream();
+  }, [rawDisconnectStream, activeThreadId, agentRunId, currentHookRunId]);
+
   const isStreaming = streamHookStatus === 'streaming' || streamHookStatus === 'connecting' || streamHookStatus === 'reconnecting';
   const isReconnecting = streamHookStatus === 'reconnecting';
 
+  // Log stream status changes
+  useEffect(() => {
+    log.log('📊 [useChat] STREAM_STATUS changed:', {
+      status: streamHookStatus,
+      currentHookRunId,
+      agentRunId,
+      activeThreadId,
+      isStreaming,
+    });
+  }, [streamHookStatus, currentHookRunId, agentRunId, activeThreadId, isStreaming]);
+
   // Handle app state changes - resume stream when coming back to foreground
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
-  
+  const lastKnownRunIdRef = useRef<string | null>(null);
+
+  // Track the runId so we can check its status even after finalizeStream clears currentHookRunId
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+    if (currentHookRunId || agentRunId) {
+      lastKnownRunIdRef.current = currentHookRunId || agentRunId;
+    }
+  }, [currentHookRunId, agentRunId]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState: AppStateStatus) => {
       // App came to foreground from background/inactive
       if (
-        appStateRef.current.match(/inactive|background/) && 
+        appStateRef.current.match(/inactive|background/) &&
         nextAppState === 'active'
       ) {
         log.log('[useChat] App came to foreground, checking stream status');
-        // Only try to resume if we have an active agent run
-        if (currentHookRunId || agentRunId) {
-          log.log('[useChat] Active run detected, resuming stream...');
-          resumeStream();
+
+        // Check if we have an active agent run OR had one before backgrounding
+        const runIdToCheck = currentHookRunId || agentRunId || lastKnownRunIdRef.current;
+
+        if (runIdToCheck) {
+          log.log('[useChat] Active/recent run detected, using forceReconnect...');
+
+          // MOBILE-SPECIFIC: Use forceReconnect instead of resumeStream
+          // On mobile, the EventSource connection is ALWAYS dead after backgrounding
+          // forceReconnect checks server status and reconnects if agent is still running
+          const result = await forceReconnect();
+
+          log.log('[useChat] forceReconnect result:', result);
+
+          if (!result.reconnected) {
+            // Agent finished while we were backgrounded, or network error
+            // Either way, we need to refetch messages to get the latest state
+            if (activeThreadId) {
+              log.log('[useChat] Agent not running or reconnect failed, refetching messages...');
+
+              // Clear tracked run ID since agent is done
+              lastKnownRunIdRef.current = null;
+              setAgentRunId(null);
+
+              // Refetch messages to get the final content
+              queryClient.invalidateQueries({
+                queryKey: chatKeys.messages(activeThreadId),
+              });
+              queryClient.invalidateQueries({
+                queryKey: ['activeRuns'],
+              });
+              await refetchMessages();
+            }
+          }
+          // If reconnected, the stream will continue receiving messages normally
+        } else if (activeThreadId) {
+          // No run was active, but we have a thread - refresh to catch any updates
+          log.log('[useChat] No active run, but thread exists - refreshing messages');
+          await refetchMessages();
+        }
+
+        // Clear the tracked runId after handling if no active run
+        if (!currentHookRunId && !agentRunId) {
+          lastKnownRunIdRef.current = null;
         }
       }
       appStateRef.current = nextAppState;
@@ -501,7 +622,7 @@ export function useChat(): UseChatReturn {
     return () => {
       subscription.remove();
     };
-  }, [currentHookRunId, agentRunId, resumeStream]);
+  }, [currentHookRunId, agentRunId, forceReconnect, activeThreadId, queryClient, refetchMessages]);
 
   const prevThreadIdRef = useRef<string | undefined>(undefined);
 
@@ -523,7 +644,8 @@ export function useChat(): UseChatReturn {
     prevThreadIdRef.current = activeThreadId;
 
     if (messagesData) {
-      const unifiedMessages = messagesData as unknown as UnifiedMessage[];
+      // Convert API Message[] to UnifiedMessage[] with proper type handling
+      const unifiedMessages = messagesData.map(messageToUnifiedMessage);
       
       const shouldReload = messages.length === 0 || messagesData.length > messages.length + 50;
       
@@ -624,28 +746,44 @@ export function useChat(): UseChatReturn {
       return;
     }
 
-    // CRITICAL: Only process completion if the hook's current run matches what we started
-    // This prevents stale 'completed' status from old run triggering completion for new run
-    if (currentHookRunId !== lastStreamStartedRef.current) {
-      log.log('[useChat] Ignoring stale status:', streamHookStatus, 'for run:', currentHookRunId, 'we started:', lastStreamStartedRef.current);
+    // Check if this is a terminal status
+    const isTerminalStatus =
+      streamHookStatus === 'completed' ||
+      streamHookStatus === 'stopped' ||
+      streamHookStatus === 'agent_not_running' ||
+      streamHookStatus === 'error';
+
+    // CRITICAL: Handle the case where finalizeStream already cleared currentHookRunId to null
+    // When the stream finalizes, it sets agentRunId (currentHookRunId) to null BEFORE
+    // React updates the status. So we need to accept terminal status when:
+    // 1. currentHookRunId matches what we started (normal completion path)
+    // 2. OR currentHookRunId is null AND we have a terminal status (post-finalize path)
+    //
+    // The key protection is: we only act if lastStreamStartedRef.current is set,
+    // which means WE initiated this stream, not some stale state.
+    const isValidCompletion =
+      currentHookRunId === lastStreamStartedRef.current ||
+      (currentHookRunId === null && isTerminalStatus);
+
+    if (!isValidCompletion) {
+      // Only log if this looks like a stale status, not if we're mid-stream
+      if (isTerminalStatus) {
+        log.log('[useChat] Ignoring stale status:', streamHookStatus, 'for run:', currentHookRunId, 'we started:', lastStreamStartedRef.current);
+      }
       return;
     }
 
-    if (
-      (streamHookStatus === 'completed' ||
-        streamHookStatus === 'stopped' ||
-        streamHookStatus === 'agent_not_running' ||
-        streamHookStatus === 'error')
-    ) {
+    if (isTerminalStatus) {
       // Track the run ID that just completed to prevent immediate resume
-      // Use currentHookRunId since that's the run that actually completed
-      if (currentHookRunId) {
-        lastCompletedRunIdRef.current = currentHookRunId;
+      // Use lastStreamStartedRef since currentHookRunId might already be null
+      const completedRunId = currentHookRunId || lastStreamStartedRef.current;
+      if (completedRunId) {
+        lastCompletedRunIdRef.current = completedRunId;
 
         // On error, also track for retry - agent WAS started, don't resend
         if (streamHookStatus === 'error') {
-          lastErrorRunIdRef.current = currentHookRunId;
-          log.log('[useChat] Stored error runId for retry:', currentHookRunId);
+          lastErrorRunIdRef.current = completedRunId;
+          log.log('[useChat] Stored error runId for retry:', completedRunId);
         }
       }
 
@@ -727,11 +865,23 @@ export function useChat(): UseChatReturn {
   }, [activeThreadId, isStreaming, refetchMessages, queryClient, activeSandboxId]);
 
   const loadThread = useCallback((threadId: string) => {
-    log.log('[useChat] Loading thread:', threadId);
+    log.log('📖 [useChat] LOAD_THREAD called:', {
+      threadId,
+      currentActiveThreadId: activeThreadId,
+      currentAgentRunId: agentRunId,
+      currentHookRunId,
+      streamHookStatus,
+    });
 
     // Don't load optimistic threads - they're already active
     if (threadId.startsWith('optimistic-')) {
       log.log('[useChat] Skipping load for optimistic thread');
+      return;
+    }
+
+    // CRITICAL: If loading the same thread, don't do anything
+    if (threadId === activeThreadId) {
+      log.log('⚠️ [useChat] SAME_THREAD - skipping loadThread to avoid disconnecting stream');
       return;
     }
 
@@ -741,14 +891,17 @@ export function useChat(): UseChatReturn {
     setAgentRunId(null);
     lastErrorRunIdRef.current = null;
     clearStreamError(); // Clear error state from streaming hook
-    
-    stopStreaming();
-    
+
+    // IMPORTANT: Use disconnectStream NOT stopStreaming when switching threads
+    // disconnectStream only disconnects locally - agent continues running on server
+    // stopStreaming would stop the agent on server which we don't want
+    disconnectStream();
+
     setSelectedToolData(null);
     setInputValue('');
     setAttachments([]);
     setIsNewThreadOptimistic(false);
-    
+
     setMessages([]);
 
     // Reset Kortix Computer state when switching threads
@@ -791,10 +944,16 @@ export function useChat(): UseChatReturn {
     }).catch(error => {
       log.error('❌ [useChat] Failed to refetch active runs:', error);
     });
-  }, [stopStreaming, clearStreamError, refetchActiveRuns, queryClient, threadsData]);
+  }, [disconnectStream, clearStreamError, refetchActiveRuns, queryClient, threadsData, activeThreadId, agentRunId, currentHookRunId, streamHookStatus]);
 
   const startNewChat = useCallback(() => {
-    log.log('[useChat] Starting new chat');
+    log.log('🆕 [useChat] START_NEW_CHAT called:', {
+      currentActiveThreadId: activeThreadId,
+      currentAgentRunId: agentRunId,
+      currentHookRunId,
+      streamHookStatus,
+    });
+
     setActiveThreadId(undefined);
     setAgentRunId(null);
     lastErrorRunIdRef.current = null;
@@ -805,12 +964,15 @@ export function useChat(): UseChatReturn {
     setIsNewThreadOptimistic(false);
     setActiveSandboxId(undefined);
     clearStreamError(); // Clear any previous error state
-    stopStreaming();
-    
+
+    // IMPORTANT: Use disconnectStream NOT stopStreaming when starting new chat
+    // We don't want to stop agents running in other threads
+    disconnectStream();
+
     // Reset Kortix Computer state when starting new chat
     useKortixComputerStore.getState().reset();
     log.log('[useChat] Reset Kortix Computer state for new chat');
-  }, [stopStreaming, clearStreamError]);
+  }, [disconnectStream, clearStreamError, activeThreadId, agentRunId, currentHookRunId, streamHookStatus]);
 
   const updateThreadTitle = useCallback(async (newTitle: string) => {
     if (!activeThreadId) {
@@ -838,7 +1000,15 @@ export function useChat(): UseChatReturn {
     lastMessageParamsRef.current = { content, agentId, agentName };
 
     try {
-      log.log('[useChat] Sending message:', { content, agentId, agentName, activeThreadId, attachmentsCount: attachments.length, selectedQuickAction, selectedQuickActionOption });
+      log.log('📤 [useChat] SEND_MESSAGE:', {
+        content: content.substring(0, 50),
+        agentId,
+        activeThreadId,
+        currentAgentRunId: agentRunId,
+        currentHookRunId,
+        streamHookStatus,
+        attachmentsCount: attachments.length,
+      });
       
       for (const attachment of attachments) {
         const validation = validateFileSize(attachment.size);
@@ -1048,7 +1218,11 @@ export function useChat(): UseChatReturn {
           });
 
           if (createResult.agent_run_id) {
-            log.log('[useChat] Starting INSTANT streaming:', createResult.agent_run_id);
+            log.log('🚀 [useChat] AGENT_STARTED (new thread):', {
+              agentRunId: createResult.agent_run_id,
+              threadId: newThreadId,
+              optimisticThreadId,
+            });
             setUserInitiatedRun(true);
             setAgentRunId(createResult.agent_run_id);
             lastErrorRunIdRef.current = null; // Clear any previous error state
@@ -1105,8 +1279,19 @@ export function useChat(): UseChatReturn {
           throw agentStartError;
         }
       } else {
+        // CRITICAL: Never send to optimistic threads - they don't exist on server!
+        // This can happen if user sends message before previous thread creation completes
+        if (currentThreadId.startsWith('optimistic-')) {
+          log.error('[useChat] Cannot send to optimistic thread - waiting for real thread ID');
+          Alert.alert(
+            t('common.error'),
+            t('chat.threadNotReady') || 'Please wait for the thread to be created'
+          );
+          return;
+        }
+
         log.log('[useChat] Sending to existing thread:', currentThreadId);
-        
+
         // Store attachments before clearing for upload
         const pendingAttachments = [...attachments];
         
@@ -1232,19 +1417,23 @@ export function useChat(): UseChatReturn {
               
               if (optimisticIndex !== -1) {
                 log.log('[useChat] ✅ Replacing optimistic message with real one');
+                const unifiedMessage = messageToUnifiedMessage(result.message);
                 return prev.map((m, index) =>
-                  index === optimisticIndex ? (result.message as UnifiedMessage) : m
+                  index === optimisticIndex ? unifiedMessage : m
                 );
               }
               
               // If no optimistic found, just add the message
               log.log('[useChat] No optimistic message found to replace, adding new');
-              return [...prev, result.message as UnifiedMessage];
+              return [...prev, messageToUnifiedMessage(result.message)];
             });
           }
           
           if (result.agentRunId) {
-            log.log('[useChat] Starting INSTANT streaming for existing thread:', result.agentRunId);
+            log.log('🚀 [useChat] AGENT_STARTED (existing thread):', {
+              agentRunId: result.agentRunId,
+              threadId: currentThreadId,
+            });
             setUserInitiatedRun(true);
             setAgentRunId(result.agentRunId);
             lastErrorRunIdRef.current = null; // Clear any previous error state
@@ -1347,11 +1536,16 @@ export function useChat(): UseChatReturn {
     setIsRetrying(true);
     
     // SIMPLE CHECK: If we have ANY assistant/tool messages, AI responded - just refresh, NEVER resend
-    const hasAIResponse = messages.some(msg => 
-      msg.type === 'assistant' || 
-      msg.type === 'tool' || 
-      (msg.content && typeof msg.content === 'object' && 'role' in msg.content && msg.content.role === 'assistant')
-    );
+    const hasAIResponse = messages.some(msg => {
+      if (msg.type === 'assistant' || msg.type === 'tool') return true;
+      // Check parsed content for role (content is JSON string in UnifiedMessage)
+      try {
+        const parsed = JSON.parse(msg.content);
+        return parsed?.role === 'assistant';
+      } catch {
+        return false;
+      }
+    });
     
     if (hasAIResponse) {
       log.log('[useChat] Retry: AI already responded, refreshing thread (NOT resending)');
@@ -1368,17 +1562,16 @@ export function useChat(): UseChatReturn {
           await refetchMessages();
           
           // fetchQuery throws on error - if we get here, network is working
-          const activeRuns = await queryClient.fetchQuery({
+          const activeRuns = await queryClient.fetchQuery<ActiveAgentRun[]>({
             queryKey: chatKeys.activeRuns(),
             staleTime: 0, // Force fresh fetch
           });
-          
+
           log.log('[useChat] Retry: Got fresh activeRuns data, count:', activeRuns?.length ?? 0);
-          
+
           if (activeRuns) {
             const runningAgent = activeRuns.find(
-              (run: { thread_id: string; status: string; id: string }) => 
-                run.thread_id === activeThreadId && run.status === 'running'
+              (run) => run.thread_id === activeThreadId && run.status === 'running'
             );
             if (runningAgent) {
               log.log('[useChat] Retry: Found running agent, reconnecting:', runningAgent.id);
@@ -1422,17 +1615,16 @@ export function useChat(): UseChatReturn {
           await refetchMessages();
           
           // fetchQuery throws on error - if we get here, network is working
-          const activeRuns = await queryClient.fetchQuery({
+          const activeRuns = await queryClient.fetchQuery<ActiveAgentRun[]>({
             queryKey: chatKeys.activeRuns(),
             staleTime: 0, // Force fresh fetch
           });
-          
+
           log.log('[useChat] Retry: Got fresh activeRuns data (runId path), count:', activeRuns?.length ?? 0);
-          
+
           if (activeRuns) {
             const runningAgent = activeRuns.find(
-              (run: { thread_id: string; status: string; id: string }) => 
-                run.thread_id === activeThreadId && run.status === 'running'
+              (run) => run.thread_id === activeThreadId && run.status === 'running'
             );
             if (runningAgent) {
               log.log('[useChat] Retry: Found running agent, reconnecting:', runningAgent.id);
@@ -1713,8 +1905,8 @@ export function useChat(): UseChatReturn {
     } else {
       // No saved state - show fresh thread list for new mode
       log.log('[useChat] 📋 Fresh mode, showing thread list:', actionId);
-      // Stop current streaming (agent keeps running on server)
-      stopStreaming();
+      // Disconnect from current stream (agent keeps running on server)
+      disconnectStream();
       setAgentRunId(null);
       setActiveThreadId(undefined);
       setMessages([]);
@@ -1725,17 +1917,17 @@ export function useChat(): UseChatReturn {
       setModeViewState('thread-list');
     }
   }, [
-    selectedQuickAction, 
-    activeThreadId, 
-    messages, 
-    agentRunId, 
-    activeSandboxId, 
-    modeViewState, 
-    inputValue, 
-    attachments, 
+    selectedQuickAction,
+    activeThreadId,
+    messages,
+    agentRunId,
+    activeSandboxId,
+    modeViewState,
+    inputValue,
+    attachments,
     selectedQuickActionOption,
-    modeStates, 
-    stopStreaming, 
+    modeStates,
+    disconnectStream,
     startStreaming,
   ]);
 
@@ -1744,7 +1936,7 @@ export function useChat(): UseChatReturn {
     log.log('[useChat] 📋 Going back to thread list for mode:', selectedQuickAction);
     Keyboard.dismiss();
     setModeViewState('thread-list');
-    
+
     // Clear the saved state for current mode when user explicitly goes back
     if (selectedQuickAction) {
       setModeStates(prev => {
@@ -1753,13 +1945,14 @@ export function useChat(): UseChatReturn {
         return updated;
       });
     }
-    
+
     // Clear active thread when going to list view
+    // Use disconnectStream - agent continues running on server
     setActiveThreadId(undefined);
     setMessages([]);
     setAgentRunId(null);
-    stopStreaming();
-  }, [stopStreaming, selectedQuickAction]);
+    disconnectStream();
+  }, [disconnectStream, selectedQuickAction]);
 
   // Open a specific thread (used from thread list)
   const showModeThread = useCallback((threadId: string) => {
