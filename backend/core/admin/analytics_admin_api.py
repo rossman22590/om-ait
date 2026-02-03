@@ -123,7 +123,7 @@ class ActivationStats(BaseModel):
 
 
 class UserFunnelStats(BaseModel):
-    """Full user funnel: Signup → Tried Task → Viewed Pricing → Converted."""
+    """Full user funnel: Signup → Tried Task → Viewed Pricing → Clicked Checkout → Converted."""
     total_signups: int
     tried_task: int
     tried_task_rate: float  # % of signups who tried
@@ -131,11 +131,16 @@ class UserFunnelStats(BaseModel):
     viewed_pricing_rate: float  # % of signups who viewed pricing
     tried_and_viewed: int  # Users who both tried task AND viewed pricing
     tried_and_viewed_rate: float
+    clicked_checkout: int  # Users who clicked subscribe/checkout button
+    clicked_checkout_rate: float  # % of signups who clicked checkout
     converted: int
     conversion_rate: float  # % of signups who converted
     # Detailed breakdown
     tried_then_viewed_rate: float  # % of tried users who viewed pricing
-    viewed_then_converted_rate: float  # % of pricing viewers who converted
+    viewed_then_clicked_rate: float  # % of pricing viewers who clicked checkout
+    clicked_then_converted_rate: float  # % of checkout clickers who converted
+    # Other users (signed up before date range but took action in date range)
+    other_clicked_checkout: int  # Users who signed up earlier but clicked checkout in this period
     date_from: str
     date_to: str
 
@@ -1429,7 +1434,7 @@ async def get_user_funnel(
     admin: dict = Depends(require_admin)
 ) -> UserFunnelStats:
     """
-    Get full user funnel: Signup → Tried Task → Viewed Pricing → Converted.
+    Get full user funnel: Signup → Tried Task → Viewed Pricing → Clicked Checkout → Converted.
 
     All data from Supabase - no GA4 cross-referencing needed.
     """
@@ -1445,45 +1450,43 @@ async def get_user_funnel(
         start_of_range = datetime(start_date.year, start_date.month, start_date.day, 0, 0, 0, tzinfo=UTC).isoformat()
         end_of_range = datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59, microsecond=999999, tzinfo=UTC).isoformat()
 
-        # Get full funnel data from Supabase RPC
-        # Returns: user_id, has_activity (tried task), viewed_pricing, is_converted
-        signups_result = await client.rpc('get_free_signups_with_activity', {
+        # Get funnel counts directly from Supabase RPC (avoids 1000 row limit)
+        counts_result = await client.rpc('get_free_signups_funnel_counts', {
             'date_from': start_of_range,
             'date_to': end_of_range
         }).execute()
 
-        signups_data = signups_result.data or []
+        counts_data = counts_result.data[0] if counts_result.data else {}
 
-        total_signups = 0
-        tried_task = 0
-        viewed_pricing = 0
-        tried_and_viewed = 0
-        converted = 0
-
-        for row in signups_data:
-            user_id = row.get('user_id')
-            if user_id:
-                total_signups += 1
-                has_activity = row.get('has_activity', False)
-                has_viewed_pricing = row.get('viewed_pricing', False)
-                is_converted = row.get('is_converted', False)
-
-                if has_activity:
-                    tried_task += 1
-                if has_viewed_pricing:
-                    viewed_pricing += 1
-                if has_activity and has_viewed_pricing:
-                    tried_and_viewed += 1
-                if is_converted:
-                    converted += 1
+        total_signups = counts_data.get('total_signups', 0)
+        tried_task = counts_data.get('tried_task', 0)
+        viewed_pricing = counts_data.get('viewed_pricing', 0)
+        tried_and_viewed = counts_data.get('tried_and_viewed', 0)
+        clicked_checkout = counts_data.get('clicked_checkout', 0)
+        converted = counts_data.get('converted', 0)
 
         # Calculate rates
         tried_task_rate = (tried_task / total_signups * 100) if total_signups > 0 else 0
         viewed_pricing_rate = (viewed_pricing / total_signups * 100) if total_signups > 0 else 0
         tried_and_viewed_rate = (tried_and_viewed / total_signups * 100) if total_signups > 0 else 0
+        clicked_checkout_rate = (clicked_checkout / total_signups * 100) if total_signups > 0 else 0
         conversion_rate = (converted / total_signups * 100) if total_signups > 0 else 0
         tried_then_viewed_rate = (tried_and_viewed / tried_task * 100) if tried_task > 0 else 0
-        viewed_then_converted_rate = (converted / viewed_pricing * 100) if viewed_pricing > 0 else 0
+        viewed_then_clicked_rate = (clicked_checkout / tried_and_viewed * 100) if tried_and_viewed > 0 else 0
+        clicked_then_converted_rate = (converted / clicked_checkout * 100) if clicked_checkout > 0 else 0
+
+        # Get "other" checkout clicks - free tier users who signed up BEFORE the date range
+        # but clicked checkout DURING the date range
+        other_clicked_checkout = 0
+        try:
+            # Use RPC to count free tier users who signed up before range but clicked during range
+            result = await client.rpc('get_other_checkout_clicks_count', {
+                'date_from': start_of_range,
+                'date_to': end_of_range
+            }).execute()
+            other_clicked_checkout = result.data or 0
+        except Exception as e:
+            logger.warning(f"Failed to get other checkout clicks: {e}")
 
         return UserFunnelStats(
             total_signups=total_signups,
@@ -1493,10 +1496,14 @@ async def get_user_funnel(
             viewed_pricing_rate=round(viewed_pricing_rate, 2),
             tried_and_viewed=tried_and_viewed,
             tried_and_viewed_rate=round(tried_and_viewed_rate, 2),
+            clicked_checkout=clicked_checkout,
+            clicked_checkout_rate=round(clicked_checkout_rate, 2),
             converted=converted,
             conversion_rate=round(conversion_rate, 2),
             tried_then_viewed_rate=round(tried_then_viewed_rate, 2),
-            viewed_then_converted_rate=round(viewed_then_converted_rate, 2),
+            viewed_then_clicked_rate=round(viewed_then_clicked_rate, 2),
+            clicked_then_converted_rate=round(clicked_then_converted_rate, 2),
+            other_clicked_checkout=other_clicked_checkout,
             date_from=start_date.strftime("%Y-%m-%d"),
             date_to=end_date.strftime("%Y-%m-%d")
         )
