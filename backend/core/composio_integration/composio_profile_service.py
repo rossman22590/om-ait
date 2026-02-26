@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from uuid import uuid4
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 import os
 
 from core.services.supabase import DBConnection
@@ -209,6 +209,9 @@ class ComposioProfileService:
     
     async def get_mcp_url_for_runtime(self, profile_id: str, account_id: str) -> str:
         try:
+            if not account_id:
+                raise ValueError("account_id is required to load Composio runtime profile")
+
             client = await self.db.client
 
             query = client.table('user_mcp_credential_profiles').select('*').eq(
@@ -233,13 +236,30 @@ class ComposioProfileService:
 
             connected_account_id = config.get('connected_account_id')
 
-            # Upgrade legacy user_id-based URLs to connected_account-based URLs for deterministic routing
-            if connected_account_id and 'user_id=' in mcp_url and 'connected_account_id=' not in mcp_url:
-                from urllib.parse import urlparse
+            # Always pin runtime routing to connected_account_id when available.
+            # This avoids ambiguous/default entity resolution and removes legacy user_id routing.
+            if connected_account_id:
+                from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
                 parsed = urlparse(mcp_url)
-                upgraded_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}?connected_account_id={connected_account_id}"
-                logger.info(f"[MCP URL] Upgraded for profile {profile_id}: {upgraded_url}")
-                return upgraded_url
+                query_params = dict(parse_qsl(parsed.query, keep_blank_values=True))
+                current_connected_account_id = query_params.get('connected_account_id')
+                has_user_id = 'user_id' in query_params
+
+                if current_connected_account_id != connected_account_id or has_user_id:
+                    query_params.pop('user_id', None)
+                    query_params['connected_account_id'] = connected_account_id
+                    upgraded_query = urlencode(query_params)
+                    upgraded_url = urlunparse((
+                        parsed.scheme,
+                        parsed.netloc,
+                        parsed.path,
+                        parsed.params,
+                        upgraded_query,
+                        parsed.fragment,
+                    ))
+                    logger.info(f"[MCP URL] Pinned connected_account_id for profile {profile_id}: {upgraded_url}")
+                    return upgraded_url
 
             logger.info(f"[MCP URL] Using stored URL for profile {profile_id}: {mcp_url}")
             return mcp_url
@@ -282,7 +302,23 @@ class ComposioProfileService:
             
             profiles = []
             for row in result.data:
-                config = self._decrypt_config(row['encrypted_config'])
+                try:
+                    config = self._decrypt_config(row['encrypted_config'])
+                except InvalidToken:
+                    logger.warning(
+                        "Skipping undecryptable Composio profile %s for account %s (encryption key mismatch)",
+                        row.get('profile_id'),
+                        account_id,
+                    )
+                    continue
+                except Exception as decrypt_error:
+                    logger.warning(
+                        "Skipping invalid Composio profile %s for account %s: %s",
+                        row.get('profile_id'),
+                        account_id,
+                        decrypt_error,
+                    )
+                    continue
                 
                 profile = ComposioProfile(
                     profile_id=row['profile_id'],
