@@ -47,6 +47,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
 
       if (mustReset) {
+        // Cross-tab SIGNED_IN can replace the user without SIGNED_OUT.
+        // Fence pending requests before cleanup yields or the new token lands.
+        setBootstrapAuthToken(null);
+        setCachedAuthToken(null);
         try {
           await resetClientState();
         } catch (error) {

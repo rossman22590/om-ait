@@ -83,6 +83,17 @@ describe('the reset decision is the shared one, at BOTH entry points', () => {
 });
 
 describe('the marker is held per-document as well as in origin-wide storage', () => {
+  test('cross-user adoption fences token reads before asynchronous cleanup, without requiring SIGNED_OUT', () => {
+    const adopt = slice('const adoptUser = async (', 'const getInitialSession');
+    const resetBranch = adopt.slice(adopt.indexOf('if (mustReset)'));
+    const bootstrapClear = resetBranch.indexOf('setBootstrapAuthToken(null);');
+    const cacheClear = resetBranch.indexOf('setCachedAuthToken(null);');
+    const cleanup = resetBranch.indexOf('await resetClientState();');
+    expect(bootstrapClear).toBeGreaterThan(-1);
+    expect(cacheClear).toBeGreaterThan(bootstrapClear);
+    expect(cleanup).toBeGreaterThan(cacheClear);
+  });
+
   test('a useRef carries the in-document half', () => {
     // One origin-wide localStorage key cannot describe several tabs: two tabs
     // signed into two accounts overwrite each other's marker while each keeps

@@ -31,6 +31,11 @@ during a token read. The project gate displayed "This project didn't load."
 *Enforcer:* `apps/web/src/lib/auth-token.test.ts` covers concurrent hydration,
 bootstrap, sign-out followed by sign-in, and expired publications.
 
+**Identity-change near-miss:** Cross-tab `SIGNED_IN` can replace a user without
+`SIGNED_OUT`. Clear bootstrap and cached tokens synchronously when `adoptUser`
+requires a reset, before its first await. Otherwise pending requests can inherit
+the incoming user's token. `auth-provider-identity.test.ts` pins this ordering.
+
 ### Verify the listening process before sharing a worktree URL (2026-09-07)
 
 **When:** sharing or verifying a local fix, check the web and API listener PIDs
