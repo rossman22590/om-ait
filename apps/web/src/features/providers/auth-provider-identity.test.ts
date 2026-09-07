@@ -71,7 +71,7 @@ describe('the reset decision is the shared one, at BOTH entry points', () => {
     // that event, and it arrives before `getInitialSession()` finishes its
     // `getUser()` round trip. Without a case here the new user is published
     // while the previous one's caches are still mounted.
-    const listener = slice('supabase.auth.onAuthStateChange(', 'setIsLoading((prev)');
+    const listener = slice('supabase.auth.onAuthStateChange(', 'switch (event)');
     expect(listener).toContain("event === 'INITIAL_SESSION'");
     expect(listener).toContain("event === 'SIGNED_IN'");
 
@@ -79,6 +79,13 @@ describe('the reset decision is the shared one, at BOTH entry points', () => {
     const publish = listener.indexOf('setSession(newSession);');
     expect(adopt).toBeGreaterThan(-1);
     expect(publish).toBeGreaterThan(adopt);
+  });
+
+  test('initial auth events cannot declare readiness before bootstrap validation finishes', () => {
+    const listener = slice('supabase.auth.onAuthStateChange(', 'return () =>');
+    expect(listener).not.toContain('setIsLoading(');
+    const bootstrap = slice('const getInitialSession = async ()', 'getInitialSession();');
+    expect(bootstrap).toContain('setIsLoading(false);');
   });
 });
 

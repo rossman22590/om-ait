@@ -36,6 +36,15 @@ bootstrap, sign-out followed by sign-in, and expired publications.
 requires a reset, before its first await. Otherwise pending requests can inherit
 the incoming user's token. `auth-provider-identity.test.ts` pins this ordering.
 
+**Cold-load ordering:** The project-access query must wait for AuthProvider's
+resolved user. Otherwise first-load identity cleanup cancels its token read and
+leaves the non-retrying gate on an error. Key access results by user and show
+pending while auth is unresolved. CI's fresh-browser localization journey
+reproduced the failure; `project-access-boundary.test.ts` pins the wiring.
+AuthProvider declares initial readiness only after bootstrap validation and
+cleanup finish, not from an earlier `INITIAL_SESSION` event. Keep the signed-out
+redirect above the pending gate and use the user-scoped key for admin bypass.
+
 ### Verify the listening process before sharing a worktree URL (2026-09-07)
 
 **When:** sharing or verifying a local fix, check the web and API listener PIDs
