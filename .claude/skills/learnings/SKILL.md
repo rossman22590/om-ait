@@ -21,6 +21,16 @@ linked, not inlined.
 
 ## Register
 
+### Token publication must not look like sign-out to waiting requests (2026-09-08)
+
+**When:** fencing in-flight auth reads against cache writes. Distinguish a token
+publication from a clear. Return the fresh published token after hydration;
+return null when a clear occurred after the read began, including clear-then-sign-in.
+*Incident:* #7065 made a valid session return null when AuthProvider published
+during a token read. The project gate displayed "This project didn't load."
+*Enforcer:* `apps/web/src/lib/auth-token.test.ts` covers concurrent hydration,
+bootstrap, sign-out followed by sign-in, and expired publications.
+
 ### Verify the listening process before sharing a worktree URL (2026-09-07)
 
 **When:** sharing or verifying a local fix, check the web and API listener PIDs
