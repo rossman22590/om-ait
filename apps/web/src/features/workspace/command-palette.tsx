@@ -2229,7 +2229,15 @@ export function CommandPalette() {
                         </>
                       )}
 
-                      {projectId && (
+                      {/* `currentSessionId`, not `projectId`. File search runs
+                          against the SESSION's sandbox daemon
+                          (`useWorkspaceSearch` -> `getActiveServerUrl()` ->
+                          `findFiles`/`findText`), so with no session mounted
+                          every query resolved to a swallowed fetch error and
+                          rendered "No files for …" — indistinguishable from a
+                          real zero-result search. A project id is not enough
+                          to make this row work; a session is. */}
+                      {currentSessionId && (
                         <CommandItem
                           value="suggestion search files find file grep repo content"
                           onSelect={() => goToPage('files')}
@@ -2482,7 +2490,7 @@ export function CommandPalette() {
                       </CommandGroup>
                     )}
 
-                    {queryLongEnough && projectId && (
+                    {queryLongEnough && currentSessionId && (
                       <CommandGroup
                         heading={tHardcodedUi.raw(
                           'componentsCommandPalette.line1437JsxAttrHeadingFileSearch',
@@ -2711,7 +2719,7 @@ export function CommandPalette() {
               </>
             )}
 
-            {page === 'files' && projectId && (
+            {page === 'files' && currentSessionId && (
               <FileSearchPage query={query} onSelect={handleSelectFile} />
             )}
 
