@@ -28,6 +28,7 @@ import Loading from '@/components/ui/loading';
 import { SidebarContext } from '@/components/ui/sidebar';
 import { TextShimmer } from '@/components/ui/text-shimmer';
 import { errorToast, successToast } from '@/components/ui/toast';
+import { preloadAccountHub } from '@/features/accounts/hub/account-hub-entry';
 import { useWorkspaceSearch } from '@/features/files';
 import { fetchChangeRequests } from '@/features/project-files/api/change-requests';
 import { ChangeRequestDetailDialog } from '@/features/project-files/components/change-request-detail-dialog';
@@ -91,6 +92,7 @@ import { useProjectCan } from '@/lib/use-project-can';
 import { useProjectFeatureFlags } from '@/lib/use-project-feature-flags';
 import { cn } from '@/lib/utils';
 import { DEFAULT_WALLPAPER_ID } from '@/lib/wallpapers';
+import { hubTarget, openAccountPanel } from '@/stores/account-panel-store';
 import { useChatSendStore } from '@/stores/chat-send-store';
 import { useCurrentAccountStore } from '@/stores/current-account-store';
 import { useProjectSessionTabsStore } from '@/stores/project-session-tabs-store';
@@ -1083,6 +1085,10 @@ export function CommandPalette() {
       // already declare `requiresProject: true` and are filtered above;
       // `{accountId}` rows are filtered here, off the token itself, so a new
       // account-scoped row can never ship without the guard.
+      // An account row cannot resolve without a selected account, exactly as
+      // an `{accountId}` href could not. Same guard, off the kind instead of
+      // off a token, so a new account row can never ship without it.
+      if (item.kind === 'account' && !selectedAccountId) continue;
       let href = item.href;
       if (href?.includes('{projectId}')) {
         if (!projectId) continue;
@@ -1483,8 +1489,14 @@ export function CommandPalette() {
     const rows = hasQuery ? filteredNavItems : rootSuggestionItems;
     for (const item of rows.slice(0, PALETTE_PREFETCH_LIMIT)) {
       const href = item.href;
+      // An account row opens a modal, so what it needs warmed is the hub's JS
+      // chunk, not an RSC payload.
+      if (item.kind === 'account') {
+        preloadAccountHub();
+        continue;
+      }
       if (item.kind !== 'navigate' || !href) continue;
-      if (href.startsWith('/projects') || href.startsWith('/accounts')) router.prefetch(href);
+      if (href.startsWith('/projects')) router.prefetch(href);
     }
   }, [open, page, hasQuery, filteredNavItems, rootSuggestionItems, router]);
 
@@ -1534,8 +1546,10 @@ export function CommandPalette() {
   // fallback stays cold on purpose: it exists only for the window before that.
   useEffect(() => {
     if (!open || !projectId || !inviteMembersAccountId) return;
-    router.prefetch(`/accounts/${inviteMembersAccountId}?tab=access-projects&project=${projectId}`);
-  }, [open, projectId, inviteMembersAccountId, router]);
+    // The destination is the account hub, which is a modal: what needs warming
+    // is its chunk, not an RSC payload.
+    preloadAccountHub();
+  }, [open, projectId, inviteMembersAccountId]);
 
   const hasSessionResults = rootSessionResults.length > 0;
   const hasWorkspaceResults = rootWorkspaceRows.length > 0;
@@ -1765,13 +1779,18 @@ export function CommandPalette() {
     // redirect to exactly this destination (it resolves the account id itself
     // and appends the same `&project=` scoping), so the unresolved case costs
     // one extra hop instead of the click doing nothing.
-    // nav-contract: prefetch-only — the destination depends on whether
-    // `inviteMembersAccountId` has resolved, so it is not known at render.
-    router.push(
-      inviteMembersAccountId
-        ? `/accounts/${inviteMembersAccountId}?tab=access-projects&project=${projectId}`
-        : `/projects/${projectId}/members`,
-    );
+    if (inviteMembersAccountId) {
+      // The hub over the page you are on — no navigation at all.
+      openAccountPanel(
+        hubTarget(inviteMembersAccountId, { tab: 'access-projects', project: projectId }),
+      );
+      close();
+      return;
+    }
+    // nav-contract: prefetch-only — the fallback only runs in the window
+    // before `inviteMembersAccountId` resolves; that route redirects to the
+    // same hub destination, resolving the account id itself.
+    router.push(`/projects/${projectId}/members`);
     close();
   }, [close, projectId, inviteMembersAccountId, router]);
 
@@ -1946,6 +1965,16 @@ export function CommandPalette() {
   const handleRegistryItem = useCallback(
     (item: MenuItemDef) => {
       switch (item.kind) {
+        // The account hub has no route: it is `?accountId=` over the page you
+        // are on, so this row opens a modal rather than navigating. `close()`
+        // then leaves the palette, and the hub is already there — no fetch, no
+        // transition, and Escape puts you back on this same page.
+        case 'account': {
+          if (!selectedAccountId) break;
+          openAccountPanel(hubTarget(selectedAccountId, { tab: item.accountTab }));
+          close();
+          break;
+        }
         case 'navigate': {
           const href = item.href || '';
 
@@ -1967,7 +1996,7 @@ export function CommandPalette() {
             break;
           }
 
-          if (href.startsWith('/projects') || href.startsWith('/accounts')) {
+          if (href.startsWith('/projects')) {
             // nav-contract: prefetch-only — a cmdk row activated by keyboard,
             // and `href` is resolved from the registry item at click time. The
             // root-navigation effect warms the rendered rows.
@@ -2019,6 +2048,7 @@ export function CommandPalette() {
       handleSetTheme,
       handleSetWallpaper,
       actionHandlers,
+      selectedAccountId,
     ],
   );
 

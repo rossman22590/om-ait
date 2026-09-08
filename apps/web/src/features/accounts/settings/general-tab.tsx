@@ -8,6 +8,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { HubLink } from '@/features/accounts/hub/account-hub-location';
+import { hubTarget } from '@/stores/account-panel-store';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { InfoBanner } from '@/components/ui/info-banner';
@@ -367,10 +369,10 @@ export function GeneralTab({ onClose }: { onClose: () => void }) {
               <ItemActions>
                 <Button asChild variant="outline" size="sm">
                   {/* The anchor navigates; `onClose` only shuts the dialog. */}
-                  <Link href={`/accounts/${accountId}`} onClick={onClose}>
+                  <HubLink to={hubTarget(accountId)} onClick={onClose}>
                     {t('accountSettings.button')}
                     <ArrowUpRight className="size-3.5" />
-                  </Link>
+                  </HubLink>
                 </Button>
               </ItemActions>
             </Item>
