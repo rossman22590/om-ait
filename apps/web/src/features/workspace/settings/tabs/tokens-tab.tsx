@@ -45,6 +45,8 @@ import {
   expiresAtIso,
   expiryOptions,
 } from '@/components/iam/api-key-expiry';
+import { HubLink } from '@/features/accounts/hub/account-hub-location';
+import { hubTarget } from '@/stores/account-panel-store';
 import { type ApiKeyRow, type ApiKeyStatus, buildApiKeyRows } from '@/components/iam/api-key-rows';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -359,12 +361,12 @@ export function TokensTab({ accountId }: { accountId: string | undefined }) {
         {t.rich('serviceAccountTokens', {
           link: (chunks) =>
             accountId ? (
-              <Link
-                href={`/accounts/${accountId}?tab=tokens`}
+              <HubLink
+                to={hubTarget(accountId, { tab: 'tokens' })}
                 className="text-foreground underline underline-offset-2"
               >
                 {chunks}
-              </Link>
+              </HubLink>
             ) : (
               <>{chunks}</>
             ),
