@@ -1929,12 +1929,13 @@ flow(
     ],
   },
   async (ctx) => {
+    // The session-bound token is minted the way apps/api mints it: an
+    // `account_tokens` row whose secret hash is scrypt(secret, API_KEY_SECRET).
+    // The local runner pins that secret; the preview harness exports the
+    // self-host one; any other target must provide KE2E_API_KEY_SECRET.
     const apiKeySecret =
       process.env.KE2E_API_KEY_SECRET ??
       (ctx.env.target === 'local' ? 'local-flow-runner-api-key-secret' : null);
-    if (!apiKeySecret) {
-      ctx.skip('KE2E_API_KEY_SECRET is required to mint a session-bound token on this target');
-    }
     const team = await ctx.fixtures.team();
     // `managedGit` on the LOCAL target is a local bare repository (no GitHub),
     // which is what the gateway's manifest read needs; the capability gate is
@@ -1964,6 +1965,12 @@ flow(
     const sessionId = randomUUID();
     const openapiSlug = `ke2e-openapi-${Date.now().toString(36)}`;
     const secret = `kortix_pat_${randomBytes(24).toString('hex')}`;
+    // Asserted skip: the agent declaration above already proved the manifest
+    // write on this target, so a target that cannot mint a session token skips
+    // AFTER a passing assertion, not before running anything.
+    if (!apiKeySecret) {
+      ctx.skip('KE2E_API_KEY_SECRET is required to mint a session-bound token on this target');
+    }
     const secretHash = `scrypt:v1:${scryptSync(secret, apiKeySecret as string, 32).toString('hex')}`;
     const session = ctx.client.withBearer(secret, 'SESSION_TOKEN');
     const call = (connector: string, action: string) =>
