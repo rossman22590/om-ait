@@ -216,11 +216,11 @@ export function TokensTab({ accountId }: { accountId: string | undefined }) {
   const revokeMutation = useMutation({
     mutationFn: (row: ApiKeyRow) => revokeAccountToken(row.id, accountId),
     onSuccess: () => {
-      successToast(tI18nComplete('text096e0be6bb57'));
+      successToast(t('keyRevoked'));
       queryClient.invalidateQueries({ queryKey: MY_TOKENS_KEY(accountId ?? '') });
       setRevokeTarget(null);
     },
-    onError: (err: Error) => errorToast(err.message || tI18nComplete('text4840dd3bd303')),
+    onError: (err: Error) => errorToast(err.message || t('revokeFailed')),
   });
 
   const rows = buildApiKeyRows({
@@ -475,7 +475,7 @@ function CreateApiKeyDialog({
       onCreated();
       setCreated(result);
     },
-    onError: (err: Error) => errorToast(err.message || tI18nComplete('textc8e60f01cd4e')),
+    onError: (err: Error) => errorToast(err.message || t('createFailed')),
   });
 
   function close() {
