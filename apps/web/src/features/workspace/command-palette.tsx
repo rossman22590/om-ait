@@ -2531,10 +2531,17 @@ export function CommandPalette() {
                             {query.trim()}
                             {tHardcodedUi.raw('componentsCommandPalette.line1462JsxTextText')}
                           </span>
+                          {/* The "Search files" half of this hint points at a
+                              row that only exists on a session — see the
+                              `currentSessionId` guards above. Off a session it
+                              named a control that was not on screen, so the
+                              generic half is all that is offered there. */}
                           <p className="text-muted-foreground/30 mt-1 text-xs">
-                            {tHardcodedUi.raw(
-                              'componentsCommandPalette.line1465JsxTextTrySearchFilesOrADifferentTerm',
-                            )}
+                            {currentSessionId
+                              ? tHardcodedUi.raw(
+                                  'componentsCommandPalette.line1465JsxTextTrySearchFilesOrADifferentTerm',
+                                )
+                              : tHardcodedUi.raw('i18nComplete.textce18e358bf01')}
                           </p>
                         </div>
                       </div>
