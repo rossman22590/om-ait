@@ -218,11 +218,11 @@ export function GeneralTab({ onClose }: { onClose: () => void }) {
       setAvatarFile(null);
       setAvatarUrl(newAvatarUrl);
 
-      successToast(tHardcodedUi.raw('i18nComplete.text91a8ab20e938'));
+      successToast(t('profileUpdated'));
     } catch (error) {
       console.error('Error updating profile:', error);
       const message = error instanceof Error && error.message ? error.message : '';
-      errorToast(message || tHardcodedUi.raw('i18nComplete.text5c768dee3757'));
+      errorToast(message || t('profileUpdateFailed'));
     } finally {
       setIsSaving(false);
     }
