@@ -71,15 +71,7 @@ test.describe("23 — Composio managed connector", () => {
     if (user?.id) await deleteAuthUser(user.id, authOptions);
   });
 
-  // @quarantine (2026-09-08, release 0.13.12 gate): on staging.kortix.com only,
-  // one of the `/connect/toolkits` GETs in this journey intermittently answers
-  // 204 (twice in the gate, once on the backspace request in a targeted rerun),
-  // while the same code passes on the self-host preview and the API has no 204
-  // path. Diagnosis in memory `release-01312-promote-2026-09-07`; the quarantine
-  // keeps the deployed gate honest about everything else until the 204's origin
-  // (edge vs origin) is pinned with the response-header dump on branch
-  // diag/release-gate-spec26.
-  test("short searches return matching connectors in Discovery and All", { tag: "@quarantine" }, async ({
+  test("short searches return matching connectors in Discovery and All", async ({
     page,
   }) => {
     const status = await api<ConnectStatus>(
@@ -123,6 +115,11 @@ test.describe("23 — Composio managed connector", () => {
       const search = page.getByPlaceholder("Search all connectors");
       for (const query of ["a", "sl", " G ", "gm", "gmail"]) {
         const response = page.waitForResponse((value) => {
+          // Only the real request: on the cross-site staging pair the Authorization
+          // header forces a CORS preflight — an OPTIONS on the SAME url and query that
+          // answers 204 and matched this predicate before the GET did (release gate
+          // v0.13.12, 2026-09-07/08, browser shard 3: "expected 200, received 204").
+          if (value.request().method() === "OPTIONS") return false;
           const url = new URL(value.url());
           return (
             url.pathname.endsWith("/connect/toolkits") &&
@@ -172,6 +169,11 @@ test.describe("23 — Composio managed connector", () => {
       }
       // Backspacing restores the broader one-letter result set.
       const backspaceResponse = page.waitForResponse((value) => {
+        // Only the real request: on the cross-site staging pair the Authorization
+        // header forces a CORS preflight — an OPTIONS on the SAME url and query that
+        // answers 204 and matched this predicate before the GET did (release gate
+        // v0.13.12, 2026-09-07/08, browser shard 3: "expected 200, received 204").
+        if (value.request().method() === "OPTIONS") return false;
         const url = new URL(value.url());
         return (
           url.pathname.endsWith("/connect/toolkits") &&
@@ -184,6 +186,11 @@ test.describe("23 — Composio managed connector", () => {
         page.getByRole("button", { name: /^GitHub\b/ }).first(),
       ).toBeVisible();
       const emptyResponse = page.waitForResponse((value) => {
+        // Only the real request: on the cross-site staging pair the Authorization
+        // header forces a CORS preflight — an OPTIONS on the SAME url and query that
+        // answers 204 and matched this predicate before the GET did (release gate
+        // v0.13.12, 2026-09-07/08, browser shard 3: "expected 200, received 204").
+        if (value.request().method() === "OPTIONS") return false;
         const url = new URL(value.url());
         return (
           url.pathname.endsWith("/connect/toolkits") &&
