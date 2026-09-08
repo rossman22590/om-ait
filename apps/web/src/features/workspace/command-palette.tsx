@@ -90,19 +90,15 @@ import { track } from '@/lib/track';
 import { useProjectCan } from '@/lib/use-project-can';
 import { useProjectFeatureFlags } from '@/lib/use-project-feature-flags';
 import { cn } from '@/lib/utils';
-import { stripKortixSystemTags } from '@/lib/utils/kortix-system-tags';
-import { stripHtmlTags } from '@/lib/utils/strip-html-tags';
 import { DEFAULT_WALLPAPER_ID } from '@/lib/wallpapers';
 import { useChatSendStore } from '@/stores/chat-send-store';
 import { useCurrentAccountStore } from '@/stores/current-account-store';
-import { useMessageJumpStore } from '@/stores/message-jump-store';
 import { useProjectSessionTabsStore } from '@/stores/project-session-tabs-store';
 import { useProjectSwitchStore } from '@/stores/project-switch-store';
 import { useSettingsPanelStore } from '@/stores/settings-panel-store';
 import { openTabAndNavigate } from '@/stores/tab-store';
 import { useUpgradeDialogStore } from '@/stores/upgrade-dialog-store';
 import { type ConversationDensity, useUserPreferencesStore } from '@/stores/user-preferences-store';
-import { type TextPart, groupMessagesIntoTurns, isTextPart } from '@/ui';
 import {
   type FeatureFlagKey,
   type KortixAccount,
@@ -129,7 +125,6 @@ import {
   useCreateRuntimeSession,
   useModelStore,
   useRuntimeAgents,
-  useRuntimeMessages,
   useRuntimeProviders,
 } from '@kortix/sdk/react';
 import { capitalizeWords, chalkColors, formatRelativeTime } from '@kortix/shared';
@@ -163,7 +158,6 @@ type PalettePage =
   | 'root'
   | 'agents'
   | 'models'
-  | 'messages'
   | 'workspaces'
   | 'accounts'
   | 'sessions'
@@ -518,85 +512,6 @@ function FileSearchPage({
               {item.path}
             </span>
           </div>
-        </CommandItem>
-      ))}
-    </CommandGroup>
-  );
-}
-
-function MessagesPage({
-  sessionId,
-  query,
-  onSelect,
-}: {
-  sessionId: string;
-  query: string;
-  onSelect: (messageId: string) => void;
-}) {
-  const tHardcodedUi = useTranslations('hardcodedUi');
-  const { data: messages, isLoading } = useRuntimeMessages(sessionId);
-
-  const turns = useMemo(() => (messages ? groupMessagesIntoTurns(messages) : []), [messages]);
-
-  const items = useMemo(() => {
-    const result: { id: string; text: string }[] = [];
-    for (const turn of turns) {
-      const textParts = turn.userMessage.parts.filter(isTextPart) as TextPart[];
-      const raw = textParts.map((p) => p.text).join(' ');
-      const stripped = stripHtmlTags(stripKortixSystemTags(raw)).trim();
-      if (stripped.length > 0) {
-        result.push({ id: turn.userMessage.info.id, text: stripped });
-      }
-    }
-    return result;
-  }, [turns]);
-
-  const filtered = useMemo(() => {
-    if (!query.trim()) return items;
-    const q = query.trim().toLowerCase();
-    return items.filter((item) => (item.text || '').toLowerCase().includes(q));
-  }, [items, query]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center gap-2 py-10">
-        <TextShimmer>
-          {tHardcodedUi.raw('componentsCommandPalette.line328JsxTextLoadingMessages')}
-        </TextShimmer>
-      </div>
-    );
-  }
-
-  if (filtered.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-12">
-        <div className="bg-muted/30 flex h-10 w-10 items-center justify-center rounded-full">
-          <MessageCircle className="text-muted-foreground/30 size-4" />
-        </div>
-        <span className="text-muted-foreground/60 text-sm">
-          {query
-            ? tHardcodedUi('i18nComplete.text6d2e757d8700', { value0: query })
-            : tHardcodedUi.raw('i18nComplete.text1b0e06a3f475')}
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <CommandGroup heading={`Messages (${filtered.length})`} forceMount>
-      {filtered.map((item, index) => (
-        <CommandItem
-          key={item.id}
-          value={sanitizeCmdkValue(`message ${index} ${item.text.slice(0, 80)}`)}
-          onSelect={() => onSelect(item.id)}
-        >
-          <MessageCircle className="text-muted-foreground/40 h-3.5 w-3.5 shrink-0" />
-          <span className="text-muted-foreground/50 w-6 shrink-0 text-right text-xs tabular-nums">
-            #{index + 1}
-          </span>
-          <span className="flex-1 truncate text-sm">
-            {item.text.length > 80 ? `${item.text.slice(0, 80)}...` : item.text}
-          </span>
         </CommandItem>
       ))}
     </CommandGroup>
@@ -1334,12 +1249,6 @@ export function CommandPalette() {
         keywords: 'change model llm switch select provider anthropic openai claude gpt',
         targetPage: 'models',
       });
-      items.push({
-        id: 'jump-to-message',
-        label: tHardcodedUi.raw('i18nComplete.text2518d1e2e3d1'),
-        keywords: 'jump message go scroll navigate find conversation chat',
-        targetPage: 'messages',
-      });
     }
     return items.filter((item) => {
       const haystack = [item.label, item.keywords].join(' ').toLowerCase();
@@ -1666,16 +1575,6 @@ export function CommandPalette() {
       close();
     },
     [projectId, router, close],
-  );
-
-  const jumpToMessage = useMessageJumpStore((s) => s.jumpToMessage);
-
-  const handleJumpToMessage = useCallback(
-    (messageId: string) => {
-      jumpToMessage(messageId);
-      close();
-    },
-    [jumpToMessage, close],
   );
 
   const handleToggleSidebar = useCallback(() => {
@@ -2161,10 +2060,10 @@ export function CommandPalette() {
     if (page === 'accounts') return filteredAccountsList.length;
     if (page === 'sessions') return filteredProjectSessionsList.length;
     if (page === 'density') return filteredDensityOptions.length;
-    // 0, like 'messages': these pages fetch and filter their own rows, so the
-    // count lives inside them (the 'changes' group heading carries it) rather
-    // than being lifted here only to be recomputed.
-    if (page === 'messages' || page === 'changes' || page === 'flags') return 0;
+    // 0: these pages fetch and filter their own rows, so the count lives
+    // inside them (the 'changes' group heading carries it) rather than being
+    // lifted here only to be recomputed.
+    if (page === 'changes' || page === 'flags') return 0;
     if (!hasQuery) return 0;
     return (
       filteredNavItems.length +
@@ -2193,7 +2092,6 @@ export function CommandPalette() {
     if (page === 'agents') return tI18nComplete.raw('text32f4468b0b6f');
     if (page === 'models') return tI18nComplete.raw('text37b90680b842');
     if (page === 'files') return tI18nComplete.raw('text19608ade89b8');
-    if (page === 'messages') return tI18nComplete.raw('text764a5aa003f8');
     if (page === 'workspaces') return tI18nComplete.raw('text5c192a3e6f23');
     if (page === 'accounts') return tI18nComplete.raw('text72eb3689cab9');
     if (page === 'sessions') return tI18nComplete.raw('textf41875714fdc');
@@ -2207,7 +2105,6 @@ export function CommandPalette() {
     if (page === 'agents') return tI18nComplete.raw('text6fb2caa0ee1c');
     if (page === 'models') return tI18nComplete.raw('text9cb6d01d8b29');
     if (page === 'files') return tI18nComplete.raw('text5a5bc0c4ce6e');
-    if (page === 'messages') return tI18nComplete.raw('text2518d1e2e3d1');
     if (page === 'workspaces') return tI18nComplete.raw('text9ad6baffd025');
     if (page === 'accounts') return tI18nComplete.raw('text4ecda5e7a644');
     if (page === 'sessions') return tI18nComplete.raw('text113463edeb06');
@@ -2329,18 +2226,6 @@ export function CommandPalette() {
                             )}
                             <ChevronRight className="text-muted-foreground/30 size-3" />
                           </CommandItem>
-                          <CommandItem
-                            value="suggestion jump to message go scroll navigate"
-                            onSelect={() => goToPage('messages')}
-                          >
-                            <MessageCircle className="size-4" />
-                            <span className="flex-1">
-                              {tHardcodedUi.raw(
-                                'componentsCommandPalette.line1235JsxTextJumpToMessage',
-                              )}
-                            </span>
-                            <ChevronRight className="text-muted-foreground/30 size-3" />
-                          </CommandItem>
                         </>
                       )}
 
@@ -2439,8 +2324,6 @@ export function CommandPalette() {
                           >
                             {item.id === 'change-agent' ? (
                               <Bot className="size-4" />
-                            ) : item.id === 'jump-to-message' ? (
-                              <MessageCircle className="size-4" />
                             ) : (
                               <Cpu className="size-4" />
                             )}
@@ -2993,14 +2876,6 @@ export function CommandPalette() {
                   </span>
                 </div>
               ))}
-
-            {page === 'messages' && currentSessionId && (
-              <MessagesPage
-                sessionId={currentSessionId}
-                query={query}
-                onSelect={handleJumpToMessage}
-              />
-            )}
 
             {page === 'changes' && projectId && (
               <ChangeRequestsPage
