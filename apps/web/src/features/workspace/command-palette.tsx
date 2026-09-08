@@ -74,7 +74,6 @@ import {
 } from '@/features/workspace/workspace-palette';
 import { useAccountsList } from '@/hooks/account/use-accounts-list';
 import { useNewProjectSession } from '@/hooks/projects/use-new-project-session';
-import { useSandboxProxy } from '@/hooks/use-sandbox-proxy';
 import { useLocalizedUiCatalog } from '@/i18n/use-localized-ui-catalog';
 import { useTranslations } from '@/i18n/use-translations';
 import { performSignOut } from '@/lib/auth/perform-sign-out';
@@ -92,13 +91,6 @@ import { useProjectCan } from '@/lib/use-project-can';
 import { useProjectFeatureFlags } from '@/lib/use-project-feature-flags';
 import { cn } from '@/lib/utils';
 import { stripKortixSystemTags } from '@/lib/utils/kortix-system-tags';
-import {
-  buildWebProxyUrl,
-  normalizeExternalInput,
-  parseLocalhostUrl,
-  toInternalUrl,
-} from '@/lib/utils/sandbox-url';
-import { enrichPreviewMetadata } from '@/lib/utils/session-context';
 import { stripHtmlTags } from '@/lib/utils/strip-html-tags';
 import { DEFAULT_WALLPAPER_ID } from '@/lib/wallpapers';
 import { useChatSendStore } from '@/stores/chat-send-store';
@@ -153,7 +145,6 @@ import {
   FileTextIcon as FileText,
   FlaskIcon as Flask,
   GitBranchIcon as FolderGit2,
-  GlobeIcon as Globe,
   HashIcon as Hash,
   ChatCircleIcon as MessageCircle,
   MinusIcon as Minus,
@@ -899,7 +890,6 @@ export function CommandPalette() {
   }, [params?.sessionId, pathname]);
   const sidebarCtx = useContext(SidebarContext);
   const sidebarOpen = sidebarCtx?.open ?? false;
-  const { proxyUrl: buildProxyUrl, subdomainOpts } = useSandboxProxy();
   const createSession = useCreateRuntimeSession();
   const createPty = useCreatePty();
   const { theme, setTheme } = useTheme();
@@ -1687,146 +1677,6 @@ export function CommandPalette() {
     },
     [jumpToMessage, close],
   );
-
-  const detectedUrl = useMemo(() => {
-    const q = query.trim();
-    if (!q) return null;
-
-    const localhostParsed = parseLocalhostUrl(q.startsWith('http') ? q : `http://${q}`);
-    if (localhostParsed) {
-      return { kind: 'localhost' as const, ...localhostParsed };
-    }
-
-    if (/^\d{2,5}$/.test(q)) {
-      const port = Number.parseInt(q, 10);
-      if (port >= 1 && port <= 65535) {
-        return {
-          kind: 'localhost' as const,
-          originalUrl: `http://localhost:${port}/`,
-          port,
-          path: '/',
-        };
-      }
-    }
-
-    const normalized = normalizeExternalInput(q);
-    if (normalized) {
-      if (!q.includes('/')) {
-        const ext = q.split('.').pop()?.toLowerCase() || '';
-        const FILE_EXTS = new Set([
-          'ts',
-          'tsx',
-          'js',
-          'jsx',
-          'json',
-          'md',
-          'mdx',
-          'css',
-          'scss',
-          'less',
-          'html',
-          'xml',
-          'yaml',
-          'yml',
-          'toml',
-          'txt',
-          'log',
-          'env',
-          'lock',
-          'sql',
-          'db',
-          'py',
-          'rb',
-          'rs',
-          'go',
-          'java',
-          'sh',
-          'bash',
-          'zsh',
-          'conf',
-          'cfg',
-          'ini',
-          'svg',
-          'png',
-          'jpg',
-          'jpeg',
-          'gif',
-          'ico',
-          'woff',
-          'woff2',
-          'ttf',
-          'eot',
-          'map',
-          'd',
-          'mjs',
-          'cjs',
-          'mts',
-          'cts',
-          'vue',
-          'svelte',
-          'astro',
-          'wasm',
-          'zip',
-          'tar',
-          'gz',
-          'pdf',
-          'docx',
-          'pptx',
-          'xlsx',
-        ]);
-        if (FILE_EXTS.has(ext)) return null;
-      }
-      return { kind: 'external' as const, url: normalized };
-    }
-
-    return null;
-  }, [query]);
-
-  const handleOpenUrl = useCallback(() => {
-    if (!detectedUrl) return;
-
-    if (detectedUrl.kind === 'localhost') {
-      const { port, path } = detectedUrl;
-      const internalUrl = toInternalUrl(port, path);
-      const proxied = buildProxyUrl(internalUrl) || internalUrl;
-      const tabId = `preview:${port}`;
-      openTabAndNavigate({
-        id: tabId,
-        title: tHardcodedUi('i18nComplete.textb1d5e8ac8bb4', { value0: port }),
-        type: 'preview',
-        href: `/p/${port}`,
-        metadata: enrichPreviewMetadata({
-          url: proxied,
-          port,
-          originalUrl: internalUrl,
-          path,
-        }),
-      });
-    } else {
-      const extUrl = detectedUrl.url;
-      const proxyUrl = buildWebProxyUrl(extUrl, subdomainOpts) || extUrl;
-      let displayHost: string;
-      try {
-        displayHost = new URL(extUrl).hostname;
-      } catch {
-        displayHost = extUrl;
-      }
-
-      openTabAndNavigate({
-        id: `preview:web`,
-        title: displayHost,
-        type: 'preview',
-        href: '/p/web',
-        metadata: enrichPreviewMetadata({
-          url: proxyUrl,
-          port: 0,
-          originalUrl: extUrl,
-          path: '/',
-        }),
-      });
-    }
-    close();
-  }, [detectedUrl, close, buildProxyUrl, tHardcodedUi, subdomainOpts]);
 
   const handleToggleSidebar = useCallback(() => {
     // Reached by keyboard, from a palette the user is already typing in — the
@@ -2749,36 +2599,7 @@ export function CommandPalette() {
                       </CommandGroup>
                     )}
 
-                    {detectedUrl && (
-                      <CommandGroup
-                        heading={tHardcodedUi.raw(
-                          'componentsCommandPalette.line1419JsxAttrHeadingOpenURL',
-                        )}
-                        forceMount
-                      >
-                        <CommandItem
-                          value={sanitizeCmdkValue(
-                            `open url browser preview ${query.trim()} localhost port`,
-                          )}
-                          onSelect={handleOpenUrl}
-                        >
-                          <Globe className="text-kortix-blue size-4" />
-                          <span className="flex-1 truncate">
-                            {detectedUrl.kind === 'localhost'
-                              ? tI18nComplete('text7ca3b3fe99bb', {
-                                  value0: detectedUrl.port,
-                                  value1: detectedUrl.path !== '/' ? detectedUrl.path : '',
-                                })
-                              : `Open ${new URL(detectedUrl.url).hostname}`}
-                          </span>
-                          <Badge variant="kortix" size="sm">
-                            {tHardcodedUi.raw('i18nComplete.textd4c3e8a11256')}
-                          </Badge>
-                        </CommandItem>
-                      </CommandGroup>
-                    )}
-
-                    {queryLongEnough && !detectedUrl && projectId && (
+                    {queryLongEnough && projectId && (
                       <CommandGroup
                         heading={tHardcodedUi.raw(
                           'componentsCommandPalette.line1437JsxAttrHeadingFileSearch',
