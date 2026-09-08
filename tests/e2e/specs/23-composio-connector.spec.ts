@@ -115,6 +115,11 @@ test.describe("23 — Composio managed connector", () => {
       const search = page.getByPlaceholder("Search all connectors");
       for (const query of ["a", "sl", " G ", "gm", "gmail"]) {
         const response = page.waitForResponse((value) => {
+          // Only the real request: on the cross-site staging pair the Authorization
+          // header forces a CORS preflight — an OPTIONS on the SAME url and query that
+          // answers 204 and matched this predicate before the GET did (release gate
+          // v0.13.12, 2026-09-07/08, browser shard 3: "expected 200, received 204").
+          if (value.request().method() === "OPTIONS") return false;
           const url = new URL(value.url());
           return (
             url.pathname.endsWith("/connect/toolkits") &&
@@ -164,6 +169,11 @@ test.describe("23 — Composio managed connector", () => {
       }
       // Backspacing restores the broader one-letter result set.
       const backspaceResponse = page.waitForResponse((value) => {
+        // Only the real request: on the cross-site staging pair the Authorization
+        // header forces a CORS preflight — an OPTIONS on the SAME url and query that
+        // answers 204 and matched this predicate before the GET did (release gate
+        // v0.13.12, 2026-09-07/08, browser shard 3: "expected 200, received 204").
+        if (value.request().method() === "OPTIONS") return false;
         const url = new URL(value.url());
         return (
           url.pathname.endsWith("/connect/toolkits") &&
@@ -176,6 +186,11 @@ test.describe("23 — Composio managed connector", () => {
         page.getByRole("button", { name: /^GitHub\b/ }).first(),
       ).toBeVisible();
       const emptyResponse = page.waitForResponse((value) => {
+        // Only the real request: on the cross-site staging pair the Authorization
+        // header forces a CORS preflight — an OPTIONS on the SAME url and query that
+        // answers 204 and matched this predicate before the GET did (release gate
+        // v0.13.12, 2026-09-07/08, browser shard 3: "expected 200, received 204").
+        if (value.request().method() === "OPTIONS") return false;
         const url = new URL(value.url());
         return (
           url.pathname.endsWith("/connect/toolkits") &&
