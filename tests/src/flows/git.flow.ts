@@ -399,13 +399,14 @@ flow(
     domain: 'git',
     requires: ['database'],
     routes: [
+      'POST /v1/accounts/tokens',
       'GET /v1/git/:project/info/refs',
       'POST /v1/git/:project/git-upload-pack',
       'POST /v1/git/:project/git-receive-pack',
     ],
   },
   async (ctx) => {
-    const { randomUUID, randomBytes, scryptSync } = await import('node:crypto');
+    const { randomUUID } = await import('node:crypto');
     const { mkdtemp, rm } = await import('node:fs/promises');
     const { tmpdir } = await import('node:os');
     const { join } = await import('node:path');
@@ -413,9 +414,6 @@ flow(
     const { promisify } = await import('node:util');
     const { Client: PgClient } = await import('pg');
     const exec = promisify(execFile);
-    const secretSalt = process.env.KE2E_API_KEY_SECRET ??
-      (ctx.env.target === 'local' ? 'local-flow-runner-api-key-secret' : null);
-    if (!secretSalt) throw new Error('GH-17 requires KE2E_API_KEY_SECRET to mint session credentials');
     const team = await ctx.fixtures.team();
     const member = await team.addMember('member');
     const project = await team.project({ managedGit: true });
@@ -427,10 +425,15 @@ flow(
     const root = await mkdtemp(join(tmpdir(), 'ke2e-ref-role-'));
     const sessions: string[] = [];
     let localGitServer: import('node:http').Server | null = null;
-    const mint = async (userId: string) => {
+    const mint = async (identity: typeof ctx.P.OWNER) => {
+      const userId = identity.userId!;
       const sessionId = randomUUID();
       sessions.push(sessionId);
-      const secret = `kortix_pat_${randomBytes(24).toString('hex')}`;
+      const created = await ctx.client.as(ctx.P.OWNER).post('/v1/accounts/tokens', {
+        name: 'GH-17 session fixture',
+      });
+      created.status(201);
+      const { token_id: tokenId, secret_key: secret } = created.json<{ token_id: string; secret_key: string }>();
       await db.query(`INSERT INTO kortix.project_sessions
         (session_id, account_id, project_id, branch_name, created_by, metadata)
         VALUES ($1, $2, $3, $1, $4, '{"workspace_mode":"branch"}'::jsonb)`,
@@ -439,12 +442,12 @@ flow(
         (sandbox_id, session_id, account_id, project_id, status)
         VALUES ($1::uuid, $1, $2, $3, 'active')`,
       [sessionId, team.id, project.id]);
-      await db.query(`INSERT INTO kortix.account_tokens
-        (account_id, user_id, name, public_key, secret_key_hash, project_id, session_id, agent_grant)
-        VALUES ($1, $2, 'GH-17', $3, $4, $5, $6, $7::jsonb)`,
-      [team.id, userId, `kortix_pk_${randomBytes(16).toString('hex')}`,
-        `scrypt:v1:${scryptSync(secret, secretSalt, 32).toString('hex')}`,
-        project.id, sessionId, JSON.stringify({ agent: 'kortix', kortixCli: 'all', connectors: 'all', env: [] })]);
+      // Bind the API-minted credential to the fixture session. The test never
+      // needs the server's token-hash secret on local, preview, or staging.
+      await db.query(`UPDATE kortix.account_tokens
+        SET project_id = $2, session_id = $3, agent_grant = $4::jsonb, account_id = $5, user_id = $6 WHERE token_id = $1`,
+      [tokenId, project.id, sessionId,
+        JSON.stringify({ agent: 'kortix', kortixCli: 'all', connectors: 'all', env: [] }), team.id, userId]);
       return { secret, sessionId };
     };
     const git = async (secret: string, args: string[], expected = 0) => {
@@ -503,8 +506,8 @@ flow(
         await db.query('UPDATE kortix.projects SET repo_url = $1 WHERE project_id = $2',
           [`http://127.0.0.1:${port}`, project.id]);
       }
-      const owner = await mint(ctx.P.OWNER.userId!);
-      const memberSession = await mint(member.userId!);
+      const owner = await mint(ctx.P.OWNER);
+      const memberSession = await mint(member);
       const remote = `${ctx.env.apiUrl.replace(/\/v1$/, '')}/v1/git/${project.id}`;
       await ctx.step('owner session clones through HTTP and creates a shared branch; read-back finds it', async () => {
         await git(owner.secret, ['clone', remote, '.']);
