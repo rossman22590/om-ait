@@ -21,6 +21,16 @@ linked, not inlined.
 
 ## Register
 
+### Stop concurrent deployed suites when managed GitHub reports a secondary limit (2026-09-10)
+
+**When:** preview and staging tests share a managed GitHub organization.
+Stop content-creating runs, allow a quiet backoff interval, then retry unfinished
+shards serially. A primary rate-limit budget does not prove secondary capacity.
+*Near-miss:* 0.13.13 validation exhausted repository creation; preview and staging
+provisioning returned 503 with GitHub's secondary-limit response.
+*Enforcer:* manual serialized job reruns; TODO: a shared deployed-suite lease
+and secondary-limit backoff in the managed GitHub client.
+
 ### Give a shared modal store exactly one active renderer (2026-09-10)
 
 **When:** a page and its nested settings overlay both mount a global dialog.
