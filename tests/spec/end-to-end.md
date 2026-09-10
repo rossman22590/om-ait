@@ -743,6 +743,7 @@ supplied scope field without restarting the session.
 `GH-14` `POST /projects/create-repo` → PROJECT_CREATE; missing name → 400; no install → 409/503.
 `GH-15` `POST /projects/link-repository` → PROJECT_CREATE; missing repo → 400; no install → 400/409/502; bad token → 400.
 `GH-16` `GET /projects/github/repository-branches` → PROJECT_CREATE; returns the repository default plus every existing branch; missing installation → 409; wrong installation owner → 400.
+`GH-17` Real Git processes authenticate with session PATs. An owner session creates and deletes a shared branch. A member session with `kortix_cli: all` can push its own branch but cannot create another branch or delete the shared branch. HTTP ref read-back proves denied pushes leave the repository unchanged.
 `IAM-14` `GET …/iam/groups/:gid/project-grants` → 200; unknown → 404; NONMEMBER → 403.
 `IAM-15` `POST …/iam/members/:userId/effective:batch` → 200; non-array → 400.
 `IAM-16` `GET …/iam/members/:userId/project-access` → 200; NONMEMBER → 403.
