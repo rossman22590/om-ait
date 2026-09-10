@@ -21,6 +21,16 @@ linked, not inlined.
 
 ## Register
 
+### Give a shared modal store exactly one active renderer (2026-09-10)
+
+**When:** a page and its nested settings overlay both mount a global dialog.
+Select one renderer at the deepest dialog depth. Concurrent Radix dialogs can
+hide each other from the accessibility tree while both remain visibly open.
+*Near-miss:* the 0.13.13 preview opened two billing dialogs from the account hub;
+the checkout controls disappeared from Playwright's role locators.
+*Enforcer:* billing browser journey asserts one accessible dialog, repeated
+open/close, and Escape preserving the account hub.
+
 ### Verify the preview report SHA and result before accepting a green deployment (2026-09-10)
 
 **When:** using a persistent branch preview as release evidence. Push deploys
