@@ -264,6 +264,11 @@ jobs:
             echo "::error::A test artifact contains a secret-shaped value."
             exit 1
           fi
+          if [ -n "${KE2E_CI_PASSTHROUGH_SECRET:-}" ] && [ -d tests/test-results ] \
+            && grep -rFq -- "$KE2E_CI_PASSTHROUGH_SECRET" tests/test-results; then
+            echo "::error::A test artifact contains the CI diagnostic credential."
+            exit 1
+          fi
           echo "No secret-shaped values found."
       - uses: actions/upload-artifact@v7
         # Cancellation can leave raw Playwright traces before reporter scrubbing.
@@ -363,6 +368,11 @@ jobs:
           pattern='kortix_(pat|sa)_[A-Za-z0-9]{12,}|sk-[A-Za-z0-9]{20,}|eyJ[A-Za-z0-9_-]{30,}\.'
           if [ -d tests/test-results ] && grep -rEIl "$pattern" tests/test-results; then
             echo "::error::A test artifact contains a secret-shaped value."
+            exit 1
+          fi
+          if [ -n "${KE2E_CI_PASSTHROUGH_SECRET:-}" ] && [ -d tests/test-results ] \
+            && grep -rFq -- "$KE2E_CI_PASSTHROUGH_SECRET" tests/test-results; then
+            echo "::error::A test artifact contains the CI diagnostic credential."
             exit 1
           fi
           echo "No secret-shaped values found."
