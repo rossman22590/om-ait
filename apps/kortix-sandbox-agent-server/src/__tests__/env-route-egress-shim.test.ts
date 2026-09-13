@@ -24,7 +24,9 @@ import type { OpenCodeConfig as Config } from '../harness/open-code/config'
 import { __resetEgressShimForTests, egressShimEnv, stopEgressShim } from '../egress-shim'
 import type { Opencode } from '../harness/open-code/supervisor'
 import { createProjectEnvStore } from '../project-env'
-import { buildOpenCodeTestApp } from './helpers/open-code-harness'
+import { Hono } from 'hono'
+import { createEnvRouter } from '../routes/env'
+import { createOpenCodeControlService } from '../harness/open-code/control'
 
 const TEST_TOKEN = 'egress-shim-test-kortix-token-32ch'
 const TEST_ENV_DIR = mkdtempSync(join(tmpdir(), 'kortix-env-shim-'))
@@ -140,28 +142,21 @@ function catalog(rules: Array<{ identifier: string; hosts: string[] }>): string 
   })
 }
 
-function buildTestApp(opencode: Opencode): { app: ReturnType<typeof buildOpenCodeTestApp>; envFile: string } {
+function buildTestApp(opencode: Opencode): { app: Hono; envFile: string } {
   const envFile = join(TEST_ENV_DIR, `agent-env-${testEnvFileSequence++}.sh`)
   const store = createProjectEnvStore({
     KORTIX_PROJECT_SECRETS_REVISION: 'rev-1',
     KORTIX_PROJECT_SECRET_NAMES: 'API_KEY',
     API_KEY: 'v1',
   } as NodeJS.ProcessEnv)
-  const app = buildOpenCodeTestApp(
-    baseConfig(),
-    opencode,
-    Date.now(),
-    { repoMaterializationError: null, timeline: [] },
-    store,
-    null,
-    undefined,
-    envFile,
-  )
+  const cfg = baseConfig()
+  const control = createOpenCodeControlService(opencode).bind({ cfg, projectEnv: store, agentEnvFile: envFile })
+  const app = new Hono().route('/kortix/env', createEnvRouter(cfg, control))
   return { app, envFile }
 }
 
 async function postEnv(
-  app: ReturnType<typeof buildOpenCodeTestApp>,
+  app: Hono,
   body: Record<string, unknown>,
 ): Promise<{ status: number; json: Record<string, unknown> }> {
   const res = await app.request('/kortix/env', {

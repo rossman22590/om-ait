@@ -21,7 +21,8 @@ import { TURN_PROBE_WINDOW, inspectOpencodeRoot,
   opencodeDeliveryInFlight,
   opencodeTurnInFlight,
 } from '../harness/open-code/opencode-turn-state';
-import { createHealthRouter, observeRequestedTurn } from '../harness/open-code/routes/health';
+import { createHealthRouter } from '../routes/health';
+import { createOpenCodeDiagnosticsService, observeRequestedTurn } from '../harness/open-code/diagnostics';
 
 const BASE = 'http://127.0.0.1:4096';
 const WORKSPACE = '/workspace';
@@ -726,15 +727,19 @@ describe('observeRequestedTurn — what /kortix/health?turn=1 answers with', () 
       },
     ]);
     const router = createHealthRouter(
-      { projectTarget: '/workspace', autoClone: false, sandboxToken: '' } as never,
       {
+        cfg: { projectTarget: '/workspace', autoClone: false, sandboxToken: '' } as never,
+        bootTime: Date.now(),
+        bootState: { repoMaterializationError: null, timeline: [] },
+        staticWebPort: null,
+        resources: () => null,
+      },
+      createOpenCodeDiagnosticsService({
         getState: () => 'ok',
         getInternalUrl: () => BASE,
         getPid: () => 1,
         getActivePort: () => 4096,
-      } as never,
-      Date.now(),
-      { repoMaterializationError: null, timeline: [] },
+      } as never),
     );
 
     const body = (await (
@@ -749,15 +754,19 @@ describe('observeRequestedTurn — what /kortix/health?turn=1 answers with', () 
   test('/kortix/health?turn=1 reports a root-scoped orphaned prompt on the wire', async () => {
     stubFetch([{ info: { role: 'user', time: { completed: 1 } } }]);
     const router = createHealthRouter(
-      { projectTarget: '/workspace', autoClone: false, sandboxToken: '' } as never,
       {
+        cfg: { projectTarget: '/workspace', autoClone: false, sandboxToken: '' } as never,
+        bootTime: Date.now(),
+        bootState: { repoMaterializationError: null, timeline: [] },
+        staticWebPort: null,
+        resources: () => null,
+      },
+      createOpenCodeDiagnosticsService({
         getState: () => 'ok',
         getInternalUrl: () => BASE,
         getPid: () => 1,
         getActivePort: () => 4096,
-      } as never,
-      Date.now(),
-      { repoMaterializationError: null, timeline: [] },
+      } as never),
     );
 
     const body = (await (
@@ -774,15 +783,19 @@ describe('observeRequestedTurn — what /kortix/health?turn=1 answers with', () 
   test('/kortix/health without ?turn=1 still answers nothing about turns', async () => {
     stubFetch(assistantTurn(undefined));
     const router = createHealthRouter(
-      { projectTarget: '/workspace', autoClone: false, sandboxToken: '' } as never,
       {
+        cfg: { projectTarget: '/workspace', autoClone: false, sandboxToken: '' } as never,
+        bootTime: Date.now(),
+        bootState: { repoMaterializationError: null, timeline: [] },
+        staticWebPort: null,
+        resources: () => null,
+      },
+      createOpenCodeDiagnosticsService({
         getState: () => 'ok',
         getInternalUrl: () => BASE,
         getPid: () => 1,
         getActivePort: () => 4096,
-      } as never,
-      Date.now(),
-      { repoMaterializationError: null, timeline: [] },
+      } as never),
     );
 
     const body = (await (await router.request('/')).json()) as Record<string, unknown>;

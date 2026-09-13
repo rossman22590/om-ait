@@ -5,7 +5,10 @@ import type { HarnessService } from '../../harness/harness'
 import type { OpenCodeBootState } from '../../harness/open-code/boot-state'
 import type { Opencode } from '../../harness/open-code/supervisor'
 import { OPENCODE_HOME } from '../../harness/open-code/paths'
-import { createOpenCodeHttpService } from '../../harness/open-code/http'
+import { createOpenCodeProxyService } from '../../harness/open-code/proxy'
+import { createOpenCodeControlService } from '../../harness/open-code/control'
+import { createOpenCodeDiagnosticsService } from '../../harness/open-code/diagnostics'
+import { createOpenCodeQueryService } from '../../harness/open-code/queries'
 import { createOpenCodeAssetsService } from '../../harness/open-code/assets'
 import { startOpenCodeBackground } from '../../harness/open-code/background'
 import { buildDaemonApp } from '../../proxy'
@@ -17,7 +20,10 @@ export function createOpenCodeHarnessFixture(cfg: Config, supervisor: Opencode):
     id: 'opencode',
     environment: { home: OPENCODE_HOME },
     lifecycle: supervisor,
-    http: createOpenCodeHttpService(supervisor),
+    proxy: createOpenCodeProxyService(supervisor),
+    control: createOpenCodeControlService(supervisor),
+    diagnostics: createOpenCodeDiagnosticsService(supervisor),
+    queries: createOpenCodeQueryService(supervisor),
     background: { start: (currentCfg) => startOpenCodeBackground(supervisor, requireOpenCodeConfig(currentCfg)) },
     assets: createOpenCodeAssetsService({
       getInternalUrl: () => supervisor.getInternalUrl(),

@@ -19,7 +19,8 @@ import type { Opencode } from '../harness/open-code/supervisor'
 import { OpencodeDb } from '../harness/open-code/opencode-db'
 import { RuntimeStateStore } from '../harness/open-code/runtime-state-projection'
 import { KortixEventBus, kortixEventBus, resetKortixEventBusForTests } from '../kortix-event-bus'
-import { createOpencodeRuntimeRouter } from '../harness/open-code/routes/opencode-runtime'
+import { createRuntimeRouter } from '../routes/runtime'
+import { createOpenCodeQueryService } from '../harness/open-code/queries'
 
 const TOKEN = 'sandbox-token'
 const SESSION = 'ses_fc5a2a353ffe4n9mPmwVuEVg5u'
@@ -190,7 +191,7 @@ function buildDb(messages = 6, attachmentBytes = 120_000): void {
 }
 
 function makeRouter(options: { dbPath?: string; pinnedSessionId?: () => string | null } = {}) {
-  const cfg = { sandboxToken: TOKEN, workspace: '/workspace' } as Config
+  const cfg = { sandboxToken: TOKEN, workspace: '/workspace', opencodeInternalPort: 4096, opencodeStandbyPort: 4097, defaultOpencodeConfigDir: '/workspace/.kortix/opencode' } as Config
   const opencode = {
     getInternalUrl: () => `http://127.0.0.1:${server.port}`,
     getState: () => 'ok',
@@ -206,12 +207,11 @@ function makeRouter(options: { dbPath?: string; pinnedSessionId?: () => string |
     daemonBuild: () => 7,
   })
   return {
-    app: createOpencodeRuntimeRouter(cfg, {
-      opencode,
+    app: createRuntimeRouter(cfg, createOpenCodeQueryService(opencode, {
       db,
       state,
       pinnedSessionId: options.pinnedSessionId ?? (() => SESSION),
-    }),
+    }).bind({ cfg })),
     state,
     db,
     cfg,
@@ -253,15 +253,14 @@ describe('auth', () => {
   })
 
   test('an unconfigured daemon answers 503, not 401 — the operator gets the real reason', async () => {
-    const cfg = {} as Config
+    const cfg = { opencodeInternalPort: 4096, opencodeStandbyPort: 4097, defaultOpencodeConfigDir: '/workspace/.kortix/opencode' } as Config
     const opencode = { getInternalUrl: () => `http://127.0.0.1:${server.port}` } as unknown as Opencode
     const db = new OpencodeDb(dbPath)
-    const app = createOpencodeRuntimeRouter(cfg, {
-      opencode,
+    const app = createRuntimeRouter(cfg, createOpenCodeQueryService(opencode, {
       db,
       state: new RuntimeStateStore({ opencode, cfg, db, pinnedSessionId: () => null, daemonBuild: () => null }),
       pinnedSessionId: () => null,
-    })
+    }).bind({ cfg }))
     expect((await app.request('http://d/state', { headers: auth })).status).toBe(503)
   })
 })
@@ -561,15 +560,14 @@ describe('GET /events (SSE)', () => {
   })
 
   test('the heartbeat is a TYPED event and carries no seq', async () => {
-    const cfg = { sandboxToken: TOKEN, workspace: '/workspace' } as Config
+    const cfg = { sandboxToken: TOKEN, workspace: '/workspace', opencodeInternalPort: 4096, opencodeStandbyPort: 4097, defaultOpencodeConfigDir: '/workspace/.kortix/opencode' } as Config
     const opencode = { getInternalUrl: () => `http://127.0.0.1:${server.port}` } as unknown as Opencode
     const db = new OpencodeDb(dbPath)
-    const app = createOpencodeRuntimeRouter(cfg, {
-      opencode,
+    const app = createRuntimeRouter(cfg, createOpenCodeQueryService(opencode, {
       db,
       state: new RuntimeStateStore({ opencode, cfg, db, pinnedSessionId: () => SESSION, daemonBuild: () => null }),
       pinnedSessionId: () => SESSION,
-    })
+    }).bind({ cfg }))
     const res = await app.request('http://d/events', { headers: auth })
     const [hello] = await readFrames(res, 1)
     expect(hello).toContain('event: kortix.hello')
@@ -577,7 +575,7 @@ describe('GET /events (SSE)', () => {
     // unit test. What matters here is the WIRE FORM: a `:` comment would be
     // swallowed by every SSE parser and leave consumer watchdogs blind — the
     // defect sse-keepalive.ts records from the 2026-08-26 incident.
-    const { EVENT_HEARTBEAT_MS } = await import('../harness/open-code/routes/opencode-runtime')
+    const { EVENT_HEARTBEAT_MS } = await import('../routes/runtime')
     expect(EVENT_HEARTBEAT_MS).toBe(15_000)
   })
 

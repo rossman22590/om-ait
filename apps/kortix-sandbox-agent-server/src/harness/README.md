@@ -19,7 +19,10 @@ await runtime.lifecycle.start()
 | `assets.ts` | Harness maintenance contract |
 | `open-code/service.ts` | Composition over one supervisor; native typed ports |
 | `open-code/boot.ts` | Native cold boot, warm seed/adoption, first turn, reconciliation and relays |
-| `open-code/http.ts`, `open-code/routes/` | Full existing compatibility HTTP surface and forwarding |
+| `../routes/` | Controllers, authentication, request parsing, HTTP status/headers, gzip and SSE delivery |
+| `control.ts`, `diagnostics.ts`, `queries.ts`, `proxy.ts` | Named host-facing operation contracts; no router dependencies |
+| `open-code/control.ts`, `open-code/diagnostics.ts`, `open-code/queries.ts` | Native execution, configuration, state queries, diagnostics and attachments |
+| `open-code/proxy.ts` | Native readiness, upstream client, timeout classification and payload processing |
 | `open-code/events.ts`, `open-code/event-bus.ts` | Native event reading, session identity and recovery instructions |
 | `open-code/config.ts`, `open-code/paths.ts` | Native environment, authored config discovery and paths |
 | `open-code/assets.ts` | Native binary/plugin updates and skill placement |
@@ -32,13 +35,15 @@ CLI/daemon update scheduler. These call service ports for harness behavior.
 They do not import OpenCode modules or unwrap a native supervisor.
 
 There are no root `opencode.ts` or `opencode-events.ts` compatibility reexports.
-Native tests import the implementation that owns the behavior. A package-level
-architecture test rejects concrete adapter imports from host production code.
+Native tests import the implementation that owns the behavior. Package-level architecture tests reject concrete adapter imports from host
+production code and HTTP framework/controller imports from harness modules.
 
 ## Native features remain available
 
-The common interface is not a feature limit. The HTTP port mounts every existing
-native route and preserves catch-all forwarding. OpenCode-specific configuration,
+The common interface is not a feature limit. Host controllers register every
+existing route and invoke named resolved operations. The compatibility proxy port
+preserves catch-all forwarding, including native features without a common method.
+OpenCode-specific configuration,
 events and full supervisor operations remain typed inside the adapter. A future
 adapter can expose its own features without implementing weaker substitutes for
 OpenCode operations. No silent feature fallback or harness switching is added.
@@ -46,7 +51,18 @@ OpenCode operations. No silent feature fallback or harness switching is added.
 `createService` does not spawn a process or subscribe to events. The lifecycle,
 configuration and internal supervisor refer to the same object. Methods that use
 `this` keep their owner. Warm adoption reuses that object and passes refreshed
-configuration to event subscriptions and HTTP rebuilds.
+configuration to event subscriptions and controller rebuilds.
+
+Controllers receive the resolved service through dependency injection. They never
+select OpenCode or access its supervisor. `routes/harness-control.ts` binds current
+configuration to control/query operations and registers the existing URLs.
+`/kortix/opencode/*` remains a compatibility URL, not an implementation selector.
+
+The adapter cannot register routes or receive a Hono context. Native services
+return data, operation outcomes, attachment bytes, or event subscriptions. The
+upstream compatibility client returns a transport result; the controller handles
+HTTP response construction and SSE keepalives. Existing native payload fields
+remain intact. This refactor does not introduce a canonical response protocol.
 
 ## Unchanged contracts
 

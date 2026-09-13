@@ -1,10 +1,13 @@
-import type { Hono } from 'hono'
 import type { Config } from '../config'
 import type { SandboxBootState } from '../boot-state'
 import type { ProjectEnvStore } from '../project-env'
 import type { ResourceMonitor } from '../resources'
 import type { startStaticWebServer } from '../static-web'
 import type { HarnessAssetsService } from './assets'
+import type { HarnessProxyService } from './proxy'
+import type { HarnessControlService } from './control'
+import type { HarnessDiagnosticsService } from './diagnostics'
+import type { HarnessQueryFactory } from './queries'
 import { openCodeDefinition } from './open-code/service'
 
 export type { OpenCodeAssetsCompatibilityResult as HarnessAssetsCompatibilityResult } from './open-code/assets'
@@ -18,28 +21,14 @@ export interface HarnessLifecycleService {
   getState(): HarnessState
 }
 
-export interface HarnessHttpContext {
-  cfg: Config
-  bootTime: number
-  bootState: SandboxBootState
-  projectEnv?: ProjectEnvStore
-  staticWebPort: number | null
-  agentEnvFile?: string
-  resources: () => ResourceMonitor | null
-}
-
-/** Adapter-owned compatibility routes preserve every native feature. */
-export interface HarnessHttpService {
-  mountControlRoutes(router: Hono, context: HarnessHttpContext): void
-  mountFallback(app: Hono, context: HarnessHttpContext): void
-  blockedPorts(cfg: Config): readonly number[]
-}
-
 export interface HarnessService {
   readonly id: string
   readonly environment: { readonly home: string }
   readonly lifecycle: HarnessLifecycleService
-  readonly http: HarnessHttpService
+  readonly proxy: HarnessProxyService
+  readonly control: HarnessControlService
+  readonly diagnostics: HarnessDiagnosticsService
+  readonly queries: HarnessQueryFactory
   readonly background: { start(cfg: Config): ResourceMonitor }
   readonly assets: HarnessAssetsService
 }

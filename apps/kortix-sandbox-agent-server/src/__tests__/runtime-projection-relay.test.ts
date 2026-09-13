@@ -416,7 +416,7 @@ describe('wiring', () => {
     new Uint8Array(require('node:fs').readFileSync(require('node:path').join(import.meta.dir, '..', 'harness', 'open-code', 'boot.ts'))),
   )
   const envRoute = require('node:fs').readFileSync(
-    require('node:path').join(import.meta.dir, '..', 'harness', 'open-code', 'routes', 'env.ts'),
+    require('node:path').join(import.meta.dir, '..', 'harness', 'open-code', 'control.ts'),
     'utf8',
   ) as string
 

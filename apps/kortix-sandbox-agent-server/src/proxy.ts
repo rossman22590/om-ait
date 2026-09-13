@@ -9,6 +9,8 @@ import { egressShimPort } from './egress-shim'
 import { logger } from './logger'
 import { registerAgentSwapBlocker } from './runtime-assets'
 import { createEnvRpcRouter } from './routes/env-rpc'
+import { createHarnessControlRouter } from './routes/harness-control'
+import { createRuntimeProxyRouter } from './routes/runtime-proxy'
 import { createGitRouter } from './routes/git'
 import { createPortProxyRouter } from './routes/port-proxy'
 import { createFilesRouter } from './routes/files'
@@ -99,8 +101,8 @@ export function buildDaemonApp(
     agentEnvFile,
     resources: () => resourceMonitor,
   }
-  // The harness owns its complete native control surface and response shapes.
-  harness.http.mountControlRoutes(kortixRouter, context)
+  // Controllers own HTTP. The resolved service supplies runtime operations.
+  kortixRouter.route('/', createHarnessControlRouter(harness, context))
   // NOTE: /kortix/git is currently unused by the product (the agent commits +
   // opens change requests from a chat prompt). Kept as a host-driven primitive.
   const gitRouter = createGitRouter(cfg)
@@ -175,7 +177,7 @@ export function buildDaemonApp(
       blockedSelfPorts: new Set([
         cfg.servicePort,
         egressShimPort(),
-        ...harness.http.blockedPorts(cfg),
+        ...harness.proxy.blockedPorts(cfg),
       ]),
     }),
   )
@@ -194,7 +196,7 @@ export function buildDaemonApp(
   // trips the apps/api preview-proxy's per-attempt timeout. See the router doc.
   app.route('/presentation', createPresentationRouter(cfg))
 
-  harness.http.mountFallback(app, context)
+  app.route('/', createRuntimeProxyRouter(context, harness.proxy))
 
   return app
 }

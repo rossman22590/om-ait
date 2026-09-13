@@ -4,7 +4,10 @@ import type { ProjectEnvStore } from '../../project-env'
 import type { HarnessDefinition, HarnessService } from '../harness'
 import { loadOpenCodeEnvironment, requireOpenCodeConfig, resolveOpenCodeSkillDirectories } from './config'
 import { createOpenCodeAssetsService } from './assets'
-import { createOpenCodeHttpService } from './http'
+import { createOpenCodeProxyService } from './proxy'
+import { createOpenCodeControlService } from './control'
+import { createOpenCodeDiagnosticsService } from './diagnostics'
+import { createOpenCodeQueryService } from './queries'
 import { startOpenCodeBackground } from './background'
 import {
   startOpencodeEventLoop,
@@ -55,7 +58,10 @@ export function createOpenCodeHarnessService(
   return {
     id: 'opencode',
     environment: { home: OPENCODE_HOME },
-    http: createOpenCodeHttpService(supervisor),
+    proxy: createOpenCodeProxyService(supervisor),
+    control: createOpenCodeControlService(supervisor),
+    diagnostics: createOpenCodeDiagnosticsService(supervisor),
+    queries: createOpenCodeQueryService(supervisor),
     background: { start: (currentCfg) => startOpenCodeBackground(supervisor, requireOpenCodeConfig(currentCfg)) },
     assets: createOpenCodeAssetsService({
       getInternalUrl: () => supervisor.getInternalUrl(),

@@ -27,7 +27,8 @@ import type { OpenCodeConfig as Config } from '../harness/open-code/config'
 import { syncConfigDirToBase } from '../git'
 import { KORTIX_SERVICE_CALL_HEADER } from '../kortix-user-context'
 import type { Opencode } from '../harness/open-code/supervisor'
-import { createRefreshRouter } from '../harness/open-code/routes/refresh'
+import { createRefreshRouter } from '../routes/refresh'
+import { createOpenCodeControlService } from '../harness/open-code/control'
 
 const CONFIG_DIR = '.kortix/opencode'
 const AGENT = `${CONFIG_DIR}/agents/kortix.md`
@@ -345,7 +346,7 @@ describe('base=1 requires a DIRECT service call', () => {
   function router() {
     // The rejection paths return before any repo or runtime work, so a config
     // carrying just the token is all the route reads on these paths.
-    const cfg = { sandboxToken: TOKEN } as unknown as Config
+    const cfg = { sandboxToken: TOKEN, opencodeInternalPort: 4096, opencodeStandbyPort: 4097, defaultOpencodeConfigDir: '/ephemeral/opencode' } as unknown as Config
     const opencode = {
       restart: async () => {
         throw new Error('restart must not run on a refused request')
@@ -353,7 +354,7 @@ describe('base=1 requires a DIRECT service call', () => {
       getState: () => 'ready',
       getPid: () => 1,
     } as unknown as Opencode
-    return createRefreshRouter(cfg, opencode)
+    return createRefreshRouter(cfg, createOpenCodeControlService(opencode).bind({ cfg }))
   }
 
   async function post(path: string, headers: Record<string, string>) {

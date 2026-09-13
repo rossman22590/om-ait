@@ -65,7 +65,7 @@ describe('boot instrumentation', () => {
   })
 
   test('the proxy holds every caller off until the workspace is complete', () => {
-    const PROXY = readFileSync(join(import.meta.dir, '..', 'harness', 'open-code', 'http.ts'), 'utf8')
+    const PROXY = readFileSync(join(import.meta.dir, '..', 'harness', 'open-code', 'proxy.ts'), 'utf8')
     expect(PROXY).toContain("bootState.workspaceReady === false")
     expect(PROXY).toContain("'workspace_not_ready'")
     // set false only on the early-spawn path, true once deps + skills are in
