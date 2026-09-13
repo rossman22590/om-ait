@@ -289,7 +289,8 @@ describe('daemon proxy auth gate', () => {
       expect(readdirSync(target).filter((entry) => entry.startsWith('.kortix-'))).toEqual([])
     } finally {
       chmodSync(root, 0o755)
-      process.env.GIT_CONFIG_GLOBAL = originalGitConfigGlobal
+      if (originalGitConfigGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL
+      else process.env.GIT_CONFIG_GLOBAL = originalGitConfigGlobal
       rmSync(root, { recursive: true, force: true })
     }
   })
@@ -382,7 +383,8 @@ describe('daemon proxy auth gate', () => {
       expect(readFileSync(globalGitConfig, 'utf8')).toContain(`directory = ${target}`)
     } finally {
       globalThis.fetch = originalFetch
-      process.env.GIT_CONFIG_GLOBAL = originalGitConfigGlobal
+      if (originalGitConfigGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL
+      else process.env.GIT_CONFIG_GLOBAL = originalGitConfigGlobal
       rmSync(root, { recursive: true, force: true })
     }
   })
