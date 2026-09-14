@@ -21,6 +21,15 @@ linked, not inlined.
 
 ## Register
 
+### Assert settled dialog geometry before capturing a responsive screenshot (2026-09-14)
+
+**When:** changing the viewport while a modal or select is opening or closing.
+Wait for the target geometry and for dismissed dialogs to leave the DOM.
+Disable animations for the screenshot itself. In PR #7234, a capture during
+resize showed a 208px dialog; its settled mobile width was 390px. This nearly
+triggered an unnecessary layout change. *Enforcer:* browser journey 28 asserts
+mobile dialog width, awaits dialog removal, and disables capture animations.
+
 ### `count`/`for_each` must be known at PLAN time — gate a grant on a literal bool, never on an ARN created in the same apply (2026-09-14)
 
 **When:** adding an optional resource to a Terraform module whose on/off input is

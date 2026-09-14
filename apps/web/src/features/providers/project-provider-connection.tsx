@@ -268,7 +268,7 @@ export function ProjectProviderConnection({
           if (!next && (!busy || challenge)) closeDialog();
         }}
       >
-        <ModalContent className="lg:max-w-md">
+        <ModalContent className="lg:max-w-md" showCloseButton={!busy || !!challenge}>
           <ModalHeader>
             <ModalTitle>{t('connectionFor', { provider: row.label })}</ModalTitle>
           </ModalHeader>
@@ -381,6 +381,8 @@ export function ProjectProviderConnection({
             </Button>
             <Button
               disabled={!canSubmit}
+              aria-busy={busy}
+              aria-label={busy ? t('connect') : undefined}
               onClick={() => connect.mutate({ attempt: ++generation.current })}
             >
               {busy ? (

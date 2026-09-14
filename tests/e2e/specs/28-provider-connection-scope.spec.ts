@@ -134,10 +134,12 @@ test.describe('28 — provider connection scope', () => {
       await page.setViewportSize({ width: 390, height: 844 });
       await expect(dialog.getByRole('button', { name: 'Connect ChatGPT', exact: true })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-      await page.screenshot({ path: test.info().outputPath('provider-connect-mobile.png') });
+      await expect.poll(async () => (await dialog.boundingBox())?.width).toBeGreaterThan(320);
+      await page.screenshot({ path: test.info().outputPath('provider-connect-mobile.png'), animations: 'disabled' });
       await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
       await page.setViewportSize({ width: 1280, height: 900 });
-      await page.screenshot({ path: test.info().outputPath('provider-list-desktop.png') });
+      await page.screenshot({ path: test.info().outputPath('provider-list-desktop.png'), animations: 'disabled' });
 
       // A stale saved account fails visibly without enabling a missing credential.
       await openConnection();
