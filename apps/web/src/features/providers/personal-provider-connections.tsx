@@ -37,7 +37,7 @@ export function PersonalProviderConnections({ projectId }: { projectId?: string 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: connectionsKey });
     if (projectId) refreshProjectProviderState(queryClient, projectId);
-    else await queryClient.invalidateQueries();
+    else void queryClient.invalidateQueries();
   };
   const connect = useMutation({
     mutationFn: async () => {
