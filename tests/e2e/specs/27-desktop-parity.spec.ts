@@ -288,9 +288,11 @@ for (const runtime of runtimes) {
           path: test.info().outputPath("agent-sections.png"),
           scale: "css",
         });
+        // The capability bar's tab, not the agent editor's "Connectors"
+        // section tab of the same name, which does not change the route.
         const connectors = page
-          .getByRole("tab", { name: "Connectors", exact: true })
-          .first();
+          .locator(".kx-titlebar-tabs")
+          .getByRole("tab", { name: "Connectors", exact: true });
         await connectors.click();
         await expect(page).toHaveURL(/\/customize\/connectors/);
         // A fresh document must also load real data, independent of the agent
