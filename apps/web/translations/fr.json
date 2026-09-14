@@ -19229,5 +19229,24 @@
     "label": "Accès au dépôt du projet",
     "enabled": "Les nouvelles sessions reçoivent le dépôt du projet. Les permissions Git restent applicables. Les sessions existantes conservent leur accès.",
     "disabled": "Les nouvelles sessions fonctionnent sans le dépôt du projet. Elles peuvent créer des fichiers et utiliser les outils autorisés. Les sessions existantes conservent leur accès."
+  },
+  "modelAccess": {
+    "manageProvider": "Paramètres de {name}",
+    "enableProviderAction": "Activer le fournisseur",
+    "disableProviderAction": "Désactiver le fournisseur",
+    "enabled": "Activé",
+    "disabled": "Désactivé",
+    "enableProvider": "Activer {name}",
+    "defaultProviderHint": "Choisissez un modèle par défaut chez un autre fournisseur avant de désactiver celui-ci.",
+    "credentialsHint": "Désactivez l’inférence sans supprimer les identifiants.",
+    "providerError": "Impossible de modifier l’accès au fournisseur.",
+    "managedTitle": "Modèles gérés par Kortix",
+    "managedDescription": "Modèles gérés facturés en crédits Kortix. Aucune clé API nécessaire.",
+    "hiddenHint": "Masqué dans le sélecteur. Les requêtes directes restent autorisées ; désactivez-les dans le menu du modèle.",
+    "hidden": "Masqué dans le sélecteur",
+    "disableModel": "Désactiver le modèle",
+    "modelError": "Impossible de modifier l’accès au modèle.",
+    "hiddenShort": "Masqué dans le sélecteur. Les requêtes directes restent autorisées.",
+    "resetError": "Impossible de réinitialiser la liste des modèles."
   }
 }

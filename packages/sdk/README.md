@@ -652,3 +652,20 @@ Set `false` to run new sessions without the project repository or repository API
 Git, secret, connector, and tool permissions remain separate. Existing sessions retain their saved policy.
 `AgentConfigBlock.workspace` is deprecated. The SDK maps legacy `branch`/`runtime` to the boolean field.
 A legacy `read` write requires an explicit `repository_access` choice; it does not enable read-only repository access.
+
+
+### Project provider and model access
+
+```ts
+const policy = await kortix.projects.modelAccess(projectId);
+await kortix.projects.setModelAccess(projectId, {
+  target: 'provider', id: 'kortix', enabled: false,
+});
+await kortix.projects.setModelAccess(projectId, {
+  target: 'model', id: 'openai/gpt-5.5', enabled: false,
+});
+```
+
+`kortix` identifies Kortix Managed Models. Other provider IDs identify BYOK, Codex, or custom providers. Provider disable takes precedence over individual model choices. Each write changes one target and preserves credentials. Disabling the current project default or its provider returns `409 cannot_disable_default`; select another default first.
+
+`useModelAccess(projectId)` from `@kortix/sdk/react` exposes the policy, write state, and `setEnabled(change)`. Successful writes refresh both picker caches. Rejected writes leave the displayed policy unchanged. The policy blocks gateway inference; legacy `setProjectModelEnablement` remains display-only. Native runtimes that bypass the gateway return `enforced: false`.

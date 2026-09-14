@@ -19229,5 +19229,24 @@
     "label": "Project repository access",
     "enabled": "New sessions receive the project repository. Git permissions still apply. Existing sessions keep their access setting.",
     "disabled": "New sessions run without the project repository. They can still create files and use granted tools. Existing sessions keep their access setting."
+  },
+  "modelAccess": {
+    "manageProvider": "{name} settings",
+    "enableProviderAction": "Enable provider",
+    "disableProviderAction": "Disable provider",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "enableProvider": "Enable {name}",
+    "defaultProviderHint": "Choose a project default from another provider before disabling this provider.",
+    "credentialsHint": "Disable inference without removing credentials.",
+    "providerError": "Could not update provider access.",
+    "managedTitle": "Kortix Managed Models",
+    "managedDescription": "Managed models billed with Kortix credits. No API key needed.",
+    "hiddenHint": "Hidden from the picker. Direct requests are still allowed; use the model menu to disable them.",
+    "hidden": "Hidden from picker",
+    "disableModel": "Disable model",
+    "modelError": "Could not update model access.",
+    "hiddenShort": "Hidden from the picker. Direct requests are still allowed.",
+    "resetError": "Could not reset the model list."
   }
 }

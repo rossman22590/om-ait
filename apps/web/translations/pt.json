@@ -19229,5 +19229,24 @@
     "label": "Acesso ao repositório do projeto",
     "enabled": "As novas sessões recebem o repositório do projeto. As permissões do Git continuam em vigor. As sessões existentes mantêm a sua configuração de acesso.",
     "disabled": "As novas sessões são executadas sem o repositório do projeto. Podem criar arquivos e usar ferramentas autorizadas. As sessões existentes mantêm a sua configuração de acesso."
+  },
+  "modelAccess": {
+    "manageProvider": "Configurações de {name}",
+    "enableProviderAction": "Ativar provedor",
+    "disableProviderAction": "Desativar provedor",
+    "enabled": "Ativado",
+    "disabled": "Desativado",
+    "enableProvider": "Ativar {name}",
+    "defaultProviderHint": "Escolha um modelo padrão de outro provedor antes de desativar este provedor.",
+    "credentialsHint": "Desative a inferência sem remover as credenciais.",
+    "providerError": "Não foi possível atualizar o acesso ao provedor.",
+    "managedTitle": "Modelos gerenciados pela Kortix",
+    "managedDescription": "Modelos gerenciados cobrados em créditos Kortix. Não é necessária uma chave API.",
+    "hiddenHint": "Oculto no seletor. Solicitações diretas continuam permitidas; desative-as no menu do modelo.",
+    "hidden": "Oculto no seletor",
+    "disableModel": "Desativar modelo",
+    "modelError": "Não foi possível atualizar o acesso ao modelo.",
+    "hiddenShort": "Oculto no seletor. Solicitações diretas continuam permitidas.",
+    "resetError": "Não foi possível redefinir a lista de modelos."
   }
 }
