@@ -21,6 +21,15 @@ linked, not inlined.
 
 ## Register
 
+### Drop decoded response headers and capture transcripts before manual stop (2026-09-14)
+
+**When:** forwarding a fetch response or stopping a session. Remove
+`content-encoding` and `content-length` after fetch decompresses the upstream body.
+Await transcript capture before provider stop; turn-end capture can still be in flight.
+*Incident:* PR #7240 live preview: RUN-9 failed with ZstdDecompressionError;
+SESS-24 returned an unavailable transcript immediately after manual stop.
+*Enforcers:* compressed upstream proxy test, stop ordering tests, RUN-9 and SESS-24.
+
 ### Preserve deployment prefixes and prepare shared images before timed preview flows (2026-09-14)
 
 **When:** running the full suite on a self-hosted preview. Preserve the gateway's
