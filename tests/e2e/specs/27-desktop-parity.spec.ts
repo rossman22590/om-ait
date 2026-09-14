@@ -554,7 +554,72 @@ for (const runtime of runtimes) {
           timeout: 60_000,
         });
 
-        if (!desktopApp) return;
+        if (!desktopApp) {
+          // Windows and Linux: the window controls sit top-right, so Back takes
+          // the band's left edge and the page's top row must clear the 124px
+          // control cluster on the right. Same session, same history shape.
+          for (const platform of ["Win32", "Linux x86_64"]) {
+            const other = await page.context().newPage();
+            try {
+              await other.addInitScript(
+                (value) =>
+                  Object.defineProperty(navigator, "platform", { get: () => value }),
+                platform,
+              );
+              await other.setViewportSize({ width: 1440, height: 900 });
+              await other.goto(projectUrl);
+              await expect(
+                other.getByRole("button", { name: "Switch project", exact: true }),
+              ).toBeVisible({ timeout: 60_000 });
+              await other.goto(`${baseURL}/new`);
+              await expect(
+                other.getByRole("heading", { name: "Create a project" }),
+              ).toBeVisible({ timeout: 60_000 });
+              const otherBack = other.getByRole("button", { name: "Back", exact: true });
+              await expect(otherBack, `${platform}: Back`).toBeVisible();
+              const b = (await otherBack.boundingBox())!;
+              expect(b.x, `${platform}: Back starts at the band's left edge`).toBeLessThan(24);
+              expect(b.y + b.height, `${platform}: Back sits inside the band`).toBeLessThanOrEqual(42);
+              const otherLogOut = other.getByRole("button", { name: "Log out", exact: true });
+              const l = (await otherLogOut.boundingBox())!;
+              expect(
+                l.x + l.width,
+                `${platform}: Log out clears the window controls`,
+              ).toBeLessThanOrEqual(1440 - 124);
+              expect(l.y, `${platform}: Log out sits below Back`).toBeGreaterThanOrEqual(b.y + b.height);
+              await otherBack.click();
+              await expect(other).toHaveURL(new RegExp(`/projects/${project.id}`), {
+                timeout: 60_000,
+              });
+            } finally {
+              await other.close();
+            }
+          }
+          return;
+        }
+        // The mouse side buttons step the same history. Real DOM buttons 3/4
+        // through CDP, caught by the preload and resolved by the shell.
+        const cdp = await page.context().newCDPSession(page);
+        const sideButton = async (button: "back" | "forward") => {
+          for (const type of ["mousePressed", "mouseReleased"] as const) {
+            await cdp.send("Input.dispatchMouseEvent", {
+              type,
+              x: 400,
+              y: 400,
+              button,
+              buttons: 0,
+              clickCount: 1,
+            });
+          }
+        };
+        await sideButton("forward");
+        await expect(page).toHaveURL(/\/new(\?|$)/, { timeout: 60_000 });
+        await sideButton("back");
+        await expect(page).toHaveURL(new RegExp(`/projects/${project.id}`), {
+          timeout: 60_000,
+        });
+        await cdp.detach();
+
         // The shell's Go menu reaches the same history on any page, including
         // pages the web app does not render.
         const menuItem = (id: string) =>
