@@ -51,12 +51,14 @@ export function ProjectProviderConnection({
   row,
   canWrite,
   subscriptionConnected,
+  projectConnectionsLoading,
   KeyFields,
 }: {
   projectId: string;
   row: ProviderConnectRow;
   canWrite: boolean;
   subscriptionConnected: boolean;
+  projectConnectionsLoading: boolean;
   KeyFields: ComponentType<ProviderKeyFieldsProps>;
 }) {
   const t = useTranslations('personalProviders');
@@ -113,7 +115,9 @@ export function ProjectProviderConnection({
   const loadFailed =
     project.isError || (personalEnabled && (connections.isError || bindings.isError));
   const loading =
-    project.isPending || (personalEnabled && (connections.isPending || bindings.isPending));
+    projectConnectionsLoading ||
+    project.isPending ||
+    (personalEnabled && (connections.isPending || bindings.isPending));
 
   async function refresh() {
     await Promise.all([

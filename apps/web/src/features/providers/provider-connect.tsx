@@ -711,7 +711,6 @@ export function ProviderConnect({
   enabled = true,
   className,
 }: ProviderConnectProps) {
-  const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
   const tPersonal = useTranslations('personalProviders');
   useLiveLlmProviderCatalog(projectId, enabled);
   useLlmProviderCatalogRevision();
@@ -770,18 +769,6 @@ export function ProviderConnect({
   const visibleRows = useMemo(() => rows.slice(0, limit), [rows, limit]);
   const hiddenCount = rows.length - visibleRows.length;
 
-  if (providerStateLoading) {
-    return (
-      <div
-        className="flex min-h-[200px] items-center justify-center"
-        role="status"
-        aria-label={tI18nComplete.raw('text7f619ff13aa8')}
-      >
-        <Loading className="text-muted-foreground size-4 shrink-0" />
-      </div>
-    );
-  }
-
   return (
     <>
       <ProviderConnectView
@@ -793,6 +780,7 @@ export function ProviderConnect({
             projectId={projectId}
             row={row}
             canWrite={canWrite}
+            projectConnectionsLoading={providerStateLoading}
             subscriptionConnected={row.id === 'openai' && connectedIds.has('codex')}
             KeyFields={ProviderKeyFields}
           />
