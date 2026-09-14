@@ -518,6 +518,7 @@ for (const runtime of runtimes) {
         // The reported soft lock: the switcher opens /new, and /new has no
         // navigation of its own — only an account picker and Log out.
         await page.getByRole("button", { name: "Switch project", exact: true }).click();
+        await page.getByRole("menuitem", { name: "Switch Project", exact: true }).click();
         await page.getByRole("menuitem", { name: "Create a project…" }).click();
         await expect(page).toHaveURL(/\/new(\?|$)/, { timeout: 60_000 });
         await expect(
