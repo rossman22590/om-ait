@@ -34,6 +34,11 @@ const { explainNetError, hostOf, normalizeInstanceUrl } = require('./instance-ru
 const { createInstanceStore } = require('./instance-store');
 const { isConfiguredAppUrl, isTrustedAppSender } = require('./native-sender');
 const {
+  NAVIGATION_SHORTCUTS,
+  historyTarget,
+  isAppPath,
+} = require('./navigation');
+const {
   DESKTOP_CHROME_JS,
   configureNativeWindowControls,
   macTrafficLightPosition,
@@ -163,32 +168,6 @@ function isPreviewHost(host) {
 
 // Product + auth route prefixes allowed to render in the desktop window. MUST
 // stay in sync with DESKTOP_ALLOWED_ROUTES in apps/web/src/middleware.ts.
-const APP_PATH_PREFIXES = [
-  '/projects',
-  '/new',
-  '/accounts',
-  '/invites',
-  '/admin',
-  '/setup',
-  '/connectors',
-  '/oauth',
-  '/checkout',
-  '/tunnel',
-  '/github',
-  '/cli',
-  '/templates',
-  '/maintenance',
-  '/countryerror',
-  '/debug',
-];
-
-function isAppPath(pathname) {
-  if (pathname === '/auth' || pathname.startsWith('/auth/')) return true;
-  return APP_PATH_PREFIXES.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`),
-  );
-}
-
 /**
  * Should `urlStr` render inside the desktop window? (Top-frame navigations
  * only — iframes are never gated, which is the whole point: the Pipedream
@@ -412,6 +391,13 @@ function createMainWindow() {
     shell.openExternal(url);
   });
 
+  // Go menu state follows every committed navigation, including the App
+  // Router's same-document ones.
+  mainWindow.webContents.on('did-navigate', refreshNavigationMenu);
+  mainWindow.webContents.on('did-navigate-in-page', (_event, _url, isMainFrame) => {
+    if (isMainFrame) refreshNavigationMenu();
+  });
+
   // window.open(...) / <a target="_blank">.
   //
   // This is the crux of why Electron beats Tauri for the connectors flow.
@@ -487,6 +473,41 @@ function navigateMainWindow(url) {
     .then(() => wc.navigationHistory.clear())
     .catch(() => {}); // did-fail-load reports failures
   mainWindow.focus();
+}
+
+/* ─── Back / Forward / Home ───────────────────────────────────────────────
+   The window has no browser toolbar, so these are shell behaviour on every
+   page — including pages the web app does not own (sandbox previews, a 401
+   body, a render that threw). Policy lives in navigation.js. */
+
+/** History index for one step, skipping entries the gate keeps out of the window. */
+function mainHistoryTarget(direction) {
+  const history = mainWindow?.webContents.navigationHistory;
+  if (!history) return -1;
+  return historyTarget(history.getAllEntries(), history.getActiveIndex(), direction, shouldLoadInApp);
+}
+
+/** @param {'back' | 'forward' | 'home'} direction */
+function navigateWindow(direction) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const wc = mainWindow.webContents;
+  if (direction === 'home') {
+    // The instance's landing door resolves the user's latest project.
+    wc.loadURL(instanceStore.appUrl()).catch(() => {}); // did-fail-load reports failures
+    return;
+  }
+  const index = mainHistoryTarget(direction);
+  if (index >= 0) wc.navigationHistory.goToIndex(index);
+}
+
+/** Enable Back and Forward only when a step has an in-app target. */
+function refreshNavigationMenu() {
+  const menu = Menu.getApplicationMenu();
+  if (!menu) return;
+  for (const direction of ['back', 'forward']) {
+    const item = menu.getMenuItemById(`kx-go-${direction}`);
+    if (item) item.enabled = mainHistoryTarget(direction) >= 0;
+  }
 }
 
 /** Save a choice (menu, web bridge) and load the app onto it. Returns the save error, or null. */
@@ -727,6 +748,7 @@ async function answerBasicChallenge(authInfo, callback) {
 
 function buildMenu() {
   const isMac = process.platform === 'darwin';
+  const shortcuts = isMac ? NAVIGATION_SHORTCUTS.darwin : NAVIGATION_SHORTCUTS.other;
 
   // Hidden, nested dev switcher so the backend the app points at can change
   // without a rebuild — mirrors the Tauri "Frontend URL" submenu.
@@ -803,10 +825,36 @@ function buildMenu() {
             ]),
       ],
     },
+    {
+      // Browser-standard history, so no page can strand the user. The
+      // accelerators are registered natively: they also work on a page whose
+      // renderer has no handler, and a page that consumes the key first (a
+      // code editor's Cmd+[) keeps it.
+      label: 'Go',
+      submenu: [
+        {
+          id: 'kx-go-back',
+          label: 'Back',
+          accelerator: shortcuts.back,
+          enabled: false,
+          click: () => navigateWindow('back'),
+        },
+        {
+          id: 'kx-go-forward',
+          label: 'Forward',
+          accelerator: shortcuts.forward,
+          enabled: false,
+          click: () => navigateWindow('forward'),
+        },
+        { type: 'separator' },
+        { id: 'kx-go-home', label: 'Home', accelerator: shortcuts.home, click: () => navigateWindow('home') },
+      ],
+    },
     { role: 'windowMenu' },
   ];
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  refreshNavigationMenu();
 }
 
 /* ─── IPC: native bridge (consumed via the __TAURI__ shim in preload.js) ───*/
@@ -863,6 +911,14 @@ function registerIpc() {
       default:
         throw new Error(`Unknown command: ${cmd}`);
     }
+  });
+
+  // Mouse side buttons (preload.js). Any page in the main window may ask: a
+  // history step is what its own `history.back()` could do anyway, and the
+  // target is still chosen here. Other windows (OAuth popups) may not.
+  ipcMain.on('kortix:navigate', (event, direction) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return;
+    if (direction === 'back' || direction === 'forward') navigateWindow(direction);
   });
 
   // Window controls (Tauri `getCurrentWindow().*`).

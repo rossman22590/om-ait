@@ -185,6 +185,11 @@ for (const runtime of runtimes) {
           exact: true,
         });
         await expect(switcher).toBeVisible();
+        // The project shell navigates and owns the band's corner, so the
+        // window's Back (root layout) steps aside on every project view.
+        await expect(
+          page.getByRole("button", { name: "Back", exact: true }),
+        ).toHaveCount(0);
         const box = await switcher.boundingBox();
         expect(
           box!.y,
@@ -468,6 +473,105 @@ for (const runtime of runtimes) {
           await fresh.close();
         }
       } finally {
+        await deleteAuthUser(user.id, authOptions);
+      }
+    });
+
+    test("Create a project keeps a way back to the project it opened from", async ({
+      page,
+      baseURL,
+      desktopApp,
+    }) => {
+      test.setTimeout(300_000);
+      const databaseUrl =
+        process.env.KE2E_DATABASE_URL || process.env.E2E_DATABASE_URL;
+      if (!databaseUrl)
+        throw new Error("Desktop parity requires the configured test database");
+      await page.addInitScript(() =>
+        Object.defineProperty(navigator, "platform", { get: () => "MacIntel" }),
+      );
+      const email = `e2e-desktop-new-${randomUUID()}@example.test`;
+      const user = await createAuthUser(email, authOptions);
+      const session = await signIn(email, authOptions);
+      let project: ManifestProject | undefined;
+      try {
+        const accounts = await api<{ account_id: string }[]>(
+          session.access_token,
+          "GET",
+          "/accounts",
+        );
+        const accountId = accounts[0].account_id;
+        project = await createManifestProject({
+          api,
+          accessToken: session.access_token,
+          accountId,
+          userId: user.id,
+          name: "Desktop back",
+          databaseUrl,
+        });
+        const projectUrl = `${baseURL}/projects/${project.id}`;
+        await installBrowserSessionDirect(page, session, projectUrl, authOptions);
+        await selectAccountForUi(page, accountId);
+        await page.goto(projectUrl);
+        await dismissOnboarding(page);
+
+        // The reported soft lock: the switcher opens /new, and /new has no
+        // navigation of its own — only an account picker and Log out.
+        await page.getByRole("button", { name: "Switch project", exact: true }).click();
+        await page.getByRole("menuitem", { name: "Create a project…" }).click();
+        await expect(page).toHaveURL(/\/new(\?|$)/, { timeout: 60_000 });
+        await expect(
+          page.getByRole("heading", { name: "Create a project" }),
+        ).toBeVisible({ timeout: 60_000 });
+
+        const back = page.getByRole("button", { name: "Back", exact: true });
+        if (!desktop) {
+          // The web keeps the browser's own Back and draws none.
+          await expect(back).toHaveCount(0);
+          return;
+        }
+        await expect(back).toBeVisible();
+        const backBox = (await back.boundingBox())!;
+        expect(backBox.x, "Back must clear the macOS traffic lights").toBeGreaterThanOrEqual(62);
+        expect(backBox.y + backBox.height, "Back must sit inside the title-bar band").toBeLessThanOrEqual(43);
+        // The page's own top row (account picker, Log out) drops below the band.
+        const logOut = page.getByRole("button", { name: "Log out", exact: true });
+        await expect(logOut).toBeVisible();
+        expect(
+          (await logOut.boundingBox())!.y,
+          "Log out must sit below the title-bar band",
+        ).toBeGreaterThanOrEqual(backBox.y + backBox.height);
+
+        await back.click();
+        await expect(page).toHaveURL(new RegExp(`/projects/${project.id}`), {
+          timeout: 60_000,
+        });
+
+        if (!desktopApp) return;
+        // The shell's Go menu reaches the same history on any page, including
+        // pages the web app does not render.
+        const menuItem = (id: string) =>
+          desktopApp.evaluate(({ Menu }, itemId) => {
+            const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
+            return item ? { enabled: item.enabled } : null;
+          }, id);
+        const clickMenu = (id: string) =>
+          desktopApp.evaluate(({ Menu, BrowserWindow }, itemId) => {
+            const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
+            item?.click(undefined, BrowserWindow.getAllWindows()[0], undefined);
+          }, id);
+        await expect.poll(() => menuItem("kx-go-forward")).toEqual({ enabled: true });
+        await clickMenu("kx-go-forward");
+        await expect(page).toHaveURL(/\/new(\?|$)/, { timeout: 60_000 });
+        await expect.poll(() => menuItem("kx-go-back")).toEqual({ enabled: true });
+        await clickMenu("kx-go-back");
+        await expect(page).toHaveURL(new RegExp(`/projects/${project.id}`), {
+          timeout: 60_000,
+        });
+        await clickMenu("kx-go-home");
+        await expect(page).not.toHaveURL(/\/new(\?|$)/, { timeout: 60_000 });
+      } finally {
+        await project?.dispose();
         await deleteAuthUser(user.id, authOptions);
       }
     });

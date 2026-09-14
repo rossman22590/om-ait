@@ -1,7 +1,8 @@
 'use client';
 
 import { ArrowLeftIcon } from '@phosphor-icons/react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useSyncExternalStore } from 'react';
 
 import { TITLEBAR_CONTROL_CLASS } from '@/components/desktop/titlebar-control';
 import { Button } from '@/components/ui/button';
@@ -11,12 +12,14 @@ import { useAppHome } from '@/lib/onboarding/use-app-home';
 import { cn } from '@/lib/utils';
 
 /**
- * Back, for full-screen frames that carry no product navigation.
+ * Back, for every screen that carries no product navigation.
  *
- * The desktop shell has no browser toolbar. A frame with no sidebar and no
- * in-page exit — the auth consent and status screens, `/github/setup` before
- * the user continues — has nothing to click, so the user is stuck on it. This
- * is the missing toolbar button, drawn in the title-bar band.
+ * The desktop shell has no browser toolbar. A screen with no sidebar and no
+ * in-page exit — `/new`, `/checkout`, a loading frame, an auth status screen —
+ * has nothing to click, so the user is stuck on it. This is the missing toolbar
+ * button, drawn in the title-bar band. The shell's Go menu (Back ⌘[, Forward
+ * ⌘], Home ⇧⌘H, apps/desktop-electron/src/navigation.js) backs it up on pages
+ * the web app does not render.
  *
  * It renders on every platform. `.kx-desktop-back` in globals.css shows it only
  * under `html[data-desktop='true']`, so the web keeps the browser's own Back.
@@ -82,22 +85,81 @@ export function DesktopBackControl({ onBack }: { onBack: () => void }) {
   );
 }
 
+/* ─── Page-declared target ──────────────────────────────────────────────────
+   One Back exists per window, mounted by the root layout. A page that knows
+   where its flow started declares it with `useDesktopBackTarget`; the latest
+   mounted declaration wins and is dropped on unmount. */
+
+let backTarget: string | undefined;
+const backTargetListeners = new Set<() => void>();
+
+function setBackTarget(next: string | undefined) {
+  if (backTarget === next) return;
+  backTarget = next;
+  for (const listener of backTargetListeners) listener();
+}
+
+function subscribeBackTarget(listener: () => void) {
+  backTargetListeners.add(listener);
+  return () => {
+    backTargetListeners.delete(listener);
+  };
+}
+
+/** Where the window's Back goes while the calling component is mounted. */
+export function useDesktopBackTarget(href: string | undefined): void {
+  useEffect(() => {
+    if (!href) return;
+    setBackTarget(href);
+    return () => {
+      if (backTarget === href) setBackTarget(undefined);
+    };
+  }, [href]);
+}
+
+/** Pathname of an app href, for comparing against `usePathname()`. */
+function hrefPath(href: string): string {
+  return href.split(/[?#]/)[0] || '/';
+}
+
 /**
- * Back wired to this window's history. Rendered by `AuthFrame`.
+ * Whether Back has anywhere to go. It has nowhere when there is no declared
+ * target, no in-app entry behind the page, and the page already is home — a
+ * click would replace the page with itself.
+ */
+export function hasBackDestination(
+  win: NavigationWindow,
+  { to, home, pathname }: { to?: string; home: string; pathname: string },
+): boolean {
+  return Boolean(to) || Boolean(win.navigation?.canGoBack) || hrefPath(home) !== pathname;
+}
+
+/**
+ * The window's one Back, mounted by the root layout so every screen has an
+ * exit by default — a screen added tomorrow needs no opt-in.
+ *
+ * Screens whose shell already navigates (the project shell, the admin shell,
+ * the marketing navbar) wear `data-kx-titlebar-owner`; `.kx-desktop-back` in
+ * globals.css hides Back under that marker, because those shells draw their
+ * own control in the same corner of the band.
  *
  * Signed-in only. Back leads into the app, and a signed-out visitor has no app
  * to return to: `/auth` is where they start, and forgot/reset password carry
  * their own "Back to sign in". `user` is `null` on the server and on the first
  * client render, so the gate cannot desync hydration.
  */
-export function DesktopBackButton({ href }: { href?: string }) {
+export function DesktopBackButton() {
   const { user } = useAuth();
   const router = useRouter();
+  const pathname = usePathname() ?? '/';
   const home = useAppHome();
-  if (!user) return null;
-  return (
-    <DesktopBackControl
-      onBack={() => goBack(router, window as Window & NavigationWindow, { to: href, home })}
-    />
+  const to = useSyncExternalStore(
+    subscribeBackTarget,
+    () => backTarget,
+    () => undefined,
   );
+  if (!user) return null;
+  const win = window as Window & NavigationWindow;
+  if (!hasBackDestination(win, { to, home, pathname })) return null;
+  return <DesktopBackControl onBack={() => goBack(router, win, { to, home })} />;
 }
