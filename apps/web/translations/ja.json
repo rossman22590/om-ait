@@ -19310,6 +19310,18 @@
     "cancel": "キャンセル",
     "autoEnable": "ここで接続すると、このプロジェクト内のあなたのセッションでもこのプロバイダーが有効になります。",
     "disconnectTitle": "個人用プロバイダーの接続を解除しますか？",
-    "disconnectDescription": "すべてのプロジェクトからこの接続が削除されます。後で再接続できます。"
+    "disconnectDescription": "すべてのプロジェクトからこの接続が削除されます。後で再接続できます。",
+    "connectionFor": "{provider}の接続",
+    "projectConnection": "プロジェクトの接続",
+    "myConnection": "自分の接続",
+    "myApiKey": "自分のAPIキー",
+    "mySubscription": "自分のChatGPTサブスクリプション",
+    "subscriptionConnected": "ChatGPTサブスクリプション接続済み",
+    "personalActive": "自分が開始するセッションで使用します。設定 → 自分のプロバイダーで管理できます。",
+    "personalDraft": "接続すると自分が開始するセッションで使用できます。接続は非公開のままです。",
+    "listInstruction": "キーを貼り付け、他の場所をクリックすると保存されます。各行で個人またはプロジェクトの接続を選択します。",
+    "loadFailed": "個人の接続を読み込めませんでした。",
+    "useConnection": "接続を使用",
+    "reconnectChatGpt": "ChatGPTを再接続"
   }
 }

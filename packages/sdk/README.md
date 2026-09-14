@@ -662,4 +662,4 @@ For ChatGPT, call `startOAuth('codex')`, show `verification_url` and `user_code`
 
 The gateway selects the connection belonging to its authenticated user. A session uses the launching user recorded in its token. Other participants in that session retain this session identity. Project bindings authorize this use explicitly. Project credentials remain the fallback when no personal binding exists. Native-runtime projects do not support personal provider bindings.
 
-The UI is at **Preferences → My providers** and **Project → Models → Providers → My providers**. Metadata endpoints never return credential values. Disconnect removes all project bindings; it does not revoke the upstream provider account itself.
+The UI is at **Preferences → My providers** and the connection selector in each **Project → Models → Providers** row. Metadata endpoints never return credential values. Disconnect removes all project bindings; it does not revoke the upstream provider account itself.

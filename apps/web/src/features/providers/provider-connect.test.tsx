@@ -500,3 +500,42 @@ describe('ProviderConnectView — the subscription slot', () => {
     expect(out).not.toContain('role="dialog"');
   });
 });
+
+describe('ProviderConnectView — connection scope stays inside its row', () => {
+  test('wraps the existing fields and subscription once without adding a second provider list', () => {
+    const html = renderToStaticMarkup(
+      <ProviderConnectView
+        {...props({
+          subscriptionSlots: { openai: <button>Connect ChatGPT</button> },
+          wrapCredentials: (provider, fields) => (
+            <section data-scope-for={provider.id}>{fields}</section>
+          ),
+          instruction: 'Choose a personal or project connection.',
+        })}
+      />,
+    );
+    expect(html.match(/data-provider-row="openai"/g)).toHaveLength(1);
+    expect(html.match(/Connect ChatGPT/g)).toHaveLength(1);
+    expect(html).toContain('data-scope-for="openai"');
+    expect(html).toContain('Choose a personal or project connection.');
+    expect(html).not.toContain('Everyone on this project can use it.');
+  });
+
+  test('offers personal scope to readers without exposing shared credential fields', () => {
+    const html = renderToStaticMarkup(
+      <ProviderConnectView
+        {...props({
+          canWrite: false,
+          wrapCredentials: (_provider, fields) => (
+            <section>
+              <button>Choose connection</button>
+              {fields}
+            </section>
+          ),
+        })}
+      />,
+    );
+    expect(html).toContain('Choose connection');
+    expect(html).not.toContain('type="password"');
+  });
+});

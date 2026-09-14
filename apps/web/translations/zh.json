@@ -19276,6 +19276,18 @@
     "cancel": "取消",
     "autoEnable": "在此处连接后，也会为你在此项目中的会话启用该提供商。",
     "disconnectTitle": "断开个人提供商连接？",
-    "disconnectDescription": "这将从所有项目中移除你的连接。你可以稍后重新连接。"
+    "disconnectDescription": "这将从所有项目中移除你的连接。你可以稍后重新连接。",
+    "connectionFor": "{provider} 的连接",
+    "projectConnection": "项目连接",
+    "myConnection": "我的连接",
+    "myApiKey": "我的 API 密钥",
+    "mySubscription": "我的 ChatGPT 订阅",
+    "subscriptionConnected": "ChatGPT 订阅已连接",
+    "personalActive": "用于你启动的会话。在设置 → 我的提供商中管理此连接。",
+    "personalDraft": "连接后可用于你启动的会话。你的连接保持私密。",
+    "listInstruction": "粘贴密钥后，点击其他位置即可保存。为每一行选择个人或项目连接。",
+    "loadFailed": "无法加载个人连接。",
+    "useConnection": "使用连接",
+    "reconnectChatGpt": "重新连接 ChatGPT"
   }
 }

@@ -19313,6 +19313,18 @@
     "cancel": "Cancel",
     "autoEnable": "Connecting here also enables this provider for your sessions in this project.",
     "disconnectTitle": "Disconnect personal provider?",
-    "disconnectDescription": "This removes your connection from every project. You can connect again later."
+    "disconnectDescription": "This removes your connection from every project. You can connect again later.",
+    "connectionFor": "Connection for {provider}",
+    "projectConnection": "Project connection",
+    "myConnection": "My connection",
+    "myApiKey": "My API key",
+    "mySubscription": "My ChatGPT subscription",
+    "subscriptionConnected": "ChatGPT subscription connected",
+    "personalActive": "Used for sessions you launch. Manage this connection in Settings → My providers.",
+    "personalDraft": "Connect to use this for sessions you launch. Your connection stays private.",
+    "listInstruction": "Paste a key — it saves when you click away. Choose a personal or project connection in each row.",
+    "loadFailed": "Could not load personal connections.",
+    "useConnection": "Use connection",
+    "reconnectChatGpt": "Reconnect ChatGPT"
   }
 }

@@ -63,6 +63,7 @@ import { useTranslations } from '@/i18n/use-translations';
  */
 
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { ProjectProviderConnection } from './project-provider-connection';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -207,6 +208,8 @@ export interface ProviderConnectViewProps {
   onRemoveKey?: (providerId: string) => void;
   /** Per-provider extra auth affordance. Only `openai` has one today. */
   subscriptionSlots?: Record<string, ReactNode>;
+  wrapCredentials?: (row: ProviderConnectRow, fields: ReactNode) => ReactNode;
+  instruction?: ReactNode;
   /**
    * "Browse before you connect". When set, `detailSlot` REPLACES the list —
    * the one capability the deleted `CatalogTab` drill-down had that an inline
@@ -464,7 +467,7 @@ function ProviderKeyFields({
       ) : (
         // One border around the stack, `divide-y` for the seams — Bedrock's
         // three fields are one credential, so they get one box.
-        <div className="border-border divide-border dark:bg-input/30 divide-y overflow-hidden rounded-md border">
+        <div className="border-border divide-border bg-background divide-y overflow-hidden rounded-md border">
           {fields}
         </div>
       )}
@@ -513,6 +516,7 @@ function ProviderRow({
   onToggleReveal,
   onRemoveKey,
   subscriptionSlot,
+  wrapCredentials,
   onOpenDetail,
 }: {
   row: ProviderConnectRow;
@@ -526,6 +530,7 @@ function ProviderRow({
   onToggleReveal: ProviderConnectViewProps['onToggleReveal'];
   onRemoveKey?: ProviderConnectViewProps['onRemoveKey'];
   subscriptionSlot?: ReactNode;
+  wrapCredentials?: ProviderConnectViewProps['wrapCredentials'];
   onOpenDetail?: (providerId: string) => void;
 }) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
@@ -562,9 +567,9 @@ function ProviderRow({
     </div>
   );
 
-  // Read-only members get the identity column and nothing else — no field to
-  // type in, so no second column to line it up against either.
-  if (!canWrite) {
+  // Shared credentials require project write access. The scope wrapper can still
+  // offer a reader their own personal connection without exposing shared fields.
+  if (!canWrite && !wrapCredentials) {
     return (
       <div className="py-1.5" data-provider-row={row.id}>
         {identity}
@@ -572,25 +577,29 @@ function ProviderRow({
     );
   }
 
+  const fields = canWrite ? (
+    <ProviderKeyFields
+      row={row}
+      values={values}
+      onValueChange={onValueChange}
+      onCommit={onCommit}
+      status={status}
+      errorMessage={errorMessage}
+      revealedFields={revealedFields}
+      onToggleReveal={onToggleReveal}
+      onRemoveKey={onRemoveKey}
+    >
+      {subscriptionSlot}
+    </ProviderKeyFields>
+  ) : null;
+
   return (
     <div
       data-provider-row={row.id}
       className="grid gap-1.5 py-1.5 sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)] sm:items-start sm:gap-4"
     >
       {identity}
-      <ProviderKeyFields
-        row={row}
-        values={values}
-        onValueChange={onValueChange}
-        onCommit={onCommit}
-        status={status}
-        errorMessage={errorMessage}
-        revealedFields={revealedFields}
-        onToggleReveal={onToggleReveal}
-        onRemoveKey={onRemoveKey}
-      >
-        {subscriptionSlot}
-      </ProviderKeyFields>
+      {wrapCredentials ? wrapCredentials(row, fields) : fields}
     </div>
   );
 }
@@ -654,6 +663,8 @@ export function ProviderConnectView({
   search,
   onSearchChange,
   subscriptionSlots,
+  wrapCredentials,
+  instruction,
   detailProviderId = null,
   onOpenDetail,
   detailSlot,
@@ -687,7 +698,9 @@ export function ProviderConnectView({
           auto-save nobody is told about is indistinguishable from an edit that
           was lost. */}
       <p className="text-muted-foreground px-0.5 text-xs text-pretty">
-        {canWrite ? tI18nComplete.raw('text9253b4fa8e06') : tI18nComplete.raw('text30674c348b84')}
+        {canWrite
+          ? (instruction ?? tI18nComplete.raw('text9253b4fa8e06'))
+          : tI18nComplete.raw('text30674c348b84')}
       </p>
 
       {rows.length === 0 ? (
@@ -708,6 +721,7 @@ export function ProviderConnectView({
               onToggleReveal={onToggleReveal}
               onRemoveKey={onRemoveKey}
               subscriptionSlot={subscriptionSlots?.[row.id]}
+              wrapCredentials={wrapCredentials}
               onOpenDetail={onOpenDetail}
             />
           ))}
@@ -787,6 +801,7 @@ export function ProviderConnect({
   className,
 }: ProviderConnectProps) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
+  const tPersonal = useTranslations('personalProviders');
   useLiveLlmProviderCatalog(projectId, enabled);
   useLlmProviderCatalogRevision();
   const { connectedProviders, providerStateLoading } = useConnectedProviders(projectId, enabled);
@@ -873,10 +888,7 @@ export function ProviderConnect({
     mutationFn: async (providerId: string) => {
       const entry = LLM_PROVIDER_BY_ID.get(providerId);
       if (!entry) throw new Error(`Unknown provider ${providerId}`);
-      // LLM provider credentials are ALWAYS project-wide — a per-user key is
-      // invisible to the gateway's shared-row resolution and every model turn
-      // dies with "No upstream configured" (2026-07-07 prod incident). Ported
-      // verbatim from the deleted `api-key-connect-form.tsx:52-62`.
+      // The project scope uses shared secrets. Personal scope uses user connections.
       await Promise.all(
         entry.envVars.map((envVar) =>
           upsertProjectSecret(projectId, {
@@ -1058,6 +1070,12 @@ export function ProviderConnect({
       <ProviderConnectView
         className={className}
         rows={visibleRows}
+        instruction={tPersonal('listInstruction')}
+        wrapCredentials={(row, fields) => (
+          <ProjectProviderConnection projectId={projectId} row={row} KeyFields={ProviderKeyFields}>
+            {fields}
+          </ProjectProviderConnection>
+        )}
         totalCount={searchable.length}
         hiddenCount={hiddenCount}
         onLoadMore={() => setVisibleCount((shown) => shown + PROVIDER_PAGE_SIZE)}

@@ -75,7 +75,6 @@ import { useEffect, useState } from 'react';
 
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { errorToast } from '@/components/ui/toast';
-import { PersonalProviderConnections } from '@/features/providers/personal-provider-connections';
 import { ProviderConnect } from '@/features/providers/provider-connect';
 import { ModelSelector } from '@/features/session/model-selector';
 import { CapabilityPageShell } from '@/features/workspace/capabilities/shared/capability-page-shell';
@@ -316,7 +315,6 @@ export function LlmSections({
 
   return (
     <>
-      {tab === 'providers' && <PersonalProviderConnections projectId={projectId} />}
       {tab === 'providers' && (
         /* JAY-510: this path mounts `ProviderConnect` DIRECTLY — no nested
            dialog, so connecting Anthropic here opens nothing on top of what

@@ -19313,6 +19313,18 @@
     "cancel": "Otkaži",
     "autoEnable": "Povezivanje ovde takođe omogućava ovog provajdera za vaše sesije u ovom projektu.",
     "disconnectTitle": "Prekinuti vezu sa ličnim provajderom?",
-    "disconnectDescription": "Ovo uklanja vašu vezu iz svih projekata. Kasnije se možete ponovo povezati."
+    "disconnectDescription": "Ovo uklanja vašu vezu iz svih projekata. Kasnije se možete ponovo povezati.",
+    "connectionFor": "Veza za {provider}",
+    "projectConnection": "Veza projekta",
+    "myConnection": "Moja veza",
+    "myApiKey": "Moj API ključ",
+    "mySubscription": "Moja ChatGPT pretplata",
+    "subscriptionConnected": "ChatGPT pretplata je povezana",
+    "personalActive": "Koristi se za sesije koje pokrećete. Upravljajte vezom u Podešavanja → Moji provajderi.",
+    "personalDraft": "Povežite se da biste koristili ovu vezu u svojim sesijama. Vaša veza ostaje privatna.",
+    "listInstruction": "Nalepite ključ — čuva se kada kliknete van polja. U svakom redu izaberite ličnu vezu ili vezu projekta.",
+    "loadFailed": "Lične veze nije moguće učitati.",
+    "useConnection": "Koristi vezu",
+    "reconnectChatGpt": "Ponovo poveži ChatGPT"
   }
 }
