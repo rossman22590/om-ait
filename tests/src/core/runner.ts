@@ -350,8 +350,13 @@ export async function runSuite(opts: RunOptions): Promise<RunResult> {
           const snapshots = await client.get('/v1/projects/:projectId/snapshots',
             { params: { projectId: project.id } });
           snapshots.status(200);
-          return snapshots.json<{ templates: Array<{ is_default: boolean; ready: boolean }> }>()
-            .templates.find((template) => template.is_default)?.ready === true;
+          const template = snapshots.json<{ templates: Array<{
+            is_default: boolean;
+            ready: boolean;
+            provider_coverage?: Array<{ launch_ready: boolean }>;
+          }> }>().templates.find((template) => template.is_default);
+          return template?.ready === true ||
+            template?.provider_coverage?.some((provider) => provider.launch_ready === true) === true;
         }, { until: (ready) => ready, timeoutMs: 900_000, intervalMs: 5000,
           description: 'current default sandbox image readiness' });
         await waitFor(async () => {
