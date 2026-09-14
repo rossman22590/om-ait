@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { MINIMAL_FALLBACK_MODELS, withModelLimits } from '../harness/open-code/supervisor'
+import { MINIMAL_FALLBACK_MODELS, withModelLimits } from '../harness/open-code/lifecycle'
 
 describe('MINIMAL_FALLBACK_MODELS capability metadata', () => {
   test('openai/gpt-5.5 does not advertise temperature support', () => {

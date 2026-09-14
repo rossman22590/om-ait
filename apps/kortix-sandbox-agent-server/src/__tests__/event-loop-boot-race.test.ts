@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from 'bun:test'
 
 import { startOpencodeEventLoop } from '../harness/open-code/events'
-import type { Opencode } from '../harness/open-code/supervisor'
+import type { Opencode } from '../harness/open-code/lifecycle'
 import type { OpenCodeConfig as Config } from '../harness/open-code/config'
 import { createOpenCodeHarnessService } from '../harness/open-code/service'
 

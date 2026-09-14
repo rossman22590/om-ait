@@ -15,7 +15,7 @@ import {
   type OpencodeEventLoopOptions,
   type OpencodeEventSubscription,
 } from './events'
-import { createOpencodeSupervisor, type Opencode, type OpencodeSupervisorOptions } from './supervisor'
+import { createOpencodeLifecycle, type Opencode, type OpencodeLifecycleOptions } from './lifecycle'
 
 /** Native reload semantics remain explicit; these are not universal promises. */
 export type OpenCodeConfigurationService = Pick<
@@ -41,41 +41,41 @@ export interface OpenCodeHarnessService extends HarnessService {
   readonly configuration: OpenCodeConfigurationService
   readonly events: OpenCodeEventService
   /**
-   * Adapter-internal supervisor access. Not exposed by HarnessService, so host
+   * Adapter-internal lifecycle access. Not exposed by HarnessService, so host
    * consumers cannot bypass the boundary. No native operations are removed.
    */
   readonly native: Opencode
 }
 
-/** Compose services over ONE supervisor without changing startup behavior. */
+/** Compose services over ONE lifecycle without changing startup behavior. */
 export function createOpenCodeHarnessService(
   cfg: Config,
   opencodeConfigDir: string,
   projectEnv?: ProjectEnvStore,
-  options: OpencodeSupervisorOptions = {},
+  options: OpencodeLifecycleOptions = {},
 ): OpenCodeHarnessService {
-  const supervisor = createOpencodeSupervisor(cfg, opencodeConfigDir, projectEnv, options)
+  const lifecycle = createOpencodeLifecycle(cfg, opencodeConfigDir, projectEnv, options)
   return {
     id: 'opencode',
     environment: { home: OPENCODE_HOME },
-    proxy: createOpenCodeProxyService(supervisor),
-    control: createOpenCodeControlService(supervisor),
-    diagnostics: createOpenCodeDiagnosticsService(supervisor),
-    queries: createOpenCodeQueryService(supervisor),
-    background: { start: (currentCfg) => startOpenCodeBackground(supervisor, requireOpenCodeConfig(currentCfg)) },
+    proxy: createOpenCodeProxyService(lifecycle),
+    control: createOpenCodeControlService(lifecycle),
+    diagnostics: createOpenCodeDiagnosticsService(lifecycle),
+    queries: createOpenCodeQueryService(lifecycle),
+    background: { start: (currentCfg) => startOpenCodeBackground(lifecycle, requireOpenCodeConfig(currentCfg)) },
     assets: createOpenCodeAssetsService({
-      getInternalUrl: () => supervisor.getInternalUrl(),
-      restart: () => supervisor.restart(),
+      getInternalUrl: () => lifecycle.getInternalUrl(),
+      restart: () => lifecycle.restart(),
       workspace: () => cfg.workspace,
     }),
     // Keep the method owner: restart/reload/reconfigure call sibling methods
     // through `this`. Copying unbound methods into separate objects breaks it.
-    lifecycle: supervisor,
-    configuration: supervisor,
-    native: supervisor,
+    lifecycle,
+    configuration: lifecycle,
+    native: lifecycle,
     events: {
       subscribe: (currentCfg, handlers, eventOptions) =>
-        startOpencodeEventLoop(supervisor, currentCfg, handlers, eventOptions),
+        startOpencodeEventLoop(lifecycle, currentCfg, handlers, eventOptions),
     },
   }
 }

@@ -2,7 +2,7 @@ import { createHmac } from 'crypto'
 import { describe, expect, it } from 'bun:test'
 import { KORTIX_USER_CONTEXT_HEADER } from '../kortix-user-context'
 import type { OpenCodeConfig as Config } from '../harness/open-code/config'
-import type { Opencode } from '../harness/open-code/supervisor'
+import type { Opencode } from '../harness/open-code/lifecycle'
 import { startProxy } from '../proxy'
 import { createOpenCodeHarnessFixture } from './helpers/open-code-harness'
 

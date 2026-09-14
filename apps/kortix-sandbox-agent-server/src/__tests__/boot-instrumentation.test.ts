@@ -6,7 +6,7 @@ import { describe, expect, test } from 'bun:test'
 // They keep the sub-marks that decompose `opencode-ready` — and the early
 // initial-turn claim — from being quietly dropped.
 const MAIN = readFileSync(join(import.meta.dir, '..', 'harness', 'open-code', 'boot.ts'), 'utf8')
-const OPENCODE = readFileSync(join(import.meta.dir, '..', 'harness', 'open-code', 'supervisor.ts'), 'utf8')
+const OPENCODE = readFileSync(join(import.meta.dir, '..', 'harness', 'open-code', 'lifecycle.ts'), 'utf8')
 
 describe('boot instrumentation', () => {
   test('the initial-turn claim is prefetched at proxy-up, before the clone is awaited', () => {
@@ -100,7 +100,7 @@ describe('boot instrumentation', () => {
     expect(restart).toBeGreaterThan(-1)
   })
 
-  test('the supervisor reports the first HTTP response separately from the first 200', () => {
+  test('the lifecycle reports the first HTTP response separately from the first 200', () => {
     expect(OPENCODE).toContain('onFirstListeningResponse?: () => void')
     const probe = OPENCODE.indexOf('const probe = directoryProbeOpen')
     const report = OPENCODE.indexOf('options.onFirstListeningResponse?.()', probe)

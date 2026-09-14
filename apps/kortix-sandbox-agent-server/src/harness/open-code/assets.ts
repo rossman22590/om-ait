@@ -27,7 +27,7 @@ const execFileAsync = promisify(execFile)
 const OPENCODE_INSTALL_TIMEOUT_MS = 600_000
 const OPENCODE_HEALTH_TIMEOUT_MS = 5_000
 
-/** Live supervisor accessors are re-read after verified reload and warm adoption. */
+/** Live lifecycle accessors are re-read after verified reload and warm adoption. */
 export interface OpenCodeAssetsRuntime {
   getInternalUrl(): string
   workspace(): string
@@ -349,7 +349,7 @@ async function reconcileOpenCodeAssets(
   }
 }
 
-/** Create the same maintenance operations with or without a live supervisor. */
+/** Create the same maintenance operations with or without a live lifecycle. */
 export function createOpenCodeAssetsService(
   runtime?: OpenCodeAssetsRuntime,
   options: OpenCodeAssetsOptions = {},

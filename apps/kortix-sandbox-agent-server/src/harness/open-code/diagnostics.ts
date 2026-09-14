@@ -16,7 +16,7 @@ import { tailFile } from '../../log-tail'
 import type { Config } from '../../config'
 import { readRepoInfo } from '../../git'
 import { runtimeConvergenceReport } from '../../runtime-assets'
-import type { Opencode } from './supervisor'
+import type { Opencode } from './lifecycle'
 import {
   type OpencodeDeliveryObservation,
   inspectOpencodeRoot,

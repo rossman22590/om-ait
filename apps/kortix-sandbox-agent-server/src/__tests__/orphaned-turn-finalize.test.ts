@@ -5,11 +5,11 @@
  * A killed or crashed opencode emits neither, so the last assistant message
  * stays incomplete and every client streaming it spins — which is what an agent
  * running `kill <opencode pid>` from its own shell produces, and equally what an
- * OOM produces. The supervisor respawns the box within ~500ms, so the sandbox is
+ * OOM produces. The lifecycle respawns the box within ~500ms, so the sandbox is
  * fine; only the turn is stranded.
  *
  * Boot already finalized such a turn when it adopted a root. These tests cover
- * the extracted version, which the supervisor's unplanned-respawn hook now calls
+ * the extracted version, which the lifecycle's unplanned-respawn hook now calls
  * too.
  */
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -100,7 +100,7 @@ describe('finalizeOrphanedTurn', () => {
 
   test('leaves a COMPLETED turn alone', async () => {
     // Aborting a finished turn would be a visible lie in the transcript, and the
-    // supervisor's hook fires on every unplanned respawn — including ones where
+    // lifecycle's hook fires on every unplanned respawn — including ones where
     // nothing was in flight.
     stubFetch(assistantTurn(1_700_000_000));
 
@@ -129,7 +129,7 @@ describe('finalizeOrphanedTurn', () => {
     expect(calls.some((c) => c.includes('/abort'))).toBe(false);
   });
 
-  test('a failing abort is swallowed, never thrown at the supervisor', async () => {
+  test('a failing abort is swallowed, never thrown at the lifecycle', async () => {
     // This runs from the respawn path. A daemon that cannot finish bringing
     // opencode back because it could not tidy up a turn is worse than a spinner.
     stubFetch(assistantTurn(undefined), { abortThrows: true });

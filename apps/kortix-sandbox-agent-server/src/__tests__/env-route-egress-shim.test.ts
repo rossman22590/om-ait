@@ -22,7 +22,7 @@ import { join } from 'node:path'
 
 import type { OpenCodeConfig as Config } from '../harness/open-code/config'
 import { __resetEgressShimForTests, egressShimEnv, stopEgressShim } from '../egress-shim'
-import type { Opencode } from '../harness/open-code/supervisor'
+import type { Opencode } from '../harness/open-code/lifecycle'
 import { createProjectEnvStore } from '../project-env'
 import { Hono } from 'hono'
 import { createEnvRouter } from '../routes/env'

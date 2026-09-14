@@ -8,7 +8,7 @@ import { join } from 'node:path'
 
 import type { OpenCodeConfig as Config } from '../harness/open-code/config'
 import { __flushDaemonLogFileForTests, __resetLoggerFileSinkForTests, enableDaemonLogFile, logger } from '../logger'
-import type { Opencode } from '../harness/open-code/supervisor'
+import type { Opencode } from '../harness/open-code/lifecycle'
 import { startResourceMonitor } from '../resources'
 import { createDiagRouter } from '../routes/diag'
 import { createOpenCodeDiagnosticsService } from '../harness/open-code/diagnostics'

@@ -26,7 +26,7 @@ import { join } from 'node:path'
 import type { OpenCodeConfig as Config } from '../harness/open-code/config'
 import { syncConfigDirToBase } from '../git'
 import { KORTIX_SERVICE_CALL_HEADER } from '../kortix-user-context'
-import type { Opencode } from '../harness/open-code/supervisor'
+import type { Opencode } from '../harness/open-code/lifecycle'
 import { createRefreshRouter } from '../routes/refresh'
 import { createOpenCodeControlService } from '../harness/open-code/control'
 

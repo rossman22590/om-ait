@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { Config } from '../config'
-import type { Opencode } from '../harness/open-code/supervisor'
+import type { Opencode } from '../harness/open-code/lifecycle'
 import type { HarnessDiagnosticsService } from '../harness/diagnostics'
 import {
   DAEMON_LOG_BUFFER_CAP_BYTES,

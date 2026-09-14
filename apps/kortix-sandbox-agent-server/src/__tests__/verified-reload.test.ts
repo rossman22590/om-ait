@@ -9,7 +9,7 @@
  * The required shape is: boot the candidate, verify it serves, then promote it
  * and retire the old process.
  *
- * These assert on source structure. The supervisor owns real child processes,
+ * These assert on source structure. The lifecycle owns real child processes,
  * real ports and a real readiness probe; spawning opencode in unit tests would
  * be slow and flaky. What regresses here is the ORDERING and the FAILURE
  * BRANCH — kill-before-verify, or treating a failed boot as success — and both
@@ -17,10 +17,10 @@
  */
 import { describe, expect, test } from 'bun:test';
 import { createOpenCodeProxyService } from '../harness/open-code/proxy';
-import type { Opencode } from '../harness/open-code/supervisor';
+import type { Opencode } from '../harness/open-code/lifecycle';
 import { loadOpenCodeConfig } from '../harness/open-code/config';
 
-const SRC = await Bun.file(new URL('../harness/open-code/supervisor.ts', import.meta.url).pathname).text();
+const SRC = await Bun.file(new URL('../harness/open-code/lifecycle.ts', import.meta.url).pathname).text();
 const CONFIG = await Bun.file(new URL('../harness/open-code/config.ts', import.meta.url).pathname).text();
 const PROXY = await Bun.file(new URL('../proxy.ts', import.meta.url).pathname).text();
 const REFRESH = await Bun.file(new URL('../harness/open-code/control.ts', import.meta.url).pathname).text();

@@ -17,7 +17,7 @@ await runtime.lifecycle.start()
 | --- | --- |
 | `harness.ts` | Resolution and host-facing contracts |
 | `assets.ts` | Harness maintenance contract |
-| `open-code/service.ts` | Composition over one supervisor; native typed ports |
+| `open-code/service.ts` | Composition over one lifecycle; native typed ports |
 | `open-code/boot.ts` | Native cold boot, warm seed/adoption, first turn, reconciliation and relays |
 | `../routes/` | Controllers, authentication, request parsing, HTTP status/headers, gzip and SSE delivery |
 | `control.ts`, `diagnostics.ts`, `queries.ts`, `proxy.ts` | Named host-facing operation contracts; no router dependencies |
@@ -32,7 +32,7 @@ await runtime.lifecycle.start()
 The host retains its entrypoint, monitor mode, Git/files/PTYs, authentication,
 static previews, LLM/connector proxy, resource sampler, event sequencer, and
 CLI/daemon update scheduler. These call service ports for harness behavior.
-They do not import OpenCode modules or unwrap a native supervisor.
+They do not import OpenCode modules or unwrap a native lifecycle.
 
 There are no root `opencode.ts` or `opencode-events.ts` compatibility reexports.
 Native tests import the implementation that owns the behavior. Package-level architecture tests reject concrete adapter imports from host
@@ -44,17 +44,17 @@ The common interface is not a feature limit. Host controllers register every
 existing route and invoke named resolved operations. The compatibility proxy port
 preserves catch-all forwarding, including native features without a common method.
 OpenCode-specific configuration,
-events and full supervisor operations remain typed inside the adapter. A future
+events and full lifecycle operations remain typed inside the adapter. A future
 adapter can expose its own features without implementing weaker substitutes for
 OpenCode operations. No silent feature fallback or harness switching is added.
 
 `createService` does not spawn a process or subscribe to events. The lifecycle,
-configuration and internal supervisor refer to the same object. Methods that use
+configuration and internal lifecycle refer to the same object. Methods that use
 `this` keep their owner. Warm adoption reuses that object and passes refreshed
 configuration to event subscriptions and controller rebuilds.
 
 Controllers receive the resolved service through dependency injection. They never
-select OpenCode or access its supervisor. `routes/harness-control.ts` binds current
+select OpenCode or access its lifecycle. `routes/harness-control.ts` binds current
 configuration to control/query operations and registers the existing URLs.
 `/kortix/opencode/*` remains a compatibility URL, not an implementation selector.
 

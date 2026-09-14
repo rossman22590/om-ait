@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import type { OpenCodeConfig as Config } from '../harness/open-code/config'
-import { createOpencodeSupervisor, prefetchExecutablePages } from '../harness/open-code/supervisor'
+import { createOpencodeLifecycle, prefetchExecutablePages } from '../harness/open-code/lifecycle'
 
 const tempDirs: string[] = []
 
@@ -39,7 +39,7 @@ describe('OpenCode executable prefetch', () => {
       opencodeInternalPort: 4096,
       opencodeStandbyPort: 4097,
     } as Config
-    const opencode = createOpencodeSupervisor(cfg, fixture.dir, undefined, {
+    const opencode = createOpencodeLifecycle(cfg, fixture.dir, undefined, {
       binaryPathOverride: fixture.path,
       configPathOverride: join(fixture.dir, 'opencode-config.json'),
     })
@@ -91,7 +91,7 @@ describe('OpenCode executable prefetch', () => {
     ).rejects.toThrow('synthetic allocation failure')
   })
 
-  test('resolves and prefetches the binary once per supervisor', async () => {
+  test('resolves and prefetches the binary once per lifecycle', async () => {
     const fixture = await fixtureFile(1024)
     const marks: string[] = []
     const cfg = {
@@ -100,7 +100,7 @@ describe('OpenCode executable prefetch', () => {
       opencodeInternalPort: 4096,
       opencodeStandbyPort: 4097,
     } as Config
-    const opencode = createOpencodeSupervisor(cfg, fixture.dir, undefined, {
+    const opencode = createOpencodeLifecycle(cfg, fixture.dir, undefined, {
       binaryPathOverride: fixture.path,
       onStartupMark: (mark) => marks.push(mark),
     })
@@ -124,7 +124,7 @@ describe('OpenCode executable prefetch', () => {
       opencodeStandbyPort: 4097,
     } as Config
     const marks: string[] = []
-    const opencode = createOpencodeSupervisor(cfg, dir, undefined, {
+    const opencode = createOpencodeLifecycle(cfg, dir, undefined, {
       binaryPathOverride: missing,
       onStartupMark: (mark) => marks.push(mark),
     })
@@ -146,7 +146,7 @@ describe('OpenCode executable prefetch', () => {
       opencodeInternalPort: 4096,
       opencodeStandbyPort: 4097,
     } as Config
-    const opencode = createOpencodeSupervisor(cfg, fixture.dir, undefined, {
+    const opencode = createOpencodeLifecycle(cfg, fixture.dir, undefined, {
       binaryPathOverride: fixture.path,
       configPathOverride: join(fixture.dir, 'opencode-config.json'),
       prefetchExecutableOverride: async () => {
@@ -173,7 +173,7 @@ describe('OpenCode executable prefetch', () => {
       opencodeInternalPort: 4096,
       opencodeStandbyPort: 4097,
     } as Config
-    const opencode = createOpencodeSupervisor(cfg, fixture.dir, undefined, {
+    const opencode = createOpencodeLifecycle(cfg, fixture.dir, undefined, {
       binaryPathOverride: fixture.path,
       prefetchExecutableOverride: (_path, signal) =>
         new Promise<number>((_resolve, reject) => {
@@ -214,7 +214,7 @@ describe('OpenCode executable prefetch', () => {
       opencodeInternalPort: 4096,
       opencodeStandbyPort: 4097,
     } as Config
-    const opencode = createOpencodeSupervisor(cfg, fixture.dir, undefined, {
+    const opencode = createOpencodeLifecycle(cfg, fixture.dir, undefined, {
       binaryPathOverride: fixture.path,
       configPathOverride: join(fixture.dir, 'opencode-config.json'),
       onStartupMark: (mark) => marks.push(mark),
@@ -251,7 +251,7 @@ describe('OpenCode executable prefetch', () => {
       opencodeInternalPort: 4096,
       opencodeStandbyPort: 4097,
     } as Config
-    const opencode = createOpencodeSupervisor(cfg, fixture.dir, undefined, {
+    const opencode = createOpencodeLifecycle(cfg, fixture.dir, undefined, {
       configPathOverride: join(fixture.dir, 'opencode-config.json'),
       binaryPathResolverOverride: async () => (++attempts === 1 ? null : fixture.path),
     })

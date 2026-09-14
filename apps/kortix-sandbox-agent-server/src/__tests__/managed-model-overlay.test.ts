@@ -15,7 +15,7 @@ import {
   startManagedModelsPrefetch,
   withManagedOverlay,
   type Opencode,
-} from '../harness/open-code/supervisor'
+} from '../harness/open-code/lifecycle'
 import { loadOpenCodeConfig as loadConfig } from '../harness/open-code/config'
 import { reconcileManagedModels, resetManagedReconcileForTests } from '../harness/open-code/boot'
 

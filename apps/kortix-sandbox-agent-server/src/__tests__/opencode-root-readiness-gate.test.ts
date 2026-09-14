@@ -11,7 +11,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 }
 
 describe('fast OpenCode root readiness gate', () => {
-  test('waits for the supervisor first-ready signal before root resolution', async () => {
+  test('waits for the lifecycle first-ready signal before root resolution', async () => {
     const ready = deferred()
     const events: string[] = []
     let now = 1_000

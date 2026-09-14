@@ -1634,7 +1634,7 @@ async function resolveOpencodeCwd(cfg: Config): Promise<string> {
 export type OpencodeState = HarnessState
 
 export interface LivenessDecisionInput {
-  /** The supervisor's current opencode state. */
+  /** The lifecycle's current opencode state. */
   state: OpencodeState
   /** Did THIS liveness probe get a healthy answer from opencode? */
   ready: boolean
@@ -1722,7 +1722,7 @@ export type Opencode = HarnessLifecycleService & {
   waitForCurrentReadyResponse(): Promise<void>
 }
 
-export interface OpencodeSupervisorOptions {
+export interface OpencodeLifecycleOptions {
   onStartupMark?: (label: string) => void
   onFirstReadyResponse?: () => void
   /**
@@ -1757,7 +1757,7 @@ export interface OpencodeSupervisorOptions {
    * you get when an agent runs `kill <opencode pid>` from its own shell, and
    * equally what an OOM or a crash produces.
    *
-   * The supervisor cannot fix that itself: it knows nothing about sessions.
+   * The lifecycle cannot fix that itself: it knows nothing about sessions.
    * It reports the fact and main.ts finalizes the orphaned turn, the same way
    * boot already does when it adopts a root whose last turn never completed.
    */
@@ -1773,11 +1773,11 @@ export interface OpencodeSupervisorOptions {
   onUnplannedRespawn?: () => void | Promise<boolean | void>
 }
 
-export function createOpencodeSupervisor(
+export function createOpencodeLifecycle(
   cfg: Config,
   opencodeConfigDir: string,
   projectEnv?: ProjectEnvStore,
-  options: OpencodeSupervisorOptions = {},
+  options: OpencodeLifecycleOptions = {},
 ): Opencode {
   let currentCfg = cfg
   let currentOpencodeConfigDir = opencodeConfigDir
@@ -2189,7 +2189,7 @@ export function createOpencodeSupervisor(
     | { ok: false; reason: string }
   > {
     if (!binaryPath) return { ok: false, reason: 'opencode binary not resolved yet' }
-    if (stopping) return { ok: false, reason: 'supervisor is shutting down' }
+    if (stopping) return { ok: false, reason: 'lifecycle is shutting down' }
 
     const candidatePort = livePort() === currentCfg.opencodeInternalPort
       ? currentCfg.opencodeStandbyPort

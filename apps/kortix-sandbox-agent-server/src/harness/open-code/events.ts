@@ -1,6 +1,6 @@
 import { logger } from '../../logger'
 import type { OpenCodeConfig as Config } from './config'
-import type { Opencode } from './supervisor'
+import type { Opencode } from './lifecycle'
 
 // opencode's QuestionInfo schema, mirrored from the v2 SDK. Anything richer
 // (like permission.asked) is layered on top of the same SSE stream.
@@ -73,7 +73,7 @@ export interface OpencodeEventLoopOptions {
 }
 
 // Subscribe to opencode's SSE event stream and dispatch known event types.
-// Auto-reconnects on close — when the underlying opencode supervisor restarts,
+// Auto-reconnects on close — when the underlying opencode lifecycle restarts,
 // we'll loop reconnecting until /event is reachable again.
 export function startOpencodeEventLoop(
   opencode: Opencode,

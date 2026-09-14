@@ -1,7 +1,7 @@
 import type { OpenCodeConfig as Config } from './config'
 import { logger } from '../../logger'
 import { startResourceMonitor, type ResourceMonitor } from '../../resources'
-import type { Opencode } from './supervisor'
+import type { Opencode } from './lifecycle'
 import { OPENCODE_HOME } from './paths'
 import { defaultSidecarDir, opencodeDbPath, runAttachmentOffloadPass } from './attachment-offload'
 import { opencodeTurnInFlight, readPinnedSessionId } from './opencode-turn-state'

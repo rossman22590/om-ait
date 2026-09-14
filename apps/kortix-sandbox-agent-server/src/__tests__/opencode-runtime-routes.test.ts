@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type { OpenCodeConfig as Config } from '../harness/open-code/config'
-import type { Opencode } from '../harness/open-code/supervisor'
+import type { Opencode } from '../harness/open-code/lifecycle'
 import { OpencodeDb } from '../harness/open-code/opencode-db'
 import { RuntimeStateStore } from '../harness/open-code/runtime-state-projection'
 import { KortixEventBus, kortixEventBus, resetKortixEventBusForTests } from '../kortix-event-bus'

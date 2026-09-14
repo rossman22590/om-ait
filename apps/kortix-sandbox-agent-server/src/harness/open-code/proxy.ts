@@ -4,7 +4,7 @@ import { bootPhaseLabel } from './boot-phase'
 import { runtimeAssetsActivity } from '../../runtime-assets'
 import { logger } from '../../logger'
 import { isRepoMaterialized } from '../../git'
-import type { Opencode } from './supervisor'
+import type { Opencode } from './lifecycle'
 import type { OpenCodeBootState } from './boot-state'
 import { stripInlineAttachmentBytes } from './inline-attachments'
 

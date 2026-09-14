@@ -26,7 +26,7 @@ import {
   writeManagedOverlayCatalogFile,
   waitForOpencodeReady,
   type Opencode,
-} from './supervisor'
+} from './lifecycle'
 import { relayBootTimelineToApi } from '../../boot-timeline-relay'
 import { scheduleRuntimeProjectionPush } from './runtime-projection-relay'
 import { repairOpencodeConfigDir } from './apple-double'
@@ -145,7 +145,7 @@ export async function runOpenCode(context: HarnessBootContext & { cfg: Config; b
   // cleanly while opencode is still starting, and /kortix/health never touches
   // opencode at all. So bind first, then clone.
   //
-  // The supervisor is created here with the BAKED config dir because the
+  // The lifecycle is created here with the BAKED config dir because the
   // project's own dir lives inside the repo and isn't known yet; it is
   // reconfigured with the resolved dir below, before the process is ever
   // spawned. `reconfigure` only rewrites state read at spawn time, so this is
@@ -194,7 +194,7 @@ export async function runOpenCode(context: HarnessBootContext & { cfg: Config; b
   // Hand the convergence machinery this session's live runtime, once.
   //
   // Two things need it. opencode convergence restarts opencode, so it goes
-  // through the supervisor that owns spawn/respawn/dispose — never behind its
+  // through the lifecycle that owns spawn/respawn/dispose — never behind its
   // back. And a staged daemon update exits `75` through the SAME clean shutdown
   // a SIGTERM takes: opencode is a child of this process, so a bare
   // `process.exit` would leave the relaunched daemon fighting an orphan for the
@@ -969,7 +969,7 @@ async function startSessionRuntime(
     // duplicate subscription when the initial session was requested but failed).
     if (!loopStarted) harness.events.subscribe(cfg, eventHandlers)
   } else {
-    logger.warn('[boot] opencode did not become ready within deadline; supervisor still retrying', { opencodePid: opencode.getPid() })
+    logger.warn('[boot] opencode did not become ready within deadline; lifecycle still retrying', { opencodePid: opencode.getPid() })
   }
 }
 
@@ -1581,7 +1581,7 @@ export async function publishInitialOpenCodeSessionAfterPrompt(
  * A turn ends only when opencode emits `session.idle`/`session.error`. A killed
  * or crashed opencode emits neither, so the last assistant message stays
  * incomplete and every client streaming it spins — indefinitely, because the
- * supervisor's respawn brings the box back without ever closing that turn.
+ * lifecycle's respawn brings the box back without ever closing that turn.
  *
  * Boot already did exactly this when it adopted a root whose last turn never
  * finished; it was simply unreachable from anywhere else. Same two calls, now
@@ -1765,7 +1765,7 @@ async function waitForSignalOrTimeout(signal: Promise<void>, timeoutMs: number):
 }
 
 /**
- * Hold the optional FAST root lookup for the supervisor's first successful
+ * Hold the optional FAST root lookup for the lifecycle's first successful
  * session-API response. The gate replaces at most one doomed five-second
  * root-list request. Its elapsed time is deducted from the existing 20-second
  * root-resolution budget, so it cannot extend boot. The unchanged resolver

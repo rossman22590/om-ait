@@ -35,7 +35,7 @@
  */
 import { logger } from '../../logger'
 import type { OpenCodeConfig as Config } from './config'
-import type { Opencode } from './supervisor'
+import type { Opencode } from './lifecycle'
 import { OpencodeDb, isSupportedOpencodeVersion } from './opencode-db'
 import { kortixEventBus } from '../../kortix-event-bus'
 import {

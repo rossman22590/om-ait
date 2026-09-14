@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { OFFLOAD_PLACEHOLDER_URL } from '../harness/open-code/attachment-offload'
-import type { Opencode } from '../harness/open-code/supervisor'
+import type { Opencode } from '../harness/open-code/lifecycle'
 import { createPartRouter } from '../routes/part'
 import { createOpenCodeAttachmentService, findAttachment } from '../harness/open-code/queries'
 

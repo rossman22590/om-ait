@@ -8,7 +8,7 @@ import {
   publishOpencodeNativeLink,
   resolveInstalledOpencodeNative,
 } from '../harness/open-code/opencode-binary'
-import { detectOpencodeBinary } from '../harness/open-code/supervisor'
+import { detectOpencodeBinary } from '../harness/open-code/lifecycle'
 import { installOpencodeVersion } from '../harness/open-code/assets'
 
 const tempDirs: string[] = []
@@ -318,7 +318,7 @@ describe('OpenCode runtime installation', () => {
 
 describe('isStubOpencodeLauncher', () => {
   test('recognises the pnpm postinstall stub behind a real cmd-shim and accepts a real launcher', async () => {
-    const { isStubOpencodeLauncher } = await import('../harness/open-code/supervisor')
+    const { isStubOpencodeLauncher } = await import('../harness/open-code/lifecycle')
     const dir = await mkdtemp(join(tmpdir(), 'kortix-stub-'))
     try {
       // Exactly what pnpm's shim looks like on a box (Essentia 2026-08-25).

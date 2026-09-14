@@ -6,7 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import type { OpenCodeConfig as Config } from '../harness/open-code/config'
-import type { Opencode } from '../harness/open-code/supervisor'
+import type { Opencode } from '../harness/open-code/lifecycle'
 import { buildOpenCodeTestApp } from './helpers/open-code-harness'
 import { KORTIX_USER_CONTEXT_HEADER } from '../kortix-user-context'
 

@@ -1,6 +1,6 @@
 import type { OpenCodeConfig as Config } from './config';
 import { logger } from '../../logger';
-import type { Opencode } from './supervisor';
+import type { Opencode } from './lifecycle';
 import type { OpencodeTurnError } from './events';
 
 // ─────────────────────────────────────────────────────────────────────────────

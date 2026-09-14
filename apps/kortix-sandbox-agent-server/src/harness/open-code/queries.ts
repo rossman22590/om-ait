@@ -8,7 +8,7 @@ import type {
 } from '../queries'
 import type { OpenCodeConfig } from './config'
 import { requireOpenCodeConfig } from './config'
-import type { Opencode } from './supervisor'
+import type { Opencode } from './lifecycle'
 import { OpencodeDb, isSupportedOpencodeVersion } from './opencode-db'
 import { projectTranscript } from './opencode-projection'
 import { configureRuntimeState, runtimeStateStore, type RuntimeStateStore } from './runtime-state-projection'

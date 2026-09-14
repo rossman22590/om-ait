@@ -26,7 +26,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const OPENCODE_SRC = readFileSync(join(import.meta.dir, '..', 'harness', 'open-code', 'supervisor.ts'), 'utf8')
+const OPENCODE_SRC = readFileSync(join(import.meta.dir, '..', 'harness', 'open-code', 'lifecycle.ts'), 'utf8')
 
 function disposeReloadBody(): string {
   // tryDisposeReload + the disposeInstances helper it delegates the HTTP call to.
@@ -96,7 +96,7 @@ describe('tryDisposeReload', () => {
     expect(ENV_ROUTE).toContain('requiresRespawn(')
     expect(ENV_ROUTE).toContain('result.changedNames')
     expect(ENV_ROUTE).toContain('reloadConfig({ mustRespawn })')
-    // And the supervisor must honour it BEFORE trying dispose.
+    // And the lifecycle must honour it BEFORE trying dispose.
     const reload = OPENCODE_SRC.split('async reloadConfig(')[1]?.split('\n    },')[0]
     expect(reload).toContain('!opts.mustRespawn && (await tryDisposeReload())')
   })
@@ -133,7 +133,7 @@ describe('tryDisposeReload', () => {
  * OLD auth.json on disk and opencode kept authenticating with the account the
  * user had just replaced — while the UI confirmed the new one.
  */
-import { requiresRespawn, RESPAWN_REQUIRED_ENV_NAMES } from '../harness/open-code/supervisor'
+import { requiresRespawn, RESPAWN_REQUIRED_ENV_NAMES } from '../harness/open-code/lifecycle'
 
 describe('requiresRespawn', () => {
   test('the auth carriers force a respawn — a dispose cannot rewrite auth.json', () => {
