@@ -4,7 +4,7 @@ import { unwrap } from './shared';
 // ── Full v2 agent-config editor (the "agent builder", agent-first spec §2.2,
 // redirected 2026-07-05 — "one home per concern") ──
 // Round-trips the agent's TWO homes as one wire shape: `block` (governance —
-// connectors/secrets/skills/kortix_cli/workspace/enabled, written to
+// connectors/secrets/skills/kortix_cli/repository_access/enabled, written to
 // kortix.yaml) and `block.opencode` (OpenCode BEHAVIOR — mode/model/
 // temperature/top_p/steps/variant/color/hidden/permission/prompt, written to
 // the agent's own native `.kortix/opencode/agents/<name>.md` frontmatter +

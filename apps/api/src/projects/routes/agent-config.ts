@@ -3,7 +3,7 @@
 // 2026-07-05: "one home per concern").
 //
 // TWO homes, ONE wire contract: kortix.yaml carries governance ONLY
-// (connectors/secrets/skills/kortix_cli/workspace/enabled); the agent's own
+// (connectors/secrets/skills/kortix_cli/repository_access/enabled); the agent's own
 // native `.kortix/opencode/agents/<name>.md` frontmatter + body carries every
 // OpenCode-behavioral field (mode/model/temperature/top_p/steps/variant/
 // color/hidden/permission) plus the prompt itself. This route is the ONE

@@ -362,4 +362,4 @@ agents:
 The deprecated `workspace` field remains readable: `branch` means `true`, and `runtime` means `false`.
 Legacy `read` configurations still reject session creation until you replace the field with an explicit boolean.
 There is no read-only repository mode. Conflicting old and new fields are rejected.
-Saving an agent in the editor writes `repository_access` instead of the legacy field.
+The editor and SDK send `repository_access`. For disabled access, the API also stores `workspace: runtime` as a compatibility mirror. This preserves the restriction for older API replicas during rollout or rollback. API reads omit the mirror. Hand-authored manifests using only `repository_access` require the updated API.

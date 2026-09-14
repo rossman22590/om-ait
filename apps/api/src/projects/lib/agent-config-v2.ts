@@ -2,7 +2,7 @@
  * Read/write helpers for the v2 `agents.<name>` GOVERNANCE block (spec
  * docs/specs/2026-07-05-agent-first-config-unification.md §2.2, redirected
  * 2026-07-05 — "one home per concern"). `AgentBlockV2` here is governance
- * ONLY: connectors/secrets/skills/kortix_cli/workspace/enabled. OpenCode
+ * ONLY: connectors/secrets/skills/kortix_cli/repository_access/enabled. OpenCode
  * BEHAVIOR (mode/model/temperature/top_p/steps/variant/color/hidden/
  * permission/prompt) lives entirely in the agent's own native
  * `.kortix/opencode/agents/<name>.md` frontmatter + body — see
@@ -200,6 +200,8 @@ function applyAgentMapBlock(
   };
   const repository = normalizeRepositoryAccess(normalized.block);
   if (!repository.ok) return repository;
+  // Older API replicas ignore repository_access. Keep their deny signal during rollout and rollback.
+  if (repository.block.repository_access === false) repository.block.workspace = 'runtime';
   nextAgents[agentName] = repository.block;
   const nextRaw = { ...manifest.raw, agents: nextAgents };
 

@@ -711,7 +711,7 @@ export function buildManifestV2Schema(): JsonSchemaFragment {
     title: 'Kortix manifest (kortix_version 2)',
     description:
       'kortix.yaml, schema version 2 — YAML-only. `agents` is a name→block MAP, ' +
-      'GOVERNANCE ONLY (connectors/secrets/skills/kortix_cli/workspace/enabled); every agent must ' +
+      'GOVERNANCE ONLY (connectors/secrets/skills/kortix_cli/repository_access/enabled); every agent must ' +
       'be declared, and OpenCode behavior (description/model/mode/temperature/permission/the ' +
       'prompt itself) lives entirely in that agent’s own native ' +
       '`.kortix/opencode/agents/<name>.md` frontmatter + body — authoring any of those fields ' +

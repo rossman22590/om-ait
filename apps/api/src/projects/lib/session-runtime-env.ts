@@ -86,7 +86,7 @@ export function auditRelayEnvPassthrough(
 }
 
 export function buildSessionRuntimeEnv(input: SessionRuntimeEnvInput): Record<string, string> {
-  const allowsFullRepository = (input.repositoryAccess ?? true);
+  const allowsFullRepository = input.repositoryAccess ?? true;
   const compiledBootMode = input.compiledBootMode ?? 'off';
   const compiledBootEnabled = compiledBootMode !== 'off';
   const projectGitEnv: Record<string, string> = allowsFullRepository

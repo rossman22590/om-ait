@@ -370,11 +370,13 @@ describe('connectors_required — the config route validation gate', () => {
 
 
 describe('repository access', () => {
-  test('preserves false and removes supported legacy modes when saving', () => {
+  test('mirrors false for older API readers while returning only the boolean', () => {
     const saved = applyAgentBlockV2(v2Manifest(), 'support', { repository_access: false });
     expect(saved.ok).toBe(true);
     if (!saved.ok) return;
-    expect((saved.raw.agents as any).support).toEqual({ repository_access: false });
+    expect((saved.raw.agents as any).support).toEqual({ repository_access: false, workspace: 'runtime' });
+    const read = readAgentBlockV2({ ...v2Manifest(), raw: saved.raw }, 'support');
+    expect(read.ok && read.block).toEqual({ repository_access: false });
   });
   test('rejects conflicting aliases and invalid boolean values', () => {
     for (const block of [{ repository_access: true, workspace: 'runtime' }, { repository_access: 'false' }]) {
