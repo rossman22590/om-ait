@@ -45,3 +45,19 @@ it('sends the diagnostic credential but redacts it from captured artifacts', asy
   expect(response.captured.req.headers[CI_PASSTHROUGH_HEADER.toLowerCase()]).toBe(`${secret.slice(0, 6)}***[64]`);
   expect(JSON.stringify(response.captured)).not.toContain(secret);
 });
+
+it('keeps a gateway mount prefix when binding credentials, without doubling the API version', async () => {
+  const urls: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: URL) => {
+    urls.push(String(url));
+    return new Response('{}', { headers: { 'content-type': 'application/json' } });
+  }));
+  await new Client('https://preview.test/_gateway').withBearer('test').get('/v1/models');
+  await new Client('https://preview.test/_gateway').get('/health');
+  await new Client('https://preview.test/v1').get('/v1/health');
+  expect(urls).toEqual([
+    'https://preview.test/_gateway/v1/models',
+    'https://preview.test/_gateway/health',
+    'https://preview.test/v1/health',
+  ]);
+});
