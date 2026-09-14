@@ -52,6 +52,7 @@ const STATIC_GROUPS: readonly RailGroupDefinition[] = [
     // same way "Workspace" and "Account" do.
     label: 'Personal',
     items: [
+      { tab: 'provider-connections', label: 'My providers', description: 'Your subscriptions and provider API keys, reusable across projects.', icon: Link },
       {
         tab: 'profile',
         label: 'Profile',

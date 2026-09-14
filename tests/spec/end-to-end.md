@@ -1016,3 +1016,7 @@ Native commands trust only the configured frontend origin in the main window's
 main frame. A second window at that same origin must receive an unauthorized
 sender error. Full document navigation within the configured frontend stays in
 the app, including when the frontend uses a custom host.
+
+### SEC-30 — Personal provider connections across projects
+
+A signed-in user saves a provider credential independently of projects. Anonymous and account-token callers cannot manage global credentials. Metadata responses omit credential values. Another user cannot see or bind the credential. Project use requires explicit binding, and two projects reference the same connection. Disabling one binding preserves the other. Disconnecting removes all bindings. Unsupported OAuth providers, tampered device handles, and empty API keys fail safely.

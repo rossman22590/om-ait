@@ -1,3 +1,5 @@
+import { listProjectUserProviderConnections } from '../../provider-connections/store';
+import { providerConnectionAdapter } from '../../provider-connections/adapters';
 import { accountMayUseManagedModels } from '../../billing/services/entitlements';
 import { listProjectSecretNamesForConsumer } from '../../projects/secrets';
 import { getAccountModelDefaults } from '../../repositories/model-preferences';
@@ -52,6 +54,13 @@ export async function servableProjectCatalog(input: {
     getAccountModelDefaults(accountId, projectId),
     getProjectRoutingPolicy(projectId),
   ]);
+  if (principalUserId) {
+    const personal = await listProjectUserProviderConnections(projectId, principalUserId);
+    for (const binding of personal) {
+      const adapter = providerConnectionAdapter(binding.provider_id);
+      if (adapter) secrets.push(adapter.secretName);
+    }
+  }
   const effectiveDefault = toWireModel(
     defaults.projects[projectId] ?? defaults.account ?? platformDefaultModelId() ?? '',
   );

@@ -1,3 +1,4 @@
+import { resolveUserProviderConnection } from '../../provider-connections/store';
 import {
   type AuthedPrincipal,
   GatewayResolutionError,
@@ -172,7 +173,8 @@ export async function resolveCandidates(
         name,
         consumer: 'llm_gateway',
       });
-    const keys = await resolveProjectSecretsForConsumer({
+    const personal = await resolveUserProviderConnection(principal.projectId, principal.userId, provider);
+    const keys = personal ? [{ identifier: `personal:${personal.connectionId}`, value: personal.value }] : await resolveProjectSecretsForConsumer({
       projectId: principal.projectId,
       accountId: principal.accountId,
       sessionId: principal.sessionId,
