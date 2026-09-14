@@ -539,3 +539,28 @@ describe('ProviderConnectView — connection scope stays inside its row', () => 
     expect(html).not.toContain('type="password"');
   });
 });
+
+describe('ProviderConnectView — connection actions', () => {
+  test('replaces inline credentials with one action per provider and keeps reader instructions', () => {
+    const html = renderToStaticMarkup(
+      <ProviderConnectView
+        {...props({
+          canWrite: false,
+          rows: [OPENAI],
+          instruction: 'Connect your account or add a connection for this project.',
+          wrapCredentials: () => (
+            <>
+              <span>Not connected</span>
+              <button>Connect</button>
+            </>
+          ),
+        })}
+      />,
+    );
+    expect(html.match(/data-provider-row="openai"/g)).toHaveLength(1);
+    expect(html.match(/<button[^>]*>Connect<\/button>/g)).toHaveLength(1);
+    expect(html).not.toContain('type="password"');
+    expect(html).not.toContain('role="combobox"');
+    expect(html).toContain('Connect your account or add a connection for this project.');
+  });
+});
