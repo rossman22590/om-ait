@@ -110,7 +110,11 @@ async function openIdentityWizard(
     projectId = project.id;
 
     const url = `/projects/${project.id}?accountId=${accountId}&accountTab=identity&accountSetup=${flow}`;
-    await installBrowserSessionDirect(page, session, url, authOptions);
+    // Install the session on a static asset, then navigate to the app ONCE.
+    // Landing on the app twice aborts the first page's in-flight
+    // `GET /auth/v1/user`, and AuthProvider answers that fetch failure with a
+    // global sign-out (preview run 34896117591 landed on /auth this way).
+    await installBrowserSessionDirect(page, session, "/favicon.png", authOptions);
     await selectAccountForUi(page, accountId);
     await page.goto(url, { waitUntil: "domcontentloaded" });
     await dismissOnboarding(page);
