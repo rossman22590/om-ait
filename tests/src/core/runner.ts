@@ -342,7 +342,18 @@ export async function runSuite(opts: RunOptions): Promise<RunResult> {
         const sessionId = created.json<{ session_id: string }>().session_id;
         if (!sessionId) throw new Error('sandbox setup returned no session_id');
         stack.push('session', sessionId, { projectId: project.id });
-        log.info('sandbox setup: waiting for the default image and runtime (up to 15 minutes)');
+        const setupDeadline = Date.now() + 900_000;
+        log.info('sandbox setup: waiting for the current default image and runtime (up to 15 minutes)');
+        // Session boot can use the previous ready image while the current one
+        // builds. The preview gate must exercise this deploy's baked daemon.
+        await waitFor(async () => {
+          const snapshots = await client.get('/v1/projects/:projectId/snapshots',
+            { params: { projectId: project.id } });
+          snapshots.status(200);
+          return snapshots.json<{ templates: Array<{ is_default: boolean; ready: boolean }> }>()
+            .templates.find((template) => template.is_default)?.ready === true;
+        }, { until: (ready) => ready, timeoutMs: 900_000, intervalMs: 5000,
+          description: 'current default sandbox image readiness' });
         await waitFor(async () => {
           const ready = await client.post('/v1/projects/:projectId/sessions/:sessionId/start', {},
             { params: { projectId: project.id, sessionId }, query: { wait_ms: '8000' }, timeoutMs: 30_000 });
@@ -350,9 +361,9 @@ export async function runSuite(opts: RunOptions): Promise<RunResult> {
           const body = ready.json<{ stage: string; retriable: boolean; message?: string }>();
           if (body.stage === 'error' && !body.retriable) throw new Error(JSON.stringify(body));
           return body.stage;
-        }, { until: (stage) => stage === 'ready', timeoutMs: 900_000, intervalMs: 3000,
+        }, { until: (stage) => stage === 'ready', timeoutMs: Math.max(1, setupDeadline - Date.now()), intervalMs: 3000,
           description: 'sandbox fixture readiness' });
-        log.info('sandbox setup: default image and runtime ready');
+        log.info('sandbox setup: current default image and runtime ready');
       } finally {
         await stack.teardown();
       }

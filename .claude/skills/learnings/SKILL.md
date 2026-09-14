@@ -21,6 +21,24 @@ linked, not inlined.
 
 ## Register
 
+### Await archive parser completion before extraction (2026-09-14)
+
+**When:** downloading an archive through parallel file and validation streams.
+A file sink finishing does not mean the decompressor has checked every header.
+Await the parser verdict before creating the extraction directory or launching tar.
+*Near-miss:* PR #7240 Linux package gate created a stage for a traversal archive;
+the guard and extraction raced. *Enforcer:* real traversal archive regression in
+`config-provider.test.ts`; it requires no stage and no extracted files on rejection.
+
+### Establish browser readiness before measuring navigation or capturing fonts (2026-09-14)
+
+**When:** measuring document reloads or taking UI screenshots. Await the initial
+load before recording its baseline. Select destination links by their exact href;
+await font readiness before screenshot capture within the journey deadline.
+*Incident:* PR #7240 local Chromium counted a late boot load as a menu reload,
+clicked before the agent card appeared, and timed out during a 46-second cold font load.
+*Enforcers:* browser journeys 24 and 27 retain navigation, layout, and screenshot assertions.
+
 ### Drop decoded response headers and capture transcripts before manual stop (2026-09-14)
 
 **When:** forwarding a fetch response or stopping a session. Remove
@@ -37,7 +55,8 @@ platform names and OpenCode titles are validated independently (GOLD-1, SESS-10)
 **When:** running the full suite on a self-hosted preview. Preserve the gateway's
 `/_gateway` mount when binding test credentials. Enable every tested page in the
 preview profile. Finish the cold default-image build before runtime flow timers;
-run forced shared-image rebuilds only after concurrent flows finish.
+run forced shared-image rebuilds only after concurrent flows finish. Require the
+current template identity to be ready; fallback images carry an older daemon.
 *Incident:* PR #7240 preview run 34902478412: four gateway failures and seven
 runtime timeouts; `SNAP-2` deleted the shared image while sessions were booting.
 *Enforcers:* `client-ci-passthrough.test.ts`, `preview-stack.test.ts`, runner sandbox

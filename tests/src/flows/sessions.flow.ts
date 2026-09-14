@@ -164,6 +164,7 @@ flow(
       'GET /v1/projects/:projectId/sessions/:sessionId/public-shares',
       'DELETE /v1/projects/:projectId/sessions/:sessionId/public-shares/:shareId',
       'GET /v1/p/public-share/:token',
+      'GET /v1/p/config',
     ],
   },
   async (ctx) => {
@@ -338,7 +339,7 @@ flow(
     });
 
     await ctx.step(
-      'unauthenticated resolution of the file token → 200/503 with its public origin URL',
+      'unauthenticated file resolution matches the deployment’s preview-origin configuration',
       async () => {
         const r = await ctx.client
           .as(ctx.P.ANON)
@@ -346,6 +347,13 @@ flow(
         r.status([200, 503]);
         if (r.statusCode === 200) {
           r.body().has('$.share.resource_type', 'file').has('$.share.file_path', '/workspace/README.md');
+          const config = await ctx.client.as(ctx.P.ANON).get('/v1/p/config');
+          config.status(200);
+          if (config.json<any>().preview_url_template === null) {
+            r.body().has('$.share.public_url', null)
+              .has('$.share.proxy_path', `/v1/p/public-share/${fileToken}/file`);
+            return;
+          }
           const publicUrl = new URL(r.json<any>().share.public_url);
           if (publicUrl.protocol !== 'https:' || publicUrl.pathname !== '/open') {
             throw new Error(`file share returned an invalid public_url: ${publicUrl}`);
