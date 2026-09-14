@@ -368,6 +368,10 @@
         "plan": {
           "label": "Piano",
           "description": "Abbonamento, postazioni del team e fatturazione di questo account."
+        },
+        "provider-connections": {
+          "label": "I miei provider",
+          "description": "I tuoi abbonamenti e le chiavi API dei provider, riutilizzabili nei progetti."
         }
       }
     },

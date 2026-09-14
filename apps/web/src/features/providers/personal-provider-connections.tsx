@@ -36,7 +36,8 @@ export function PersonalProviderConnections({ projectId }: { projectId?: string 
   const adapter = connections.data?.providers.find(p => p.provider_id === provider);
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: connectionsKey });
-    if (projectId) await refreshProjectProviderState(queryClient, projectId);
+    if (projectId) refreshProjectProviderState(queryClient, projectId);
+    else await queryClient.invalidateQueries();
   };
   const connect = useMutation({
     mutationFn: async () => {

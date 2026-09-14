@@ -221,6 +221,10 @@
         "plan": {
           "label": "Plan",
           "description": "Your subscription, team seats, and billing for this account."
+        },
+        "provider-connections": {
+          "label": "My providers",
+          "description": "Your subscriptions and provider API keys, reusable across projects."
         }
       }
     },

@@ -368,6 +368,10 @@
         "plan": {
           "label": "Forfait",
           "description": "Abonnement, sièges d'équipe et facturation de ce compte."
+        },
+        "provider-connections": {
+          "label": "Mes fournisseurs",
+          "description": "Vos abonnements et clés API de fournisseurs, réutilisables dans plusieurs projets."
         }
       }
     },

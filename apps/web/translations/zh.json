@@ -368,6 +368,10 @@
         "plan": {
           "label": "套餐",
           "description": "此账户的订阅、团队席位和账单。"
+        },
+        "provider-connections": {
+          "label": "我的提供商",
+          "description": "你的订阅和提供商 API 密钥，可跨项目使用。"
         }
       }
     },

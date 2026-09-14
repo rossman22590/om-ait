@@ -22,7 +22,11 @@ export function providerConnectionAdapters(): ProviderConnectionAdapter[] {
     if (!upstream || upstream.kind === 'bedrock') continue;
     adapters.push({ id: provider.id, name: provider.name, authType: 'api_key', secretName: upstream.envVar });
   }
-  return adapters;
+  const priority = ['codex', 'openai', 'anthropic', 'google', 'openrouter'];
+  return adapters.sort((a, b) => {
+    const rank = (id: string) => { const index = priority.indexOf(id); return index < 0 ? priority.length : index; };
+    return rank(a.id) - rank(b.id) || a.name.localeCompare(b.name);
+  });
 }
 
 export function providerConnectionAdapter(id: string) {

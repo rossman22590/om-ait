@@ -368,6 +368,10 @@
         "plan": {
           "label": "Plano",
           "description": "Assinatura, licenças da equipe e cobrança desta conta."
+        },
+        "provider-connections": {
+          "label": "Meus provedores",
+          "description": "Suas assinaturas e chaves de API de provedores, reutilizáveis entre projetos."
         }
       }
     },

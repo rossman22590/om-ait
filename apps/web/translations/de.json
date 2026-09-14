@@ -368,6 +368,10 @@
         "plan": {
           "label": "Tarif",
           "description": "Ihr Abonnement, Teamplätze und die Abrechnung für dieses Konto."
+        },
+        "provider-connections": {
+          "label": "Meine Anbieter",
+          "description": "Deine Abonnements und Anbieter-API-Schlüssel für mehrere Projekte."
         }
       }
     },

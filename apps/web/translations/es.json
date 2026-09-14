@@ -368,6 +368,10 @@
         "plan": {
           "label": "Plan",
           "description": "Suscripción, puestos del equipo y facturación de esta cuenta."
+        },
+        "provider-connections": {
+          "label": "Mis proveedores",
+          "description": "Tus suscripciones y claves API de proveedores, reutilizables entre proyectos."
         }
       }
     },

@@ -10,6 +10,7 @@ import { deleteUserProviderConnection, listUserProviderConnections, saveUserProv
 export const providerConnectionsApp = makeOpenApiApp<AppEnv>();
 providerConnectionsApp.use('*', combinedAuth);
 providerConnectionsApp.use('*', async (c, next) => {
+  c.header('Cache-Control', 'no-store');
   // Account/project/agent tokens cannot acquire authority over a global user credential.
   if (c.get('authType') !== 'supabase' || c.get('impersonationGrantId')) {
     return c.json({ error: 'Sign in to manage personal provider connections' }, 403);

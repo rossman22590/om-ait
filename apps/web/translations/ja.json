@@ -368,6 +368,10 @@
         "plan": {
           "label": "プラン",
           "description": "このアカウントのサブスクリプション、チーム席、請求。"
+        },
+        "provider-connections": {
+          "label": "自分のプロバイダー",
+          "description": "サブスクリプションとプロバイダーの API キーを複数のプロジェクトで使用します。"
         }
       }
     },
