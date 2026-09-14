@@ -19289,5 +19289,27 @@
         "prompt": "Scrivi il documento che una nuova persona legge durante la prima settimana: come lavoriamo, dove si trovano le cose, a chi chiedere e come si riconosce un buon lavoro. Ricava tutto ciò che puoi dalla memoria del progetto ed elenca alla fine ciò che hai dovuto dedurre, invece di fermarti per chiedermelo."
       }
     }
+  },
+  "personalProviders": {
+    "title": "I miei provider",
+    "region": "Connessioni personali ai provider",
+    "description": "Connettiti una volta e usa il tuo abbonamento o la tua chiave API in più progetti.",
+    "projectDescription": "Attivando una connessione, questa viene usata dalle sessioni che avvii in questo progetto.",
+    "globalDescription": "Scegli dove usare ogni connessione in Modelli → Provider del progetto.",
+    "connected": "Provider personale connesso",
+    "expired": "Autorizzazione scaduta. Connettiti di nuovo.",
+    "gatewayRequired": "I provider personali richiedono il gateway LLM per questo progetto.",
+    "personalApiKey": "Personale · Chiave API",
+    "personalSubscription": "Personale · Abbonamento",
+    "useInProject": "Usa il mio provider {provider} in questo progetto",
+    "disconnect": "Disconnetti",
+    "provider": "Provider",
+    "apiKey": "La tua chiave API",
+    "connectChatGpt": "Connetti ChatGPT",
+    "saveKey": "Salva chiave personale",
+    "cancel": "Annulla",
+    "autoEnable": "La connessione da qui abilita questo provider anche per le tue sessioni in questo progetto.",
+    "disconnectTitle": "Disconnettere il provider personale?",
+    "disconnectDescription": "La connessione verrà rimossa da tutti i progetti. Potrai riconnetterti in seguito."
   }
 }

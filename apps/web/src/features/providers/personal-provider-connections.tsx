@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getProjectDetail, deleteUserProviderConnection, listProjectPersonalProviders, listUserProviderConnections,
@@ -21,6 +22,7 @@ const connectionsKey = ['user-provider-connections'];
 
 /** Personal credentials have one management surface, also embedded in project Providers. */
 export function PersonalProviderConnections({ projectId }: { projectId?: string }) {
+  const t = useTranslations('personalProviders');
   const queryClient = useQueryClient();
   const project = useQuery({ queryKey: qk.project.detail(projectId ?? ''),
     queryFn: () => getProjectDetail(projectId!), enabled: !!projectId });
@@ -57,16 +59,16 @@ export function PersonalProviderConnections({ projectId }: { projectId?: string 
           if (generation.current !== attempt) return;
           if (result.status === 'success') { authorized = true; break; }
           if (result.status === 'failed') throw new Error(result.error);
-          if (result.status === 'expired') throw new Error('Authorization expired. Connect again.');
-          if (Date.now() >= start.expires_at) throw new Error('Authorization expired. Connect again.');
+          if (result.status === 'expired') throw new Error(t('expired'));
+          if (Date.now() >= start.expires_at) throw new Error(t('expired'));
         }
-        if (!authorized) throw new Error('Authorization expired. Connect again.');
+        if (!authorized) throw new Error(t('expired'));
       }
       if (generation.current !== attempt) return;
       if (projectId) await setProjectPersonalProvider(projectId, provider, true);
       setChallenge(null);
       await refresh();
-      successToast('Personal provider connected');
+      successToast(t('connected'));
     },
     onError: (error) => { setChallenge(null); errorToast(error.message); },
   });
@@ -77,17 +79,17 @@ export function PersonalProviderConnections({ projectId }: { projectId?: string 
     onSuccess: async () => { setRemove(null); await refresh(); }, onError: (error) => errorToast(error.message) });
 
   if (projectId && project.isPending) return <Loading />;
-  if (projectId && !isLlmGatewayEnabled(project.data?.project)) return <InfoBanner>Personal providers require the LLM gateway for this project.</InfoBanner>;
+  if (projectId && !isLlmGatewayEnabled(project.data?.project)) return <InfoBanner>{t('gatewayRequired')}</InfoBanner>;
   if (connections.isPending) return <Loading />;
   if (connections.isError) return <InfoBanner tone="destructive">{connections.error.message}</InfoBanner>;
   const providers = connections.data.providers;
   return (
-    <section className="space-y-4" aria-label="Personal provider connections">
+    <section className="space-y-4" aria-label={t('region')}>
       <div className="space-y-1.5">
-        <h3 className="text-sm font-medium">My providers</h3>
+        <h3 className="text-sm font-medium">{t('title')}</h3>
         <p className="text-muted-foreground text-xs">
-          Connect once and use your subscription or API key across projects.
-          {projectId ? ' Enabling a connection uses it for sessions launched as you in this project.' : ' Choose where to use each connection in project Models → Providers.'}
+          {t('description')} {' '}
+          {projectId ? t('projectDescription') : t('globalDescription')}
         </p>
       </div>
       {bindings.isError && <InfoBanner tone="destructive">{bindings.error.message}</InfoBanner>}
@@ -99,42 +101,42 @@ export function PersonalProviderConnections({ projectId }: { projectId?: string 
             return <li key={id} className="flex flex-wrap items-center gap-3 px-4 py-3">
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{name}</p>
-                <p className="text-muted-foreground text-xs">Personal · {connection.auth_type === 'api_key' ? 'API key' : 'Subscription'}</p>
+                <p className="text-muted-foreground text-xs">{connection.auth_type === 'api_key' ? t('personalApiKey') : t('personalSubscription')}</p>
               </div>
-              {projectId && <Switch aria-label={`Use my ${name} in this project`}
+              {projectId && <Switch aria-label={t('useInProject', { provider: name })}
                 checked={bindings.data?.items.some(b => b.provider_id === id) ?? false}
                 disabled={bindings.isPending || bindings.isError || bind.isPending}
                 onCheckedChange={enabled => bind.mutate({ id, enabled })} />}
-              <Button variant="ghost" size="sm" onClick={() => setRemove(id)}>Disconnect</Button>
+              <Button variant="ghost" size="sm" onClick={() => setRemove(id)}>{t('disconnect')}</Button>
             </li>;
           })}
         </ul>
       )}
       <div className="space-y-4">
         <Field>
-          <FieldLabel htmlFor="personal-provider">Provider</FieldLabel>
+          <FieldLabel htmlFor="personal-provider">{t('provider')}</FieldLabel>
           <Select value={provider} onValueChange={setProvider} disabled={connect.isPending}>
             <SelectTrigger id="personal-provider"><SelectValue /></SelectTrigger>
             <SelectContent>{providers.map(p => <SelectItem key={p.provider_id} value={p.provider_id}>{p.name}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
         {adapter?.auth_type === 'api_key' && <Field>
-          <FieldLabel htmlFor="personal-provider-key">Your API key</FieldLabel>
+          <FieldLabel htmlFor="personal-provider-key">{t('apiKey')}</FieldLabel>
           <Input id="personal-provider-key" type="password" autoComplete="off" value={apiKey} onChange={e => setApiKey(e.target.value)} disabled={connect.isPending} />
         </Field>}
         {challenge && <ChatGptDeviceChallenge {...challenge} />}
         <div className="flex items-center gap-2">
           <Button size="sm" disabled={connect.isPending || !adapter || (adapter.auth_type === 'api_key' && !apiKey.trim())} onClick={() => connect.mutate()}>
             {connect.isPending && <Loading className="size-4" />}
-            {adapter?.auth_type === 'device_oauth' ? 'Connect ChatGPT' : 'Save personal key'}
+            {adapter?.auth_type === 'device_oauth' ? t('connectChatGpt') : t('saveKey')}
           </Button>
-          {challenge && <Button size="sm" variant="ghost" onClick={() => { generation.current++; setChallenge(null); }}>Cancel</Button>}
+          {challenge && <Button size="sm" variant="ghost" onClick={() => { generation.current++; setChallenge(null); }}>{t('cancel')}</Button>}
         </div>
-        {projectId && <p className="text-muted-foreground text-xs">Connecting here also enables this provider for your sessions in this project.</p>}
+        {projectId && <p className="text-muted-foreground text-xs">{t('autoEnable')}</p>}
       </div>
       <ConfirmDialog open={!!remove} onOpenChange={open => { if (!open) setRemove(null); }}
-        title="Disconnect personal provider?" description="This removes your connection from every project. You can connect again later."
-        confirmLabel="Disconnect" confirmVariant="destructive" isPending={disconnect.isPending}
+        title={t('disconnectTitle')} description={t('disconnectDescription')}
+        confirmLabel={t('disconnect')} confirmVariant="destructive" isPending={disconnect.isPending}
         onConfirm={() => { if (remove) disconnect.mutate(remove); }} />
     </section>
   );

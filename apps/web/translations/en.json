@@ -19292,5 +19292,27 @@
         "prompt": "Write the document a new hire reads in their first week — how we work, where things live, who to ask, what good looks like. Take what you can from project memory, and list anything you had to guess at the end rather than stopping to ask me."
       }
     }
+  },
+  "personalProviders": {
+    "title": "My providers",
+    "region": "Personal provider connections",
+    "description": "Connect once and use your subscription or API key across projects.",
+    "projectDescription": "Enabling a connection uses it for sessions launched as you in this project.",
+    "globalDescription": "Choose where to use each connection in project Models → Providers.",
+    "connected": "Personal provider connected",
+    "expired": "Authorization expired. Connect again.",
+    "gatewayRequired": "Personal providers require the LLM gateway for this project.",
+    "personalApiKey": "Personal · API key",
+    "personalSubscription": "Personal · Subscription",
+    "useInProject": "Use my {provider} in this project",
+    "disconnect": "Disconnect",
+    "provider": "Provider",
+    "apiKey": "Your API key",
+    "connectChatGpt": "Connect ChatGPT",
+    "saveKey": "Save personal key",
+    "cancel": "Cancel",
+    "autoEnable": "Connecting here also enables this provider for your sessions in this project.",
+    "disconnectTitle": "Disconnect personal provider?",
+    "disconnectDescription": "This removes your connection from every project. You can connect again later."
   }
 }

@@ -19255,5 +19255,27 @@
         "prompt": "编写一份新员工第一周阅读的文档——介绍我们的工作方式、资料存放位置、可以向谁求助，以及什么才算做好。尽可能从项目记忆中提取信息，并在最后列出所有不得不猜测的内容，而不是停下来询问我。"
       }
     }
+  },
+  "personalProviders": {
+    "title": "我的提供商",
+    "region": "个人提供商连接",
+    "description": "连接一次，即可在多个项目中使用你的订阅或 API 密钥。",
+    "projectDescription": "启用连接后，你在此项目中发起的会话将使用此连接。",
+    "globalDescription": "在项目的“模型 → 提供商”中选择使用各个连接的位置。",
+    "connected": "个人提供商已连接",
+    "expired": "授权已过期。请重新连接。",
+    "gatewayRequired": "此项目需要启用 LLM 网关才能使用个人提供商。",
+    "personalApiKey": "个人 · API 密钥",
+    "personalSubscription": "个人 · 订阅",
+    "useInProject": "在此项目中使用我的 {provider}",
+    "disconnect": "断开连接",
+    "provider": "提供商",
+    "apiKey": "你的 API 密钥",
+    "connectChatGpt": "连接 ChatGPT",
+    "saveKey": "保存个人密钥",
+    "cancel": "取消",
+    "autoEnable": "在此处连接后，也会为你在此项目中的会话启用该提供商。",
+    "disconnectTitle": "断开个人提供商连接？",
+    "disconnectDescription": "这将从所有项目中移除你的连接。你可以稍后重新连接。"
   }
 }

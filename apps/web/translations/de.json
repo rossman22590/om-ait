@@ -19289,5 +19289,27 @@
         "prompt": "Schreibe das Dokument, das eine neue Person in ihrer ersten Woche liest – wie wir arbeiten, wo sich Dinge befinden, wen sie fragen kann und woran man gute Arbeit erkennt. Nutze, was du aus dem Projektgedächtnis entnehmen kannst, und liste am Ende alles auf, worüber du Annahmen treffen musstest, statt mich zwischendurch zu fragen."
       }
     }
+  },
+  "personalProviders": {
+    "title": "Meine Anbieter",
+    "region": "Persönliche Anbieterverbindungen",
+    "description": "Einmal verbinden und dein Abonnement oder deinen API-Schlüssel in mehreren Projekten verwenden.",
+    "projectDescription": "Wenn du eine Verbindung aktivierst, verwenden die von dir gestarteten Sitzungen in diesem Projekt diese Verbindung.",
+    "globalDescription": "Wähle unter Modelle → Anbieter im Projekt, wo du jede Verbindung verwenden möchtest.",
+    "connected": "Persönlicher Anbieter verbunden",
+    "expired": "Autorisierung abgelaufen. Verbinde dich erneut.",
+    "gatewayRequired": "Persönliche Anbieter erfordern das LLM-Gateway für dieses Projekt.",
+    "personalApiKey": "Persönlich · API-Schlüssel",
+    "personalSubscription": "Persönlich · Abonnement",
+    "useInProject": "Meinen Anbieter {provider} in diesem Projekt verwenden",
+    "disconnect": "Trennen",
+    "provider": "Anbieter",
+    "apiKey": "Dein API-Schlüssel",
+    "connectChatGpt": "ChatGPT verbinden",
+    "saveKey": "Persönlichen Schlüssel speichern",
+    "cancel": "Abbrechen",
+    "autoEnable": "Eine Verbindung hier aktiviert diesen Anbieter auch für deine Sitzungen in diesem Projekt.",
+    "disconnectTitle": "Persönlichen Anbieter trennen?",
+    "disconnectDescription": "Dadurch wird deine Verbindung aus allen Projekten entfernt. Du kannst sie später erneut herstellen."
   }
 }

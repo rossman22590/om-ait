@@ -19292,5 +19292,27 @@
         "prompt": "Rédige le document qu’une nouvelle recrue lit durant sa première semaine — notre façon de travailler, où se trouvent les éléments, à qui s’adresser et ce qui caractérise un travail de qualité. Utilise ce que tu peux tirer de la mémoire du projet et, à la fin, liste tout ce que tu as dû supposer au lieu de t’arrêter pour me poser des questions."
       }
     }
+  },
+  "personalProviders": {
+    "title": "Mes fournisseurs",
+    "region": "Connexions personnelles aux fournisseurs",
+    "description": "Connectez-vous une fois et utilisez votre abonnement ou votre clé API dans plusieurs projets.",
+    "projectDescription": "Une connexion activée est utilisée pour les sessions que vous lancez dans ce projet.",
+    "globalDescription": "Choisissez où utiliser chaque connexion dans Modèles → Fournisseurs du projet.",
+    "connected": "Fournisseur personnel connecté",
+    "expired": "Autorisation expirée. Reconnectez-vous.",
+    "gatewayRequired": "Les fournisseurs personnels nécessitent la passerelle LLM pour ce projet.",
+    "personalApiKey": "Personnel · Clé API",
+    "personalSubscription": "Personnel · Abonnement",
+    "useInProject": "Utiliser mon fournisseur {provider} dans ce projet",
+    "disconnect": "Déconnecter",
+    "provider": "Fournisseur",
+    "apiKey": "Votre clé API",
+    "connectChatGpt": "Connecter ChatGPT",
+    "saveKey": "Enregistrer la clé personnelle",
+    "cancel": "Annuler",
+    "autoEnable": "La connexion ici active aussi ce fournisseur pour vos sessions dans ce projet.",
+    "disconnectTitle": "Déconnecter le fournisseur personnel ?",
+    "disconnectDescription": "Cette action supprime votre connexion de tous les projets. Vous pourrez vous reconnecter plus tard."
   }
 }

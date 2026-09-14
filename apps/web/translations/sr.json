@@ -19292,5 +19292,27 @@
         "prompt": "Напиши документ који нови запослени чита током прве недеље — како радимо, где се ствари налазе, кога да питају и како изгледа добар резултат. Узми све што можеш из меморије пројекта, а на крају наведи све што си морао да претпоставиш, уместо да застанеш и питаш ме."
       }
     }
+  },
+  "personalProviders": {
+    "title": "Moji provajderi",
+    "region": "Lične veze sa provajderima",
+    "description": "Povežite se jednom i koristite pretplatu ili API ključ u više projekata.",
+    "projectDescription": "Kada omogućite vezu, ona se koristi za sesije koje vi pokrenete u ovom projektu.",
+    "globalDescription": "Izaberite gde se svaka veza koristi u odeljku Modeli → Provajderi projekta.",
+    "connected": "Lični provajder je povezan",
+    "expired": "Autorizacija je istekla. Povežite se ponovo.",
+    "gatewayRequired": "Lični provajderi zahtevaju LLM mrežni prolaz za ovaj projekat.",
+    "personalApiKey": "Lično · API ključ",
+    "personalSubscription": "Lično · Pretplata",
+    "useInProject": "Koristi mog provajdera {provider} u ovom projektu",
+    "disconnect": "Prekini vezu",
+    "provider": "Provajder",
+    "apiKey": "Vaš API ključ",
+    "connectChatGpt": "Poveži ChatGPT",
+    "saveKey": "Sačuvaj lični ključ",
+    "cancel": "Otkaži",
+    "autoEnable": "Povezivanje ovde takođe omogućava ovog provajdera za vaše sesije u ovom projektu.",
+    "disconnectTitle": "Prekinuti vezu sa ličnim provajderom?",
+    "disconnectDescription": "Ovo uklanja vašu vezu iz svih projekata. Kasnije se možete ponovo povezati."
   }
 }

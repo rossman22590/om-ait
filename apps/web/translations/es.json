@@ -19289,5 +19289,27 @@
         "prompt": "Escribe el documento que una persona recién contratada lee durante su primera semana: cómo trabajamos, dónde están las cosas, a quién preguntar y cómo es un buen trabajo. Usa todo lo que puedas de la memoria del proyecto y, al final, enumera lo que hayas tenido que suponer en lugar de detenerte a preguntarme."
       }
     }
+  },
+  "personalProviders": {
+    "title": "Mis proveedores",
+    "region": "Conexiones personales de proveedores",
+    "description": "Conecta una vez y usa tu suscripción o clave de API en varios proyectos.",
+    "projectDescription": "Al activar una conexión, se usará en las sesiones que inicies en este proyecto.",
+    "globalDescription": "Elige dónde usar cada conexión en Modelos → Proveedores del proyecto.",
+    "connected": "Proveedor personal conectado",
+    "expired": "La autorización ha caducado. Conecta de nuevo.",
+    "gatewayRequired": "Los proveedores personales requieren la pasarela LLM en este proyecto.",
+    "personalApiKey": "Personal · Clave de API",
+    "personalSubscription": "Personal · Suscripción",
+    "useInProject": "Usar mi proveedor {provider} en este proyecto",
+    "disconnect": "Desconectar",
+    "provider": "Proveedor",
+    "apiKey": "Tu clave de API",
+    "connectChatGpt": "Conectar ChatGPT",
+    "saveKey": "Guardar clave personal",
+    "cancel": "Cancelar",
+    "autoEnable": "Conectar aquí también activa este proveedor para tus sesiones en este proyecto.",
+    "disconnectTitle": "¿Desconectar el proveedor personal?",
+    "disconnectDescription": "Esto elimina tu conexión de todos los proyectos. Puedes volver a conectarte más tarde."
   }
 }
