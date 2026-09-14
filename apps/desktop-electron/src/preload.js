@@ -53,7 +53,7 @@ window.addEventListener(
     const direction = event.button === 3 ? 'back' : event.button === 4 ? 'forward' : null;
     if (!direction) return;
     event.preventDefault();
-    ipcRenderer.send('kortix:navigate', direction);
+    void ipcRenderer.invoke('kortix:navigate', direction);
   },
   true,
 );
@@ -62,4 +62,9 @@ window.addEventListener(
 contextBridge.exposeInMainWorld('kortixDesktop', {
   shell: 'electron',
   version: '0.1.0',
+  // One history step through the shell's policy, which skips entries the
+  // navigation gate keeps out of the window. Resolves true when it moved. The
+  // web app's Back uses this: a renderer history.back() into such an entry is
+  // cancelled by the gate (will-navigate does fire for it) and nothing happens.
+  navigate: (direction) => ipcRenderer.invoke('kortix:navigate', direction),
 });

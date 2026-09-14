@@ -52,6 +52,42 @@ describe('goBack', () => {
     expect(router.calls).toEqual(['replace:/projects/p1']);
   });
 
+  test('in the desktop shell, history is the shell’s: it skips entries outside the app', async () => {
+    // Electron gates a renderer history.back() into a page outside the app
+    // (a redirect hop, /favicon.png) and nothing happens. The shell's own
+    // step skips those entries, so web Back asks it first.
+    const router = fakeRouter();
+    const asked: string[] = [];
+    const win: NavigationWindow = {
+      navigation: { canGoBack: true },
+      kortixDesktop: { navigate: async (d) => (asked.push(d), true) },
+    };
+    await goBack(router, win, { home: '/projects/p1' });
+    expect(asked).toEqual(['back']);
+    expect(router.calls).toEqual([]);
+  });
+
+  test('in the desktop shell, no in-app entry behind means home', async () => {
+    const router = fakeRouter();
+    const win: NavigationWindow = {
+      navigation: { canGoBack: true },
+      kortixDesktop: { navigate: async () => false },
+    };
+    await goBack(router, win, { home: '/projects/p1' });
+    expect(router.calls).toEqual(['replace:/projects/p1']);
+  });
+
+  test('a declared target still wins in the desktop shell', async () => {
+    const router = fakeRouter();
+    const asked: string[] = [];
+    const win: NavigationWindow = {
+      kortixDesktop: { navigate: async (d) => (asked.push(d), true) },
+    };
+    await goBack(router, win, { to: '/projects/p1?accountTab=git', home: '/p' });
+    expect(asked).toEqual([]);
+    expect(router.calls).toEqual(['replace:/projects/p1?accountTab=git']);
+  });
+
   test('does not trust history.length, which counts other origins', () => {
     // github.com → /github/setup is two entries, one cross-origin. back()
     // through it would load github.com inside the desktop window.

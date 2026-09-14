@@ -253,10 +253,10 @@ for (const runtime of runtimes) {
           .getByRole("link", { name: "Customize", exact: true })
           .click();
         await expect(page).toHaveURL(/\/customize\/agents/);
-        await page
-          .getByRole("link", { name: /Kortix/i })
-          .last()
-          .click();
+        // By href, not by a /Kortix/i name: before the agent list renders, the
+        // last link matching that name can be the Skills tab, and the click
+        // lands on /customize/skills.
+        await page.locator('a[href$="/customize/agents/kortix"]').first().click();
         await expect(page).toHaveURL(/\/customize\/agents\/kortix/);
         await expectSeparateRows(
           page.locator(
@@ -452,10 +452,14 @@ for (const runtime of runtimes) {
           box!.y + box!.height,
           "Back must sit inside the title-bar band",
         ).toBeLessThanOrEqual(43);
-        // installBrowserSessionDirect lands on /favicon.png first, so an
-        // in-app entry is behind the dead end and Back is history.back().
+        // installBrowserSessionDirect lands on /favicon.png first, so an entry
+        // is behind the dead end. The browser steps back onto it. The desktop
+        // shell cancels a renderer history.back() into it (not an app path) and
+        // steps over it instead, to /auth, which sends a signed-in user on.
         await back.click();
-        await expect(page).not.toHaveURL(/\/oauth\/authorize/);
+        await expect(page).not.toHaveURL(/\/oauth\/authorize/, {
+          timeout: 60_000,
+        });
         if (desktopApp) return;
         // A window opened straight onto the dead end has no in-app entry
         // behind it (about:blank is another origin), so Back goes home.

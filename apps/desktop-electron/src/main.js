@@ -166,8 +166,8 @@ function isPreviewHost(host) {
   );
 }
 
-// Product + auth route prefixes allowed to render in the desktop window. MUST
-// stay in sync with DESKTOP_ALLOWED_ROUTES in apps/web/src/middleware.ts.
+// Product + auth route prefixes live in navigation.js (APP_PATH_PREFIXES); its
+// test fails when they miss a route the web middleware allows on desktop.
 /**
  * Should `urlStr` render inside the desktop window? (Top-frame navigations
  * only — iframes are never gated, which is the whole point: the Pipedream
@@ -487,17 +487,22 @@ function mainHistoryTarget(direction) {
   return historyTarget(history.getAllEntries(), history.getActiveIndex(), direction, shouldLoadInApp);
 }
 
-/** @param {'back' | 'forward' | 'home'} direction */
+/**
+ * @param {'back' | 'forward' | 'home'} direction
+ * @returns {boolean} whether the window moved
+ */
 function navigateWindow(direction) {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
   const wc = mainWindow.webContents;
   if (direction === 'home') {
     // The instance's landing door resolves the user's latest project.
     wc.loadURL(instanceStore.appUrl()).catch(() => {}); // did-fail-load reports failures
-    return;
+    return true;
   }
   const index = mainHistoryTarget(direction);
-  if (index >= 0) wc.navigationHistory.goToIndex(index);
+  if (index < 0) return false;
+  wc.navigationHistory.goToIndex(index);
+  return true;
 }
 
 /** Enable Back and Forward only when a step has an in-app target. */
@@ -827,9 +832,8 @@ function buildMenu() {
     },
     {
       // Browser-standard history, so no page can strand the user. The
-      // accelerators are registered natively: they also work on a page whose
-      // renderer has no handler, and a page that consumes the key first (a
-      // code editor's Cmd+[) keeps it.
+      // accelerators are native menu accelerators, so they work on any page,
+      // including one the web app did not render.
       label: 'Go',
       submenu: [
         {
@@ -913,12 +917,14 @@ function registerIpc() {
     }
   });
 
-  // Mouse side buttons (preload.js). Any page in the main window may ask: a
-  // history step is what its own `history.back()` could do anyway, and the
-  // target is still chosen here. Other windows (OAuth popups) may not.
-  ipcMain.on('kortix:navigate', (event, direction) => {
-    if (!mainWindow || event.sender !== mainWindow.webContents) return;
-    if (direction === 'back' || direction === 'forward') navigateWindow(direction);
+  // One history step (preload.js: the mouse side buttons and the web app's
+  // Back). Any page in the main window may ask: a history step is what its own
+  // `history.back()` could do anyway, and the target is still chosen here.
+  // Other windows (OAuth popups) may not. Resolves whether the window moved.
+  ipcMain.handle('kortix:navigate', (event, direction) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return false;
+    if (direction !== 'back' && direction !== 'forward') return false;
+    return navigateWindow(direction);
   });
 
   // Window controls (Tauri `getCurrentWindow().*`).

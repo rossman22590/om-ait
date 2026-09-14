@@ -27,8 +27,15 @@ import { cn } from '@/lib/utils';
  * `DESKTOP_INIT_SCRIPT` sets the attribute before first paint.
  */
 
-/** `window` with the Navigation API, which TypeScript's DOM lib does not declare yet. */
-export type NavigationWindow = { navigation?: { canGoBack: boolean } };
+/**
+ * `window` with the Navigation API, which TypeScript's DOM lib does not declare
+ * yet, and the desktop shell's history step (apps/desktop-electron/src/preload.js).
+ * `navigate` resolves `true` when the shell moved; shells before it lack it.
+ */
+export type NavigationWindow = {
+  navigation?: { canGoBack: boolean };
+  kortixDesktop?: { navigate?: (direction: 'back' | 'forward') => Promise<boolean> };
+};
 
 /** The two router calls Back makes, and nothing else. */
 type Navigate = Pick<ReturnType<typeof useRouter>, 'back' | 'replace'>;
@@ -41,24 +48,34 @@ type Navigate = Pick<ReturnType<typeof useRouter>, 'back' | 'replace'>;
  * 2. The previous page, when it belongs to this app.
  * 3. `home`.
  *
- * `navigation.canGoBack` counts only the contiguous run of same-origin entries
- * around the current one, so it is `false` when the entry behind is github.com
- * or the window's initial `about:blank`. `history.length` is deliberately not
- * used: it counts cross-origin entries, and Electron's `will-navigate` gate
- * does not run for history traversal, so Back would load GitHub inside the app
- * window.
+ * In the desktop shell, step 2 is the shell's own history step. A renderer
+ * `history.back()` into a page the navigation gate keeps out of the window
+ * (a redirect hop, a static file) is cancelled there and nothing happens; the
+ * shell's step skips such entries instead.
+ *
+ * Elsewhere, `navigation.canGoBack` counts only the contiguous run of
+ * same-origin entries around the current one, so it is `false` when the entry
+ * behind is github.com or the window's initial `about:blank`. `history.length`
+ * is deliberately not used: it counts cross-origin entries.
  *
  * `replace`, not `push`, for a target: the frame is a dead end, and pushing
  * would leave it one Back away again.
  */
-export function goBack(
+export async function goBack(
   router: Navigate,
   win: NavigationWindow,
   { to, home }: { to?: string; home: string },
-): void {
+): Promise<void> {
   if (to) {
     router.replace(to);
-  } else if (win.navigation?.canGoBack) {
+    return;
+  }
+  const shellNavigate = win.kortixDesktop?.navigate;
+  if (shellNavigate) {
+    if (!(await shellNavigate('back'))) router.replace(home);
+    return;
+  }
+  if (win.navigation?.canGoBack) {
     router.back();
   } else {
     router.replace(home);
@@ -161,5 +178,5 @@ export function DesktopBackButton() {
   if (!user) return null;
   const win = window as Window & NavigationWindow;
   if (!hasBackDestination(win, { to, home, pathname })) return null;
-  return <DesktopBackControl onBack={() => goBack(router, win, { to, home })} />;
+  return <DesktopBackControl onBack={() => void goBack(router, win, { to, home })} />;
 }
