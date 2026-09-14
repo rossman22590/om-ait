@@ -544,6 +544,20 @@ DB `project_secrets` (AES-256-GCM, key bound to `projectId`, unique `(project_id
 `TUN-4` device auth (public) `POST /tunnel/device-auth`, `GET …/:code/status`; (auth) `GET …/:code/info`, `POST …/:code/approve|deny`.
 `TUN-5` WS `GET /tunnel/ws?tunnelId=` — auth via first message; rate-limited.
 
+`TUN-6` — verified binary transfer and permission decisions
+
+Register a real filesystem agent over WebSocket. Empty `fs.write` arguments return
+400 before creating a permission request. A valid unapproved write returns 403 and
+creates no file. Denying it prevents approval of that same request (409). Concurrent
+approve/deny requests produce exactly one 200 and one 409. Grant a path-scoped write
+permission, then execute `agent-tunnel-cli fs_upload` with an XLSX source path. The
+process exits 0, stderr is empty, and stdout reports the source size and SHA-256.
+The destination bytes match the source. Repeat the write through a Computer Tunnel
+connector and assert its returned digest and persisted bytes. Same-length corrupted bytes with the source
+checksum fail without replacing the destination. Malformed base64 returns 400.
+Cleanup removes the connection and temporary files.
+
+
 ### Ops (platform admin)
 
 `OPS-1` `GET /ops/overview` → `requireAdmin` (platform admin/super_admin) → 200; non-admin → 403.
