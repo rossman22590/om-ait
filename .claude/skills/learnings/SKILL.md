@@ -36,6 +36,34 @@ showed Back on `/oauth/authorize` doing nothing and `shell.openExternal
 (/favicon.png)`. *Enforcer:* `27-desktop-parity.spec.ts` (web, desktop UA,
 `E2E_DESKTOP_NATIVE=1`), `desktop-back-button.test.tsx`, `navigation.test.js`.
 
+### Stop proxy maintenance timers and isolate background writers in package tests (2026-09-14)
+
+**When:** stopping the sandbox proxy or running package tests. Cancel boot and
+interval offload timers; reject callbacks after stop. Disable automatic offload in
+the test runner; explicit offload tests use temporary databases. Use the actual
+`kortixd` package name for the sequential lane. *Near-miss:* XLSX verification's
+full run entered a background scan of the developer's OpenCode DB; the process
+was stopped during its SELECT. *Enforcers:* proxy stop regression and runner contract.
+
+### Validate the destination against an exact-file permission, not its parent (2026-09-14)
+
+**When:** validating Computer Tunnel writes. Resolve both the destination and
+missing allowlist paths through their nearest existing ancestor. Compare the full
+resolved destination with the allowlist. An approved file does not grant its parent.
+*Incident:* XLSX follow-up CI exposed rejected exact-file approvals; macOS also
+compared `/var` with `/private/var` for missing files. *Enforcers:*
+`filesystem-integrity.test.ts` and `TUN-6` with an exact-file permission.
+
+### Transfer opaque bytes programmatically and verify the destination digest (2026-09-14)
+
+**When:** sending binary artifacts through Computer Tunnel. Never transcribe base64
+from model context. Use `fs_upload`, or generate at the destination. Validate format
+at the source; compare SHA-256 after transfer. Reject malformed file arguments before
+creating permission requests. Resolve approve/deny with a pending-state conditional update.
+*Incident:* XLSX transfer to a Mac produced identical same-length corrupt copies;
+an approval denial also conflicted with a reported write. That historical race is unproven.
+*Enforcers:* `filesystem-integrity.test.ts` and product flow `TUN-6`.
+
 ### Moving a surface under a URL namespace must move every reader, and an effect must never depend on a per-render localized object (2026-09-14)
 
 **When:** relocating a page into an overlay/modal that prefixes its query
@@ -5068,3 +5096,25 @@ before connecting, and deletes the minted token by `token_id`. Preview test
 configuration no longer exports the signing secret; its unit test rejects
 that export. The flow allows five minutes for managed Git writes and ten
 sequential manifest reads; all existing assertions remain required.
+
+### Preview runtime secret contracts span two Git revisions (2026-09-14)
+
+**When:** a preview fails in `validatePreviewRuntimeSecrets` before the API starts.
+The orchestration code runs from `main`; the bootstrap reads the exact PR head.
+A newly allowlisted runtime secret on `main` can therefore reach an older PR
+bootstrap that rejects it. Merge the upstream contract change into the canonical
+branch before retrying. Do not bypass validation or remove the allowlist.
+
+*Incident:* PR #7233, preview run `34893648765`, rejected `PLATINUM_API_KEY`.
+The publisher carried #7221's new field, while the PR bootstrap predated it.
+Merging `8767572f10` brought in the matching allowlist and provider configuration.
+*Automation:* `tests/unit/preview-stack.test.ts` checks the allowlist and Platinum
+configuration within one revision. Cross-revision compatibility is not covered.
+
+### Preserve mounted service paths in preview test clients
+
+**Incident (2026-09-14, PR #7233):** preview gateway tests reached the API because the REST test client discarded `/_gateway`. Gateway health returned `kortix-api`, and inference routes returned `404`. The deployed gateway itself remained healthy.
+
+**Rule:** preserve the preview gateway mount in anonymous requests and authenticated client clones. API flows continue to supply their own `/v1` path.
+
+**Enforcer:** `tests/unit/client-ci-passthrough.test.ts` asserts both mounted health and authenticated inference URLs. The regression failed before the client fix; both client suites then passed all 22 tests.
