@@ -19224,5 +19224,10 @@
         "prompt": "Rédige le document qu’une nouvelle recrue lit durant sa première semaine — notre façon de travailler, où se trouvent les éléments, à qui s’adresser et ce qui caractérise un travail de qualité. Utilise ce que tu peux tirer de la mémoire du projet et, à la fin, liste tout ce que tu as dû supposer au lieu de t’arrêter pour me poser des questions."
       }
     }
+  },
+  "repositoryAccess": {
+    "label": "Accès au dépôt du projet",
+    "enabled": "Les nouvelles sessions reçoivent le dépôt du projet. Les permissions Git restent applicables. Les sessions existantes conservent leur accès.",
+    "disabled": "Les nouvelles sessions fonctionnent sans le dépôt du projet. Elles peuvent créer des fichiers et utiliser les outils autorisés. Les sessions existantes conservent leur accès."
   }
 }

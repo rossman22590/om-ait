@@ -250,7 +250,7 @@ DB `project_sessions` (`status queued|branching|provisioning|running|stopped|fai
 `SESS-3` CLI client-branch optimization — `kortix sessions new`: if server can't self-create a branch through its configured Git credentials AND local `origin` == `project.repo_url`, CLI mints uuid, `git push origin HEAD:refs/heads/<uuid>`, then posts `session_id`+`branch_already_created:true`+`base_ref`.
 `SESS-4` `GET /projects/:id/sessions` → `read` → list (updatedAt desc).
 `SESS-5` `GET /projects/:id/sessions/:sid` → `read` → 200; non-uuid `sid` → 400.
-`SESS-6` `PATCH /projects/:id/sessions/:sid {name?,metadata?}` → `session` (any project member, M_VIEWER included); attempting `status`/`sandbox_url`/`error`/`opencode_session_id` or server-owned metadata including `workspace_mode`/`sandbox_slug` → 400 (server-managed); any other field → 400 (not user-editable). `name` sets a sticky USER override stored in `metadata.custom_name` (NOT clobbered by the server-side OpenCode title mirror, which only writes the auto title `metadata.name` during session reads); `name:""`/null clears it. Response `name` = resolved display (`custom_name ?? metadata.name`); `custom_name` exposed separately (authoritative override or null).
+`SESS-6` `PATCH /projects/:id/sessions/:sid {name?,metadata?}` → `session` (any project member, M_VIEWER included); attempting `status`/`sandbox_url`/`error`/`opencode_session_id` or server-owned metadata including `repository_access`/`workspace_mode`/`sandbox_slug` → 400 (server-managed); any other field → 400 (not user-editable). `name` sets a sticky USER override stored in `metadata.custom_name` (NOT clobbered by the server-side OpenCode title mirror, which only writes the auto title `metadata.name` during session reads); `name:""`/null clears it. Response `name` = resolved display (`custom_name ?? metadata.name`); `custom_name` exposed separately (authoritative override or null).
 `SESS-7` `DELETE /projects/:id/sessions/:sid` → `session` (then **owner or project manager** only — `canManageLifecycle`, NOT `canManageSharing`; see `SESS-26` — a viewer can stop sessions they own) → 200 soft-delete status `stopped`; **remote branch preserved**.
 `SESS-8` `GET /projects/:id/sessions/:sid/sandbox` → `read` → `session_sandboxes` row; **404 while row not yet inserted** (frontend polls); then status `provisioning`→`active` with `base_url`/`external_id`.
 `SESS-9` `POST /projects/:id/sessions/:sid/restart` → `session` (then **owner or project manager** only — `canManageLifecycle`) → **202**; tears down container, revokes sandbox keys, re-provisions with rotated git/LLM/CLI tokens (status→`provisioning`); branch preserved.
@@ -1016,3 +1016,7 @@ Native commands trust only the configured frontend origin in the main window's
 main frame. A second window at that same origin must receive an unauthorized
 sender error. Full document navigation within the configured frontend stays in
 the app, including when the frontend uses a custom host.
+
+`PROJ-19` also round-trips `repository_access: false` and `true` through agent config PUT/GET.
+Legacy `workspace: runtime` resolves to `repository_access: false` in responses.
+Invalid booleans and conflicting aliases return 400 without changing the saved policy.

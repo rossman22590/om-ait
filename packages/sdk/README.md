@@ -643,3 +643,12 @@ pnpm --filter @kortix/sdk test   # facade, files, react hooks, turns, transcript
 See **`API-MAP.md`** for the complete endpoint catalogue. It covers the Kortix
 REST API and OpenCode REST runtime. See **`CHANGELOG.md`** for
 per-release changes.
+
+
+### Agent repository access
+
+Agent configuration accepts `repository_access?: boolean` (default `true`).
+Set `false` to run new sessions without the project repository or repository API access.
+Git, secret, connector, and tool permissions remain separate. Existing sessions retain their saved policy.
+`AgentConfigBlock.workspace` is deprecated. The SDK maps legacy `branch`/`runtime` to the boolean field.
+A legacy `read` write requires an explicit `repository_access` choice; it does not enable read-only repository access.

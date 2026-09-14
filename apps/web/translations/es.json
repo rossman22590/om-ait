@@ -19224,5 +19224,10 @@
         "prompt": "Escribe el documento que una persona recién contratada lee durante su primera semana: cómo trabajamos, dónde están las cosas, a quién preguntar y cómo es un buen trabajo. Usa todo lo que puedas de la memoria del proyecto y, al final, enumera lo que hayas tenido que suponer en lugar de detenerte a preguntarme."
       }
     }
+  },
+  "repositoryAccess": {
+    "label": "Acceso al repositorio del proyecto",
+    "enabled": "Las sesiones nuevas reciben el repositorio del proyecto. Se siguen aplicando los permisos de Git. Las sesiones existentes conservan su configuración de acceso.",
+    "disabled": "Las sesiones nuevas se ejecutan sin el repositorio del proyecto. Pueden crear archivos y usar herramientas autorizadas. Las sesiones existentes conservan su configuración de acceso."
   }
 }

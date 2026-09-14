@@ -19224,5 +19224,10 @@
         "prompt": "Schreibe das Dokument, das eine neue Person in ihrer ersten Woche liest – wie wir arbeiten, wo sich Dinge befinden, wen sie fragen kann und woran man gute Arbeit erkennt. Nutze, was du aus dem Projektgedächtnis entnehmen kannst, und liste am Ende alles auf, worüber du Annahmen treffen musstest, statt mich zwischendurch zu fragen."
       }
     }
+  },
+  "repositoryAccess": {
+    "label": "Zugriff auf das Projekt-Repository",
+    "enabled": "Neue Sitzungen erhalten das Projekt-Repository. Git-Berechtigungen gelten weiterhin. Bestehende Sitzungen behalten ihre Zugriffseinstellung.",
+    "disabled": "Neue Sitzungen laufen ohne Projekt-Repository. Sie können weiterhin Dateien erstellen und freigegebene Werkzeuge nutzen. Bestehende Sitzungen behalten ihre Zugriffseinstellung."
   }
 }

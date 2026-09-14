@@ -593,9 +593,14 @@ function agentBlockV2Schema(): JsonSchemaFragment {
       secrets: grantSetSchema(),
       skills: grantSetSchema(),
       kortix_cli: kortixCliGrantSetSchema(2),
-      workspace: { type: 'string', enum: [...WORKSPACE_MODES_V2] },
+      repository_access: { type: 'boolean', description: 'Allow new sessions to access the project repository. Defaults to true.' },
+      workspace: { type: 'string', enum: [...WORKSPACE_MODES_V2], deprecated: true },
     },
     additionalProperties: false,
+    allOf: [
+      { if: { required: ['workspace'], properties: { workspace: { const: 'branch' } } }, then: { properties: { repository_access: { const: true } } } },
+      { if: { required: ['workspace'], properties: { workspace: { enum: ['runtime', 'read'] } } }, then: { properties: { repository_access: { const: false } } } },
+    ],
   };
 }
 

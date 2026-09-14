@@ -19224,5 +19224,10 @@
         "prompt": "Scrivi il documento che una nuova persona legge durante la prima settimana: come lavoriamo, dove si trovano le cose, a chi chiedere e come si riconosce un buon lavoro. Ricava tutto ciò che puoi dalla memoria del progetto ed elenca alla fine ciò che hai dovuto dedurre, invece di fermarti per chiedermelo."
       }
     }
+  },
+  "repositoryAccess": {
+    "label": "Accesso al repository del progetto",
+    "enabled": "Le nuove sessioni ricevono il repository del progetto. Restano validi i permessi Git. Le sessioni esistenti mantengono la propria impostazione di accesso.",
+    "disabled": "Le nuove sessioni vengono eseguite senza il repository del progetto. Possono creare file e usare gli strumenti autorizzati. Le sessioni esistenti mantengono la propria impostazione di accesso."
   }
 }

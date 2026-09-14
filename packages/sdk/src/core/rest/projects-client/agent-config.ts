@@ -62,6 +62,9 @@ export interface AgentConfigBlock {
   secrets?: AgentGrantSetV2;
   skills?: AgentGrantSetV2;
   kortix_cli?: AgentGrantSetV2;
+  /** Whether new sessions can access the project repository. Defaults to true. */
+  repository_access?: boolean;
+  /** @deprecated Use repository_access. Legacy read requires an explicit choice. */
   workspace?: 'runtime' | 'read' | 'branch';
   opencode?: OpencodeAgentConfig;
 }
@@ -86,7 +89,7 @@ export async function getAgentConfig(projectId: string, agentName: string) {
   );
   return {
     ...response,
-    block: response.block ? canonicalizeRequiredConnectors(response.block) : null,
+    block: response.block ? canonicalizeAgentBlock(response.block) : null,
   };
 }
 
@@ -95,7 +98,7 @@ export async function updateAgentConfig(
   agentName: string,
   block: AgentConfigBlock,
 ) {
-  const canonicalBlock = canonicalizeRequiredConnectors(block);
+  const canonicalBlock = canonicalizeAgentBlock(block, true);
   const response = unwrap(
     await backendApi.put<{
       ok: boolean;
@@ -106,8 +109,23 @@ export async function updateAgentConfig(
   );
   return {
     ...response,
-    block: response.block ? canonicalizeRequiredConnectors(response.block) : null,
+    block: response.block ? canonicalizeAgentBlock(response.block) : null,
   };
+}
+
+function canonicalizeAgentBlock(block: AgentConfigBlock, writing = false): AgentConfigBlock {
+  const next = canonicalizeRequiredConnectors(block);
+  if (next.workspace === undefined) return next;
+  const legacyAccess = next.workspace === 'branch';
+  if (next.repository_access !== undefined && next.repository_access !== legacyAccess) {
+    throw new Error('repository_access conflicts with workspace');
+  }
+  if (writing && next.workspace === 'read' && next.repository_access === undefined) {
+    throw new Error('Legacy read is unavailable. Set repository_access explicitly.');
+  }
+  next.repository_access ??= legacyAccess;
+  delete next.workspace;
+  return next;
 }
 
 function normalizeConnectorList(values: string[]): string[] {

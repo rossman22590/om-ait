@@ -19224,5 +19224,10 @@
         "prompt": "Write the document a new hire reads in their first week — how we work, where things live, who to ask, what good looks like. Take what you can from project memory, and list anything you had to guess at the end rather than stopping to ask me."
       }
     }
+  },
+  "repositoryAccess": {
+    "label": "Project repository access",
+    "enabled": "New sessions receive the project repository. Git permissions still apply. Existing sessions keep their access setting.",
+    "disabled": "New sessions run without the project repository. They can still create files and use granted tools. Existing sessions keep their access setting."
   }
 }
