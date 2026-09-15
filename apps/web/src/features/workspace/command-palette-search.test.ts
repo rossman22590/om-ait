@@ -223,16 +223,31 @@ describe('queries return the rows they name', () => {
     expect(hits('customize')).toEqual(['nav:proj-customize']);
   });
 
-  test('"project" matches visible project labels and the personal-provider description', () => {
+  test('"project" matches the four rows whose visible text contains the word', () => {
     // `account-access-projects` is the account hub's "Projects" pane — the
     // word is its own label, which is exactly the bar this file sets. Ten
     // `proj-*` rows used to answer this by their ids.
-    expect(hits('project').sort()).toEqual(['nav:account-access-projects', 'nav:nav-projects', 'settings:provider-connections']);
+    //
+    // `proj-members` joined them when the product settled on ONE noun for a
+    // unit of work: its label is now "Project members" (it was "Workspace
+    // members"), so it answers by visible text like the other two — not by its
+    // id (`features/workspace/workspace-vocabulary.test.ts`).
+    expect(hits('project').sort()).toEqual([
+      'nav:account-access-projects',
+      'nav:nav-projects',
+      'nav:proj-members',
+      'settings:provider-connections',
+    ]);
   });
 
   test('"proj" matches nothing by id', () => {
-    // Matches visible project labels and the personal-provider description.
-    expect(hits('proj').sort()).toEqual(['nav:account-access-projects', 'nav:nav-projects', 'settings:provider-connections']);
+    // Every match contains the query in visible text, not only in an id.
+    expect(hits('proj').sort()).toEqual([
+      'nav:account-access-projects',
+      'nav:nav-projects',
+      'nav:proj-members',
+      'settings:provider-connections',
+    ]);
   });
 
   test('"nav" and "pref" are not queries at all', () => {

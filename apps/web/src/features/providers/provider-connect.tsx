@@ -24,7 +24,7 @@ import {
 import Loading from '@/components/ui/loading';
 import { EmptyState } from '@/features/layout/section/empty-state';
 import { PROVIDER_NOTES, ProviderLogo } from '@/features/providers/provider-branding';
-import { ProviderDetail } from '@/features/workspace/customize/sections/llm-provider/provider-detail';
+import { ProviderAccessMenu } from '@/features/workspace/customize/sections/llm-provider/provider-access-menu';
 import { useConnectedProviders } from '@/features/workspace/customize/sections/llm-provider/use-connected-providers';
 import {
   useLiveLlmProviderCatalog,
@@ -35,8 +35,9 @@ import {
   orderProviderRows,
   prettyFieldLabel,
 } from '@/features/workspace/customize/sections/llm-provider/utils';
-import { LLM_PROVIDERS, LLM_PROVIDER_BY_ID, type LlmProviderEntry } from '@/lib/llm-providers';
+import { LLM_PROVIDERS, type LlmProviderEntry } from '@/lib/llm-providers';
 import { cn } from '@/lib/utils';
+import { useModelAccess, useProjectModelPickerCatalog } from '@kortix/sdk/react';
 import {
   CheckCircleIcon as Check,
   ArrowSquareOutIcon as ExternalLink,
@@ -140,16 +141,11 @@ export interface ProviderConnectViewProps {
   onRemoveKey?: (providerId: string) => void;
   /** Per-provider extra auth affordance. Only `openai` has one today. */
   subscriptionSlots?: Record<string, ReactNode>;
+  accessSlots?: Record<string, ReactNode>;
   wrapCredentials?: (row: ProviderConnectRow, fields: ReactNode) => ReactNode;
   instruction?: ReactNode;
-  /**
-   * "Browse before you connect". When set, `detailSlot` REPLACES the list —
-   * the one capability the deleted `CatalogTab` drill-down had that an inline
-   * row does not.
-   */
-  detailProviderId?: string | null;
-  onOpenDetail?: (providerId: string | null) => void;
-  detailSlot?: ReactNode;
+  /** Open the Models tab with this provider's models visible. */
+  onOpenModels?: (providerId: string) => void;
   className?: string;
 }
 
@@ -424,8 +420,9 @@ function ProviderRow({
   onToggleReveal,
   onRemoveKey,
   subscriptionSlot,
+  accessSlot,
   wrapCredentials,
-  onOpenDetail,
+  onOpenModels,
 }: {
   row: ProviderConnectRow;
   values: Record<string, string>;
@@ -438,8 +435,9 @@ function ProviderRow({
   onToggleReveal: ProviderConnectViewProps['onToggleReveal'];
   onRemoveKey?: ProviderConnectViewProps['onRemoveKey'];
   subscriptionSlot?: ReactNode;
+  accessSlot?: ReactNode;
   wrapCredentials?: ProviderConnectViewProps['wrapCredentials'];
-  onOpenDetail?: (providerId: string) => void;
+  onOpenModels?: (providerId: string) => void;
 }) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
   const identity = (
@@ -460,11 +458,12 @@ function ProviderRow({
               <ExternalLink className="size-3.5 shrink-0" />
             </a>
           )}
+          {accessSlot}
         </div>
-        {onOpenDetail && row.modelCount > 0 && (
+        {onOpenModels && row.modelCount > 0 && (
           <button
             type="button"
-            onClick={() => onOpenDetail(row.id)}
+            onClick={() => onOpenModels(row.id)}
             className="text-muted-foreground/50 hover:text-foreground mt-0.5 cursor-pointer text-xs tabular-nums underline underline-offset-2 transition-colors"
           >
             {row.modelCount} {tI18nComplete.raw('text9372c470eead')}
@@ -575,18 +574,13 @@ export function ProviderConnectView({
   search,
   onSearchChange,
   subscriptionSlots,
+  accessSlots,
   wrapCredentials,
   instruction,
-  detailProviderId = null,
-  onOpenDetail,
-  detailSlot,
+  onOpenModels,
   className,
 }: ProviderConnectViewProps) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
-  if (detailProviderId && detailSlot) {
-    return <div className={cn('px-5 py-5', className)}>{detailSlot}</div>;
-  }
-
   return (
     <div className={cn('flex flex-col gap-4 px-5 py-5', className)}>
       <InputGroupSearch data-provider-search="">
@@ -634,8 +628,9 @@ export function ProviderConnectView({
               onToggleReveal={onToggleReveal}
               onRemoveKey={onRemoveKey}
               subscriptionSlot={subscriptionSlots?.[row.id]}
+              accessSlot={accessSlots?.[row.id]}
               wrapCredentials={wrapCredentials}
-              onOpenDetail={onOpenDetail}
+              onOpenModels={onOpenModels}
             />
           ))}
         </div>
@@ -702,6 +697,7 @@ export interface ProviderConnectProps {
   canWrite?: boolean;
   /** Set while this surface is visible; drives the underlying queries. */
   enabled?: boolean;
+  onOpenModels?: (providerId: string) => void;
   className?: string;
 }
 
@@ -709,15 +705,17 @@ export function ProviderConnect({
   projectId,
   canWrite = false,
   enabled = true,
+  onOpenModels,
   className,
 }: ProviderConnectProps) {
   const tPersonal = useTranslations('personalProviders');
+  const tAccess = useTranslations('modelAccess');
+  const access = useModelAccess(enabled ? projectId : null);
+  const pickerCatalog = useProjectModelPickerCatalog(enabled ? projectId : null);
   useLiveLlmProviderCatalog(projectId, enabled);
-  useLlmProviderCatalogRevision();
+  const catalogRevision = useLlmProviderCatalogRevision();
   const { connectedProviders, providerStateLoading } = useConnectedProviders(projectId, enabled);
   const [search, setSearch] = useState('');
-  const [detailProviderId, setDetailProviderId] = useState<string | null>(null);
-  const detailEntry = detailProviderId ? (LLM_PROVIDER_BY_ID.get(detailProviderId) ?? null) : null;
 
   const connectedIds = useMemo(
     () => new Set(connectedProviders.map((provider) => provider.id)),
@@ -726,7 +724,41 @@ export function ProviderConnect({
 
   // The revision subscription above re-renders this component after the live
   // catalog replaces the module binding.
-  const searchable = LLM_PROVIDERS.filter((provider) => provider.id !== 'kortix');
+  const managedProvider = useMemo<LlmProviderEntry>(
+    () => ({
+      id: 'kortix',
+      label: 'Kortix',
+      envVars: [],
+      authRequirement: { methods: [] },
+      helpUrl: null,
+      apiHost: null,
+      hint: tAccess('managedDescription'),
+      models: Object.entries(pickerCatalog?.models ?? {})
+        .filter(([id]) => !id.includes('/'))
+        .map(([id, model]) => ({
+          id,
+          name: model.name || id,
+          description: model.description,
+          reasoning: model.reasoning,
+          tool_call: model.tool_call,
+          attachment: model.attachment,
+          limit: model.limit,
+          cost: model.cost,
+        })),
+      featured: true,
+      managed: true,
+    }),
+    [pickerCatalog, tAccess],
+  );
+  const searchable = useMemo(
+    () => [
+      ...(access.data?.enforced ? [managedProvider] : []),
+      ...LLM_PROVIDERS.filter((provider) => provider.id !== 'kortix'),
+    ],
+    // The module catalog changes out of band. Its revision triggers a fresh read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [access.data?.enforced, managedProvider, catalogRevision],
+  );
 
   /**
    * THE list, in a FIXED order that a save never disturbs — see
@@ -737,7 +769,7 @@ export function ProviderConnect({
     () =>
       orderProviderRows({
         providers: searchable,
-        firstClassIds: FIRST_CLASS_PROVIDER_IDS,
+        firstClassIds: ['kortix', ...FIRST_CLASS_PROVIDER_IDS],
         connectedIds,
         search,
       }).map((entry) => toRow(entry, connectedIds)),
@@ -772,19 +804,33 @@ export function ProviderConnect({
   return (
     <>
       <ProviderConnectView
+        accessSlots={Object.fromEntries(
+          visibleRows.map((row) => [
+            row.id,
+            <ProviderAccessMenu
+              key={row.id}
+              access={access}
+              providerId={row.id}
+              name={row.id === 'kortix' ? tAccess('managedTitle') : row.label}
+              canWrite={canWrite}
+            />,
+          ]),
+        )}
         className={className}
         rows={visibleRows}
         instruction={tPersonal('listInstruction')}
-        wrapCredentials={(row) => (
-          <ProjectProviderConnection
-            projectId={projectId}
-            row={row}
-            canWrite={canWrite}
-            projectConnectionsLoading={providerStateLoading}
-            subscriptionConnected={row.id === 'openai' && connectedIds.has('codex')}
-            KeyFields={ProviderKeyFields}
-          />
-        )}
+        wrapCredentials={(row) =>
+          row.id === 'kortix' ? null : (
+            <ProjectProviderConnection
+              projectId={projectId}
+              row={row}
+              canWrite={canWrite}
+              projectConnectionsLoading={providerStateLoading}
+              subscriptionConnected={row.id === 'openai' && connectedIds.has('codex')}
+              KeyFields={ProviderKeyFields}
+            />
+          )
+        }
         totalCount={searchable.length}
         hiddenCount={hiddenCount}
         onLoadMore={() => setVisibleCount((shown) => shown + PROVIDER_PAGE_SIZE)}
@@ -795,24 +841,7 @@ export function ProviderConnect({
         canWrite={canWrite}
         search={search}
         onSearchChange={setSearch}
-        detailProviderId={detailProviderId}
-        onOpenDetail={setDetailProviderId}
-        detailSlot={
-          detailEntry ? (
-            <ProviderDetail
-              provider={detailEntry}
-              isConnected={connectedIds.has(detailEntry.id)}
-              canWrite={canWrite}
-              onBack={() => setDetailProviderId(null)}
-              onConnect={() => {
-                setDetailProviderId(null);
-                requestAnimationFrame(() =>
-                  document.getElementById(`provider-action-${detailEntry.id}`)?.click(),
-                );
-              }}
-            />
-          ) : undefined
-        }
+        onOpenModels={access.data?.enforced ? onOpenModels : undefined}
       />
     </>
   );

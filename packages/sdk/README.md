@@ -643,7 +643,6 @@ pnpm --filter @kortix/sdk test   # facade, files, react hooks, turns, transcript
 See **`API-MAP.md`** for the complete endpoint catalogue. It covers the Kortix
 REST API and OpenCode REST runtime. See **`CHANGELOG.md`** for
 per-release changes.
-
 ### Personal provider connections
 
 Connect a ChatGPT subscription or provider API key once, then enable it in each project. Personal connections belong to the signed-in user. Management requires a Supabase user JWT; account PATs and sandbox tokens cannot manage global credentials.
@@ -663,3 +662,20 @@ For ChatGPT, call `startOAuth('codex')`, show `verification_url` and `user_code`
 The gateway selects the connection belonging to its authenticated user. A session uses the launching user recorded in its token. Other participants in that session retain this session identity. Project bindings authorize this use explicitly. Project credentials remain the fallback when no personal binding exists. Native-runtime projects do not support personal provider bindings.
 
 Manage saved accounts in **Preferences → My providers**. Under **Project → Models → Providers**, each row shows its connection status and a **Connect** or **Manage** action. The dialog defaults new connections to **Use my account** when supported. Choose **Share with this project** explicitly for shared credentials. Changes apply only after submission; cancelling preserves the current connection. Metadata endpoints never return credential values. Disconnect removes all project bindings; it does not revoke the upstream provider account itself.
+
+
+### Project provider and model access
+
+```ts
+const policy = await kortix.projects.modelAccess(projectId);
+await kortix.projects.setModelAccess(projectId, {
+  target: 'provider', id: 'kortix', enabled: false,
+});
+await kortix.projects.setModelAccess(projectId, {
+  target: 'model', id: 'openai/gpt-5.5', enabled: false,
+});
+```
+
+`kortix` identifies Kortix Managed Models. Other provider IDs identify BYOK, Codex, or custom providers. Provider disable takes precedence over individual model choices. Each write changes one target and preserves credentials. Disabling the current project default or its provider returns `409 cannot_disable_default`; select another default first.
+
+`useModelAccess(projectId)` from `@kortix/sdk/react` exposes the policy, write state, and `setEnabled(change)`. Successful writes refresh both picker caches. Rejected writes leave the displayed policy unchanged. The policy blocks gateway inference; legacy `setProjectModelEnablement` remains display-only. Native runtimes that bypass the gateway return `enforced: false`.

@@ -1013,7 +1013,6 @@ defines `window.Kortix`.
 - [SDK](/docs/sdk) — install and your first session.
 - [Sessions](/docs/sdk/sessions) — lifecycle, streaming, and error handling.
 - [React hooks](/docs/sdk/react) — the reactive layer built on these modules.
-
 ## Personal provider connections
 
 `kortix.providerConnections` manages your ChatGPT subscription and provider API keys across projects. Use a signed-in user's JWT. Account PATs and sandbox tokens cannot manage these credentials.
@@ -1031,3 +1030,14 @@ defines `window.Kortix`.
 Personal providers require the LLM gateway. Sessions use the launching user's authenticated identity, including when another participant sends a message in that session. Enabling a connection grants its use to those sessions. Without a personal binding, existing project credentials apply. Removing a connection removes its project bindings immediately; requests already in flight can finish.
 
 Manage saved accounts in **Preferences → My providers**. Under **Project → Models → Providers**, each provider appears once with a status and **Connect** or **Manage** action. The dialog offers **Use my account** by default for supported providers. OpenAI supports **ChatGPT subscription** and **API key**. Select **Share with this project** explicitly to save shared credentials. Confirm with **Save connection**, **Use this account**, or **Use project connection**. Changing a choice or cancelling performs no write. **Stop using my account** removes this project binding while preserving the saved account for other projects. Project members can connect their own accounts without permission to change shared credentials. Tokens remain on the API and never enter sandbox environment variables.
+
+
+## Provider and model access
+
+Read `kortix.projects.modelAccess(projectId)`. Change one target with `kortix.projects.setModelAccess(projectId, { target: 'provider' | 'model', id, enabled })`.
+
+Use provider ID `kortix` for Kortix Managed Models, or a catalog provider ID for BYOK, Codex, and custom providers. Use the full gateway wire ID for a model. Provider disable covers future models and preserves individual model preferences and saved credentials.
+
+The current default model and its provider require a replacement before disabling (`409 cannot_disable_default`). Direct gateway requests to disabled targets fail with `model_disabled` or `provider_disabled`. Existing in-flight upstream requests finish normally. The response's `enforced` flag is false when the project uses native OpenCode instead of the gateway.
+
+React consumers use `useModelAccess(projectId)` from `@kortix/sdk/react`. Its `setEnabled(change)` mutation refreshes the management catalog and session picker.

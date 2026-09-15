@@ -544,6 +544,20 @@ DB `project_secrets` (AES-256-GCM, key bound to `projectId`, unique `(project_id
 `TUN-4` device auth (public) `POST /tunnel/device-auth`, `GET …/:code/status`; (auth) `GET …/:code/info`, `POST …/:code/approve|deny`.
 `TUN-5` WS `GET /tunnel/ws?tunnelId=` — auth via first message; rate-limited.
 
+`TUN-6` — verified binary transfer and permission decisions
+
+Register a real filesystem agent over WebSocket. Empty `fs.write` arguments return
+400 before creating a permission request. A valid unapproved write returns 403 and
+creates no file. Denying it prevents approval of that same request (409). Concurrent
+approve/deny requests produce exactly one 200 and one 409. Grant a path-scoped write
+permission, then execute `agent-tunnel-cli fs_upload` with an XLSX source path. The
+process exits 0, stderr is empty, and stdout reports the source size and SHA-256.
+The destination bytes match the source. Repeat the write through a Computer Tunnel
+connector and assert its returned digest and persisted bytes. Same-length corrupted bytes with the source
+checksum fail without replacing the destination. Malformed base64 returns 400.
+Cleanup removes the connection and temporary files.
+
+
 ### Ops (platform admin)
 
 `OPS-1` `GET /ops/overview` → `requireAdmin` (platform admin/super_admin) → 200; non-admin → 403.
@@ -1016,9 +1030,10 @@ Native commands trust only the configured frontend origin in the main window's
 main frame. A second window at that same origin must receive an unauthorized
 sender error. Full document navigation within the configured frontend stays in
 the app, including when the frontend uses a custom host.
-
 ### Personal provider connections across projects
 
 `SEC-30` A signed-in user saves a provider credential independently of projects. Anonymous and account-token callers cannot manage global credentials. Metadata responses omit credential values. Another user cannot see or bind the credential. Project use requires explicit binding, and two projects reference the same connection. Disabling one binding preserves the other. Disconnecting removes all bindings. Unsupported OAuth providers, tampered device handles, and empty API keys fail safely.
 
 Browser journey **28 — provider connection scope** keeps one provider row with status and Connect or Manage. Credentials and ownership appear only inside the dialog. New supported connections default to the user's private account. Changing ownership clears the draft key. Changing choices and cancelling perform no writes. Explicit submission writes either a shared project secret or a personal credential and binding. Reload preserves the connection. A second project reuses the same account without rewriting credentials. A stale account fails visibly without creating a binding. OpenAI subscription and API key share the same dialog, including at mobile width. Gateway-disabled projects use the same dialog for shared credentials. Project members can save and bind personal keys but cannot edit shared keys. Stopping personal use removes only the project binding and preserves the saved account.
+
+`GW-ACCESS-1` Project provider and model access. New projects have no explicit restrictions. Anonymous and nonmember reads/writes are denied; members cannot write. Managers disable managed or BYOK providers and individual models. The current default model/provider cannot be disabled. Concurrent edits persist together. Disables survive reads, hide models from the picker, and reject direct gateway requests with `provider_disabled` or `model_disabled` before upstream inference. Provider re-enable retains individual model restrictions. Model re-enable restores access; invalid payloads do not change policy. A disabled target cannot become the routing default. Other project metadata survives. The web app uses one Models list for provider browsing and access controls. Provider model-count links open the Models tab with all provider groups listed together and no provider selector. Enabled providers have no status label; provider menus expose enable/disable and explain default protection.
