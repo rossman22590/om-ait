@@ -359,6 +359,7 @@ export function applyPreviewEnvironment(
     KE2E_SUPABASE_URL: origin,
     E2E_SUPABASE_URL: origin,
     E2E_MAILPIT_URL: `${origin}/_mailpit`,
+    E2E_APPS_BASE_DOMAIN: runtime.KORTIX_APPS_BASE_DOMAIN || `apps.${new URL(origin).hostname.split('.').slice(1).join('.')}`,
     KE2E_DATABASE_URL: `postgresql://postgres:${postgresPassword}@127.0.0.1:15432/postgres`,
     E2E_DATABASE_URL: `postgresql://postgres:${postgresPassword}@127.0.0.1:15432/postgres`,
     KE2E_SUPABASE_ANON_KEY: anonKey,
