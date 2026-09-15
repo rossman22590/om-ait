@@ -227,7 +227,8 @@ export function startProxy(
   // Box telemetry: a `[resources]` log line every minute and on every
   // runtime state change, `[resources] pressure` when a threshold is crossed.
   resourceMonitor?.stop()
-  resourceMonitor = harness.background.start(cfg)
+  const proxyResourceMonitor = harness.background.start(cfg)
+  resourceMonitor = proxyResourceMonitor
   // A staged daemon update must not exit this process while somebody has a
   // terminal open — the PTY dies with the daemon that spawned it. The registry
   // is the only thing that knows, so it answers the question rather than the
@@ -319,6 +320,8 @@ export function startProxy(
       logger.info('[proxy] reloaded with session config', { projectId: next.projectId })
     },
     async stop() {
+      proxyResourceMonitor.stop()
+      if (resourceMonitor === proxyResourceMonitor) resourceMonitor = null
       server.stop(true)
     },
   }

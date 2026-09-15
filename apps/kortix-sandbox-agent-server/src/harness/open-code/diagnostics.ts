@@ -260,6 +260,11 @@ async function readOpenCodeHealth(
     boot_error: bootState.repoMaterializationError ?? initialSessionError ?? auditRelayError,
     opencode_session_id: bootState.initialOpenCodeSessionId ?? null,
     opencode_session_required: !!bootState.initialOpenCodeSessionRequired,
+    // Which config provider delivered the project this boot (git | s3), the
+    // expected vs actual SHA, and — when S3 was attempted and Git delivered
+    // instead — the classified reason. A successful fallback keeps the S3
+    // failure visible here; the same facts go to the boot timeline relay.
+    config_provider: bootState.configProvider ?? null,
     // In-container boot timeline (ms since process start) so the dashboard can
     // attribute the post-create boot latency (clone vs opencode vs proxy).
     boot_timeline: bootState.timeline,

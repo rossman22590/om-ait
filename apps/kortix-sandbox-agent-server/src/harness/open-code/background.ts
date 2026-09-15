@@ -23,12 +23,13 @@ export function startOpenCodeBackground(opencode: Opencode, cfg: Config): Resour
   const offloadDbPath = opencodeDbPath(OPENCODE_HOME)
   const offloadSidecarDir = defaultSidecarDir(OPENCODE_HOME)
   let offloadRunning = false
+  let stopped = false
   const runOffloadIfIdle = async (why: string): Promise<void> => {
-    if (offloadRunning) return
+    if (stopped || offloadRunning) return
     if (process.env.KORTIX_ATTACHMENT_OFFLOAD === '0') return
     offloadRunning = true
     try {
-      if ((await turnInFlight()) !== false) return
+      if ((await turnInFlight()) !== false || stopped) return
       const result = await runAttachmentOffloadPass({ dbPath: offloadDbPath, sidecarDir: offloadSidecarDir })
       if (result.offloaded > 0) logger.info('[offload] moved attachment bytes out of the transcript', { why, ...result })
     } catch (err) {
@@ -39,9 +40,10 @@ export function startOpenCodeBackground(opencode: Opencode, cfg: Config): Resour
   }
   const offloadTimer = setInterval(() => void runOffloadIfIdle('interval'), 5 * 60_000)
   offloadTimer.unref?.()
-  setTimeout(() => void runOffloadIfIdle('boot'), 90_000).unref?.()
+  const offloadBootTimer = setTimeout(() => void runOffloadIfIdle('boot'), 90_000)
+  offloadBootTimer.unref?.()
 
-  return startResourceMonitor({
+  const monitor = startResourceMonitor({
     runtimePid: () => opencode.getPid(),
     discoverRuntimePids: findOpencodePids,
     pressure: evaluateOpenCodePressure,
@@ -73,6 +75,17 @@ export function startOpenCodeBackground(opencode: Opencode, cfg: Config): Resour
       },
     },
   })
+  // Stopping the background work stops the offload timers too, so a proxy
+  // stop never leaves a pass that touches the transcript store behind.
+  return {
+    ...monitor,
+    stop() {
+      stopped = true
+      clearTimeout(offloadBootTimer)
+      clearInterval(offloadTimer)
+      monitor.stop()
+    },
+  }
 }
 
 /**

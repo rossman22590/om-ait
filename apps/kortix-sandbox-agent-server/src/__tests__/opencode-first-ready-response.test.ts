@@ -55,19 +55,19 @@ describe('OpenCode lifecycle first ready response', () => {
       gitUserEmail: 'agent@kortix.ai',
     } as Config
     let spawnAttempts = 0
+    let readySettled = false
     lifecycle = createOpencodeLifecycle(cfg, configDir, undefined, {
       binaryPathOverride: binary,
       configPathOverride: join(root, 'runtime-config.json'),
       onStartupMark: (label) => {
         if (label === 'runtime-config-ready') spawnAttempts += 1
       },
+      onFirstReadyResponse: () => {
+        readySettled = true
+      },
     })
 
     await lifecycle.start()
-    let readySettled = false
-    const ready = lifecycle.waitForCurrentReadyResponse().then(() => {
-      readySettled = true
-    })
 
     await waitFor(() => spawnAttempts >= 2, 3_000)
     expect(readySettled).toBe(false)
@@ -82,7 +82,7 @@ Bun.serve({ port, hostname: '127.0.0.1', fetch: () => Response.json([]) })
     )
     chmodSync(binary, 0o755)
 
-    await ready
+    await waitFor(() => readySettled)
     await waitFor(() => lifecycle?.getState() === 'ok')
     expect(spawnAttempts).toBeGreaterThanOrEqual(3)
   }, 15_000)
@@ -135,35 +135,16 @@ Bun.serve({
     await waitFor(() => existsSync(probedFile))
     expect(reports).toBe(0)
 
-    let firstReadySettled = false
-    const firstReady = lifecycle.waitForCurrentReadyResponse().then(() => {
-      firstReadySettled = true
-    })
     await Bun.sleep(25)
-    expect(firstReadySettled).toBe(false)
+    expect(reports).toBe(0)
 
     writeFileSync(readyFile, 'ready')
-    await firstReady
     await waitFor(() => reports === 1)
-    expect(lifecycle.getState()).toBe('ok')
-
-    let repeatedWaitSettled = false
-    await lifecycle.waitForCurrentReadyResponse().then(() => {
-      repeatedWaitSettled = true
-    })
-    expect(repeatedWaitSettled).toBe(true)
+    await waitFor(() => lifecycle?.getState() === 'ok')
 
     rmSync(readyFile)
     await lifecycle.restart()
-    let restartedReadySettled = false
-    const restartedReady = lifecycle.waitForCurrentReadyResponse().then(() => {
-      restartedReadySettled = true
-    })
-    await Bun.sleep(25)
-    expect(restartedReadySettled).toBe(false)
-
     writeFileSync(readyFile, 'ready')
-    await restartedReady
     await waitFor(() => lifecycle?.getState() === 'ok')
     expect(reports).toBe(1)
 
@@ -173,15 +154,7 @@ Bun.serve({
     process.kill(livePid as number, 'SIGKILL')
     await waitFor(() => lifecycle?.getPid() === null)
 
-    let respawnReadySettled = false
-    const respawnReady = lifecycle.waitForCurrentReadyResponse().then(() => {
-      respawnReadySettled = true
-    })
-    await Bun.sleep(25)
-    expect(respawnReadySettled).toBe(false)
-
     writeFileSync(readyFile, 'ready')
-    await respawnReady
     await waitFor(() => lifecycle?.getState() === 'ok')
     expect(reports).toBe(1)
   }, 15_000)
@@ -191,13 +164,13 @@ Bun.serve({
     const sessionRuntimeAt = MAIN.indexOf('void startSessionRuntime(', harnessAt)
     const bootPath = MAIN.slice(harnessAt, sessionRuntimeAt)
     const callbackAt = bootPath.indexOf('onFirstReadyResponse: () => {')
-    const fastPathAt = bootPath.indexOf('nativeBinaryFastPathEnabled:', callbackAt)
-    const callback = bootPath.slice(callbackAt, fastPathAt)
+    const nextOptionAt = bootPath.indexOf('deferDirectoryProbe:', callbackAt)
+    const callback = bootPath.slice(callbackAt, nextOptionAt)
 
     expect(harnessAt).toBeGreaterThan(-1)
     expect(sessionRuntimeAt).toBeGreaterThan(harnessAt)
     expect(callbackAt).toBeGreaterThan(-1)
-    expect(fastPathAt).toBeGreaterThan(callbackAt)
+    expect(nextOptionAt).toBeGreaterThan(callbackAt)
     expect(callback).toContain("mark.label === 'opencode-session-api-ready'")
     expect(callback).toContain("bootMark('opencode-session-api-ready')")
     expect(callback).not.toContain('opencode-listening')
