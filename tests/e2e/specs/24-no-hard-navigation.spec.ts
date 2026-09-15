@@ -221,6 +221,7 @@ test.describe("24 — a menu click never reloads the document", () => {
         waitUntil: "domcontentloaded",
       });
       await dismissOnboarding(page);
+      await page.waitForLoadState("load");
 
       const loadsAfterBoot = documentLoads.length;
 
@@ -298,6 +299,7 @@ test.describe("24 — a menu click never reloads the document", () => {
         waitUntil: "domcontentloaded",
       });
       await dismissOnboarding(page);
+      await page.waitForLoadState("load");
 
       const newEntry = sidebar(page)
         .getByRole("link", { name: /^new$/i })
