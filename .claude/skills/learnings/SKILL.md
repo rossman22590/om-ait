@@ -21,6 +21,53 @@ linked, not inlined.
 
 ## Register
 
+### A raw `sql` subquery must QUALIFY every outer column — Drizzle unqualifies them in a single-table select (2026-09-15)
+
+**When:** writing `` sql`(select … from ${inner} where … = ${outer.col})` `` as a
+column of `db.select({...}).from(outer)`, or anywhere the template may later be
+placed there. Drizzle renders column references in a single-table selection
+WITHOUT their table, so `${outer.col}` becomes `"col"`, Postgres binds it to the
+INNER table, and the correlation is a tautology that returns the first row of the
+inner table for every outer row. Use a typed `leftJoin`, or wrap every outer column
+in `qualifiedColumn()` (`apps/api/src/shared/sql-qualified-column.ts`). *Incident:*
+prod v0.13.16 and earlier, from ~2026-09-07: `loadSandbox`
+(`sandbox-proxy/backend.ts`) read the session agent this way, so every proxied
+request got another customer's agent (`chief-of-staff`, the first
+`project_sessions` tuple). Agent-less prompts re-pointed session tokens at it —
+344 tokens in unrelated projects lost CLI and connector access; the admin project
+list showed global session counts per project. *Automation:*
+`sql-correlated-subquery-guard.test.ts` fails on any raw subquery that references
+a `@kortix/db` table column it does not select from; `backend-load-sandbox-sql.test.ts`
+pins the rendered join; `isLaunchableAgentName` + the proxy/re-mint guards refuse
+any agent name the session's own manifest does not declare.
+
+### Renaming or replacing the default agent is TWO writes — the manifest AND `project.metadata.default_agent`, which wins (2026-09-15)
+
+**When:** a CR renames, removes, or replaces the agent named by `default_agent`
+in `kortix.yaml`. `resolveGovernedAgentGrant` (`apps/api/src/projects/agents.ts`)
+resolves the `default` sentinel from `opts.projectDefaultAgent` (the DB mirror)
+BEFORE `loaded.defaultAgent` (the manifest). A CR merge does not refresh the DB
+mirror, so the old name keeps winning and every default-agent launch (web
+composer, triggers without `agent`, Slack) fails `AGENT_NOT_DECLARED`. After the
+merge, run `kortix agents default <new>` (writes both), then assert
+`kortix projects info --json` → `metadata.default_agent`. *Near-miss:* prod
+customer project, `kortix` → `galileo-admin` rename, ~7 min window, caught before
+any member launched. *Automation:* none — candidate: CR-merge manifest sync
+updates `metadata.default_agent` when the merged manifest no longer declares it.
+
+### A verify-failure predicate exists so NO caller lists reasons by hand — grep every caller when you fix one (2026-09-15)
+
+**When:** adding or fixing any caller of `verifySupabaseJwt` (or any verifier
+that returns a reason string). #6698 (2026-08-21) taught both auth middlewares
+that `unsupported-alg:HS256` is inconclusive via `isInconclusiveVerifyFailure`,
+but `sandbox-proxy/preview-auth.ts` kept `reason !== 'no-keys' && reason !==
+'no-key-for-kid'`. Prod JWKS publishes an ES256 key while GoTrue still signs
+HS256, so every preview ORIGIN (and `?token=` WebSocket) answered "Sign in to
+open this preview" to a valid session while `/v1/p/...` served the same token.
+*Incident:* prod, every JWT-authenticated preview origin, v0.13.16 and earlier.
+*Enforcer:* tripwire in `unit-jwt-alg-fallback.test.ts` fails when a
+production caller skips the predicate or compares a reason literal.
+
 ### Await archive parser completion before extraction (2026-09-14)
 
 **When:** downloading an archive through parallel file and validation streams.
