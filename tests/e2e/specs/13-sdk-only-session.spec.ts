@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { execFileSync } from 'node:child_process';
+import { Client } from 'pg';
 import { randomUUID } from 'node:crypto';
 import { createApiJsonClient } from '../helpers/http';
 import {
@@ -26,22 +26,25 @@ test.use({
   },
 });
 
-function executeSql(sql: string): string {
-  return execFileSync(
-    'psql',
-    [databaseUrl, '-v', 'ON_ERROR_STOP=1', '-At', '-c', sql],
-    { encoding: 'utf8' },
-  ).trim();
+async function executeSql(sql: string): Promise<string> {
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    const result = await client.query({ text: sql, rowMode: 'array' });
+    return result.rows.map((row) => row.join('|')).join('\n');
+  } finally {
+    await client.end();
+  }
 }
 
-function readAccountTier(accountId: string): string {
+async function readAccountTier(accountId: string): Promise<string> {
   return executeSql(
     `SELECT tier FROM kortix.credit_accounts WHERE account_id = '${accountId}'`,
   );
 }
 
-function fundAccount(accountId: string): void {
-  executeSql(
+async function fundAccount(accountId: string): Promise<void> {
+  await executeSql(
     `INSERT INTO kortix.credit_accounts (
        account_id,
        balance,
@@ -61,16 +64,16 @@ function fundAccount(accountId: string): void {
   );
 }
 
-function readSessionStatuses(sessionId: string): {
+async function readSessionStatuses(sessionId: string): Promise<{
   projectSession: string;
   sandbox: string;
-} {
-  const [projectSession, sandbox] = executeSql(
+}> {
+  const [projectSession, sandbox] = (await executeSql(
     `SELECT ps.status || '|' || ss.status
        FROM kortix.project_sessions ps
        JOIN kortix.session_sandboxes ss ON ss.session_id = ps.session_id
       WHERE ps.session_id = '${sessionId}'`,
-  ).split('|');
+  )).split('|');
   if (!projectSession || !sandbox) {
     throw new Error(`missing runtime status for session ${sessionId}`);
   }
@@ -201,8 +204,8 @@ test.describe.serial('13 — SDK-only web session', { tag: '@quarantine' }, () =
     const accounts = await api<AccountSummary[]>(auth.access_token, 'GET', '/accounts');
     const account = accounts.find((item) => item.personal_account) ?? accounts[0];
     expect(account?.account_id).toBe(accountId);
-    fundAccount(accountId);
-    expect(readAccountTier(accountId)).toBe('tier_2_20');
+    await fundAccount(accountId);
+    expect(await readAccountTier(accountId)).toBe('tier_2_20');
 
     const project = await api<ProjectSummary>(
       auth.access_token,
@@ -216,14 +219,14 @@ test.describe.serial('13 — SDK-only web session', { tag: '@quarantine' }, () =
       201,
     );
     projectId = project.project_id;
-    expect(readAccountTier(accountId)).toBe('tier_2_20');
+    expect(await readAccountTier(accountId)).toBe('tier_2_20');
     await api(
       auth.access_token,
       'PATCH',
       `/projects/${projectId}/onboarding`,
       { completed: true },
     );
-    expect(readAccountTier(accountId)).toBe('tier_2_20');
+    expect(await readAccountTier(accountId)).toBe('tier_2_20');
     const billing = await api<BillingState>(
       auth.access_token,
       'GET',
@@ -266,17 +269,7 @@ test.describe.serial('13 — SDK-only web session', { tag: '@quarantine' }, () =
       await api(auth.access_token, 'DELETE', `/projects/${projectId}`).catch(() => {});
     }
     if (accountId) {
-      execFileSync(
-        'psql',
-        [
-          databaseUrl,
-          '-v',
-          'ON_ERROR_STOP=1',
-          '-c',
-          `DELETE FROM kortix.accounts WHERE account_id = '${accountId}'`,
-        ],
-        { stdio: 'ignore' },
-      );
+      await executeSql(`DELETE FROM kortix.accounts WHERE account_id = '${accountId}'`);
     }
     if (user?.id) {
       await deleteAuthUser(user.id, {
@@ -358,7 +351,7 @@ test.describe.serial('13 — SDK-only web session', { tag: '@quarantine' }, () =
     expect(passiveRead).toBe(503);
     expect(transcriptReads).toHaveLength(1);
     expect(startRequests).toEqual([]);
-    expect(readSessionStatuses(sessionId)).toEqual({
+    expect(await readSessionStatuses(sessionId)).toEqual({
       projectSession: 'stopped',
       sandbox: 'stopped',
     });
@@ -548,7 +541,7 @@ test("13 — opening a terminal without a cached PTY wakes a stopped sandbox and
   let sessionId = "";
   try {
     await api<AccountSummary[]>(auth.access_token, "GET", "/accounts");
-    fundAccount(user.id);
+    await fundAccount(user.id);
     const project = await api<ProjectSummary>(
       auth.access_token,
       "POST",
@@ -646,6 +639,7 @@ test("13 — opening a terminal without a cached PTY wakes a stopped sandbox and
       await api(auth.access_token, "DELETE", `/projects/${projectId}`).catch(
         () => {},
       );
+    await executeSql(`DELETE FROM kortix.accounts WHERE account_id = '${user.id}'`);
     await deleteAuthUser(user.id, authOptions);
   }
 });
