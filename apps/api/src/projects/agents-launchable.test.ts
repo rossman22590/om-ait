@@ -40,6 +40,12 @@ describe('isLaunchableAgentName', () => {
     expect(isLaunchableAgentName('meta', governed)).toBe(true);
   });
 
+  test("OpenCode's built-in agents stay launchable in a governed project — a plan/build pick keeps running", () => {
+    for (const builtin of ['build', 'plan', 'general', 'explore']) {
+      expect(isLaunchableAgentName(builtin, governed)).toBe(true);
+    }
+  });
+
   test('a project with no per-agent governance keeps the runtime roster as the authority', () => {
     expect(isLaunchableAgentName('build', { specs: [], errors: [] })).toBe(true);
   });

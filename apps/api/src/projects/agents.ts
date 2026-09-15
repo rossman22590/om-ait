@@ -342,6 +342,21 @@ export async function resolveAgentGrant(
 }
 
 /**
+ * Agents every OpenCode runtime reports as `native` (verified against a live
+ * sandbox roster, 2026-09-15: build, compaction, explore, general, plan,
+ * summary, title).
+ */
+export const OPENCODE_BUILTIN_AGENT_NAMES: ReadonlySet<string> = new Set([
+  'build',
+  'compaction',
+  'explore',
+  'general',
+  'plan',
+  'summary',
+  'title',
+]);
+
+/**
  * May `agentName` be the RUNNING agent of a session in this project?
  *
  * A session token's grant follows the agent a prompt names (see
@@ -350,8 +365,8 @@ export async function resolveAgentGrant(
  * DIFFERENT project, onto ~50 session tokens of unrelated projects, and every
  * one of those sessions lost its CLI and connector access.
  *
- *   - `default` and the platform meta agent are always launchable: neither is
- *     ever declared in a manifest.
+ *   - `default`, the platform meta agent and OpenCode's built-in agents are
+ *     always launchable: none of them is ever another project's agent.
  *   - A project with no per-agent governance (no specs, no parse errors) keeps
  *     the runtime roster as the authority, unchanged.
  *   - Otherwise the name must be a declared, enabled spec. A manifest that
@@ -363,6 +378,11 @@ export function isLaunchableAgentName(agentName: string, loaded: LoadedAgents): 
   const name = agentName.trim();
   if (!name) return false;
   if (name === DEFAULT_AGENT_SENTINEL || isMetaAgentName(name)) return true;
+  // OpenCode ships these in every runtime and a governed project's picker can
+  // still send one. They are the runtime's own, not another project's, so they
+  // keep running exactly as before: an undeclared built-in resolves to the
+  // deny-all grant in `grantFromLoadedAgents`, never a widening.
+  if (OPENCODE_BUILTIN_AGENT_NAMES.has(name)) return true;
   if (loaded.specs.length === 0 && loaded.errors.length === 0) return true;
   return loaded.specs.some((s) => s.name === name && s.enabled);
 }
