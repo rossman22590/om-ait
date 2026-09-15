@@ -598,12 +598,13 @@ test("13 — opening a terminal without a cached PTY wakes a stopped sandbox and
       .poll(() => readSessionStatuses(sessionId), { timeout: 60_000 })
       .toEqual({ projectSession: "stopped", sandbox: "stopped" });
 
-    const responses: { method: string; status: number }[] = [];
+    const responses: { method: string; status: number; payload: unknown }[] = [];
     page.on("response", (response) => {
       if (new URL(response.url()).pathname.endsWith("/kortix/pty")) {
         responses.push({
           method: response.request().method(),
           status: response.status(),
+          payload: response.request().postDataJSON(),
         });
       }
     });
@@ -619,6 +620,11 @@ test("13 — opening a terminal without a cached PTY wakes a stopped sandbox and
         { timeout: 180_000 },
       )
       .toBe(true);
+    expect(responses.find((r) => r.method === "POST" && r.status === 200)?.payload).toMatchObject({
+      env: { TERM: "xterm-256color", COLORTERM: "truecolor" },
+    });
+    // Mounting xterm does not prove the socket has received shell output.
+    await expect(page.locator(".xterm-rows")).toContainText(/[$#] /, { timeout: 60_000 });
     await input.focus();
     await page.keyboard.type("printf 'TERMINAL_%s\\n' COLD_CONNECTED");
     await page.keyboard.press("Enter");
