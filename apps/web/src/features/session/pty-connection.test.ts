@@ -10,7 +10,31 @@ import {
   nextPtyAttachStep,
   shouldAutoReplaceTerminal,
   shouldExpirePtyConnect,
+  shouldRequestSessionWake,
 } from './pty-connection';
+
+describe('shouldRequestSessionWake', () => {
+  const base = { sandboxWaking: true, visible: true, canStart: true, alreadyRequested: false };
+
+  test('a visible panel on a parked box asks the session to start', () => {
+    // Reproduced 2026-09-16: after a page load with no cached PTY list, the
+    // panel polled GET /kortix/pty (503) for 248 s and nothing woke the box.
+    expect(shouldRequestSessionWake(base)).toBe(true);
+  });
+
+  test('asks once per waking episode', () => {
+    expect(shouldRequestSessionWake({ ...base, alreadyRequested: true })).toBe(false);
+  });
+
+  test('a hidden panel never wakes a box: nobody is waiting for it', () => {
+    expect(shouldRequestSessionWake({ ...base, visible: false })).toBe(false);
+  });
+
+  test('does nothing without the ids /start needs, or when the box is not parked', () => {
+    expect(shouldRequestSessionWake({ ...base, canStart: false })).toBe(false);
+    expect(shouldRequestSessionWake({ ...base, sandboxWaking: false })).toBe(false);
+  });
+});
 
 describe('classifyPtyAttachProbe', () => {
   test('a PTY list that answers means the box is up and the upgrade failed for another reason', () => {

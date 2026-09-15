@@ -27,8 +27,8 @@ import {
 // tint. Selection stays neutral so it reads on any ANSI color underneath.
 //
 // `background` and `foreground` MUST stay equal to `--terminal-surface` and
-// `--terminal-fg` in globals.css — the connect bar and the panel shell paint
-// those tokens, and xterm's ITheme only accepts literal colors, never vars.
+// `--terminal-fg` in globals.css — the xterm container paints those tokens
+// around the canvas, and xterm's ITheme only accepts literal colors, never vars.
 const terminalTheme: ITheme = {
   background: '#0f0f0f',
   foreground: '#e5e5e5',
@@ -605,6 +605,10 @@ PtyTerminal.displayName = 'PtyTerminal';
  * The one place the terminal talks about its connection. Nothing is written
  * into the shell buffer: a countdown there reads as a stuck loop and is left
  * behind in the scrollback after the shell comes back.
+ *
+ * It is app chrome, not shell output, so it paints Kortix tokens. Before the
+ * first connect it replaces the empty shell with the app background; after it,
+ * it floats over the scrollback as a popover pill.
  */
 function PtyAttachStatus({
   placement,
@@ -619,28 +623,20 @@ function PtyAttachStatus({
   actionLabel: string | null;
   onAction: () => void;
 }) {
-  const action = actionLabel ? (
-    <Button
-      type="button"
-      size="xs"
-      variant="ghost"
-      onClick={onAction}
-      className="text-terminal-fg hover:bg-terminal-fg/10 hover:text-terminal-fg active:scale-[0.96]"
-    >
-      {actionLabel}
-    </Button>
-  ) : null;
-
   if (placement === 'centered') {
     return (
       <div
         role="status"
         aria-live="polite"
-        className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center"
+        className="bg-background absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center"
       >
-        {busy ? <Loading className="text-terminal-muted size-4" /> : null}
-        <p className="text-terminal-muted text-xs text-pretty">{label}</p>
-        {action}
+        {busy ? <Loading className="text-muted-foreground size-4" /> : null}
+        <p className="text-muted-foreground text-xs text-pretty">{label}</p>
+        {actionLabel ? (
+          <Button type="button" size="sm" variant="outline" onClick={onAction} className="mt-1">
+            {actionLabel}
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -651,13 +647,23 @@ function PtyAttachStatus({
         role="status"
         aria-live="polite"
         className={cn(
-          'bg-terminal-surface border-terminal-border text-terminal-muted pointer-events-auto flex h-8 max-w-full items-center gap-2 rounded-md border pl-3 text-xs shadow-md',
-          action ? 'pr-0.5' : 'pr-3',
+          'bg-popover text-muted-foreground pointer-events-auto flex h-8 max-w-full items-center gap-2 rounded-md border pl-3 text-xs shadow-md',
+          actionLabel ? 'pr-0.5' : 'pr-3',
         )}
       >
         {busy ? <Loading className="size-3.5 shrink-0" /> : null}
         <span className="truncate">{label}</span>
-        {action}
+        {actionLabel ? (
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            onClick={onAction}
+            className="active:scale-[0.96]"
+          >
+            {actionLabel}
+          </Button>
+        ) : null}
       </div>
     </div>
   );

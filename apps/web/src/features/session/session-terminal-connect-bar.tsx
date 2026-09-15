@@ -14,8 +14,8 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
  * "how do I get a shell into this from my machine?" right where a shell lives.
  *
  * Collapsed, it is a label and nothing else. Expanded, it lists the two
- * commands as plain terminal lines: no wells, no borders, no fills — the
- * terminal surface is already the container.
+ * commands as plain lines: no wells, no borders, no fills. It is app chrome,
+ * so it paints Kortix tokens; only the shell itself uses the terminal palette.
  */
 export function SessionTerminalConnectBar({ projectSessionId }: { projectSessionId: string }) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
@@ -23,13 +23,13 @@ export function SessionTerminalConnectBar({ projectSessionId }: { projectSession
   const stepsId = useId();
 
   return (
-    <div className="border-terminal-border bg-terminal-surface shrink-0 border-b">
+    <div className="bg-background shrink-0 border-b">
       <button
         type="button"
         onClick={() => setExpanded((open) => !open)}
         aria-expanded={expanded}
         aria-controls={stepsId}
-        className="text-terminal-muted hover:text-terminal-fg focus-visible:text-terminal-fg focus-visible:ring-ring flex h-9 w-full cursor-pointer items-center gap-2 px-3 text-xs transition-colors duration-(--duration-fast) outline-none focus-visible:ring-1 focus-visible:ring-inset"
+        className="text-muted-foreground hover:text-foreground focus-visible:text-foreground focus-visible:ring-ring flex h-9 w-full cursor-pointer items-center gap-2 px-3 text-xs transition-colors duration-(--duration-fast) outline-none focus-visible:ring-1 focus-visible:ring-inset"
       >
         <LaptopIcon className="size-3.5 shrink-0" />
         <span className="min-w-0 flex-1 truncate text-left">
@@ -72,14 +72,14 @@ export function SessionTerminalConnectSteps({
 function CommandStep({ label, command }: { label: string; command: string }) {
   return (
     <li>
-      <p className="text-terminal-muted text-xs">{label}</p>
+      <p className="text-muted-foreground text-xs">{label}</p>
       <div className="flex h-7 items-center gap-2">
-        <span aria-hidden className="text-terminal-muted font-mono text-xs select-none">
+        <span aria-hidden className="text-muted-foreground font-mono text-xs select-none">
           $
         </span>
         <code
           title={command}
-          className="text-terminal-fg min-w-0 flex-1 truncate font-mono text-xs select-all"
+          className="text-foreground min-w-0 flex-1 truncate font-mono text-xs select-all"
         >
           {command}
         </code>
@@ -132,7 +132,7 @@ function CommandCopyButton({ command }: { command: string }) {
         aria-label={copyLabel}
         className={cn(
           'focus-visible:ring-ring hit-area-1.5 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-sm transition-colors duration-(--duration-fast) outline-none focus-visible:ring-1 active:scale-[0.96]',
-          copied ? 'text-terminal-fg' : 'text-terminal-muted hover:text-terminal-fg',
+          copied ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
         )}
       >
         <span className="relative inline-flex size-4 items-center justify-center">

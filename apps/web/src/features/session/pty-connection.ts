@@ -18,6 +18,27 @@ export function classifyPtyAttachProbe(error: unknown): PtyAttachProbe {
   return isSandboxNotReadyError(error) ? 'not-ready' : 'unreachable';
 }
 
+/**
+ * Should the terminal panel ask the session to start?
+ *
+ * The panel reaches the box through `GET /kortix/pty`, which by policy never
+ * wakes a parked sandbox, and the `wake=1` attach in `PtyTerminal` mounts only
+ * once a PTY exists. With no PTY yet, nothing in that chain can wake the box. A
+ * visible panel is a person waiting for a shell, so it calls `/start` once per
+ * waking episode.
+ */
+export function shouldRequestSessionWake(input: {
+  /** PTY list or create answered with a sandbox readiness 503. */
+  sandboxWaking: boolean;
+  /** The panel is on screen. */
+  visible: boolean;
+  /** Both ids `/start` needs are known. */
+  canStart: boolean;
+  alreadyRequested: boolean;
+}): boolean {
+  return input.sandboxWaking && input.visible && input.canStart && !input.alreadyRequested;
+}
+
 /** Dial cadence while a wake is running. A readiness 503 costs one row read. */
 export const PTY_WAKE_RETRY_MS = 2_000;
 /** A Platinum wake measured ~60 s on dev and 16-31 s locally. */
