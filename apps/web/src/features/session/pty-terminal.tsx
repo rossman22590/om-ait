@@ -332,8 +332,6 @@ export const PtyTerminal = forwardRef<PtyTerminalHandle, PtyTerminalProps>(funct
       const probe = classifyPtyAttachProbe(probeError);
       const wakeArmed = wakeOnNextConnectRef.current;
       const now = Date.now();
-      wakingSinceRef.current =
-        probe === 'not-ready' && wakeArmed ? (wakingSinceRef.current ?? now) : null;
       failuresRef.current = probe === 'not-ready' ? 0 : failuresRef.current + 1;
 
       const step = nextPtyAttachStep({
@@ -367,6 +365,8 @@ export const PtyTerminal = forwardRef<PtyTerminalHandle, PtyTerminalProps>(funct
       // the box, so every dial during the wake is refused and the attach that
       // finally opens is still the one the user asked for.
       const wake = wakeOnNextConnectRef.current;
+      // All probes share this attempt's deadline, including transient network failures.
+      if (wake && wakingSinceRef.current === null) wakingSinceRef.current = Date.now();
 
       // --- WebSocket connect ---
       globalPtyConnectionId++;

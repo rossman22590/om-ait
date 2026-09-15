@@ -62,11 +62,13 @@ export function nextPtyAttachStep(input: {
   /** How long the box has reported not-ready while a wake was armed. */
   wakingForMs: number;
 }): PtyAttachStep {
+  if (input.wakeArmed && input.wakingForMs >= PTY_WAKE_DEADLINE_MS) {
+    return { kind: 'pause', reason: 'failed' };
+  }
   if (input.probe === 'not-ready') {
     // A parked box whose socket dropped on its own stays parked until a person
     // asks for it. Background retries must not resurrect it.
     if (!input.wakeArmed) return { kind: 'pause', reason: 'asleep' };
-    if (input.wakingForMs >= PTY_WAKE_DEADLINE_MS) return { kind: 'pause', reason: 'failed' };
     return { kind: 'retry', delayMs: PTY_WAKE_RETRY_MS, phase: 'waking' };
   }
   if (input.failures > PTY_MAX_ATTACH_FAILURES) return { kind: 'pause', reason: 'failed' };

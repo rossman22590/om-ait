@@ -83,6 +83,14 @@ describe('nextPtyAttachStep', () => {
     ).toEqual({ kind: 'pause', reason: 'failed' });
   });
 
+  test('retains the wake deadline when readiness errors alternate with transport failures', () => {
+    for (const probe of ['reachable', 'unreachable'] as const) {
+      expect(nextPtyAttachStep({
+        ...base, probe, wakingForMs: PTY_WAKE_DEADLINE_MS,
+      })).toEqual({ kind: 'pause', reason: 'failed' });
+    }
+  });
+
   test('never resurrects a parked box without user intent', () => {
     expect(nextPtyAttachStep({ ...base, probe: 'not-ready', wakeArmed: false })).toEqual({
       kind: 'pause',
