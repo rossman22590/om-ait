@@ -1,10 +1,11 @@
 'use client';
 
 import Hint from '@/components/ui/hint';
+import { Copy } from '@/features/icon/icons/copy';
 import { useTranslations } from '@/i18n/use-translations';
 import { useDeploymentCliInstallCommand } from '@/lib/use-deployment-cli-install-command';
 import { cn } from '@/lib/utils';
-import { CaretDownIcon, CheckIcon, CopyIcon, LaptopIcon } from '@phosphor-icons/react';
+import { CaretDownIcon, CheckIcon, LaptopIcon } from '@phosphor-icons/react';
 import { AnimatePresence, m, useReducedMotion } from 'motion/react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
@@ -12,9 +13,9 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
  * A single quiet row at the top of the session Terminal panel. It answers
  * "how do I get a shell into this from my machine?" right where a shell lives.
  *
- * Collapsed, it is a label and nothing else, so no command text competes with
- * the terminal below it. Expanded, it lists the two commands in order:
- * install the CLI once, then connect this session.
+ * Collapsed, it is a label and nothing else. Expanded, it lists the two
+ * commands as plain terminal lines: no wells, no borders, no fills — the
+ * terminal surface is already the container.
  */
 export function SessionTerminalConnectBar({ projectSessionId }: { projectSessionId: string }) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
@@ -61,7 +62,7 @@ export function SessionTerminalConnectSteps({
   const connectCmd = `kortix sessions connect ${projectSessionId}`;
 
   return (
-    <ol id={id} className="space-y-3 px-3 pt-0.5 pb-3">
+    <ol id={id} className="space-y-3 pr-1.5 pb-3 pl-3">
       <CommandStep label={tI18nComplete.raw('textd236e9cd730b')} command={installCmd} />
       <CommandStep label={tI18nComplete.raw('text842bad27af42')} command={connectCmd} />
     </ol>
@@ -70,14 +71,15 @@ export function SessionTerminalConnectSteps({
 
 function CommandStep({ label, command }: { label: string; command: string }) {
   return (
-    <li className="space-y-1.5">
+    <li>
       <p className="text-terminal-muted text-xs">{label}</p>
-      {/* Radius is concentric: the 8px well minus its ~2px inset gives the
-          6px (`rounded-sm`) copy button. */}
-      <div className="border-terminal-border flex h-8 items-center gap-2 rounded-md border pr-0.5 pl-2.5">
+      <div className="flex h-7 items-center gap-2">
+        <span aria-hidden className="text-terminal-muted font-mono text-xs select-none">
+          $
+        </span>
         <code
           title={command}
-          className="text-terminal-fg min-w-0 flex-1 truncate font-mono text-xs"
+          className="text-terminal-fg min-w-0 flex-1 truncate font-mono text-xs select-all"
         >
           {command}
         </code>
@@ -101,18 +103,21 @@ function CommandCopyButton({ command }: { command: string }) {
   );
 
   const copy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(command);
-    } catch {
-      return;
-    }
+    // The check answers the click, not the clipboard promise: `writeText` can
+    // take hundreds of ms to settle, and a late check reads as a missed click.
     setCopied(true);
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => setCopied(false), 1500);
+    try {
+      await navigator.clipboard.writeText(command);
+    } catch {
+      if (timer.current) clearTimeout(timer.current);
+      setCopied(false);
+    }
   }, [command]);
 
-  // The house icon-swap morph (see CopyButton). Reduced motion keeps the
-  // cross-fade and drops the scale and blur.
+  // The house icon-swap morph and glyphs (see CopyButton). Reduced motion keeps
+  // the cross-fade and drops the scale and blur.
   const hiddenIcon = reduceMotion
     ? { opacity: 0 }
     : { scale: 0.25, opacity: 0, filter: 'blur(4px)' };
@@ -125,9 +130,12 @@ function CommandCopyButton({ command }: { command: string }) {
         type="button"
         onClick={copy}
         aria-label={copyLabel}
-        className="text-terminal-muted hover:bg-terminal-fg/10 hover:text-terminal-fg focus-visible:ring-ring hit-area-1.5 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-sm transition-colors outline-none focus-visible:ring-1 active:scale-[0.96]"
+        className={cn(
+          'focus-visible:ring-ring hit-area-1.5 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-sm transition-colors duration-(--duration-fast) outline-none focus-visible:ring-1 active:scale-[0.96]',
+          copied ? 'text-terminal-fg' : 'text-terminal-muted hover:text-terminal-fg',
+        )}
       >
-        <span className="relative inline-flex size-3.5 items-center justify-center">
+        <span className="relative inline-flex size-4 items-center justify-center">
           <AnimatePresence initial={false} mode="popLayout">
             <m.span
               key={copied ? 'check' : 'copy'}
@@ -137,11 +145,7 @@ function CommandCopyButton({ command }: { command: string }) {
               transition={{ type: 'spring', duration: 0.3, bounce: 0 }}
               className="absolute inset-0 inline-flex items-center justify-center"
             >
-              {copied ? (
-                <CheckIcon weight="fill" className="text-kortix-green size-3.5" />
-              ) : (
-                <CopyIcon className="size-3.5" />
-              )}
+              {copied ? <CheckIcon className="size-3.5" /> : <Copy className="size-3.5" />}
             </m.span>
           </AnimatePresence>
         </span>
