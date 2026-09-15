@@ -6,7 +6,6 @@ import { ErrorState } from '@/features/layout/section/error-state';
 import {
   PTY_WAKE_DEADLINE_MS,
   deriveTerminalPanelState,
-  PTY_WAKE_DEADLINE_MS,
   shouldAutoReplaceTerminal,
   shouldRequestSessionWake,
 } from '@/features/session/pty-connection';
@@ -144,10 +143,7 @@ export function SessionTerminalPanel({
   }, [isLoading, optimisticPty?.id, pty, ptys, sessionId, setTerminalPty, terminalPtyId]);
 
   useEffect(() => {
-    if (!serverUrl || hidden || createPty.isError) return;
-    // Opening the terminal is user intent. A POST wakes a parked sandbox;
-    // polling the read-only list cannot. Other list failures remain errors.
-    if (isListError && !isSandboxNotReadyError(listError)) return;
+    if (!serverUrl || hidden || isListError || createPty.isError) return;
     if (isLoading) return;
     if (pty) {
       ensuringRef.current = false;
@@ -155,9 +151,9 @@ export function SessionTerminalPanel({
       wakeRequestedRef.current = false;
       return;
     }
-    if (terminalPtyId && !isListError) return; // Wait for missing-id cleanup after a successful list.
+    if (terminalPtyId) return; // Wait for missing-id cleanup after a successful list.
     ensurePty();
-  }, [createPty.isError, ensurePty, hidden, isListError, isLoading, listError, pty, serverUrl, terminalPtyId]);
+  }, [createPty.isError, ensurePty, hidden, isListError, isLoading, pty, serverUrl, terminalPtyId]);
 
   const retryTerminal = useCallback(() => {
     ensuringRef.current = false;
@@ -196,23 +192,12 @@ export function SessionTerminalPanel({
       // Read first so an existing shell can be reused once the sandbox wakes.
       void refetchPtys().then((result) => {
         if (epoch !== pollEpochRef.current || createPty.isPending) return;
-        if (result.isError && isSandboxNotReadyError(result.error)) {
-          ensuringRef.current = false;
-          ensurePty();
-        } else if (!result.isError) {
+        if (!result.isError) {
           createPty.reset();
         }
       });
     };
-  }, [createPty, ensurePty, refetchPtys]);
-  useEffect(() => {
-    if (!sandboxWaking || hidden || terminalWaitExpired) return;
-    const interval = window.setInterval(
-      () => retryTerminalRef.current(),
-      SANDBOX_WAKING_RETRY_INTERVAL_MS,
-    );
-    return () => window.clearInterval(interval);
-  }, [hidden, sandboxWaking, terminalWaitExpired]);
+  }, [createPty, refetchPtys]);
 
   // Nothing in the list → create → attach chain can wake a parked box: the PTY
   // list GET never wakes by policy, and the `wake=1` attach needs a PTY first.
@@ -256,6 +241,15 @@ export function SessionTerminalPanel({
     return () => window.clearTimeout(timeout);
   }, [pty, wakeStartedAt]);
   const wakeTimedOut = !pty && wakeStartedAt !== null && wakeFailedAt === wakeStartedAt;
+
+  useEffect(() => {
+    if (!sandboxWaking || hidden || terminalWaitExpired || wakeTimedOut) return;
+    const interval = window.setInterval(
+      () => retryTerminalRef.current(),
+      SANDBOX_WAKING_RETRY_INTERVAL_MS,
+    );
+    return () => window.clearInterval(interval);
+  }, [hidden, sandboxWaking, terminalWaitExpired, wakeTimedOut]);
 
   const retryAfterFailure = useCallback(() => {
     wakeRequestedRef.current = false;
