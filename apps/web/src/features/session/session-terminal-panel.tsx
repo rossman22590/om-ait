@@ -11,6 +11,7 @@ import {
 } from '@/features/session/pty-connection';
 import { SessionTerminalConnectBar } from '@/features/session/session-terminal-connect-bar';
 import { useBoundedRuntimeWait } from '@/features/session/use-bounded-runtime-wait';
+import { useTranslations } from '@/i18n/use-translations';
 import { useSessionBrowserStore } from '@/stores/session-browser-store';
 import { isSandboxNotReadyError, startProjectSession } from '@kortix/sdk';
 import {
@@ -21,7 +22,6 @@ import {
   type Pty,
 } from '@kortix/sdk/react';
 import { PlusIcon as Plus, TerminalWindowIcon as Terminal } from '@phosphor-icons/react';
-import { useTranslations } from '@/i18n/use-translations';
 import dynamic from 'next/dynamic';
 import React, { useCallback, useEffect, useRef } from 'react';
 
@@ -184,7 +184,12 @@ export function SessionTerminalPanel({
 
   const retryTerminalRef = useRef<() => void>(() => {});
   const pollEpochRef = useRef(0);
-  useEffect(() => () => { pollEpochRef.current += 1; }, [hidden, serverUrl]);
+  useEffect(
+    () => () => {
+      pollEpochRef.current += 1;
+    },
+    [hidden, serverUrl],
+  );
   useEffect(() => {
     retryTerminalRef.current = () => {
       const epoch = pollEpochRef.current;

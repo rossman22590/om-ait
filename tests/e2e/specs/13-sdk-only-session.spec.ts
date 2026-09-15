@@ -528,32 +528,118 @@ test.describe.serial('13 — SDK-only web session', { tag: '@quarantine' }, () =
     expect(mismatchConsoleErrors).toEqual([]);
   });
 
-  test('opening a terminal without a cached PTY wakes a stopped sandbox and accepts shell input', async ({ page }) => {
-    await installBrowserSessionDirect(page, auth, `/projects/${projectId}/sessions/${sessionId}`, authOptions);
-    const terminalButton = page.getByRole('button', { name: 'Terminal', exact: true });
+});
+
+// Terminal recovery runs in the blocking deployed lane independently of the
+// quarantined transcript assertions above.
+
+test("13 — opening a terminal without a cached PTY wakes a stopped sandbox and accepts shell input", async ({
+  page,
+}) => {
+  test.skip(
+    !enabled,
+    "Set E2E_ENABLE_SDK_ONLY_SESSION=1 for the real sandbox flow.",
+  );
+  test.setTimeout(12 * 60_000);
+  const email = `terminal-wake-${Date.now()}-${randomUUID().slice(0, 8)}@example.test`;
+  const user = await createAuthUser(email, authOptions);
+  const auth = await signIn(email, authOptions);
+  let projectId = "";
+  let sessionId = "";
+  try {
+    await api<AccountSummary[]>(auth.access_token, "GET", "/accounts");
+    fundAccount(user.id);
+    const project = await api<ProjectSummary>(
+      auth.access_token,
+      "POST",
+      "/projects/provision",
+      {
+        account_id: user.id,
+        name: "Terminal wake verification",
+        seed_starter: true,
+      },
+      201,
+    );
+    projectId = project.project_id;
+    await api(auth.access_token, "PATCH", `/projects/${projectId}/onboarding`, {
+      completed: true,
+    });
+    const session = await api<ProjectSession>(
+      auth.access_token,
+      "POST",
+      `/projects/${projectId}/sessions`,
+      {
+        name: "Cold terminal wake",
+      },
+      201,
+    );
+    sessionId = session.session_id;
+    await waitForReadySession(auth.access_token, projectId, sessionId);
+    await installBrowserSessionDirect(
+      page,
+      auth,
+      `/projects/${projectId}/sessions/${sessionId}`,
+      authOptions,
+    );
+    const terminalButton = page.getByRole("button", {
+      name: "Terminal",
+      exact: true,
+    });
     await expect(terminalButton).toBeVisible({ timeout: 120_000 });
     // This page has not mounted the terminal, so neither the PTY query nor its
     // remembered ID exists. Stop after navigation to isolate terminal wake.
-    await api(auth.access_token, 'POST', `/projects/${projectId}/sessions/${sessionId}/stop`, {});
-    await expect.poll(() => readSessionStatuses(sessionId), { timeout: 60_000 })
-      .toEqual({ projectSession: 'stopped', sandbox: 'stopped' });
+    await api(
+      auth.access_token,
+      "POST",
+      `/projects/${projectId}/sessions/${sessionId}/stop`,
+      {},
+    );
+    await expect
+      .poll(() => readSessionStatuses(sessionId), { timeout: 60_000 })
+      .toEqual({ projectSession: "stopped", sandbox: "stopped" });
 
     const responses: { method: string; status: number }[] = [];
-    page.on('response', (response) => {
-      if (new URL(response.url()).pathname.endsWith('/kortix/pty')) {
-        responses.push({ method: response.request().method(), status: response.status() });
+    page.on("response", (response) => {
+      if (new URL(response.url()).pathname.endsWith("/kortix/pty")) {
+        responses.push({
+          method: response.request().method(),
+          status: response.status(),
+        });
       }
     });
     await terminalButton.click();
-    const input = page.locator('.xterm-helper-textarea');
+    const input = page.locator(".xterm-helper-textarea");
     await expect(input).toBeAttached({ timeout: 180_000 });
-    await expect.poll(() => responses.some((r) => r.method === 'GET' && r.status === 503)).toBe(true);
-    await expect.poll(() => responses.some((r) => r.method === 'POST' && r.status === 200), { timeout: 180_000 }).toBe(true);
+    await expect
+      .poll(() => responses.some((r) => r.method === "GET" && r.status === 503))
+      .toBe(true);
+    await expect
+      .poll(
+        () => responses.some((r) => r.method === "POST" && r.status === 200),
+        { timeout: 180_000 },
+      )
+      .toBe(true);
     await input.focus();
     await page.keyboard.type("printf 'TERMINAL_%s\\n' COLD_CONNECTED");
-    await page.keyboard.press('Enter');
-    await expect(page.locator('.xterm-rows')).toContainText('TERMINAL_COLD_CONNECTED', { timeout: 30_000 });
-    await expect(page.locator('.xterm-rows')).not.toContainText('Reconnecting in');
-  });
-
+    await page.keyboard.press("Enter");
+    await expect(page.locator(".xterm-rows")).toContainText(
+      "TERMINAL_COLD_CONNECTED",
+      { timeout: 30_000 },
+    );
+    await expect(page.locator(".xterm-rows")).not.toContainText(
+      "Reconnecting in",
+    );
+  } finally {
+    if (projectId && sessionId)
+      await api(
+        auth.access_token,
+        "DELETE",
+        `/projects/${projectId}/sessions/${sessionId}`,
+      ).catch(() => {});
+    if (projectId)
+      await api(auth.access_token, "DELETE", `/projects/${projectId}`).catch(
+        () => {},
+      );
+    await deleteAuthUser(user.id, authOptions);
+  }
 });
