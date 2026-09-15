@@ -85,16 +85,15 @@
   --color-liquid-glass: var(--liquid-glass-bg);
   --color-liquid-glass-hover: var(--liquid-glass-bg-hover);
   --shadow-liquid-glass: var(--liquid-glass-shadow);
-  /* Terminal surface. The PTY pane and its chrome (the connect strip, the
-     panel shell behind it) are always dark, in every app theme, because they
-     mirror a real shell — so these are literals, not light/dark pairs. One
-     set of tokens so the three files that paint that surface cannot drift
-     apart again. `terminalTheme` in features/session/pty-terminal.tsx must
-     keep `background` equal to --terminal-surface and `foreground` equal to
-     --terminal-fg: xterm's ITheme needs concrete colors, not CSS vars. */
+  /* Terminal surface. Only the PTY pane itself is always dark, in every app
+     theme, because it mirrors a real shell — so these are literals, not
+     light/dark pairs. Chrome around it (the connect bar, the panel shell, the
+     connection status) is app UI and paints Kortix tokens. `terminalTheme` in
+     features/session/pty-terminal.tsx must keep `background` equal to
+     --terminal-surface and `foreground` equal to --terminal-fg: xterm's ITheme
+     needs concrete colors, not CSS vars. */
   --color-terminal-surface: var(--terminal-surface);
   --color-terminal-fg: var(--terminal-fg);
-  --color-terminal-muted: var(--terminal-muted);
   --color-terminal-border: var(--terminal-border);
   /* Emoji-picker active-cell tints (src/components/ui/emoji-picker.tsx).
      Six hues the picker rotates through so the hovered/keyboard-active cell is
@@ -577,9 +576,6 @@
      pane keeps the same shell-black in both themes. See the @theme mapping. */
   --terminal-surface: #0f0f0f;
   --terminal-fg: #e5e5e5;
-  /* Secondary text on the terminal surface. The surface is dark in both
-     themes, so `text-muted-foreground` (#666 in light) fails contrast here. */
-  --terminal-muted: #999999;
   --terminal-border: rgb(255 255 255 / 0.1);
 
   /* Motion tokens (canonical values; mirrored in @theme for utilities) */
