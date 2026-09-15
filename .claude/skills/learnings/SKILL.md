@@ -21,6 +21,17 @@ linked, not inlined.
 
 ## Register
 
+
+### Terminal wake must work before a PTY exists (2026-09-15)
+
+**When:** changing terminal attach or recovery. Test a stopped sandbox with no
+cached PTY list or remembered PTY ID. `GET /kortix/pty` never wakes a sandbox;
+the visible panel must initiate a mutation before read polling can succeed.
+Keep automatic polls inside one fixed deadline; only user Retry resets it.
+*Incident:* production terminal counted reconnects indefinitely while CLI attach
+worked. PR #7267 initially fixed socket recovery but missed cold terminal creation.
+*Enforcer:* `13-sdk-only-session.spec.ts` cold terminal wake and shell-output test.
+
 ### A raw `sql` subquery must QUALIFY every outer column — Drizzle unqualifies them in a single-table select (2026-09-15)
 
 **When:** writing `` sql`(select … from ${inner} where … = ${outer.col})` `` as a

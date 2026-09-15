@@ -5,6 +5,7 @@ import Loading from '@/components/ui/loading';
 import { ErrorState } from '@/features/layout/section/error-state';
 import {
   deriveTerminalPanelState,
+  PTY_WAKE_DEADLINE_MS,
   shouldAutoReplaceTerminal,
 } from '@/features/session/pty-connection';
 import { SessionTerminalConnectBar } from '@/features/session/session-terminal-connect-bar';
@@ -84,7 +85,7 @@ export function SessionTerminalPanel({
   // multiple shells.
   const ensuringRef = useRef(false);
   const ensurePty = useCallback(() => {
-    if (!serverUrl || ensuringRef.current) return;
+    if (!serverUrl || hidden || ensuringRef.current) return;
     ensuringRef.current = true;
     createPty
       .mutateAsync({
@@ -98,7 +99,7 @@ export function SessionTerminalPanel({
       .catch(() => {
         ensuringRef.current = false;
       });
-  }, [createPty, serverUrl, sessionId, setTerminalPty, tI18nHardcoded]);
+  }, [createPty, hidden, serverUrl, sessionId, setTerminalPty, tI18nHardcoded]);
 
   useEffect(() => {
     if (serverUrl) {
@@ -135,15 +136,18 @@ export function SessionTerminalPanel({
   }, [isLoading, optimisticPty?.id, pty, ptys, sessionId, setTerminalPty, terminalPtyId]);
 
   useEffect(() => {
-    if (!serverUrl || isListError || createPty.isError) return;
+    if (!serverUrl || hidden || createPty.isError) return;
+    // Opening the terminal is user intent. A POST wakes a parked sandbox;
+    // polling the read-only list cannot. Other list failures remain errors.
+    if (isListError && !isSandboxNotReadyError(listError)) return;
     if (isLoading) return;
     if (pty) {
       ensuringRef.current = false;
       return;
     }
-    if (terminalPtyId) return; // Wait for the missing-id cleanup effect above.
+    if (terminalPtyId && !isListError) return; // Wait for missing-id cleanup after a successful list.
     ensurePty();
-  }, [createPty.isError, ensurePty, isListError, isLoading, pty, serverUrl, terminalPtyId]);
+  }, [createPty.isError, ensurePty, hidden, isListError, isLoading, listError, pty, serverUrl, terminalPtyId]);
 
   const retryTerminal = useCallback(() => {
     ensuringRef.current = false;
@@ -169,20 +173,36 @@ export function SessionTerminalPanel({
   const terminalWaitExpired = useBoundedRuntimeWait(
     !pty && (!serverUrl || isLoading || createPty.isPending || sandboxWaking),
     serverRetryAttempt,
+    PTY_WAKE_DEADLINE_MS,
   );
 
   const retryTerminalRef = useRef<() => void>(() => {});
+  const pollEpochRef = useRef(0);
+  useEffect(() => () => { pollEpochRef.current += 1; }, [hidden, serverUrl]);
   useEffect(() => {
-    retryTerminalRef.current = retryTerminal;
-  }, [retryTerminal]);
+    retryTerminalRef.current = () => {
+      const epoch = pollEpochRef.current;
+      // Polls retain the deadline. Only the user's Retry starts a new attempt.
+      // Read first so an existing shell can be reused once the sandbox wakes.
+      void refetchPtys().then((result) => {
+        if (epoch !== pollEpochRef.current || createPty.isPending) return;
+        if (result.isError && isSandboxNotReadyError(result.error)) {
+          ensuringRef.current = false;
+          ensurePty();
+        } else if (!result.isError) {
+          createPty.reset();
+        }
+      });
+    };
+  }, [createPty, ensurePty, refetchPtys]);
   useEffect(() => {
-    if (!sandboxWaking) return;
+    if (!sandboxWaking || hidden || terminalWaitExpired) return;
     const interval = window.setInterval(
       () => retryTerminalRef.current(),
       SANDBOX_WAKING_RETRY_INTERVAL_MS,
     );
     return () => window.clearInterval(interval);
-  }, [sandboxWaking]);
+  }, [hidden, sandboxWaking, terminalWaitExpired]);
 
   const panelState = deriveTerminalPanelState({
     hasServerUrl: !!serverUrl,
