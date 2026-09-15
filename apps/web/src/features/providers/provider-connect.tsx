@@ -807,13 +807,22 @@ export function ProviderConnect({
         accessSlots={Object.fromEntries(
           visibleRows.map((row) => [
             row.id,
-            <ProviderAccessMenu
-              key={row.id}
-              access={access}
-              providerId={row.id}
-              name={row.id === 'kortix' ? tAccess('managedTitle') : row.label}
-              canWrite={canWrite}
-            />,
+            <div key={row.id} className="flex shrink-0 items-center gap-0.5">
+              <ProviderAccessMenu
+                access={access}
+                providerId={row.id}
+                name={row.id === 'kortix' ? tAccess('managedTitle') : row.label}
+                canWrite={canWrite}
+              />
+              {row.id === 'openai' && (
+                <ProviderAccessMenu
+                  access={access}
+                  providerId="codex"
+                  name="ChatGPT subscription"
+                  canWrite={canWrite}
+                />
+              )}
+            </div>,
           ]),
         )}
         className={className}
