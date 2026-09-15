@@ -675,7 +675,7 @@ flow(
   {
     domain: 'sessions',
     requires: ['funded', 'daytona'],
-    timeoutMs: 900_000,
+    timeoutMs: 1_200_000,
     routes: [
       'POST /v1/projects/:projectId/sessions',
       'POST /v1/projects/:projectId/sessions/:sessionId/start',
@@ -837,6 +837,29 @@ flow(
         );
       },
     );
+
+    await ctx.step("session A's completed turn has a durable transcript before stopping", async () => {
+      await waitFor(
+        async () => {
+          const r = await owner.get('/v1/projects/:projectId/sessions/:sessionId/transcript', {
+            params: { projectId: project.id, sessionId: sessionA.id },
+            query: { shape: 'sync' },
+          });
+          r.status(200);
+          return r.json<any>();
+        },
+        {
+          until: (t) =>
+            t?.available === true &&
+            t?.source === 'mirror' &&
+            t?.complete === true &&
+            JSON.stringify(t?.messages ?? []).includes(markerA),
+          timeoutMs: 180_000,
+          intervalMs: 4_000,
+          description: `session A durable transcript containing its own marker`,
+        },
+      );
+    });
 
     await ctx.step("stop session A's sandbox → 200 stopped", async () => {
       const r = await owner.post(

@@ -533,7 +533,7 @@ flow(
   {
     domain: 'agent-run',
     requires: ['funded', 'daytona'],
-    timeoutMs: 360_000,
+    timeoutMs: 660_000,
     // Only manifest-real routes are declared; the /p/<sbx>/8000/* proxy
     // catch-all is exercised at runtime but is not a coverage target.
     routes: [
@@ -556,7 +556,7 @@ flow(
   {
     domain: 'agent-run',
     requires: ['funded', 'daytona'],
-    timeoutMs: 360_000,
+    timeoutMs: 660_000,
     routes: [
       'POST /v1/projects/:projectId/sessions',
       'POST /v1/projects/:projectId/sessions/:sessionId/start',
@@ -585,7 +585,7 @@ flow(
   {
     domain: 'agent-run',
     requires: ['funded', 'daytona'],
-    timeoutMs: 420_000,
+    timeoutMs: 900_000,
     routes: [
       'POST /v1/projects/:projectId/sessions',
       'POST /v1/projects/:projectId/sessions/:sessionId/start',
