@@ -643,3 +643,70 @@ test("13 — opening a terminal without a cached PTY wakes a stopped sandbox and
     await deleteAuthUser(user.id, authOptions);
   }
 });
+
+test('13 — message retries keep their sandbox after switching sessions', async ({ page }) => {
+  test.skip(!enabled, 'Set E2E_ENABLE_SDK_ONLY_SESSION=1 for the real sandbox flow.');
+  test.setTimeout(15 * 60_000);
+  const email = `session-routing-${Date.now()}-${randomUUID().slice(0, 8)}@example.test`;
+  const user = await createAuthUser(email, authOptions);
+  const auth = await signIn(email, authOptions);
+  let projectId = '';
+  const sessions: Array<{ id: string; nativeId: string; externalId: string }> = [];
+  try {
+    await api<AccountSummary[]>(auth.access_token, 'GET', '/accounts');
+    await fundAccount(user.id);
+    const project = await api<ProjectSummary>(auth.access_token, 'POST', '/projects/provision', {
+      account_id: user.id, name: 'Session routing verification', seed_starter: true,
+    }, 201);
+    projectId = project.project_id;
+    await api(auth.access_token, 'PATCH', `/projects/${projectId}/onboarding`, { completed: true });
+    for (const name of ['Routing session A', 'Routing session B']) {
+      const session = await api<ProjectSession>(auth.access_token, 'POST', `/projects/${projectId}/sessions`, { name }, 201);
+      const item = { id: session.session_id, nativeId: '', externalId: '' };
+      sessions.push(item);
+      await waitForReadySession(auth.access_token, projectId, item.id);
+      const [nativeId, externalId] = (await executeSql(
+        `SELECT ps.opencode_session_id || '|' || ss.external_id
+         FROM kortix.project_sessions ps JOIN kortix.session_sandboxes ss USING(session_id)
+         WHERE ps.session_id = '${item.id}'`,
+      )).split('|');
+      if (!nativeId || !externalId) throw new Error('Session runtime identity is missing');
+      Object.assign(item, { nativeId, externalId });
+    }
+    const [first, second] = sessions;
+    expect(first.externalId).not.toBe(second.externalId);
+    const reads: Array<{ nativeId: string; externalId: string }> = [];
+    page.on('request', (request) => {
+      const match = new URL(request.url()).pathname.match(/\/p\/([^/]+)\/8000\/session\/([^/]+)\/message$/);
+      if (match) reads.push({ externalId: match[1], nativeId: match[2] });
+    });
+    // Keep A's message retry pending while the user opens B. The old registry
+    // resolves that retry through the newly active runtime and sends A to B.
+    await page.route(`**/session/${first.nativeId}/message?*`, (route) => route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Sandbox is not ready' }),
+    }));
+    await installBrowserSessionDirect(page, auth, `/projects/${projectId}/sessions/${first.id}`, authOptions);
+    await expect.poll(() => reads.filter((read) => read.nativeId === first.nativeId).length, { timeout: 120_000 }).toBeGreaterThan(0);
+    await page.getByRole('link', { name: 'Routing session B', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/sessions/${second.id}`));
+    await expect.poll(() => reads.some((read) => read.nativeId === second.nativeId && read.externalId === second.externalId), { timeout: 120_000 }).toBe(true);
+    const previousReads = reads.filter((read) => read.nativeId === first.nativeId).length;
+    await expect.poll(() => reads.filter((read) => read.nativeId === first.nativeId).length, { timeout: 30_000 }).toBeGreaterThan(previousReads);
+    for (const session of sessions) {
+      for (const read of reads.filter((read) => read.nativeId === session.nativeId)) {
+        expect(read.externalId, `Message read for ${session.nativeId}`).toBe(session.externalId);
+      }
+    }
+    await expect(page.getByRole('textbox', { name: 'Message input' })).toBeVisible();
+  } finally {
+    await page.goto('about:blank').catch(() => {});
+    for (const session of sessions) {
+      await api(auth.access_token, 'DELETE', `/projects/${projectId}/sessions/${session.id}`).catch(() => {});
+    }
+    if (projectId) await api(auth.access_token, 'DELETE', `/projects/${projectId}`).catch(() => {});
+    await executeSql(`DELETE FROM kortix.accounts WHERE account_id = '${user.id}'`);
+    await deleteAuthUser(user.id, authOptions);
+  }
+});
