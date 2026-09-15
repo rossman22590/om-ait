@@ -181,6 +181,8 @@ test.describe('18 — Kortix Apps UI', () => {
       const seededUrl = new URL(seeded.url);
       if (env.target === 'local') {
         expect(seededUrl.hostname).toMatch(/\.apps\.localhost$/);
+      } else if (env.target === 'preview') {
+        expect(seededUrl.hostname).toMatch(/^preview-.+\.apps\.[a-z0-9.-]+$/);
       } else {
         const environmentPrefix = env.target === 'prod' ? 'prod' : env.target;
         expect(seededUrl.hostname).toMatch(

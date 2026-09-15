@@ -297,7 +297,7 @@ export function applyPreviewEnvironment(
     CORS_ALLOWED_ORIGINS: origin,
     KORTIX_PUBLIC_APP_URL: origin,
     KORTIX_PUBLIC_AUTH_METHODS: 'magic,password',
-    KORTIX_PUBLIC_DISABLE_LANDING_PAGE: 'true',
+    KORTIX_PUBLIC_DISABLE_LANDING_PAGE: 'false',
     KORTIX_RESTRICT_ACCOUNT_CREATION: 'false',
     KORTIX_PUBLIC_RESTRICT_ACCOUNT_CREATION: 'false',
     // Billing ON, with the Stripe SANDBOX (test-mode) keys below — the same

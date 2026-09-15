@@ -61,7 +61,7 @@ async function waitForSessionReady(
   ctx: FlowContext,
   projectId: string,
   sessionId: string,
-  timeoutMs = 300_000,
+  timeoutMs = 540_000,
 ): Promise<any> {
   try {
     return await waitFor(
@@ -330,7 +330,7 @@ flow(
   {
     domain: 'agent-run',
     requires: ['funded', 'daytona'],
-    timeoutMs: 420_000,
+    timeoutMs: 900_000,
     routes: [
       'POST /v1/projects/:projectId/sessions',
       'POST /v1/projects/:projectId/sessions/:sessionId/start',
@@ -675,7 +675,7 @@ flow(
   {
     domain: 'sessions',
     requires: ['funded', 'daytona'],
-    timeoutMs: 420_000,
+    timeoutMs: 900_000,
     routes: [
       'POST /v1/projects/:projectId/sessions',
       'POST /v1/projects/:projectId/sessions/:sessionId/start',
@@ -935,10 +935,9 @@ flow(
   {
     domain: 'sessions',
     requires: ['daytona', 'funded'],
-    // Raised with the readiness wait added below: a real cold boot measured
-    // 36-50s typically and 158s worst-success in run 32330628092, and it now
-    // runs BEFORE the inbox assertions rather than racing them.
-    timeoutMs: 600_000,
+    // Preview run 34938179244 measured a fresh Daytona image build at up to
+    // 439s. Readiness now permits that cold path before the inbox assertions.
+    timeoutMs: 1_200_000,
     routes: [
       'POST /v1/projects/:projectId/sessions/:sessionId/start',
       'POST /v1/projects/:projectId/sessions/:sessionId/prompts',
@@ -957,7 +956,7 @@ flow(
     // a claim against a box that is still booting. `ctx.fixtures.session` does
     // NOT wait for readiness, so wait here, before the first prompt exists.
     await ctx.step('the session runtime is ready before anything is queued', async () => {
-      await waitForSessionReady(ctx, project.id, session.id, 240_000);
+      await waitForSessionReady(ctx, project.id, session.id, 540_000);
     });
     const clientMessageId = `q_sess25_${Date.now()}`;
     // The CLIENT mints the wire id: OpenCode orders its transcript by the id's
