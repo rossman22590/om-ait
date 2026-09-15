@@ -21,6 +21,10 @@ linked, not inlined.
 
 ## Register
 
+### Treat a same-origin auth redirect as a rejected sensitive-path probe (2026-09-15)
+
+**When:** probing encoded filesystem paths through an auth-gated frontend. Accept a `307` only if it points to relative `/auth` with the exact normalized path in `redirect`. Check the response body for secrets independently. *Near-miss:* the v0.13.15 preview gate failed `SEC-J` on an encoded `/etc/passwd` path that returned this redirect. *Enforcer:* `SEC-J` checks the redirect shape and secret body in `tests/src/flows/security-backlog.flow.ts`.
+
 ### A webhook security gate must distinguish rejection from absent configuration (2026-09-15)
 
 **When:** testing forged requests against an optional webhook integration. Require no 2xx, and allow a service-unavailable response only when its body names the exact missing configuration. *Near-miss:* the v0.13.15 preview gate failed `SEC-F` because unsigned Slack ingress returned `503` with `OAuth mode not configured` on a preview without Slack OAuth. *Enforcer:* `SEC-F` checks the exact 503 response in `tests/src/flows/security-backlog.flow.ts`.

@@ -620,7 +620,21 @@ flow(
         '/%2e%2e/%2e%2e/etc/passwd',
       ]) {
         const response = await ctx.client.get(path);
-        response.status([400, 401, 403, 404]);
+        if (response.statusCode === 307) {
+          const location = response.header('location') ?? '';
+          const redirect = new URL(location, 'https://probe.invalid');
+          if (
+            path !== '/%2e%2e/%2e%2e/etc/passwd' ||
+            !location.startsWith('/auth?') ||
+            redirect.origin !== 'https://probe.invalid' ||
+            redirect.pathname !== '/auth' ||
+            redirect.searchParams.get('redirect') !== '/etc/passwd'
+          ) {
+            throw new Error(`${path} returned unexpected redirect ${location}`);
+          }
+        } else {
+          response.status([400, 401, 403, 404]);
+        }
         if (/root:.*:0:0|private_key|-----BEGIN [A-Z ]*PRIVATE KEY-----\s+[A-Za-z0-9+/=\s]{64,}-----END/i.test(response.text())) {
           throw new Error(`${path} exposed sensitive file content`);
         }
