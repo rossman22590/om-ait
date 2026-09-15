@@ -15,8 +15,8 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { sql } from 'drizzle-orm';
-import { db } from '../shared/db';
 import { loadSandbox } from '../sandbox-proxy/backend';
+import { db } from '../shared/db';
 
 const run = crypto.randomUUID().slice(0, 8);
 const fixtures = {
@@ -85,7 +85,9 @@ afterAll(async () => {
     `);
   }
   for (const sandboxId of fixtures.sandboxIds) {
-    await db.execute(sql`delete from kortix.session_sandboxes where sandbox_id = ${sandboxId}::uuid`);
+    await db.execute(
+      sql`delete from kortix.session_sandboxes where sandbox_id = ${sandboxId}::uuid`,
+    );
   }
   for (const sessionId of fixtures.sessionIds) {
     await db.execute(sql`delete from kortix.project_sessions where session_id = ${sessionId}`);
@@ -97,10 +99,28 @@ describe('correlated reads stay on their own row', () => {
     expect(projectsForTest.length).toBe(2);
     const [projectA, projectB] = projectsForTest as [ProjectRow, ProjectRow];
 
-    const sessionA = await insertSession({ project: projectA, agentName: `iso-a-${run}`, status: 'running' });
-    const sessionB = await insertSession({ project: projectB, agentName: `iso-b-${run}`, status: 'running' });
-    await insertSandbox({ project: projectA, sessionId: sessionA, externalId: `sbx_iso_a_${run}`, status: 'active' });
-    await insertSandbox({ project: projectB, sessionId: sessionB, externalId: `sbx_iso_b_${run}`, status: 'active' });
+    const sessionA = await insertSession({
+      project: projectA,
+      agentName: `iso-a-${run}`,
+      status: 'running',
+    });
+    const sessionB = await insertSession({
+      project: projectB,
+      agentName: `iso-b-${run}`,
+      status: 'running',
+    });
+    await insertSandbox({
+      project: projectA,
+      sessionId: sessionA,
+      externalId: `sbx_iso_a_${run}`,
+      status: 'active',
+    });
+    await insertSandbox({
+      project: projectB,
+      sessionId: sessionB,
+      externalId: `sbx_iso_b_${run}`,
+      status: 'active',
+    });
 
     const recordA = await loadSandbox(`sbx_iso_a_${run}`);
     const recordB = await loadSandbox(`sbx_iso_b_${run}`);
@@ -113,8 +133,17 @@ describe('correlated reads stay on their own row', () => {
 
   test('loadSandbox keeps the agent on the case-insensitive fallback path', async () => {
     const [projectA] = projectsForTest as [ProjectRow];
-    const session = await insertSession({ project: projectA, agentName: `iso-c-${run}`, status: 'running' });
-    await insertSandbox({ project: projectA, sessionId: session, externalId: `SBX_ISO_C_${run}`, status: 'active' });
+    const session = await insertSession({
+      project: projectA,
+      agentName: `iso-c-${run}`,
+      status: 'running',
+    });
+    await insertSandbox({
+      project: projectA,
+      sessionId: session,
+      externalId: `SBX_ISO_C_${run}`,
+      status: 'active',
+    });
 
     const record = await loadSandbox(`sbx_iso_c_${run}`.toLowerCase());
     expect(record?.sessionId).toBe(session);
