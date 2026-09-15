@@ -94,6 +94,7 @@
      --terminal-fg: xterm's ITheme needs concrete colors, not CSS vars. */
   --color-terminal-surface: var(--terminal-surface);
   --color-terminal-fg: var(--terminal-fg);
+  --color-terminal-muted: var(--terminal-muted);
   --color-terminal-border: var(--terminal-border);
   /* Emoji-picker active-cell tints (src/components/ui/emoji-picker.tsx).
      Six hues the picker rotates through so the hovered/keyboard-active cell is
@@ -576,6 +577,9 @@
      pane keeps the same shell-black in both themes. See the @theme mapping. */
   --terminal-surface: #0f0f0f;
   --terminal-fg: #e5e5e5;
+  /* Secondary text on the terminal surface. The surface is dark in both
+     themes, so `text-muted-foreground` (#666 in light) fails contrast here. */
+  --terminal-muted: #999999;
   --terminal-border: rgb(255 255 255 / 0.1);
 
   /* Motion tokens (canonical values; mirrored in @theme for utilities) */

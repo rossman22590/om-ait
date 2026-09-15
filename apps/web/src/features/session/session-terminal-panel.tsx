@@ -200,9 +200,9 @@ export function SessionTerminalPanel({
   let content: React.ReactNode;
   if (panelState === 'connecting') {
     content = (
-      <div className="flex h-full w-full flex-col items-center justify-center">
-        <Loading className="text-muted-foreground size-4" />
-        <span className="text-muted-foreground mt-2 text-xs">
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center">
+        <Loading className="text-terminal-muted size-4" />
+        <span className="text-terminal-muted text-xs">
           {sandboxWaking
             ? tI18nHardcoded.raw('i18nComplete.text5e3de76869f3')
             : tI18nHardcoded.raw(
