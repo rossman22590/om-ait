@@ -34,6 +34,29 @@ static previews, LLM/connector proxy, resource sampler, event sequencer, and
 CLI/daemon update scheduler. These call service ports for harness behavior.
 They do not import OpenCode modules or unwrap a native lifecycle.
 
+## Config provider is a host service, not harness logic
+
+`src/config-provider/` (the `git` / `prefer-s3` / `require-s3` project
+acquisition coordinator, #7221) stays outside `src/harness/`. It depends only
+on host modules (`config`, `git`, `logger`) and knows nothing about any
+harness. The relationship is one-directional:
+
+- `open-code/boot.ts` calls `materializeProject(cfg, { bootMark, onSummary })`
+  at the point where the cold boot acquires the workspace, exactly as
+  `main.ts` did before the boundary existed. The harness consumes the
+  service; the service never imports a harness module.
+- `boot-state.ts` (host) carries the outcome: `configProvider` (the
+  `ConfigProviderSummary` reported in `/kortix/health` as `config_provider`)
+  and `deferredHistoryBackfill` (a prepared-S3 start defers the history
+  backfill until the runtime is actually ready). The OpenCode boot reads and
+  runs them; a future adapter does the same through the shared boot state.
+- Its tests (`config-provider.test.ts`) import the provider and `git`
+  directly. No harness fixture is involved.
+
+A change to the acquisition protocol (descriptor source, pack format, retry
+policy) lands in `src/config-provider/` and reaches every harness through
+this one call site.
+
 There are no root `opencode.ts` or `opencode-events.ts` compatibility reexports.
 Native tests import the implementation that owns the behavior. Package-level architecture tests reject concrete adapter imports from host
 production code and HTTP framework/controller imports from harness modules.
