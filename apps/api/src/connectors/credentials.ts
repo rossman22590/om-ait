@@ -316,6 +316,83 @@ export async function upsertConnectionOAuth2Credential(
   });
 }
 
+/**
+ * The calling member's OWN connection on a `user`-strategy connector.
+ *
+ * A `user` connector has no project-wide account to share, so
+ * `ensureDefaultConnection` (which only ever looks at `ownerType: 'project'`)
+ * could never serve it. That gap is why a Private connector had no self-serve
+ * authorization at all: every connect path refused the strategy outright, the
+ * session card rendered prose with no button, and the only way to get an
+ * account in was `POST /projects/:id/connections/me` from the settings screen.
+ *
+ * Idempotent per (connector, member): the member's default connection if they
+ * already hold one, otherwise a fresh `member`-owned row marked default for
+ * that owner. Defaults are per-owner, so this never collides with the project's.
+ */
+export async function ensureMemberConnection(input: {
+  projectId: string;
+  connectorId: string;
+  userId: string;
+  label?: string;
+}): Promise<string> {
+  const ownedByCaller = and(
+    eq(connectorConnections.connectorId, input.connectorId),
+    eq(connectorConnections.ownerType, 'member'),
+    eq(connectorConnections.ownerId, input.userId),
+  );
+  const [existing] = await db
+    .select({ connectionId: connectorConnections.connectionId })
+    .from(connectorConnections)
+    .where(and(ownedByCaller, eq(connectorConnections.isDefault, true)))
+    .limit(1);
+  if (existing) return existing.connectionId;
+
+  const [connector] = await db
+    .select()
+    .from(connectors)
+    .where(
+      and(
+        eq(connectors.connectorId, input.connectorId),
+        eq(connectors.projectId, input.projectId),
+      ),
+    )
+    .limit(1);
+  if (!connector) throw new Error('Connector not found while creating its member connection');
+
+  let created: { connectionId: string } | undefined;
+  try {
+    [created] = await db
+      .insert(connectorConnections)
+      .values({
+        accountId: connector.accountId,
+        projectId: connector.projectId,
+        connectorId: connector.connectorId,
+        ownerType: 'member',
+        ownerId: input.userId,
+        label: input.label ?? 'Private connection',
+        status: 'active',
+        isDefault: true,
+        metadata: { connector_slug: connector.slug },
+        createdBy: input.userId,
+      })
+      .returning({ connectionId: connectorConnections.connectionId });
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+  }
+  if (created) return created.connectionId;
+
+  // Raced with a concurrent connect by the same member. Any row they own is
+  // the answer — the default one if the race produced it.
+  const [raced] = await db
+    .select({ connectionId: connectorConnections.connectionId })
+    .from(connectorConnections)
+    .where(ownedByCaller)
+    .limit(1);
+  if (!raced) throw new Error('Member connection could not be created or found');
+  return raced.connectionId;
+}
+
 export async function ensureDefaultConnection(input: {
   projectId: string;
   connectorId: string;

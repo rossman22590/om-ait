@@ -78,8 +78,17 @@ export async function callWithApprovalHandoff<T = unknown>(
   connector: string,
   action: string,
   args: Record<string, unknown>,
+  options: { account?: string | null } = {},
 ): Promise<ConnectorCallResult<T>> {
-  return client.call<T>(`${connector}.${action}`, args);
+  // Only forward a real name. `parseExecArgs` turns a bare `--account` into the
+  // string 'true', which is a flag typo, not an account — sending it would deny
+  // the call with a confusing "no account named true".
+  const account = options.account?.trim();
+  return client.call<T>(
+    `${connector}.${action}`,
+    args,
+    account && account !== 'true' ? { account } : {},
+  );
 }
 
 export interface ConnectLinkResult {

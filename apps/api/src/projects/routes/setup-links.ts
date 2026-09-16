@@ -193,11 +193,20 @@ projectsApp.openapi(
       );
     }
     const conn = eligibility;
-    if (conn.authorizationStrategy !== 'project') {
+    // Both strategies mint a link. The difference is WHOSE account it lands on,
+    // and the token already carries that: `uid` is the caller, so a `user`
+    // connector authorizes the caller's own member connection while a `project`
+    // connector authorizes the one shared account.
+    //
+    // This used to 409 on anything but `project`, which left a Private
+    // connector with no connect flow at all — the session's connect card had no
+    // button to offer and the turn had no remedy. A member connecting their own
+    // account is exactly what the `user` strategy means.
+    if (conn.authorizationStrategy === 'user' && !loaded.userId) {
       return c.json(
         {
-          error: 'Shared connect links require a project authorization strategy',
-          code: 'CONNECTOR_AUTHORIZATION_STRATEGY_MISMATCH',
+          error: 'A private connector can only be authorized by a signed-in member',
+          code: 'CONNECTOR_AUTHORIZATION_REQUIRES_MEMBER',
         },
         409,
       );

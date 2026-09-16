@@ -284,6 +284,11 @@ const META_TOOLS = [
           type: 'object',
           description: "Arguments matching the tool's input schema (see describe). Defaults to {}.",
         },
+        account: {
+          type: 'string',
+          description:
+            'Which connected account to run as, when this connector has more than one (a shared project account and each member\'s own). Give the account label or its connection id, exactly as `accounts` returns it. Omit to use the default account. A name that matches nothing is refused and the refusal lists the available names — it never silently runs as a different account.',
+        },
         attachment_files: {
           type: 'array',
           description:
@@ -323,6 +328,20 @@ const META_TOOLS = [
       additionalProperties: false,
     },
     readOnly: false,
+  },
+  {
+    name: 'accounts',
+    description:
+      'List the connected accounts a connector can be called as, default first. Use this before passing `account` to `call`, and when a call is denied `connector_not_connected` with a `requested_account`. An empty list means nothing is connected yet — call `connect` to get a link for the human.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        connector: { type: 'string', description: 'Connector slug, e.g. "gmail".' },
+      },
+      required: ['connector'],
+      additionalProperties: false,
+    },
+    readOnly: true,
   },
   {
     name: 'connect',
@@ -649,11 +668,37 @@ async function runMetaTool(client: ConnectorClient, name: string, args: Record<s
       }
       // Returns the authenticated approval URL immediately when policy gates
       // the call. The server callback resumes the session after a decision.
-      const result = await callWithApprovalHandoff(client, connector, action, callArgs);
+      const result = await callWithApprovalHandoff(client, connector, action, callArgs, {
+        account: typeof args.account === 'string' ? args.account : null,
+      });
       return {
         content: content(result),
         // Pending approval is a successful handoff, not a connector failure.
         isError: result.status !== 'pending_approval' && !result.ok,
+      };
+    }
+
+    case 'accounts': {
+      const connector = typeof args.connector === 'string' ? args.connector : '';
+      if (!connector) {
+        return {
+          content: content({ ok: false, error: 'connector is required' }),
+          isError: true,
+        };
+      }
+      const accounts = await client.accounts(connector);
+      return {
+        content: content({
+          ok: true,
+          connector,
+          accounts,
+          ...(accounts.length === 0
+            ? {
+                note: `Nothing is connected to "${connector}" yet. Call connect to get an authorization link for the human.`,
+              }
+            : {}),
+        }),
+        isError: false,
       };
     }
 

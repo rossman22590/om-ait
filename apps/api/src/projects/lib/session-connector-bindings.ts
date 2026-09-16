@@ -1,5 +1,4 @@
 import {
-  type RequiredConnectorConnection,
   type SessionConnectorBindings,
   SessionConnectorBindingsInputSchema,
 } from '@kortix/api-contract';
@@ -390,241 +389,6 @@ export async function validateSessionConnectorBindings(input: {
   return { ok: true, bindings: validated };
 }
 
-export type RequiredConnectorResolution =
-  | { ok: true; bindings: ValidatedSessionConnectorBinding[] }
-  | {
-      ok: false;
-      code: 'REQUIRED_CONNECTOR_CONNECTION_UNAVAILABLE';
-      /** Every unconfigured alias, so one refusal is one round trip to fix. */
-      aliases: string[];
-      connectorConnections?: never;
-    }
-  | {
-      ok: false;
-      code: 'CONNECTOR_CONNECTION_REQUIRED';
-      connectorConnections: RequiredConnectorConnection[];
-      aliases?: never;
-    };
-
-export class RequiredConnectorConnectionUnavailableError extends Error {
-  readonly code = 'REQUIRED_CONNECTOR_CONNECTION_UNAVAILABLE';
-
-  /** Every unconfigured alias, matching what create's pre-flight returns. */
-  readonly aliases: string[];
-
-  /**
-   * The first alias.
-   *
-   * Kept because callers read it, but the list is the contract: the docs tell
-   * connectors this refusal names every failing alias, and a single-alias
-   * throw made that false on the prompt path — a caller who fixed the one name
-   * they were given got refused again by the next, once per round trip.
-   */
-  get alias(): string {
-    return this.aliases[0] ?? '';
-  }
-
-  constructor(aliases: string | readonly string[]) {
-    const list = (typeof aliases === 'string' ? [aliases] : [...aliases]).filter(
-      (alias) => alias.length > 0,
-    );
-    const quoted = list.map((alias) => `"${alias}"`).join(', ');
-    super(
-      list.length === 1
-        ? `Required connection ${quoted} is unavailable`
-        : `Required connections ${quoted} are unavailable`,
-    );
-    this.aliases = list;
-    this.name = 'RequiredConnectorConnectionUnavailableError';
-  }
-}
-
-export async function resolveRequiredConnectorConnections(input: {
-  accountId: string;
-  projectId: string;
-  actingUserId: string;
-  actingPrincipalIsServiceAccount: boolean;
-  aliases: readonly string[];
-  explicitBindings?: readonly ValidatedSessionConnectorBinding[];
-}): Promise<RequiredConnectorResolution> {
-  const bindings: ValidatedSessionConnectorBinding[] = [];
-  const missing: RequiredConnectorConnection[] = [];
-  const unavailable: string[] = [];
-  const seen = new Set<string>();
-  const explicitlyBound = new Set(input.explicitBindings?.map((binding) => binding.alias) ?? []);
-  for (const requestedAlias of input.aliases) {
-    const alias = canonicalConnectorAlias(requestedAlias);
-    if (seen.has(alias)) continue;
-    seen.add(alias);
-    if (explicitlyBound.has(alias)) continue;
-    const [connectorRow] = await db
-      .select({
-        connectorId: connectors.connectorId,
-        projectId: connectors.projectId,
-        slug: connectors.slug,
-        name: connectors.name,
-        providerType: connectors.providerType,
-        config: connectors.config,
-        authorizationStrategy: connectors.authorizationStrategy,
-        enabled: connectors.enabled,
-        status: connectors.status,
-      })
-      .from(connectors)
-      .where(
-        and(
-          eq(connectors.accountId, input.accountId),
-          eq(connectors.projectId, input.projectId),
-          eq(connectors.slug, alias),
-        ),
-      )
-      .limit(1);
-    if (!connectorRow) {
-      // Keep scanning. Returning on the first unconfigured alias would hand the
-      // caller one alias per round trip, and a caller that has to guess how many
-      // more refusals are queued cannot show the end-user a complete checklist.
-      unavailable.push(publicConnectorAlias(alias));
-      continue;
-    }
-    const connector: ConnectorRequirementRow = connectorRow;
-    const connectionRows = connector.enabled && connector.status === 'active'
-      ? await db
-          .select({
-            connectionId: connectorConnections.connectionId,
-            isDefault: connectorConnections.isDefault,
-            ownerType: connectorConnections.ownerType,
-            ownerId: connectorConnections.ownerId,
-            status: connectorConnections.status,
-            metadata: connectorConnections.metadata,
-          })
-          .from(connectorConnections)
-          .where(
-            and(
-              eq(connectorConnections.accountId, input.accountId),
-              eq(connectorConnections.projectId, input.projectId),
-              eq(connectorConnections.connectorId, connector.connectorId),
-              eq(connectorConnections.status, 'active'),
-            ),
-          )
-          .orderBy(desc(connectorConnections.isDefault), connectorConnections.connectionId)
-      : [];
-    let selected: ConnectorConnectionRow | null = null;
-    for (const connection of connectionRows) {
-      if (
-        !connectorAuthorizationMatchesStrategy({
-          strategy: connector.authorizationStrategy,
-          ownerType: connection.ownerType,
-          ownerId: connection.ownerId,
-          actingUserId: input.actingUserId,
-          actingPrincipalIsServiceAccount: input.actingPrincipalIsServiceAccount,
-          trustedManagedSystem: trustedManagedAuthorization(connector, connection),
-        })
-      ) {
-        continue;
-      }
-      if (await connectorConnectionIsConnected({ connector, connection })) {
-        selected = connection;
-        break;
-      }
-    }
-    if (!selected) {
-      missing.push({
-        id: connector.connectorId,
-        slug: publicConnectorAlias(connector.slug),
-        name: connector.name,
-        authorization_strategy: connector.authorizationStrategy,
-      });
-      continue;
-    }
-    bindings.push({
-      alias,
-      connectionId: selected.connectionId,
-      connectorId: connector.connectorId,
-      ownerType: selected.ownerType,
-      ownerId: selected.ownerId,
-      authorizationStrategy: connector.authorizationStrategy,
-    });
-  }
-  // An unconfigured alias outranks a missing authorization. Only the project
-  // owner can add the connector, so sending the end-user into a connect flow for
-  // a connector that does not exist yet would strand them; the caller has to fix
-  // the manifest first and will re-hit the authorization gate on the retry.
-  if (unavailable.length > 0) {
-    return {
-      ok: false,
-      code: 'REQUIRED_CONNECTOR_CONNECTION_UNAVAILABLE',
-      aliases: unavailable,
-    };
-  }
-  if (missing.length > 0) {
-    return {
-      ok: false,
-      code: 'CONNECTOR_CONNECTION_REQUIRED',
-      connectorConnections: missing,
-    };
-  }
-  return { ok: true, bindings };
-}
-
-export async function missingRequiredConnectorConnectionsForSession(input: {
-  accountId: string;
-  projectId: string;
-  sessionId: string;
-  aliases: readonly string[];
-}): Promise<RequiredConnectorConnection[]> {
-  const missing: RequiredConnectorConnection[] = [];
-  // Collected, not thrown on sight. Create's pre-flight reports every
-  // unconfigured alias at once and the docs promise the same shape here; a
-  // throw inside the loop stopped at the first, so a project missing two
-  // connectors took two failed prompts to discover the second.
-  const unavailable: string[] = [];
-  const seen = new Set<string>();
-  for (const requestedAlias of input.aliases) {
-    const alias = canonicalConnectorAlias(requestedAlias);
-    if (seen.has(alias)) continue;
-    seen.add(alias);
-    const resolved = await resolveSessionConnectorConnection({
-      accountId: input.accountId,
-      projectId: input.projectId,
-      sessionId: input.sessionId,
-      alias,
-    });
-    if (resolved) continue;
-    const [connector] = await db
-      .select({
-        id: connectors.connectorId,
-        slug: connectors.slug,
-        name: connectors.name,
-        authorizationStrategy: connectors.authorizationStrategy,
-      })
-      .from(connectors)
-      .where(
-        and(
-          eq(connectors.accountId, input.accountId),
-          eq(connectors.projectId, input.projectId),
-          eq(connectors.slug, alias),
-        ),
-      )
-      .limit(1);
-    if (!connector) {
-      unavailable.push(publicConnectorAlias(alias));
-      continue;
-    }
-    missing.push({
-      id: connector.id,
-      slug: publicConnectorAlias(connector.slug),
-      name: connector.name,
-      authorization_strategy: connector.authorizationStrategy,
-    });
-  }
-  // Same precedence as create's pre-flight: an alias with no connector at all
-  // outranks one that merely needs authorizing. Sending someone into a connect
-  // flow for a connector the project does not have would strand them there.
-  if (unavailable.length > 0) {
-    throw new RequiredConnectorConnectionUnavailableError(unavailable);
-  }
-  return missing;
-}
-
 export async function persistSessionConnectorBindings(input: {
   sessionId: string;
   accountId: string;
@@ -688,6 +452,16 @@ export async function resolveSessionConnectorConnection(input: {
   alias: string;
   actingUserId?: string;
   actingPrincipalIsServiceAccount?: boolean;
+  /**
+   * Name or id of the account to run this call as, when the caller named one.
+   * Omitted resolves exactly as before: the session's binding if it holds one,
+   * otherwise the first entitled account (default first).
+   *
+   * A NAMED account is never silently substituted. It is matched against the
+   * accounts this caller is entitled to and, failing that, the call is denied —
+   * running "send mail as Work" against Personal is worse than not running.
+   */
+  account?: string | null;
 }): Promise<ResolvedSessionConnectorConnection | null> {
   const alias = canonicalConnectorAlias(input.alias);
   let actingUserId = input.actingUserId ?? '';
@@ -734,6 +508,7 @@ export async function resolveSessionConnectorConnection(input: {
         connectionId: connectorConnections.connectionId,
         connectorId: connectorConnections.connectorId,
         connectionStatus: connectorConnections.status,
+        connectionLabel: connectorConnections.label,
         isDefault: connectorConnections.isDefault,
         metadata: connectorConnections.metadata,
         ownerType: connectorConnections.ownerType,
@@ -805,6 +580,16 @@ export async function resolveSessionConnectorConnection(input: {
       ) {
         return null;
       }
+      // A session that PINNED an account is a constraint, not a suggestion. A
+      // call that names a different one is denied rather than quietly run
+      // against the pinned account — the caller asked for a specific mailbox.
+      if (
+        input.account?.trim() &&
+        input.account.trim().toLowerCase() !== bound.connectionId.toLowerCase() &&
+        input.account.trim().toLowerCase() !== bound.connectionLabel.trim().toLowerCase()
+      ) {
+        return null;
+      }
       return {
         connectionId: bound.connectionId,
         connectorId: bound.connectorId,
@@ -833,41 +618,52 @@ export async function resolveSessionConnectorConnection(input: {
       ? actingPrincipalIsServiceAccount
       : input.actingPrincipalIsServiceAccount,
     visibility,
+    account: input.account,
   });
   return fallbackFromDefault;
 }
 
 /**
- * Project-default connection resolution — the fallback an UNBOUND alias resolves
- * to when no session binding covers it (or no session is in scope at all).
+ * EVERY connection for this alias the caller is entitled to use, default first.
  *
- * Strategy/visibility/connectivity-aware: it walks the connector's active
- * connections (default first), keeps the first that matches the connector's
- * authorization strategy, the session's visibility, and is actually
- * connected, and stamps it `source: 'default'`.
+ * One connector can hold several accounts — the project's shared one and each
+ * member's own ("Work", "Personal"). Resolution used to stop at the first
+ * match and nothing could reach the rest, so the only way to use a second
+ * account was to pin it per session from a dropdown in the composer. The list
+ * is the primitive now: the CLI prints it, a call selects from it by name, and
+ * an unselected call takes the first entry exactly as before.
  *
- * Kept separate from `resolveSessionConnectorConnection` so callers that need the
- * project default can resolve it directly. Connector discovery and execution do
- * not call this helper. They use `resolveSessionConnectorConnection`, which also
- * enforces the stored session scope.
+ * Entitlement is the same three filters resolution has always applied, in the
+ * same order: the connector's authorization strategy, the session's
+ * visibility (a member-owned account never leaks into a shared session), and
+ * whether the account is genuinely connected.
  */
-export async function resolveProjectDefaultConnectorConnection(input: {
+export interface EntitledConnectorConnection {
+  connectionId: string;
+  connectorId: string;
+  alias: string;
+  /** Human-facing account name. What `--account` matches on. */
+  label: string;
+  ownerType: 'project' | 'agent' | 'member' | 'subject' | 'external';
+  isDefault: boolean;
+  status: 'active' | 'revoked' | 'error';
+  metadata: Record<string, unknown>;
+}
+
+export async function listEntitledConnectorConnections(input: {
   accountId: string;
   projectId: string;
   alias: string;
   actingUserId?: string;
   actingPrincipalIsServiceAccount?: boolean;
   visibility?: 'private' | 'project' | 'restricted';
-}): Promise<ResolvedSessionConnectorConnection | null> {
+}): Promise<EntitledConnectorConnection[]> {
   const alias = canonicalConnectorAlias(input.alias);
-  let actingUserId = input.actingUserId ?? '';
+  const actingUserId = input.actingUserId ?? '';
   let actingPrincipalIsServiceAccount = input.actingPrincipalIsServiceAccount ?? false;
-  let visibility: 'private' | 'project' | 'restricted' = input.visibility ?? 'private';
+  const visibility: 'private' | 'project' | 'restricted' = input.visibility ?? 'private';
 
-  if (
-    input.actingPrincipalIsServiceAccount === undefined &&
-    actingUserId.length > 0
-  ) {
+  if (input.actingPrincipalIsServiceAccount === undefined && actingUserId.length > 0) {
     const [serviceAccount] = await db
       .select({ id: serviceAccounts.serviceAccountId })
       .from(serviceAccounts)
@@ -902,11 +698,13 @@ export async function resolveProjectDefaultConnectorConnection(input: {
       ),
     )
     .limit(1);
-  if (!connectorRow || !connectorRow.enabled || connectorRow.status !== 'active') return null;
+  if (!connectorRow || !connectorRow.enabled || connectorRow.status !== 'active') return [];
   const connector: ConnectorRequirementRow = connectorRow;
-  const connections = await db
+
+  const rows = await db
     .select({
       connectionId: connectorConnections.connectionId,
+      label: connectorConnections.label,
       isDefault: connectorConnections.isDefault,
       ownerType: connectorConnections.ownerType,
       ownerId: connectorConnections.ownerId,
@@ -923,8 +721,17 @@ export async function resolveProjectDefaultConnectorConnection(input: {
       ),
     )
     .orderBy(desc(connectorConnections.isDefault), connectorConnections.connectionId);
-  let fallback: ConnectorConnectionRow | null = null;
-  for (const connection of connections) {
+
+  const entitled: EntitledConnectorConnection[] = [];
+  for (const row of rows) {
+    const connection: ConnectorConnectionRow = {
+      connectionId: row.connectionId,
+      isDefault: row.isDefault,
+      ownerType: row.ownerType,
+      ownerId: row.ownerId,
+      status: row.status,
+      metadata: row.metadata,
+    };
     if (
       !connectorAuthorizationMatchesStrategy({
         strategy: connector.authorizationStrategy,
@@ -938,19 +745,71 @@ export async function resolveProjectDefaultConnectorConnection(input: {
       continue;
     }
     if (connection.ownerType === 'member' && visibility !== 'private') continue;
-    if (await connectorConnectionIsConnected({ connector, connection })) {
-      fallback = connection;
-      break;
-    }
+    if (!(await connectorConnectionIsConnected({ connector, connection }))) continue;
+    entitled.push({
+      connectionId: row.connectionId,
+      connectorId: connector.connectorId,
+      alias,
+      label: row.label,
+      ownerType: row.ownerType,
+      isDefault: row.isDefault,
+      status: row.status,
+      metadata: row.metadata ?? {},
+    });
   }
-  if (!fallback) return null;
+  return entitled;
+}
+
+/**
+ * Pick one entitled account by name.
+ *
+ * Matches a connection id exactly, or a label case-insensitively — the CLI
+ * prints both, and a human types the label. Returns null when nothing matches,
+ * which the caller reports as "no such account" rather than silently running
+ * as a different account than the one asked for. Silently falling back would be
+ * the worst outcome here: the call would succeed against the wrong mailbox.
+ */
+export function selectEntitledConnectorConnection(
+  connections: readonly EntitledConnectorConnection[],
+  account: string | null | undefined,
+): EntitledConnectorConnection | null {
+  if (!account || !account.trim()) return connections[0] ?? null;
+  const wanted = account.trim().toLowerCase();
+  return (
+    connections.find((c) => c.connectionId.toLowerCase() === wanted) ??
+    connections.find((c) => c.label.trim().toLowerCase() === wanted) ??
+    null
+  );
+}
+
+/**
+ * Project-default connection resolution — the fallback an UNBOUND alias resolves
+ * to when no session binding covers it (or no session is in scope at all).
+ *
+ * Now a thin pick over `listEntitledConnectorConnections`, which preserves the
+ * original ordering (default first, then connection id) and the original three
+ * filters, so an unselected call resolves to exactly what it always did.
+ */
+export async function resolveProjectDefaultConnectorConnection(input: {
+  accountId: string;
+  projectId: string;
+  alias: string;
+  actingUserId?: string;
+  actingPrincipalIsServiceAccount?: boolean;
+  visibility?: 'private' | 'project' | 'restricted';
+  /** Name or id of the account to run as. Omitted = the default. */
+  account?: string | null;
+}): Promise<ResolvedSessionConnectorConnection | null> {
+  const entitled = await listEntitledConnectorConnections(input);
+  const chosen = selectEntitledConnectorConnection(entitled, input.account);
+  if (!chosen) return null;
   return {
-    connectionId: fallback.connectionId,
-    connectorId: connector.connectorId,
-    status: fallback.status,
-    isDefault: fallback.isDefault,
-    alias,
-    metadata: fallback.metadata ?? {},
+    connectionId: chosen.connectionId,
+    connectorId: chosen.connectorId,
+    status: chosen.status,
+    isDefault: chosen.isDefault,
+    alias: chosen.alias,
+    metadata: chosen.metadata,
     source: 'default',
   };
 }

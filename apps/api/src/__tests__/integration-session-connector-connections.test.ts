@@ -31,9 +31,8 @@ import { makeDbGatewayDeps } from '../connectors/db-deps';
 import { finalizePipedreamConnectionAuthorization } from '../connectors/pipedream';
 import { reconcileEmailConnections } from '../connectors/sync';
 import {
-  missingRequiredConnectorConnectionsForSession,
+  listEntitledConnectorConnections,
   resolveEffectiveSessionConnectorBindings,
-  resolveRequiredConnectorConnections,
   resolveSessionConnectorConnection,
   sessionConnectorBindingsRequirePrivateVisibility,
   validateSessionConnectorBindings,
@@ -896,38 +895,22 @@ describe('session connector isolation', () => {
         alias: 'veyris',
       });
       expect(resolved).toBeNull();
+      // And nothing is entitled either: the strategy flip is what invalidated
+      // this member's connection, so the account list must agree with the
+      // resolution rather than advertise an account a call cannot use.
       expect(
-        await missingRequiredConnectorConnectionsForSession({
+        await listEntitledConnectorConnections({
           accountId: ACCOUNT_A,
           projectId: PROJECT_A,
-          sessionId: SESSION_A,
-          aliases: ['veyris'],
+          alias: 'veyris',
         }),
-      ).toEqual([
-        {
-          id: CONNECTOR_A,
-          slug: 'veyris',
-          name: 'VEYRIS',
-          authorization_strategy: 'project',
-        },
-      ]);
+      ).toEqual([]);
     } finally {
       await db
         .update(connectors)
         .set({ authorizationStrategy: 'user' })
         .where(eq(connectors.connectorId, CONNECTOR_A));
     }
-  });
-
-  test('required connector checks reject an unavailable connection', async () => {
-    await expect(
-      missingRequiredConnectorConnectionsForSession({
-        accountId: ACCOUNT_A,
-        projectId: PROJECT_A,
-        sessionId: SESSION_A,
-        aliases: ['unavailable_connector'],
-      }),
-    ).rejects.toThrow('Required connection "unavailable_connector" is unavailable');
   });
 
   test('Pipedream finalize reads and stores the account under the connection-specific identity', async () => {
@@ -1256,196 +1239,3 @@ describe('session connector isolation', () => {
   });
 });
 
-describe('resolveRequiredConnectorConnections (require_connectors)', () => {
-  test("resolves a required connector to the acting user's OWN member connection", async () => {
-    // USER owns CONNECTION_A, a member connection for the 'veyris' connector.
-    const res = await resolveRequiredConnectorConnections({
-      accountId: ACCOUNT_A,
-      projectId: PROJECT_A,
-      actingUserId: USER,
-      actingPrincipalIsServiceAccount: false,
-      aliases: ['veyris'],
-    });
-    expect(res.ok).toBe(true);
-    if (res.ok) {
-      expect(res.bindings).toHaveLength(1);
-      expect(res.bindings[0]).toMatchObject({
-        alias: 'veyris',
-        connectionId: CONNECTION_A,
-        ownerType: 'member',
-        ownerId: USER,
-      });
-    }
-  });
-
-  test("picks the member's OWN DEFAULT when they hold several connections on one connector", async () => {
-    // A member may now hold several personal connections on one connector
-    // ("Work", "Personal"). "Use my veyris" must not be a coin flip between them
-    // — the one they marked default wins, deterministically.
-    const SECOND = crypto.randomUUID();
-    await db.insert(connectorConnections).values({
-      connectionId: SECOND,
-      accountId: ACCOUNT_A,
-      projectId: PROJECT_A,
-      connectorId: CONNECTOR_A,
-      ownerType: 'member',
-      ownerId: USER,
-      label: 'My second workspace',
-      isDefault: true,
-    });
-    await upsertConnectionCredential({
-      projectId: PROJECT_A,
-      connectorId: CONNECTOR_A,
-      connectionId: SECOND,
-      value: 'second-workspace-capability',
-      createdBy: USER,
-    });
-    try {
-      const res = await resolveRequiredConnectorConnections({
-        accountId: ACCOUNT_A,
-        projectId: PROJECT_A,
-        actingUserId: USER,
-        actingPrincipalIsServiceAccount: false,
-        aliases: ['veyris'],
-      });
-      expect(res.ok).toBe(true);
-      if (res.ok) expect(res.bindings[0]?.connectionId).toBe(SECOND);
-    } finally {
-      await db
-        .delete(connectorConnections)
-        .where(eq(connectorConnections.connectionId, SECOND));
-    }
-  });
-
-  test('skips a REVOKED connection and uses the active one instead of failing closed', async () => {
-    // The lookup must filter to usable rows IN the query. Fetching an arbitrary
-    // row first and then rejecting it would report "connect your account" while
-    // a perfectly good active connection exists.
-    const REVOKED = crypto.randomUUID();
-    await db.insert(connectorConnections).values({
-      connectionId: REVOKED,
-      accountId: ACCOUNT_A,
-      projectId: PROJECT_A,
-      connectorId: CONNECTOR_A,
-      ownerType: 'member',
-      ownerId: USER,
-      label: 'Revoked workspace',
-      status: 'revoked',
-      isDefault: true, // even as the "default", a revoked row must never win
-    });
-    try {
-      const res = await resolveRequiredConnectorConnections({
-        accountId: ACCOUNT_A,
-        projectId: PROJECT_A,
-        actingUserId: USER,
-        actingPrincipalIsServiceAccount: false,
-        aliases: ['veyris'],
-      });
-      expect(res.ok).toBe(true);
-      if (res.ok) expect(res.bindings[0]?.connectionId).toBe(CONNECTION_A);
-    } finally {
-      await db
-        .delete(connectorConnections)
-        .where(eq(connectorConnections.connectionId, REVOKED));
-    }
-  });
-
-  test('resolves DISTINCT users to their own member connections (never each other)', async () => {
-    // OTHER_USER owns CONNECTION_B for the same connector — must not get USER's.
-    const res = await resolveRequiredConnectorConnections({
-      accountId: ACCOUNT_A,
-      projectId: PROJECT_A,
-      actingUserId: OTHER_USER,
-      actingPrincipalIsServiceAccount: false,
-      aliases: ['veyris'],
-    });
-    expect(res.ok).toBe(true);
-    if (res.ok) expect(res.bindings[0]?.connectionId).toBe(CONNECTION_B);
-  });
-
-  test('returns the missing connection contract when no valid connection exists', async () => {
-    const res = await resolveRequiredConnectorConnections({
-      accountId: ACCOUNT_A,
-      projectId: PROJECT_A,
-      actingUserId: USER,
-      actingPrincipalIsServiceAccount: false,
-      aliases: ['missing_one'],
-    });
-    expect(res.ok).toBe(false);
-    if (!res.ok) {
-      expect(res.code).toBe('CONNECTOR_CONNECTION_REQUIRED');
-      expect(res.connectorConnections).toEqual([
-        {
-          id: MISSING_CONNECTOR_A,
-          slug: 'missing_one',
-          name: 'Missing one',
-          authorization_strategy: 'project',
-        },
-      ]);
-    }
-  });
-
-  test('returns every missing connection in one response', async () => {
-    const res = await resolveRequiredConnectorConnections({
-      accountId: ACCOUNT_A,
-      projectId: PROJECT_A,
-      actingUserId: USER,
-      actingPrincipalIsServiceAccount: false,
-      aliases: ['missing_two', 'missing_one', 'missing_two'],
-    });
-    expect(res.ok).toBe(false);
-    if (!res.ok) {
-      expect(res.connectorConnections).toEqual([
-        {
-          id: MISSING_CONNECTOR_B,
-          slug: 'missing_two',
-          name: 'Missing two',
-          authorization_strategy: 'user',
-        },
-        {
-          id: MISSING_CONNECTOR_A,
-          slug: 'missing_one',
-          name: 'Missing one',
-          authorization_strategy: 'project',
-        },
-      ]);
-    }
-  });
-
-  test('a service account cannot satisfy a user-strategy requirement', async () => {
-    const res = await resolveRequiredConnectorConnections({
-      accountId: ACCOUNT_A,
-      projectId: PROJECT_A,
-      actingUserId: SERVICE_ACCOUNT,
-      actingPrincipalIsServiceAccount: true,
-      aliases: ['veyris'],
-    });
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.code).toBe('CONNECTOR_CONNECTION_REQUIRED');
-  });
-
-  test('a service account can satisfy a project-strategy requirement', async () => {
-    await db
-      .update(connectors)
-      .set({ authorizationStrategy: 'project' })
-      .where(eq(connectors.connectorId, CONNECTOR_A));
-    try {
-      const res = await resolveRequiredConnectorConnections({
-        accountId: ACCOUNT_A,
-        projectId: PROJECT_A,
-        actingUserId: SERVICE_ACCOUNT,
-        actingPrincipalIsServiceAccount: true,
-        aliases: ['veyris'],
-      });
-      expect(res).toMatchObject({
-        ok: true,
-        bindings: [{ alias: 'veyris', connectionId: CONNECTION_DEFAULT, ownerType: 'project' }],
-      });
-    } finally {
-      await db
-        .update(connectors)
-        .set({ authorizationStrategy: 'user' })
-        .where(eq(connectors.connectorId, CONNECTOR_A));
-    }
-  });
-});

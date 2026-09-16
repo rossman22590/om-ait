@@ -133,18 +133,62 @@ function parseConnectorTool(tool: string): { connector: string; action: string }
   return { connector, action };
 }
 
+/** One account a connector can run as. See {@link listConnectorAccounts}. */
+export interface ConnectorAccount {
+  connection_id: string;
+  /** Human-facing name. What `ConnectorCallOptions.account` matches on. */
+  label: string;
+  owner_type: string;
+  /** True for the account an unselected call resolves to. */
+  is_default: boolean;
+}
+
+export interface ConnectorCallOptions {
+  /**
+   * Which account to run this call as — a connection label or id from
+   * {@link listConnectorAccounts}. Omit for the connector's default account,
+   * which is how every call behaved before a connector could expose more than
+   * one.
+   *
+   * A named account is never silently substituted: if it does not match one
+   * this caller is entitled to, the call is denied with `connector_not_connected`
+   * and the denial lists the names that were available.
+   */
+  account?: string | null;
+}
+
 export async function callConnector<T = unknown>(
   projectId: string | undefined,
   tool: string,
   args: Record<string, unknown> = {},
+  options: ConnectorCallOptions = {},
 ): Promise<ConnectorCallResult<T>> {
   const { connector, action } = parseConnectorTool(tool);
+  const account = options.account?.trim();
   return unwrap(
     await backendApi.post<ConnectorCallResult<T>>(
       connectorGatewayPath(projectId, 'call'),
-      { connector, action, args },
+      // The key is omitted rather than sent as null: the gateway reads its
+      // presence, and an explicit null would read as "an account was named".
+      { connector, action, args, ...(account ? { account } : {}) },
     ),
   );
+}
+
+/**
+ * The accounts this caller may run `slug` as, default first.
+ *
+ * Resolved through the same principal a call uses, so every account listed is
+ * one a call can actually use — never one the gateway would then refuse.
+ */
+export async function listConnectorAccounts(
+  projectId: string | undefined,
+  slug: string,
+): Promise<ConnectorAccount[]> {
+  const response = await backendApi.get<{ connector: string; accounts: ConnectorAccount[] }>(
+    connectorGatewayPath(projectId, `connectors/${encodeURIComponent(slug)}/accounts`),
+  );
+  return unwrap(response).accounts ?? [];
 }
 
 function connectorResponseMessage(body: unknown, status: number): string {

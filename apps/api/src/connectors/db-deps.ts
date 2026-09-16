@@ -47,6 +47,7 @@ import { reconcileStoredSessionAgentGrant } from '../projects/lib/session-token-
 import { getProjectSecretValueForConsumer } from '../projects/secrets';
 import {
   canonicalConnectorAlias,
+  listEntitledConnectorConnections,
   publicConnectorAlias,
   resolveProjectDefaultConnectorConnection,
   resolveSessionConnectorConnection,
@@ -67,6 +68,7 @@ import {
   deleteCredential,
   connectionCredentialExists,
   ensureDefaultConnection,
+  ensureMemberConnection,
   resolveCredentialValue,
   resolveConnectionCredentialValue,
 } from './credentials';
@@ -560,6 +562,7 @@ async function resolveActiveConnectorConnection(principal: ConnectorPrincipal, r
     sessionId: principal.sessionId,
     alias: row.slug,
     actingUserId: principal.userId,
+    account: principal.requestedConnectorAccount ?? null,
   });
   return connection?.status === 'active' ? connection : null;
 }
@@ -2064,19 +2067,81 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
     }
     return out;
   },
-  connectorConnect: async (projectId, slug, _userId, redirects, requestingSessionId) => {
+  listConnectorAccounts: async ({ projectId, slug, userId, sessionId }) => {
+    const [session] = sessionId
+      ? await db
+          .select({ visibility: projectSessions.visibility })
+          .from(projectSessions)
+          .where(eq(projectSessions.sessionId, sessionId))
+          .limit(1)
+      : [];
+    const [project] = await db
+      .select({ accountId: projects.accountId })
+      .from(projects)
+      .where(eq(projects.projectId, projectId))
+      .limit(1);
+    if (!project) return [];
+    const entitled = await listEntitledConnectorConnections({
+      accountId: project.accountId,
+      projectId,
+      alias: canonicalConnectorAlias(slug),
+      actingUserId: userId,
+      visibility: session?.visibility ?? 'private',
+    });
+    return entitled.map((connection) => ({
+      connection_id: connection.connectionId,
+      label: connection.label,
+      owner_type: connection.ownerType,
+      is_default: connection.isDefault,
+    }));
+  },
+  mintConnectorConnectLink: async ({ projectId, slug, userId, sessionId }) => {
+    const eligibility = await connectLinkEligibility(projectId, canonicalConnectorAlias(slug));
+    // No hosted page (raw http/mcp/graphql connector, or no provider app bound)
+    // means no link exists to hand over. The denial still names the connector.
+    if (!eligibility.ok) return null;
+    const composio = await loadComposioAdapter();
+    if (!(composio?.composioConfigured?.() ?? false) && !pipedreamConfigured()) return null;
+    // A private connector authorizes the caller's own account, so a link with no
+    // member behind it would resolve to nobody.
+    if (eligibility.authorizationStrategy === 'user' && !userId) return null;
+    const { mintSetupLink } = await import('../setup-links/token');
+    const { token } = mintSetupLink(projectId, {
+      kind: 'connector',
+      slug: canonicalConnectorAlias(slug),
+      app: eligibility.app,
+      uid: userId,
+      sid: sessionId,
+    });
+    return `${(config.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '')}/connect/${token}`;
+  },
+  connectorConnect: async (projectId, slug, userId, redirects, requestingSessionId) => {
     const conn = await loadComposioConnector(projectId, slug);
     if (conn) {
-      if (conn.authorizationStrategy !== 'project') return null;
       const composio = await loadComposioAdapter();
       if (!composio?.composioConfigured?.()) return null;
-      // Sync creates the canonical project-default connection for every
-      // materialized connector. Reuse it rather than inserting a second row,
-      // which violates idx_connector_connections_default_project.
-      const connectionId = await ensureDefaultConnection({
-        projectId,
-        connectorId: conn.connectorId,
-      });
+      // WHICH connection this authorization lands on is the strategy's call.
+      //
+      // `project` → the canonical project-default connection sync already
+      // created. Reuse it rather than inserting a second row, which violates
+      // idx_connector_connections_default_project.
+      //
+      // `user` → the CALLER's own member connection. This branch used to
+      // `return null`, which is why a Private connector had no connect flow
+      // anywhere in the product: no link could be minted, so the session card
+      // had nothing to offer and the user was simply stuck.
+      if (conn.authorizationStrategy === 'user' && !userId) return null;
+      const connectionId =
+        conn.authorizationStrategy === 'user'
+          ? await ensureMemberConnection({
+              projectId,
+              connectorId: conn.connectorId,
+              userId,
+            })
+          : await ensureDefaultConnection({
+              projectId,
+              connectorId: conn.connectorId,
+            });
       await db
         .update(connectorConnections)
         .set({

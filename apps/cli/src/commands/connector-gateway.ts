@@ -197,8 +197,33 @@ async function dispatch(
       }
       // A gated call returns its authenticated approval URL immediately. The
       // server sends the decision back into the session after a human acts.
-      const result = await callWithApprovalHandoff(connector, slug, action, parsed);
+      //
+      // `--account` picks WHICH connected account to run as when the connector
+      // holds more than one (the project's shared account and each member's
+      // own). Omitted runs as the default, which is every call's old behavior.
+      // A name that matches nothing is denied and the denial lists what was
+      // available — it never falls back to a different account.
+      const result = await callWithApprovalHandoff(connector, slug, action, parsed, {
+        account: flags.account,
+      });
       out(result);
+      break;
+    }
+
+    case 'accounts': {
+      // Which accounts a call may run as. Same principal as `call`, so what
+      // this prints is exactly what `--account` accepts.
+      const slug = args[0];
+      if (!slug) throw new CliError('usage: kortix connectors accounts <connector>', 'USAGE');
+      const connector = connectorClient(flags.project);
+      const accounts = await connector.accounts(slug);
+      out({
+        connector: slug,
+        accounts,
+        ...(accounts.length === 0
+          ? { note: `Nothing is connected to "${slug}" yet. Run 'kortix connectors connect ${slug}'.` }
+          : {}),
+      });
       break;
     }
 

@@ -88,7 +88,6 @@ Subcommands:
                                       bind a connection
                                       (repeatable).
                                     --no-connectors          use no connections.
-                                    --require-connector <alias>
                                       require a connection before
                                       provisioning (repeatable).
                                     --context <key>=<value>  runtime context
@@ -147,7 +146,7 @@ Subcommands:
                                     connector access. Changes apply to the next
                                     prompt. --secret, --no-secrets,
                                     --inherit-secrets, --connector,
-                                    --no-connectors, --require-connector,
+                                    --no-connectors,
                                     --no-required-connectors, --json.
                                     Alias: access.
   share <session-id>                Who inside Kortix can open this session.
@@ -362,7 +361,6 @@ export type SessionOverrides = {
   model?: string;
   secrets?: string[];
   connectors?: Record<string, { connection_id: string }>;
-  requiredConnectors?: string[];
   runtimeContext?: Record<string, string>;
 };
 
@@ -396,8 +394,6 @@ export function parseSessionOverrides(argv: string[]): SessionOverrides {
     };
   }
   if (noConnectors) out.connectors = {};
-  const requiredConnectors = takeFlagValues(argv, ['--require-connector']);
-  if (requiredConnectors.length) out.requiredConnectors = [...new Set(requiredConnectors)];
   for (const pair of takeFlagValues(argv, ['--context'])) {
     const eq = pair.indexOf('=');
     if (eq <= 0 || eq === pair.length - 1) {
@@ -514,9 +510,6 @@ async function sessionsNew(
   if (overrides.model) body.opencode_model = overrides.model;
   if (overrides.secrets !== undefined) body.secrets = overrides.secrets;
   if (overrides.connectors !== undefined) body.connector_bindings = overrides.connectors;
-  if (overrides.requiredConnectors !== undefined) {
-    body.require_connectors = overrides.requiredConnectors;
-  }
   if (overrides.runtimeContext) body.runtime_context = overrides.runtimeContext;
 
   const prepared = await prepareClientCreatedBranch(ctx, body);

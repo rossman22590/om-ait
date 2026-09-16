@@ -226,12 +226,16 @@ async function resolveConnectorLink(c: Context): Promise<
   if (!connector || (connector.providerType !== 'pipedream' && connector.providerType !== 'composio')) {
     return { error: c.json({ error: 'Connector not found' }, 404) };
   }
-  if (connector.authorizationStrategy !== 'project') {
+  // A `user` connector authorizes the member the token was minted for, so the
+  // link must carry a `uid`. Without one there is nobody to own the resulting
+  // connection, and the old blanket refusal of every non-`project` strategy is
+  // what made Private connectors unauthorizable from a session at all.
+  if (connector.authorizationStrategy === 'user' && !resolved.payload.uid) {
     return {
       error: c.json(
         {
-          error: 'Shared connect links require a project authorization strategy',
-          code: 'CONNECTOR_AUTHORIZATION_STRATEGY_MISMATCH',
+          error: 'This private connector link names no member to authorize',
+          code: 'CONNECTOR_AUTHORIZATION_REQUIRES_MEMBER',
         },
         409,
       ),

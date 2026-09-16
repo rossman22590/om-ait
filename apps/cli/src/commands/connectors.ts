@@ -135,6 +135,11 @@ Subcommands:
   show <slug>[.<action>] [--json]   Show a connector or one action schema.
   discover <intent> [--json]        Search session tools by intent.
   call <slug> <action> [json]       Invoke one connector action.
+       [--account <name|id>]        Which connected account to run as. Omit for
+                                    the default. See \`accounts\`.
+  accounts <slug>                   The connected accounts a call may run as,
+                                    default first. These are the names
+                                    \`call --account\` accepts.
   connections <subcommand>          Manage configured connector connections.
   add <slug> --provider <p> [...]   Add a [[connectors]] block to kortix.yaml.
                                     Add --apply to skip ship/CR and apply it
@@ -277,7 +282,7 @@ export async function runConnectors(argv: string[]): Promise<number> {
     process.stdout.write(HELP);
     return 0;
   }
-  if (sub === 'discover' || sub === 'call' || sub === 'mcp') {
+  if (sub === 'discover' || sub === 'call' || sub === 'mcp' || sub === 'accounts') {
     return runConnector([sub, ...rest]);
   }
   if (sub === 'show' && rest[0]?.includes('.')) {

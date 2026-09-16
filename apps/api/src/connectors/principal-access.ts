@@ -54,6 +54,21 @@ export function connectorDenialBody(
     principal?: ConnectorAccessPrincipal;
     connector: string;
     action?: string | null;
+    /**
+     * A hosted authorization link for `connector_not_connected`, when one can
+     * be built for this connector and caller.
+     *
+     * The agent surfaces it verbatim and the web transcript turns a
+     * `/connect/<token>` url into the one-click Connect button
+     * (`parseSetupLinkHref` → `SetupLinkButton`). This is the whole remedy for
+     * an unconnected connector: the turn is no longer refused up front, so the
+     * denial itself has to carry the fix.
+     */
+    connectUrl?: string | null;
+    /** The account name the caller asked to run as, when it named one. */
+    requestedAccount?: string | null;
+    /** The account names that WERE available, so the retry can be right. */
+    availableAccounts?: readonly string[];
   },
 ): Record<string, unknown> {
   const grant = input.principal?.agentGrant ?? null;
@@ -76,11 +91,31 @@ export function connectorDenialBody(
           ? `Agent "${grant.agent}" is not granted connector "${input.connector}". Add it to agents.${grant.agent}.connectors in kortix.yaml (or set connectors: all), then send another message so the session re-reads the manifest.`
           : `Connector "${input.connector}" is not assigned to this principal.`,
       };
-    case 'connector_not_connected':
+    case 'connector_not_connected': {
+      // Three different situations behind one reason, and naming the wrong one
+      // sends the agent (and the human) down the wrong remedy.
+      const named = input.requestedAccount?.trim();
+      const available = input.availableAccounts ?? [];
+      if (named && available.length > 0) {
+        return {
+          ...base,
+          requested_account: named,
+          available_accounts: [...available],
+          hint:
+            `Connector "${input.connector}" has no account named "${named}". ` +
+            `Available: ${available.map((name) => `"${name}"`).join(', ')}. ` +
+            `Retry with one of those, or omit \`account\` for the default.`,
+        };
+      }
       return {
         ...base,
-        hint: `Connector "${input.connector}" exists in this project but has no usable connection for this session: no credential is stored, or the app was never authorized. Run \`kortix connectors connect ${input.connector}\` or add its credential, then retry.`,
+        ...(input.connectUrl ? { connect_url: input.connectUrl } : {}),
+        ...(named ? { requested_account: named } : {}),
+        hint: input.connectUrl
+          ? `Connector "${input.connector}" has no connected account yet. Give the human this link so they can authorize it, then retry: ${input.connectUrl}`
+          : `Connector "${input.connector}" exists in this project but has no usable connection for this session: no credential is stored, or the app was never authorized. Run \`kortix connectors connect ${input.connector}\` or add its credential, then retry.`,
       };
+    }
     case 'connector_disabled':
       return {
         ...base,

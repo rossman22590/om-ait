@@ -51,6 +51,8 @@ import {
   startConnectionOAuth2DeviceAuthorization,
   syncConnectors,
   updateConnectionCredential,
+  callConnector,
+  listConnectorAccounts,
 } from './connectors';
 
 const canonicalConnectionType: import('./connectors').Connection = {
@@ -1072,4 +1074,52 @@ test('connect surfaces the already-connected verdict the popup flow branches on'
   };
   expect(noAuth.connected).toBe(true);
   expect(needsAuth.connected).toBe(false);
+});
+
+/**
+ * Account selection. One connector can hold the project's shared account and
+ * each member's own, and the agent may use any of them — so a call has to be
+ * able to say WHICH, and a caller has to be able to find out what the choices
+ * are. Before this, resolution silently took the first entitled account and
+ * the only way to influence it was a per-session dropdown in the composer.
+ */
+test('callConnector sends no account key when the caller names none', async () => {
+  nextResponse = { status: 200, body: { ok: true, data: { id: 1 } } };
+  await callConnector('P1', 'gmail.send_email', { to: 'a@b.c' });
+  expect(calls[0].url).toBe('http://test.local/connectors/projects/P1/call');
+  expect(calls[0].body).toEqual({
+    connector: 'gmail',
+    action: 'send_email',
+    args: { to: 'a@b.c' },
+  });
+});
+
+test('callConnector forwards the chosen account so the gateway runs as it', async () => {
+  nextResponse = { status: 200, body: { ok: true, data: { id: 1 } } };
+  await callConnector('P1', 'gmail.send_email', { to: 'a@b.c' }, { account: 'Personal' });
+  expect(calls[0].body).toEqual({
+    connector: 'gmail',
+    action: 'send_email',
+    args: { to: 'a@b.c' },
+    account: 'Personal',
+  });
+});
+
+test('listConnectorAccounts reads the accounts a call may run as', async () => {
+  nextResponse = {
+    status: 200,
+    body: {
+      connector: 'gmail',
+      accounts: [
+        { connection_id: 'c-1', label: 'Work', owner_type: 'project', is_default: true },
+        { connection_id: 'c-2', label: 'Personal', owner_type: 'member', is_default: false },
+      ],
+    },
+  };
+  const accounts = await listConnectorAccounts('P1', 'gmail');
+  expect(calls[0].url).toBe('http://test.local/connectors/projects/P1/connectors/gmail/accounts');
+  expect(calls[0].method).toBe('GET');
+  expect(accounts.map((account) => account.label)).toEqual(['Work', 'Personal']);
+  // Default first, because that is the one an unselected call resolves to.
+  expect(accounts[0].is_default).toBe(true);
 });

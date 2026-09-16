@@ -151,6 +151,16 @@ export interface ConnectorPrincipal {
    *  (Slack/Teams/email). Always reachable, whatever the grant says — see
    *  `principalMayUseConnector`. Empty for a session no channel created. */
   channelConnectorSlugs?: string[];
+  /**
+   * The account THIS call asked to run as (`account` in the call body), by
+   * connection label or id. A per-request value, carried on the principal
+   * because `makeGatewayDeps(p)` is the only seam between the route and
+   * connection resolution.
+   *
+   * Absent means "the default account", which is how every call behaved before
+   * a connector could hold more than one reachable account.
+   */
+  requestedConnectorAccount?: string | null;
 }
 
 interface CatalogAction {
@@ -392,6 +402,41 @@ export interface ConnectorRouterDeps {
     slug: string,
     userId: string,
   ): Promise<{ connected: boolean; accountId?: string } | null>;
+  /**
+   * The accounts this principal may run a connector as, default first.
+   *
+   * One connector can hold the project's shared account and each member's own.
+   * The CLI prints this so a human can see what exists and name one; the call
+   * denial uses it to say which names WERE available when a named account did
+   * not match.
+   */
+  listConnectorAccounts?(input: {
+    projectId: string;
+    slug: string;
+    userId: string;
+    sessionId: string | null;
+  }): Promise<
+    Array<{
+      connection_id: string;
+      label: string;
+      owner_type: string;
+      is_default: boolean;
+    }>
+  >;
+  /**
+   * A hosted authorization link for a connector with no connected account, or
+   * null when this connector has no hosted page (a raw HTTP/MCP connector whose
+   * credential someone has to paste, or a deployment with no link provider).
+   *
+   * Used by the call denial so `connector_not_connected` carries its own
+   * remedy. Never throws: a link we cannot mint degrades to the plain hint.
+   */
+  mintConnectorConnectLink?(input: {
+    projectId: string;
+    slug: string;
+    userId: string;
+    sessionId: string | null;
+  }): Promise<string | null>;
   /** Provider-neutral connect routes. Prefer Composio when wired; keep Pipedream path intact. */
   connectorConnect?(
     projectId: string,
@@ -740,7 +785,20 @@ export function createConnectorRouter(deps: ConnectorRouterDeps): OpenAPIHono {
     // pending row, but it returns immediately and never polls that execution.
     const approvalExecutionId =
       typeof body?.approval_execution_id === 'string' ? body.approval_execution_id : null;
-    const result = await handleCall(deps.makeGatewayDeps(p), {
+    // WHICH account to run as. Accepted as `account` (label or connection id);
+    // `connection_id` is taken too because that is what the connections API
+    // calls the same value. Unset keeps the default account.
+    const requestedAccount =
+      typeof body?.account === 'string' && body.account.trim()
+        ? body.account.trim()
+        : typeof body?.connection_id === 'string' && body.connection_id.trim()
+          ? body.connection_id.trim()
+          : null;
+    const callPrincipal: ConnectorPrincipal = {
+      ...p,
+      requestedConnectorAccount: requestedAccount,
+    };
+    const result = await handleCall(deps.makeGatewayDeps(callPrincipal), {
       projectId: p.projectId,
       accountId: p.accountId,
       subject: p.subject,
@@ -767,19 +825,52 @@ export function createConnectorRouter(deps: ConnectorRouterDeps): OpenAPIHono {
           },
           202,
         );
-      case 'denied':
+      case 'denied': {
+        // The one denial with a remedy attached. Minting is best-effort: a
+        // connector with no hosted page still denies, just without a link.
+        const notConnected = result.reason === 'connector_not_connected';
+        const connectUrl =
+          notConnected && deps.mintConnectorConnectLink
+            ? await deps
+                .mintConnectorConnectLink({
+                  projectId: p.projectId,
+                  slug: connectorSlug,
+                  userId: p.userId,
+                  sessionId: p.sessionId,
+                })
+                .catch(() => null)
+            : null;
+        // Only when the caller NAMED an account. A plain call that finds nothing
+        // connected is a connect problem, not a wrong-name problem, and listing
+        // an empty set would just be noise.
+        const availableAccounts =
+          notConnected && requestedAccount && deps.listConnectorAccounts
+            ? await deps
+                .listConnectorAccounts({
+                  projectId: p.projectId,
+                  slug: connectorSlug,
+                  userId: p.userId,
+                  sessionId: p.sessionId,
+                })
+                .then((rows) => rows.map((row) => row.label))
+                .catch(() => [])
+            : [];
         return c.json(
           isConnectorDenialReason(result.reason)
             ? connectorDenialBody(result.reason, {
                 principal: p,
                 connector: connectorSlug,
                 action: actionPath,
+                connectUrl,
+                requestedAccount,
+                availableAccounts,
               })
             : { ok: false, status: 'denied', reason: result.reason },
           result.reason === 'connector_not_found' || result.reason === 'action_not_found'
             ? 404
             : 403,
         );
+      }
       default:
         // 500, not 502 — Cloudflare eats 502 bodies (see route schema note).
         return c.json({ ok: false, status: 'error', reason: result.reason }, 500);
@@ -1081,6 +1172,9 @@ export function createConnectorRouter(deps: ConnectorRouterDeps): OpenAPIHono {
                 connector: z.string().optional(),
                 action: z.string().optional(),
                 args: z.record(z.string(), z.any()).optional(),
+                /** Which account to run as — a connection label or id. Omit for
+                 *  the default. See GET .../connectors/{slug}/accounts. */
+                account: z.string().optional(),
               }),
             },
           },
@@ -1153,6 +1247,9 @@ export function createConnectorRouter(deps: ConnectorRouterDeps): OpenAPIHono {
                 connector: z.string().optional(),
                 action: z.string().optional(),
                 args: z.record(z.string(), z.any()).optional(),
+                /** Which account to run as — a connection label or id. Omit for
+                 *  the default. See GET .../connectors/{slug}/accounts. */
+                account: z.string().optional(),
               }),
             },
           },
@@ -1172,6 +1269,54 @@ export function createConnectorRouter(deps: ConnectorRouterDeps): OpenAPIHono {
       const p = await deps.resolveProjectPrincipal(c, projectId);
       if (!p) return c.json({ error: 'forbidden' }, 403);
       return callResponse(c, p);
+    },
+  );
+
+  // ── The accounts a call may run as ───────────────────────────────────────
+  //
+  // One connector can hold the project's shared account and each member's own.
+  // Resolution picks the first entitled one unless a call names another, so this
+  // is how a human (or an agent) finds out WHICH names `--account` accepts.
+  // Same principal as `/call`, so what it lists is exactly what a call can use —
+  // never an account the gateway would then refuse.
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/projects/{projectId}/connectors/{slug}/accounts',
+      tags: ['connector'],
+      summary: 'Accounts this principal may run a connector as',
+      ...auth,
+      request: {
+        params: ProjectParam.extend({ slug: z.string().min(1) }),
+      },
+      responses: {
+        200: json(OpaqueSchema, 'Accounts, default first'),
+        ...errors(403, 501),
+      },
+    }),
+    async (c: any) => {
+      const projectId = c.req.param('projectId');
+      const slug = c.req.param('slug');
+      const p = await deps.resolveProjectPrincipal(c, projectId);
+      if (!p) return c.json({ error: 'forbidden' }, 403);
+      if (!deps.listConnectorAccounts) {
+        return featureNotSupportedResponse(c, 'connector_accounts');
+      }
+      if (!principalMayUseConnector(p, canonicalConnectorAlias(slug))) {
+        return c.json(
+          connectorDenialBody('connector_not_assigned', { principal: p, connector: slug }),
+          403,
+        );
+      }
+      return c.json({
+        connector: slug,
+        accounts: await deps.listConnectorAccounts({
+          projectId,
+          slug,
+          userId: p.userId,
+          sessionId: p.sessionId,
+        }),
+      });
     },
   );
 
