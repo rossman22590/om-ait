@@ -555,15 +555,17 @@ jobs:
       # docs/runbooks/project-snapshot-s3.md#aws
       #
       # KORTIX_PROJECT_SNAPSHOT_S3_ACCELERATE presigns sandbox downloads for
-      # <bucket>.s3-accelerate.amazonaws.com. It needs transfer_acceleration =
-      # true on the bucket module in infra/terraform/environments/dev (applied
-      # by this workflow's Terraform job before the ECS roll); S3 may take up to
-      # 20 minutes to activate the endpoint after the apply, during which a
-      # prefer-s3 canary boot retries and falls back to Git. Git-mode sessions
-      # (the platform default) never read this key. Set it to "false" to return
-      # to the regional endpoint without touching the bucket.
+      # <bucket>.s3-accelerate.amazonaws.com (transfer_acceleration = true on
+      # the bucket module in infra/terraform/environments/dev keeps the endpoint
+      # active). Measured OFF on 2026-09-16: the accelerated endpoint made the
+      # daemon's boot-time download close short on 8 of 11 Platinum boots
+      # (0 of 30 plain), and each retry cost more than the ~300 ms the clean
+      # accelerated download saved. Re-enable only after the daemon resumes a
+      # short body in place (docs/runbooks/project-snapshot-s3-benchmark.md,
+      # "Dev after PR #7242 merged"). Git-mode sessions (the platform default)
+      # never read this key.
       KORTIX_ECS_ENV_OVERRIDES: >-
-        {"KORTIX_PREVIEW_BASE_DOMAIN":"p.kortix.com","KORTIX_PI_WORKER_POOL_TARGET":"2","KORTIX_PROJECT_SNAPSHOT_S3_BUCKET":"kortix-dev-project-snapshots","KORTIX_PROJECT_SNAPSHOT_S3_REGION":"us-west-2","KORTIX_PROJECT_SNAPSHOT_S3_ACCELERATE":"true"}
+        {"KORTIX_PREVIEW_BASE_DOMAIN":"p.kortix.com","KORTIX_PI_WORKER_POOL_TARGET":"2","KORTIX_PROJECT_SNAPSHOT_S3_BUCKET":"kortix-dev-project-snapshots","KORTIX_PROJECT_SNAPSHOT_S3_REGION":"us-west-2","KORTIX_PROJECT_SNAPSHOT_S3_ACCELERATE":"false"}
     steps:
       - uses: actions/checkout@v7
       - name: Configure AWS credentials (OIDC)
