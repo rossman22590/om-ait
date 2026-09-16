@@ -18,8 +18,16 @@ const source = readFileSync(join(import.meta.dir, 'connector-settings.tsx'), 'ut
  * (connector-credentials rework). `connector-settings.tsx`'s own docstring:
  * "The 'Connects as' row is gone... Ownership is now a property of each
  * account — see the Accounts tab." `ConnectorSettingsProps` is exactly
- * `{projectId, connector, displayName, onRemoved}` now — no `strategyUpdating`,
- * no `onAuthorizationStrategyChange`.
+ * `{projectId, connector, displayName, onChanged, onRemoved}` now — no
+ * `strategyUpdating`, no `onAuthorizationStrategyChange`.
+ *
+ * `ConnectionSection` (transport config: slug/provider/spec/auth/headers)
+ * moved HERE, direct-provider-only, in the connector-accounts-tab-bug
+ * follow-up: `connector-accounts.tsx` used to gate `ConnectionsList` on
+ * `isManagedConnectorProvider` and fall every direct provider (openapi/http/
+ * mcp/graphql/…) through to `ConnectionSection` instead of its account list.
+ * Accounts now always renders `ConnectionsList`; this tab is the only place
+ * left that mounts the transport form.
  */
 describe('connector settings write path', () => {
   test('carries no authorization-strategy control any more', () => {
@@ -58,11 +66,22 @@ describe('connector settings write path', () => {
     expect(source).toContain('size="sm"');
   });
 
-  test('the credential form is not duplicated here — ConnectionSection is never imported', () => {
-    // Both are exported from connectors-view.tsx and already mounted on
-    // connector-accounts.tsx. Importing either here would render the same
-    // credential/config form on two tabs at once.
-    expect(source).not.toMatch(/import\s*\{[^}]*\bConnectionSection\b/);
+  test('ConnectionSection is imported and mounted, gated to direct providers only', () => {
+    // Managed (Composio/Pipedream), channel, and computer connectors have no
+    // transport config of their own — Accounts (`ConnectionsList`,
+    // `ChannelConnectionSection`, `ComputerConnectorAccount`) covers them.
+    expect(source).toMatch(/import\s*\{[^}]*\bConnectionSection\b/);
+    expect(source).toContain('const isDirectProvider =');
+    expect(source).toContain(
+      '!isManagedConnectorProvider(connector.provider) && !isChannel && !isComputer',
+    );
+    expect(source).toMatch(/\{isDirectProvider \? \(\s*<ConnectionSection/);
+  });
+
+  test('the credential/config form is not duplicated — ChannelConnectionSection is never imported here', () => {
+    // Channel connectors keep their own connect flow on the Accounts tab
+    // (`ChannelConnectionSection`, mounted from `connector-accounts.tsx`).
+    // Importing it here too would render the same form on two tabs at once.
     expect(source).not.toMatch(/import\s*\{[^}]*\bChannelConnectionSection\b/);
   });
 

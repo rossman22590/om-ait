@@ -122,6 +122,7 @@ import {
   type OAuth2DeviceAuthorizationStartResult,
   pollConnectionOAuth2DeviceAuthorization,
   putConnectionOAuth2Application,
+  reconcileConnection,
   reconcileMemberConnection,
   registerConnectionOAuth2Client,
   revokeConnection,
@@ -689,6 +690,7 @@ function ConnectionRow({
   onSetDefault,
   onDisconnect,
   onStartSession,
+  onSetCredential,
   pending,
   disabled = false,
 }: {
@@ -698,6 +700,11 @@ function ConnectionRow({
   onSetDefault: () => void;
   onDisconnect: () => void;
   onStartSession?: () => void;
+  /** Re-open the credential entry for THIS account. Direct providers
+   *  (openapi/http/mcp/graphql/…) hold their own static credential per
+   *  account instead of a connector-wide one; managed (Composio/Pipedream)
+   *  providers re-authorize through OAuth instead, so this is omitted there. */
+  onSetCredential?: () => void;
   pending: boolean;
   disabled?: boolean;
 }) {
@@ -771,6 +778,11 @@ function ConnectionRow({
               {tI18nComplete.raw('textfae237eed0c5')}
             </DropdownMenuItem>
           )}
+          {mayMutate && onSetCredential && (
+            <DropdownMenuItem onClick={onSetCredential}>
+              {tI18nComplete.raw('text3d6627454174')}
+            </DropdownMenuItem>
+          )}
           {mayMutate && !connection.is_default && active && (
             <DropdownMenuItem onClick={onSetDefault}>
               {tI18nComplete.raw('texta92f66fd3d83')}
@@ -811,6 +823,7 @@ function ConnectionOwnerGroup({
   onSetDefault,
   onDisconnect,
   onStartSession,
+  onSetCredential,
 }: {
   title: string;
   action: React.ReactNode;
@@ -824,6 +837,7 @@ function ConnectionOwnerGroup({
   onSetDefault: (connection: Connection) => void;
   onDisconnect: (connection: Connection) => void;
   onStartSession?: (connection: Connection) => void;
+  onSetCredential?: (connection: Connection) => void;
 }) {
   return (
     <section className="space-y-4">
@@ -851,6 +865,9 @@ function ConnectionOwnerGroup({
               onSetDefault={() => onSetDefault(connection)}
               onDisconnect={() => onDisconnect(connection)}
               onStartSession={onStartSession ? () => onStartSession(connection) : undefined}
+              onSetCredential={
+                onSetCredential ? () => onSetCredential(connection) : undefined
+              }
             />
           ))}
         </ul>
@@ -897,9 +914,20 @@ export function ConnectionsList({
   disabled?: boolean;
 }) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
+  // A direct provider (openapi/http/mcp/graphql/…) has no hosted OAuth: "Add"
+  // creates (or selects) the account and this then opens `SetCredentialModal`
+  // for it — the same create-then-credential sequence `connector-modal.tsx`
+  // runs from its header button, run here per ACCOUNT instead of per
+  // connector. A managed provider (Composio/Pipedream) keeps running hosted
+  // OAuth through `usePipedreamConnectProject`/`usePipedreamConnectMember`.
+  const isDirectProvider = !isManagedConnectorProvider(connector.provider);
   const [addOwner, setAddOwner] = useState<ConnectionOwner | null>(null);
   const [labelDraft, setLabelDraft] = useState('');
   const [confirmDisconnect, setConfirmDisconnect] = useState<Connection | null>(null);
+  const [credentialTarget, setCredentialTarget] = useState<{
+    connectionId: string;
+    owner: ConnectionOwner;
+  } | null>(null);
 
   const connectionsQuery = useQuery({
     queryKey: ['connections', projectId],
@@ -927,6 +955,28 @@ export function ConnectionsList({
     closeAdd();
     refresh();
   });
+  const createSharedAccount = useMutation({
+    mutationFn: (label: string) =>
+      reconcileConnection(projectId, {
+        connector_alias: connector.slug,
+        owner_type: 'project',
+        label,
+      }),
+    onSuccess: (connection) => {
+      closeAdd();
+      setCredentialTarget({ connectionId: connection.connection_id, owner: 'project' });
+    },
+    onError: (e: Error) => errorToast(e.message || tI18nComplete.raw('texta2cf78785484')),
+  });
+  const createOwnAccount = useMutation({
+    mutationFn: (label: string) =>
+      reconcileMemberConnection(projectId, { connector_alias: connector.slug, label }),
+    onSuccess: (connection) => {
+      closeAdd();
+      setCredentialTarget({ connectionId: connection.connection_id, owner: 'me' });
+    },
+    onError: (e: Error) => errorToast(e.message || tI18nComplete.raw('texta2cf78785484')),
+  });
   const setDefault = useMutation({
     mutationFn: (connectionId: string) => setDefaultConnection(projectId, connectionId),
     onSuccess: () => {
@@ -945,11 +995,19 @@ export function ConnectionsList({
     onError: (e: Error) => errorToast(e.message || tI18nComplete.raw('textb7668a581f59')),
   });
 
-  const adding = addProject.isPending || addMine.isPending;
+  const adding = isDirectProvider
+    ? createSharedAccount.isPending || createOwnAccount.isPending
+    : addProject.isPending || addMine.isPending;
   const submitAdd = () => {
     if (disabled || !addOwner || !labelDraft.trim()) return;
-    if (addOwner === 'project') addProject.mutate({ label: labelDraft });
-    else addMine.mutate({ label: labelDraft });
+    if (isDirectProvider) {
+      if (addOwner === 'project') createSharedAccount.mutate(labelDraft.trim());
+      else createOwnAccount.mutate(labelDraft.trim());
+    } else if (addOwner === 'project') {
+      addProject.mutate({ label: labelDraft });
+    } else {
+      addMine.mutate({ label: labelDraft });
+    }
   };
   const pendingConnectionId =
     setDefault.isPending && typeof setDefault.variables === 'string'
@@ -957,6 +1015,16 @@ export function ConnectionsList({
       : disconnect.isPending && typeof disconnect.variables === 'string'
         ? disconnect.variables
         : null;
+  // Re-open the credential entry for an existing direct-provider account —
+  // wired from the row menu ("Set credential") and reused right after
+  // `createSharedAccount`/`createOwnAccount` creates a brand new one.
+  const setCredential = isDirectProvider
+    ? (connection: Connection) =>
+        setCredentialTarget({
+          connectionId: connection.connection_id,
+          owner: connection.owner_type === 'project' ? 'project' : 'me',
+        })
+    : undefined;
 
   return (
     <div className="space-y-6">
@@ -988,6 +1056,7 @@ export function ConnectionsList({
         canManageConnections={canManageConnections}
         disabled={disabled}
         pendingConnectionId={pendingConnectionId}
+        onSetCredential={setCredential}
         onSetDefault={(connection) => setDefault.mutate(connection.connection_id)}
         onDisconnect={setConfirmDisconnect}
         onStartSession={onStartSession}
@@ -1013,6 +1082,7 @@ export function ConnectionsList({
         canManageConnections={canManageConnections}
         disabled={disabled}
         pendingConnectionId={pendingConnectionId}
+        onSetCredential={setCredential}
         onSetDefault={(connection) => setDefault.mutate(connection.connection_id)}
         onDisconnect={setConfirmDisconnect}
         onStartSession={onStartSession}
@@ -1094,6 +1164,23 @@ export function ConnectionsList({
         isPending={disconnect.isPending}
         onConfirm={() => confirmDisconnect && disconnect.mutate(confirmDisconnect.connection_id)}
       />
+
+      {isDirectProvider ? (
+        <SetCredentialModal
+          projectId={projectId}
+          connector={credentialTarget ? connector : null}
+          connectionId={credentialTarget?.connectionId ?? null}
+          owner={credentialTarget?.owner ?? 'me'}
+          open={credentialTarget !== null}
+          onOpenChange={(open) => {
+            if (!open) setCredentialTarget(null);
+          }}
+          onSaved={() => {
+            setCredentialTarget(null);
+            refresh();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

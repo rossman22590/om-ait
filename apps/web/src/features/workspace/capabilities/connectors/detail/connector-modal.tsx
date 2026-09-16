@@ -458,7 +458,6 @@ function ConnectorModalBody({
                   onChanged={onChanged}
                   onRemoved={onRemoved}
                   onStartSession={startPrivateSession}
-                  onSetCredential={() => setCredOpen(true)}
                 />
               )}
             </TabsContent>
@@ -479,6 +478,7 @@ function ConnectorModalBody({
                 projectId={projectId}
                 connector={connector}
                 displayName={displayName}
+                onChanged={onChanged}
                 onRemoved={onRemoved}
               />
             </TabsContent>

@@ -9,18 +9,33 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { errorToast, successToast } from '@/components/ui/toast';
+import { ConnectionSection } from '@/features/workspace/customize/sections/connectors-view';
+import { isManagedConnectorProvider } from '../provider-label';
 
 export interface ConnectorSettingsProps {
   projectId: string;
   connector: AdminConnector;
   displayName: string;
+  onChanged: () => void;
   onRemoved: () => void;
 }
 
 /**
- * Settings — removing the connector.
+ * Settings — the transport config for a direct provider, then removing the
+ * connector.
  *
  * `connectorTabs` already restricts this tab to writers.
+ *
+ * `ConnectionSection` (slug/provider/spec/auth/headers) used to sit on the
+ * Accounts tab, gated on `canWrite` with a reader-only banner in its place.
+ * It moved HERE — connector-credentials rework follow-up (the live defect an
+ * openapi/http/mcp/graphql connector's Accounts tab rendered this transport
+ * form instead of its account list). Accounts now always shows
+ * `ConnectionsList` for a direct provider, same as a managed one, so this is
+ * the only mount left — showing it on both tabs would print the same form
+ * twice (`connector-settings.write-path.test.ts` pins that). A managed
+ * (Composio/Pipedream), channel, or computer connector has no transport
+ * config to edit, so it is skipped here.
  *
  * The "Connects as" row is gone. `connectors.authorization_strategy` was a
  * connector-level MODE that made shared and private accounts mutually
@@ -34,10 +49,14 @@ export function ConnectorSettings({
   projectId,
   connector,
   displayName,
+  onChanged,
   onRemoved,
 }: ConnectorSettingsProps) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
   const isChannel = connector.provider === 'channel';
+  const isComputer = connector.provider === 'computer';
+  const isDirectProvider =
+    !isManagedConnectorProvider(connector.provider) && !isChannel && !isComputer;
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const remove = useMutation({
@@ -51,6 +70,15 @@ export function ConnectorSettings({
 
   return (
     <div className="space-y-5">
+      {isDirectProvider ? (
+        <ConnectionSection
+          projectId={projectId}
+          connector={connector}
+          onChanged={onChanged}
+          canWrite={true}
+        />
+      ) : null}
+
       {/* Capability #11. Channel connectors disconnect from their own connection
           form (`ChannelConnectionSection`), so they get no Remove row here.
           The row stays neutral — `variant="destructive"` belongs on the confirm
