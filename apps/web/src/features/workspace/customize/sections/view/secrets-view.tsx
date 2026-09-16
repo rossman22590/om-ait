@@ -70,6 +70,7 @@ import { ErrorState } from '@/features/layout/section/error-state';
 import { CapabilityPageShell } from '@/features/workspace/capabilities/shared/capability-page-shell';
 import { NewEntityMenu } from '@/features/workspace/capabilities/shared/new-entity-menu';
 import { ProjectProviderModal } from '@/features/workspace/customize/sections/llm-provider/llm-provider-modal';
+import { AccountSecretResourcesPanel } from './account-secret-resources-panel';
 import {
   newConfigPrompt,
   useConfigureThread,
@@ -206,6 +207,7 @@ export function SecretsView({ projectId }: { projectId: string }) {
   // default. When off, the picker offers only Environment variable and
   // Disabled — a new secret loads its real value into the sandbox.
   const egressEnabled = useFeatureFlag(projectId, 'secrets_egress').enabled;
+  const pooledSecretsEnabled = useFeatureFlag(projectId, 'pooled_provider_secrets').enabled;
 
   const secretsQuery = useQuery({
     queryKey,
@@ -440,6 +442,9 @@ export function SecretsView({ projectId }: { projectId: string }) {
               onSaved={refreshSecretsAndProviders}
             />
           </>
+        )}
+        {pooledSecretsEnabled && projectDetailQuery.data?.project?.account_id && (
+          <AccountSecretResourcesPanel accountId={projectDetailQuery.data.project.account_id} />
         )}
       </div>
       <ProjectProviderModal
@@ -761,12 +766,12 @@ function SecretTableRow({
             {delivery.label}
           </Badge>
           {row.requiresRotation && (
-            <span className="text-kortix-orange text-[11px] font-medium">
+            <span className="text-kortix-orange text-xs font-medium">
               {tI18nComplete.raw('texte450e0da6cf9')}
             </span>
           )}
           {shouldWarnMissingAgentGrant(row.deliveryBlockedReason, row.strategy, row.consumer) && (
-            <span className="text-kortix-orange text-[11px] font-medium">
+            <span className="text-kortix-orange text-xs font-medium">
               {tI18nComplete.raw('text6404e0b5d78d')}
             </span>
           )}

@@ -989,6 +989,10 @@
           "name": "Segredos protegidos pela rede",
           "description": "Controle quais ferramentas e destinos podem receber os segredos do projeto."
         },
+        "pooled_provider_secrets": {
+          "name": "Segredos de provedor compartilhados",
+          "description": "Compartilhe várias chaves de provedor com membros e selecione um grupo de chaves por sessão."
+        },
         "pi_worker": {
           "name": "Ambiente do worker Pi (compilado)",
           "description": "Execute sessões com o ambiente experimental do worker Pi."

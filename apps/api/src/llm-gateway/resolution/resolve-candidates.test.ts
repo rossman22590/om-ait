@@ -59,6 +59,10 @@ mock.module('../../config', () => ({ config }));
 let resolvedSecret: string | null = null;
 let secretsByName: Record<string, string | null> = {};
 let resolvedSecrets: Array<{ identifier: string; value: string }> = [];
+let pooledEnabled = false;
+let pooledSecrets: { configured: boolean; coolingDown: boolean; retryAfterSeconds?: number; secrets: Array<{ secretId: string; label: string; value: string }> } = { configured: false, coolingDown: false, secrets: [] };
+mock.module('../../feature-flags/for-project', () => ({ projectFeatureFlagEnabled: async () => pooledEnabled }));
+mock.module('../../secrets/account-resource', () => ({ resolveSessionProviderSecrets: async () => pooledSecrets }));
 const getProjectSecretValueForConsumer = mock(async (input: { name: string }) => {
   const name = input.name;
   if (name in secretsByName) return secretsByName[name] ?? null;
@@ -177,6 +181,8 @@ function principal(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  pooledEnabled = false;
+  pooledSecrets = { configured: false, coolingDown: false, secrets: [] };
   tierByAccount = {};
   modelAccess = { disabledProviders: [], disabledModels: [] };
   for (const key of Object.keys(config)) delete config[key];
@@ -201,6 +207,40 @@ beforeEach(() => {
   getProjectSecretValueForConsumer.mockClear();
   resolveProjectSecretsForConsumer.mockClear();
   resolveCodexCredential.mockClear();
+});
+
+describe('resolveCandidates — selected account key pool', () => {
+  test('the flag preserves legacy keys until enabled, then selects only granted pool keys', async () => {
+    catalogUpstream = { baseUrl: 'https://api.anthropic.com/v1', envVar: 'ANTHROPIC_API_KEY', kind: 'anthropic' };
+    resolvedSecrets = [{ identifier: 'legacy', value: 'legacy-value' }];
+    pooledSecrets = { configured: true, coolingDown: false, secrets: [
+      { secretId: 'id-a', label: 'A', value: 'key-a' },
+      { secretId: 'id-b', label: 'B', value: 'key-b' },
+    ] };
+    const p = principal({ sessionId: 'session-1' });
+    expect((await resolveCandidates(p, 'anthropic/claude-sonnet-4.6'))[0]?.credentialRef).toBe('legacy');
+    pooledEnabled = true;
+    const candidates = await resolveCandidates(p, 'anthropic/claude-sonnet-4.6');
+    expect(candidates.map((candidate) => candidate.poolSecretId)).toEqual(['id-a', 'id-b']);
+    expect(candidates.map((candidate) => candidate.apiKey)).toEqual(['key-a', 'key-b']);
+  });
+
+  test('a narrowed agent grant blocks the pool at use time', async () => {
+    catalogUpstream = { baseUrl: 'https://api.anthropic.com/v1', envVar: 'ANTHROPIC_API_KEY', kind: 'anthropic' };
+    pooledEnabled = true;
+    pooledSecrets = { configured: true, coolingDown: false, secrets: [{ secretId: 'id-a', label: 'A', value: 'key-a' }] };
+    await expect(resolveCandidates(principal({ sessionId: 'session-1', agentGrant: { env: [] } }),
+      'anthropic/claude-sonnet-4.6')).rejects.toMatchObject({ code: 'provider_not_connected' });
+  });
+
+  test('an exhausted selected pool returns a rate-limit reason and never uses a legacy key', async () => {
+    catalogUpstream = { baseUrl: 'https://api.anthropic.com/v1', envVar: 'ANTHROPIC_API_KEY', kind: 'anthropic' };
+    pooledEnabled = true;
+    resolvedSecrets = [{ identifier: 'legacy', value: 'legacy-value' }];
+    pooledSecrets = { configured: true, coolingDown: true, retryAfterSeconds: 7, secrets: [] };
+    await expect(resolveCandidates(principal({ sessionId: 'session-1' }),
+      'anthropic/claude-sonnet-4.6')).rejects.toMatchObject({ code: 'provider_pool_rate_limited', retryAfterSeconds: 7 });
+  });
 });
 
 describe('resolveCandidates — BYOK billingMode / free-tier / managed-fallback', () => {

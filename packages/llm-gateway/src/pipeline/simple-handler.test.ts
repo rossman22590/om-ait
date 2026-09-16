@@ -42,6 +42,32 @@ function hooks(usage: UsageEvent[], traces: GatewayTrace[]): GatewayHooks {
 }
 
 describe('simple gateway pipeline', () => {
+  test('a pooled credential moves to the next key after a pre-output 429', async () => {
+    const usedKeys: string[] = [];
+    const cooldowns: Array<{ secretId: string; seconds: number }> = [];
+    const response = await handleChatCompletions({
+      hooks: {
+        ...hooks([], []),
+        resolveUpstream: async () => [
+          { ...primary, poolSecretId: 'key-a', apiKey: 'first' },
+          { ...primary, poolSecretId: 'key-b', apiKey: 'second' },
+        ],
+        notePoolRateLimit: async (_principal, secretId, seconds) => { cooldowns.push({ secretId, seconds }); },
+      },
+      logger: { info() {}, warn() {}, error() {} },
+      fetchImpl: async (_url, init) => {
+        const credential = new Headers(init.headers).get('authorization') ?? '';
+        usedKeys.push(credential);
+        return new Response(credential.includes('first') ? 'limited' : '{"choices":[]}', {
+          status: credential.includes('first') ? 429 : 200,
+          headers: credential.includes('first') ? { 'retry-after': '12' } : undefined,
+        });
+      },
+    }, { authorization: 'Bearer token', rawBody: JSON.stringify({ model: 'requested-model', messages: [] }) });
+    expect(response.status).toBe(200);
+    expect(usedKeys).toEqual(['Bearer first', 'Bearer second']);
+    expect(cooldowns).toEqual([{ secretId: 'key-a', seconds: 12 }]);
+  });
   test('aborts a provider fetch that does not return response headers before the deadline', async () => {
     const fetchWithTimeout = withUpstreamHeadersTimeout(
       async (_input, init) =>

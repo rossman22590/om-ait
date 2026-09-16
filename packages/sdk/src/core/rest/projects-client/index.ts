@@ -7,6 +7,7 @@ export * from './projects';
 export * from './github';
 export * from './access';
 export * from './secrets';
+export * from './account-secret-resources';
 export * from './connectors';
 export * from './policies';
 export * from './sandbox';

@@ -989,6 +989,10 @@
           "name": "Segreti protetti dalla rete",
           "description": "Controlla quali strumenti e destinazioni possono ricevere i segreti del progetto."
         },
+        "pooled_provider_secrets": {
+          "name": "Segreti del provider condivisi",
+          "description": "Condividi più chiavi del provider con i membri e seleziona un gruppo di chiavi per ogni sessione."
+        },
         "pi_worker": {
           "name": "Runtime worker Pi (compilato)",
           "description": "Esegui sessioni con il runtime sperimentale del worker Pi."

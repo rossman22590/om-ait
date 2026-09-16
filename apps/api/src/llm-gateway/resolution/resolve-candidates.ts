@@ -1,4 +1,6 @@
 import { getProjectModelAccess } from '../../repositories/project-model-access';
+import { projectFeatureFlagEnabled } from '../../feature-flags/for-project';
+import { resolveSessionProviderSecrets } from '../../secrets/account-resource';
 import { modelAccessAllows, modelAccessProvider, type ProjectModelAccess } from '../model-access';
 import { toWireModel } from './effective';
 import {
@@ -187,14 +189,44 @@ export async function resolveCandidates(
         name,
         consumer: 'llm_gateway',
       });
-    const keys = await resolveProjectSecretsForConsumer({
-      projectId: principal.projectId,
-      accountId: principal.accountId,
-      sessionId: principal.sessionId,
-      actorUserId: principal.userId,
-      name: byok.envVar,
-      consumer: 'llm_gateway',
-    });
+    const selectedPool = principal.sessionId && principal.userId &&
+      await projectFeatureFlagEnabled(principal.projectId, 'pooled_provider_secrets')
+      ? await resolveSessionProviderSecrets({
+          accountId: principal.accountId,
+          sessionId: principal.sessionId,
+          userId: principal.userId,
+          providerId: provider,
+          name: byok.envVar,
+        })
+      : null;
+    if (selectedPool?.configured && Array.isArray(principal.agentGrant?.env) &&
+      !principal.agentGrant.env.some((identifier) => identifier.toUpperCase() === byok.envVar.toUpperCase())) {
+      throw new GatewayResolutionError('provider_not_connected',
+        `The running agent cannot use ${provider} keys.`,
+        `Add ${byok.envVar} to the agent's secret grant, or choose another agent.`);
+    }
+    const keys = selectedPool?.configured
+      ? selectedPool.secrets.map((secret) => ({ identifier: secret.secretId, value: secret.value }))
+      : await resolveProjectSecretsForConsumer({
+          projectId: principal.projectId,
+          accountId: principal.accountId,
+          sessionId: principal.sessionId,
+          actorUserId: principal.userId,
+          name: byok.envVar,
+          consumer: 'llm_gateway',
+        });
+    if (selectedPool?.configured && keys.length === 0) {
+      throw new GatewayResolutionError(
+        selectedPool.coolingDown ? 'provider_pool_rate_limited' : 'provider_not_connected',
+        selectedPool.coolingDown
+          ? `All selected ${provider} keys are cooling down after rate limits.`
+          : `No usable ${provider} key is selected for this session.`,
+        selectedPool.coolingDown
+          ? 'Retry after the provider cooldown, or select another granted key.'
+          : 'Select a granted key in session settings.',
+        selectedPool.retryAfterSeconds,
+      );
+    }
     if (keys.length > 0) {
       const tier = config.KORTIX_BILLING_INTERNAL_ENABLED
         ? await resolveCachedAccountTier(principal.accountId)
@@ -251,6 +283,7 @@ export async function resolveCandidates(
         ...(bedrockRegion ? { region: bedrockRegion } : {}),
         apiKey: value,
         credentialRef: identifier,
+        ...(selectedPool?.configured ? { poolSecretId: identifier } : {}),
         billingMode:
           config.KORTIX_BILLING_INTERNAL_ENABLED && !isFreeTier ? 'platform-fee' : 'none',
         markup: isFreeTier ? 0 : PLATFORM_FEE_MARKUP,
@@ -278,7 +311,7 @@ export async function resolveCandidates(
       // serving managed tokens the plan forbids, and skipping the wallet
       // admission gate on the way, since that gate is bypassed for exactly the
       // tiers this fallback would be serving.
-      return mayUseManagedModels
+      return mayUseManagedModels && !selectedPool?.configured
         ? [...byokDescriptors, ...byokFallbackCandidates(access)]
         : byokDescriptors;
     }
