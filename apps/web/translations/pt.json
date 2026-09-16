@@ -19380,6 +19380,12 @@
     "stopUsing": "Parar de usar minha conta",
     "removeProject": "Remover conexão do projeto",
     "stopUsingHint": "Novas sessões usarão a conexão do projeto, se disponível. Sua conta continua conectada para outros projetos.",
-    "removeProjectHint": "Isso remove a conexão compartilhada para todos neste projeto."
+    "removeProjectHint": "Isso remove a conexão compartilhada para todos neste projeto.",
+    "connectionName": "Nome da conexão",
+    "updateConnection": "Atualizar conexão",
+    "connectionSelection": "Conexão pessoal",
+    "usePool": "Usar meu grupo ({count})",
+    "poolHint": "Cada sessão usa uma das suas conexões. Os limites e erros de autenticação continuam visíveis.",
+    "disconnectConnectionHint": "Esta conexão será removida de todos os projetos. Suas outras conexões continuarão disponíveis."
   }
 }

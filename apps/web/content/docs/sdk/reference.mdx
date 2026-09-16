@@ -1022,6 +1022,10 @@ defines `window.Kortix`.
 
 `kortix.providerConnections` manages your ChatGPT subscription and provider API keys across projects. Use a signed-in user's JWT. Account PATs and sandbox tokens cannot manage these credentials.
 
+Save up to ten named connections per provider with `saveApiKey(provider, key, { create: true, label })` or `startOAuth(provider, { create: true, label })`. Pass `{ connection_id }` to update an existing connection. `remove(provider, connectionId)` removes one connection; `remove(provider)` removes them all.
+
+Choose a saved connection with `setProject(projectId, provider, true, { connection_id })`, or enable your personal pool with `{ pool: true }`. Each session retains one pool member across requests and API replicas. Removing that member allows a new selection. Requests without a session select a member per request. Pools never include another person's credentials. Provider limits and authentication errors remain visible; rejected requests are not retried against another pool member.
+
 | Method | Effect |
 | --- | --- |
 | `list()` | List supported providers and your connection metadata |

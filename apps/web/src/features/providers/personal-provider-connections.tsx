@@ -35,7 +35,9 @@ export function PersonalProviderConnections() {
   const connections = useQuery({ queryKey: connectionsKey, queryFn: listUserProviderConnections });
   const [provider, setProvider] = useState('codex');
   const [apiKey, setApiKey] = useState('');
-  const [remove, setRemove] = useState<string | null>(null);
+  const [label, setLabel] = useState('');
+  const [editingConnection, setEditingConnection] = useState<string | null>(null);
+  const [remove, setRemove] = useState<{ provider: string; connectionId: string } | null>(null);
   const [challenge, setChallenge] = useState<{ url: string; code: string | null } | null>(null);
   const generation = useRef(0);
   useEffect(
@@ -52,11 +54,15 @@ export function PersonalProviderConnections() {
   const connect = useMutation({
     mutationFn: async () => {
       const attempt = ++generation.current;
+      const options = {
+        ...(editingConnection ? { connection_id: editingConnection } : { create: true }),
+        label: label.trim() || adapter?.name || provider,
+      };
       if (adapter?.auth_type === 'api_key') {
-        await saveUserProviderApiKey(provider, apiKey);
+        await saveUserProviderApiKey(provider, apiKey, options);
         setApiKey('');
       } else {
-        const start = await startUserProviderOAuth(provider);
+        const start = await startUserProviderOAuth(provider, options);
         if (generation.current !== attempt) return;
         setChallenge({ url: start.verification_url, code: start.user_code });
         let authorized = false;
@@ -77,6 +83,8 @@ export function PersonalProviderConnections() {
       }
       if (generation.current !== attempt) return;
       setChallenge(null);
+      setEditingConnection(null);
+      setLabel('');
       await refresh();
       successToast(t('connected'));
     },
@@ -86,7 +94,8 @@ export function PersonalProviderConnections() {
     },
   });
   const disconnect = useMutation({
-    mutationFn: deleteUserProviderConnection,
+    mutationFn: (connection: { provider: string; connectionId: string }) =>
+      deleteUserProviderConnection(connection.provider, connection.connectionId),
     onSuccess: async () => {
       setRemove(null);
       await refresh();
@@ -107,21 +116,45 @@ export function PersonalProviderConnections() {
         </p>
       </div>
       {connections.data.items.length > 0 && (
-        <ul className="bg-popover divide-y rounded-md border">
+        <ul className="space-y-2">
           {connections.data.items.map((connection) => {
             const id = connection.provider_id;
             const name = providers.find((p) => p.provider_id === id)?.name ?? id;
             return (
-              <li key={id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <li
+                key={connection.connection_id}
+                className="bg-popover flex flex-wrap items-center gap-3 rounded-md border px-4 py-3"
+              >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{name}</p>
+                  <p className="text-sm font-medium">{connection.label || name}</p>
                   <p className="text-muted-foreground text-xs">
+                    {name} ·{' '}
                     {connection.auth_type === 'api_key'
                       ? t('personalApiKey')
                       : t('personalSubscription')}
                   </p>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setRemove(id)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={connect.isPending}
+                  onClick={() => {
+                    setProvider(id);
+                    setEditingConnection(connection.connection_id);
+                    setLabel(connection.label || name);
+                    setApiKey('');
+                  }}
+                >
+                  {t('updateConnection')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={connect.isPending}
+                  onClick={() =>
+                    setRemove({ provider: id, connectionId: connection.connection_id })
+                  }
+                >
                   {t('disconnect')}
                 </Button>
               </li>
@@ -132,7 +165,15 @@ export function PersonalProviderConnections() {
       <div className="space-y-4">
         <Field>
           <FieldLabel htmlFor="personal-provider">{t('provider')}</FieldLabel>
-          <Select value={provider} onValueChange={setProvider} disabled={connect.isPending}>
+          <Select
+            value={provider}
+            onValueChange={(value) => {
+              setProvider(value);
+              setApiKey('');
+              setLabel('');
+            }}
+            disabled={connect.isPending || !!editingConnection}
+          >
             <SelectTrigger id="personal-provider">
               <SelectValue />
             </SelectTrigger>
@@ -144,6 +185,16 @@ export function PersonalProviderConnections() {
               ))}
             </SelectContent>
           </Select>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="personal-connection-label">{t('connectionName')}</FieldLabel>
+          <Input
+            id="personal-connection-label"
+            value={label}
+            maxLength={100}
+            onChange={(event) => setLabel(event.target.value)}
+            disabled={connect.isPending}
+          />
         </Field>
         {adapter?.auth_type === 'api_key' && (
           <Field>
@@ -170,13 +221,16 @@ export function PersonalProviderConnections() {
             {connect.isPending && <Loading className="size-4" />}
             {adapter?.auth_type === 'device_oauth' ? t('connectChatGpt') : t('saveKey')}
           </Button>
-          {challenge && (
+          {(challenge || editingConnection) && (
             <Button
               size="sm"
               variant="ghost"
               onClick={() => {
                 generation.current++;
                 setChallenge(null);
+                setEditingConnection(null);
+                setApiKey('');
+                setLabel('');
               }}
             >
               {t('cancel')}
@@ -190,7 +244,7 @@ export function PersonalProviderConnections() {
           if (!open) setRemove(null);
         }}
         title={t('disconnectTitle')}
-        description={t('disconnectDescription')}
+        description={t('disconnectConnectionHint')}
         confirmLabel={t('disconnect')}
         confirmVariant="destructive"
         isPending={disconnect.isPending}

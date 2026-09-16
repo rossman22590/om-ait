@@ -1,6 +1,6 @@
 {
   "generatedAt": "static",
-  "count": 647,
+  "count": 648,
   "routes": [
     {
       "method": "GET",
@@ -2297,6 +2297,10 @@
     {
       "method": "PUT",
       "path": "/v1/provider-connections/:provider"
+    },
+    {
+      "method": "DELETE",
+      "path": "/v1/provider-connections/:provider/connections/:connectionId"
     },
     {
       "method": "POST",

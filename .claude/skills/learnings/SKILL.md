@@ -5331,3 +5331,20 @@ polling after `404` or `410`; preserve transcript data and allow explicit recove
 paths across a runtime switch. Controller tests assert no retries for 60 seconds
 after `404` and `410`, then successful explicit recovery. The SDK browser journey
 switches between two real sandboxes while the first message read retries.
+
+### Check Docker guest capacity when isolated Supabase startup fails
+
+**Incident (2026-09-16, PR #7295):** a new worktree exhausted Docker's disk
+while downloading Supabase images. Ten stacks then exhausted the VM's 8 GB
+memory. PostgreSQL reported `No space left on device`; Docker recorded OOM
+kills. Host disk capacity did not describe the guest's available capacity.
+
+**Rule:** inspect Docker disk usage and VM OOM logs before retrying startup.
+Remove only verified unused, downloadable image caches. Preserve database
+volumes. Stop the current task's optional Studio and metadata containers before
+starting another stack. Obtain authorization before stopping other tasks.
+
+**Enforcement:** Docker rejects removal of an image used by a container without
+force. Use ordinary `docker image rm`, never forced removal or volume pruning.
+The local runner requires working Supabase and real HTTP assertions before it
+reports success; `SEC-30` passed after this recovery.

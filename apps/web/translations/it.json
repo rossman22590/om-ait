@@ -19380,6 +19380,12 @@
     "stopUsing": "Smetti di usare il mio account",
     "removeProject": "Rimuovi connessione del progetto",
     "stopUsingHint": "Le nuove sessioni useranno la connessione del progetto, se disponibile. Il tuo account resta connesso per gli altri progetti.",
-    "removeProjectHint": "Questa azione rimuove la connessione condivisa per tutti in questo progetto."
+    "removeProjectHint": "Questa azione rimuove la connessione condivisa per tutti in questo progetto.",
+    "connectionName": "Nome della connessione",
+    "updateConnection": "Aggiorna connessione",
+    "connectionSelection": "Connessione personale",
+    "usePool": "Usa il mio gruppo ({count})",
+    "poolHint": "Ogni sessione usa una delle tue connessioni. I limiti e gli errori di autenticazione restano visibili.",
+    "disconnectConnectionHint": "Questa connessione verrà rimossa da tutti i progetti. Le altre connessioni resteranno disponibili."
   }
 }

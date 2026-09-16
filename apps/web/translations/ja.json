@@ -19380,6 +19380,12 @@
     "stopUsing": "自分のアカウントの使用を停止",
     "removeProject": "プロジェクトの接続を削除",
     "stopUsingHint": "新しいセッションは、利用可能な場合はプロジェクトの接続を使用します。他のプロジェクトではアカウントの接続が維持されます。",
-    "removeProjectHint": "このプロジェクトの全員に対して共有接続が削除されます。"
+    "removeProjectHint": "このプロジェクトの全員に対して共有接続が削除されます。",
+    "connectionName": "接続名",
+    "updateConnection": "接続を更新",
+    "connectionSelection": "個人の接続",
+    "usePool": "自分のプールを使用（{count}）",
+    "poolHint": "各セッションは自分の接続のいずれかを使用します。制限と認証エラーは引き続き表示されます。",
+    "disconnectConnectionHint": "この接続はすべてのプロジェクトから削除されます。他の接続は引き続き使用できます。"
   }
 }

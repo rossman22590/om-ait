@@ -91,6 +91,7 @@ export function ProjectProviderConnection({
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState('personal');
   const [method, setMethod] = useState('api_key');
+  const [connectionChoice, setConnectionChoice] = useState('');
   const [values, setValues] = useState<Record<string, string>>({});
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [challenge, setChallenge] = useState<{ url: string; code: string | null } | null>(null);
@@ -104,8 +105,13 @@ export function ProjectProviderConnection({
   );
   const adapter = adapters.find((p) => p.auth_type === method);
   const personal = scope === 'personal';
+  const savedConnections =
+    connections.data?.items.filter((c) => c.provider_id === adapter?.provider_id) ?? [];
+  const selectedConnection =
+    savedConnections.find((c) => c.connection_id === connectionChoice) ?? savedConnections[0];
+  const usePool = personal && connectionChoice === 'pool';
   const stored = personal
-    ? !!adapter && !!connections.data?.items.some((c) => c.provider_id === adapter.provider_id)
+    ? !!adapter && savedConnections.length > 0
     : method === 'device_oauth'
       ? subscriptionConnected
       : row.connected;
@@ -126,9 +132,17 @@ export function ProjectProviderConnection({
     ]);
     refreshProjectProviderState(client, projectId);
   }
-  async function selectConnection(providerId?: string) {
+  async function selectConnection(providerId?: string, savedConnectionId?: string) {
     // Keep the previous credential usable until the replacement is available.
-    if (providerId) await setProjectPersonalProvider(projectId, providerId, true);
+    if (providerId)
+      await setProjectPersonalProvider(
+        projectId,
+        providerId,
+        true,
+        usePool
+          ? { pool: true }
+          : { connection_id: savedConnectionId ?? selectedConnection?.connection_id },
+      );
     for (const other of adapters) {
       if (
         other.provider_id !== providerId &&
@@ -154,6 +168,8 @@ export function ProjectProviderConnection({
           ? 'personal'
           : 'project';
     setScope(nextScope);
+    const activeBinding = bindings.data?.items.find((b) => b.provider_id === active?.provider_id);
+    setConnectionChoice(activeBinding?.pool ? 'pool' : (activeBinding?.connection_id ?? ''));
     setMethod(
       active?.auth_type ??
         (subscriptionConnected || (row.id === 'openai' && !row.connected)
@@ -169,14 +185,17 @@ export function ProjectProviderConnection({
   }
   const connect = useMutation({
     mutationFn: async ({ attempt, authorize }: { attempt: number; authorize?: boolean }) => {
+      let savedConnectionId: string | undefined;
       if (personal && !adapter) throw new Error(t('loadFailed'));
       if (method === 'api_key' && hasValues) {
-        if (personal)
-          await saveUserProviderApiKey(
+        if (personal) {
+          const saved = await saveUserProviderApiKey(
             adapter!.provider_id,
             values[`${row.id}:${row.envVars[0]}`]!.trim(),
+            selectedConnection ? { connection_id: selectedConnection.connection_id } : {},
           );
-        else {
+          savedConnectionId = saved.connection_id;
+        } else {
           if (!canWrite) throw new Error(t('projectReadOnly'));
           await Promise.all(
             row.envVars.map((name) =>
@@ -192,7 +211,10 @@ export function ProjectProviderConnection({
       } else if (method === 'device_oauth' && (!stored || authorize) && (personal || canWrite)) {
         if (!personal && !canWrite) throw new Error(t('projectReadOnly'));
         const start = personal
-          ? await startUserProviderOAuth(adapter!.provider_id)
+          ? await startUserProviderOAuth(
+              adapter!.provider_id,
+              selectedConnection ? { connection_id: selectedConnection.connection_id } : {},
+            )
           : await startProjectProviderOAuth(projectId, 'openai', { sharing: { mode: 'project' } });
         if (generation.current !== attempt) return;
         setChallenge({ url: start.verification_url, code: start.user_code });
@@ -207,6 +229,7 @@ export function ProjectProviderConnection({
           if (generation.current !== attempt) return;
           if (result.status === 'success') {
             authorized = true;
+            if ('connection' in result) savedConnectionId = result.connection.connection_id;
             break;
           }
           if (result.status === 'failed') throw new Error(result.error);
@@ -215,7 +238,7 @@ export function ProjectProviderConnection({
         if (!authorized) throw new Error(t('expired'));
       }
       if (generation.current !== attempt) return;
-      await selectConnection(personal ? adapter!.provider_id : undefined);
+      await selectConnection(personal ? adapter!.provider_id : undefined, savedConnectionId);
       await refresh();
       closeDialog();
     },
@@ -285,6 +308,7 @@ export function ProjectProviderConnection({
                     value={method}
                     onValueChange={(next) => {
                       setMethod(next);
+                      setConnectionChoice('');
                       resetDraft();
                     }}
                     disabled={busy}
@@ -326,7 +350,35 @@ export function ProjectProviderConnection({
               <p className="text-muted-foreground text-xs">
                 {personal ? t('privateHint') : canWrite ? t('sharedHint') : t('projectReadOnly')}
               </p>
-              {method === 'api_key' && (personal || canWrite) && (
+              {personal && (savedConnections.length > 1 || usePool) && (
+                <div className="space-y-2">
+                  <Label htmlFor={`${id}-connection`}>{t('connectionSelection')}</Label>
+                  <Select
+                    value={usePool ? 'pool' : selectedConnection?.connection_id}
+                    onValueChange={(value) => {
+                      setConnectionChoice(value);
+                      resetDraft();
+                    }}
+                    disabled={busy}
+                  >
+                    <SelectTrigger id={`${id}-connection`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {savedConnections.map((connection, index) => (
+                        <SelectItem key={connection.connection_id} value={connection.connection_id}>
+                          {connection.label || `${adapter?.name} ${index + 1}`}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="pool">
+                        {t('usePool', { count: savedConnections.length })}
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {usePool && <p className="text-muted-foreground text-xs">{t('poolHint')}</p>}
+              {method === 'api_key' && !usePool && (personal || canWrite) && (
                 <KeyFields
                   row={{ ...row, connected: stored }}
                   values={values}
@@ -353,7 +405,7 @@ export function ProjectProviderConnection({
             {challenge && <ChatGptDeviceChallenge {...challenge} />}
             {connect.isError && <InfoBanner tone="destructive">{connect.error.message}</InfoBanner>}
             {remove.isError && <InfoBanner tone="destructive">{remove.error.message}</InfoBanner>}
-            {stored && method === 'device_oauth' && (
+            {stored && !usePool && method === 'device_oauth' && (
               <Button
                 variant="ghost"
                 size="sm"

@@ -19380,6 +19380,12 @@
     "stopUsing": "Prestani da koristiš moj nalog",
     "removeProject": "Ukloni vezu projekta",
     "stopUsingHint": "Nove sesije će koristiti vezu projekta, ako postoji. Vaš nalog ostaje povezan za druge projekte.",
-    "removeProjectHint": "Ovo uklanja deljenu vezu za sve u ovom projektu."
+    "removeProjectHint": "Ovo uklanja deljenu vezu za sve u ovom projektu.",
+    "connectionName": "Naziv veze",
+    "updateConnection": "Ažuriraj vezu",
+    "connectionSelection": "Lična veza",
+    "usePool": "Koristi moj skup ({count})",
+    "poolHint": "Svaka sesija koristi jednu od vaših veza. Ograničenja i greške pri autentifikaciji ostaju vidljivi.",
+    "disconnectConnectionHint": "Ova veza se uklanja iz svih projekata. Ostale veze ostaju dostupne."
   }
 }

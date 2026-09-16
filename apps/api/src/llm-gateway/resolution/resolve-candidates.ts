@@ -177,8 +177,7 @@ export async function resolveCandidates(
   let byokFailure: GatewayResolutionError | null = null;
 
   if (byok && principal.projectId) {
-    // Provider keys are always project-wide (shared) — there is no
-    // per-user/private key concept. See getProjectSecretValue.
+    // Explicit personal selection precedes the project's shared credentials.
     const readGatewaySecret = (name: string) =>
       getProjectSecretValueForConsumer({
         projectId: principal.projectId!,
@@ -188,7 +187,7 @@ export async function resolveCandidates(
         name,
         consumer: 'llm_gateway',
       });
-    const personal = await resolveUserProviderConnection(principal.projectId, principal.userId, provider);
+    const personal = await resolveUserProviderConnection(principal.projectId, principal.userId, provider, principal.sessionId);
     const keys = personal ? [{ identifier: `personal:${personal.connectionId}`, value: personal.value }] : await resolveProjectSecretsForConsumer({
       projectId: principal.projectId,
       accountId: principal.accountId,

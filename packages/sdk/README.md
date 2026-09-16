@@ -661,6 +661,12 @@ await providers.setProject(otherProjectId, 'openai', true);
 await providers.remove('openai');
 ```
 
+Each provider supports up to ten named personal connections. Add another connection with `saveApiKey('openai', apiKey, { create: true, label: 'Work' })` or `startOAuth('codex', { create: true, label: 'Work' })`. Reconnecting the same provider account updates its saved connection.
+
+Select one connection with `setProject(projectId, 'codex', true, { connection_id })`, or explicitly enable your private pool with `setProject(projectId, 'codex', true, { pool: true })`. A pool contains only your connections. Each session selects one member and retains it across requests and API replicas. Removing that member permits a new selection. Requests without a session select a member per request. Provider limits and authentication errors propagate without retrying another pool member.
+
+`remove(provider, connectionId)` disconnects one connection. Other pool members remain available. `remove(provider)` disconnects all of that provider's connections and project bindings.
+
 For ChatGPT, call `startOAuth('codex')`, show `verification_url` and `user_code`, then call `pollOAuth('codex', flow_id)` at `interval_ms` until success, failure, or expiry. Enable the connection with `setProject(projectId, 'codex', true)` after success.
 
 The gateway selects the connection belonging to its authenticated user. A session uses the launching user recorded in its token. Other participants in that session retain this session identity. Project bindings authorize this use explicitly. Project credentials remain the fallback when no personal binding exists. Native-runtime projects do not support personal provider bindings.

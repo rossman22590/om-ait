@@ -47,7 +47,7 @@ async function loadCodexRow(
   userId: string,
   context: CodexCredentialContext,
 ): Promise<SecretRow | null> {
-  const personal = context.accountId ? await resolveUserProviderConnection(projectId, userId, 'codex') : null;
+  const personal = context.accountId ? await resolveUserProviderConnection(projectId, userId, 'codex', context.sessionId) : null;
   if (personal) return { personalConnection: personal, accountId: context.accountId!,
     secretId: personal.connectionId, ownerUserId: userId, value: personal.value,
     actorUserId: userId, sessionId: context.sessionId ?? null };
