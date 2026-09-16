@@ -74,7 +74,6 @@ import { useOptionalSessionPanel } from '@/features/session/action-panel/session
 import { Composer as SessionChatInput } from '@/features/session/composer/composer';
 import { resolveComposerAgent } from '@/features/session/composer/composer-agent-access';
 import { sessionSlashFiles } from '@/features/session/composer/menus/slash-files';
-import { ConnectorRequiredNotice } from '@/features/session/connector-required-notice';
 import { CompactModal } from '@/features/session/header/compact-modal';
 import { SessionSiteHeader } from '@/features/session/header/session-site-header';
 import {
@@ -5686,46 +5685,6 @@ export function SessionChat({
                         className="mt-2"
                       />
                     )}
-                    {/* A turn refused for a missing connector renders HERE — after
-                    the last turn, directly under the message that triggered it —
-                    rather than as a one-line pill. It is the one failure with a
-                    button that fixes it.
-
-                    Fed `commandError`, NOT `sessionState.sendError`: the SDK sets
-                    `sendError` only inside `useSession.send()`, and this file has
-                    always gone through `sendParts` instead (the send above, and the
-                    resend below). So `sendError` is permanently null here, and
-                    since `TurnErrorDisplay` deliberately suppresses `kind:
-                    'connector'` to leave the remedy to this card, a refused turn
-                    rendered NOTHING — no card, no pill. `commandError` is the same
-                    typed error, classified through the same `classifySendError`. */}
-                    <ConnectorRequiredNotice
-                      error={commandError}
-                      projectId={projectId}
-                      resend={
-                        sessionState && lastSubmittedRef.current
-                          ? () => {
-                              const last = lastSubmittedRef.current;
-                              if (!last) return;
-                              // Clear before, re-classify after: this bypasses the
-                              // normal submit path, which is the only other place
-                              // `commandError` is managed. Without the clear the
-                              // card outlives a successful retry; without the catch
-                              // a second refusal looks like success.
-                              setCommandError(null);
-                              void sessionState
-                                .sendParts(
-                                  last.parts as Parameters<typeof sessionState.sendParts>[0],
-                                  last.options as Parameters<typeof sessionState.sendParts>[1],
-                                )
-                                .catch((err: unknown) =>
-                                  setCommandError(classifySessionError(err)),
-                                );
-                            }
-                          : undefined
-                      }
-                      className="mt-2"
-                    />
                     {/* Busy with no turn to attach it to — the same waiting row
                         the optimistic turn and every live turn use, so it never
                         changes shape as the first turn materialises.
