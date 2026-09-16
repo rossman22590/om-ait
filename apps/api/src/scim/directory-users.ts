@@ -39,3 +39,14 @@ export async function saveDirectoryUser(user: typeof accountScimUsers.$inferInse
   }).returning();
   return row!;
 }
+
+export function directoryGroupIds(user: DirectoryUser): string[] {
+  const groups = user.profile.groups;
+  return Array.isArray(groups)
+    ? groups.filter(g => g && typeof g.value === 'string').map(g => g.value as string)
+    : [];
+}
+
+export async function saveDirectoryGroups(user: DirectoryUser, groupIds: string[]) {
+  return saveDirectoryUser({ ...user, profile: { ...user.profile, groups: [...new Set(groupIds)].map(value => ({ value })) } });
+}

@@ -114,6 +114,7 @@ const SCHEMA_DEFS = [
       attr('externalId', 'string'),
       attr('displayName', 'string'),
       attr('title', 'string'),
+      attr('groups', 'complex', { multiValued: true, mutability: 'readOnly', subAttributes: [attr('value', 'string')] }),
       attr('emails', 'complex', {
         multiValued: true,
         subAttributes: [attr('value', 'string'), attr('type', 'string'), attr('primary', 'boolean')],

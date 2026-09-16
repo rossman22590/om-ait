@@ -1,3 +1,5 @@
+export class InvalidGroupMemberError extends Error {}
+
 export type GroupChange =
   | { path: 'displayName'; op: 'replace'; value: string }
   | { path: 'externalId'; op: 'replace'; value: string | null }

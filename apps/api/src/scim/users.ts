@@ -17,7 +17,7 @@ import { errors, json } from '../openapi';
 import { revokeAllAccountTokensForUser } from '../repositories/account-tokens';
 import { onMemberRemoved } from '../billing/services/seat-management';
 import { db } from '../shared/db';
-import { buildDirectoryUser, directoryUserById, directoryUserByEmail, saveDirectoryUser, type DirectoryUser } from './directory-users';
+import { buildDirectoryUser, directoryUserById, directoryUserByEmail, saveDirectoryUser, directoryGroupIds, type DirectoryUser } from './directory-users';
 import {
   ScimResource,
   ScimListQuery,
@@ -228,7 +228,18 @@ async function applyDirectoryState(c: any, user: DirectoryUser, active: boolean,
   if (!active && member && await isLastOwner(user.accountId, member)) {
     return scimError(c, 409, 'Cannot deactivate the last owner of this account');
   }
-  user = await saveDirectoryUser({ ...user, userId, active, deletedAt: deleted ? new Date() : null });
+  let groupIds = directoryGroupIds(user);
+  if (!active && userId) {
+    const currentGroups = await db.select({ groupId: accountGroups.groupId }).from(accountGroups)
+      .innerJoin(accountGroupMembers, eq(accountGroupMembers.groupId, accountGroups.groupId))
+      .where(and(eq(accountGroups.accountId, user.accountId), eq(accountGroups.source, 'scim'), eq(accountGroupMembers.userId, userId)));
+    groupIds = [...new Set([...groupIds, ...currentGroups.map(g => g.groupId)])];
+  }
+  if (deleted) groupIds = [];
+  user = await saveDirectoryUser({
+    ...user, userId, active, deletedAt: deleted ? new Date() : null,
+    profile: { ...user.profile, groups: groupIds.map(value => ({ value })) },
+  });
   if (!active) {
     if (userId) {
       const revocationError = await deprovisionMember(user.accountId, userId);
@@ -257,6 +268,11 @@ async function applyDirectoryState(c: any, user: DirectoryUser, active: boolean,
       set: { scimExternalId: user.externalId },
     });
     if (!member) await assignScimMembership(user.accountId, userId);
+    if (groupIds.length) {
+      const groups = await db.select({ groupId: accountGroups.groupId }).from(accountGroups)
+        .where(and(eq(accountGroups.accountId, user.accountId), inArray(accountGroups.groupId, groupIds)));
+      if (groups.length) await db.insert(accountGroupMembers).values(groups.map(g => ({ groupId: g.groupId, userId }))).onConflictDoNothing();
+    }
     invalidateIamCacheForUser(userId);
   } else {
     if (user.invitationId) await db.update(accountInvitations).set({ email: user.userName })
@@ -265,6 +281,7 @@ async function applyDirectoryState(c: any, user: DirectoryUser, active: boolean,
     const [invite] = await db.insert(accountInvitations).values({
       inviteId: user.invitationId ?? user.scimId,
       accountId: user.accountId, email: user.userName, initialRole: 'member', expiresAt, invitedBy: null,
+      bootstrapGrants: groupIds.map(group_id => ({ group_id })),
     }).onConflictDoUpdate({
       target: [accountInvitations.accountId, accountInvitations.email],
       set: { expiresAt, initialRole: 'member', acceptedAt: null },
@@ -278,7 +295,7 @@ function userChanges(body: Record<string, unknown>, patch = false): Map<string, 
   const changes = new Map<string, unknown>();
   const set = (key: string, value: unknown, remove = false) => {
     const attr = key.toLowerCase();
-    if (['schemas', 'id', 'meta'].includes(attr)) return;
+    if (['schemas', 'id', 'meta', 'groups'].includes(attr)) return;
     const emailPath = attr.match(/^emails\[type\s+eq\s+"([^"]+)"\]\.(value|primary)$/i);
     const optional = ['externalid', 'name', 'name.givenname', 'name.familyname', 'name.formatted', 'displayname', 'title', 'emails'];
     if (!['active', 'username', ...optional].includes(attr) && !emailPath) throw new Error(`Unsupported user attribute: ${key}`);

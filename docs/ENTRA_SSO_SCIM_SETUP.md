@@ -277,7 +277,7 @@ SCIM behavior worth knowing:
   A removal with a `value` array removes only those members. An empty array
   preserves membership. Omitting both the value and filter removes all members.
 
-HTTP flows `SCIM-6` through `SCIM-13` cover Entra's PATCH formats, persisted membership,
+HTTP flows `SCIM-6` through `SCIM-14` cover Entra's PATCH formats, persisted membership,
 last-owner protection, stable user IDs, and concurrent SSO deactivation. Run `pnpm test -- --domain scim` to verify them.
 
 ---
@@ -307,8 +307,9 @@ These mirror the automated integration tests
 - **Deactivation removes access and retains directory state.** `active:false`
   remains readable through SCIM with the same ID. `active:true` restores baseline
   membership. DELETE hides the resource and prevents SSO from restoring it.
-  Explicit SCIM creation can provision it again. Previous role and group grants
-  are not restored automatically; the IdP must push group membership again.
+  Explicit SCIM creation can provision it again. Reactivation restores group assignments still present in the SCIM directory;
+  group removals made while inactive remain removed. Individual role grants are
+  not restored. DELETE also clears directory group assignments.
 - **Group → role is explicit.** Synced groups never grant access on their own; an
   admin must grant the Kortix group a project role. This is intentional
   (deny-by-default, no surprise access).

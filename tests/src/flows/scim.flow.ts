@@ -838,8 +838,19 @@ flow('SCIM-10', {
     (await sso.get('/v1/accounts/:accountId', { params })).status(403);
     (await scim.get('/scim/v2/accounts/:accountId/Groups/:groupId', {
       params: { ...params, groupId },
-    })).status(200).body().has('$.members', []);
+    })).status(200).body().has('$.members', [{ value: scimId }]);
   });
+
+  await ctx.step('reactivation preserves directory group membership without a second group push', async () => {
+    (await scim.patch('/scim/v2/accounts/:accountId/Users/:userId', {
+      Operations: [{ op: 'replace', path: 'active', value: true }],
+    }, { params: { ...params, userId: scimId } })).status(200).body().has('$.active', true);
+    (await sso.get('/v1/accounts/:accountId', { params })).status(200);
+    (await scim.get('/scim/v2/accounts/:accountId/Groups/:groupId', {
+      params: { ...params, groupId },
+    })).status(200).body().has('$.members', [{ value: scimId }]);
+  });
+
 });
 
 flow('SCIM-11', {
@@ -878,6 +889,15 @@ flow('SCIM-11', {
     (await scim.patch('/scim/v2/accounts/:accountId/Groups/:groupId', {
       Operations: [{ op: 'Add', value: { members: [{ value: ctx.P.OWNER.userId! }] } }],
     }, { params })).status(200).body().has('$.members', [{ value: ctx.P.OWNER.userId! }]);
+  });
+
+  await ctx.step('unknown user references reject the whole update and duplicate group names return 409', async () => {
+    (await scim.patch('/scim/v2/accounts/:accountId/Groups/:groupId', {
+      Operations: [{ op: 'replace', path: 'members', value: [{ value: ctx.P.OWNER.userId! }, { value: crypto.randomUUID() }] }],
+    }, { params })).status(400);
+    (await scim.get('/scim/v2/accounts/:accountId/Groups/:groupId', { params }))
+      .status(200).body().has('$.members', [{ value: ctx.P.OWNER.userId! }]);
+    (await scim.post('/scim/v2/accounts/:accountId/Groups', { displayName: group.displayName }, { params })).status(409);
   });
 
   await ctx.step('malformed and unsupported operations fail without changing group state', async () => {
@@ -1026,5 +1046,71 @@ flow('SCIM-13', {
     (await scimA.get('/scim/v2/accounts/:accountId/Users/:userId', {
       params: { accountId: a.id, userId: user.userId! },
     })).status(401);
+  });
+});
+
+flow('SCIM-14', {
+  domain: 'scim',
+  routes: [
+    'PUT /v1/accounts/:accountId/iam/sso/provider',
+    'GET /v1/accounts/:accountId',
+    'POST /scim/v2/accounts/:accountId/Users',
+    'PATCH /scim/v2/accounts/:accountId/Users/:userId',
+    'DELETE /scim/v2/accounts/:accountId/Users/:userId',
+    'POST /scim/v2/accounts/:accountId/Groups',
+    'GET /scim/v2/accounts/:accountId/Groups/:groupId',
+    'PATCH /scim/v2/accounts/:accountId/Groups/:groupId',
+  ],
+}, async (ctx) => {
+  const team = await ctx.fixtures.team({ enterprise: true });
+  const params = { accountId: team.id };
+  const scim = ctx.client.withBearer(await mintScimToken(ctx, team.id), 'SCIM');
+  const email = `${ctx.fixtures.name('inactive-directory')}@ke2e.kortix.test`;
+  const providerId = crypto.randomUUID();
+  (await ctx.client.as(ctx.P.OWNER).put('/v1/accounts/:accountId/iam/sso/provider', {
+    supabase_sso_provider_id: providerId, name: 'Entra inactive groups',
+    primary_domain: `${ctx.fixtures.name('inactive-directory')}.test`, auto_create_members: true,
+  }, { params })).status(200);
+  const created = await scim.post('/scim/v2/accounts/:accountId/Users', { userName: email, active: false }, { params });
+  created.status(201);
+  const userId = created.json<{ id: string }>().id;
+  const groups: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    const group = await scim.post('/scim/v2/accounts/:accountId/Groups', {
+      displayName: ctx.fixtures.name(`inactive-group-${i}`), members: [{ value: userId }],
+    }, { params });
+    group.status(201).body().has('$.members', [{ value: userId }]);
+    groups.push(group.json<{ id: string }>().id);
+  }
+  const user = await ctx.fixtures.userWithEmail(email);
+  const sso = ctx.client.withBearer(await ssoFixtureToken(ctx.env, user, providerId, []), 'SSO-inactive');
+
+  await ctx.step('inactive users keep directory group state without account access, including before first login', async () => {
+    (await sso.get('/v1/accounts/:accountId', { params })).status(403);
+    (await scim.patch('/scim/v2/accounts/:accountId/Groups/:groupId', {
+      Operations: [{ op: 'remove', path: 'members', value: [{ value: userId }] }],
+    }, { params: { ...params, groupId: groups[0]! } })).status(200).body().has('$.members', []);
+  });
+
+  await ctx.step('reactivation restores only group assignments still present in the directory', async () => {
+    (await scim.patch('/scim/v2/accounts/:accountId/Users/:userId', {
+      Operations: [{ op: 'replace', path: 'active', value: true }],
+    }, { params: { ...params, userId } })).status(200);
+    (await sso.get('/v1/accounts/:accountId', { params })).status(200);
+    (await scim.get('/scim/v2/accounts/:accountId/Groups/:groupId', {
+      params: { ...params, groupId: groups[0]! },
+    })).status(200).body().has('$.members', []);
+    (await scim.get('/scim/v2/accounts/:accountId/Groups/:groupId', {
+      params: { ...params, groupId: groups[1]! },
+    })).status(200).body().has('$.members', [{ value: userId }]);
+  });
+
+  await ctx.step('deleting a user clears directory groups and a later create cannot restore them', async () => {
+    (await scim.del('/scim/v2/accounts/:accountId/Users/:userId', { params: { ...params, userId } })).status(204);
+    (await sso.get('/v1/accounts/:accountId', { params })).status(403);
+    (await scim.post('/scim/v2/accounts/:accountId/Users', { userName: email, active: true }, { params })).status(201);
+    (await scim.get('/scim/v2/accounts/:accountId/Groups/:groupId', {
+      params: { ...params, groupId: groups[1]! },
+    })).status(200).body().has('$.members', []);
   });
 });

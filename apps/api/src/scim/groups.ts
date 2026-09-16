@@ -3,15 +3,15 @@
 // Registers onto the shared scimRouter via side effect.
 
 import { createRoute, z } from '@hono/zod-openapi';
-import { accountGroupMembers, accountGroups, accountInvitations, accountMembers } from '@kortix/db';
+import { accountGroupMembers, accountGroups, accountInvitations, accountMembers, accountScimUsers } from '@kortix/db';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { invalidateIamCacheForGroup, invalidateIamCacheForUsers } from '../iam/cache-invalidation';
 import { scimError } from '../middleware/scim-auth';
 import { errors, json } from '../openapi';
 import { db } from '../shared/db';
 import { deleteGroup } from '../repositories/iam';
-import { directoryUserById } from './directory-users';
-import { groupChanges, memberValues, type GroupChange } from './group-patch';
+import { directoryUserById, directoryGroupIds, saveDirectoryGroups } from './directory-users';
+import { groupChanges, memberValues, InvalidGroupMemberError, type GroupChange } from './group-patch';
 import {
   ScimResource,
   ScimListQuery,
@@ -31,9 +31,8 @@ import {
  * member joins account_group_members immediately; a pending invite can't (no user
  * row exists) so we park the group on the invite's bootstrap_grants and it
  * materializes on acceptance (accounts/invites.ts applyBootstrapGrants), the same
- * ride-along used for project grants. Values matching neither are ignored (RFC
- * 7644 tolerates unknown members). Insert-only — removals are handled by the
- * caller.
+ * ride-along used for project grants. Unknown references fail the request so
+ * an IdP can retry after provisioning the missing user.
  */
 async function addGroupMembersOrDeferInvites(
   accountId: string,
@@ -43,7 +42,9 @@ async function addGroupMembersOrDeferInvites(
   const resolved = await Promise.all(memberValues.map(async value => {
     const user = await directoryUserById(accountId, value);
     if (!user) return value;
-    if (!user.active || user.deletedAt) return null;
+    if (user.deletedAt) return null;
+    await saveDirectoryGroups(user, [...directoryGroupIds(user), groupId]);
+    if (!user.active) return null;
     return user.userId ?? user.invitationId;
   }));
   memberValues = resolved.filter((value): value is string => value !== null);
@@ -83,6 +84,8 @@ async function addGroupMembersOrDeferInvites(
         inArray(accountInvitations.inviteId, unmatched),
       ),
     );
+  const knownInvites = new Set(invites.map(invite => invite.inviteId));
+  if (unmatched.some(value => !knownInvites.has(value))) throw new InvalidGroupMemberError('A referenced user does not exist in this account');
   for (const inv of invites) {
     const resolvedUserId = await userIdByEmail(inv.email, accountId);
     let resolvedMemberUserId: string | null = null;
@@ -176,6 +179,13 @@ async function unparkGroupFromInvites(
   groupId: string,
   onlyInviteId?: string,
 ): Promise<void> {
+  const directoryUsers = await db.select().from(accountScimUsers)
+    .where(eq(accountScimUsers.accountId, accountId));
+  for (const user of directoryUsers) {
+    if (onlyInviteId && user.invitationId !== onlyInviteId) continue;
+    const groups = directoryGroupIds(user);
+    if (groups.includes(groupId)) await saveDirectoryGroups(user, groups.filter(id => id !== groupId));
+  }
   const conds = [
     eq(accountInvitations.accountId, accountId),
     isNull(accountInvitations.acceptedAt),
@@ -214,7 +224,10 @@ async function removeGroupMemberValue(
   value: string,
 ): Promise<void> {
   const directoryUser = await directoryUserById(accountId, value);
-  if (directoryUser) value = directoryUser.userId ?? directoryUser.invitationId ?? value;
+  if (directoryUser) {
+    await saveDirectoryGroups(directoryUser, directoryGroupIds(directoryUser).filter(id => id !== groupId));
+    value = directoryUser.userId ?? directoryUser.invitationId ?? value;
+  }
   await db
     .delete(accountGroupMembers)
     .where(and(eq(accountGroupMembers.groupId, groupId), eq(accountGroupMembers.userId, value)));
@@ -380,13 +393,17 @@ scimRouter.openapi(
         .returning();
       groupId = row.groupId;
     } catch (err: unknown) {
-      if (err instanceof Error && /unique|duplicate/i.test(err.message)) {
+      if ((err as { cause?: { code?: string }; code?: string }).cause?.code === '23505' || (err as { code?: string }).code === '23505') {
         return scimError(c, 409, 'A group with this displayName already exists');
       }
       throw err;
     }
 
-    await addGroupMembersOrDeferInvites(accountId, groupId, initialMembers);
+    try { await addGroupMembersOrDeferInvites(accountId, groupId, initialMembers); }
+    catch (error) {
+      if (error instanceof InvalidGroupMemberError) return scimError(c, 400, error.message);
+      throw error;
+    }
 
     await invalidateIamCacheForGroup(groupId);
 
@@ -456,6 +473,7 @@ async function writeGroup(c: any) {
   try {
     await applyGroupChanges(accountId, groupId, changes);
   } catch (error) {
+    if (error instanceof InvalidGroupMemberError) return scimError(c, 400, error.message);
     const cause = (error as { cause?: { code?: string }; code?: string });
     if (cause.code === '23505' || cause.cause?.code === '23505') return scimError(c, 409, 'A group with this displayName already exists');
     throw error;
@@ -515,6 +533,7 @@ scimRouter.openapi(
       .where(and(eq(accountGroups.accountId, accountId), eq(accountGroups.groupId, groupId)))
       .limit(1);
     if (!existing) return c.body(null, 204);
+    await unparkGroupFromInvites(accountId, groupId);
     // `deleteGroup`, not a bare delete: it also drops the group's assignments in
     // the same transaction. `role_assignments.principal_id` is polymorphic, so
     // there is no FK for Postgres to cascade, and the grants would outlive the

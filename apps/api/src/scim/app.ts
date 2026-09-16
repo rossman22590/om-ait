@@ -261,6 +261,11 @@ export async function buildGroup(
     sql`${accountInvitations.bootstrapGrants} @> ${JSON.stringify([{ group_id: group.groupId }])}::jsonb`,
   ));
   const memberIds = new Set<string>();
+  for (const user of directoryUsers) {
+    if (!user.deletedAt && Array.isArray(user.profile.groups) && user.profile.groups.some(g => g?.value === group.groupId)) {
+      memberIds.add(user.scimId);
+    }
+  }
   for (const member of memberRows) {
     const user = byUserId.get(member.userId);
     if (!user || (user.active && !user.deletedAt)) memberIds.add(user?.scimId ?? member.userId);
