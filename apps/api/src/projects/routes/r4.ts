@@ -125,10 +125,9 @@ import { AnyObject, TriggerSchema, projectsApp } from '../lib/app';
 import { callerKortixSessionId } from '../lib/caller-session';
 import {
   type ConnectionOwnerType,
-  type ConnectorAuthorizationStrategy,
-  connectorAuthorizationMatchesStrategy,
+  connectionIsReachable,
   isTrustedManagedChannelAuthorization,
-} from '../lib/connector-authorization-strategy';
+} from '../lib/connection-access';
 import { sessionMayEnumerateConnection } from '../lib/connector-connection-visibility';
 import { withProjectGitAuth } from '../lib/git';
 import { metadataMerge } from '../lib/metadata-merge';
@@ -259,7 +258,6 @@ function mayReadConnection(
     ownerId: string | null;
     isDefault: boolean;
     metadata: Record<string, unknown>;
-    authorizationStrategy: ConnectorAuthorizationStrategy;
     providerType: string;
     connectorConfig: Record<string, unknown>;
   },
@@ -272,8 +270,7 @@ function mayReadConnection(
   sessionBoundConnectionIds: ReadonlySet<string> | null,
 ): boolean {
   if (!sessionMayEnumerateConnection(connection, sessionBoundConnectionIds)) return false;
-  return connectorAuthorizationMatchesStrategy({
-    strategy: connection.authorizationStrategy,
+  return connectionIsReachable({
     ownerType: connection.ownerType,
     ownerId: connection.ownerId,
     actingUserId: userId,
@@ -296,7 +293,6 @@ function mayMutateConnection(
     ownerType: ConnectionOwnerType;
     ownerId: string | null;
     metadata: Record<string, unknown>;
-    authorizationStrategy: ConnectorAuthorizationStrategy;
     providerType: string;
     connectorConfig: Record<string, unknown>;
   },
@@ -304,8 +300,7 @@ function mayMutateConnection(
   actingPrincipalIsServiceAccount: boolean,
   mayManageSystemConnections: boolean,
 ): boolean {
-  const strategyMatches = connectorAuthorizationMatchesStrategy({
-    strategy: connection.authorizationStrategy,
+  const reachable = connectionIsReachable({
     ownerType: connection.ownerType,
     ownerId: connection.ownerId,
     actingUserId: userId,
@@ -321,8 +316,11 @@ function mayMutateConnection(
       metadata: connection.metadata,
     }),
   });
-  if (!strategyMatches) return false;
-  return connection.authorizationStrategy === 'user' || mayManageSystemConnections;
+  if (!reachable) return false;
+  // Your own private account is yours to administer — reachability already
+  // proved the owner is the caller. Everything shared with the project is
+  // administration and needs the connections-manage capability.
+  return connection.ownerType === 'member' || mayManageSystemConnections;
 }
 
 async function reconcileConnectionRow(input: {
@@ -426,7 +424,6 @@ projectsApp.openapi(
         status: connectorConnections.status,
         isDefault: connectorConnections.isDefault,
         metadata: connectorConnections.metadata,
-        authorizationStrategy: connectors.authorizationStrategy,
         providerType: connectors.providerType,
         connectorConfig: connectors.config,
       })
@@ -568,7 +565,6 @@ projectsApp.openapi(
       .select({
         connectorId: connectors.connectorId,
         providerType: connectors.providerType,
-        authorizationStrategy: connectors.authorizationStrategy,
       })
       .from(connectors)
       .where(
@@ -586,15 +582,9 @@ projectsApp.openapi(
         409,
       );
     }
-    if (connector.authorizationStrategy !== 'user') {
-      return c.json(
-        {
-          error: 'This connector uses project-owned connections',
-          code: 'CONNECTOR_AUTHORIZATION_STRATEGY_MISMATCH',
-        },
-        409,
-      );
-    }
+    // No connector-level gate: every connector can hold both a shared project
+    // account and each member's own private one. Refusing here is what left a
+    // former `user`-strategy connector with no connect flow at all.
     const ownerType = 'member' as const;
     const ownerId = loaded.userId;
     const { connection, created } = await reconcileConnectionRow({
@@ -685,7 +675,6 @@ projectsApp.openapi(
       .select({
         connectorId: connectors.connectorId,
         providerType: connectors.providerType,
-        authorizationStrategy: connectors.authorizationStrategy,
       })
       .from(connectors)
       .where(
@@ -705,8 +694,7 @@ projectsApp.openapi(
     }
     const normalizedOwnerId = ownerType === 'project' ? null : ownerId;
     if (
-      !connectorAuthorizationMatchesStrategy({
-        strategy: connector.authorizationStrategy,
+      !connectionIsReachable({
         ownerType: ownerType as ConnectionOwnerType,
         ownerId: normalizedOwnerId,
         actingUserId: loaded.userId,
@@ -715,8 +703,8 @@ projectsApp.openapi(
     ) {
       return c.json(
         {
-          error: `This connector uses ${connector.authorizationStrategy}-owned connections`,
-          code: 'CONNECTOR_AUTHORIZATION_STRATEGY_MISMATCH',
+          error: `A ${ownerType}-owned connection is not reachable by this caller`,
+          code: 'CONNECTOR_CONNECTION_OWNER_NOT_REACHABLE',
         },
         409,
       );
@@ -783,8 +771,7 @@ for (const operation of ['credential', 'revoke', 'activate', 'default'] as const
           ownerId: connectorConnections.ownerId,
           isDefault: connectorConnections.isDefault,
           metadata: connectorConnections.metadata,
-          authorizationStrategy: connectors.authorizationStrategy,
-          providerType: connectors.providerType,
+            providerType: connectors.providerType,
           connectorConfig: connectors.config,
         })
         .from(connectorConnections)
@@ -974,8 +961,7 @@ for (const operation of ['connect', 'connect/finalize'] as const) {
           connectorAlias: connectors.slug,
           providerType: connectors.providerType,
           connectorConfig: connectors.config,
-          authorizationStrategy: connectors.authorizationStrategy,
-        })
+          })
         .from(connectorConnections)
         .innerJoin(
           connectors,

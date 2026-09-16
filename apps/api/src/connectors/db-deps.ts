@@ -42,7 +42,11 @@ import { principalMayUseConnector } from './principal-access';
 import type { ChannelPlatform } from '../projects/connectors';
 import { invalidateProjectMirror } from '../projects/git';
 import { loadProjectForUser } from '../projects/lib/access';
-import { connectorAuthorizationMatchesStrategy } from '../projects/lib/connector-authorization-strategy';
+import {
+  connectionIsReachable,
+  type ConnectionOwnerType,
+  type ConnectorConnectOwner,
+} from '../projects/lib/connection-access';
 import { reconcileStoredSessionAgentGrant } from '../projects/lib/session-token-grant';
 import { getProjectSecretValueForConsumer } from '../projects/secrets';
 import {
@@ -514,6 +518,11 @@ function toGatewayConnector(
     connectionId: string;
     isDefault: boolean;
     metadata: Record<string, unknown>;
+    // Optional: only `resolveActiveConnectorConnection` (session-scoped calls)
+    // carries these. Other callers (catalog/discovery paths) pass connections
+    // without them and the gateway simply has no account to echo.
+    label?: string;
+    ownerType?: ConnectionOwnerType;
   } | null,
 ): GatewayConnector {
   const { auth, hasAuth: configuredHasAuth } = authOf(row);
@@ -527,6 +536,8 @@ function toGatewayConnector(
     connectionId: connection?.connectionId ?? null,
     connectionIsDefault: connection?.isDefault ?? false,
     connectionMetadata: connection?.metadata ?? {},
+    connectionLabel: connection?.label ?? null,
+    connectionOwnerType: connection?.ownerType ?? null,
     slug: row.slug,
     provider: row.providerType,
     platform: channelPlatform(row.config),
@@ -793,7 +804,6 @@ export async function loadPipedreamConnector(projectId: string, slug: string) {
       connectorId: connectors.connectorId,
       providerType: connectors.providerType,
       config: connectors.config,
-      authorizationStrategy: connectors.authorizationStrategy,
     })
     .from(connectors)
     .where(and(eq(connectors.projectId, projectId), eq(connectors.slug, slug)))
@@ -801,11 +811,7 @@ export async function loadPipedreamConnector(projectId: string, slug: string) {
   if (!row || row.providerType !== 'pipedream') return null;
   const app = (row.config as any)?.app;
   if (typeof app !== 'string' || !app) return null;
-  return {
-    connectorId: row.connectorId,
-    app,
-    authorizationStrategy: row.authorizationStrategy,
-  };
+  return { connectorId: row.connectorId, app };
 }
 
 /** Load a Composio connector's toolkit slug + id (verifies provider). */
@@ -816,7 +822,6 @@ export async function loadComposioConnector(projectId: string, slug: string) {
       accountId: connectors.accountId,
       providerType: connectors.providerType,
       config: connectors.config,
-      authorizationStrategy: connectors.authorizationStrategy,
     })
     .from(connectors)
     .where(and(eq(connectors.projectId, projectId), eq(connectors.slug, slug)))
@@ -824,12 +829,7 @@ export async function loadComposioConnector(projectId: string, slug: string) {
   if (!row || row.providerType !== 'composio') return null;
   const app = (row.config as any)?.app;
   if (typeof app !== 'string' || !app) return null;
-  return {
-    connectorId: row.connectorId,
-    accountId: row.accountId,
-    app,
-    authorizationStrategy: row.authorizationStrategy,
-  };
+  return { connectorId: row.connectorId, accountId: row.accountId, app };
 }
 
 type ComposioAdapter = {
@@ -883,7 +883,6 @@ export type ConnectLinkEligibility =
       ok: true;
       connectorId: string;
       app: string;
-      authorizationStrategy: string;
       /** Which provider mints the hosted page behind the link. */
       providerType: 'pipedream' | 'composio';
     }
@@ -913,7 +912,6 @@ export async function connectLinkEligibility(
       connectorId: connectors.connectorId,
       providerType: connectors.providerType,
       config: connectors.config,
-      authorizationStrategy: connectors.authorizationStrategy,
     })
     .from(connectors)
     .where(and(eq(connectors.projectId, projectId), eq(connectors.slug, slug)))
@@ -938,7 +936,6 @@ export async function connectLinkEligibility(
     ok: true,
     connectorId: row.connectorId,
     app,
-    authorizationStrategy: row.authorizationStrategy,
     providerType: row.providerType,
   };
 }
@@ -1191,6 +1188,7 @@ async function resolveProjectUserWith(
   action:
     | typeof PROJECT_ACTIONS.PROJECT_CONNECTOR_READ
     | typeof PROJECT_ACTIONS.PROJECT_CONNECTOR_WRITE
+    | typeof PROJECT_ACTIONS.PROJECT_CONNECTOR_CONNECTIONS_MANAGE
     | typeof PROJECT_ACTIONS.PROJECT_SECRET_READ
     | typeof PROJECT_ACTIONS.PROJECT_SECRET_WRITE,
 ): Promise<{ accountId: string; userId: string } | null> {
@@ -1222,6 +1220,19 @@ async function resolveAdmin(
   projectId: string,
 ): Promise<{ accountId: string; userId: string } | null> {
   return resolveProjectUserWith(c, projectId, PROJECT_ACTIONS.PROJECT_CONNECTOR_WRITE);
+}
+
+// Connecting an account the whole project can use is administration, and this
+// is the SAME capability r4's project-owned connection create asserts.
+async function resolveConnectionsManager(
+  c: Context,
+  projectId: string,
+): Promise<{ accountId: string; userId: string } | null> {
+  return resolveProjectUserWith(
+    c,
+    projectId,
+    PROJECT_ACTIONS.PROJECT_CONNECTOR_CONNECTIONS_MANAGE,
+  );
 }
 
 async function resolveSecretBindingAdmin(
@@ -1347,6 +1358,36 @@ async function listConnectors(projectId: string): Promise<AdminConnectorView[]> 
               ),
             ),
     ]);
+  // `authorization_strategy` is a DERIVED SUMMARY now, not a setting. The
+  // column is retired (see migration 20260916182954570) and the PUT route is an
+  // inert no-op, but the field stays on the wire so an older client keeps
+  // parsing the response. It answers one question: does this connector's live
+  // set of accounts look private-only?
+  const ownershipRows =
+    conns.length === 0
+      ? []
+      : await db
+          .select({
+            connectorId: connectorConnections.connectorId,
+            ownerType: connectorConnections.ownerType,
+          })
+          .from(connectorConnections)
+          .where(
+            and(
+              inArray(
+                connectorConnections.connectorId,
+                conns.map((row) => row.connectorId),
+              ),
+              eq(connectorConnections.status, 'active'),
+            ),
+          );
+  const memberOwned = new Set<string>();
+  const projectOwned = new Set<string>();
+  for (const row of ownershipRows) {
+    if (row.ownerType === 'member') memberOwned.add(row.connectorId);
+    else if (row.ownerType === 'project') projectOwned.add(row.connectorId);
+  }
+
   const actionsByConnector = new Map<string, typeof actions>();
   for (const action of actions) {
     const current = actionsByConnector.get(action.connectorId) ?? [];
@@ -1404,7 +1445,10 @@ async function listConnectors(projectId: string): Promise<AdminConnectorView[]> 
         !connectedSlugs.has(row.slug)
           ? ('needs_auth' as const)
           : row.status,
-      authorizationStrategy: row.authorizationStrategy,
+      authorizationStrategy:
+        memberOwned.has(row.connectorId) && !projectOwned.has(row.connectorId)
+          ? ('user' as const)
+          : ('project' as const),
       sensitive: config?.sensitive === true,
       actions: (actionsByConnector.get(row.connectorId) ?? []).map((a) => ({
         path: a.path,
@@ -1468,7 +1512,6 @@ async function setConnectorSecretBinding(
     secretIdentifier,
     requiresAuth: authOf(connector).hasAuth,
     provider: connector.providerType,
-    authorizationStrategy: connector.authorizationStrategy,
     hasStoredCredential: await credentialExists(connector.connectorId, null),
     secretCompatible: Boolean(secret),
   });
@@ -1595,6 +1638,7 @@ async function getConnectorConfig(
     provider: row.providerType,
     platform: channelPlatform(row.config) as ChannelPlatform | null,
     credentialMode: 'shared',
+    /** @deprecated Retired; echoed from the manifest so an old editor still parses. */
     authorizationStrategy: row.authorizationStrategy,
     app: cfg.app ?? null,
     account: cfg.account ?? null,
@@ -1852,6 +1896,7 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
   listCatalog,
   featureFlagEnabled: projectFeatureFlagEnabled,
   resolveAdmin,
+  resolveConnectionsManager,
   resolveReader,
   resolveSecretReader,
   listConnectors,
@@ -1873,26 +1918,21 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
   resolveSecretBindingAdmin,
   deleteConnectorCredential: async (projectId, slug) => {
     const [row] = await db
-      .select({
-        connectorId: connectors.connectorId,
-        authorizationStrategy: connectors.authorizationStrategy,
-      })
+      .select({ connectorId: connectors.connectorId })
       .from(connectors)
       .where(and(eq(connectors.projectId, projectId), eq(connectors.slug, slug)))
       .limit(1);
     if (!row) return { ok: false as const, error: 'connector not found', status: 404 };
-    if (row.authorizationStrategy !== 'project') {
-      return {
-        ok: false as const,
-        error: 'Shared credentials require a project authorization strategy',
-        status: 409,
-      };
-    }
+    // The connector-level strategy gate is gone: the shared credential is a
+    // project-wide credential on every connector, and this route already runs
+    // behind project.connector.write.
     await deleteCredential(row.connectorId, null);
     return { ok: true as const };
   },
   setCredentialMode: (projectId, accountId, slug, mode) =>
     setConnectorCredentialModeInManifest(projectId, accountId, slug, mode),
+  // @deprecated The route above it is an inert no-op; kept wired so the manifest
+  // writer stays reachable if an operator ever needs it out of band.
   setAuthorizationStrategy: (projectId, accountId, slug, authorizationStrategy) =>
     setConnectorAuthorizationStrategyInManifest(projectId, accountId, slug, authorizationStrategy),
   setSensitive: async (projectId, accountId, slug, sensitive) =>
@@ -1914,7 +1954,7 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
   pipedreamConnect: pipedreamConfigured()
     ? async (projectId, slug, _userId, redirects) => {
         const conn = await loadPipedreamConnector(projectId, slug);
-        if (!conn || conn.authorizationStrategy !== 'project') return null;
+        if (!conn) return null;
         const { connectUrl, token } = await pipedreamConnectUrl(
           projectId,
           slug,
@@ -1928,7 +1968,7 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
   pipedreamFinalize: pipedreamConfigured()
     ? async (projectId, slug, _userId) => {
         const conn = await loadPipedreamConnector(projectId, slug);
-        if (!conn || conn.authorizationStrategy !== 'project') return null;
+        if (!conn) return null;
         const r = await finalizePipedreamConnection({
           projectId,
           slug,
@@ -1965,8 +2005,7 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
             .limit(1);
           if (
             connection &&
-            connectorAuthorizationMatchesStrategy({
-              strategy: conn.authorizationStrategy,
+            connectionIsReachable({
               ownerType: connection.ownerType,
               ownerId: connection.ownerId,
               actingUserId: connection.ownerId ?? '',
@@ -1988,7 +2027,6 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
           }
           return rejected;
         }
-        if (conn.authorizationStrategy !== 'project') return rejected;
         const shared = await finalizePipedreamConnection({
           projectId,
           slug,
@@ -2102,9 +2140,10 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
     if (!eligibility.ok) return null;
     const composio = await loadComposioAdapter();
     if (!(composio?.composioConfigured?.() ?? false) && !pipedreamConfigured()) return null;
-    // A private connector authorizes the caller's own account, so a link with no
-    // member behind it would resolve to nobody.
-    if (eligibility.authorizationStrategy === 'user' && !userId) return null;
+    // The denial's remedy is always "authorize YOURSELF": the human reading it
+    // is the one who can, and a shared account is a deliberate admin choice made
+    // from settings. A link with no member behind it would resolve to nobody.
+    if (!userId) return null;
     const { mintSetupLink } = await import('../setup-links/token');
     const { token } = mintSetupLink(projectId, {
       kind: 'connector',
@@ -2112,27 +2151,31 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
       app: eligibility.app,
       uid: userId,
       sid: sessionId,
+      owner: 'me',
     });
     return `${(config.FRONTEND_URL || 'http://localhost:3000').replace(/\/+$/, '')}/connect/${token}`;
   },
-  connectorConnect: async (projectId, slug, userId, redirects, requestingSessionId) => {
+  connectorConnect: async (projectId, slug, userId, redirects, requestingSessionId, owner) => {
+    const connectOwner: ConnectorConnectOwner = owner ?? 'me';
     const conn = await loadComposioConnector(projectId, slug);
     if (conn) {
       const composio = await loadComposioAdapter();
       if (!composio?.composioConfigured?.()) return null;
-      // WHICH connection this authorization lands on is the strategy's call.
+      // WHICH connection this authorization lands on is the CALLER's explicit
+      // choice, not a property of the connector:
       //
+      // `me`      → the caller's own member connection.
       // `project` → the canonical project-default connection sync already
-      // created. Reuse it rather than inserting a second row, which violates
-      // idx_connector_connections_default_project.
+      //             created. Reuse it rather than inserting a second row, which
+      //             violates idx_connector_connections_default_project.
       //
-      // `user` → the CALLER's own member connection. This branch used to
-      // `return null`, which is why a Private connector had no connect flow
+      // The `me` branch used to `return null` for any connector whose strategy
+      // was not `user`, which is why a private account had no connect flow
       // anywhere in the product: no link could be minted, so the session card
       // had nothing to offer and the user was simply stuck.
-      if (conn.authorizationStrategy === 'user' && !userId) return null;
+      if (connectOwner === 'me' && !userId) return null;
       const connectionId =
-        conn.authorizationStrategy === 'user'
+        connectOwner === 'me'
           ? await ensureMemberConnection({
               projectId,
               connectorId: conn.connectorId,
@@ -2208,7 +2251,13 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
     }
     if (!pipedreamConfigured()) return null;
     const pipedream = await loadPipedreamConnector(projectId, slug);
-    if (!pipedream || pipedream.authorizationStrategy !== 'project') return null;
+    if (!pipedream) return null;
+    // Legacy Pipedream path: its hosted flow only ever authorized the ONE shared
+    // project account (`pipedreamConnectUrl(..., null)` — no external user id).
+    // A private account there needs a per-member external id, which this path
+    // has never minted, so `me` is refused rather than silently answered with
+    // the shared account.
+    if (connectOwner === 'me') return null;
     const { connectUrl, token } = await pipedreamConnectUrl(projectId, slug, pipedream.app, null, redirects);
     await mergeRequestingSession(
       await ensureDefaultConnection({ projectId, connectorId: pipedream.connectorId }),
@@ -2216,10 +2265,14 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
     );
     return { provider: 'pipedream', token, app: pipedream.app, connectUrl };
   },
-  connectorFinalize: async (projectId, slug, _userId, selector) => {
+  connectorFinalize: async (projectId, slug, _userId, selector, owner) => {
+    const finalizeOwner: ConnectorConnectOwner = owner ?? 'me';
     const conn = await loadComposioConnector(projectId, slug);
     if (conn) {
-      if (conn.authorizationStrategy !== 'project') return null;
+      // Finalize the connection the START created, so it honors the owner the
+      // link recorded. Hard-requiring a project-owned row here is what made a
+      // completed private authorization resolve to nothing.
+      if (finalizeOwner === 'me' && !_userId) return null;
       const composio = await loadComposioAdapter();
       if (!composio?.composioConfigured?.()) return null;
       const [connection] = await db
@@ -2230,8 +2283,15 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
             eq(connectorConnections.accountId, conn.accountId),
             eq(connectorConnections.projectId, projectId),
             eq(connectorConnections.connectorId, conn.connectorId),
-            eq(connectorConnections.ownerType, 'project'),
-            isNull(connectorConnections.ownerId),
+            finalizeOwner === 'me'
+              ? and(
+                  eq(connectorConnections.ownerType, 'member'),
+                  eq(connectorConnections.ownerId, _userId ?? ''),
+                )
+              : and(
+                  eq(connectorConnections.ownerType, 'project'),
+                  isNull(connectorConnections.ownerId),
+                ),
             selector?.connectionId
               ? eq(connectorConnections.connectionId, selector.connectionId)
               : eq(connectorConnections.isDefault, true),
@@ -2301,7 +2361,10 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
     }
     if (!pipedreamConfigured()) return null;
     const pipedream = await loadPipedreamConnector(projectId, slug);
-    if (!pipedream || pipedream.authorizationStrategy !== 'project') return null;
+    if (!pipedream) return null;
+    // Mirrors `connectorConnect`: the legacy Pipedream hosted flow only ever
+    // authorized the shared project account.
+    if (finalizeOwner === 'me') return null;
     const r = await finalizePipedreamConnection({
       projectId,
       slug,

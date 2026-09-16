@@ -26,10 +26,9 @@ import {
 import { db } from '../../shared/db';
 import { isUniqueViolation } from '../../shared/postgres-errors';
 import {
-  connectorAuthorizationMatchesStrategy,
+  connectionIsReachable,
   isTrustedManagedChannelAuthorization,
-  type ConnectorAuthorizationStrategy,
-} from './connector-authorization-strategy';
+} from './connection-access';
 import { projectSecretIsConfiguredForConsumer } from '../secrets';
 
 export interface ValidatedSessionConnectorBinding {
@@ -38,7 +37,6 @@ export interface ValidatedSessionConnectorBinding {
   connectorId: string;
   ownerType: 'project' | 'agent' | 'member' | 'subject' | 'external';
   ownerId: string | null;
-  authorizationStrategy: ConnectorAuthorizationStrategy;
 }
 
 export interface ResolvedSessionConnectorConnection {
@@ -49,6 +47,13 @@ export interface ResolvedSessionConnectorConnection {
   isDefault: boolean;
   metadata: Record<string, unknown>;
   source: 'request' | 'default';
+  /**
+   * Human-facing account name and ownership, carried so every successful call
+   * can echo WHICH identity ran it. A transcript that does not name the
+   * account cannot be read back later to answer "whose mailbox sent that".
+   */
+  label: string;
+  ownerType: 'project' | 'agent' | 'member' | 'subject' | 'external';
 }
 
 interface ConnectorRequirementRow {
@@ -58,7 +63,6 @@ interface ConnectorRequirementRow {
   name: string;
   providerType: string;
   config: Record<string, unknown>;
-  authorizationStrategy: ConnectorAuthorizationStrategy;
   enabled: boolean;
   status: 'active' | 'disabled' | 'needs_auth' | 'error';
 }
@@ -148,6 +152,28 @@ function trustedManagedAuthorization(
     ownerId: connection.ownerId,
     metadata: connection.metadata,
   });
+}
+
+/**
+ * Does the account the caller named describe the connection this session pinned?
+ * Accepts the same grammar as `selectEntitledConnectorConnection`: a connection
+ * id, a label, or the selector words `me` / `project`.
+ */
+function boundConnectionAnswersTo(
+  account: string,
+  bound: {
+    connectionId: string;
+    connectionLabel: string;
+    ownerType: 'project' | 'agent' | 'member' | 'subject' | 'external';
+  },
+): boolean {
+  const wanted = account.trim().toLowerCase();
+  if (wanted === 'me') return bound.ownerType === 'member';
+  if (wanted === 'project') return bound.ownerType !== 'member';
+  return (
+    wanted === bound.connectionId.toLowerCase() ||
+    wanted === bound.connectionLabel.trim().toLowerCase()
+  );
 }
 
 export function mayUseLegacyDefaultConnection(hasAnyDurableBinding: boolean): boolean {
@@ -286,7 +312,6 @@ export async function validateSessionConnectorBindings(input: {
         connectorName: connectors.name,
         providerType: connectors.providerType,
         connectorConfig: connectors.config,
-        authorizationStrategy: connectors.authorizationStrategy,
       })
       .from(connectorConnections)
       .innerJoin(
@@ -321,7 +346,6 @@ export async function validateSessionConnectorBindings(input: {
       name: row.connectorName,
       providerType: row.providerType,
       config: row.connectorConfig,
-      authorizationStrategy: row.authorizationStrategy,
       enabled: row.connectorEnabled,
       status: row.connectorStatus,
     };
@@ -334,8 +358,7 @@ export async function validateSessionConnectorBindings(input: {
       metadata: row.metadata,
     };
     if (
-      !connectorAuthorizationMatchesStrategy({
-        strategy: connector.authorizationStrategy,
+      !connectionIsReachable({
         ownerType: connection.ownerType,
         ownerId: connection.ownerId,
         actingUserId: input.actingUserId,
@@ -383,7 +406,6 @@ export async function validateSessionConnectorBindings(input: {
       connectorId: row.connectorId,
       ownerType: row.ownerType,
       ownerId: row.ownerId,
-      authorizationStrategy: row.authorizationStrategy,
     });
   }
   return { ok: true, bindings: validated };
@@ -517,7 +539,6 @@ export async function resolveSessionConnectorConnection(input: {
         connectorName: connectors.name,
         providerType: connectors.providerType,
         connectorConfig: connectors.config,
-        authorizationStrategy: connectors.authorizationStrategy,
         connectorEnabled: connectors.enabled,
         connectorStatus: connectors.status,
       })
@@ -551,7 +572,6 @@ export async function resolveSessionConnectorConnection(input: {
         name: bound.connectorName,
         providerType: bound.providerType,
         config: bound.connectorConfig,
-        authorizationStrategy: bound.authorizationStrategy,
         enabled: bound.connectorEnabled,
         status: bound.connectorStatus,
       };
@@ -568,8 +588,7 @@ export async function resolveSessionConnectorConnection(input: {
         connector.status !== 'active' ||
         connection.status !== 'active' ||
         (connection.ownerType === 'member' && visibility !== 'private') ||
-        !connectorAuthorizationMatchesStrategy({
-          strategy: connector.authorizationStrategy,
+        !connectionIsReachable({
           ownerType: connection.ownerType,
           ownerId: connection.ownerId,
           actingUserId,
@@ -583,11 +602,7 @@ export async function resolveSessionConnectorConnection(input: {
       // A session that PINNED an account is a constraint, not a suggestion. A
       // call that names a different one is denied rather than quietly run
       // against the pinned account — the caller asked for a specific mailbox.
-      if (
-        input.account?.trim() &&
-        input.account.trim().toLowerCase() !== bound.connectionId.toLowerCase() &&
-        input.account.trim().toLowerCase() !== bound.connectionLabel.trim().toLowerCase()
-      ) {
+      if (input.account?.trim() && !boundConnectionAnswersTo(input.account, bound)) {
         return null;
       }
       return {
@@ -598,6 +613,8 @@ export async function resolveSessionConnectorConnection(input: {
         source: bound.source,
         alias,
         metadata: bound.metadata ?? {},
+        label: bound.connectionLabel,
+        ownerType: bound.ownerType,
       };
     }
     if (connectorBindingsConfigured && !inheritUnbound) return null;
@@ -633,10 +650,15 @@ export async function resolveSessionConnectorConnection(input: {
  * is the primitive now: the CLI prints it, a call selects from it by name, and
  * an unselected call takes the first entry exactly as before.
  *
- * Entitlement is the same three filters resolution has always applied, in the
- * same order: the connector's authorization strategy, the session's
- * visibility (a member-owned account never leaks into a shared session), and
- * whether the account is genuinely connected.
+ * Entitlement is three filters: the row's reachability for this principal
+ * (`connectionIsReachable`), the session's visibility (a member-owned account
+ * never leaks into a shared session), and whether the account is genuinely
+ * connected.
+ *
+ * Order: the caller's own default private account, their other private
+ * accounts, the project's default shared account, then the rest. A call that
+ * names no account takes the first entry, so "my own identity first, the
+ * project's shared one as the fallback" is the resolution rule.
  */
 export interface EntitledConnectorConnection {
   connectionId: string;
@@ -685,7 +707,6 @@ export async function listEntitledConnectorConnections(input: {
       name: connectors.name,
       providerType: connectors.providerType,
       config: connectors.config,
-      authorizationStrategy: connectors.authorizationStrategy,
       enabled: connectors.enabled,
       status: connectors.status,
     })
@@ -733,8 +754,7 @@ export async function listEntitledConnectorConnections(input: {
       metadata: row.metadata,
     };
     if (
-      !connectorAuthorizationMatchesStrategy({
-        strategy: connector.authorizationStrategy,
+      !connectionIsReachable({
         ownerType: connection.ownerType,
         ownerId: connection.ownerId,
         actingUserId,
@@ -757,17 +777,33 @@ export async function listEntitledConnectorConnections(input: {
       metadata: row.metadata ?? {},
     });
   }
-  return entitled;
+  // Every member-owned row that survived the filter is the CALLER's own, so
+  // owner type alone ranks the list. `sort` is stable, so rows inside a rank
+  // keep the query's `connectionId` order.
+  return entitled.sort(
+    (a, b) => entitledConnectionRank(a) - entitledConnectionRank(b),
+  );
+}
+
+function entitledConnectionRank(connection: EntitledConnectorConnection): number {
+  if (connection.ownerType === 'member') return connection.isDefault ? 0 : 1;
+  return connection.isDefault ? 2 : 3;
 }
 
 /**
  * Pick one entitled account by name.
  *
- * Matches a connection id exactly, or a label case-insensitively — the CLI
- * prints both, and a human types the label. Returns null when nothing matches,
- * which the caller reports as "no such account" rather than silently running
- * as a different account than the one asked for. Silently falling back would be
- * the worst outcome here: the call would succeed against the wrong mailbox.
+ * Matches a connection id exactly, a label case-insensitively — the CLI prints
+ * both, and a human types the label — or the two selector words:
+ *
+ *   `me`      the caller's own default private account
+ *   `project` the project's default shared account
+ *
+ * The words are matched BEFORE labels, so a connection literally labelled
+ * "me" is still reachable by its id. Returns null when nothing matches, which
+ * the caller reports as "no such account" rather than silently running as a
+ * different account than the one asked for. Silently falling back would be the
+ * worst outcome here: the call would succeed against the wrong mailbox.
  */
 export function selectEntitledConnectorConnection(
   connections: readonly EntitledConnectorConnection[],
@@ -775,6 +811,14 @@ export function selectEntitledConnectorConnection(
 ): EntitledConnectorConnection | null {
   if (!account || !account.trim()) return connections[0] ?? null;
   const wanted = account.trim().toLowerCase();
+  if (wanted === 'me') {
+    const mine = connections.filter((c) => c.ownerType === 'member');
+    return mine.find((c) => c.isDefault) ?? mine[0] ?? null;
+  }
+  if (wanted === 'project') {
+    const shared = connections.filter((c) => c.ownerType !== 'member');
+    return shared.find((c) => c.isDefault) ?? shared[0] ?? null;
+  }
   return (
     connections.find((c) => c.connectionId.toLowerCase() === wanted) ??
     connections.find((c) => c.label.trim().toLowerCase() === wanted) ??
@@ -811,6 +855,8 @@ export async function resolveProjectDefaultConnectorConnection(input: {
     alias: chosen.alias,
     metadata: chosen.metadata,
     source: 'default',
+    label: chosen.label,
+    ownerType: chosen.ownerType,
   };
 }
 
