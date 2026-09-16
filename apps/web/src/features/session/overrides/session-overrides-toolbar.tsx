@@ -154,7 +154,7 @@ export function SessionOverridesToolbar({
     draft: {},
   });
   const [retroactive, setRetroactive] = useState<boolean | undefined>();
-  const [providerPoolDraft, setProviderPoolDraft] = useState<Record<string, string[]>>(providerSecretPools ?? {});
+  const providerPoolDraft = useMemo(() => providerSecretPools ?? {}, [providerSecretPools]);
 
   useEffect(() => {
     if (!catalog || !initializationKey) return;
@@ -191,7 +191,6 @@ export function SessionOverridesToolbar({
         setDraftState({ key: initializationKey, draft: createSessionScopeDraft(result, catalog) });
         successToast(tI18nComplete.raw('textdf7987d6fd91'));
       } else if (!sessionId) {
-        onProviderSecretPoolsChange?.(providerPoolDraft);
         successToast(tI18nComplete.raw('text2467c93661b7'));
       }
       return true;
@@ -204,8 +203,6 @@ export function SessionOverridesToolbar({
     draftState.draft,
     initializationKey,
     initialized,
-    onProviderSecretPoolsChange,
-    providerPoolDraft,
     saveScope.mutateAsync,
     scope,
     sessionId,
@@ -279,7 +276,7 @@ export function SessionOverridesToolbar({
           ? <p className="text-muted-foreground text-xs">{tPooled('enableGateway')}</p>
           : sessionId
           ? <ProviderSecretPoolEditor projectId={projectId} sessionId={sessionId} />
-          : <NewProviderSecretPoolEditor projectId={projectId} selection={providerPoolDraft} onChange={setProviderPoolDraft} />,
+          : <NewProviderSecretPoolEditor projectId={projectId} selection={providerPoolDraft} onChange={onProviderSecretPoolsChange ?? (() => {})} />,
       });
     }
     if (sandboxSlot) {
@@ -338,6 +335,7 @@ export function SessionOverridesToolbar({
     pooledSecretsEnabled,
     llmGatewayEnabled,
     providerPoolDraft,
+    onProviderSecretPoolsChange,
     selectedProviderKeyCount,
     projectId,
     sessionId,
