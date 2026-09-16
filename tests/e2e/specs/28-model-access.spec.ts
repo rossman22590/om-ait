@@ -35,7 +35,10 @@ test('ChatGPT picker shows published model prices instead of Free', async ({ pag
     );
     await page.goto(`${base}/models`);
     await dismissOnboarding(page);
-    const picker = await (await pickerResponse).json();
+    expect((await pickerResponse).status()).toBe(200);
+    const picker = await api<{ models: Record<string, { cost: { input: number } }> }>(
+      session.access_token, 'GET', `${base}/model-picker`,
+    );
     expect(picker.models['codex/gpt-5.6-sol'].cost.input).toBeGreaterThan(0);
     await page.locator('button[role=tab]').filter({ hasText: /^Models$/ }).click();
     const row = page.locator('[data-model-id="codex/gpt-5.6-sol"]');
