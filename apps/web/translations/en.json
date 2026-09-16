@@ -18462,7 +18462,8 @@
       "textded4b88e52f7": "No shared account yet",
       "textc3bafa5156b4": "No account of your own yet",
       "textea5d0ffa0962": "A project manager connects the shared account.",
-      "text3d6627454174": "Set credential"
+      "text3d6627454174": "Set credential",
+      "text929505ef815a": "No account is connected yet. Add your own below, or ask a project manager to connect a shared one."
     }
   },
   "projectOnboarding": {

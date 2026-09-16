@@ -389,7 +389,7 @@ function ConnectorModalBody({
               ? canWrite
                 ? tI18nComplete.raw('text7acd4ac590c6')
                 : tI18nComplete.raw('text6a05ddf8cca1')
-              : tI18nComplete.raw('text607b97fdc5aa')}
+              : tI18nComplete.raw('text929505ef815a')}
           </InfoBanner>
         ) : null}
         <Tabs
