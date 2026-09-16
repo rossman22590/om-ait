@@ -113,11 +113,11 @@ function CommandDialog({
         // tw-animate-css) and keeps both classes; without it, the winner would
         // be whichever utility Tailwind happens to emit last.
         className={cn(
-          'p-0 shadow-[0_0_20px_0] shadow-black/20 data-[state=closed]:animate-none!',
+          'p-0 shadow-[0_0_50px_0] shadow-black/10 data-[state=closed]:animate-none! border',
           className,
         )}
         hideCloseButton={!showCloseButton}
-        overlayClassName="bg-black/40 backdrop-blur-[1px] data-[state=closed]:animate-none!"
+        overlayClassName="bg-black/20 backdrop-blur-[1px] data-[state=closed]:animate-none!"
       >
         <Command
           shouldFilter={shouldFilter}
