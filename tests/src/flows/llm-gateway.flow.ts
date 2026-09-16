@@ -148,6 +148,7 @@ flow(
   {
     domain: 'llm-gateway',
     routes: [
+      'PATCH /v1/projects/:projectId/experimental',
       'GET /v1/projects/:projectId/llm-catalog',
       'GET /v1/projects/:projectId/llm-catalog/providers',
     ],
@@ -178,15 +179,23 @@ flow(
       });
     }
 
-    await ctx.step('OWNER → 200 on the model-level catalog', async () => {
-      const r = await ctx.client
-        .as(ctx.P.OWNER)
+    await ctx.step('enabled catalog reports zero subscription rates and positive OpenAI API rates', async () => {
+      (await ctx.client.as(ctx.P.OWNER).patch(
+        '/v1/projects/:projectId/experimental',
+        { feature: 'llm_gateway', enabled: true },
+        { params },
+      )).status(200);
+      const response = await ctx.client.as(ctx.P.OWNER)
         .get('/v1/projects/:projectId/llm-catalog', { params });
-      // /llm-catalog is gated by the project's llm_gateway flag. On a fresh
-      // fixture project the flag may be off → 404 (catalog disabled), or on
-      // → 200 with a `{models:...}` body. Either is a valid boundary; a 500
-      // is the only real failure.
-      r.status([200, 404]);
+      response.status(200);
+      const models = response.json<{ models: Record<string, { cost?: Record<string, unknown> }> }>().models;
+      const subscription = models['codex/gpt-5.6-sol']?.cost;
+      if (JSON.stringify(subscription) !== JSON.stringify({ input: 0, output: 0, cache_read: 0, cache_write: 0 })) {
+        throw new Error(`ChatGPT must have zero rates without paid tiers: ${JSON.stringify(subscription)}`);
+      }
+      if (!(Number(models['openai/gpt-5.6-sol']?.cost?.input) > 0)) {
+        throw new Error('Paid OpenAI API input rate must remain positive');
+      }
     });
 
     await ctx.step('OWNER → 200 with a provider catalog on /providers', async () => {
