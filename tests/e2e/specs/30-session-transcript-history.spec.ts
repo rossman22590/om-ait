@@ -162,7 +162,7 @@ test('30 — saved session history paints while sandbox start and the open bundl
       (r) => r.url().endsWith(`/sessions/${sessionId}/prompts`) && r.request().method() === 'POST',
     );
     releaseSend();
-    expect((await accepted).status()).toBe(201);
+    expect((await accepted).status()).toBe(202);
     const inbox = await api<{ prompts: Array<{ text: string }> }>(
       auth.access_token,
       'GET',
