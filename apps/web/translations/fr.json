@@ -18461,7 +18461,9 @@
       "textc6309c452031": "Connecter un compte partagé",
       "textded4b88e52f7": "Aucun compte partagé pour l’instant",
       "textc3bafa5156b4": "Vous n’avez pas encore de compte personnel",
-      "textea5d0ffa0962": "Un responsable du projet connecte le compte partagé."
+      "textea5d0ffa0962": "Un responsable du projet connecte le compte partagé.",
+      "text3d6627454174": "Définir l’identifiant",
+      "text929505ef815a": "Aucun compte n’est encore connecté. Ajoutez le vôtre ci-dessous, ou demandez à un responsable du projet de connecter un compte partagé."
     }
   },
   "projectOnboarding": {
