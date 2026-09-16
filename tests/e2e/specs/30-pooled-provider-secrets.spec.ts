@@ -12,7 +12,7 @@ const authOptions = { supabaseUrl, password: 'E2ePooledSecrets123!' };
 const api = createApiJsonClient(apiBase);
 
 test.describe('30 — pooled provider secrets', () => {
-  test('flag gates the Secrets panel; two keys have distinct IDs and delete independently', async ({ page }) => {
+  test('flag gates shared keys; selected keys reach session creation and delete independently', async ({ page }) => {
     test.skip(!databaseUrl, 'KE2E_DATABASE_URL is required');
     test.setTimeout(120_000);
     const runId = Date.now().toString(36);
@@ -88,6 +88,43 @@ test.describe('30 — pooled provider secrets', () => {
       await api(session.access_token, 'PATCH', `/projects/${projectId}/features`, {
         feature: 'pooled_provider_secrets', enabled: true,
       });
+
+      // This fast fixture has no Git repository. Supply an agent roster for
+      // the browser so the composer can submit; the API remains real.
+      await page.route(`**/v1/projects/${projectId}/detail`, async (route) => {
+        const response = await route.fetch();
+        const detail = await response.json();
+        await route.fulfill({ response, json: {
+          ...detail,
+          config: {
+            ...detail.config,
+            default_agent: 'kortix',
+            open_code_default_agent: 'kortix',
+            agents: [{ name: 'kortix', path: 'kortix.yaml', description: null, mode: null, source: 'kortix.toml', enabled: true }],
+          },
+        } });
+      });
+      await api(session.access_token, 'PATCH', `/projects/${projectId}/features`, {
+        feature: 'llm_gateway', enabled: true,
+      });
+      await page.goto(`/projects/${projectId}`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('button', { name: 'Session overrides' }).click();
+      await page.getByRole('button', { name: /Provider keys/ }).click();
+      await page.getByRole('checkbox', { name: 'Primary test key' }).check();
+      await page.getByRole('checkbox', { name: 'Backup test key' }).check();
+      await page.getByRole('button', { name: 'Done' }).click();
+      await page.getByRole('textbox', { name: 'Message input' }).fill('Verify selected provider keys');
+      const createRequest = page.waitForRequest((request) => request.method() === 'POST'
+        && request.url().endsWith(`/projects/${projectId}/sessions`));
+      const send = page.getByRole('button', { name: 'Send message' });
+      await expect(send).toBeEnabled();
+      await send.click();
+      expect((await createRequest).postDataJSON()).toMatchObject({
+        provider_secret_pools: { anthropic: createdIds },
+      });
+      await page.unroute(`**/v1/projects/${projectId}/detail`);
+      await page.goto(`/projects/${projectId}/customize/secrets`, { waitUntil: 'domcontentloaded' });
+      await expect(panel.getByText('Primary test key', { exact: true })).toBeVisible();
 
       await panel.getByRole('button', { name: 'Actions for Primary test key' }).click();
       await page.getByRole('menuitem', { name: 'Delete key' }).click();

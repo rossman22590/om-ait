@@ -21,6 +21,19 @@ linked, not inlined.
 
 ## Register
 
+### Verify pre-create settings in the session create request (2026-09-16)
+
+**When:** adding a setting that the new-session composer must carry into
+`POST /sessions`. Keep the selection in composer-owned state. Assert the
+outgoing create body and session read-back after the visible control changes.
+
+**Near-miss (PR #7319):** the Provider keys panel showed two selected keys,
+but its local draft never reached the composer. A warm session was claimed
+without a pool. The preview browser caught this before merge.
+
+**Enforcement:** browser journey 30 checks selected IDs in the create request.
+The warm-session unit test rejects a create body with `provider_secret_pools`.
+
 ### A shared admission budget must charge what a request COSTS, and strict FIFO turns one mis-charged waiter into a fleet-wide outage (2026-09-16)
 
 **When:** writing or reviewing any admission/quota gate that reserves a
