@@ -1,3 +1,4 @@
+import { promptConnectorRefusalBody } from '../../projects/lib/prompt-connector-refusal';
 import { stripInlineAttachmentBytes } from '../inline-attachments';
 import { timeUpstream } from '../../middleware/upstream-timing';
 import { ProvisionTimeline } from '../../platform/services/provision-timeline';
@@ -38,6 +39,7 @@ import {
 import { config } from '../../config';
 import { previewCorsHeaders } from '../preview-hosts';
 import { appCookieHeader } from '../preview-session';
+import { isProviderIngressAuthFailure } from '../provider-auth';
 import {
   PREVIEW_STATE_HEADER,
   previewStatePage,
@@ -82,6 +84,7 @@ import {
 } from '../prompt-wire-id-repair';
 import {
   PROXY_RETRY_BUDGET_MS,
+  isFileImportRequest,
   isLongTurnCompletionRequest,
   isUploadRequest,
   proxyAttemptTimeoutMs,
@@ -594,34 +597,8 @@ async function connectorGateRefusal(
     }
     throw err;
   }
-  if (verdict.ok) return null;
-
-  if (verdict.kind === 'unavailable') {
-    return jsonProxyError(
-      {
-        error:
-          verdict.aliases.length === 1
-            ? `Required connection "${verdict.aliases[0]}" is unavailable`
-            : `Required connections ${verdict.aliases.map((a) => `"${a}"`).join(', ')} are unavailable`,
-        code: 'REQUIRED_CONNECTOR_CONNECTION_UNAVAILABLE',
-        connectors: verdict.aliases,
-      },
-      409,
-      origin,
-    );
-  }
-  return jsonProxyError(
-    {
-      // `message` as well as `error`: the SDK prefers `message` and otherwise
-      // substitutes a generic "Failed to send message", which would bury this.
-      error: 'Create the required connections before continuing this session.',
-      message: 'Create the required connections before continuing this session.',
-      code: 'CONNECTOR_CONNECTION_REQUIRED',
-      connector_connections: verdict.connections,
-    },
-    409,
-    origin,
-  );
+  const refusal = promptConnectorRefusalBody(verdict);
+  return refusal ? jsonProxyError(refusal, 409, origin) : null;
 }
 
 // A prompt's explicit `agent` only constitutes a prohibited switch when it would
@@ -1189,7 +1166,12 @@ export async function forwardToSandbox(
   // already wrote does not get absorbed — it lands a SECOND file. With this loop
   // retrying up to 4 times and the SDK retrying up to 3 on top, one user action
   // could deposit up to 12 copies and still report failure.
-  const uploadDelivery = isUploadRequest({ method, path: remainingPath });
+  // An attachment import is the same class: the daemon downloads the file and
+  // does not observe a disconnect, so a replay downloads it a second time. Only
+  // on the daemon port — `/file/import` elsewhere is the user's own route.
+  const uploadDelivery =
+    isUploadRequest({ method, path: remainingPath }) ||
+    isFileImportRequest({ method, path: remainingPath, port: upstreamPort });
   // Requests whose body must never be sent twice.
   const nonReplayableWrite = promptDelivery || uploadDelivery;
   // False until this request reaches the non-idempotent upstream fetch.
@@ -1218,6 +1200,7 @@ export async function forwardToSandbox(
   // at all (out of budget on the first pass) is the provider-edge case too — we
   // have no evidence about the box.
   let lastAttemptHop: ProxyHop = 'provider_ingress';
+  let providerCredentialsRefreshed = false;
 
   // The one SSE endpoint proxied per sandbox. Its streams get a byte-counting
   // passthrough (below), and a previous stream that answered 200 without EVER
@@ -1450,6 +1433,7 @@ export async function forwardToSandbox(
         proxyAttemptTimeoutMs(budgetRemainingMs, {
           method,
           path: remainingPath,
+          port: upstreamPort,
         }),
       );
       let upstream: Response;
@@ -1496,6 +1480,27 @@ export async function forwardToSandbox(
         clearTimeout(connectTimer);
       }
       ptl.mark('upstream');
+
+      // A resumed Daytona sandbox can reject a cached preview token. Its edge
+      // answers either JSON 401 or a login redirect; neither is the daemon's
+      // signed-context refusal. Drop every transport's cached link for this
+      // port and refresh once for reads. Never replay a write here.
+      if (await isProviderIngressAuthFailure(record.provider, upstream)) {
+        await upstream.body?.cancel().catch(() => {});
+        invalidatePreviewLink(sandboxId, port);
+        if (!providerCredentialsRefreshed && (method === 'GET' || method === 'HEAD') && attempt < MAX_RETRIES) {
+          providerCredentialsRefreshed = true;
+          continue;
+        }
+        await abandonTurnLifecycle();
+        // The provider rejected authentication before the daemon received it.
+        if (promptDedupeKey) releasePromptDelivery(promptDedupeKey);
+        return jsonProxyError({
+          error: 'sandbox provider authentication unavailable',
+          code: 'sandbox_provider_auth_unavailable',
+          retry: true,
+        }, 503, origin);
+      }
 
       if (upstream.status >= 300 && upstream.status < 400) {
         await abandonTurnLifecycle();
