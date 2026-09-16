@@ -64,6 +64,7 @@ import {
 } from '../secrets';
 import { SECRET_CAPABILITIES_ENV_NAME } from '../secret-capabilities';
 import {
+  manifestRuntime,
   resolveCompiledAgentConfigForSession,
   resolveManifestRuntime,
   resolveSelectedAgentConfigForSession,
@@ -483,6 +484,14 @@ export async function buildSessionSandboxEnvVars(input: {
   let compiledAgentConfig: string | null = input.platformMetaAgent
     ? buildPlatformMetaOpenCodeConfig()
     : null;
+  // The harness the daemon boots, from the manifest's `runtime:` field — read
+  // off the SAME manifest fetch that compiles the agent config, so selecting
+  // pi costs no extra git round trip. Every provisioning path (create,
+  // restart, resume, open/ensure) builds its env here, so a pi project stays
+  // on pi across the session's whole life. The `pi_worker` feature flag is
+  // the one exception: it routes `runtime: pi` to the split worker topology
+  // BEFORE this builder runs (createSession), and never reaches it.
+  let harness: 'opencode' | 'pi' = 'opencode';
   if (input.defaultBranch && !input.platformMetaAgent) {
     const gitProject = {
       projectId: input.projectId,
@@ -491,16 +500,21 @@ export async function buildSessionSandboxEnvVars(input: {
       manifestPath: input.manifestPath ?? 'kortix.yaml',
       gitAuthToken: null,
     };
+    const onManifest = (raw: Record<string, unknown>) => {
+      harness = manifestRuntime(raw);
+    };
     compiledAgentConfig =
       !(input.repositoryAccess ?? true)
         ? await resolveSelectedAgentConfigForSession(
             gitProject,
             input.agentName,
             input.baseRef,
+            { onManifest },
           )
           : await resolveCompiledAgentConfigForSession(
               gitProject,
               input.baseRef,
+              { onManifest },
             ).catch(() => null);
 
     // Per-agent secret scoping: an agent declared in `agents:` with a `secrets`
@@ -664,6 +678,7 @@ export async function buildSessionSandboxEnvVars(input: {
       // and as the session's OpenCode config default.
       opencodeModel: input.opencodeModel,
       compiledAgentConfig,
+      harness,
       repositoryAccess: input.repositoryAccess,
       compiledBootMode: config.KORTIX_COMPILED_BOOT_MODE,
       freshSession: input.freshSession,

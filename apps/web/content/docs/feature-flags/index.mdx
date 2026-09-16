@@ -159,8 +159,10 @@ refs). An explicit project choice always wins.
   holds a handle, and Kortix substitutes the real value only on requests to
   approved hosts. See [Secrets](/docs/project/secrets).
 - **`pi_worker`** — compile a pi-based worker runtime and the OpenCode
-  compiled-boot artifacts on every push. Sessions boot on the worker only when
-  the manifest also sets `runtime: pi`.
+  compiled-boot artifacts on every push. Sessions boot on the split
+  worker/environment topology only when the manifest also sets `runtime: pi`.
+  Without the flag, `runtime: pi` boots pi in-process inside the ordinary
+  session sandbox (`KORTIX_HARNESS=pi`); no flag is needed for that.
 
 ### Graduated flags
 
