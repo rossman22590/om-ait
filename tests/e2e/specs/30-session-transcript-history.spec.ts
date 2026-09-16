@@ -181,7 +181,8 @@ test('30 — saved session history paints while sandbox start and the open bundl
       text: 'Continue while the computer starts.',
     });
     for (const part of promptParts.slice(1))
-      expect(part.url).toMatch(new RegExp(`^kortix-attachment://${projectId}/${sessionId}/`));
+      expect(part.attachment_id).toMatch(/^[0-9a-f-]{36}$/);
+      expect(promptParts.slice(1).every((part: { url?: string }) => !part.url)).toBe(true);
     const preview = page.getByRole('img', {
       name: 'wake-image.png',
       exact: true,
@@ -473,7 +474,7 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
         const sentParts = acceptedResponse.request().postDataJSON().parts;
         expect(sentParts).toHaveLength(3);
         for (const part of sentParts.slice(1))
-          expect(part.url).toMatch(new RegExp(`^kortix-attachment://${projectId}/${sessionId}/`));
+          expect(part.attachment_id).toMatch(/^[0-9a-f-]{36}$/);
         await expect(page.getByRole('img', { name: 'wake-image.png', exact: true })).toBeVisible();
         await page.screenshot({
           path: testInfo.outputPath('real-send-during-wake.png'),

@@ -187,7 +187,7 @@ test('bounded reads cancel oversized bodies with and without a length header', a
       }),
       { headers },
     );
-    await expect(readTranscriptAttachmentBytes(response)).rejects.toThrow('exceeds 25 MiB');
+    await expect(readTranscriptAttachmentBytes(response)).rejects.toThrow('exceeds 50 MiB');
     expect(cancelled).toBe(true);
   }
   expect(await readTranscriptAttachmentBytes(new Response(new Uint8Array([0, 1, 255])))).toEqual(

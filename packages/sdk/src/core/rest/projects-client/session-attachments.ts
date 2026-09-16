@@ -3,7 +3,7 @@ import { authenticatedFetch } from "../../http/auth";
 import { platformConfig } from "../../http/config";
 import { unwrap } from "./shared";
 
-const MAX_SESSION_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+const MAX_SESSION_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 const REFERENCE = new RegExp(
   `^kortix-attachment://(${UUID})/(${UUID})/(${UUID})$`,
@@ -42,7 +42,7 @@ export async function uploadSessionAttachment(
   options: { attachmentId?: string; signal?: AbortSignal } = {},
 ): Promise<SessionAttachment> {
   if (file.size > MAX_SESSION_ATTACHMENT_BYTES)
-    throw new Error("Attachments must be 25 MiB or smaller.");
+    throw new Error("Attachments must be 50 MiB or smaller.");
   const key = `${projectId}/${sessionId}`;
   const cached = options.attachmentId ? undefined : uploads.get(file)?.get(key);
   if (cached?.promise) return cached.promise;

@@ -34,7 +34,7 @@ projectsApp.use(
   bodyLimit({
     maxSize: MAX_SESSION_ATTACHMENT_BYTES + 64 * 1024,
     onError: (c) =>
-      c.json({ error: "Attachments must be 25 MiB or smaller." }, 413),
+      c.json({ error: "Attachments must be 50 MiB or smaller." }, 413),
   }),
 );
 
@@ -104,7 +104,7 @@ projectsApp.openapi(
       );
     }
     if (file.size > MAX_SESSION_ATTACHMENT_BYTES)
-      return c.json({ error: "Attachments must be 25 MiB or smaller." }, 413);
+      return c.json({ error: "Attachments must be 50 MiB or smaller." }, 413);
     const filename = file.name.trim() || "File";
     const mime = (file.type || "application/octet-stream")
       .split(";")[0]!

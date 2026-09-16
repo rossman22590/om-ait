@@ -43,11 +43,12 @@ the existing session-open and tail-capture behavior; it does not prune previousl
 
 ## Attachments
 
-With the flag enabled, the existing-session composer saves new local files through the API
-before queueing the prompt. Each file has a stable `kortix-attachment://` reference. The private
+The composer uploads local files through the SDK attachment controller as soon as they are selected,
+including on project home before a session exists. With the history flag enabled, runtime delivery
+also saves those files to durable session storage before forwarding the prompt. Each file has a stable `kortix-attachment://` reference. The private
 Supabase Storage bucket `session-attachments` holds the bytes; transcript rows hold references,
 filenames, and MIME types. The API creates the bucket on the first upload. No schema migration
-is required. The limit is 25 MiB per file.
+is required. The limit is 50 MiB per file.
 
 The prompt inbox stores references while the computer starts. Delivery writes each file to a
 deterministic sandbox path and puts that path plus the private reference in the message. Image
@@ -56,14 +57,14 @@ Retrying a failed batch reuses successful uploads and preserves each file's orig
 Different files with the same name retain separate IDs. Disabling the flag stops new saved uploads
 but preserves existing downloads. Deleting a session removes its private attachment objects.
 
-First-message attachments remain in the durable inbox until delivery. With the flag enabled,
-delivery saves every staged file to private storage before sending the prompt to the runtime.
-Storage failure leaves the prompt retryable. The initial create request retains its existing
-12 MiB serialized-parts limit (about 9 MiB of file bytes across the batch).
+First and later messages use the same upload handles. The composer accepts up to 20 files,
+50 MiB per file, and 100 MiB total. Storage failure leaves delivery retryable. Older API clients
+that send inline data still have the 12 MiB serialized-parts limit; the web composer sends handles.
+Sent files retain their local previews and downloads while upload and startup finish.
 
 At capture, older user attachments are recovered from inline bytes or readable workspace files.
 The mirror retains the saved reference. Later captures reuse it even if the original file disappears
-or the flag is disabled. Recovery never downloads external URLs. Each read is bounded to 25 MiB.
+or the flag is disabled. Recovery never downloads external URLs. Each read is bounded to 50 MiB.
 A missing file or storage failure preserves the message and retries recovery on a later capture.
 Enable the flag and complete a turn or stop a running session to recover its older attachments.
 Recovery copies the bytes available at capture time; it cannot reconstruct a file already lost or changed.
@@ -94,7 +95,7 @@ is rejected rather than used to select that old root.
 
 ## Automated checks
 
-- `pnpm test -- --id SESS-31`: stopped-session upload/download, immutable retries, 25 MiB limit, access checks, flag rollback, and deletion cleanup.
+- `pnpm test -- --id SESS-31`: stopped-session upload/download, immutable retries, 50 MiB limit, access checks, flag rollback, and deletion cleanup.
 - `pnpm test -- --id SESS-30`: real HTTP flag enforcement, stopped-session reads, access checks,
   and replaced-root rejection.
 - `E2E_GREP='30 — saved session history' pnpm test -- --browser-only`: toggles the flag in the

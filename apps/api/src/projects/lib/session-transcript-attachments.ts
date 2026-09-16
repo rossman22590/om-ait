@@ -46,7 +46,7 @@ export async function readTranscriptAttachmentBytes(response: Response): Promise
   if (!response.ok) throw new Error(`Attachment read failed (${response.status})`);
   if (Number(response.headers.get('content-length')) > MAX_SESSION_ATTACHMENT_BYTES) {
     await response.body?.cancel();
-    throw new Error('Attachment exceeds 25 MiB');
+    throw new Error('Attachment exceeds 50 MiB');
   }
   const reader = response.body?.getReader();
   if (!reader) throw new Error('Attachment read returned no body');
@@ -59,7 +59,7 @@ export async function readTranscriptAttachmentBytes(response: Response): Promise
       size += next.value.byteLength;
       if (size > MAX_SESSION_ATTACHMENT_BYTES) {
         await reader.cancel();
-        throw new Error('Attachment exceeds 25 MiB');
+        throw new Error('Attachment exceeds 50 MiB');
       }
       chunks.push(next.value);
     }
@@ -128,7 +128,7 @@ export async function recoverTranscriptAttachments(input: {
           let bytes: Uint8Array | null;
           if (source.startsWith('data:')) {
             if (source.length > (MAX_SESSION_ATTACHMENT_BYTES * 4) / 3 + 1024)
-              throw new Error('Attachment exceeds 25 MiB');
+              throw new Error('Attachment exceeds 50 MiB');
             bytes = parseStagedPromptDataUrl({
               url: source,
               mime,
@@ -141,7 +141,7 @@ export async function recoverTranscriptAttachments(input: {
           }
           if (!bytes) throw new Error('Original attachment is unavailable');
           if (bytes.byteLength > MAX_SESSION_ATTACHMENT_BYTES)
-            throw new Error('Attachment exceeds 25 MiB');
+            throw new Error('Attachment exceeds 50 MiB');
           return (await input.saveFile({ ...scope, filename, mime, bytes })).url;
         } catch (error) {
           input.onFailure(filename, error);

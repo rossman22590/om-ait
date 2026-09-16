@@ -93,3 +93,14 @@ test("refuses a public bucket", async () => {
   await expect(store.put(input())).rejects.toThrow("private");
   expect(objects.size).toBe(0);
 });
+
+test('raises an older private bucket limit to the current composer limit', async () => {
+  const updateBucket = mock(async () => ({ error: null }));
+  const store = createSessionAttachmentStore({
+    ...storage,
+    getBucket: async () => ({ data: { public: false, file_size_limit: 25 * 1024 * 1024 }, error: null }),
+    updateBucket,
+  } as never);
+  await store.put(input());
+  expect(updateBucket).toHaveBeenCalledWith('session-attachments', { public: false, fileSizeLimit: 50 * 1024 * 1024 });
+});

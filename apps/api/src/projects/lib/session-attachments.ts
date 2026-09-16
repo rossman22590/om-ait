@@ -29,6 +29,10 @@ export function createSessionAttachmentStore(
       if (data) {
         if (data.public)
           throw new Error("Session attachment storage must be private");
+        if (typeof data.file_size_limit === 'number' && data.file_size_limit < MAX_SESSION_ATTACHMENT_BYTES) {
+          const updated = await storage.updateBucket(BUCKET, { public: false, fileSizeLimit: MAX_SESSION_ATTACHMENT_BYTES });
+          if (updated.error) throw updated.error;
+        }
         return;
       }
       if (error && !missing(error)) throw error;
@@ -66,7 +70,7 @@ export function createSessionAttachmentStore(
       },
     ) {
       if (input.bytes.byteLength > MAX_SESSION_ATTACHMENT_BYTES)
-        throw new Error("Attachments must be 25 MiB or smaller.");
+        throw new Error("Attachments must be 50 MiB or smaller.");
       await ensureBucket();
       const result = await storage
         .from(BUCKET)

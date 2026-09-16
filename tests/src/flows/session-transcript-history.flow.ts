@@ -213,7 +213,7 @@ flow(
         (
           await owner.request("POST", upload, {
             params,
-            body: form(new Uint8Array(25 * 1024 * 1024 + 1)),
+            body: form(new Uint8Array(50 * 1024 * 1024 + 1)),
           })
         ).status(413);
       },

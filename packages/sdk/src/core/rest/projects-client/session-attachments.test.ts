@@ -85,7 +85,7 @@ test("rejects external and traversal references before sending credentials", asy
   }
 });
 
-test("rejects files over 25 MiB before uploading", async () => {
+test("rejects files over 50 MiB before uploading", async () => {
   globalThis.fetch = (() => {
     throw new Error("must not fetch");
   }) as unknown as typeof fetch;
@@ -93,10 +93,10 @@ test("rejects files over 25 MiB before uploading", async () => {
     uploadSessionAttachment(
       projectId,
       sessionId,
-      new File([new Uint8Array(25 * 1024 * 1024 + 1)], "large.zip"),
+      new File([new Uint8Array(50 * 1024 * 1024 + 1)], "large.zip"),
       { attachmentId },
     ),
-  ).rejects.toThrow("25 MiB");
+  ).rejects.toThrow("50 MiB");
 });
 
 test("reuses successful uploads and retry IDs only within the same session", async () => {
@@ -126,4 +126,14 @@ test("reuses successful uploads and retry IDs only within the same session", asy
   expect(calls[1]!.id).toBe(calls[0]!.id);
   expect(calls[2]!.id).not.toBe(calls[0]!.id);
   expect(calls[2]!.url).toContain(`/sessions/${attachmentId}/attachments`);
+});
+
+test('accepts a 30 MiB saved file under the shared 50 MiB composer limit', async () => {
+  globalThis.fetch = (async (_url: RequestInfo | URL, init?: RequestInit) => {
+    const file = (init!.body as FormData).get('file') as File;
+    expect(file.size).toBe(30 * 1024 * 1024);
+    return Response.json({ attachment_id: attachmentId, filename: file.name, mime: file.type, size: file.size, url: ref });
+  }) as typeof fetch;
+  const result = await uploadSessionAttachment(projectId, sessionId, new File([new Uint8Array(30 * 1024 * 1024)], 'large.zip', { type: 'application/zip' }), { attachmentId });
+  expect(result.size).toBe(30 * 1024 * 1024);
 });

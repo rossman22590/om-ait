@@ -300,7 +300,7 @@ export async function createSession(
     };
   }
 
-  const result = await executeCreateSession(command);
+  const result = await executeCreateSession({ ...command, attachmentSourceCommandId: claimed.row.commandId });
   if (result.status === 'created' && result.sessionId) {
     const postCreate = await applyPostCreateActions({
       projectId: command.project.projectId,
@@ -428,7 +428,7 @@ export async function continueSession(
       projectId: projectSessions.projectId,
       status: projectSessions.status,
       metadata: projectSessions.metadata,
-      projectMetadata: sql<Record<string, unknown> | null>`(SELECT p.metadata FROM kortix.projects p WHERE p.project_id = ${projectSessions.projectId})`,
+      projectMetadata: sql<Record<string, unknown> | null>`(SELECT p.metadata FROM kortix.projects p WHERE p.project_id = "kortix"."project_sessions"."project_id")`,
     })
     .from(projectSessions)
     .where(eq(projectSessions.sessionId, sessionId))
@@ -524,6 +524,8 @@ export async function continueSession(
         materializationKey: command.materializationKey,
         attachmentProjectId: resolveFeatureFlag(session.projectMetadata, 'session_transcript_history')
           ? session.projectId : undefined,
+        accountId: session.accountId,
+        projectId: session.projectId,
       },
     );
     // ACCEPTANCE IS NOT DELIVERY. `prompt_async` answers for the request, and
@@ -2096,6 +2098,7 @@ async function executeQueuedCreate(
     requestingPrincipalType = serviceAccount ? 'service_account' : 'human';
   }
   return executeCreateSession({
+    attachmentSourceCommandId: row.commandId,
     source: row.source as CreateSessionCommand['source'],
     project,
     userId,
@@ -2125,6 +2128,7 @@ async function executeCreateSession(
     ...(command.metadata ?? {}),
   };
   const result = await createProjectSession({
+    attachmentSourceCommandId: command.attachmentSourceCommandId,
     project: command.project,
     userId: command.userId,
     requestingPrincipalType: command.requestingPrincipalType,
@@ -2436,6 +2440,8 @@ async function postPrompt(
     wireMessageId?: string;
     materializationKey?: string;
     attachmentProjectId?: string;
+    accountId?: string;
+    projectId?: string;
   },
 ): Promise<'accepted' | 'deduplicated' | 'failed' | 'unreachable'> {
   const parts: PromptPartWire[] =
@@ -2446,6 +2452,8 @@ async function postPrompt(
         externalId,
         sessionId: callerSessionId,
         userId,
+        accountId: prompt.accountId,
+        projectId: prompt.projectId,
         materializationKey: prompt.materializationKey,
         writeFile: writeRuntimePromptFile,
         readAttachment: (scope) => sessionAttachmentStore().read(scope),
