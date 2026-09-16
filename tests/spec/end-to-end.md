@@ -1050,6 +1050,8 @@ These contracts use product IDs. They replace the old route-coverage bucket IDs.
 
 `SCIM-14` Inactive users retain directory group assignments without retaining account access, including before first login. Changes made while inactive determine membership after reactivation. DELETE clears the directory assignments and explicit recreation does not restore them.
 
+`SCIM-15` provisions populated Entra default mappings: phone numbers, work addresses, preferred language, enterprise department, employee number, and manager. Create, GET, filtered PATCH, removal, atomic invalid-value rollback, ResourceTypes, and Schemas must preserve the same attributes.
+
 
 `SEC-7` A project manager creates a secret setup request. The public link validates its token and writes the submitted value once.
 `SESS-17` A project member reads session previews. Unknown sessions and non-members are rejected.

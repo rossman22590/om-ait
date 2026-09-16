@@ -1,3 +1,4 @@
+import { userChanges, applyProfile } from './user-profile';
 // SCIM Users routes: GET (list + filter), GET/:id, POST, PATCH, DELETE.
 // Registers onto the shared scimRouter via side effect.
 
@@ -289,86 +290,6 @@ async function applyDirectoryState(c: any, user: DirectoryUser, active: boolean,
     user = await saveDirectoryUser({ ...user, invitationId: invite!.inviteId });
   }
   return user;
-}
-
-function userChanges(body: Record<string, unknown>, patch = false): Map<string, unknown> {
-  const changes = new Map<string, unknown>();
-  const set = (key: string, value: unknown, remove = false) => {
-    const attr = key.toLowerCase();
-    if (['schemas', 'id', 'meta', 'groups'].includes(attr)) return;
-    const emailPath = attr.match(/^emails\[type\s+eq\s+"([^"]+)"\]\.(value|primary)$/i);
-    const optional = ['externalid', 'name', 'name.givenname', 'name.familyname', 'name.formatted', 'displayname', 'title', 'emails'];
-    if (!['active', 'username', ...optional].includes(attr) && !emailPath) throw new Error(`Unsupported user attribute: ${key}`);
-    if (remove) {
-      if (!optional.includes(attr)) throw new Error(`Cannot remove user attribute: ${key}`);
-      value = null;
-    }
-    if (attr === 'active' && typeof value === 'string') {
-      const normalized = value.toLowerCase();
-      if (normalized === 'false') value = false;
-      if (normalized === 'true') value = true;
-    }
-    if (attr === 'active' && typeof value !== 'boolean') throw new Error('active must be a boolean');
-    if (attr === 'username' && (typeof value !== 'string' || !value.trim() || value.trim().length > 255)) {
-      throw new Error('userName must contain 1 to 255 characters');
-    }
-    if (attr === 'name' && value !== null) {
-      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('name must be an attribute object');
-      for (const [sub, field] of Object.entries(value)) set(`name.${sub}`, field);
-      return;
-    }
-    if ((['externalid', 'displayname', 'title'].includes(attr) || attr.startsWith('name.') || emailPath?.[2] === 'value') && value !== null && typeof value !== 'string') {
-      throw new Error(`${key} must be a string or null`);
-    }
-    if (emailPath?.[2] === 'primary' && typeof value !== 'boolean') throw new Error('email primary must be a boolean');
-    if (attr === 'emails' && value !== null && (!Array.isArray(value) || value.some(e => !e || typeof e.value !== 'string'))) {
-      throw new Error('emails must be an array of email values');
-    }
-    changes.delete(attr);
-    changes.set(attr, value);
-  };
-  if (patch) {
-    if (!Array.isArray(body.Operations) || body.Operations.length === 0) throw new Error('Operations must be a nonempty array');
-    for (const operation of body.Operations) {
-      if (!operation || typeof operation !== 'object') throw new Error('Invalid PATCH operation');
-      const op = typeof operation.op === 'string' ? operation.op.toLowerCase() : '';
-      if (!['replace', 'add', 'remove'].includes(op)) throw new Error('Unsupported user PATCH operation');
-      if (typeof operation.path === 'string' && operation.path) set(operation.path, operation.value, op === 'remove');
-      else if (operation.path === undefined && op !== 'remove' && operation.value && typeof operation.value === 'object' && !Array.isArray(operation.value)) {
-        for (const [key, value] of Object.entries(operation.value)) set(key, value);
-      } else throw new Error('A pathless PATCH operation requires an attribute object');
-    }
-  } else {
-    for (const [key, value] of Object.entries(body)) set(key, value);
-  }
-  return changes;
-}
-
-function applyProfile(user: DirectoryUser, changes: Map<string, unknown>): DirectoryUser {
-  const profile = { ...user.profile };
-  for (const [key, value] of changes) {
-    const emailPath = key.match(/^emails\[type\s+eq\s+"([^"]+)"\]\.(value|primary)$/i);
-    if (key === 'name') profile.name = value;
-    if (key.startsWith('name.')) {
-      const sub = ({ givenname: 'givenName', familyname: 'familyName', formatted: 'formatted' } as Record<string, string>)[key.slice(5)]!;
-      profile.name = { ...(profile.name as Record<string, unknown> ?? {}), [sub]: value };
-    }
-    if (key === 'displayname') profile.displayName = value;
-    if (key === 'title') profile.title = value;
-    if (key === 'emails') profile.emails = value ?? [];
-    if (emailPath) {
-      const emails = [...(profile.emails as Array<Record<string, unknown>> ?? [])];
-      const index = emails.findIndex(e => typeof e.type === 'string' && e.type.toLowerCase() === emailPath[1]);
-      if (index < 0) emails.push({ type: emailPath[1], [emailPath[2]!]: value });
-      else emails[index] = { ...emails[index], [emailPath[2]!]: value };
-      profile.emails = emails;
-    }
-  }
-  return {
-    ...user, profile,
-    userName: changes.has('username') ? (changes.get('username') as string).trim().toLowerCase() : user.userName,
-    externalId: changes.has('externalid') ? changes.get('externalid') as string | null : user.externalId,
-  };
 }
 
 const userParams = z.object({ accountId: z.string().uuid(), userId: z.string().uuid() });
