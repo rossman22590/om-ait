@@ -779,10 +779,13 @@ export function shouldAutoResumeStoppedSandbox(
  * agent (a POST) or restarted the session.
  *
  * A terminal ATTACH is the same class of intent as a session mutation: a human
- * opened the panel or pressed "Reconnect now". The client marks exactly those
- * two connects with `wake=1` and NEVER marks its automatic backoff retries, so
- * the "passive resurrection" the resume policy exists to prevent (polling,
- * hydration, background reconnects) still cannot wake a box.
+ * opened the panel or pressed a control. The client marks that attach with
+ * `wake=1` and keeps the mark on its retries only until the attach opens. The
+ * wake is asynchronous and the row stays `stopped` until the provider confirms
+ * the box, so each marked dial during the wake is refused with 503 and the
+ * client dials again. Once an attach has opened the client stops marking, so a
+ * socket that drops because the box parked (the "passive resurrection" the
+ * resume policy exists to prevent) still cannot wake it.
  *
  * Pure + exported so the gate is unit-tested without provisioning a box.
  */
@@ -1041,9 +1044,9 @@ export async function forwardToSandbox(
         console.warn(`[sandbox-proxy] auto-resume failed for ${resumeExternalId}:`, err);
         return false;
       });
-      // Re-read: the resume flips the row → 'active' (this call or a concurrent
-      // one). The box boots in the background; the wake/retry loop below tolerates
-      // the gap and forwards once it's up (and subsequent client retries recover).
+      // Re-read. The resume only claims the wake: the row stays 'stopped' until
+      // the provider confirms the box, so this request usually returns the 503
+      // below and the client's retry forwards once the row is 'active'.
       const resumed = await loadSandbox(sandboxId);
       if (resumed) record = resumed;
     }
@@ -1934,8 +1937,10 @@ export async function resolvePreviewWsUpstream(opts: {
         console.warn(`[preview-ws] auto-resume failed for ${resumeExternalId}:`, err);
         return false;
       });
-      // The resume flips the row to 'active' immediately; the box finishes
-      // booting in the background and the client's next retry connects.
+      // The resume only CLAIMS the wake: the row stays 'stopped' until the
+      // provider confirms the box, which measured 16-31 s locally and ~60 s on
+      // dev. Until then this returns 503 and the client dials again; a browser
+      // sees each refusal as 1006 and asks `GET /kortix/pty` for the reason.
       const resumed = await loadSandbox(sandboxId);
       if (resumed) record = resumed;
     }
