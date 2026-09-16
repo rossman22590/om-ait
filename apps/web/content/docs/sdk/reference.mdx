@@ -895,6 +895,11 @@ part reports zero, they estimate cost from token counts using a
 `ModelPricingLookup`. Every total is multiplied by `COST_MARKUP` (`1.2`) to
 match what Kortix bills.
 
+ChatGPT/Codex subscription messages contribute `$0.00`, including historical
+messages with nonzero runtime costs. Token and context usage remain visible.
+Mixed sessions retain charges for paid API messages. OpenAI API models remain
+billable, including API models whose names contain `codex`.
+
 ### Child sessions and pending requests
 
 A `task` tool call delegates to a child session. These helpers connect a
@@ -1030,6 +1035,15 @@ defines `window.Kortix`.
 Personal providers require the LLM gateway. Sessions use the launching user's authenticated identity, including when another participant sends a message in that session. Enabling a connection grants its use to those sessions. Without a personal binding, existing project credentials apply. Removing a connection removes its project bindings immediately; requests already in flight can finish.
 
 Manage saved accounts in **Preferences → My providers**. Under **Project → Models → Providers**, each provider appears once with a status and **Connect** or **Manage** action. The dialog offers **Use my account** by default for supported providers. OpenAI supports **ChatGPT subscription** and **API key**. Select **Share with this project** explicitly to save shared credentials. Confirm with **Save connection**, **Use this account**, or **Use project connection**. Changing a choice or cancelling performs no write. **Stop using my account** removes this project binding while preserving the saved account for other projects. Project members can connect their own accounts without permission to change shared credentials. Tokens remain on the API and never enter sandbox environment variables.
+
+
+### Agent repository access
+
+Agent configuration accepts `repository_access?: boolean` (default `true`).
+Set `false` to run new sessions without the project repository or repository API access.
+Git, secret, connector, and tool permissions remain separate. Existing sessions retain their saved policy.
+`AgentConfigBlock.workspace` is deprecated. The SDK maps legacy `branch`/`runtime` to the boolean field.
+A legacy `read` write requires an explicit `repository_access` choice; it does not enable read-only repository access.
 
 
 ## Provider and model access
