@@ -1049,6 +1049,70 @@ flow('SCIM-13', {
   });
 });
 
+flow('SCIM-15', {
+  domain: 'scim',
+  routes: [
+    'POST /scim/v2/accounts/:accountId/Users',
+    'GET /scim/v2/accounts/:accountId/Users/:userId',
+    'PATCH /scim/v2/accounts/:accountId/Users/:userId',
+    'GET /scim/v2/accounts/:accountId/ResourceTypes/:id',
+    'GET /scim/v2/accounts/:accountId/Schemas',
+  ],
+}, async (ctx) => {
+  const team = await ctx.fixtures.team({ enterprise: true });
+  const scim = ctx.client.withBearer(await mintScimToken(ctx, team.id), 'SCIM');
+  const params = { accountId: team.id, userId: '' };
+  const enterprise = 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User';
+  await ctx.step('create and read back the populated attributes in Entra default mappings', async () => {
+    const created = await scim.post('/scim/v2/accounts/:accountId/Users', {
+      userName: `${ctx.fixtures.name('entra-profile')}@ke2e.kortix.test`,
+      preferredLanguage: 'en-US',
+      phoneNumbers: [{ type: 'work', value: '+1 202 555 0100', primary: true }],
+      addresses: [{ type: 'work', locality: 'Sarajevo', country: 'BA', postalCode: '71000' }],
+      [enterprise]: { department: 'Engineering', employeeNumber: 'SCIM-15', manager: { value: ctx.P.OWNER.userId! } },
+    }, { params });
+    created.status(201);
+    params.userId = created.json<{ id: string }>().id;
+    const read = await scim.get('/scim/v2/accounts/:accountId/Users/:userId', { params });
+    read.status(200).body().has('$.preferredLanguage', 'en-US').has('$.phoneNumbers[0].primary', true)
+      .has('$.addresses[0].locality', 'Sarajevo');
+    const data = read.json<Record<string, any>>();
+    if (data[enterprise]?.department !== 'Engineering' || !data.schemas.includes(enterprise)) throw new Error('Enterprise attributes did not persist');
+  });
+  await ctx.step('Entra filtered paths and enterprise subattributes persist together', async () => {
+    (await scim.patch('/scim/v2/accounts/:accountId/Users/:userId', { Operations: [
+      { op: 'Replace', path: 'phoneNumbers[type eq "mobile"].value', value: '+1 202 555 0101' },
+      { op: 'Replace', path: 'addresses[type eq "work"].streetAddress', value: 'Test Street' },
+      { op: 'Replace', path: `${enterprise}:department`, value: 'Quality' },
+      { op: 'Replace', path: `${enterprise}:manager.value`, value: ctx.P.OWNER.userId! },
+    ] }, { params })).status(200);
+    const read = await scim.get('/scim/v2/accounts/:accountId/Users/:userId', { params });
+    read.status(200).body().has('$.phoneNumbers[1].value', '+1 202 555 0101').has('$.addresses[0].streetAddress', 'Test Street');
+    if (read.json<Record<string, any>>()[enterprise]?.department !== 'Quality') throw new Error('Department patch did not persist');
+  });
+  await ctx.step('invalid profile updates roll back and removals preserve unrelated values', async () => {
+    (await scim.patch('/scim/v2/accounts/:accountId/Users/:userId', { Operations: [
+      { op: 'replace', path: 'preferredLanguage', value: 'de-DE' },
+      { op: 'replace', path: 'phoneNumbers', value: [{ value: 42 }] },
+    ] }, { params })).status(400);
+    (await scim.patch('/scim/v2/accounts/:accountId/Users/:userId', { Operations: [
+      { op: 'remove', path: 'phoneNumbers[type eq "mobile"]' },
+      { op: 'remove', path: `${enterprise}:department` },
+    ] }, { params })).status(200).body().has('$.preferredLanguage', 'en-US')
+      .has('$.phoneNumbers', [{ type: 'work', value: '+1 202 555 0100', primary: true }]);
+    const read = await scim.get('/scim/v2/accounts/:accountId/Users/:userId', { params });
+    const data = read.json<Record<string, any>>();
+    if (data[enterprise]?.department != null || data[enterprise]?.employeeNumber !== 'SCIM-15') throw new Error('Enterprise removal changed unrelated attributes');
+  });
+  await ctx.step('discovery advertises the supported enterprise extension', async () => {
+    (await scim.get('/scim/v2/accounts/:accountId/ResourceTypes/:id', { params: { ...params, id: 'User' } })).status(200)
+      .body().has('$.schemaExtensions', [{ schema: enterprise, required: false }]);
+    const schemas = await scim.get('/scim/v2/accounts/:accountId/Schemas', { params });
+    schemas.status(200);
+    if (!schemas.json<{ Resources: Array<{ id: string }> }>().Resources.some(s => s.id === enterprise)) throw new Error('Enterprise schema is absent');
+  });
+});
+
 flow('SCIM-14', {
   domain: 'scim',
   routes: [

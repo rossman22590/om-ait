@@ -2,6 +2,7 @@ import { accountScimUsers } from '@kortix/db';
 import { and, eq, or } from 'drizzle-orm';
 import { db } from '../shared/db';
 import { buildInviteUser, type UserShape } from './app';
+import { ENTERPRISE_USER_SCHEMA } from './user-profile';
 
 export type DirectoryUser = typeof accountScimUsers.$inferSelect;
 
@@ -24,7 +25,10 @@ export function buildDirectoryUser(user: DirectoryUser): UserShape {
   const resource = buildInviteUser(user.accountId, {
     inviteId: user.scimId, email: user.userName, createdAt: user.createdAt, externalId: user.externalId,
   }, user.active);
-  return { ...user.profile, ...resource, emails: user.profile.emails as UserShape['emails'] ?? resource.emails, meta: { ...resource.meta, lastModified: user.updatedAt.toISOString() } };
+  return { ...user.profile, ...resource,
+    schemas: [...resource.schemas, ...(user.profile[ENTERPRISE_USER_SCHEMA] ? [ENTERPRISE_USER_SCHEMA] : [])],
+    emails: user.profile.emails as UserShape['emails'] ?? resource.emails,
+    meta: { ...resource.meta, lastModified: user.updatedAt.toISOString() } };
 }
 
 export async function saveDirectoryUser(user: typeof accountScimUsers.$inferInsert): Promise<DirectoryUser> {
