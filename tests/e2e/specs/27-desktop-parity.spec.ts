@@ -145,6 +145,7 @@ for (const runtime of runtimes) {
       const user = await createAuthUser(email, authOptions);
       const session = await signIn(email, authOptions);
       let project: ManifestProject | undefined;
+      let pooledResource: { accountId: string; secretId: string } | undefined;
       try {
         const accounts = await api<{ account_id: string }[]>(
           session.access_token,
@@ -404,7 +405,37 @@ for (const runtime of runtimes) {
           );
           expect(denied).toContain("Unauthorized IPC sender");
         }
+        for (const feature of ['llm_gateway', 'pooled_provider_secrets']) {
+          await api(session.access_token, 'PATCH', `/projects/${project.id}/features`, {
+            feature, enabled: true,
+          });
+        }
+        const key = await api<{ secret_id: string }>(
+          session.access_token, 'POST', `/accounts/${accountId}/secret-resources`, {
+            label: 'Desktop pooled key', provider_id: 'anthropic', name: 'ANTHROPIC_API_KEY',
+            value: 'fake-desktop-key', consumer: 'llm_gateway', strategy: 'broker',
+          }, 201,
+        );
+        pooledResource = { accountId, secretId: key.secret_id };
+        await resize(720, 480);
+        await page.goto(`${baseURL}/projects/${project.id}/customize/secrets`);
+        const sharedSecrets = page.getByRole('region', { name: 'Shared provider secrets' });
+        await expect(sharedSecrets.getByText('Desktop pooled key')).toBeVisible();
+        const welcome = page.getByRole('complementary', { name: 'Welcome from Marko' });
+        if (await welcome.isVisible().catch(() => false)) {
+          await welcome.getByRole('button', { name: 'Dismiss' }).click();
+        }
+        await sharedSecrets.getByRole('button', { name: 'Actions for Desktop pooled key' }).click();
+        await expect(page.getByRole('menuitem', { name: 'Manage access' })).toBeVisible();
+        await page.keyboard.press('Escape');
+        await page.goto(`${baseURL}/projects/${project.id}`);
+        await page.getByRole('button', { name: 'Session overrides' }).click();
+        await page.getByRole('button', { name: /Provider keys/ }).click();
+        await expect(page.getByRole('checkbox', { name: 'Desktop pooled key' })).toBeVisible();
       } finally {
+        if (pooledResource) {
+          await api(session.access_token, 'DELETE', `/accounts/${pooledResource.accountId}/secret-resources/${pooledResource.secretId}`).catch(() => {});
+        }
         await project?.dispose();
         await deleteAuthUser(user.id, authOptions);
       }
