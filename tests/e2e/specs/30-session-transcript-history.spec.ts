@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { loadEnv } from '../../src/core/env';
 import { createDatabaseSession } from '../../src/fixtures/database-project';
 import { seedSessionTranscript } from '../../src/fixtures/session-transcript';
-import { runDatabaseSql } from '../helpers/database';
+import { queryDatabaseRows, runDatabaseSql } from '../helpers/database';
 import { createApiJsonClient } from '../helpers/http';
 import { createManifestProject, fundAccount } from '../helpers/manifest-project';
 import {
@@ -196,3 +196,276 @@ test('30 — saved session history paints while sandbox start and the open bundl
     });
   }
 });
+
+interface SavedHistory {
+  source: string;
+  messages: Array<{
+    info: {
+      id: string;
+      role: string;
+      parentID?: string;
+      time: { completed?: number };
+    };
+    parts: Array<{ type: string; text?: string }>;
+  }>;
+}
+
+if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
+  test('30 — real replies survive stop and a prompt sent during wake runs once', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(20 * 60_000);
+    const env = loadEnv();
+    const suffix = Date.now().toString(36).toUpperCase();
+    const firstReply = `HISTORY_FIRST_${suffix}`;
+    const secondReply = `HISTORY_SECOND_${suffix}`;
+    const prompt = (reply: string) => `Do not use tools. Reply with exactly this text: ${reply}`;
+    const email = `transcript-live-${Date.now()}@example.test`;
+    const user = await createAuthUser(email, authOptions);
+    const auth = await signIn(email, authOptions);
+    let projectId = '';
+    let sessionId = '';
+    let releaseStart = () => {};
+    const submittedIds: string[] = [];
+    try {
+      const accounts = await api<Array<{ account_id: string; personal_account?: boolean }>>(
+        auth.access_token,
+        'GET',
+        '/accounts',
+      );
+      const accountId = (accounts.find((a) => a.personal_account) ?? accounts[0]).account_id;
+      await fundAccount(env.databaseUrl!, accountId);
+      const project = await api<{ project_id: string }>(
+        auth.access_token,
+        'POST',
+        '/projects/provision',
+        {
+          account_id: accountId,
+          name: `Live transcript ${suffix}`,
+          seed_starter: true,
+        },
+        201,
+      );
+      projectId = project.project_id;
+      await api(auth.access_token, 'PATCH', `/projects/${projectId}/onboarding`, {
+        completed: true,
+      });
+      await api(auth.access_token, 'PATCH', `/projects/${projectId}/features`, {
+        feature: 'session_transcript_history',
+        enabled: true,
+      });
+      const session = await api<{ session_id: string }>(
+        auth.access_token,
+        'POST',
+        `/projects/${projectId}/sessions`,
+        { name: `Live transcript ${suffix}` },
+        201,
+      );
+      sessionId = session.session_id;
+      const sessionPath = `/projects/${projectId}/sessions/${sessionId}`;
+      const readHistory = () =>
+        api<SavedHistory>(
+          auth.access_token,
+          'GET',
+          `${sessionPath}/transcript?shape=sync&history=true`,
+        );
+      const textOf = (message: SavedHistory['messages'][number]) =>
+        message.parts
+          .filter((part) => part.type === 'text')
+          .map((part) => part.text ?? '')
+          .join('');
+      const savedReply = (history: SavedHistory, text: string) =>
+        history.messages.filter(
+          (message) =>
+            message.info.role === 'assistant' &&
+            message.info.time.completed &&
+            textOf(message).trim() === text,
+        );
+      await test.step('a real cloud sandbox reaches ready', async () => {
+        await expect
+          .poll(
+            async () => {
+              const result = await api<{
+                stage: string;
+                sandbox?: { status?: string };
+              }>(auth.access_token, 'POST', `${sessionPath}/start?wait_ms=8000`, {});
+              return `${result.stage}:${result.sandbox?.status}`;
+            },
+            { timeout: 12 * 60_000, intervals: [2_000, 5_000] },
+          )
+          .toBe('ready:active');
+      });
+      page.on('request', (request) => {
+        if (request.method() === 'POST' && request.url().endsWith(`${sessionPath}/prompts`)) {
+          submittedIds.push(request.postDataJSON().message_id);
+        }
+      });
+      await installBrowserSessionDirect(page, auth, sessionPath, authOptions);
+      await selectAccountForUi(page, accountId);
+      await dismissOnboarding(page);
+      await dismissWelcomeCard(page);
+      const editor = page.getByRole('textbox', { name: 'Message input' });
+      await test.step('a streamed reply reaches the database before manual stop', async () => {
+        await expect(editor).toBeVisible({ timeout: 120_000 });
+        await editor.fill(prompt(firstReply));
+        const accepted = page.waitForResponse(
+          (r) => r.request().method() === 'POST' && r.url().endsWith(`${sessionPath}/prompts`),
+        );
+        await page.getByRole('button', { name: 'Send message', exact: true }).click();
+        expect((await accepted).status()).toBe(202);
+        await expect(page.getByText(firstReply, { exact: true })).toBeVisible({
+          timeout: 180_000,
+        });
+        await expect
+          .poll(async () => savedReply(await readHistory(), firstReply).length, {
+            timeout: 90_000,
+            intervals: [1_000, 2_000],
+          })
+          .toBe(1);
+        expect((await readHistory()).source).toBe('mirror');
+      });
+      const originalIds = (await readHistory()).messages.map((message) => message.info.id);
+      await page.goto(`/projects/${projectId}/settings/feature-flags`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await api(auth.access_token, 'POST', `${sessionPath}/stop`, {});
+      await expect
+        .poll(
+          async () => {
+            const rows = await queryDatabaseRows<{ status: string }>(
+              'SELECT status FROM kortix.session_sandboxes WHERE session_id=$1',
+              [sessionId],
+              env.databaseUrl,
+            );
+            return rows[0]?.status;
+          },
+          { timeout: 60_000 },
+        )
+        .toBe('stopped');
+      expect(savedReply(await readHistory(), firstReply)).toHaveLength(1);
+      const waiting = new Promise<void>((resolve) => {
+        releaseStart = resolve;
+      });
+      let startRequested = false;
+      await page.route(`**/sessions/${sessionId}/start*`, async (route) => {
+        startRequested = true;
+        await waiting;
+        await route.continue().catch(() => {});
+      });
+      await test.step('saved history and the sent message paint before wake completes', async () => {
+        const history = page.waitForResponse(
+          (r) => r.url().includes(`${sessionPath}/transcript?`) && r.url().includes('history=true'),
+        );
+        await page.goto(sessionPath, { waitUntil: 'domcontentloaded' });
+        expect((await history).status()).toBe(200);
+        await expect(page.getByText(firstReply, { exact: true })).toBeVisible();
+        await expect.poll(() => startRequested).toBe(true);
+        await editor.fill(prompt(secondReply));
+        const accepted = page.waitForResponse(
+          (r) => r.request().method() === 'POST' && r.url().endsWith(`${sessionPath}/prompts`),
+        );
+        await page.getByRole('button', { name: 'Send message', exact: true }).click();
+        await expect(page.getByText(prompt(secondReply), { exact: true })).toBeVisible();
+        await expect(page.getByTestId('session-busy-indicator')).toContainText('Thinking');
+        expect((await accepted).status()).toBe(202);
+        await page.screenshot({
+          path: testInfo.outputPath('real-send-during-wake.png'),
+          fullPage: true,
+        });
+        releaseStart();
+        await page.unrouteAll({ behavior: 'ignoreErrors' });
+      });
+      await test.step('the queued prompt runs once and both turns persist', async () => {
+        await expect(page.getByText(secondReply, { exact: true })).toBeVisible({
+          timeout: 240_000,
+        });
+        await expect
+          .poll(async () => savedReply(await readHistory(), secondReply).length, {
+            timeout: 90_000,
+            intervals: [1_000, 2_000],
+          })
+          .toBe(1);
+        const history = await readHistory();
+        expect(history.source).toBe('mirror');
+        expect(savedReply(history, firstReply)).toHaveLength(1);
+        expect(submittedIds).toHaveLength(2);
+        expect(new Set(submittedIds).size).toBe(2);
+        const deliveries = await queryDatabaseRows<{
+          requested_id: string;
+          delivered_id: string;
+          state: string;
+        }>(
+          `SELECT payload->>'wireMessageId' AS requested_id,
+                  result->>'forwarded_message_id' AS delivered_id,
+                  result->>'status' AS state
+             FROM kortix.session_lifecycle_commands
+            WHERE session_id=$1 AND payload->>'wireMessageId'=ANY($2::text[])`,
+          [sessionId, submittedIds],
+          env.databaseUrl,
+        );
+        await testInfo.attach('persisted-transcript.json', {
+          body: JSON.stringify(
+            { projectId, sessionId, submittedIds, deliveries, history },
+            null,
+            2,
+          ),
+          contentType: 'application/json',
+        });
+        expect(deliveries).toHaveLength(2);
+        for (const delivery of deliveries) {
+          expect(delivery.state).toBe('delivered');
+          expect(
+            history.messages.filter((message) => message.info.id === delivery.delivered_id),
+          ).toHaveLength(1);
+        }
+        for (const id of originalIds)
+          expect(history.messages.map((message) => message.info.id)).toContain(id);
+        for (const reply of [firstReply, secondReply]) {
+          const messages = history.messages.filter(
+            (message) => message.info.role === 'user' && textOf(message) === prompt(reply),
+          );
+          expect(messages).toHaveLength(1);
+          expect(savedReply(history, reply)[0].info.parentID).toBe(messages[0].info.id);
+        }
+      });
+      await test.step('a fresh page keeps both completed replies without duplicates', async () => {
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await expect(page.getByText(firstReply, { exact: true })).toHaveCount(1);
+        await expect(page.getByText(secondReply, { exact: true })).toHaveCount(1);
+        await page.screenshot({
+          path: testInfo.outputPath('real-replies-after-reload.png'),
+          fullPage: true,
+        });
+      });
+    } finally {
+      releaseStart();
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
+      if (projectId) {
+        const sessions = await queryDatabaseRows<{ session_id: string }>(
+          'SELECT session_id FROM kortix.project_sessions WHERE project_id=$1',
+          [projectId],
+          env.databaseUrl,
+        );
+        const removed = await Promise.allSettled(
+          sessions.map((session) =>
+            api(
+              auth.access_token,
+              'DELETE',
+              `/projects/${projectId}/sessions/${session.session_id}`,
+              undefined,
+              [200, 404],
+            ),
+          ),
+        );
+        for (const result of removed) {
+          if (result.status === 'rejected') throw result.reason;
+        }
+        await api(auth.access_token, 'DELETE', `/projects/${projectId}`);
+      }
+      await deleteAuthUser(user.id, {
+        supabaseUrl: authOptions.supabaseUrl,
+        envFiles: ['apps/api/.env', 'apps/web/.env'],
+      });
+    }
+  });
+}

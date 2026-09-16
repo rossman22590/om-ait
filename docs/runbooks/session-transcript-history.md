@@ -73,12 +73,19 @@ is rejected rather than used to select that old root.
   real UI and verifies stored messages while `/start` and `/snapshot` remain pending. It sends
   during startup, asserts the optimistic message and Thinking indicator, and reads back the
   accepted prompt from the real API inbox.
+- `E2E_GREP='30 — real replies' pnpm test -- --target-browser-full`: uses the configured preview
+  or deployed test target and provisions a real cloud session. It sends through the UI, reads
+  the completed reply from the database before stopping, reopens the stopped session, and
+  sends while wake is pending. It checks delivery records, one user message and one completed
+  reply per send, and both replies after a page reload. This cloud journey is excluded from
+  the deterministic local profile. It deletes its sessions and auth user and archives its project.
 - `apps/api/src/__tests__/integration-session-transcript-capture.test.ts`: real PostgreSQL writes
   for more than 500 messages, retries, idempotence, concurrent captures, and flag rollback.
 - SDK hook tests cover disabled reads, missing history, session switching, and late responses.
 
-The browser fixture proves startup request initiation and pre-readiness rendering. It does not
-provision a cloud computer. Use the local steps above to verify a real cloud session before merging.
+The local browser fixture proves startup request initiation and pre-readiness rendering.
+The deployed browser journey additionally verifies cloud startup, streaming, turn-end capture,
+stop, wake, queued delivery, and reload. Both checks are required before merging.
 
 On 2026-09-16, the shared local database returned `PGRST203` for `atomic_use_credits` because
 two function signatures matched. The released browser startup request returned `402`.
