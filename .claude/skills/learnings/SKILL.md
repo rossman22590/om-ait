@@ -21,6 +21,15 @@ linked, not inlined.
 
 ## Register
 
+### Test Entra's actual SCIM PATCH payloads (2026-09-16)
+
+**When:** parsing SCIM user or group updates. Normalize Entra string booleans,
+case-insensitive attributes, and pathless attribute objects. A removal value
+array selects members; only an omitted value and filter mean remove all.
+*Incident:* dev investigation reproduced ignored user deactivation and removal
+of unrelated group members. *Enforcer:* HTTP flows `SCIM-6` and `SCIM-7` prove
+deactivation, last-owner protection, selective removal, and persisted read-back.
+
 ### Test SCIM ingress without a User-Agent (2026-09-16)
 
 **When:** routing enterprise directory provisioning through AWS WAF. Entra omits
