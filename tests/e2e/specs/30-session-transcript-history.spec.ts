@@ -675,7 +675,7 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
       });
     } finally {
       releaseStart();
-      await page.unrouteAll({ behavior: 'ignoreErrors' });
+      if (!page.isClosed()) await page.unrouteAll({ behavior: 'ignoreErrors' });
       if (projectId) {
         const sessions = await queryDatabaseRows<{ session_id: string }>(
           'SELECT session_id FROM kortix.project_sessions WHERE project_id=$1',
