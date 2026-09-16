@@ -452,6 +452,21 @@ export function agentConfigEtag(compiled: string | null | undefined): string | n
  * posture as resolveCompiledAgentConfigForSession below. Only an explicit,
  * well-formed `runtime: pi` can move a session onto the worker.
  */
+/**
+ * The harness a session boots, from the two inputs that can ask for pi:
+ * the project's `pi_harness` feature flag (on ⇒ pi, whatever the manifest
+ * says) and the manifest's `runtime:` field (`pi` ⇒ pi, even with the flag
+ * off). Everything else is OpenCode. `runtime: null` is "no readable v2
+ * manifest", which counts as opencode.
+ */
+export function selectSessionHarness(input: {
+  piHarnessFlag: boolean;
+  runtime: RuntimeV2 | null;
+}): 'opencode' | 'pi' {
+  if (input.piHarnessFlag) return 'pi';
+  return input.runtime === 'pi' ? 'pi' : 'opencode';
+}
+
 /** The harness a parsed manifest selects. `runtime` is a v2 field; anything but `pi` is OpenCode. */
 export function manifestRuntime(raw: unknown): RuntimeV2 {
   if (!raw || typeof raw !== 'object' || manifestSchemaVersion(raw as Record<string, unknown>) !== 2) return 'opencode';

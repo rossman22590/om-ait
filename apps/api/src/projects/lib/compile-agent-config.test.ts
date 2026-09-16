@@ -63,6 +63,7 @@ const {
   manifestRuntime,
   resolveCompiledAgentConfigForSession,
   resolveSelectedAgentConfigForSession,
+  selectSessionHarness,
 } = await import('./compile-agent-config');
 type OpencodeConfig = Awaited<ReturnType<typeof compileAgentConfig>> & object;
 
@@ -489,6 +490,23 @@ agents:
   a: {}
 `);
     expect(() => compileAgentConfig(manifest, 'claude' as never)).toThrow(CompileAgentConfigError);
+  });
+});
+
+describe('selectSessionHarness — flag OR manifest', () => {
+  test('pi when the project flag is on, whatever the manifest says', () => {
+    expect(selectSessionHarness({ piHarnessFlag: true, runtime: 'opencode' })).toBe('pi');
+    expect(selectSessionHarness({ piHarnessFlag: true, runtime: 'pi' })).toBe('pi');
+    expect(selectSessionHarness({ piHarnessFlag: true, runtime: null })).toBe('pi');
+  });
+
+  test('pi when the manifest says runtime: pi, even with the flag off', () => {
+    expect(selectSessionHarness({ piHarnessFlag: false, runtime: 'pi' })).toBe('pi');
+  });
+
+  test('opencode in every other case', () => {
+    expect(selectSessionHarness({ piHarnessFlag: false, runtime: 'opencode' })).toBe('opencode');
+    expect(selectSessionHarness({ piHarnessFlag: false, runtime: null })).toBe('opencode');
   });
 });
 

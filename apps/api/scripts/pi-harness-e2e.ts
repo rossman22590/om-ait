@@ -286,6 +286,19 @@ async function probe(): Promise<void> {
   await show(`/p/${eid}/8000/kortix/logs?tail=${arg('tail', '120')}`, 9000);
 }
 
+/** Set or clear a per-project feature flag override (PATCH /projects/:id/features). */
+async function flag(): Promise<void> {
+  const base = need('api');
+  const projectId = need('project');
+  const feature = need('feature');
+  const raw = need('enabled');
+  const enabled = raw === 'null' ? null : raw === 'true';
+  const token = await jwt();
+  const r = await api(base, token, `/projects/${projectId}/features`, { method: 'PATCH', body: JSON.stringify({ feature, enabled }) });
+  const flags = (r.body?.experimental ?? r.body?.feature_flags ?? null) as Record<string, boolean> | null;
+  console.log(JSON.stringify({ status: r.status, feature, enabled, effective: flags?.[feature] ?? null }));
+}
+
 async function del(): Promise<void> {
   const base = need('api');
   const projectId = need('project');
@@ -299,6 +312,9 @@ async function del(): Promise<void> {
 switch (process.argv[2]) {
   case 'delete':
     await del();
+    break;
+  case 'flag':
+    await flag();
     break;
   case 'probe':
     await probe();
