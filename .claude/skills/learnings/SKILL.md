@@ -5624,3 +5624,17 @@ Drizzle schema. Keep the generated SQL and snapshot names identical. Run
 
 **Enforcement:** the Squawk CI job rejects identifiers over 63 bytes. The
 schema-sync job regenerates from `kortix.ts` and rejects snapshot drift.
+
+### Bind timestamps as text in raw Drizzle SQL fragments
+
+**Near-miss (2026-09-16, PR #7319):** the pooled key cooldown update passed
+TypeScript and gateway unit tests. The first real PostgreSQL call failed
+because the `postgres` driver received a JavaScript `Date` from a raw `sql`
+fragment.
+
+**Rule:** convert a timestamp to ISO text and cast it to `timestamptz` when
+binding it inside raw Drizzle SQL. Exercise the database write with a real row
+before claiming the API behavior works.
+
+**Enforcement:** `coolDownAccountSecret` uses an ISO timestamp with an explicit
+cast. The direct local PostgreSQL call completed after this change.

@@ -32,7 +32,7 @@ export function decryptAccountSecret(accountId: string, envelope: string): strin
 export async function coolDownAccountSecret(secretId: string, accountId: string, seconds: number): Promise<void> {
   const until = new Date(Date.now() + Math.max(1, Math.min(60, Math.floor(seconds))) * 1000);
   await db.update(accountSecretResources).set({
-    cooldownUntil: sql`greatest(coalesce(${accountSecretResources.cooldownUntil}, '-infinity'::timestamptz), ${until})`,
+    cooldownUntil: sql`greatest(coalesce(${accountSecretResources.cooldownUntil}, '-infinity'::timestamptz), ${until.toISOString()}::timestamptz)`,
   }).where(and(eq(accountSecretResources.secretId, secretId), eq(accountSecretResources.accountId, accountId)));
 }
 
