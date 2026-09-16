@@ -68,6 +68,7 @@ import { notifyConnectorSession } from './notify-session';
 import { validateConnectorSecretBinding } from './connector-secret-binding';
 import {
   connectorIdsWithSharedCredentials,
+  connectorIdsWithReachableMemberCredential,
   credentialExists,
   deleteCredential,
   connectionCredentialExists,
@@ -1271,8 +1272,20 @@ async function resolveSecretReader(
   return resolveProjectUserWith(c, projectId, PROJECT_ACTIONS.PROJECT_SECRET_READ);
 }
 
-/** Admin list — sharing + credential mode + whether the shared credential is set. */
-async function listConnectors(projectId: string): Promise<AdminConnectorView[]> {
+/**
+ * Admin list — sharing + credential mode + whether a credential is set.
+ *
+ * `actingUserId` answers it for THIS caller: a connector with no project-wide
+ * shared credential but a credentialed account owned by the caller is
+ * connected for them (connection-access.ts — reachability is per-row, not
+ * per-connector). Omitted only by callers with no human principal (there is
+ * nobody whose own account could make the difference); the project-wide
+ * checks below still apply either way.
+ */
+async function listConnectors(
+  projectId: string,
+  actingUserId?: string | null,
+): Promise<AdminConnectorView[]> {
   const conns = hideSupersededSlack(
     await db.select().from(connectors).where(eq(connectors.projectId, projectId)),
   ).filter((row) => !isLegacyComputerAggregate(row));
@@ -1304,6 +1317,7 @@ async function listConnectors(projectId: string): Promise<AdminConnectorView[]> 
   const [
     actions,
     credentialConnectorIds,
+    memberCredentialedConnectorIds,
     connectedChannelSlugs,
     authorizedComposioSlugs,
     validBoundSecrets,
@@ -1319,6 +1333,12 @@ async function listConnectors(projectId: string): Promise<AdminConnectorView[]> 
           ),
         ),
       connectorIdsWithSharedCredentials(credentialRows.map((row) => row.connectorId)),
+      actingUserId
+        ? connectorIdsWithReachableMemberCredential(
+            credentialRows.map((row) => row.connectorId),
+            actingUserId,
+          )
+        : Promise.resolve(new Set<string>()),
       Promise.all(
         channelRows.map(async (row) => [row.slug, await connectorConnected(row, null)] as const),
       ).then(
@@ -1398,7 +1418,13 @@ async function listConnectors(projectId: string): Promise<AdminConnectorView[]> 
   const connectedSlugs = new Set(connectedChannelSlugs);
   const storedCredentialSlugs = new Set<string>();
   for (const row of credentialRows) {
-    if (credentialConnectorIds.has(row.connectorId)) {
+    // Project-wide (shared) credential, OR the caller's own credentialed
+    // member-owned account — either makes this connector connected FOR THIS
+    // CALLER, same as a real gateway call would resolve it (connection-access.ts).
+    if (
+      credentialConnectorIds.has(row.connectorId) ||
+      memberCredentialedConnectorIds.has(row.connectorId)
+    ) {
       connectedSlugs.add(row.slug);
       storedCredentialSlugs.add(row.slug);
     }

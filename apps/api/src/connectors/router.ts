@@ -293,7 +293,13 @@ export interface ConnectorRouterDeps {
     c: Context,
     projectId: string,
   ): Promise<{ accountId: string; userId: string } | null>;
-  listConnectors(projectId: string): Promise<AdminConnectorView[]>;
+  /**
+   * `actingUserId`: whose own credentialed accounts count toward "connected"
+   * for a connector with no project-wide shared credential (connection-access.ts
+   * — reachability is per-row, not per-connector). Omit only when there is no
+   * human caller to ask.
+   */
+  listConnectors(projectId: string, actingUserId?: string | null): Promise<AdminConnectorView[]>;
   syncConnectors(projectId: string, accountId: string): Promise<SyncResult>;
   /** Create/update a connector in kortix.yaml + materialize. */
   createConnector?(
@@ -1383,7 +1389,9 @@ export function createConnectorRouter(deps: ConnectorRouterDeps): OpenAPIHono {
       const canReadSecretIdentifiers = deps.resolveSecretReader
         ? Boolean(await deps.resolveSecretReader(c, projectId))
         : false;
-      const connectors = await deps.listConnectors(projectId);
+      // Whose own credentialed accounts count as "connected" for a connector
+      // with no project-wide shared credential — see listConnectors' doc.
+      const connectors = await deps.listConnectors(projectId, reader.userId);
       return c.json({
         connectors: canReadSecretIdentifiers
           ? connectors
