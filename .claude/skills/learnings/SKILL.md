@@ -5399,3 +5399,17 @@ Use the stable SCIM ID for user and group read-back before and after first login
 **Enforcement:** real HTTP flows `SCIM-9` and `SCIM-10` verify concurrent SSO
 requests cannot undo deactivation, explicit reactivation works, deletion is
 idempotent, and cached user IDs continue to support group membership updates.
+
+### Verify SCIM write responses against persisted directory state
+
+**Incident (2026-09-16, PR #7298):** group `Replace Members` and user
+`name.givenName` updates returned HTTP 200 while retaining the old values.
+Malformed group operations could also leave an earlier operation applied.
+
+**Rule:** validate complete SCIM changes before applying them. Apply a request
+atomically and verify GET read-back. Support case-insensitive attribute names,
+Entra subattribute paths, stable pagination, and escaped equality filters.
+
+**Enforcement:** HTTP flows `SCIM-11` and `SCIM-12` assert persisted values,
+rollback, rejection of malformed requests, and pagination. `SCIM-13` verifies
+account isolation, last-owner guards, and provisioning-token revocation.

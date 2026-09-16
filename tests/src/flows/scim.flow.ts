@@ -782,7 +782,7 @@ flow('SCIM-10', {
   await ctx.step('provision a pending user with an external ID and include its stable ID in group read-back', async () => {
     (await ctx.client.as(ctx.P.OWNER).put('/v1/accounts/:accountId/iam/sso/provider', {
       supabase_sso_provider_id: providerId, name: 'Entra before login',
-      primary_domain: `${ctx.fixtures.name('scim-first-login')}.test`, auto_create_members: true,
+      primary_domain: `${ctx.fixtures.name('scim-first-login')}.test`, auto_create_members: false,
     }, { params })).status(200);
     const user = await scim.post('/scim/v2/accounts/:accountId/Users', {
       userName: email, externalId: providerId, displayName: 'Before login',
@@ -811,6 +811,16 @@ flow('SCIM-10', {
     })).status(200).body().has('$.members', [{ value: scimId }]);
   });
 
+  await ctx.step('disabled JIT denies unprovisioned SSO users and inactive SCIM users before first login', async () => {
+    const outsider = await ctx.fixtures.user();
+    const denied = ctx.client.withBearer(await ssoFixtureToken(ctx.env, outsider, providerId, []), 'SSO-unprovisioned');
+    (await denied.get('/v1/accounts/:accountId', { params })).status(403);
+    (await scim.post('/scim/v2/accounts/:accountId/Users', {
+      userName: outsider.email!, active: false,
+    }, { params })).status(201).body().has('$.active', false);
+    (await denied.get('/v1/accounts/:accountId', { params })).status(403);
+  });
+
   await ctx.step('cached SCIM IDs support repeated group removal and re-addition after first login', async () => {
     for (const op of ['remove', 'remove', 'add', 'add']) {
       (await scim.patch('/scim/v2/accounts/:accountId/Groups/:groupId', {
@@ -829,5 +839,192 @@ flow('SCIM-10', {
     (await scim.get('/scim/v2/accounts/:accountId/Groups/:groupId', {
       params: { ...params, groupId },
     })).status(200).body().has('$.members', []);
+  });
+});
+
+flow('SCIM-11', {
+  domain: 'scim',
+  routes: [
+    'POST /scim/v2/accounts/:accountId/Groups',
+    'GET /scim/v2/accounts/:accountId/Groups/:groupId',
+    'PATCH /scim/v2/accounts/:accountId/Groups/:groupId',
+    'PUT /scim/v2/accounts/:accountId/Groups/:groupId',
+  ],
+}, async (ctx) => {
+  const team = await ctx.fixtures.team({ enterprise: true });
+  const scim = ctx.client.withBearer(await mintScimToken(ctx, team.id), 'SCIM');
+  const created = await scim.post('/scim/v2/accounts/:accountId/Groups', {
+    displayName: ctx.fixtures.name('scim-atomic'), members: [{ value: ctx.P.OWNER.userId! }],
+  }, { params: { accountId: team.id } });
+  created.status(201);
+  const group = created.json<{ id: string; displayName: string }>();
+  const params = { accountId: team.id, groupId: group.id };
+
+  await ctx.step('a malformed second operation rolls back an earlier valid group rename', async () => {
+    (await scim.patch('/scim/v2/accounts/:accountId/Groups/:groupId', {
+      Operations: [
+        { op: 'replace', path: 'displayName', value: `${group.displayName}-changed` },
+        { op: 'remove', path: 'members', value: [{ display: 'missing value' }] },
+      ],
+    }, { params })).status(400);
+    (await scim.get('/scim/v2/accounts/:accountId/Groups/:groupId', { params }))
+      .status(200).body().has('$.displayName', group.displayName).has('$.members', [{ value: ctx.P.OWNER.userId! }]);
+  });
+
+  await ctx.step('case-insensitive replace-members and pathless add persist exactly the supplied members', async () => {
+    (await scim.patch('/scim/v2/accounts/:accountId/Groups/:groupId', {
+      Operations: [{ op: 'Replace', path: 'Members', value: [] }],
+    }, { params })).status(200).body().has('$.members', []);
+    (await scim.patch('/scim/v2/accounts/:accountId/Groups/:groupId', {
+      Operations: [{ op: 'Add', value: { members: [{ value: ctx.P.OWNER.userId! }] } }],
+    }, { params })).status(200).body().has('$.members', [{ value: ctx.P.OWNER.userId! }]);
+  });
+
+  await ctx.step('malformed and unsupported operations fail without changing group state', async () => {
+    for (const body of [{}, { Operations: 'bad' }, { Operations: [null] },
+      { Operations: [{ op: 'replace', path: 'members', value: [{}] }] },
+      { Operations: [{ op: 'remove', path: 'members[broken]' }] },
+      { Operations: [{ op: 'replace', path: 'unsupported', value: 1 }] }]) {
+      (await scim.patch('/scim/v2/accounts/:accountId/Groups/:groupId', body, { params })).status(400);
+    }
+    (await scim.put('/scim/v2/accounts/:accountId/Groups/:groupId', { members: [{}] }, { params })).status(400);
+    (await scim.get('/scim/v2/accounts/:accountId/Groups/:groupId', { params }))
+      .status(200).body().has('$.members', [{ value: ctx.P.OWNER.userId! }]);
+  });
+});
+
+flow('SCIM-12', {
+  domain: 'scim',
+  routes: [
+    'POST /scim/v2/accounts/:accountId/Users',
+    'GET /scim/v2/accounts/:accountId/Users',
+    'GET /scim/v2/accounts/:accountId/Users/:userId',
+    'PATCH /scim/v2/accounts/:accountId/Users/:userId',
+    'GET /scim/v2/accounts/:accountId/Groups',
+    'POST /scim/v2/accounts/:accountId/Groups',
+  ],
+}, async (ctx) => {
+  const team = await ctx.fixtures.team({ enterprise: true });
+  const scim = ctx.client.withBearer(await mintScimToken(ctx, team.id), 'SCIM');
+  const params = { accountId: team.id };
+  const email = `${ctx.fixtures.name('scim-profile')}@ke2e.kortix.test`;
+  const created = await scim.post('/scim/v2/accounts/:accountId/Users', {
+    userName: email, active: false, name: { givenName: 'Before', familyName: 'Sync' },
+  }, { params });
+  created.status(201).body().has('$.active', false);
+  const userId = created.json<{ id: string }>().id;
+
+  await ctx.step('Entra name subattributes and filtered work-email updates persist through read-back', async () => {
+    (await scim.patch('/scim/v2/accounts/:accountId/Users/:userId', {
+      Operations: [
+        { op: 'Replace', path: 'name.givenName', value: 'After' },
+        { op: 'Replace', path: 'emails[type eq "work"].value', value: `work-${email}` },
+      ],
+    }, { params: { ...params, userId } })).status(200);
+    (await scim.get('/scim/v2/accounts/:accountId/Users/:userId', {
+      params: { ...params, userId },
+    })).status(200).body().has('$.name.givenName', 'After').has('$.name.familyName', 'Sync')
+      .has('$.emails[0].value', `work-${email}`).has('$.active', false);
+  });
+
+  await ctx.step('invalid active and malformed user operations return 400 and leave inactive state unchanged', async () => {
+    for (const body of [{}, { Operations: null }, { Operations: [] },
+      { Operations: [{ op: 'replace', path: 'active', value: 'maybe' }] },
+      { Operations: [{ op: 'replace', path: 'name.givenName', value: 4 }] }]) {
+      (await scim.patch('/scim/v2/accounts/:accountId/Users/:userId', body, {
+        params: { ...params, userId },
+      })).status(400);
+    }
+    (await scim.get('/scim/v2/accounts/:accountId/Users/:userId', { params: { ...params, userId } }))
+      .status(200).body().has('$.active', false).has('$.name.givenName', 'After');
+  });
+
+  await ctx.step('SCIM filters accept case-insensitive operators and escaped strings', async () => {
+    (await scim.get('/scim/v2/accounts/:accountId/Users', {
+      params, query: { filter: `USERNAME EQ "${email.toUpperCase()}"` },
+    })).status(200).body().has('$.totalResults', 1).has('$.Resources[0].id', userId);
+    const displayName = `${ctx.fixtures.name('quoted')} "group"`;
+    const group = await scim.post('/scim/v2/accounts/:accountId/Groups', { displayName }, { params });
+    group.status(201);
+    (await scim.get('/scim/v2/accounts/:accountId/Groups', {
+      params, query: { filter: `displayName eq ${JSON.stringify(displayName)}` },
+    })).status(200).body().has('$.totalResults', 1).has('$.Resources[0].id', group.json<{ id: string }>().id);
+  });
+
+  await ctx.step('user pagination returns stable non-overlapping pages and count zero returns only the total', async () => {
+    for (let i = 0; i < 2; i++) {
+      (await scim.post('/scim/v2/accounts/:accountId/Users', {
+        userName: `${i}-${email}`,
+      }, { params })).status(201);
+    }
+    const all = (await scim.get('/scim/v2/accounts/:accountId/Users', { params })).json<{ totalResults: number; Resources: { id: string }[] }>();
+    for (let i = 0; i < all.totalResults; i++) {
+      (await scim.get('/scim/v2/accounts/:accountId/Users', {
+        params, query: { startIndex: String(i + 1), count: '1' },
+      })).status(200).body().has('$.totalResults', all.totalResults).has('$.startIndex', i + 1)
+        .has('$.itemsPerPage', 1).has('$.Resources[0].id', all.Resources[i]!.id);
+    }
+    (await scim.get('/scim/v2/accounts/:accountId/Users', {
+      params, query: { count: '0' },
+    })).status(200).body().has('$.totalResults', all.totalResults).has('$.Resources', []);
+  });
+});
+
+flow('SCIM-13', {
+  domain: 'scim',
+  routes: [
+    'GET /v1/accounts/:accountId',
+    'POST /v1/accounts/:accountId/iam/scim/tokens',
+    'DELETE /v1/accounts/:accountId/iam/scim/tokens/:tokenId',
+    'POST /scim/v2/accounts/:accountId/Users',
+    'GET /scim/v2/accounts/:accountId/Users/:userId',
+    'PATCH /scim/v2/accounts/:accountId/Users/:userId',
+    'PUT /scim/v2/accounts/:accountId/Users/:userId',
+    'DELETE /scim/v2/accounts/:accountId/Users/:userId',
+  ],
+}, async (ctx) => {
+  const a = await ctx.fixtures.team({ enterprise: true });
+  const b = await ctx.fixtures.team({ enterprise: true });
+  const user = await ctx.fixtures.user();
+  const aToken = await ctx.client.as(ctx.P.OWNER).post('/v1/accounts/:accountId/iam/scim/tokens',
+    { name: ctx.fixtures.name('revoke-scim') }, { params: { accountId: a.id } });
+  aToken.status(201);
+  const credential = aToken.json<{ token_id: string; secret: string }>();
+  const scimA = ctx.client.withBearer(credential.secret, 'SCIM-A');
+  const scimB = ctx.client.withBearer(await mintScimToken(ctx, b.id), 'SCIM-B');
+
+  await ctx.step('the same identity has independent SCIM state in two accounts', async () => {
+    for (const [scim, accountId] of [[scimA, a.id], [scimB, b.id]] as const) {
+      (await scim.post('/scim/v2/accounts/:accountId/Users', { userName: user.email! }, {
+        params: { accountId },
+      })).status(201).body().has('$.id', user.userId!);
+    }
+    (await scimA.patch('/scim/v2/accounts/:accountId/Users/:userId', {
+      Operations: [{ op: 'replace', path: 'active', value: false }],
+    }, { params: { accountId: a.id, userId: user.userId! } })).status(200);
+    (await ctx.client.as(user).get('/v1/accounts/:accountId', { params: { accountId: a.id } })).status(403);
+    (await ctx.client.as(user).get('/v1/accounts/:accountId', { params: { accountId: b.id } })).status(200);
+    (await scimB.get('/scim/v2/accounts/:accountId/Users/:userId', {
+      params: { accountId: b.id, userId: user.userId! },
+    })).status(200).body().has('$.active', true);
+  });
+
+  await ctx.step('POST, PUT and DELETE protect the last account owner', async () => {
+    const params = { accountId: a.id, userId: ctx.P.OWNER.userId! };
+    (await scimA.post('/scim/v2/accounts/:accountId/Users', {
+      userName: ctx.P.OWNER.email!, active: false,
+    }, { params })).status(409);
+    (await scimA.put('/scim/v2/accounts/:accountId/Users/:userId', { active: false }, { params })).status(409);
+    (await scimA.del('/scim/v2/accounts/:accountId/Users/:userId', { params })).status(409);
+    (await ctx.client.as(ctx.P.OWNER).get('/v1/accounts/:accountId', { params })).status(200);
+  });
+
+  await ctx.step('revoking a provisioning token immediately rejects subsequent SCIM requests', async () => {
+    (await ctx.client.as(ctx.P.OWNER).del('/v1/accounts/:accountId/iam/scim/tokens/:tokenId', {
+      params: { accountId: a.id, tokenId: credential.token_id },
+    })).status(200);
+    (await scimA.get('/scim/v2/accounts/:accountId/Users/:userId', {
+      params: { accountId: a.id, userId: user.userId! },
+    })).status(401);
   });
 });

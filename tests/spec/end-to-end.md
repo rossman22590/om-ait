@@ -999,6 +999,12 @@ These contracts use product IDs. They replace the old route-coverage bucket IDs.
 `SCIM-9` SCIM deactivation and deletion prevent existing SSO tokens from recreating membership, even with auto_create_members enabled. Deactivated users remain readable as inactive and retain their ID and externalId. Explicit reactivation restores membership. DELETE retries return 204; explicit SCIM creation restores the same identity after deletion.
 `SCIM-10` A pending SCIM user keeps its ID and external ID after first SSO login. Pending group grants appear in read-back. Cached IDs support repeated group changes. Renaming cannot bypass deactivation.
 
+`SCIM-11` Group PATCH operations are atomic. Attribute and operation names are case-insensitive. Pathless adds and explicit member replacement persist exact membership. Malformed operations and invalid PUT members return 400 without changing state.
+
+`SCIM-12` SCIM profile updates persist name subattributes and filtered work email. Invalid user patches return 400 without changing state. Filters accept case-insensitive operators and escaped strings. Pagination returns stable pages and count zero returns the total without resources.
+
+`SCIM-13` An identity has independent SCIM state in each account. Deactivation in one account preserves access to another. POST, PUT, and DELETE cannot remove the last owner. Revoking a SCIM token immediately rejects further requests.
+
 
 `SEC-7` A project manager creates a secret setup request. The public link validates its token and writes the submitted value once.
 `SESS-17` A project member reads session previews. Unknown sessions and non-members are rejected.

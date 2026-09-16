@@ -260,8 +260,14 @@ SCIM behavior worth knowing:
   or remove members of those groups, including claims in an older browser token.
   SAML group mappings continue to manage groups that SCIM has not taken over.
 - Entra pathless group updates persist `displayName` and `externalId`.
+- User profile updates persist name subattributes, display name, title, and work
+  email in the SCIM directory. Group PATCH and PUT reject malformed references.
+  A failed PATCH rolls back every operation in that request.
+- User and group lists support `startIndex` and `count`, with at most 200 resources
+  per page. `count=0` returns the matching total without resource data.
 - **Users**: create by email; a not-yet-signed-up user is provisioned as an invite
-  and reports `active:true`. Its SCIM ID and `externalId` survive first login.
+  and reports `active:true`. Its SCIM ID and `externalId` survive first login. Active SCIM users
+  can sign in even when automatic JIT creation is disabled.
 - **Deactivate** (`PATCH active:false`, Entra's string `"False"`, or DELETE): removes the account membership
   and group memberships, revokes account tokens, and invalidates their cache.
   Existing SSO tokens cannot recreate a deactivated membership. The last owner
@@ -271,7 +277,7 @@ SCIM behavior worth knowing:
   A removal with a `value` array removes only those members. An empty array
   preserves membership. Omitting both the value and filter removes all members.
 
-HTTP flows `SCIM-6` through `SCIM-10` cover Entra's PATCH formats, persisted membership,
+HTTP flows `SCIM-6` through `SCIM-13` cover Entra's PATCH formats, persisted membership,
 last-owner protection, stable user IDs, and concurrent SSO deactivation. Run `pnpm test -- --domain scim` to verify them.
 
 ---

@@ -44,4 +44,4 @@ function getDb(): Database {
   return globalForDb.__kortixApiDb;
 }
 
-export const { db, transaction: withDbTransaction } = contextualDatabase(getDb());
+export const { db, transaction: withDbTransaction, afterCommit: afterDbCommit } = contextualDatabase(getDb());

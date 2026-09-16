@@ -24,7 +24,7 @@ export function buildDirectoryUser(user: DirectoryUser): UserShape {
   const resource = buildInviteUser(user.accountId, {
     inviteId: user.scimId, email: user.userName, createdAt: user.createdAt, externalId: user.externalId,
   }, user.active);
-  return { ...user.profile, ...resource, meta: { ...resource.meta, lastModified: user.updatedAt.toISOString() } };
+  return { ...user.profile, ...resource, emails: user.profile.emails as UserShape['emails'] ?? resource.emails, meta: { ...resource.meta, lastModified: user.updatedAt.toISOString() } };
 }
 
 export async function saveDirectoryUser(user: typeof accountScimUsers.$inferInsert): Promise<DirectoryUser> {

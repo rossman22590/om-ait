@@ -11,8 +11,10 @@ import { errors, json } from '../openapi';
 import { db } from '../shared/db';
 import { deleteGroup } from '../repositories/iam';
 import { directoryUserById } from './directory-users';
+import { groupChanges, memberValues, type GroupChange } from './group-patch';
 import {
   ScimResource,
+  ScimListQuery,
   buildGroup,
   isUnsupportedFilter,
   listResponse,
@@ -249,7 +251,7 @@ scimRouter.openapi(
     summary: 'List SCIM Groups (filter by displayName/id/externalId eq)',
     request: {
       params: z.object({ accountId: z.string() }),
-      query: z.object({ filter: z.string().optional() }),
+      query: ScimListQuery,
     },
     responses: {
       200: json(ScimResource, 'SCIM ListResponse'),
@@ -278,11 +280,11 @@ scimRouter.openapi(
 
     let filteredRows = rows;
     if (filter) {
-      if (filter.attr === 'displayName') {
-        filteredRows = rows.filter((r) => r.name === filter.value);
-      } else if (filter.attr === 'id') {
+      if (filter.attr.toLowerCase() === 'displayname') {
+        filteredRows = rows.filter((r) => r.name.toLowerCase() === filter.value.toLowerCase());
+      } else if (filter.attr.toLowerCase() === 'id') {
         filteredRows = rows.filter((r) => r.groupId === filter.value);
-      } else if (filter.attr === 'externalId') {
+      } else if (filter.attr.toLowerCase() === 'externalid') {
         filteredRows = rows.filter((r) => r.externalId === filter.value);
       } else {
         filteredRows = [];
@@ -290,7 +292,7 @@ scimRouter.openapi(
     }
 
     const resources = await Promise.all(filteredRows.map((r) => buildGroup(accountId, r)));
-    return c.json(listResponse(resources));
+    return c.json(listResponse(resources.sort((a, b) => a.id.localeCompare(b.id)), c.req.valid('query')));
   },
 );
 
@@ -351,6 +353,10 @@ scimRouter.openapi(
       return scimError(c, 400, 'Body must be JSON');
     }
 
+    let initialMembers: string[] = [];
+    try { if (body.members !== undefined) initialMembers = memberValues(body.members); }
+    catch (error) { return scimError(c, 400, (error as Error).message); }
+
     const displayName = typeof body.displayName === 'string' ? body.displayName.trim() : '';
     if (!displayName) return scimError(c, 400, 'displayName is required');
     if (displayName.length > 128) {
@@ -380,15 +386,7 @@ scimRouter.openapi(
       throw err;
     }
 
-    // Initial members can be supplied in the create body (Okta's group push
-    // does this). Same resolution rules as PATCH adds — a plain member-only
-    // filter here would silently drop invited/JIT people.
-    if (Array.isArray(body.members)) {
-      const userIds = (body.members as Array<{ value?: unknown }>)
-        .map((m) => (typeof m.value === 'string' ? m.value : null))
-        .filter((v): v is string => !!v);
-      await addGroupMembersOrDeferInvites(accountId, groupId, userIds);
-    }
+    await addGroupMembersOrDeferInvites(accountId, groupId, initialMembers);
 
     await invalidateIamCacheForGroup(groupId);
 
@@ -416,321 +414,74 @@ scimRouter.openapi(
   },
 );
 
-/**
- * Group PATCH handles member adds/removes — the high-traffic operation for
- * IdP-driven group sync. Spec is large; we support what IdPs actually send:
- *   - { Operations: [{ op:"add", path:"members", value:[{value:userId}] }] }
- *   - { Operations: [{ op:"remove", path:'members[value eq "..."]' }] }
- *   - { Operations: [{ op:"replace", path:"displayName", value:"X" }] }
- *   - { Operations: [{ op:"replace", value: { members: [{value:userId}, ...] } }] } (Azure AD style)
- */
-scimRouter.openapi(
-  createRoute({
-    method: 'patch',
-    path: '/accounts/{accountId}/Groups/{groupId}',
-    tags: ['scim'],
-    summary: 'Patch a SCIM Group (member add/remove, rename)',
-    request: {
-      params: z.object({ accountId: z.string(), groupId: z.string() }),
-      body: { content: { 'application/json': { schema: ScimResource } } },
-    },
-    responses: {
-      200: json(ScimResource, 'SCIM Group'),
-      ...errors(400, 401, 403, 404),
-    },
-  }),
-  async (c: any) => {
-    const accountId = c.req.param('accountId');
-    const groupId = c.req.param('groupId');
-
-    const [group] = await db
-      .select({ groupId: accountGroups.groupId, name: accountGroups.name })
-      .from(accountGroups)
-      .where(and(eq(accountGroups.accountId, accountId), eq(accountGroups.groupId, groupId)))
-      .limit(1);
-    if (!group) return scimError(c, 404, 'Group not found');
-
-    let body: Record<string, unknown>;
-    try {
-      body = await c.req.json();
-    } catch {
-      return scimError(c, 400, 'Body must be JSON');
-    }
-
-    const operations = Array.isArray(body.Operations)
-      ? (body.Operations as Array<Record<string, unknown>>)
-      : [];
-
-    // Snapshot the pre-PATCH members so we can bust REMOVED users too (the
-    // current-member helper below only covers who's left after the ops).
-    const beforeMemberIds = (
-      await db
-        .select({ userId: accountGroupMembers.userId })
-        .from(accountGroupMembers)
-        .where(eq(accountGroupMembers.groupId, groupId))
-    ).map((r) => r.userId);
-
-    for (const op of operations) {
-      const opName = typeof op.op === 'string' ? op.op.toLowerCase() : '';
-      const path = typeof op.path === 'string' ? op.path : '';
-
-      // displayName / externalId replace
-      if (opName === 'replace' && path === 'displayName' && typeof op.value === 'string') {
-        const next = op.value.trim();
-        if (next) {
-          await db
-            .update(accountGroups)
-            .set({ name: next, updatedAt: new Date() })
-            .where(eq(accountGroups.groupId, groupId));
-        }
-        continue;
-      }
-      if (opName === 'replace' && path === 'externalId' && typeof op.value === 'string') {
-        await db
-          .update(accountGroups)
-          .set({ externalId: op.value, updatedAt: new Date() })
-          .where(eq(accountGroups.groupId, groupId));
-        continue;
-      }
-
-      // Azure AD: replace with no path, value is an object containing members
-      if (opName === 'replace' && !path && op.value && typeof op.value === 'object') {
-        const v = op.value as Record<string, unknown>;
-        if (typeof v.displayName === 'string' && v.displayName.trim()) {
-          await db.update(accountGroups).set({ name: v.displayName.trim() })
-            .where(eq(accountGroups.groupId, groupId));
-        }
-        if (typeof v.externalId === 'string') {
-          await db.update(accountGroups).set({ externalId: v.externalId })
-            .where(eq(accountGroups.groupId, groupId));
-        }
-        if (Array.isArray(v.members)) {
-          const userIds = (v.members as Array<{ value?: unknown }>)
-            .map((m) => (typeof m.value === 'string' ? m.value : null))
-            .filter((u): u is string => !!u);
-          // Wholesale replace: drop existing rows AND parked grants, then add
-          // the new set — real members join now, pending invites re-park. The
-          // un-park keeps a person the IdP dropped pre-login from joining the
-          // group at first sign-in off a stale grant.
-          await db.delete(accountGroupMembers).where(eq(accountGroupMembers.groupId, groupId));
-          await unparkGroupFromInvites(accountId, groupId);
-          await addGroupMembersOrDeferInvites(accountId, groupId, userIds);
-        }
-        continue;
-      }
-
-      // Member adds: op=add, path=members, value=[{value:userId}, ...]
-      if (opName === 'add' && path === 'members' && Array.isArray(op.value)) {
-        const userIds = (op.value as Array<{ value?: unknown }>)
-          .map((m) => (typeof m.value === 'string' ? m.value : null))
-          .filter((u): u is string => !!u);
-        await addGroupMembersOrDeferInvites(accountId, groupId, userIds);
-        continue;
-      }
-
-      // Member removes: path looks like members[value eq "userId"]. The value
-      // may be a user_id OR the invitation id the IdP cached at provisioning —
-      // removeGroupMemberValue resolves both (and un-parks a pending grant).
-      if (opName === 'remove' && /^members(?:$|\[)/i.test(path)) {
-        const m = path.match(/^members\[value\s+eq\s+"([^"]+)"\]$/i);
-        if (m) {
-          await removeGroupMemberValue(accountId, groupId, m[1]!);
-        } else if (path.toLowerCase() === 'members' && op.value !== undefined) {
-          if (!Array.isArray(op.value) || op.value.some((member) =>
-            !member || typeof member.value !== 'string' || !member.value
-          )) {
-            return scimError(c, 400, 'members removal value must be an array of member references');
-          }
-          for (const member of op.value) {
-            await removeGroupMemberValue(accountId, groupId, member.value);
-          }
-        } else if (!path.includes('[')) {
-          // Bare `remove members` (no filter) — empty the group, both live
-          // rows and parked grants.
-          await db.delete(accountGroupMembers).where(eq(accountGroupMembers.groupId, groupId));
-          await unparkGroupFromInvites(accountId, groupId);
-        }
-        continue;
-      }
-    }
-
-    await db
-      .update(accountGroups)
-      .set({ source: 'scim', updatedAt: new Date() })
-      .where(eq(accountGroups.groupId, groupId));
-
-    // Membership may have changed → bust both who was a member before and who is
-    // now, so role changes via this group apply immediately (not after the TTL).
-    invalidateIamCacheForUsers(beforeMemberIds);
-    await invalidateIamCacheForGroup(groupId);
-
-    await scimAudit(c, {
-      accountId,
-      action: 'scim.group.update',
-      resourceType: 'account_group',
-      resourceId: groupId,
-      before: { name: group.name },
-      after: { operations: operations.length },
-    });
-
-    const [row] = await db
-      .select({
-        groupId: accountGroups.groupId,
-        name: accountGroups.name,
-        externalId: accountGroups.externalId,
-        createdAt: accountGroups.createdAt,
-        updatedAt: accountGroups.updatedAt,
-      })
-      .from(accountGroups)
-      .where(eq(accountGroups.groupId, groupId))
-      .limit(1);
-    return c.json(await buildGroup(accountId, row!));
-  },
-);
-
-/**
- * Pure: interpret a SCIM Group PUT body as the changes to apply. PUT is
- * nominally a full-resource replace, but omitted fields are treated as
- * "leave alone" rather than "clear" — IdPs always send the fields they
- * manage, and clearing membership because a partial client omitted the key
- * would wipe a group. A PRESENT members array is authoritative, including
- * an empty one (that's the IdP saying the group has no members). Mirrors
- * how users.ts PUT treats the body as a change set. Exported for unit tests.
- */
-export function parseGroupPut(body: Record<string, unknown>): {
-  displayName: string | null;
-  externalId: string | null;
-  members: string[] | null;
-} {
-  const displayName =
-    typeof body.displayName === 'string' && body.displayName.trim()
-      ? body.displayName.trim()
-      : null;
-  const externalId =
-    typeof body.externalId === 'string' && body.externalId.trim() ? body.externalId.trim() : null;
-  const members = Array.isArray(body.members)
-    ? (body.members as Array<{ value?: unknown }>)
-        .map((m) => (typeof m.value === 'string' ? m.value : null))
-        .filter((v): v is string => !!v)
-    : null;
-  return { displayName, externalId, members };
-}
-
-// PUT — Okta's group push replaces the whole resource via PUT (renames arrive
-// this way). Kortix previously implemented only PATCH, so those calls 404'd —
-// the same gap users.ts closed for Okta's profile pushes. Member values may be
-// user ids OR cached invitation ids; the shared add/remove helpers resolve both.
-scimRouter.openapi(
-  createRoute({
-    method: 'put',
-    path: '/accounts/{accountId}/Groups/{groupId}',
-    tags: ['scim'],
-    summary: 'Replace a SCIM Group (IdP rename / full-state push)',
-    request: {
-      params: z.object({ accountId: z.string(), groupId: z.string() }),
-      body: { content: { 'application/json': { schema: ScimResource } } },
-    },
-    responses: {
-      200: json(ScimResource, 'SCIM Group'),
-      ...errors(400, 401, 403, 404, 409),
-    },
-  }),
-  async (c: any) => {
-    const accountId = c.req.param('accountId');
-    const groupId = c.req.param('groupId');
-
-    const [group] = await db
-      .select({ groupId: accountGroups.groupId, name: accountGroups.name })
-      .from(accountGroups)
-      .where(and(eq(accountGroups.accountId, accountId), eq(accountGroups.groupId, groupId)))
-      .limit(1);
-    if (!group) return scimError(c, 404, 'Group not found');
-
-    let body: Record<string, unknown>;
-    try {
-      body = await c.req.json();
-    } catch {
-      return scimError(c, 400, 'Body must be JSON');
-    }
-    if (typeof body.displayName === 'string' && body.displayName.trim().length > 128) {
-      return scimError(c, 400, 'displayName too long (max 128 chars)');
-    }
-
-    const changes = parseGroupPut(body);
-
-    // Snapshot the pre-PUT members so removed users' cached roles bust too.
-    const beforeMemberIds = (
-      await db
-        .select({ userId: accountGroupMembers.userId })
-        .from(accountGroupMembers)
-        .where(eq(accountGroupMembers.groupId, groupId))
-    ).map((r) => r.userId);
-
-    if (changes.displayName && changes.displayName !== group.name) {
-      try {
-        await db
-          .update(accountGroups)
-          .set({ name: changes.displayName, updatedAt: new Date() })
-          .where(eq(accountGroups.groupId, groupId));
-      } catch (err: unknown) {
-        // Same unique-name guard as POST — renaming onto an existing group
-        // must 409, not 500.
-        if (err instanceof Error && /unique|duplicate/i.test(err.message)) {
-          return scimError(c, 409, 'A group with this displayName already exists');
-        }
-        throw err;
-      }
-    }
-    if (changes.externalId) {
-      await db
-        .update(accountGroups)
-        .set({ externalId: changes.externalId, updatedAt: new Date() })
-        .where(eq(accountGroups.groupId, groupId));
-    }
-    if (changes.members) {
-      // Full-state member replace — identical semantics to PATCH's Azure-style
-      // replace: drop live rows AND parked invite grants, then re-add so real
-      // members join now and pending invites re-park.
+async function applyGroupChanges(accountId: string, groupId: string, changes: GroupChange[]) {
+  for (const change of changes) {
+    if (change.path === 'displayName') {
+      await db.update(accountGroups).set({ name: change.value }).where(eq(accountGroups.groupId, groupId));
+    } else if (change.path === 'externalId') {
+      await db.update(accountGroups).set({ externalId: change.value }).where(eq(accountGroups.groupId, groupId));
+    } else if (change.op === 'replace' || (change.op === 'remove' && change.value === null)) {
       await db.delete(accountGroupMembers).where(eq(accountGroupMembers.groupId, groupId));
       await unparkGroupFromInvites(accountId, groupId);
-      await addGroupMembersOrDeferInvites(accountId, groupId, changes.members);
+      if (change.op === 'replace') await addGroupMembersOrDeferInvites(accountId, groupId, change.value!);
+    } else if (change.op === 'add') {
+      await addGroupMembersOrDeferInvites(accountId, groupId, change.value!);
+    } else {
+      for (const value of change.value!) await removeGroupMemberValue(accountId, groupId, value);
     }
+  }
+}
 
-    await db
-      .update(accountGroups)
-      .set({ source: 'scim', updatedAt: new Date() })
-      .where(eq(accountGroups.groupId, groupId));
+export function parseGroupPut(body: Record<string, unknown>) {
+  const changes = groupChanges(body);
+  return {
+    displayName: changes.find(c => c.path === 'displayName')?.value ?? null,
+    externalId: changes.find(c => c.path === 'externalId')?.value ?? null,
+    members: changes.find(c => c.path === 'members')?.value ?? null,
+  };
+}
 
-    invalidateIamCacheForUsers(beforeMemberIds);
-    await invalidateIamCacheForGroup(groupId);
+async function writeGroup(c: any) {
+  const accountId = c.req.param('accountId');
+  const groupId = c.req.param('groupId');
+  const [group] = await db.select().from(accountGroups).where(and(
+    eq(accountGroups.accountId, accountId), eq(accountGroups.groupId, groupId),
+  )).limit(1);
+  if (!group) return scimError(c, 404, 'Group not found');
+  let changes: GroupChange[];
+  try { changes = groupChanges(await c.req.json(), c.req.method === 'PATCH'); }
+  catch (error) { return scimError(c, 400, (error as Error).message); }
+  const before = await db.select({ userId: accountGroupMembers.userId }).from(accountGroupMembers)
+    .where(eq(accountGroupMembers.groupId, groupId));
+  try {
+    await applyGroupChanges(accountId, groupId, changes);
+  } catch (error) {
+    const cause = (error as { cause?: { code?: string }; code?: string });
+    if (cause.code === '23505' || cause.cause?.code === '23505') return scimError(c, 409, 'A group with this displayName already exists');
+    throw error;
+  }
+  const [updated] = await db.update(accountGroups).set({ source: 'scim', updatedAt: new Date() })
+    .where(eq(accountGroups.groupId, groupId)).returning();
+  invalidateIamCacheForUsers(before.map(m => m.userId));
+  await invalidateIamCacheForGroup(groupId);
+  await scimAudit(c, {
+    accountId, action: 'scim.group.update', resourceType: 'account_group', resourceId: groupId,
+    before: { name: group.name }, after: { operations: changes.length },
+  });
+  return c.json(await buildGroup(accountId, updated!));
+}
 
-    await scimAudit(c, {
-      accountId,
-      action: 'scim.group.update',
-      resourceType: 'account_group',
-      resourceId: groupId,
-      before: { name: group.name },
-      after: {
-        via: 'put',
-        name: changes.displayName ?? group.name,
-        members_replaced: changes.members !== null,
-      },
-    });
-
-    const [row] = await db
-      .select({
-        groupId: accountGroups.groupId,
-        name: accountGroups.name,
-        externalId: accountGroups.externalId,
-        createdAt: accountGroups.createdAt,
-        updatedAt: accountGroups.updatedAt,
-      })
-      .from(accountGroups)
-      .where(eq(accountGroups.groupId, groupId))
-      .limit(1);
-    return c.json(await buildGroup(accountId, row!));
-  },
-);
+for (const method of ['patch', 'put'] as const) {
+  scimRouter.openapi(createRoute({
+    method, path: '/accounts/{accountId}/Groups/{groupId}', tags: ['scim'],
+    summary: method === 'patch' ? 'Patch a SCIM Group' : 'Replace a SCIM Group',
+    request: {
+      params: z.object({ accountId: z.string().uuid(), groupId: z.string().uuid() }),
+      body: { content: { 'application/json': { schema: ScimResource } } },
+    },
+    responses: { 200: json(ScimResource, 'SCIM Group'), ...errors(400, 401, 403, 404, 409) },
+  }), writeGroup);
+}
 
 scimRouter.openapi(
   createRoute({

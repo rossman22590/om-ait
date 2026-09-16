@@ -51,8 +51,10 @@ type ParsedFilter = { attr: string; value: string } | null;
  *  `attr eq "value"` with optional whitespace. Returns null if unsupported. */
 export function parseFilter(raw: string | undefined): ParsedFilter {
   if (!raw) return null;
-  const m = raw.match(/^\s*(\w+)\s+eq\s+"([^"]*)"\s*$/);
-  return m ? { attr: m[1]!, value: m[2]! } : null;
+  const m = raw.match(/^\s*(\w+)\s+eq\s+("(?:[^"\\]|\\.)*")\s*$/i);
+  if (!m) return null;
+  try { return { attr: m[1]!, value: JSON.parse(m[2]!) as string }; }
+  catch { return null; }
 }
 
 /**
@@ -67,13 +69,22 @@ export function isUnsupportedFilter(raw: string | undefined): boolean {
   return typeof raw === 'string' && raw.trim().length > 0 && parseFilter(raw) === null;
 }
 
-export function listResponse<T>(resources: T[]) {
+export const ScimListQuery = z.object({
+  filter: z.string().optional(),
+  startIndex: z.coerce.number().int().min(0).optional(),
+  count: z.coerce.number().int().min(0).optional(),
+});
+
+export function listResponse<T>(resources: T[], query: { startIndex?: number; count?: number } = {}) {
+  const startIndex = Math.max(1, query.startIndex ?? 1);
+  const count = Math.min(200, query.count ?? 200);
+  const page = resources.slice(startIndex - 1, startIndex - 1 + count);
   return {
     schemas: ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
     totalResults: resources.length,
-    startIndex: 1,
-    itemsPerPage: resources.length,
-    Resources: resources,
+    startIndex,
+    itemsPerPage: page.length,
+    Resources: page,
   };
 }
 
