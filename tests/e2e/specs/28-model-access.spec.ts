@@ -20,6 +20,7 @@ test('ChatGPT picker shows published model prices instead of Free', async ({ pag
       accountId: accounts[0].account_id,
       userId: user.id,
       name: 'ChatGPT picker pricing',
+      repoUrl: '',
     });
     projectId = project.id;
     const base = `/projects/${project.id}`;
