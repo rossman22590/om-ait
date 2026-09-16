@@ -105,3 +105,24 @@ test("capture reports failure after three attempts without an infinite retry", a
   ).rejects.toThrow("offline");
   expect(attempts).toBe(3);
 });
+
+test("prepares attachment bytes before sanitizing transcript pages", async () => {
+  const url =
+    "kortix-attachment://11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333";
+  const result = await readTranscriptPages(
+    async () =>
+      Response.json([
+        {
+          info: { id: "msg_file", role: "user" },
+          parts: [{ type: "file", url: "data:text/plain;base64,YQ==" }],
+        },
+      ]),
+    true,
+    async (messages) => {
+      const message = messages[0] as any;
+      expect(message.parts[0].url).toBe("data:text/plain;base64,YQ==");
+      return [{ ...message, parts: [{ ...message.parts[0], url }] }];
+    },
+  );
+  expect(result.rows[0]!.parts[0]!.url).toBe(url);
+});

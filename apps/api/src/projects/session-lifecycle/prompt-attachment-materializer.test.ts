@@ -37,12 +37,55 @@ function materialize(input: Partial<Parameters<typeof materializePromptAttachmen
     sessionId: 'session_1',
     userId: 'user_1',
     materializationKey: 'command_1',
-    writeFile: async (file) => ({ path: file.targetPath, size: file.bytes.byteLength }),
+    writeFile: async (file) => ({
+      path: file.targetPath,
+      size: file.bytes.byteLength,
+    }),
     ...input,
   });
 }
 
 describe('materializePromptAttachments', () => {
+  test('saves every staged first-prompt file before writing it to the runtime', async () => {
+    const events: string[] = [];
+    const url =
+      'kortix-attachment://11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333';
+    const result = await materialize({
+      saveAttachment: async ({ filename, bytes }) => {
+        events.push(`save:${filename}`);
+        expect(bytes.length).toBeGreaterThan(0);
+        return url;
+      },
+      writeFile: async (file) => {
+        events.push(`write:${file.filename}`);
+        return { path: file.targetPath, size: file.bytes.length };
+      },
+    });
+    for (const filename of ['bundle.zip', 'shot.png', 'README.md']) {
+      expect(events.indexOf(`save:${filename}`)).toBeLessThan(events.indexOf(`write:${filename}`));
+    }
+    expect(
+      result
+        .slice(1)
+        .every((part) => part.type === 'text' && part.text?.includes(`attachment="${url}"`)),
+    ).toBe(true);
+  });
+
+  test('storage failure prevents first-prompt delivery and remains retryable', async () => {
+    let writes = 0;
+    await expect(
+      materialize({
+        saveAttachment: async () => {
+          throw new Error('Storage unavailable');
+        },
+        writeFile: async (file) => {
+          writes++;
+          return { path: file.targetPath, size: file.bytes.length };
+        },
+      }),
+    ).rejects.toThrow('Storage unavailable');
+    expect(writes).toBe(0);
+  });
   // A model-native attachment is only worth inlining if the prompt body can
   // still reach the box. Past the budget it is written to the workspace like
   // any other file — a JPEG the runtime never receives is worth less than a
@@ -214,7 +257,10 @@ describe('materializePromptAttachments', () => {
 
     expect(error).toBeInstanceOf(PromptAttachmentMaterializationError);
     expect(error.failures).toEqual([
-      { filename: 'bundle.zip', reason: 'file "bundle.zip" has malformed staged data' },
+      {
+        filename: 'bundle.zip',
+        reason: 'file "bundle.zip" has malformed staged data',
+      },
     ]);
   });
 
@@ -232,7 +278,10 @@ describe('materializePromptAttachments', () => {
 
     expect(error).toBeInstanceOf(PromptAttachmentMaterializationError);
     expect(error.failures).toEqual([
-      { filename: 'bundle.zip', reason: 'file "bundle.zip" has inconsistent MIME metadata' },
+      {
+        filename: 'bundle.zip',
+        reason: 'file "bundle.zip" has inconsistent MIME metadata',
+      },
     ]);
   });
 
@@ -327,7 +376,12 @@ describe('materializePromptAttachments — review findings 2026-09-05', () => {
       inlineBudgetBytes: 10,
       parts: [
         { type: 'text', text: 'see' },
-        { type: 'file', mime: 'image/png', filename: 'in-box.png', url: 'https://box.test/uploads/in-box.png' },
+        {
+          type: 'file',
+          mime: 'image/png',
+          filename: 'in-box.png',
+          url: 'https://box.test/uploads/in-box.png',
+        },
       ],
       writeFile: async (f) => {
         writes.push(f.targetPath);
@@ -335,7 +389,10 @@ describe('materializePromptAttachments — review findings 2026-09-05', () => {
       },
     });
     expect(writes).toEqual([]);
-    expect(result[1]).toMatchObject({ type: 'file', url: 'https://box.test/uploads/in-box.png' });
+    expect(result[1]).toMatchObject({
+      type: 'file',
+      url: 'https://box.test/uploads/in-box.png',
+    });
   });
 
   test('the legacy repair keeps native images inline via an unbounded budget', async () => {
@@ -345,7 +402,12 @@ describe('materializePromptAttachments — review findings 2026-09-05', () => {
       inlineBudgetBytes: Number.POSITIVE_INFINITY,
       parts: [
         png(INLINE_PROMPT_BUDGET_BYTES * 4),
-        { type: 'file', mime: 'application/zip', filename: 'b.zip', url: 'data:application/zip;base64,UEsDBA==' },
+        {
+          type: 'file',
+          mime: 'application/zip',
+          filename: 'b.zip',
+          url: 'data:application/zip;base64,UEsDBA==',
+        },
       ],
       writeFile: async (f) => {
         writes.push(f.filename);
@@ -368,7 +430,10 @@ test('stored attachments materialize after wake and retain a preview reference',
       expect(scope.sessionId).toBe(sessionId);
       return new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' });
     },
-    writeFile: async (input) => { writes.push(input); return { path: input.targetPath, size: input.bytes.length }; },
+    writeFile: async (input) => {
+      writes.push(input);
+      return { path: input.targetPath, size: input.bytes.length };
+    },
   });
   expect(writes).toHaveLength(1);
   expect([...writes[0].bytes]).toEqual([1, 2, 3]);
@@ -379,9 +444,21 @@ test('stored attachments materialize after wake and retain a preview reference',
 
 test('stored attachments cannot be read into another session', async () => {
   let reads = 0;
-  await expect(materialize({
-    parts: [{ type: 'file', mime: 'text/plain', filename: 'notes.txt', url: 'kortix-attachment://11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333' }],
-    readAttachment: async () => { reads++; return new Blob(['private']); },
-  })).rejects.toThrow('another session');
+  await expect(
+    materialize({
+      parts: [
+        {
+          type: 'file',
+          mime: 'text/plain',
+          filename: 'notes.txt',
+          url: 'kortix-attachment://11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333',
+        },
+      ],
+      readAttachment: async () => {
+        reads++;
+        return new Blob(['private']);
+      },
+    }),
+  ).rejects.toThrow('another session');
   expect(reads).toBe(0);
 });

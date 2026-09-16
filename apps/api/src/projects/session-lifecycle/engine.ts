@@ -1,4 +1,6 @@
 import { sessionAttachmentStore } from '../lib/session-attachments';
+import { stableSessionAttachmentId } from '../lib/session-attachment-identity';
+import { resolveFeatureFlag } from '../../feature-flags/registry';
 import { PromptDeliveryRefused, throwIfPromptRefused } from './prompt-delivery-refusal';
 import {
   assertInboxDeliveryActive,
@@ -426,6 +428,7 @@ export async function continueSession(
       projectId: projectSessions.projectId,
       status: projectSessions.status,
       metadata: projectSessions.metadata,
+      projectMetadata: sql<Record<string, unknown> | null>`(SELECT p.metadata FROM kortix.projects p WHERE p.project_id = ${projectSessions.projectId})`,
     })
     .from(projectSessions)
     .where(eq(projectSessions.sessionId, sessionId))
@@ -484,7 +487,7 @@ export async function continueSession(
           userId,
           materializationKey: key,
           writeFile: writeRuntimePromptFile,
-        readAttachment: (scope) => sessionAttachmentStore().read(scope),
+          readAttachment: (scope) => sessionAttachmentStore().read(scope),
           // The runtime already holds this message's native images inline;
           // only the legacy non-native parts need a file behind them.
           inlineBudgetBytes: Number.POSITIVE_INFINITY,
@@ -519,6 +522,8 @@ export async function continueSession(
         overrides: command.overrides,
         wireMessageId: command.wireMessageId,
         materializationKey: command.materializationKey,
+        attachmentProjectId: resolveFeatureFlag(session.projectMetadata, 'session_transcript_history')
+          ? session.projectId : undefined,
       },
     );
     // ACCEPTANCE IS NOT DELIVERY. `prompt_async` answers for the request, and
@@ -2430,6 +2435,7 @@ async function postPrompt(
     overrides?: PromptOverridesWire;
     wireMessageId?: string;
     materializationKey?: string;
+    attachmentProjectId?: string;
   },
 ): Promise<'accepted' | 'deduplicated' | 'failed' | 'unreachable'> {
   const parts: PromptPartWire[] =
@@ -2443,6 +2449,15 @@ async function postPrompt(
         materializationKey: prompt.materializationKey,
         writeFile: writeRuntimePromptFile,
         readAttachment: (scope) => sessionAttachmentStore().read(scope),
+        saveAttachment: prompt.attachmentProjectId ? async (file) => {
+          const saved = await sessionAttachmentStore().put({
+            ...file,
+            projectId: prompt.attachmentProjectId!,
+            sessionId: callerSessionId,
+            attachmentId: stableSessionAttachmentId(`${callerSessionId}:${prompt.materializationKey}:${file.index}`),
+          });
+          return saved.url;
+        } : undefined,
       })
     : parts;
   const overrides = prompt?.overrides;

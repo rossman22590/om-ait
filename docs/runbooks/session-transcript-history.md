@@ -30,7 +30,7 @@ one API process run in order. A newer stored snapshot cannot be overwritten by a
 A complete capture replaces removed messages as well as adding and updating messages.
 
 Message IDs, completion timestamps, and errors survive capture. Existing size limits and
-sanitization still apply: file URLs and tool inputs/outputs are omitted. This is a display copy,
+sanitization still apply: inline file URLs and tool inputs/outputs are omitted. Private attachment references survive capture. This is a display copy,
 not a backup for restoring a runtime or replaying its tool history.
 
 A failed capture preserves the last saved transcript. If all retries fail or the sandbox disappears
@@ -56,9 +56,17 @@ Retrying a failed batch reuses successful uploads and preserves each file's orig
 Different files with the same name retain separate IDs. Disabling the flag stops new saved uploads
 but preserves existing downloads. Deleting a session removes its private attachment objects.
 
-Attachments sent before this feature, and initial prompts created before a session exists, retain
-the existing sandbox-backed behavior. They are not retroactively copied into object storage.
-Missing old sandbox bytes cannot be reconstructed from the transcript's filename and MIME metadata.
+First-message attachments remain in the durable inbox until delivery. With the flag enabled,
+delivery saves every staged file to private storage before sending the prompt to the runtime.
+Storage failure leaves the prompt retryable. The initial create request retains its existing
+12 MiB serialized-parts limit (about 9 MiB of file bytes across the batch).
+
+At capture, older user attachments are recovered from inline bytes or readable workspace files.
+The mirror retains the saved reference. Later captures reuse it even if the original file disappears
+or the flag is disabled. Recovery never downloads external URLs. Each read is bounded to 25 MiB.
+A missing file or storage failure preserves the message and retries recovery on a later capture.
+Enable the flag and complete a turn or stop a running session to recover its older attachments.
+Recovery copies the bytes available at capture time; it cannot reconstruct a file already lost or changed.
 
 ## Local verification
 

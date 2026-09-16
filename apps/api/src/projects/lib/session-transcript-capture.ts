@@ -19,11 +19,16 @@ import {
   sessionTranscriptMessages,
   sessionTranscriptMirrors,
 } from '@kortix/db';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../shared/db';
 import { resolveFeatureFlag } from '../../feature-flags/registry';
 import { readTranscriptPages, retryTranscriptCapture } from './session-transcript-pages';
+import {
+  readTranscriptAttachmentBytes,
+  recoverTranscriptAttachments,
+} from './session-transcript-attachments';
+import { sessionAttachmentStore } from './session-attachments';
 import { sandboxRuntimeRequestHeaders } from '../sandbox-fetch';
 import { resolveSessionOpencodeEndpoint } from '../session-lifecycle/engine';
 import {
@@ -45,7 +50,11 @@ export interface CaptureResult {
 export interface CaptureDeps {
   readMessages: (
     sessionId: string,
-    options?: { fullHistory: boolean },
+    options?: {
+      fullHistory: boolean;
+      projectId?: string;
+      retainHistory?: boolean;
+    },
   ) => Promise<{
     opencodeSessionId: string;
     payload: unknown;
@@ -58,18 +67,70 @@ const liveCaptureDeps: CaptureDeps = {
     const resolved = await resolveSessionOpencodeEndpoint(sessionId);
     if (!resolved) return null;
     const deadline = AbortSignal.timeout(options?.fullHistory ? 60_000 : CAPTURE_TIMEOUT_MS);
-    const result = await readTranscriptPages(async (cursor) => {
-      const url = new URL(
-        `${resolved.endpoint.url}/session/${encodeURIComponent(resolved.opencodeSessionId)}/message`,
-      );
-      url.searchParams.set('directory', WORKSPACE_DIRECTORY);
-      url.searchParams.set('limit', String(MIRROR_CAPTURE_LIMIT));
-      if (cursor) url.searchParams.set('cursor', cursor);
-      return fetch(url, {
-        headers: sandboxRuntimeRequestHeaders(resolved.endpoint.headers),
-        signal: AbortSignal.any([deadline, AbortSignal.timeout(CAPTURE_TIMEOUT_MS)]),
-      });
-    }, options?.fullHistory === true);
+    const previous = options?.retainHistory
+      ? await db
+          .select({
+            messageId: sessionTranscriptMessages.messageId,
+            parts: sessionTranscriptMessages.parts,
+          })
+          .from(sessionTranscriptMessages)
+          .where(
+            and(
+              eq(sessionTranscriptMessages.sessionId, sessionId),
+              eq(sessionTranscriptMessages.opencodeSessionId, resolved.opencodeSessionId),
+            ),
+          )
+      : [];
+    const savedParts = new Map(
+      previous.map((row) => [row.messageId, row.parts as Record<string, unknown>[]]),
+    );
+    const result = await readTranscriptPages(
+      async (cursor) => {
+        const url = new URL(
+          `${resolved.endpoint.url}/session/${encodeURIComponent(resolved.opencodeSessionId)}/message`,
+        );
+        url.searchParams.set('directory', WORKSPACE_DIRECTORY);
+        url.searchParams.set('limit', String(MIRROR_CAPTURE_LIMIT));
+        if (cursor) url.searchParams.set('cursor', cursor);
+        return fetch(url, {
+          headers: sandboxRuntimeRequestHeaders(resolved.endpoint.headers),
+          signal: AbortSignal.any([deadline, AbortSignal.timeout(CAPTURE_TIMEOUT_MS)]),
+        });
+      },
+      options?.fullHistory === true,
+      options?.projectId && options.retainHistory
+        ? (messages) =>
+            recoverTranscriptAttachments({
+              messages,
+              previous: savedParts,
+              projectId: options.projectId!,
+              sessionId,
+              recover: options.fullHistory,
+              signal: deadline,
+              readFile: async (path) => {
+                const response = await fetch(
+                  `${resolved.endpoint.url}/file/raw?path=${encodeURIComponent(path)}`,
+                  {
+                    headers: sandboxRuntimeRequestHeaders(resolved.endpoint.headers),
+                    signal: AbortSignal.any([deadline, AbortSignal.timeout(CAPTURE_TIMEOUT_MS)]),
+                  },
+                );
+                if (response.status === 404) {
+                  await response.body?.cancel();
+                  return null;
+                }
+                return readTranscriptAttachmentBytes(response);
+              },
+              saveFile: (file) => sessionAttachmentStore().put(file),
+              onFailure: (filename, error) =>
+                console.warn('[transcript-attachments] recovery failed', {
+                  sessionId,
+                  filename,
+                  error: error instanceof Error ? error.message : String(error),
+                }),
+            })
+        : undefined,
+    );
     return {
       opencodeSessionId: resolved.opencodeSessionId,
       payload: result.rows,
@@ -111,18 +172,20 @@ async function captureSessionTranscript(
     if (!session) return null;
 
     const fullHistory = resolveFeatureFlag(session.metadata, 'session_transcript_history');
+    const retainHistory =
+      fullHistory || session.metadata?.session_transcript_history_retained === true;
     const capture = async (): Promise<CaptureResult | null> => {
       const startedAt = new Date();
-      const read = await deps.readMessages(sessionId, { fullHistory });
+      const read = await deps.readMessages(sessionId, {
+        fullHistory,
+        projectId: session.projectId,
+        retainHistory,
+      });
       if (!read) return null;
       const rows = mirrorRowsFromOpencodePayload(read.payload);
       if (rows.length === 0 && !fullHistory) return null;
       if (fullHistory && read.headComplete !== true) return null;
 
-      const retainHistory =
-        fullHistory ||
-        (session.metadata as Record<string, unknown> | null)
-          ?.session_transcript_history_retained === true;
       const now = startedAt;
       return await db.transaction(async (tx) => {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${sessionId}))`);

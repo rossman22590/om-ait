@@ -64,7 +64,7 @@ test('30 — saved session history paints while sandbox start and the open bundl
     });
     projectId = project.id;
     disposeProject = project.dispose;
-    const sessionId = await createDatabaseSession(env, {
+    sessionId = await createDatabaseSession(env, {
       projectId,
       accountId,
       userId: user.id,
@@ -234,7 +234,8 @@ test('30 — saved session history paints while sandbox start and the open bundl
     releaseSend();
     await page.unrouteAll({ behavior: 'ignoreErrors' });
     if (projectId) {
-      if (sessionId) await api(auth.access_token, 'DELETE', `/projects/${projectId}/sessions/${sessionId}`);
+      if (sessionId)
+        await api(auth.access_token, 'DELETE', `/projects/${projectId}/sessions/${sessionId}`);
       await runDatabaseSql(
         "UPDATE kortix.project_sessions SET metadata = metadata || jsonb_build_object('deletedAt', now()::text) WHERE project_id = $1",
         [projectId],
@@ -276,10 +277,11 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
     const suffix = Date.now().toString(36).toUpperCase();
     const firstReply = `HISTORY_FIRST_${suffix}`;
     const secondReply = `HISTORY_SECOND_${suffix}`;
+    const legacyReply = `HISTORY_LEGACY_${suffix}`;
     const prompt = (reply: string) =>
       reply === secondReply
         ? 'Read the attached wake-notes.txt file with a tool. Reply with exactly its contents, without other text.'
-        : `Do not use tools. Reply with exactly this text: ${reply}`;
+        : 'Read the attached first-notes.txt file with a tool. Reply with exactly its contents, without other text.';
     const email = `transcript-live-${Date.now()}@example.test`;
     const user = await createAuthUser(email, authOptions);
     const auth = await signIn(email, authOptions);
@@ -318,7 +320,27 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
         auth.access_token,
         'POST',
         `/projects/${projectId}/sessions`,
-        { name: `Live transcript ${suffix}` },
+        {
+          name: `Live transcript ${suffix}`,
+          pending_prompt: {
+            text: prompt(firstReply),
+            parts: [
+              { type: 'text', text: prompt(firstReply) },
+              {
+                type: 'file',
+                filename: 'first-image.png',
+                mime: imageFixture.mimeType,
+                url: `data:${imageFixture.mimeType};base64,${imageFixture.buffer.toString('base64')}`,
+              },
+              {
+                type: 'file',
+                filename: 'first-notes.txt',
+                mime: 'text/plain',
+                url: `data:text/plain;base64,${Buffer.from(firstReply).toString('base64')}`,
+              },
+            ],
+          },
+        },
         201,
       );
       sessionId = session.session_id;
@@ -367,12 +389,6 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
       const editor = page.getByRole('textbox', { name: 'Message input' });
       await test.step('a streamed reply reaches the database before manual stop', async () => {
         await expect(editor).toBeVisible({ timeout: 120_000 });
-        await editor.fill(prompt(firstReply));
-        const accepted = page.waitForResponse(
-          (r) => r.request().method() === 'POST' && r.url().endsWith(`${sessionPath}/prompts`),
-        );
-        await page.getByRole('button', { name: 'Send message', exact: true }).click();
-        expect((await accepted).status()).toBe(202);
         await expect(page.getByText(firstReply, { exact: true })).toBeVisible({
           timeout: 180_000,
         });
@@ -383,6 +399,20 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
           })
           .toBe(1);
         expect((await readHistory()).source).toBe('mirror');
+        const firstDelivery = await queryDatabaseRows<{ requested_id: string }>(
+          "SELECT payload->>'wireMessageId' AS requested_id FROM kortix.session_lifecycle_commands WHERE session_id=$1 AND payload->>'clientMessageId'=$2",
+          [sessionId, `pending:${sessionId}`],
+          env.databaseUrl,
+        );
+        expect(firstDelivery).toHaveLength(1);
+        submittedIds.push(firstDelivery[0].requested_id);
+        const firstUser = (await readHistory()).messages.find(
+          (message) => message.info.role === 'user',
+        )!;
+        const firstText = textOf(firstUser);
+        expect(firstText).toContain('filename="first-image.png"');
+        expect(firstText).toContain('filename="first-notes.txt"');
+        expect([...firstText.matchAll(/attachment="kortix-attachment:\/\//g)]).toHaveLength(2);
       });
       const originalIds = (await readHistory()).messages.map((message) => message.info.id);
       await page.goto(`/projects/${projectId}/settings/feature-flags`, {
@@ -505,6 +535,46 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
           expect(savedReply(history, reply)[0].info.parentID).toBe(messages[0].info.id);
         }
       });
+      await test.step('enabling history recovers an older inline image and sandbox file', async () => {
+        await api(auth.access_token, 'PATCH', `/projects/${projectId}/features`, {
+          feature: 'session_transcript_history',
+          enabled: false,
+        });
+        const legacyPrompt =
+          'Read the attached legacy-notes.txt file with a tool. Reply with exactly its contents, without other text.';
+        await api(
+          auth.access_token,
+          'POST',
+          `${sessionPath}/prompts`,
+          {
+            client_message_id: `legacy-${suffix}`,
+            message_id: `msg_${((Date.now() - 120_000) * 4096).toString(16).slice(-12).padStart(12, '0')}legacy00000001`,
+            parts: [
+              { type: 'text', text: legacyPrompt },
+              {
+                type: 'file',
+                filename: 'legacy-image.png',
+                mime: imageFixture.mimeType,
+                url: `data:${imageFixture.mimeType};base64,${imageFixture.buffer.toString('base64')}`,
+              },
+              {
+                type: 'file',
+                filename: 'legacy-notes.txt',
+                mime: 'text/plain',
+                url: `data:text/plain;base64,${Buffer.from(legacyReply).toString('base64')}`,
+              },
+            ],
+          },
+          202,
+        );
+        await expect(page.getByText(legacyReply, { exact: true })).toBeVisible({
+          timeout: 240_000,
+        });
+        await api(auth.access_token, 'PATCH', `/projects/${projectId}/features`, {
+          feature: 'session_transcript_history',
+          enabled: true,
+        });
+      });
       await test.step('saved attachments and completed replies load while the computer is stopped', async () => {
         await page.goto(`/projects/${projectId}/settings/feature-flags`, {
           waitUntil: 'domcontentloaded',
@@ -533,6 +603,23 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
         const chunks: Buffer[] = [];
         for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
         expect(Buffer.concat(chunks).toString()).toBe(secondReply);
+        for (const [imageName, textName, expectedText] of [
+          ['first-image.png', 'first-notes.txt', firstReply],
+          ['legacy-image.png', 'legacy-notes.txt', legacyReply],
+        ]) {
+          const image = page.getByRole('img', { name: imageName, exact: true });
+          await expect(image).toBeVisible();
+          await expect
+            .poll(() => image.evaluate((node) => (node as HTMLImageElement).naturalWidth))
+            .toBe(1);
+          const download = page.waitForEvent('download');
+          await page.getByRole('button', { name: textName, exact: false }).click();
+          const stream = await (await download).createReadStream();
+          const chunks: Buffer[] = [];
+          for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+          expect(Buffer.concat(chunks).toString()).toBe(expectedText);
+        }
+        await expect(page.getByText(legacyReply, { exact: true })).toHaveCount(1);
         await expect(page.getByText(firstReply, { exact: true })).toHaveCount(1);
         await expect(page.getByText(secondReply, { exact: true })).toHaveCount(1);
         await page.screenshot({

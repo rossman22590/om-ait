@@ -55,6 +55,7 @@
  */
 
 import { sessionTranscriptMessages, sessionTranscriptMirrors } from '@kortix/db';
+import { parseSessionAttachmentRef } from '@kortix/shared';
 import { count, eq, sql } from 'drizzle-orm';
 
 import { db } from '../../shared/db';
@@ -117,7 +118,7 @@ export function sanitizeParts(raw: unknown): Array<Record<string, unknown>> {
 
     if (type === 'file') {
       // A base64 `data:` url here is the entire 7-19 MB transcript incident.
-      delete part.url;
+      if (!parseSessionAttachmentRef(part.url)) delete part.url;
       delete part.source;
     }
 
