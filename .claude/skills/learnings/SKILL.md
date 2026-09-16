@@ -21,6 +21,15 @@ linked, not inlined.
 
 ## Register
 
+### Keep subscription usage separate from API token prices (2026-09-15)
+
+**When:** serving model rates or aggregating session/turn cost. Give ChatGPT/Codex
+subscription routes explicit zero rates. Exclude their historical runtime costs
+before applying token estimates or markup. Preserve tokens and paid API costs.
+*Incident:* a reported ChatGPT session displayed `$7.91` from inherited OpenAI
+API prices. *Enforcers:* SDK turn-cost tests, catalog tests, REST flow `GW-5`,
+and browser journey 26 cover subscription-only and mixed sessions.
+
 ### Let Docker readiness decide whether a sandbox can run the preview (2026-09-15)
 
 **When:** preparing a Daytona warm image, attempt kernel module loads but do not
