@@ -1,11 +1,12 @@
+import type { UploadResult } from '@/features/files/api/runtime-files';
+import { attachmentMime } from '@/features/session/attachment-mime';
+import type { AttachedFile } from '@/features/session/session-chat-input';
+import type { SessionAttachment } from '@kortix/sdk';
 import {
   MAX_PROMPT_UPLOAD_FILENAME_BYTES,
   promptFileReferenceXml,
   sanitizePromptUploadFilename,
 } from '@kortix/shared';
-import type { UploadResult } from '@/features/files/api/runtime-files';
-import { attachmentMime } from '@/features/session/attachment-mime';
-import type { AttachedFile } from '@/features/session/session-chat-input';
 
 export type PromptFilePart = {
   type: 'file';
@@ -40,6 +41,7 @@ export type UploadedFileRef = {
    * `image.png`) produced three identical React keys.
    */
   pendingId?: string;
+  attachmentUrl?: string;
 };
 
 export const UPLOADS_DIR = '/workspace/uploads';
@@ -66,6 +68,7 @@ export function uploadedFileRefXml(input: UploadedFileRef): string {
     mime: input.mime,
     filename: input.filename,
     pendingId: input.pendingId,
+    attachmentUrl: input.attachmentUrl,
   });
 }
 
@@ -299,4 +302,47 @@ export async function stageFirstPromptAttachments(
       };
     }),
   );
+}
+
+export async function buildPromptPartsWithStoredAttachments(
+  text: string,
+  files: AttachedFile[] | undefined,
+  upload: (file: File) => Promise<SessionAttachment>,
+): Promise<{ text: string; remoteParts: PromptFilePart[] }> {
+  const settled = await Promise.allSettled(
+    (files ?? []).map(async (file): Promise<PromptFilePart> => {
+      if (file.kind === 'remote')
+        return { type: 'file', mime: file.mime, filename: file.filename, url: file.url };
+      const saved = await upload(file.file);
+      return {
+        type: 'file',
+        mime: attachmentMime(saved.mime, saved.filename),
+        filename: saved.filename,
+        url: saved.url,
+      };
+    }),
+  );
+  const remoteParts: PromptFilePart[] = [];
+  const failures: UploadFailure[] = [];
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') remoteParts.push(result.value);
+    else {
+      const file = files![index];
+      failures.push({
+        filename: file.kind === 'local' ? file.file.name : file.filename,
+        reason: failureReason(result.reason),
+      });
+    }
+  });
+  if (failures.length)
+    throw new UploadBatchError(
+      failures,
+      remoteParts.map((part) => ({
+        path: '',
+        mime: part.mime,
+        filename: part.filename,
+        attachmentUrl: part.url,
+      })),
+    );
+  return { text, remoteParts };
 }

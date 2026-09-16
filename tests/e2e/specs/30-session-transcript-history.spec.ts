@@ -18,6 +18,15 @@ import {
   selectAccountForUi,
 } from '../helpers/ui';
 
+const imageFixture = {
+  name: 'wake-image.png',
+  mimeType: 'image/png',
+  buffer: Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jWZkAAAAASUVORK5CYII=',
+    'base64',
+  ),
+};
+
 const api = createApiJsonClient(process.env.E2E_API_URL!);
 const authOptions = {
   supabaseUrl: process.env.E2E_SUPABASE_URL!,
@@ -54,7 +63,11 @@ test('30 — saved session history paints while sandbox start and the open bundl
     });
     projectId = project.id;
     disposeProject = project.dispose;
-    const sessionId = await createDatabaseSession(env, { projectId, accountId, userId: user.id });
+    const sessionId = await createDatabaseSession(env, {
+      projectId,
+      accountId,
+      userId: user.id,
+    });
     await seedSessionTranscript(env, { projectId, accountId, sessionId });
     await runDatabaseSql(
       "UPDATE kortix.project_sessions SET agent_name='kortix' WHERE session_id=$1",
@@ -138,26 +151,68 @@ test('30 — saved session history paints while sandbox start and the open bundl
       await route.continue().catch(() => {});
     });
     const editor = page.locator('[contenteditable="true"]').first();
+    await page
+      .locator('input[type="file"]')
+      .last()
+      .setInputFiles([
+        imageFixture,
+        {
+          name: 'wake-notes.txt',
+          mimeType: 'text/plain',
+          buffer: Buffer.from('Saved before sandbox startup.'),
+        },
+      ]);
     await editor.fill('Continue while the computer starts.');
-    const send = page.getByRole('button', { name: 'Send message', exact: true });
+    const send = page.getByRole('button', {
+      name: 'Send message',
+      exact: true,
+    });
     await expect(send).toBeEnabled();
     const submitted = page.waitForRequest(
       (r) => r.url().endsWith(`/sessions/${sessionId}/prompts`) && r.method() === 'POST',
     );
     await send.click();
     const request = await submitted;
-    expect(request.postDataJSON().parts).toEqual([
-      { type: 'text', text: 'Continue while the computer starts.' },
-    ]);
-    await expect(page.getByText('Continue while the computer starts.', { exact: true })).toBeVisible();
+    const promptParts = request.postDataJSON().parts;
+    expect(promptParts).toHaveLength(3);
+    expect(promptParts[0]).toEqual({
+      type: 'text',
+      text: 'Continue while the computer starts.',
+    });
+    for (const part of promptParts.slice(1))
+      expect(part.url).toMatch(new RegExp(`^kortix-attachment://${projectId}/${sessionId}/`));
+    const preview = page.getByRole('img', {
+      name: 'wake-image.png',
+      exact: true,
+    });
+    await expect(preview).toBeVisible();
+    await expect
+      .poll(() => preview.evaluate((node) => (node as HTMLImageElement).naturalWidth))
+      .toBe(1);
+    const downloaded = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'wake-notes.txt', exact: false }).click();
+    const file = await downloaded;
+    expect(file.suggestedFilename()).toBe('wake-notes.txt');
+    const stream = await file.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+    expect(Buffer.concat(chunks).toString()).toBe('Saved before sandbox startup.');
+    await expect(
+      page.getByText('Continue while the computer starts.', { exact: true }),
+    ).toBeVisible();
     await expect(page.getByTestId('session-busy-indicator')).toBeVisible();
     await expect(page.getByTestId('session-busy-indicator')).toContainText('Thinking');
     await expect(
-      page.getByText('Starting your computer… your message will send automatically.', { exact: true }),
+      page.getByText('Starting your computer… your message will send automatically.', {
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(editor).toHaveText('');
     expect(startResponded).toBe(false);
-    await page.screenshot({ path: testInfo.outputPath('send-before-sandbox-ready.png'), fullPage: true });
+    await page.screenshot({
+      path: testInfo.outputPath('send-before-sandbox-ready.png'),
+      fullPage: true,
+    });
     const accepted = page.waitForResponse(
       (r) => r.url().endsWith(`/sessions/${sessionId}/prompts`) && r.request().method() === 'POST',
     );
@@ -219,7 +274,10 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
     const suffix = Date.now().toString(36).toUpperCase();
     const firstReply = `HISTORY_FIRST_${suffix}`;
     const secondReply = `HISTORY_SECOND_${suffix}`;
-    const prompt = (reply: string) => `Do not use tools. Reply with exactly this text: ${reply}`;
+    const prompt = (reply: string) =>
+      reply === secondReply
+        ? 'Read the attached wake-notes.txt file with a tool. Reply with exactly its contents, without other text.'
+        : `Do not use tools. Reply with exactly this text: ${reply}`;
     const email = `transcript-live-${Date.now()}@example.test`;
     const user = await createAuthUser(email, authOptions);
     const auth = await signIn(email, authOptions);
@@ -360,6 +418,17 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
         expect((await history).status()).toBe(200);
         await expect(page.getByText(firstReply, { exact: true })).toBeVisible();
         await expect.poll(() => startRequested).toBe(true);
+        await page
+          .locator('input[type="file"]')
+          .last()
+          .setInputFiles([
+            imageFixture,
+            {
+              name: 'wake-notes.txt',
+              mimeType: 'text/plain',
+              buffer: Buffer.from(secondReply),
+            },
+          ]);
         await editor.fill(prompt(secondReply));
         const accepted = page.waitForResponse(
           (r) => r.request().method() === 'POST' && r.url().endsWith(`${sessionPath}/prompts`),
@@ -367,7 +436,13 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
         await page.getByRole('button', { name: 'Send message', exact: true }).click();
         await expect(page.getByText(prompt(secondReply), { exact: true })).toBeVisible();
         await expect(page.getByTestId('session-busy-indicator')).toContainText('Thinking');
-        expect((await accepted).status()).toBe(202);
+        const acceptedResponse = await accepted;
+        expect(acceptedResponse.status()).toBe(202);
+        const sentParts = acceptedResponse.request().postDataJSON().parts;
+        expect(sentParts).toHaveLength(3);
+        for (const part of sentParts.slice(1))
+          expect(part.url).toMatch(new RegExp(`^kortix-attachment://${projectId}/${sessionId}/`));
+        await expect(page.getByRole('img', { name: 'wake-image.png', exact: true })).toBeVisible();
         await page.screenshot({
           path: testInfo.outputPath('real-send-during-wake.png'),
           fullPage: true,
@@ -422,14 +497,40 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
           expect(history.messages.map((message) => message.info.id)).toContain(id);
         for (const reply of [firstReply, secondReply]) {
           const messages = history.messages.filter(
-            (message) => message.info.role === 'user' && textOf(message) === prompt(reply),
+            (message) => message.info.role === 'user' && textOf(message).startsWith(prompt(reply)),
           );
           expect(messages).toHaveLength(1);
           expect(savedReply(history, reply)[0].info.parentID).toBe(messages[0].info.id);
         }
       });
-      await test.step('a fresh page keeps both completed replies without duplicates', async () => {
-        await page.reload({ waitUntil: 'domcontentloaded' });
+      await test.step('saved attachments and completed replies load while the computer is stopped', async () => {
+        await page.goto(`/projects/${projectId}/settings/feature-flags`, {
+          waitUntil: 'domcontentloaded',
+        });
+        await api(auth.access_token, 'POST', `${sessionPath}/stop`, {});
+        const held = new Promise<void>((resolve) => {
+          releaseStart = resolve;
+        });
+        await page.route(`**/sessions/${sessionId}/start*`, async (route) => {
+          await held;
+          await route.continue().catch(() => {});
+        });
+        await page.goto(sessionPath, { waitUntil: 'domcontentloaded' });
+        const savedImage = page.getByRole('img', {
+          name: 'wake-image.png',
+          exact: true,
+        });
+        await expect(savedImage).toBeVisible();
+        await expect
+          .poll(() => savedImage.evaluate((node) => (node as HTMLImageElement).naturalWidth))
+          .toBe(1);
+        const downloaded = page.waitForEvent('download');
+        await page.getByRole('button', { name: 'wake-notes.txt', exact: false }).click();
+        const file = await downloaded;
+        const stream = await file.createReadStream();
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+        expect(Buffer.concat(chunks).toString()).toBe(secondReply);
         await expect(page.getByText(firstReply, { exact: true })).toHaveCount(1);
         await expect(page.getByText(secondReply, { exact: true })).toHaveCount(1);
         await page.screenshot({

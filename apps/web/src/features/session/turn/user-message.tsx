@@ -3,6 +3,8 @@
 /** Moved from session-chat.tsx (`UserMessageRow`) so the turn module owns the
  *  user-message card. Full-width card, no reference chips. */
 
+import { fetchSessionAttachment, isSessionAttachmentRef } from '@kortix/sdk';
+import { toast } from 'sonner';
 import { useTranslations } from '@/i18n/use-translations';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -453,6 +455,7 @@ interface OrderedUploadReference {
   mime: string;
   filename: string;
   pending?: string;
+  attachment?: string;
   sourcePartIndex: number;
 }
 
@@ -530,6 +533,7 @@ export function normalizeAttachments(
     mime: string;
     filename: string;
     pending?: string;
+    attachment?: string;
     sourcePartIndex?: number;
   }>,
 ): NormalizedAttachment[] {
@@ -552,9 +556,9 @@ export function normalizeAttachments(
       key: `upload:${index}:${file.pending ?? file.path}`,
       filename: file.filename || getFilename(file.path),
       mime: file.mime,
-      src: file.path || undefined,
+      src: file.attachment || file.path || undefined,
       path: file.path || undefined,
-      pending: Boolean(file.pending) || !file.path,
+      pending: Boolean(file.pending) || (!file.path && !file.attachment),
     });
   };
 
@@ -708,6 +712,31 @@ export interface AttachmentUploadStatus {
   message?: string;
 }
 
+function StoredAttachmentFile({ file, pending }: { file: NormalizedAttachment; pending?: boolean }) {
+  const [downloading, setDownloading] = useState(false);
+  const download = async () => {
+    if (downloading) return;
+    setDownloading(true);
+    try {
+      const blob = await fetchSessionAttachment(file.src!);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = file.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not download attachment');
+    } finally {
+      setDownloading(false);
+    }
+  };
+  return <AttachmentTile filename={file.filename} mime={file.mime} pending={pending || downloading}
+    onOpen={() => void download()} />;
+}
+
 export function MessageAttachments({
   attachments,
   pending,
@@ -774,6 +803,9 @@ export function MessageAttachments({
           );
         }
 
+        if (isSessionAttachmentRef(file.src)) {
+          return <li key={file.key} className="contents"><StoredAttachmentFile file={file} pending={pending} /></li>;
+        }
         const canOpen = Boolean(file.path);
         return (
           <li key={file.key} className="contents">

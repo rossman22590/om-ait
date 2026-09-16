@@ -443,3 +443,22 @@ describe('stageFirstPromptAttachments', () => {
     expect(await stageFirstPromptAttachments([])).toEqual([]);
   });
 });
+
+test('stages local attachments in original order and names individual failures', async () => {
+  const { buildPromptPartsWithStoredAttachments } = await import('./uploaded-file-refs');
+  const first = localFile('image.png', 'image/png');
+  const second = localFile('image.png', 'image/png');
+  const remote = remoteFile();
+  const saved = async (file: File) => ({
+    attachment_id: file === first.file ? 'first' : 'second',
+    filename: file.name, mime: file.type, size: file.size,
+    url: file === first.file ? 'saved:first' : 'saved:second',
+  });
+  const result = await buildPromptPartsWithStoredAttachments('read these', [first, remote, second], saved);
+  expect(result.text).toBe('read these');
+  expect(result.remoteParts.map((part) => part.url)).toEqual(['saved:first', remote.url, 'saved:second']);
+  await expect(buildPromptPartsWithStoredAttachments('read these', [first, second], async (file) => {
+    if (file === second.file) throw new Error('network interrupted');
+    return saved(file);
+  })).rejects.toThrow('image.png — network interrupted');
+});

@@ -3,6 +3,7 @@
 import { Disclosure, DisclosureContent, DisclosureTrigger } from '@/components/ui/disclosure';
 import { SystemMessage } from '@/components/ui/system-message';
 import { stripKortixSystemTags } from '@/lib/utils/kortix-system-tags';
+import { isSessionAttachmentRef } from '@kortix/sdk';
 
 // ============================================================================
 // Parse <file> XML references from uploaded file text parts
@@ -16,6 +17,7 @@ interface ParsedFileRef {
    *  stable per-attachment id standing in for the absent server path. See
    *  `uploaded-file-refs.ts`. */
   pending?: string;
+  attachment?: string;
 }
 
 // Attributes are read by NAME, not by position, so an optional `pending` can be
@@ -44,11 +46,13 @@ export function parseFileReferences(text: string): {
       // rather than silently swallowing it.
       if (path === undefined && filename === undefined) return whole;
       const pending = pick('pending');
+      const attachment = pick('attachment');
       files.push({
         path: path ?? '',
         mime: pick('mime') ?? '',
         filename: filename ?? '',
         ...(pending ? { pending } : {}),
+        ...(isSessionAttachmentRef(attachment) ? { attachment } : {}),
       });
       return '';
     })

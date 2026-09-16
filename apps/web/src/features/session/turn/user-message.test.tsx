@@ -638,3 +638,10 @@ describe('UserMessage inline edit-from-here editor', () => {
     expect(markup).toContain('ship the thing');
   });
 });
+
+test('saved attachments are available before their sandbox path exists', async () => {
+  const { normalizeAttachments } = await import('./user-message');
+  const ref = 'kortix-attachment://11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333';
+  const attachments = normalizeAttachments([], [{ path: '', filename: 'a.png', mime: 'image/png', attachment: ref }]);
+  expect(attachments[0]).toMatchObject({ src: ref, pending: false });
+});

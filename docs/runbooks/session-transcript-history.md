@@ -41,6 +41,25 @@ Projects that complete a full capture receive `metadata.session_transcript_histo
 This preserves their stored history when the feature flag is turned off. Disabling the flag restores
 the existing session-open and tail-capture behavior; it does not prune previously retained history.
 
+## Attachments
+
+With the flag enabled, the existing-session composer saves new local files through the API
+before queueing the prompt. Each file has a stable `kortix-attachment://` reference. The private
+Supabase Storage bucket `session-attachments` holds the bytes; transcript rows hold references,
+filenames, and MIME types. The API creates the bucket on the first upload. No schema migration
+is required. The limit is 25 MiB per file.
+
+The prompt inbox stores references while the computer starts. Delivery writes each file to a
+deterministic sandbox path and puts that path plus the private reference in the message. Image
+previews and file downloads use authenticated API reads, including while the computer is stopped.
+Retrying a failed batch reuses successful uploads and preserves each file's original position.
+Different files with the same name retain separate IDs. Disabling the flag stops new saved uploads
+but preserves existing downloads. Deleting a session removes its private attachment objects.
+
+Attachments sent before this feature, and initial prompts created before a session exists, retain
+the existing sandbox-backed behavior. They are not retroactively copied into object storage.
+Missing old sandbox bytes cannot be reconstructed from the transcript's filename and MIME metadata.
+
 ## Local verification
 
 From the canonical worktree:
@@ -58,7 +77,7 @@ Supabase database. Sign in with your local account.
 4. Confirm both sides of the conversation appear while the computer starts.
 5. Type and send before startup finishes. Confirm the message and Thinking appear immediately.
 6. Wait for startup. Confirm the message runs once and the conversation stays in order.
-7. Send another message. Confirm streaming, completion, and reopening still work.
+7. Attach an image and a text file before startup finishes. Confirm previews, one delivery, and downloads after reopening.
 8. Disable the flag and confirm the prior session-open behavior remains usable.
 
 An old session with no saved transcript falls back to the live runtime. Complete a turn with
@@ -67,6 +86,7 @@ is rejected rather than used to select that old root.
 
 ## Automated checks
 
+- `pnpm test -- --id SESS-31`: stopped-session upload/download, immutable retries, 25 MiB limit, access checks, flag rollback, and deletion cleanup.
 - `pnpm test -- --id SESS-30`: real HTTP flag enforcement, stopped-session reads, access checks,
   and replaced-root rejection.
 - `E2E_GREP='30 — saved session history' pnpm test -- --browser-only`: toggles the flag in the

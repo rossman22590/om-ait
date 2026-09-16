@@ -133,6 +133,8 @@ import {
 import {
   buildOptimisticPromptTextWithUploads,
   buildPromptPartsWithUploads,
+  buildPromptPartsWithStoredAttachments,
+  uploadedFileRefXml,
 } from '@/features/session/uploaded-file-refs';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
 import { useModelPricingLookup } from '@/lib/model-pricing';
@@ -197,7 +199,7 @@ import {
   shouldShowToolPart,
   unwrapError,
 } from '@/ui';
-import { isAbortError } from '@kortix/sdk';
+import { isAbortError, uploadSessionAttachment, isSessionAttachmentRef } from '@kortix/sdk';
 import type { ProviderListResponse } from '@kortix/sdk/react';
 import {
   type AbortSettlement,
@@ -3874,7 +3876,10 @@ export function SessionChat({
       > = [textPrompt];
       let built: Awaited<ReturnType<typeof buildPromptPartsWithUploads>>;
       try {
-        built = await buildPromptPartsWithUploads(textPrompt.text, attachedFiles, uploadFile);
+        built = transcriptHistory.enabled && projectId && projectSessionId
+          ? await buildPromptPartsWithStoredAttachments(textPrompt.text, attachedFiles,
+              (file) => uploadSessionAttachment(projectId, projectSessionId, file))
+          : await buildPromptPartsWithUploads(textPrompt.text, attachedFiles, uploadFile);
       } catch (err) {
         // Never reached the network — nothing to rehydrate from the server,
         // so just clear busy and drop the optimistic message outright.
@@ -3887,6 +3892,7 @@ export function SessionChat({
       }
       textPrompt.text = built.text;
       parts.push(...built.remoteParts);
+
 
       // Append session reference hints for @session mentions.
       // Merge tracked mentions with any raw @ses_<id> tags typed directly.
@@ -3955,6 +3961,15 @@ export function SessionChat({
       // silently dropped. Do not "restore" the old no-messageID behaviour on
       // the strength of the part-id reasoning above — they are not the same
       // hazard, and the mint is the guard against this one.
+      if (!willQueue && built.remoteParts.some((part) => isSessionAttachmentRef(part.url))) {
+        const refs = built.remoteParts.map((part) => uploadedFileRefXml({
+          path: isSessionAttachmentRef(part.url) ? '' : part.url,
+          mime: part.mime, filename: part.filename,
+          attachmentUrl: isSessionAttachmentRef(part.url) ? part.url : undefined,
+        })).join('\n');
+        beginOptimisticSend(sessionId, messageID, `${textPrompt.text}\n\n${refs}`, [textPartId]);
+        markOptimisticSendInboxBacked(sessionId, messageID);
+      }
       const mappedParts = parts.map((p: any) => {
         if (p.type === 'file')
           return {
