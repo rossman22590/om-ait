@@ -1270,7 +1270,6 @@ flow(
     ],
   },
   async (ctx) => {
-    const project = await ctx.fixtures.project({ managedGit: true });
     const owner = ctx.client.as(ctx.P.OWNER);
     const { randomUUID } = await import('node:crypto');
     const { Client } = await import('pg');
@@ -1280,12 +1279,24 @@ flow(
       connectionString: databaseUrl,
       ssl: local ? false : { rejectUnauthorized: false },
     });
+    const team = await ctx.fixtures.team();
+    await db.connect();
     const sessionId = randomUUID();
     const commandId = randomUUID();
-    const params = { projectId: project.id, sessionId };
-    const promptPath = '/v1/projects/:projectId/sessions/:sessionId/prompts';
     try {
-      await db.connect();
+      await db.query(
+        `INSERT INTO kortix.credit_accounts
+         (account_id, balance, balance_precise, non_expiring_credits, non_expiring_credits_precise, tier)
+         VALUES ($1, 1000, 1000, 1000, 1000, 'tier_2_20')
+         ON CONFLICT (account_id) DO UPDATE SET
+           balance = 1000, balance_precise = 1000,
+           non_expiring_credits = 1000, non_expiring_credits_precise = 1000,
+           tier = 'tier_2_20'`,
+        [team.id],
+      );
+      const project = await team.project({ managedGit: true });
+      const params = { projectId: project.id, sessionId };
+      const promptPath = '/v1/projects/:projectId/sessions/:sessionId/prompts';
       await ctx.step('create a session requiring an unavailable connector', async () => {
         const config = await owner.put(
           '/v1/projects/:projectId/agents/:agentName/config',
@@ -1297,7 +1308,7 @@ flow(
           `INSERT INTO kortix.project_sessions
         (session_id, account_id, project_id, branch_name, agent_name, status, created_by, visibility, required_connectors)
         VALUES ($1, $2, $3, 'main', 'kortix', 'running', $4, 'project', '["missing-gmail"]'::jsonb)`,
-          [sessionId, ctx.P.accountId, project.id, ctx.P.OWNER.userId],
+          [sessionId, team.id, project.id, ctx.P.OWNER.userId],
         );
       });
       await ctx.step('POST returns the connector refusal and creates no inbox row', async () => {
@@ -1327,7 +1338,7 @@ flow(
          actor_user_id, payload, locked_by, locked_until)
         VALUES ($1, 'continue_session', 'ui', 'running', $2, $3, $4, $5,
           '{"text":"hello","clientMessageId":"stop-running"}'::jsonb, 'SESS-29', now() + interval '1 hour')`,
-            [commandId, project.id, sessionId, ctx.P.accountId, ctx.P.OWNER.userId],
+            [commandId, project.id, sessionId, team.id, ctx.P.OWNER.userId],
           );
           const held = await owner.post(`${promptPath}/hold`, { held: true }, { params });
           held.status(200);
@@ -1349,18 +1360,18 @@ flow(
         const connector = await db.query(
           `INSERT INTO kortix.connectors (account_id, project_id, slug, name, provider_type, config, enabled)
            VALUES ($1, $2, 'optional-gmail', 'Optional Gmail', 'openapi', '{}'::jsonb, false)
-           RETURNING connector_id`, [ctx.P.accountId, project.id],
+           RETURNING connector_id`, [team.id, project.id],
         );
         const connection = await db.query(
           `INSERT INTO kortix.connector_connections (account_id, project_id, connector_id, owner_type, label)
            VALUES ($1, $2, $3, 'project', 'Optional Gmail') RETURNING connection_id`,
-          [ctx.P.accountId, project.id, connector.rows[0].connector_id],
+          [team.id, project.id, connector.rows[0].connector_id],
         );
         await db.query(
           `INSERT INTO kortix.project_session_connector_bindings
            (session_id, account_id, project_id, connector_alias, connector_id, connection_id)
            VALUES ($1, $2, $3, 'optional-gmail', $4, $5)`,
-          [sessionId, ctx.P.accountId, project.id, connector.rows[0].connector_id, connection.rows[0].connection_id],
+          [sessionId, team.id, project.id, connector.rows[0].connector_id, connection.rows[0].connection_id],
         );
         await db.query('UPDATE kortix.project_sessions SET required_connectors = NULL WHERE session_id = $1', [sessionId]);
         const body = {
