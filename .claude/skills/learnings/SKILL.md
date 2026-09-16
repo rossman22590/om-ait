@@ -21,6 +21,50 @@ linked, not inlined.
 
 ## Register
 
+### Let Docker readiness decide whether a sandbox can run the preview (2026-09-15)
+
+**When:** preparing a Daytona warm image, attempt kernel module loads but do not
+abort on a denied `modprobe`. Require the bounded `docker info` gate to pass.
+*Incident:* PR #7267's fallback stopped on `iptable_nat: Operation not permitted`;
+the same base image started Docker and pulled Supabase images with this check.
+Platinum's earlier `503 body-budget-exhausted` came from its public proxy, not
+Kortix. Inspect response bodies before attributing preview failures to the app.
+*Enforcer:* `daytona-ci.test.ts` requires advisory module loads and Docker readiness.
+
+### Give the preview frontend enough heap for the full browser gate (2026-09-15)
+
+**When:** configuring a full self-host preview. Persist its frontend memory limit
+through `KORTIX_FRONTEND_MEMORY_LIMIT`; do not edit generated Compose limits.
+*Incident:* PR #7267's frontend restarted five times with `Reached heap limit`
+under its 512 MiB container limit while the 16 GiB host had over 12 GiB available.
+Browser navigation failures masked the terminal test behind infrastructure noise.
+*Enforcer:* `preview-stack.test.ts` requires a 2048 MiB preview frontend limit;
+also inspect the deployed container limit and restart count after the full gate.
+
+
+
+### Diagnose terminal close 1006 from the server refusal before calling it a wake (2026-09-15)
+
+**When:** investigating a browser terminal that fails while CLI attach works.
+Match the PTY path and timestamp to `[preview-ws] REFUSED`; a browser error alone
+cannot distinguish authentication from readiness. The reported 16:12 EDT session
+had 27 `401 unauthorized` refusals from 20:11–20:16 UTC, not readiness 503s.
+Its valid HS256 token worked over HTTP but the old WebSocket gate rejected it.
+Release 0.13.17 fixed that gate at 20:54 UTC; a real HS256 browser attach now works.
+*Enforcers:* `unit-preview-auth-principal.test.ts`, `unit-jwt-alg-fallback.test.ts`;
+terminal retries use the HTTP probe in `pty-connection.ts` rather than guessing.
+
+
+### Terminal wake must work before a PTY exists (2026-09-15)
+
+**When:** changing terminal attach or recovery. Test a stopped sandbox with no
+cached PTY list or remembered PTY ID. `GET /kortix/pty` never wakes a sandbox;
+the visible panel must initiate a mutation before read polling can succeed.
+Keep automatic polls inside one fixed deadline; only user Retry resets it.
+*Incident:* production terminal counted reconnects indefinitely while CLI attach
+worked. PR #7267 initially fixed socket recovery but missed cold terminal creation.
+*Enforcer:* `13-sdk-only-session.spec.ts` cold terminal wake and shell-output test.
+
 ### A raw `sql` subquery must QUALIFY every outer column — Drizzle unqualifies them in a single-table select (2026-09-15)
 
 **When:** writing `` sql`(select … from ${inner} where … = ${outer.col})` `` as a
@@ -5206,3 +5250,20 @@ the helper fall back to a repository dotenv file for a deployed target.
 **Enforcer:** `09-admin-console.spec.ts` passes the selected database URL to both
 the role insert and cleanup delete. The preview journey must observe the grant
 through `/v1/user-roles` and render the admin overview.
+
+### Bind retained message retries to their originating runtime
+
+**Incident (2026-09-15, PR #7267):** production retried three native conversation
+IDs against sandbox `61e4c0bd-bacd-4fc1-80e2-df289cf6772a`. Database records mapped
+each conversation to a different sandbox. Cached controllers resolved the global
+active client after navigation. Message reads returned repeated `404` responses.
+
+**Rule:** bind each transcript controller to its originating runtime URL or
+explicit client. Retaining or looking up a controller must not clear that binding.
+Preserve HTTP status on synchronization errors. Stop automatic retries and busy
+polling after `404` or `410`; preserve transcript data and allow explicit recovery.
+
+**Enforcement:** registry tests use a real HTTP server to assert A/B/A request
+paths across a runtime switch. Controller tests assert no retries for 60 seconds
+after `404` and `410`, then successful explicit recovery. The SDK browser journey
+switches between two real sandboxes while the first message read retries.
