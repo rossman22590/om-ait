@@ -18457,7 +18457,11 @@
       "textf09704dad946": "返回连接器",
       "textf3c16c11f690": "没有可添加的内容",
       "textf75561ab0be6": "凭证现在来自机密 {value0}",
-      "textf91b7814f64d": "此项目中不存在 slug 为“{value0}”的连接器。"
+      "textf91b7814f64d": "此项目中不存在 slug 为“{value0}”的连接器。",
+      "textc6309c452031": "连接共享账户",
+      "textded4b88e52f7": "尚无共享账户",
+      "textc3bafa5156b4": "你还没有自己的账户",
+      "textea5d0ffa0962": "共享账户由项目管理员连接。"
     }
   },
   "projectOnboarding": {

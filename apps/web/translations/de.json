@@ -18457,7 +18457,11 @@
       "textf09704dad946": "Zurück zu den Connectoren",
       "textf3c16c11f690": "Nichts hinzuzufügen",
       "textf75561ab0be6": "Anmeldedaten kommen jetzt aus dem Secret {value0}",
-      "textf91b7814f64d": "Kein Connector mit dem Slug „{value0}“ existiert in diesem Projekt."
+      "textf91b7814f64d": "Kein Connector mit dem Slug „{value0}“ existiert in diesem Projekt.",
+      "textc6309c452031": "Gemeinsames Konto verbinden",
+      "textded4b88e52f7": "Noch kein gemeinsames Konto",
+      "textc3bafa5156b4": "Noch kein eigenes Konto",
+      "textea5d0ffa0962": "Ein Projektmanager verbindet das gemeinsame Konto."
     }
   },
   "projectOnboarding": {

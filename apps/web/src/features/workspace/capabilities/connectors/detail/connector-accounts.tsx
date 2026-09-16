@@ -1,6 +1,6 @@
 'use client';
 
-import type { AdminConnector } from '@kortix/sdk';
+import type { AdminConnector, Connection } from '@kortix/sdk';
 import { useTranslations } from '@/i18n/use-translations';
 
 import { Label } from '@/components/ui/label';
@@ -19,10 +19,10 @@ export interface ConnectorAccountsProps {
   displayName: string;
   canWrite: boolean;
   canManageConnections: boolean;
-  strategyUpdating: boolean;
   onChanged: () => void;
   onRemoved: () => void;
-  onStartSession: () => void;
+  /** Start a session bound to this exact account. */
+  onStartSession: (connection: Connection) => void;
   onSetCredential: () => void;
 }
 
@@ -45,7 +45,6 @@ export function ConnectorAccounts({
   displayName,
   canWrite,
   canManageConnections,
-  strategyUpdating,
   onChanged,
   onRemoved,
   onStartSession,
@@ -80,7 +79,6 @@ export function ConnectorAccounts({
           canManageConnections={canManageConnections}
           onChanged={onChanged}
           onStartSession={onStartSession}
-          disabled={strategyUpdating}
         />
         {showRoster ? (
           <section className="space-y-2">
@@ -112,23 +110,20 @@ export function ConnectorAccounts({
     );
   }
 
-  // `canWrite` is already true past the guard above, so the only thing left to
-  // gate on is the in-flight strategy change — writing an account while the
-  // authorization owner is moving would race it.
   return isChannel ? (
     <ChannelConnectionSection
       projectId={projectId}
       connector={connector}
       onChanged={onChanged}
       onRemoved={onRemoved}
-      canWrite={!strategyUpdating}
+      canWrite={canWrite}
     />
   ) : (
     <ConnectionSection
       projectId={projectId}
       connector={connector}
       onChanged={onChanged}
-      canWrite={!strategyUpdating}
+      canWrite={canWrite}
       onSetCredential={usesProjectAuthorization ? onSetCredential : undefined}
     />
   );

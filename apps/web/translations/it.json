@@ -18457,7 +18457,11 @@
       "textf09704dad946": "Torna ai connettori",
       "textf3c16c11f690": "Niente da aggiungere",
       "textf75561ab0be6": "La credenziale ora proviene dal segreto {value0}",
-      "textf91b7814f64d": "Nessun connettore con slug “{value0}” esiste in questo progetto."
+      "textf91b7814f64d": "Nessun connettore con slug “{value0}” esiste in questo progetto.",
+      "textc6309c452031": "Collega account condiviso",
+      "textded4b88e52f7": "Nessun account condiviso finora",
+      "textc3bafa5156b4": "Non hai ancora un account personale",
+      "textea5d0ffa0962": "Un responsabile del progetto collega l’account condiviso."
     }
   },
   "projectOnboarding": {

@@ -18457,7 +18457,11 @@
       "textf09704dad946": "Retour aux connecteurs",
       "textf3c16c11f690": "Rien à ajouter",
       "textf75561ab0be6": "Les identifiants proviennent désormais du secret {value0}",
-      "textf91b7814f64d": "Aucun connecteur avec le slug « {value0} » n’existe dans ce projet."
+      "textf91b7814f64d": "Aucun connecteur avec le slug « {value0} » n’existe dans ce projet.",
+      "textc6309c452031": "Connecter un compte partagé",
+      "textded4b88e52f7": "Aucun compte partagé pour l’instant",
+      "textc3bafa5156b4": "Vous n’avez pas encore de compte personnel",
+      "textea5d0ffa0962": "Un responsable du projet connecte le compte partagé."
     }
   },
   "projectOnboarding": {

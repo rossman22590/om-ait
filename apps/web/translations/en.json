@@ -18457,7 +18457,11 @@
       "textf09704dad946": "Return to connectors",
       "textf3c16c11f690": "Nothing addable",
       "textf75561ab0be6": "Credential now comes from the secret {value0}",
-      "textf91b7814f64d": "No connector with slug “{value0}” exists in this project."
+      "textf91b7814f64d": "No connector with slug “{value0}” exists in this project.",
+      "textc6309c452031": "Connect shared account",
+      "textded4b88e52f7": "No shared account yet",
+      "textc3bafa5156b4": "No account of your own yet",
+      "textea5d0ffa0962": "A project manager connects the shared account."
     }
   },
   "projectOnboarding": {
