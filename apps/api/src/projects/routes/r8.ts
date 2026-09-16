@@ -498,7 +498,7 @@ projectsApp.openapi(
     responses: {
       200: json(z.any(), 'Already queued (same client_message_id)'),
       202: json(z.any(), 'Prompt queued'),
-      ...errors(400, 402, 404, 409),
+      ...errors(400, 402, 403, 404, 409, 503),
     },
   }),
   async (c: any) => {
