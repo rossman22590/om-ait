@@ -88,8 +88,6 @@ Subcommands:
                                       bind a connection
                                       (repeatable).
                                     --no-connectors          use no connections.
-                                      require a connection before
-                                      provisioning (repeatable).
                                     --context <key>=<value>  runtime context
                                       (repeatable).
   chat [<session-id>]               Talk to a session's agent (REPL, or
@@ -146,8 +144,7 @@ Subcommands:
                                     connector access. Changes apply to the next
                                     prompt. --secret, --no-secrets,
                                     --inherit-secrets, --connector,
-                                    --no-connectors,
-                                    --no-required-connectors, --json.
+                                    --no-connectors, --json.
                                     Alias: access.
   share <session-id>                Who inside Kortix can open this session.
                                     --mode private|project|members, --member

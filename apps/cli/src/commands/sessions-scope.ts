@@ -23,7 +23,6 @@ Options:
   --inherit-secrets              Remove session narrowing; use the agent grant.
   --connector <alias>=<connection-id>  Replace connector bindings (repeatable).
   --no-connectors                Replace explicit connector bindings with none.
-  --no-required-connectors       Require no connector aliases.
   --json                         Print the authoritative scope as JSON.
   --project <id>                 Operate on this project id.
   --host <name>                  Operate on this logged-in host.
