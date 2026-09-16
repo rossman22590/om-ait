@@ -171,7 +171,7 @@ export async function recoverTranscriptAttachments(input: {
           const source = attribute(attrs, 'path');
           const existing = attribute(attrs, 'attachment');
           let replacement = match[0];
-          if (source && !existing) {
+          if (source && !parseSessionAttachmentRef(existing)) {
             const url = await save(
               source,
               attribute(attrs, 'filename') || path.posix.basename(source),
@@ -182,7 +182,9 @@ export async function recoverTranscriptAttachments(input: {
             if (url)
               replacement = replacement.replace(
                 /<file\s+[^>]*>/,
-                (tag) => `${tag.slice(0, -1)} attachment="${url}">`,
+                (tag) => existing !== undefined
+                  ? tag.replace(/\sattachment="[^"]*"/, ` attachment="${url}"`)
+                  : `${tag.slice(0, -1)} attachment="${url}">`,
               );
           }
           text += part.text.slice(end, match.index) + replacement;

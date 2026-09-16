@@ -194,3 +194,20 @@ test('bounded reads cancel oversized bodies with and without a length header', a
     new Uint8Array([0, 1, 255]),
   );
 });
+
+test('replaces temporary upload identities with one durable reference', async () => {
+  const f = fixture();
+  const part = { ...text, text: text.text.replace('<file ', '<file attachment="local_upload_1" ') };
+  const messages = [row([part])];
+  const result = await recoverTranscriptAttachments({ ...f.input, messages });
+  const rendered = String(result[0].parts[0].text);
+  expect(f.saved).toHaveLength(1);
+  expect(rendered).not.toContain('local_upload_1');
+  expect([...rendered.matchAll(/attachment="/g)]).toHaveLength(1);
+  expect(rendered).toContain('attachment="kortix-attachment://');
+  f.saved.length = 0;
+  expect(await recoverTranscriptAttachments({
+    ...f.input, messages, previous: new Map([['msg_1', result[0].parts]]), recover: false,
+  })).toEqual(result);
+  expect(f.saved).toHaveLength(0);
+});
