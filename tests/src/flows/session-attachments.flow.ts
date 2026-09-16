@@ -30,7 +30,8 @@ flow('SESS-30', {
     'DELETE /v1/projects/:projectId/cli-token/:tokenId',
   ],
 }, async (ctx) => {
-  const project = await ctx.fixtures.project();
+  // Prompt admission reads the manifest to verify required connectors.
+  const project = await ctx.fixtures.project({ seed: true });
   const owner = ctx.client.as(ctx.P.OWNER);
   const base = { projectId: project.id };
   const bytes = new TextEncoder().encode('eager upload before session readiness\n'.repeat(4000));
