@@ -657,7 +657,6 @@ flow('SCIM-8', {
     (await scim.post('/scim/v2/accounts/:accountId/Users', { userName: user.email! }, { params }))
       .status(201);
     oldWithoutGroup = ctx.client.withBearer(await ssoFixtureToken(ctx.env, user, providerId, []), 'SSO-before-add');
-    oldWithGroup = ctx.client.withBearer(await ssoFixtureToken(ctx.env, user, providerId, [claim]), 'SSO-before-remove');
   });
 
   await ctx.step('a stale SSO token cannot remove membership added by SCIM', async () => {
@@ -670,6 +669,7 @@ flow('SCIM-8', {
   });
 
   await ctx.step('a stale SSO token cannot restore membership removed by SCIM', async () => {
+    oldWithGroup = ctx.client.withBearer(await ssoFixtureToken(ctx.env, user, providerId, [claim]), 'SSO-before-remove');
     (await scim.patch('/scim/v2/accounts/:accountId/Groups/:groupId', {
       Operations: [{ op: 'remove', path: 'members', value: [{ value: user.userId! }] }],
     }, { params })).status(200).body().has('$.members', []);
