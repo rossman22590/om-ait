@@ -1260,6 +1260,7 @@ flow(
   'SESS-29',
   {
     domain: 'sessions',
+    serial: true,
     requires: ['database'],
     timeoutMs: 120_000,
     routes: [
