@@ -854,12 +854,15 @@ export const accountSecretGrants = kortixSchema.table('account_secret_grants', {
 /** A session's explicit provider pool. Absence means inherit legacy behavior;
  * an empty array is an explicit selection of no account credentials. */
 export const sessionProviderSecretPools = kortixSchema.table('session_provider_secret_pools', {
-  sessionId: text('session_id').notNull().references(() => projectSessions.sessionId, { onDelete: 'cascade' }),
+  sessionId: text('session_id').notNull(),
   providerId: varchar('provider_id', { length: 100 }).notNull(),
   secretIds: jsonb('secret_ids').$type<string[]>().default([]).notNull(),
   nextIndex: integer('next_index').default(0).notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-}, (table) => [primaryKey({ columns: [table.sessionId, table.providerId] })]);
+}, (table) => [
+  primaryKey({ columns: [table.sessionId, table.providerId] }),
+  foreignKey({ columns: [table.sessionId], foreignColumns: [projectSessions.sessionId], name: 'session_provider_pools_session_fk' }).onDelete('cascade'),
+]);
 
 /**
  * Who can see/open a session within the org. `private` (default) = only the

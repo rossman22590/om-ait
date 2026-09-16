@@ -60,7 +60,7 @@ ALTER TABLE "kortix"."account_secret_grants" ADD CONSTRAINT "account_secret_gran
 ALTER TABLE "kortix"."account_secret_grants" ADD CONSTRAINT "account_secret_grants_member_fk" FOREIGN KEY ("user_id","account_id") REFERENCES "kortix"."account_memberships"("user_id","account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "kortix"."account_secret_grants" ADD CONSTRAINT "account_secret_grants_resource_fk" FOREIGN KEY ("secret_id","account_id") REFERENCES "kortix"."account_secret_resources"("secret_id","account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "kortix"."account_secret_resources" ADD CONSTRAINT "account_secret_resources_account_id_accounts_account_id_fk" FOREIGN KEY ("account_id") REFERENCES "kortix"."accounts"("account_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "kortix"."session_provider_secret_pools" ADD CONSTRAINT "session_provider_secret_pools_session_id_project_sessions_session_id_fk" FOREIGN KEY ("session_id") REFERENCES "kortix"."project_sessions"("session_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "kortix"."session_provider_secret_pools" ADD CONSTRAINT "session_provider_pools_session_fk" FOREIGN KEY ("session_id") REFERENCES "kortix"."project_sessions"("session_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "account_secret_grants_member" ON "kortix"."account_secret_grants" USING btree ("account_id","user_id");--> statement-breakpoint
 CREATE INDEX "account_secret_resources_account_provider" ON "kortix"."account_secret_resources" USING btree ("account_id","provider_id");
 

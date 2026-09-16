@@ -45,6 +45,10 @@ test.describe('30 — pooled provider secrets', () => {
       });
       await page.reload({ waitUntil: 'domcontentloaded' });
       await expect(panel).toBeVisible();
+      const welcome = page.getByRole('complementary', { name: 'Welcome from Marko' });
+      if (await welcome.isVisible().catch(() => false)) {
+        await welcome.getByRole('button', { name: 'Dismiss' }).click();
+      }
       for (const label of ['Primary test key', 'Backup test key']) {
         await panel.getByRole('button', { name: 'Add key' }).click();
         const dialog = page.getByRole('dialog', { name: 'Add provider key' });

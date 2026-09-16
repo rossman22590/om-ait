@@ -68,6 +68,29 @@ describe('simple gateway pipeline', () => {
     expect(usedKeys).toEqual(['Bearer first', 'Bearer second']);
     expect(cooldowns).toEqual([{ secretId: 'key-a', seconds: 12 }]);
   });
+  test('a pool exhausts each key once and returns the provider rate limit', async () => {
+    const usedKeys: string[] = [];
+    const cooldowns: string[] = [];
+    const response = await handleChatCompletions({
+      hooks: {
+        ...hooks([], []),
+        resolveUpstream: async () => [
+          { ...primary, poolSecretId: 'key-a', apiKey: 'first' },
+          { ...primary, poolSecretId: 'key-b', apiKey: 'second' },
+        ],
+        notePoolRateLimit: async (_principal, secretId) => { cooldowns.push(secretId); },
+      },
+      logger: { info() {}, warn() {}, error() {} },
+      fetchImpl: async (_url, init) => {
+        usedKeys.push(new Headers(init.headers).get('authorization') ?? '');
+        return new Response('limited', { status: 429, headers: { 'retry-after': '8' } });
+      },
+    }, { authorization: 'Bearer token', rawBody: JSON.stringify({ model: 'requested-model', messages: [] }) });
+    expect(response.status).toBe(429);
+    expect(response.headers.get('retry-after')).toBe('8');
+    expect(usedKeys).toEqual(['Bearer first', 'Bearer second']);
+    expect(cooldowns).toEqual(['key-a', 'key-b']);
+  });
   test('aborts a provider fetch that does not return response headers before the deadline', async () => {
     const fetchWithTimeout = withUpstreamHeadersTimeout(
       async (_input, init) =>

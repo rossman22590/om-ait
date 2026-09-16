@@ -18412,8 +18412,8 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "session_provider_secret_pools_session_id_project_sessions_session_id_fk": {
-          "name": "session_provider_secret_pools_session_id_project_sessions_session_id_fk",
+        "session_provider_pools_session_fk": {
+          "name": "session_provider_pools_session_fk",
           "tableFrom": "session_provider_secret_pools",
           "tableTo": "project_sessions",
           "schemaTo": "kortix",
