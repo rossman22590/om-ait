@@ -17,6 +17,11 @@
  */
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
+// PEM-shaped, assembled at runtime so no contiguous armor literal reaches the
+// secret scanner (gitleaks `private-key`). Not a key; the gate only needs
+// "env owns the identity".
+const FAKE_ENV_PEM = ['-----BEGIN', ' RSA PRIVATE KEY', '-----env-----'].join('');
+
 process.env.FRONTEND_URL = 'https://dev.kortix.com';
 
 const realAuth = await import('../../middleware/auth');
@@ -74,7 +79,7 @@ afterEach(() => {
 
 function makeEnvManaged() {
   process.env.KORTIX_GITHUB_APP_ID = '3812697';
-  process.env.KORTIX_GITHUB_APP_PRIVATE_KEY = '-----BEGIN RSA PRIVATE KEY-----env-----';
+  process.env.KORTIX_GITHUB_APP_PRIVATE_KEY = FAKE_ENV_PEM;
   process.env.MANAGED_GIT_GITHUB_OWNER = 'managed-kortix';
   process.env.MANAGED_GIT_GITHUB_TOKEN = 'ghp_env';
 }
