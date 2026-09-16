@@ -1,4 +1,4 @@
-import type { HarnessLifecycleService, HarnessState } from '../harness'
+import type { HarnessLifecycleService, HarnessState } from '../lifecycle-contract'
 import { spawn, type ChildProcess } from 'node:child_process'
 
 /**

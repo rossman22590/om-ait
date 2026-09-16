@@ -10,16 +10,12 @@ import type { HarnessDiagnosticsService } from './diagnostics'
 import type { HarnessQueryFactory } from './queries'
 import { openCodeDefinition } from './open-code/service'
 
+import type { HarnessLifecycleService } from './lifecycle-contract'
+
 export type { OpenCodeAssetsCompatibilityResult as HarnessAssetsCompatibilityResult } from './open-code/assets'
-
-export type HarnessState = 'starting' | 'ok' | 'down'
-
-export interface HarnessLifecycleService {
-  start(): Promise<void>
-  stop(signal?: NodeJS.Signals): Promise<void>
-  restart(): Promise<void>
-  getState(): HarnessState
-}
+// The lifecycle port lives in a leaf module so adapters can import it without
+// dragging this resolver (and the OpenCode definition) into their importers.
+export type { HarnessLifecycleService, HarnessState } from './lifecycle-contract'
 
 export interface HarnessService {
   readonly id: string

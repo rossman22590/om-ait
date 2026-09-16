@@ -18,7 +18,9 @@ export function createPartRouter(attachments: HarnessAttachmentService): Hono {
       )
     }
     if (result.kind === 'redirect') return c.redirect(result.location, 302)
-    return new Response(result.bytes, {
+    // The bytes are ArrayBuffer-backed; the DOM lib the API's typecheck uses
+    // admits only `Uint8Array<ArrayBuffer>` as a body, hence the cast.
+    return new Response(result.bytes as Uint8Array<ArrayBuffer>, {
       status: 200,
       headers: {
         'Content-Type': result.mime,
