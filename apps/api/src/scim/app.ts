@@ -8,13 +8,14 @@
 // (the orchestrator) so the original ordering is preserved.
 
 import { z } from '@hono/zod-openapi';
-import { accountGroupMembers } from '@kortix/db';
-import { eq, sql } from 'drizzle-orm';
+import { accountGroupMembers, accountInvitations, accountScimUsers } from '@kortix/db';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { scimAuth } from '../middleware/scim-auth';
 import { makeOpenApiApp } from '../openapi';
 import { recordAuditEvent } from '../shared/audit';
 import { db } from '../shared/db';
+import { withDirectoryTransaction } from '../iam/directory-transaction';
 import { getSupabase } from '../shared/supabase';
 
 // SCIM payloads are large/dynamic — model permissively.
@@ -27,6 +28,20 @@ export const scimRouter = makeOpenApiApp<any>();
 // before the route-module side-effect registrations regardless of ES module
 // import hoisting in the orchestrator.
 scimRouter.use('/accounts/:accountId/*', scimAuth);
+
+class ScimRollback extends Error {}
+
+scimRouter.use('/accounts/:accountId/*', async (c, next) => {
+  if (c.req.method === 'GET') return next();
+  try {
+    await withDirectoryTransaction(c.req.param('accountId')!, async () => {
+      await next();
+      if (c.res.status >= 400) throw new ScimRollback();
+    });
+  } catch (error) {
+    if (!(error instanceof ScimRollback)) throw error;
+  }
+});
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -226,12 +241,29 @@ export async function buildGroup(
     .select({ userId: accountGroupMembers.userId })
     .from(accountGroupMembers)
     .where(eq(accountGroupMembers.groupId, group.groupId));
+  const directoryUsers = await db.select().from(accountScimUsers)
+    .where(eq(accountScimUsers.accountId, accountId));
+  const byUserId = new Map(directoryUsers.filter(u => u.userId).map(u => [u.userId, u]));
+  const byInviteId = new Map(directoryUsers.filter(u => u.invitationId).map(u => [u.invitationId, u]));
+  const invites = await db.select().from(accountInvitations).where(and(
+    eq(accountInvitations.accountId, accountId), isNull(accountInvitations.acceptedAt),
+    sql`${accountInvitations.bootstrapGrants} @> ${JSON.stringify([{ group_id: group.groupId }])}::jsonb`,
+  ));
+  const memberIds = new Set<string>();
+  for (const member of memberRows) {
+    const user = byUserId.get(member.userId);
+    if (!user || (user.active && !user.deletedAt)) memberIds.add(user?.scimId ?? member.userId);
+  }
+  for (const invite of invites) {
+    const user = byInviteId.get(invite.inviteId);
+    if (!user || (user.active && !user.deletedAt)) memberIds.add(user?.scimId ?? invite.inviteId);
+  }
   return {
     schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'],
     id: group.groupId,
     displayName: group.name,
     externalId: group.externalId,
-    members: memberRows.map((m) => ({ value: m.userId })),
+    members: [...memberIds].sort().map(value => ({ value })),
     meta: {
       resourceType: 'Group',
       created: group.createdAt.toISOString(),

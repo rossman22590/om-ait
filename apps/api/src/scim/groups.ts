@@ -10,6 +10,7 @@ import { scimError } from '../middleware/scim-auth';
 import { errors, json } from '../openapi';
 import { db } from '../shared/db';
 import { deleteGroup } from '../repositories/iam';
+import { directoryUserById } from './directory-users';
 import {
   ScimResource,
   buildGroup,
@@ -37,6 +38,13 @@ async function addGroupMembersOrDeferInvites(
   groupId: string,
   memberValues: string[],
 ): Promise<void> {
+  const resolved = await Promise.all(memberValues.map(async value => {
+    const user = await directoryUserById(accountId, value);
+    if (!user) return value;
+    if (!user.active || user.deletedAt) return null;
+    return user.userId ?? user.invitationId;
+  }));
+  memberValues = resolved.filter((value): value is string => value !== null);
   if (memberValues.length === 0) return;
 
   const realMembers = await db
@@ -203,6 +211,8 @@ async function removeGroupMemberValue(
   groupId: string,
   value: string,
 ): Promise<void> {
+  const directoryUser = await directoryUserById(accountId, value);
+  if (directoryUser) value = directoryUser.userId ?? directoryUser.invitationId ?? value;
   await db
     .delete(accountGroupMembers)
     .where(and(eq(accountGroupMembers.groupId, groupId), eq(accountGroupMembers.userId, value)));

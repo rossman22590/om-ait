@@ -14,9 +14,10 @@
 // also needs access to project X for a one-off" workable without the
 // next sign-in stomping it.
 
-import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
-import { accountGroupMembers, accountGroups, accountInvitations, accountMembers, accountMemberships } from '@kortix/db';
+import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { accountGroupMembers, accountGroups, accountInvitations, accountMembers, accountMemberships, accountScimUsers } from '@kortix/db';
 import { db } from '../shared/db';
+import { withDirectoryTransaction } from './directory-transaction';
 import { assignRole, SYSTEM_ACTOR } from './assignments';
 import { invalidateIamCacheForUser } from './cache-invalidation';
 import {
@@ -256,6 +257,19 @@ export async function syncSsoMembership(args: {
   const provider = await getSsoProviderBySupabaseId(supabaseSsoProviderId);
   if (!provider) return { skipped: true };
 
+  return withDirectoryTransaction(provider.accountId, async () => {
+  const [directoryUser] = await db.select().from(accountScimUsers).where(and(
+    eq(accountScimUsers.accountId, provider.accountId),
+    or(eq(accountScimUsers.userId, args.userId), eq(accountScimUsers.userName, args.email.trim().toLowerCase())),
+  )).limit(1);
+  if (directoryUser && (!directoryUser.active || directoryUser.deletedAt)) {
+    return { skipped: false, memberCreated: false };
+  }
+  if (directoryUser && !directoryUser.userId) {
+    await db.update(accountScimUsers).set({ userId: args.userId })
+      .where(and(eq(accountScimUsers.accountId, provider.accountId), eq(accountScimUsers.scimId, directoryUser.scimId)));
+  }
+
   // 1. Ensure account membership. If autoCreateMembers is off, we only
   //    sync groups for users an admin has already invited.
   const [existingMember] = await db
@@ -401,4 +415,5 @@ export async function syncSsoMembership(args: {
     groupsAdded: toAdd,
     groupsRemoved: toRemove,
   };
+  });
 }
