@@ -1457,14 +1457,18 @@ async function maybeCreateInitialOpencodeSession(
   // marker (delivery, below, hasn't happened yet) — reflects only a PRIOR
   // boot's successful delivery, never this one's own pending write.
   const priorDeliveredMarker = readInitialPromptDeliveredMarker()
-  // A verified reload can promote OpenCode onto the standby port. Resolve the
-  // live URL here so root lookup never runs against a retired process.
+  const rootListDeadlineMs = await waitForOpencodeRootReadiness({
+    firstListening: opencode.waitForCurrentListening(),
+  })
+  // A verified reload can promote OpenCode onto the standby port while the
+  // readiness gate waits. Resolve the live URL after that wait so root lookup
+  // never resumes against the retired process.
   const baseUrl = opencode.getInternalUrl()
   const resolved = await resolveExistingRoot(
     baseUrl,
     workspace,
     priorPin,
-    OPENCODE_ROOT_RESOLUTION_DEADLINE_MS,
+    rootListDeadlineMs,
     onListening,
   )
   bootMark('opencode-answering')
@@ -1754,6 +1758,62 @@ export type ExistingRootResult =
 
 const OPENCODE_ROOT_RESOLUTION_DEADLINE_MS = 20_000
 const OPENCODE_ROOT_LIST_ATTEMPT_TIMEOUT_MS = 5_000
+const OPENCODE_LISTENING_GATE_MAX_MS = OPENCODE_ROOT_LIST_ATTEMPT_TIMEOUT_MS
+
+type OpencodeRootReadinessInput = {
+  /** The current OpenCode announced its request handler (or the fallback proved it). */
+  firstListening: Promise<void>
+  deadlineMs?: number
+}
+
+type OpencodeRootReadinessDeps = {
+  now?: () => number
+  waitForSignal?: (signal: Promise<void>, timeoutMs: number) => Promise<void>
+}
+
+async function waitForSignalOrTimeout(signal: Promise<void>, timeoutMs: number): Promise<void> {
+  if (timeoutMs <= 0) return
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    await Promise.race([
+      signal.catch(() => undefined),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+/**
+ * Hold the root lookup until OpenCode can actually answer it.
+ *
+ * Every boot waits for the current OpenCode's readiness announcement
+ * (`waitForCurrentListening`, see OPENCODE_LISTENING_LINE in lifecycle.ts). A
+ * freshly spawned OpenCode binds its port ~100 ms before its request handler
+ * exists, and a root-list request that lands in that window is never
+ * answered: it burns the whole 5 s attempt timeout, then the retry is answered
+ * in milliseconds. That was the S3-boot penalty measured on 2026-09-15
+ * (`opencode-listening` at 6.2 s instead of 2.3 s): the S3 checkout lands
+ * early enough for the poll to be running when the port binds, the Git
+ * checkout mostly does not. The wait is capped at one root-list attempt
+ * (5 s) and its elapsed time is deducted from the existing 20-second
+ * root-resolution budget, so it cannot extend boot. The unchanged resolver
+ * still owns retries, root selection, and found/create/defer decisions.
+ */
+export async function waitForOpencodeRootReadiness(
+  input: OpencodeRootReadinessInput,
+  deps: OpencodeRootReadinessDeps = {},
+): Promise<number> {
+  const deadlineMs = Math.max(0, input.deadlineMs ?? OPENCODE_ROOT_RESOLUTION_DEADLINE_MS)
+  const now = deps.now ?? Date.now
+  const waitForSignal = deps.waitForSignal ?? waitForSignalOrTimeout
+  const startedAt = now()
+  await waitForSignal(input.firstListening, Math.min(deadlineMs, OPENCODE_LISTENING_GATE_MAX_MS))
+  const elapsedMs = Math.max(0, now() - startedAt)
+  return Math.max(0, deadlineMs - elapsedMs)
+}
 
 /**
  * Resolve a usable existing canonical root for this workspace so a restart

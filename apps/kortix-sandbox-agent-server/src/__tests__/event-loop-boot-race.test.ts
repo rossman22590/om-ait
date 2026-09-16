@@ -101,7 +101,14 @@ describe('event-loop boot race — the SSE subscribe must not sleep through open
     expect(requestedWorkspaces).toEqual([])
     let receive!: (event: unknown) => void
     const received = new Promise<unknown>((resolve) => { receive = resolve })
-    const loop = harness.events.subscribe({ workspace: '/adopted' } as Config, { onEvent: receive })
+    // No process is spawned here, so the lifecycle never announces "server
+    // listening"; skip the subscribe gate (covered by event-loop-dead-window)
+    // instead of sleeping through its 5 s cap.
+    const loop = harness.events.subscribe(
+      { workspace: '/adopted' } as Config,
+      { onEvent: receive },
+      { listeningWaitMaxMs: 0 },
+    )
     loops.push(loop)
     await loop.connected
     expect(await received).toEqual(nativeEvent)

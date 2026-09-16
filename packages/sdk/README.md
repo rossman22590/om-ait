@@ -206,6 +206,10 @@ OpenCode query and synchronization controllers to the sandbox runtime. Two
 sandboxes cannot share browser cache state when a snapshot exposes the same
 OpenCode id during adoption.
 
+Message retries keep the originating sandbox URL after navigation. A `404` or
+`410` message read stops automatic retries and preserves the cached transcript.
+An explicit reconciliation can recover the controller when the session returns.
+
 ## The facade surface
 
 `createKortix(config)` returns one client. The table below is illustrative, not
@@ -669,3 +673,10 @@ await kortix.projects.setModelAccess(projectId, {
 `kortix` identifies Kortix Managed Models. Other provider IDs identify BYOK, Codex, or custom providers. Provider disable takes precedence over individual model choices. Each write changes one target and preserves credentials. Disabling the current project default or its provider returns `409 cannot_disable_default`; select another default first.
 
 `useModelAccess(projectId)` from `@kortix/sdk/react` exposes the policy, write state, and `setEnabled(change)`. Successful writes refresh both picker caches. Rejected writes leave the displayed policy unchanged. The policy blocks gateway inference; legacy `setProjectModelEnablement` remains display-only. Native runtimes that bypass the gateway return `enforced: false`.
+
+### ChatGPT subscription usage
+
+`getSessionCost` and `getTurnCost` report zero LLM cost for ChatGPT/Codex
+subscription messages. This also corrects historical runtime costs. Token
+counts remain available. Mixed sessions retain paid API costs; OpenAI API
+models remain billable. Subscription coverage does not include sandbox compute.

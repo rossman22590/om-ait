@@ -16,14 +16,19 @@ describe('initial OpenCode session ordering', () => {
     const initialStart = src.indexOf('async function maybeCreateInitialOpencodeSession(')
     const initialEnd = src.indexOf('\nasync function resolveExistingRoot', initialStart)
     const initial = src.slice(initialStart, initialEnd)
-    const baseUrlAt = initial.indexOf('const baseUrl = opencode.getInternalUrl()')
+    // The listening gate (OPENCODE_LISTENING_LINE) runs first; the live URL is
+    // resolved after it so a verified reload during the wait is honoured.
+    const gateAt = initial.indexOf('await waitForOpencodeRootReadiness(')
+    const baseUrlAt = initial.indexOf('const baseUrl = opencode.getInternalUrl()', gateAt)
     const rootAt = initial.indexOf('await resolveExistingRoot(', baseUrlAt)
     const answeringAt = initial.indexOf("bootMark('opencode-answering')", rootAt)
 
-    expect(baseUrlAt).toBeGreaterThan(-1)
+    expect(gateAt).toBeGreaterThan(-1)
+    expect(initial).toContain('firstListening: opencode.waitForCurrentListening()')
+    expect(baseUrlAt).toBeGreaterThan(gateAt)
     expect(rootAt).toBeGreaterThan(baseUrlAt)
     expect(answeringAt).toBeGreaterThan(rootAt)
-    expect(initial).toContain('OPENCODE_ROOT_RESOLUTION_DEADLINE_MS,\n    onListening,\n  )')
+    expect(initial).toContain('rootListDeadlineMs,\n    onListening,\n  )')
   })
 
   test('initial prompt delivery never waits for the event stream handshake', async () => {

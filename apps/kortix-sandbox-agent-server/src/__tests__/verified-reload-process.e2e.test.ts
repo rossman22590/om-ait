@@ -55,7 +55,9 @@ describe('verified reload process promotion', () => {
     mkdirSync(configDir)
     writeFileSync(
       binary,
-      '#!/usr/bin/env bun\nconst port = Number(Bun.argv[Bun.argv.indexOf("--port") + 1])\nBun.serve({ port, hostname: "127.0.0.1", fetch: () => Response.json([]) })\n',
+      // Announces itself like real OpenCode: the lifecycle sends a candidate
+      // nothing before this line (or its 10 s fallback).
+      '#!/usr/bin/env bun\nconst port = Number(Bun.argv[Bun.argv.indexOf("--port") + 1])\nBun.serve({ port, hostname: "127.0.0.1", fetch: () => Response.json([]) })\nconsole.log("opencode server listening on http://127.0.0.1:" + port)\n',
     )
     chmodSync(binary, 0o755)
 
@@ -131,7 +133,9 @@ describe('the live port is a property of the process, never a variable beside it
     mkdirSync(configDir)
     writeFileSync(
       binary,
-      '#!/usr/bin/env bun\nconst port = Number(Bun.argv[Bun.argv.indexOf("--port") + 1])\nBun.serve({ port, hostname: "127.0.0.1", fetch: () => Response.json([]) })\n',
+      // Announces itself like real OpenCode: the lifecycle sends a candidate
+      // nothing before this line (or its 10 s fallback).
+      '#!/usr/bin/env bun\nconst port = Number(Bun.argv[Bun.argv.indexOf("--port") + 1])\nBun.serve({ port, hostname: "127.0.0.1", fetch: () => Response.json([]) })\nconsole.log("opencode server listening on http://127.0.0.1:" + port)\n',
     )
     chmodSync(binary, 0o755)
     return { workspace, configDir, binary }
