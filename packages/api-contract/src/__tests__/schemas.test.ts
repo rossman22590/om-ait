@@ -1262,7 +1262,7 @@ describe('removed usage-attribution fields', () => {
 });
 
 describe('SessionCreateInputSchema backend secret bounds', () => {
-  it('bounds create-time provider pools', () => {
+  test('bounds create-time provider pools', () => {
     const id = '11111111-1111-4111-8111-111111111111';
     expect(SessionCreateInputSchema.safeParse({ provider_secret_pools: { anthropic: [id] } }).success).toBe(true);
     expect(SessionCreateInputSchema.safeParse({ provider_secret_pools: { anthropic: Array(11).fill(id) } }).success).toBe(false);
