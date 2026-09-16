@@ -968,7 +968,7 @@ export function useSession(projectId: string, sessionId: string, options: UseSes
 
   // 5. Resolve the canonical OpenCode root id (server-owned; /start hands it over)
   // and sync messages off it.
-  const transcriptHistoryFlag = useFeatureFlag(projectId, 'session_transcript_history');
+  const transcriptHistoryFlag = useFeatureFlag(startEnabled && chatEngine ? projectId : null, 'session_transcript_history');
   const transcriptHistoryEnabled = enabled && chatEngine && transcriptHistoryFlag.enabled;
   const transcriptHistory = useSessionTranscriptHistory(projectId, sessionId, transcriptHistoryEnabled);
   const canonicalSession = useCanonicalOpenCodeSession({

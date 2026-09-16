@@ -206,7 +206,7 @@ export function useSessionSync(sessionId: string, options: UseSessionSyncOptions
     if (!canQueryOpenCodeSession(sessionId) || !kortixSessionScope) return;
     // Already have the thread (a warm remount, or the runtime beat us): the
     // live read outranks a snapshot and must never be overwritten by one.
-    if ((useSyncStore.getState().messages[sessionId]?.length ?? 0) > 0) return;
+    if (sessionId in useSyncStore.getState().messages) return;
     const abort = new AbortController();
     const read = mirror !== undefined
       ? Promise.resolve(mirror)
@@ -219,6 +219,7 @@ export function useSessionSync(sessionId: string, options: UseSessionSyncOptions
           envelope,
           runtimeSessionId: sessionId,
           hasMessages: (state.messages[sessionId]?.length ?? 0) > 0,
+          hasLoadedTranscript: sessionId in state.messages,
         })
       ) {
         return;

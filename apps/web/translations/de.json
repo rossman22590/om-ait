@@ -993,6 +993,10 @@
           "name": "Netzwerkerzwungene Geheimnisse",
           "description": "Steuern Sie, welche Werkzeuge und Ziele Projektgeheimnisse empfangen dürfen."
         },
+        "session_transcript_history": {
+          "name": "Chatverlauf der Sitzung",
+          "description": "Speichere den Chatverlauf nach jedem Durchlauf und zeige ihn an, während der Sitzungscomputer startet."
+        },
         "pi_worker": {
           "name": "Pi-Worker-Laufzeit (kompiliert)",
           "description": "Führen Sie Sitzungen mit der experimentellen Pi-Worker-Laufzeit aus."

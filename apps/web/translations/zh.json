@@ -993,6 +993,10 @@
           "name": "网络强制保护的机密",
           "description": "控制哪些工具和目标可以接收项目机密。"
         },
+        "session_transcript_history": {
+          "name": "会话聊天记录",
+          "description": "每轮对话后保存聊天记录，并在会话计算机启动时显示。"
+        },
         "pi_worker": {
           "name": "Pi 工作器运行时（已编译）",
           "description": "使用实验性 Pi 工作器运行时来运行会话。"

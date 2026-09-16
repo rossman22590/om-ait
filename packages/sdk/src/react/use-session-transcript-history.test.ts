@@ -18,31 +18,58 @@ afterEach(async () => {
 
 function transcript(rootId = 'ses_history') {
   return {
-    available: true, source: 'mirror', complete: true, reason: null,
-    captured_at: '2026-09-16T00:00:00Z', opencode_session_id: rootId,
-    message_count: 1, messages: [{
-      info: { id: 'msg_history', sessionID: rootId, role: 'assistant', time: { created: 1, completed: 2 } },
-      parts: [{ id: 'prt_history', type: 'text', text: 'Saved reply' }],
-    }],
+    available: true,
+    source: 'mirror',
+    complete: true,
+    reason: null,
+    captured_at: '2026-09-16T00:00:00Z',
+    opencode_session_id: rootId,
+    message_count: 1,
+    messages: [
+      {
+        info: {
+          id: 'msg_history',
+          sessionID: rootId,
+          role: 'assistant',
+          time: { created: 1, completed: 2 },
+        },
+        parts: [{ id: 'prt_history', type: 'text', text: 'Saved reply' }],
+      },
+    ],
   };
 }
 
 async function mount(enabled: boolean, sessionId = 's1') {
-  configureKortix({ backendUrl: 'http://test.local/v1', getToken: async () => 'token' });
+  configureKortix({
+    backendUrl: 'http://test.local/v1',
+    getToken: async () => 'token',
+  });
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   let value: ReturnType<typeof useSessionTranscriptHistory>;
   function Probe(props: { enabled: boolean; sessionId: string }) {
     value = useSessionTranscriptHistory('p1', props.sessionId, props.enabled);
     return null;
   }
-  const render = (sid: string, active: boolean) => React.createElement(
-    QueryClientProvider, { client }, React.createElement(Probe, { sessionId: sid, enabled: active }),
-  );
-  await act(async () => { root = create(render(sessionId, enabled)); });
-  await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
-  return { value: () => value!, update: async (sid: string, active = enabled) => {
-    await act(async () => { root!.update(render(sid, active)); });
-  } };
+  const render = (sid: string, active: boolean) =>
+    React.createElement(
+      QueryClientProvider,
+      { client },
+      React.createElement(Probe, { sessionId: sid, enabled: active }),
+    );
+  await act(async () => {
+    root = create(render(sessionId, enabled));
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  });
+  return {
+    value: () => value!,
+    update: async (sid: string, active = enabled) => {
+      await act(async () => {
+        root!.update(render(sid, active));
+      });
+    },
+  };
 }
 
 test('enabled history reads the database without any start, snapshot, or runtime request', async () => {
@@ -53,7 +80,10 @@ test('enabled history reads the database without any start, snapshot, or runtime
   }) as unknown as typeof fetch;
   const hook = await mount(true);
   expect(hook.value().rootSessionId).toBe('ses_history');
-  expect(hook.value().envelope?.messages[0].info.time).toEqual({ created: 1, completed: 2 });
+  expect(hook.value().envelope?.messages[0].info.time).toEqual({
+    created: 1,
+    completed: 2,
+  });
   expect(requests).toHaveLength(1);
   expect(requests[0]).toContain('/sessions/s1/transcript?shape=sync');
   expect(requests[0]).toContain('history=true');
@@ -86,7 +116,14 @@ test('turning the flag off removes the early history result', async () => {
 });
 
 test('missing history falls back without inventing an empty conversation or root', async () => {
-  globalThis.fetch = mock(async () => Response.json({ ...transcript(), available: false, source: 'none', messages: [] })) as unknown as typeof fetch;
+  globalThis.fetch = mock(async () =>
+    Response.json({
+      ...transcript(),
+      available: false,
+      source: 'none',
+      messages: [],
+    }),
+  ) as unknown as typeof fetch;
   const hook = await mount(true);
   expect(hook.value()).toEqual({ envelope: null, rootSessionId: null });
 });

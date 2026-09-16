@@ -993,6 +993,10 @@
           "name": "Segredos protegidos pela rede",
           "description": "Controle quais ferramentas e destinos podem receber os segredos do projeto."
         },
+        "session_transcript_history": {
+          "name": "Histórico da sessão",
+          "description": "Salva o histórico do chat após cada turno e o mostra enquanto o computador da sessão inicia."
+        },
         "pi_worker": {
           "name": "Ambiente do worker Pi (compilado)",
           "description": "Execute sessões com o ambiente experimental do worker Pi."

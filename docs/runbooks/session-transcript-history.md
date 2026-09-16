@@ -1,0 +1,76 @@
+# Session transcript history
+
+`session_transcript_history` is an experimental, per-project feature flag. It is off by default.
+Enable **Settings → Feature flags → Session Transcript History** for the project to test it.
+
+Opening a session still calls `/start` and starts its computer. The SDK also reads
+`GET /projects/:projectId/sessions/:sessionId/transcript?shape=sync&history=true` independently
+of the shared snapshot and the runtime. It paints the last 40 saved messages first.
+The existing live reconciliation replaces those messages by their original OpenCode IDs.
+Older-message loading uses the live runtime once it is available.
+
+## Capture and storage
+
+The API captures messages when the sandbox reports `end` or `turn_end`. Manual sandbox stop
+also captures before powering off. The browser does not write transcripts.
+
+With the flag enabled, capture follows every `x-next-cursor` page. It stores the complete
+renderable transcript in the existing `session_transcript_messages` and `session_transcript_mirrors`
+tables. No schema migration is required. Each request has an 8-second deadline; a full read has
+a 60-second deadline. Capture retries up to three times with 250 ms and 500 ms backoff.
+
+Writes use one transaction, a session advisory lock, and batches of 100 messages. Captures in
+one API process run in order. A newer stored snapshot cannot be overwritten by an older read.
+A complete capture replaces removed messages as well as adding and updating messages.
+
+Message IDs, completion timestamps, and errors survive capture. Existing size limits and
+sanitization still apply: file URLs and tool inputs/outputs are omitted. This is a display copy,
+not a backup for restoring a runtime or replaying its tool history.
+
+A failed capture preserves the last saved transcript. If all retries fail or the sandbox disappears
+before reporting turn end, the latest messages need the live runtime. Another completed turn or
+manual stop attempts capture again. A process restart can interrupt an asynchronous capture.
+
+Projects that complete a full capture receive `metadata.session_transcript_history_retained=true`.
+This preserves their stored history when the feature flag is turned off. Disabling the flag restores
+the existing session-open and tail-capture behavior; it does not prune previously retained history.
+
+## Local verification
+
+From the canonical worktree:
+
+```sh
+pnpm worktree start session-transcript-history
+```
+
+Open `http://localhost:17800`. The API uses port `17808`. This worktree shares the primary local
+Supabase database. Sign in with your local account.
+
+1. Enable the flag in a project's Feature flags settings.
+2. Open a session, send a message, and wait for the answer to finish.
+3. Navigate away and reopen the session. Repeat after stopping its computer.
+4. Confirm both sides of the conversation appear while the computer starts.
+5. Wait for startup. Confirm the conversation remains in order, without duplicate messages.
+6. Send another message. Confirm streaming, completion, and reopening still work.
+7. Disable the flag and confirm the prior session-open behavior remains usable.
+
+An old session with no saved transcript falls back to the live runtime. Complete a turn with
+the flag enabled to capture its full history. A stored transcript from a replaced OpenCode root
+is rejected rather than used to select that old root.
+
+## Automated checks
+
+- `pnpm test -- --id SESS-30`: real HTTP flag enforcement, stopped-session reads, access checks,
+  and replaced-root rejection.
+- `E2E_GREP='30 — saved session history' pnpm test -- --browser-only`: toggles the flag in the
+  real UI and verifies stored messages while `/start` and `/snapshot` remain pending.
+- `apps/api/src/__tests__/integration-session-transcript-capture.test.ts`: real PostgreSQL writes
+  for more than 500 messages, retries, idempotence, concurrent captures, and flag rollback.
+- SDK hook tests cover disabled reads, missing history, session switching, and late responses.
+
+The browser fixture proves startup request initiation and pre-readiness rendering. It does not
+provision a cloud computer. Use the local steps above to verify a real cloud session before merging.
+
+On 2026-09-16, the shared local database returned `PGRST203` for `atomic_use_credits` because
+two function signatures matched. The released browser startup request returned `402`.
+This prevents that fixture from proving cloud startup; transcript rendering passed before the request was released.

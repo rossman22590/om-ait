@@ -993,6 +993,10 @@
           "name": "Segreti protetti dalla rete",
           "description": "Controlla quali strumenti e destinazioni possono ricevere i segreti del progetto."
         },
+        "session_transcript_history": {
+          "name": "Cronologia della sessione",
+          "description": "Salva la cronologia della chat dopo ogni turno e mostrala durante l’avvio del computer della sessione."
+        },
         "pi_worker": {
           "name": "Runtime worker Pi (compilato)",
           "description": "Esegui sessioni con il runtime sperimentale del worker Pi."

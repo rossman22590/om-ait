@@ -191,6 +191,13 @@ persisted session default.
 `POST /start`. The hook owns messages, rewind and restore, cancellation,
 commands, permissions, and questions. Hosts do not construct runtime routes.
 
+Projects can opt into `session_transcript_history` in Settings → Feature flags. `useSession`
+then reads saved messages from the platform database while `/start` continues. It uses the
+server-validated OpenCode root and lets the live read reconcile the saved messages by ID.
+The flag is off by default. Missing or rejected history falls back to the existing runtime path.
+See [the testing runbook](../../docs/runbooks/session-transcript-history.md) for capture limits
+and local verification.
+
 A server-rendered host can seed a known OpenCode pin while `/start` runs:
 
 ```tsx
