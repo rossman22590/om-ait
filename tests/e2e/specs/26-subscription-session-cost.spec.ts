@@ -13,7 +13,11 @@ import {
   installBrowserSessionDirect,
   signIn,
 } from "../helpers/session-auth";
-import { dismissOnboarding, selectAccountForUi } from "../helpers/ui";
+import {
+  dismissOnboarding,
+  dismissWelcomeCard,
+  selectAccountForUi,
+} from "../helpers/ui";
 
 const apiBase = process.env.E2E_API_URL || "http://localhost:8008/v1";
 const supabaseUrl = process.env.E2E_SUPABASE_URL || "http://127.0.0.1:54321";
@@ -75,7 +79,7 @@ test("26 — ChatGPT session usage excludes historical subscription costs and re
       const messages = [
         {
           info: {
-            id: "msg_cost_user",
+            id: "msg_000000000000000000000001",
             sessionID: rootId,
             role: "user",
             time: { created: now },
@@ -86,19 +90,19 @@ test("26 — ChatGPT session usage excludes historical subscription costs and re
             {
               id: "prt_cost_user",
               sessionID: rootId,
-              messageID: "msg_cost_user",
+              messageID: "msg_000000000000000000000001",
               type: "text",
               text: "Explain subscription usage.",
             },
           ],
         },
         ...[false, ...(scenario.paid ? [true] : [])].map((paid, index) => {
-          const id = `msg_cost_assistant_${index}`;
+          const id = `msg_00000000000000000000000${index + 2}`;
           return {
             info: {
               id,
               sessionID: rootId,
-              parentID: "msg_cost_user",
+              parentID: "msg_000000000000000000000001",
               role: "assistant",
               providerID: "kortix",
               modelID: paid ? "openai/gpt-5.6-sol" : "codex/gpt-5.6-sol",
@@ -138,7 +142,7 @@ test("26 — ChatGPT session usage excludes historical subscription costs and re
         }),
       ];
       await runDatabaseSql(
-        "UPDATE kortix.project_sessions SET status = 'stopped', opencode_session_id = $2 WHERE session_id = $1",
+        "UPDATE kortix.project_sessions SET status = 'stopped', opencode_session_id = $2, sandbox_id = $1, sandbox_url = 'http://127.0.0.1:1' WHERE session_id = $1",
         [sessionId, rootId],
         env.databaseUrl,
       );
@@ -164,8 +168,9 @@ test("26 — ChatGPT session usage excludes historical subscription costs and re
       }
       // A retained, stopped computer makes the persisted transcript readable.
       await runDatabaseSql(
-        "INSERT INTO kortix.session_sandboxes (sandbox_id, session_id, account_id, project_id, status) VALUES ($1::uuid,$1,$2,$3,'stopped')",
-        [sessionId, accountId, projectId], env.databaseUrl,
+        "INSERT INTO kortix.session_sandboxes (sandbox_id, session_id, account_id, project_id, status, external_id, base_url) VALUES ($1::uuid,$1,$2,$3,'stopped',$1,'http://127.0.0.1:1')",
+        [sessionId, accountId, projectId],
+        env.databaseUrl,
       );
       // The browser reads the persisted mirror through the real authenticated API.
       const snapshot = page.waitForResponse(
@@ -179,15 +184,27 @@ test("26 — ChatGPT session usage excludes historical subscription costs and re
       });
       await dismissOnboarding(page);
       const response = await snapshot;
-      expect(JSON.stringify(await response.json())).toContain(
-        "codex/gpt-5.6-sol",
-      );
+      const payload = await response.json();
+      expect(payload.transcript.source).toBe("mirror");
+      expect(payload.transcript.messages[1].info).toMatchObject({
+        modelID: "codex/gpt-5.6-sol",
+        cost: 7.91,
+        tokens: { input: 118_017 },
+      });
       await expect(
         page
           .getByText("ChatGPT subscription response.", { exact: true })
           .first(),
       ).toBeVisible({ timeout: 60_000 });
-      await page.locator('[data-slot="token-progress"] button').click();
+      await dismissWelcomeCard(page);
+      for (const close of await page
+        .getByRole("button", { name: "Close notification" })
+        .all()) {
+        await close.click();
+      }
+      // Keyboard activation also works while the welcome card finishes loading.
+      await page.locator('[data-slot="token-progress"] button').focus();
+      await page.keyboard.press("Enter");
       const dialog = page.getByRole("dialog");
       await expect(
         dialog.getByText("Session usage", { exact: true }),
@@ -199,14 +216,25 @@ test("26 — ChatGPT session usage excludes historical subscription costs and re
         dialog.getByText("Messages", { exact: true }).locator(".."),
       ).toContainText(String(messages.length));
       await expect(dialog.getByText("118,017", { exact: true })).toBeVisible();
+      await page.evaluate(() => document.fonts.ready.then(() => undefined));
       await page.screenshot({
+        animations: "disabled",
         path: testInfo.outputPath(`${scenario.name}.png`),
       });
       await page.keyboard.press("Escape");
     }
   } finally {
     if (projectId) {
-      await runDatabaseSql('DELETE FROM kortix.session_sandboxes WHERE project_id = $1', [projectId], env.databaseUrl);
+      await runDatabaseSql(
+        "UPDATE kortix.project_sessions SET metadata = metadata || jsonb_build_object('deletedAt', now()::text) WHERE project_id = $1",
+        [projectId],
+        env.databaseUrl,
+      );
+      await runDatabaseSql(
+        "DELETE FROM kortix.session_sandboxes WHERE project_id = $1",
+        [projectId],
+        env.databaseUrl,
+      );
       await deleteDatabaseProject(env, projectId);
     }
     await deleteAuthUser(user.id, {
