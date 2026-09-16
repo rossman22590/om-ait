@@ -21,6 +21,15 @@ linked, not inlined.
 
 ## Register
 
+### Resolve SCIM identities across the complete auth directory (2026-09-16)
+
+**When:** matching provisioned users by email. Query the normalized email in
+`auth.users` and prefer the existing account member for duplicate identities.
+Do not treat a lookup failure as a missing user and create an invitation.
+*Near-miss:* SCIM searched only the first 1,000 auth users; dev held 2,816 users.
+*Enforcer:* `scim/user-lookup.test.ts` covers the truncated directory and lookup
+failures; `SCIM-6` verifies provisioning and deactivation over HTTP.
+
 ### Test Entra's actual SCIM PATCH payloads (2026-09-16)
 
 **When:** parsing SCIM user or group updates. Normalize Entra string booleans,
