@@ -109,25 +109,19 @@ describe('KaaB error tables match the codes the API emits', () => {
     }
   });
 
-  test('every required-connector refusal code is documented in every table', () => {
-    // Derived from the resolution union rather than hand-listed, so a third
-    // refusal code added to the gate fails here until it is documented.
-    const union = readFileSync(join(import.meta.dir, 'session-connector-bindings.ts'), 'utf8')
-      .split('export type RequiredConnectorResolution =')[1]
-      ?.split('\nexport ')[0];
-    expect(union).toBeTruthy();
-    const gateCodes = [...(union as string).matchAll(/code: '([A-Z][A-Z0-9_]+)'/g)].map(
-      ([, code]) => code,
+  // The session-level required-connector GATE is retired (connection-access.ts:
+  // credentials are a call-time choice, not a session gate). The union type
+  // this test used to derive its code list from —
+  // `RequiredConnectorResolution` in session-connector-bindings.ts — no longer
+  // exists, and neither code it named is emitted by any route anymore. Pinned
+  // here so a resurrected gate (or a resurrected phantom doc entry) fails a
+  // test instead of shipping silently.
+  test('the retired required-connector gate stays retired: no resolution union, no live refusal', () => {
+    const sessionBindingsSource = readFileSync(
+      join(import.meta.dir, 'session-connector-bindings.ts'),
+      'utf8',
     );
-    expect(gateCodes.sort()).toEqual([
-      'CONNECTOR_CONNECTION_REQUIRED',
-      'REQUIRED_CONNECTOR_CONNECTION_UNAVAILABLE',
-    ]);
-
-    for (const relativePath of ERROR_TABLES) {
-      const codes = documentedErrorCodes(readFileSync(join(REPO_ROOT, relativePath), 'utf8'));
-      for (const code of gateCodes) expect({ relativePath, code, listed: codes.includes(code) })
-        .toEqual({ relativePath, code, listed: true });
-    }
+    expect(sessionBindingsSource).not.toContain('RequiredConnectorResolution');
+    expect(sessionBindingsSource).not.toContain('REQUIRED_CONNECTOR_CONNECTION_UNAVAILABLE');
   });
 });

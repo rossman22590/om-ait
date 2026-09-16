@@ -756,12 +756,18 @@ describe('session connector isolation', () => {
     expect(resolved).toBeNull();
   });
 
-  test('project strategy rejects member and unmanaged system authorizations without a capability bypass', async () => {
-    await db
-      .update(connectors)
-      .set({ authorizationStrategy: 'project' })
-      .where(eq(connectors.connectorId, CONNECTOR_A));
-    try {
+  // Reachability is a property of the ROW (connection-access.ts), never of the
+  // connector's (retired) authorization_strategy — proven here by getting the
+  // SAME verdicts under BOTH strategy values. A project-owned row is always
+  // reachable; a member owns their own row regardless of a manage-capability
+  // bypass; an external/unmanaged row is reachable by nobody, capability or
+  // not — that invariant is what actually matters and did not change.
+  test('connection reachability is per-row, not per-connector — the (retired) strategy never changes the verdict', async () => {
+    for (const strategy of ['project', 'user'] as const) {
+      await db
+        .update(connectors)
+        .set({ authorizationStrategy: strategy })
+        .where(eq(connectors.connectorId, CONNECTOR_A));
       const projectOwned = await validateSessionConnectorBindings({
         accountId: ACCOUNT_A,
         projectId: PROJECT_A,
@@ -770,12 +776,13 @@ describe('session connector isolation', () => {
         mayManageSystemConnections: false,
         bindings: { veyris: { connection_id: CONNECTION_DEFAULT } },
       });
-      const memberOwned = await validateSessionConnectorBindings({
+      const ownMemberConnection = await validateSessionConnectorBindings({
         accountId: ACCOUNT_A,
         projectId: PROJECT_A,
         actingUserId: USER,
         actingPrincipalIsServiceAccount: false,
-        mayManageSystemConnections: true,
+        // No manage capability needed — CONNECTION_A is USER's own row.
+        mayManageSystemConnections: false,
         bindings: { veyris: { connection_id: CONNECTION_A } },
       });
       const unmanagedSystem = await validateSessionConnectorBindings({
@@ -787,17 +794,16 @@ describe('session connector isolation', () => {
         bindings: { veyris: { connection_id: CONNECTION_EXTERNAL } },
       });
       expect(projectOwned).toMatchObject({ ok: true });
-      expect(memberOwned).toMatchObject({ ok: false, code: 'CONNECTOR_CONNECTION_NOT_FOUND' });
+      expect(ownMemberConnection).toMatchObject({ ok: true });
       expect(unmanagedSystem).toMatchObject({
         ok: false,
         code: 'CONNECTOR_CONNECTION_NOT_FOUND',
       });
-    } finally {
-      await db
-        .update(connectors)
-        .set({ authorizationStrategy: 'user' })
-        .where(eq(connectors.connectorId, CONNECTOR_A));
     }
+    await db
+      .update(connectors)
+      .set({ authorizationStrategy: 'user' })
+      .where(eq(connectors.connectorId, CONNECTOR_A));
   });
 
   test('a personal-connection binding fails closed if the session becomes shared', async () => {
@@ -882,34 +888,37 @@ describe('session connector isolation', () => {
     }
   });
 
-  test('authorization strategy changes take effect on the next resolution without restart', async () => {
-    await db
-      .update(connectors)
-      .set({ authorizationStrategy: 'project' })
-      .where(eq(connectors.connectorId, CONNECTOR_A));
-    try {
+  // SESSION_A is bound to CONNECTION_A, USER's own member-owned row on
+  // CONNECTOR_A. Flipping the connector's (retired) authorization_strategy
+  // used to invalidate that binding on the next resolution — the exact bug
+  // this initiative retires the flag over. It must now have NO effect: the
+  // binding resolves the same way regardless of the flag's value.
+  test('the (retired) authorization strategy no longer affects resolution on the next call', async () => {
+    for (const strategy of ['project', 'user'] as const) {
+      await db
+        .update(connectors)
+        .set({ authorizationStrategy: strategy })
+        .where(eq(connectors.connectorId, CONNECTOR_A));
       const resolved = await resolveSessionConnectorConnection({
         accountId: ACCOUNT_A,
         projectId: PROJECT_A,
         sessionId: SESSION_A,
         alias: 'veyris',
       });
-      expect(resolved).toBeNull();
-      // And nothing is entitled either: the strategy flip is what invalidated
-      // this member's connection, so the account list must agree with the
-      // resolution rather than advertise an account a call cannot use.
+      expect(resolved).toMatchObject({ connectionId: CONNECTION_A, ownerType: 'member' });
+      // No actingUserId supplied here, so the member-owned row (CONNECTION_A)
+      // is never entitled — but the project-owned default (CONNECTION_DEFAULT)
+      // is unconditionally reachable regardless of identity or strategy, and
+      // stays the sole entry in both directions of the flip.
       expect(
-        await listEntitledConnectorConnections({
-          accountId: ACCOUNT_A,
-          projectId: PROJECT_A,
-          alias: 'veyris',
-        }),
-      ).toEqual([]);
-    } finally {
-      await db
-        .update(connectors)
-        .set({ authorizationStrategy: 'user' })
-        .where(eq(connectors.connectorId, CONNECTOR_A));
+        (
+          await listEntitledConnectorConnections({
+            accountId: ACCOUNT_A,
+            projectId: PROJECT_A,
+            alias: 'veyris',
+          })
+        ).map((c) => c.connectionId),
+      ).toEqual([CONNECTION_DEFAULT]);
     }
   });
 
