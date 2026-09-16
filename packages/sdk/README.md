@@ -185,6 +185,15 @@ OpenCode session from reusing stale snapshot defaults. A per-call choice
 overrides a `setModel()` or `setAgent()` choice. A handle choice overrides the
 persisted session default.
 
+### Saved session attachments
+
+With `session_transcript_history` enabled, `session.attachments.upload(file)` stores up to
+25 MiB in private object storage. It returns `{ attachment_id, filename, mime, size, url }`.
+Use `url` in a file part sent to the prompt inbox. The API copies those bytes into the
+sandbox after startup. Uploads and `session.attachments.read(attachment_id)` do not start a
+sandbox. Reads return a `Blob` and require access to the session. Retries of the same `File`
+reuse the successful upload; an explicit `attachmentId` supports caller-managed retries.
+
 ### React runtime
 
 `useSession(projectId, sessionId)` opens the OpenCode REST runtime returned by

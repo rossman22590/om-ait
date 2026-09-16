@@ -5,6 +5,7 @@ export interface PromptFileReference {
   mime: string;
   filename: string;
   pendingId?: string;
+  attachmentUrl?: string;
 }
 
 /**
@@ -93,5 +94,6 @@ export function promptFileReferenceXml(input: PromptFileReference): string {
   const pending = input.pendingId
     ? ` pending="${xmlAttribute(input.pendingId)}"`
     : '';
-  return `<file path="${xmlAttribute(input.path)}" mime="${xmlAttribute(input.mime)}" filename="${xmlAttribute(input.filename)}"${pending}>\nThis file has been uploaded and is available at the path above.\n</file>`;
+  const attachment = input.attachmentUrl ? ` attachment="${xmlAttribute(input.attachmentUrl)}"` : '';
+  return `<file path="${xmlAttribute(input.path)}" mime="${xmlAttribute(input.mime)}" filename="${xmlAttribute(input.filename)}"${pending}${attachment}>\nThis file has been uploaded and is available at the path above.\n</file>`;
 }

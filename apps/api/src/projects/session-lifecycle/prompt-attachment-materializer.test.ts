@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { PromptPartWire } from './store';
 import {
+  type RuntimePromptFileWriteInput,
   INLINE_PROMPT_BUDGET_BYTES,
   PromptAttachmentMaterializationError,
   materializePromptAttachments,
@@ -353,4 +354,34 @@ describe('materializePromptAttachments — review findings 2026-09-05', () => {
     });
     expect(writes).toEqual(['b.zip']);
   });
+});
+
+test('stored attachments materialize after wake and retain a preview reference', async () => {
+  const projectId = '11111111-1111-4111-8111-111111111111';
+  const sessionId = '22222222-2222-4222-8222-222222222222';
+  const url = `kortix-attachment://${projectId}/${sessionId}/33333333-3333-4333-8333-333333333333`;
+  const writes: RuntimePromptFileWriteInput[] = [];
+  const result = await materialize({
+    sessionId,
+    parts: [{ type: 'file', mime: 'image/png', filename: 'shot.png', url }],
+    readAttachment: async (scope) => {
+      expect(scope.sessionId).toBe(sessionId);
+      return new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' });
+    },
+    writeFile: async (input) => { writes.push(input); return { path: input.targetPath, size: input.bytes.length }; },
+  });
+  expect(writes).toHaveLength(1);
+  expect([...writes[0].bytes]).toEqual([1, 2, 3]);
+  expect(result[0].type).toBe('text');
+  expect(result[0].text).toContain(`attachment="${url}"`);
+  expect(result[0].text).toContain(writes[0].targetPath);
+});
+
+test('stored attachments cannot be read into another session', async () => {
+  let reads = 0;
+  await expect(materialize({
+    parts: [{ type: 'file', mime: 'text/plain', filename: 'notes.txt', url: 'kortix-attachment://11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222/33333333-3333-4333-8333-333333333333' }],
+    readAttachment: async () => { reads++; return new Blob(['private']); },
+  })).rejects.toThrow('another session');
+  expect(reads).toBe(0);
 });

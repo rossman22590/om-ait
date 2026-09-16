@@ -45,7 +45,7 @@
  * dimmed to "Queued". `use-session-sync.ts` states the acceptance criterion for
  * any replacement: it must read the MESSAGE, not its shape. This does.
  *
- * ATTACHMENT BYTES NEVER LEAVE THE BOX. `sanitizeParts` strips a file part's
+ * ATTACHMENT BYTES NEVER ENTER TRANSCRIPT ROWS. `sanitizeParts` strips a file part's
  * `url` (base64 data URLs are what made those bodies 7-19 MB) and a tool part's
  * `state.input`/`state.output`.
  *

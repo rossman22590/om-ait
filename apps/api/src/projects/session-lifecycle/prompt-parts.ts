@@ -12,7 +12,7 @@
  * not a blob store.
  */
 
-import { isModelNativeAttachmentMime } from '@kortix/shared';
+import { isModelNativeAttachmentMime, parseSessionAttachmentRef } from '@kortix/shared';
 import { parseStagedPromptDataUrl } from './prompt-attachment-materializer';
 import type { PromptPartWire } from './store';
 
@@ -72,6 +72,9 @@ function validateFilePart(part: PromptPartWire): string | null {
   const mime = part.mime?.trim();
   const url = part.url?.trim();
   if (!mime || !url) return `file "${filename}" is missing MIME or URL data`;
+  if (url.startsWith('kortix-attachment:')) {
+    return parseSessionAttachmentRef(url) ? null : `file "${filename}" has an invalid attachment reference`;
+  }
   const staged = url.toLowerCase().startsWith('data:');
   // A native file may arrive as a remote URL (already in the box) or staged
   // as a data: URL. A staged one is parsed HERE: past the inline budget the

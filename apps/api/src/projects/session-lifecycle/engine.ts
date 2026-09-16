@@ -1,3 +1,4 @@
+import { sessionAttachmentStore } from '../lib/session-attachments';
 import { PromptDeliveryRefused, throwIfPromptRefused } from './prompt-delivery-refusal';
 import {
   assertInboxDeliveryActive,
@@ -483,6 +484,7 @@ export async function continueSession(
           userId,
           materializationKey: key,
           writeFile: writeRuntimePromptFile,
+        readAttachment: (scope) => sessionAttachmentStore().read(scope),
           // The runtime already holds this message's native images inline;
           // only the legacy non-native parts need a file behind them.
           inlineBudgetBytes: Number.POSITIVE_INFINITY,
@@ -2440,6 +2442,7 @@ async function postPrompt(
         userId,
         materializationKey: prompt.materializationKey,
         writeFile: writeRuntimePromptFile,
+        readAttachment: (scope) => sessionAttachmentStore().read(scope),
       })
     : parts;
   const overrides = prompt?.overrides;

@@ -1597,3 +1597,9 @@ test('kortix.iam.can probes one leaf for one principal', async () => {
   expect(last().url).toContain('/accounts/ACC1/iam/members/U1/effective?');
   expect(last().url).toContain('action=project.write');
 });
+
+test('session attachments upload before runtime initialization', async () => {
+  await kortix.session('PID123', 'SID456').attachments.upload(new File(['hello'], 'notes.txt'));
+  expect(last().url).toContain('/projects/PID123/sessions/SID456/attachments');
+  expect(last().method).toBe('POST');
+});

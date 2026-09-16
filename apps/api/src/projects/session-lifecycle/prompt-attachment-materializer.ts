@@ -1,5 +1,7 @@
 import {
   isModelNativeAttachmentMime,
+  parseSessionAttachmentRef,
+  type SessionAttachmentScope,
   promptFileReferenceXml,
   sanitizePromptUploadFilename,
 } from '@kortix/shared';
@@ -120,6 +122,7 @@ export async function materializePromptAttachments(input: {
   userId: string;
   materializationKey: string;
   writeFile: RuntimePromptFileWriter;
+  readAttachment?: (scope: SessionAttachmentScope) => Promise<Blob | null>;
   /**
    * Override the inline budget. The legacy repair passes `Infinity`: it is
    * patching a message the runtime ALREADY holds, native images included, and
@@ -142,6 +145,7 @@ export async function materializePromptAttachments(input: {
     .filter(({ part }) => {
       if (part.type !== 'file') return false;
       const url = part.url ?? '';
+      if (parseSessionAttachmentRef(url)) return true;
       const staged = url.toLowerCase().startsWith('data:');
       if (!isModelNativeAttachmentMime(part.mime ?? '')) return staged;
       // A native file that is a REMOTE URL costs the URL, not the bytes, and
@@ -162,7 +166,21 @@ export async function materializePromptAttachments(input: {
         index,
         materializationKey: input.materializationKey,
       });
-      const { bytes } = parseStagedPromptDataUrl(part);
+      const stored = parseSessionAttachmentRef(part.url);
+      let bytes: Uint8Array;
+      if (stored) {
+        if (stored.sessionId !== input.sessionId) throw new Error('Attachment belongs to another session');
+        if (!input.readAttachment) throw new Error('Attachment storage is unavailable');
+        const blob = await input.readAttachment(stored);
+        if (!blob) throw new Error('Saved attachment was not found');
+        bytes = new Uint8Array(await blob.arrayBuffer());
+        reference.text = promptFileReferenceXml({
+          path: reference.targetPath, mime: reference.mime, filename: reference.filename,
+          attachmentUrl: part.url,
+        });
+      } else {
+        bytes = parseStagedPromptDataUrl(part).bytes;
+      }
       await input.writeFile({
         externalId: input.externalId,
         sessionId: input.sessionId,
