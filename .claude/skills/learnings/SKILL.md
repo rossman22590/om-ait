@@ -21,6 +21,16 @@ linked, not inlined.
 
 ## Register
 
+### Test SCIM ingress without a User-Agent (2026-09-16)
+
+**When:** routing enterprise directory provisioning through AWS WAF. Entra omits
+`User-Agent`; supply a relay identity only on account-scoped SCIM routes when
+the header is absent or empty. Preserve the bearer, body, and sender headers.
+*Incident:* Azure's dev connection test returned HTML `403` before SCIM auth;
+the identical request with a User-Agent reached Kortix. All five local SCIM
+flows passed because their HTTP client sent a header. *Enforcer:*
+`api-router/worker.test.mjs` covers SCIM methods, discovery, and route boundaries.
+
 ### Refresh provider credentials before blaming sandbox authentication (2026-09-16)
 
 **When:** a resumed terminal receives an upstream authentication refusal. Daytona

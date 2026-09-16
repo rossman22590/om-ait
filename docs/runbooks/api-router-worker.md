@@ -49,6 +49,29 @@ body. A real origin error body means the Worker is current; the maintenance
 message above means it is stale (or an admin really set `level: blocking` —
 check `GET https://api.kortix.com/v1/system/maintenance`).
 
+## Entra provisioning returns HTML 403
+
+Microsoft Entra can omit `User-Agent` on SCIM connection tests and provisioning
+requests. AWS WAF rejects a missing header before Kortix can validate the SCIM
+bearer. The router supplies `Kortix-SCIM-Relay/1.0` only for account-scoped SCIM
+paths when that header is missing or empty. Sender headers, bodies, and bearer
+tokens remain unchanged. Gateway and unrelated API routes are excluded.
+
+Compare the same unauthenticated request with and without a client header:
+
+```bash
+curl -i -H 'User-Agent:' 'https://dev-api.kortix.com/scim/v2/accounts/<account-id>/ServiceProviderConfig'
+curl -i -H 'User-Agent: SCIM-Diagnostic/1.0' 'https://dev-api.kortix.com/scim/v2/accounts/<account-id>/ServiceProviderConfig'
+```
+
+Both must return Kortix's JSON SCIM `401` error. An HTML `403` on only the first
+request means the relay fix is absent. Do not disable WAF or SCIM authentication.
+After deploying the router, run **Test connection** in Entra, then **Provision
+on demand** and verify the resulting user and group membership in Kortix.
+
+On 2026-09-16, the logged-in Entra `Kortix Dev` application reproduced this
+failure against dev commit `80a175ad3acab7abf0c19f088074dd065fb4933e`.
+
 ## The managed-git credential
 
 Managed projects live as repos in the GitHub org `managed-kortix`. The API

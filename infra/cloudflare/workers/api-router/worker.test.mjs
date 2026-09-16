@@ -330,6 +330,61 @@ describe('api-router worker', () => {
     expect(await proxiedRequest.text()).toBe('{"event":"test"}');
   });
 
+  test.each(['GET', 'POST', 'PATCH', 'PUT', 'DELETE'])(
+    'relays Entra SCIM %s without a User-Agent and preserves authentication',
+    async (method) => {
+      let proxiedRequest;
+      globalThis.fetch = async (request) => {
+        proxiedRequest = request;
+        return Response.json({ schemas: [], detail: 'Invalid SCIM token' }, { status: 401 });
+      };
+      const response = await worker.fetch(
+        new Request('https://dev-api.kortix.com/scim/v2/accounts/00000000-0000-4000-a000-000000000000/Users', {
+          method,
+          headers: { Authorization: 'Bearer invalid-test-token' },
+          ...(method === 'GET' ? {} : { body: '{"Operations":[]}' }),
+        }),
+        env,
+      );
+      expect(proxiedRequest.headers.get('User-Agent')).toBe('Kortix-SCIM-Relay/1.0');
+      expect(proxiedRequest.headers.get('Authorization')).toBe('Bearer invalid-test-token');
+      expect(response.status).toBe(401);
+      if (method !== 'GET') expect(await proxiedRequest.text()).toBe('{"Operations":[]}');
+    },
+  );
+
+  test.each(['Users', 'Groups/test-group', 'ServiceProviderConfig', 'ResourceTypes/User', 'Schemas/urn:ietf:params:scim:schemas:core:2.0:User'])(
+    'normalizes an empty SCIM User-Agent for %s',
+    async (resource) => {
+      let proxiedRequest;
+      globalThis.fetch = async (request) => {
+        proxiedRequest = request;
+        return Response.json({});
+      };
+      await worker.fetch(new Request(`https://dev-api.kortix.com/scim/v2/accounts/00000000-0000-4000-a000-000000000000/${resource}`, {
+        headers: { 'User-Agent': '' },
+      }), env);
+      expect(proxiedRequest.headers.get('User-Agent')).toBe('Kortix-SCIM-Relay/1.0');
+    },
+  );
+
+  test.each([
+    ['https://dev-api.kortix.com/scim/v2/accounts/00000000-0000-4000-a000-000000000000/Users', 'Entra/1.0', 'Entra/1.0'],
+    ['https://gateway-dev.kortix.com/scim/v2/accounts/00000000-0000-4000-a000-000000000000/Users', null, null],
+    ['https://dev-api.kortix.com/scim/v2/accounts/not-an-account/Users', null, null],
+    ['https://dev-api.kortix.com/scim/v2/accounts/00000000-0000-4000-a000-000000000000/Unknown', null, null],
+  ])('preserves sender headers and SCIM routing boundaries: %s', async (url, userAgent, expected) => {
+    let proxiedRequest;
+    globalThis.fetch = async (request) => {
+      proxiedRequest = request;
+      return Response.json({});
+    };
+    await worker.fetch(new Request(url, {
+      headers: userAgent ? { 'User-Agent': userAgent } : {},
+    }), env);
+    expect(proxiedRequest.headers.get('User-Agent')).toBe(expected);
+  });
+
   test('preserves a webhook sender User-Agent', async () => {
     let proxiedUserAgent = '';
     globalThis.fetch = async (request) => {
