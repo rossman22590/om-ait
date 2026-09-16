@@ -21,6 +21,16 @@ linked, not inlined.
 
 ## Register
 
+### Bind change-request origin to the authenticated session (2026-09-16)
+
+**When:** opening a change request with a session credential. Derive the origin
+from the authenticated `sessionId`; reject a different body `session_id` and a
+missing session row. Never let a caller omit the origin that a later merge gate
+uses. *Near-miss:* CR open accepted an omitted or foreign `session_id`, so a
+session could make its own CR appear unrelated before the self-merge check.
+*Enforcer:* `GH-17` opens a CR without `session_id`, rejects a mismatch, and
+checks explicit-grant and null-grant self-merge outcomes through HTTP and Git.
+
 ### An honest 404 catch-all changes every proxy that passed the old status through (2026-09-15)
 
 **When:** replacing a permissive fallback (SPA HTML 200) with a strict 404. Grep
