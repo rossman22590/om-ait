@@ -14,7 +14,7 @@
 // also needs access to project X for a one-off" workable without the
 // next sign-in stomping it.
 
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { accountGroupMembers, accountGroups, accountInvitations, accountMembers, accountMemberships } from '@kortix/db';
 import { db } from '../shared/db';
 import { assignRole, SYSTEM_ACTOR } from './assignments';
@@ -333,7 +333,12 @@ export async function syncSsoMembership(args: {
     }
   }
 
-  const mappings = await listSsoGroupMappings(provider.accountId);
+  const allMappings = await listSsoGroupMappings(provider.accountId);
+  const ssoGroups = await db.select({ groupId: accountGroups.groupId })
+    .from(accountGroups)
+    .where(and(eq(accountGroups.accountId, provider.accountId), ne(accountGroups.source, 'scim')));
+  const ssoGroupIds = new Set(ssoGroups.map((group) => group.groupId));
+  const mappings = allMappings.filter((mapping) => ssoGroupIds.has(mapping.groupId));
   if (mappings.length === 0) {
     return { skipped: false, memberCreated };
   }

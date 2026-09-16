@@ -21,6 +21,15 @@ linked, not inlined.
 
 ## Register
 
+### Preserve SCIM group changes when old SSO sessions make requests (2026-09-16)
+
+**When:** reconciling SAML group claims. Leave SCIM-managed groups to SCIM. Mark
+existing groups as SCIM-managed when the provisioning API takes ownership.
+*Incident:* Azure added Ivan to Engineering on dev; reloading his older SSO
+session deleted the membership. Pathless group attributes also returned success
+without persisting. *Enforcer:* `SCIM-8` uses real signed Supabase tokens to
+prove old claims cannot undo SCIM additions or removals, and checks read-back.
+
 ### Resolve SCIM identities across the complete auth directory (2026-09-16)
 
 **When:** matching provisioned users by email. Query the normalized email in

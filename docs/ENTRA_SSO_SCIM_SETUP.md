@@ -255,6 +255,11 @@ new tab (**Provisioning**) to configure.
    ([screenshot 7](#screenshots)).
 
 SCIM behavior worth knowing:
+
+- SCIM owns membership in groups it creates or updates. SAML claims cannot add
+  or remove members of those groups, including claims in an older browser token.
+  SAML group mappings continue to manage groups that SCIM has not taken over.
+- Entra pathless group updates persist `displayName` and `externalId`.
 - **Users**: create by email; a not-yet-signed-up user is provisioned as an invite
   and reports `active:true` while the invitation remains valid.
 - **Deactivate** (`PATCH active:false`, Entra's string `"False"`, or DELETE): removes the account membership
@@ -264,7 +269,7 @@ SCIM behavior worth knowing:
   A removal with a `value` array removes only those members. An empty array
   preserves membership. Omitting both the value and filter removes all members.
 
-HTTP flows `SCIM-6` and `SCIM-7` cover Entra's PATCH formats, persisted membership,
+HTTP flows `SCIM-6`, `SCIM-7`, and `SCIM-8` cover Entra's PATCH formats, persisted membership,
 and last-owner protection. Run `pnpm test -- --domain scim` to verify them.
 
 ---

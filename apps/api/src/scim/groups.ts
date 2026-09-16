@@ -486,6 +486,14 @@ scimRouter.openapi(
       // Azure AD: replace with no path, value is an object containing members
       if (opName === 'replace' && !path && op.value && typeof op.value === 'object') {
         const v = op.value as Record<string, unknown>;
+        if (typeof v.displayName === 'string' && v.displayName.trim()) {
+          await db.update(accountGroups).set({ name: v.displayName.trim() })
+            .where(eq(accountGroups.groupId, groupId));
+        }
+        if (typeof v.externalId === 'string') {
+          await db.update(accountGroups).set({ externalId: v.externalId })
+            .where(eq(accountGroups.groupId, groupId));
+        }
         if (Array.isArray(v.members)) {
           const userIds = (v.members as Array<{ value?: unknown }>)
             .map((m) => (typeof m.value === 'string' ? m.value : null))
@@ -538,7 +546,7 @@ scimRouter.openapi(
 
     await db
       .update(accountGroups)
-      .set({ updatedAt: new Date() })
+      .set({ source: 'scim', updatedAt: new Date() })
       .where(eq(accountGroups.groupId, groupId));
 
     // Membership may have changed → bust both who was a member before and who is
@@ -680,7 +688,7 @@ scimRouter.openapi(
 
     await db
       .update(accountGroups)
-      .set({ updatedAt: new Date() })
+      .set({ source: 'scim', updatedAt: new Date() })
       .where(eq(accountGroups.groupId, groupId));
 
     invalidateIamCacheForUsers(beforeMemberIds);

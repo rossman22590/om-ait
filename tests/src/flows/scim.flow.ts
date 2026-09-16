@@ -19,6 +19,7 @@
 import { flow } from '../core/flow';
 import type { Client } from '../core/client';
 import type { FlowContext } from '../core/types';
+import { ssoFixtureToken } from '../fixtures/supabase';
 
 /** Mint a per-account SCIM bearer token for an account the OWNER controls. */
 async function mintScimToken(ctx: FlowContext, accountId: string): Promise<string> {
@@ -613,5 +614,77 @@ flow('SCIM-7', {
     const params = { accountId: team.id, groupId };
     (await scim.del('/scim/v2/accounts/:accountId/Groups/:groupId', { params })).status(204);
     (await scim.get('/scim/v2/accounts/:accountId/Groups/:groupId', { params })).status(404);
+  });
+});
+
+flow('SCIM-8', {
+  domain: 'scim',
+  routes: [
+    'GET /v1/accounts',
+    'PUT /v1/accounts/:accountId/iam/sso/provider',
+    'POST /v1/accounts/:accountId/iam/sso/mappings',
+    'POST /v1/accounts/:accountId/iam/groups',
+    'POST /scim/v2/accounts/:accountId/Users',
+    'GET /scim/v2/accounts/:accountId/Groups/:groupId',
+    'PATCH /scim/v2/accounts/:accountId/Groups/:groupId',
+  ],
+}, async (ctx) => {
+  const team = await ctx.fixtures.team({ enterprise: true });
+  const user = await ctx.fixtures.user();
+  const owner = ctx.client.as(ctx.P.OWNER);
+  const providerId = crypto.randomUUID();
+  const claim = ctx.fixtures.name('engineering');
+  const params = { accountId: team.id, groupId: '' };
+  const scim = ctx.client.withBearer(await mintScimToken(ctx, team.id), 'SCIM');
+  let oldWithoutGroup: Client;
+  let oldWithGroup: Client;
+
+  await ctx.step('configure SSO and map an existing manual group, as in the Azure test tenant', async () => {
+    (await owner.put('/v1/accounts/:accountId/iam/sso/provider', {
+      supabase_sso_provider_id: providerId,
+      name: 'Entra regression',
+      primary_domain: `${ctx.fixtures.name('sso-scim')}.test`,
+      group_claim_name: 'memberOf',
+      auto_create_members: true,
+      auto_provision_groups: true,
+    }, { params })).status(200);
+    const created = await owner.post('/v1/accounts/:accountId/iam/groups', { name: claim }, { params });
+    created.status(201);
+    params.groupId = created.json<{ group_id: string }>().group_id;
+    (await owner.post('/v1/accounts/:accountId/iam/sso/mappings', {
+      claim_value: claim, group_id: params.groupId,
+    }, { params })).status(201);
+    (await scim.post('/scim/v2/accounts/:accountId/Users', { userName: user.email! }, { params }))
+      .status(201);
+    oldWithoutGroup = ctx.client.withBearer(await ssoFixtureToken(ctx.env, user, providerId, []), 'SSO-before-add');
+    oldWithGroup = ctx.client.withBearer(await ssoFixtureToken(ctx.env, user, providerId, [claim]), 'SSO-before-remove');
+  });
+
+  await ctx.step('a stale SSO token cannot remove membership added by SCIM', async () => {
+    (await scim.patch('/scim/v2/accounts/:accountId/Groups/:groupId', {
+      Operations: [{ op: 'add', path: 'members', value: [{ value: user.userId! }] }],
+    }, { params })).status(200).body().has('$.members', [{ value: user.userId! }]);
+    (await oldWithoutGroup.get('/v1/accounts')).status(200);
+    (await scim.get('/scim/v2/accounts/:accountId/Groups/:groupId', { params }))
+      .status(200).body().has('$.members', [{ value: user.userId! }]);
+  });
+
+  await ctx.step('a stale SSO token cannot restore membership removed by SCIM', async () => {
+    (await scim.patch('/scim/v2/accounts/:accountId/Groups/:groupId', {
+      Operations: [{ op: 'remove', path: 'members', value: [{ value: user.userId! }] }],
+    }, { params })).status(200).body().has('$.members', []);
+    (await oldWithGroup.get('/v1/accounts')).status(200);
+    (await scim.get('/scim/v2/accounts/:accountId/Groups/:groupId', { params }))
+      .status(200).body().has('$.members', []);
+  });
+
+  await ctx.step('Entra pathless group attributes persist and retries keep the same resource', async () => {
+    for (let retry = 0; retry < 2; retry++) {
+      (await scim.patch('/scim/v2/accounts/:accountId/Groups/:groupId', {
+        Operations: [{ op: 'Replace', value: { externalId: providerId, displayName: `${claim}-renamed` } }],
+      }, { params })).status(200).body().has('$.externalId', providerId).has('$.displayName', `${claim}-renamed`);
+    }
+    (await scim.get('/scim/v2/accounts/:accountId/Groups/:groupId', { params }))
+      .status(200).body().has('$.id', params.groupId).has('$.externalId', providerId);
   });
 });
