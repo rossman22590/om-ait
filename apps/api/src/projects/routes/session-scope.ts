@@ -87,6 +87,11 @@ projectsApp.openapi(
     });
     return c.json({
       secrets_allowlist: visible.row.secretsAllowlist ?? null,
+      // Always null. A session cannot require connectors any more, but the key
+      // stays on the wire: `SessionScope` is a published @kortix/sdk type, and a
+      // consumer reading `scope.required_connectors` must get null, not
+      // undefined.
+      required_connectors: null,
       connector_bindings: bindings,
       dropped_secrets: [],
       added_secrets: [],
@@ -483,6 +488,7 @@ projectsApp.openapi(
 
     return c.json({
       secrets_allowlist: nextAllowlist,
+      required_connectors: null,
       connector_bindings: effectiveBindings,
       // Names are gated; the WARNING is not. Enumerating the agent grant to
       // report what a null → list narrowing dropped hands the caller secret
