@@ -74,6 +74,21 @@ test.describe('30 — pooled provider secrets', () => {
       expect(listed.secrets.map((secret) => secret.secret_id).sort()).toEqual([...createdIds].sort());
       expect(listed.secrets.every((secret) => secret.value === undefined)).toBe(true);
 
+      const picker = await api<{ models: Record<string, unknown> }>(
+        session.access_token, 'GET', `/projects/${projectId}/model-picker`,
+      );
+      expect(Object.keys(picker.models).some((model) => model.startsWith('anthropic/'))).toBe(true);
+      await api(session.access_token, 'PATCH', `/projects/${projectId}/features`, {
+        feature: 'pooled_provider_secrets', enabled: false,
+      });
+      const disabledPicker = await api<{ models: Record<string, unknown> }>(
+        session.access_token, 'GET', `/projects/${projectId}/model-picker`,
+      );
+      expect(Object.keys(disabledPicker.models).some((model) => model.startsWith('anthropic/'))).toBe(false);
+      await api(session.access_token, 'PATCH', `/projects/${projectId}/features`, {
+        feature: 'pooled_provider_secrets', enabled: true,
+      });
+
       await panel.getByRole('button', { name: 'Actions for Primary test key' }).click();
       await page.getByRole('menuitem', { name: 'Delete key' }).click();
       await page.getByRole('button', { name: 'Delete key', exact: true }).click();

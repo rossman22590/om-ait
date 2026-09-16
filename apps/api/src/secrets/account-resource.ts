@@ -36,6 +36,20 @@ export async function coolDownAccountSecret(secretId: string, accountId: string,
   }).where(and(eq(accountSecretResources.secretId, secretId), eq(accountSecretResources.accountId, accountId)));
 }
 
+/** Provider names visible to a member for model discovery. Never reads secret values. */
+export async function listGrantedGatewaySecretNames(accountId: string, userId: string): Promise<string[]> {
+  const rows = await db.select({ name: accountSecretResources.name }).from(accountSecretResources)
+    .innerJoin(accountSecretGrants, and(eq(accountSecretGrants.secretId, accountSecretResources.secretId), eq(accountSecretGrants.accountId, accountSecretResources.accountId)))
+    .innerJoin(accountMembers, and(eq(accountMembers.accountId, accountSecretGrants.accountId), eq(accountMembers.userId, accountSecretGrants.userId)))
+    .where(and(
+      eq(accountSecretResources.accountId, accountId),
+      eq(accountSecretResources.consumer, 'llm_gateway'),
+      eq(accountSecretResources.active, true),
+      eq(accountSecretGrants.userId, userId),
+    ));
+  return [...new Set(rows.map((row) => row.name))];
+}
+
 /** Resolve at use time so grant revocation and deletion affect the next call. */
 export async function resolveSessionProviderSecrets(input: {
   accountId: string;
