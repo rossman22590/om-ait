@@ -1,13 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { loadEnv } from '../../src/core/env';
-import {
-  createDatabaseProject,
-  createDatabaseSession,
-  deleteDatabaseProject,
-} from '../../src/fixtures/database-project';
+import { createDatabaseSession } from '../../src/fixtures/database-project';
 import { seedSessionTranscript } from '../../src/fixtures/session-transcript';
 import { runDatabaseSql } from '../helpers/database';
 import { createApiJsonClient } from '../helpers/http';
+import { createManifestProject, fundAccount } from '../helpers/manifest-project';
 import {
   createAuthUser,
   deleteAuthUser,
@@ -36,7 +33,9 @@ test('30 — saved session history paints while sandbox start and the open bundl
   const user = await createAuthUser(email, authOptions);
   const auth = await signIn(email, authOptions);
   let projectId = '';
+  let disposeProject = async () => {};
   let releaseReads = () => {};
+  let releaseSend = () => {};
   try {
     const accounts = await api<Array<{ account_id: string; personal_account?: boolean }>>(
       auth.access_token,
@@ -44,14 +43,24 @@ test('30 — saved session history paints while sandbox start and the open bundl
       '/accounts',
     );
     const accountId = (accounts.find((a) => a.personal_account) ?? accounts[0]).account_id;
-    const project = await createDatabaseProject(env, {
+    await fundAccount(env.databaseUrl!, accountId);
+    const project = await createManifestProject({
+      api,
+      accessToken: auth.access_token,
+      databaseUrl: env.databaseUrl!,
       accountId,
       userId: user.id,
       name: 'Transcript history verification',
     });
     projectId = project.id;
+    disposeProject = project.dispose;
     const sessionId = await createDatabaseSession(env, { projectId, accountId, userId: user.id });
     await seedSessionTranscript(env, { projectId, accountId, sessionId });
+    await runDatabaseSql(
+      "UPDATE kortix.project_sessions SET agent_name='kortix' WHERE session_id=$1",
+      [sessionId],
+      env.databaseUrl,
+    );
     await installBrowserSessionDirect(page, auth, `/projects/${projectId}`, authOptions);
     await selectAccountForUi(page, accountId);
     await dismissOnboarding(page);
@@ -121,12 +130,52 @@ test('30 — saved session history paints while sandbox start and the open bundl
       path: testInfo.outputPath('history-before-sandbox-ready.png'),
       fullPage: true,
     });
+    const pendingSend = new Promise<void>((resolve) => {
+      releaseSend = resolve;
+    });
+    await page.route(`**/sessions/${sessionId}/prompts`, async (route) => {
+      if (route.request().method() === 'POST') await pendingSend;
+      await route.continue().catch(() => {});
+    });
+    const editor = page.locator('[contenteditable="true"]').first();
+    await editor.fill('Continue while the computer starts.');
+    const send = page.getByRole('button', { name: 'Send message', exact: true });
+    await expect(send).toBeEnabled();
+    const submitted = page.waitForRequest(
+      (r) => r.url().endsWith(`/sessions/${sessionId}/prompts`) && r.method() === 'POST',
+    );
+    await send.click();
+    const request = await submitted;
+    expect(request.postDataJSON().parts).toEqual([
+      { type: 'text', text: 'Continue while the computer starts.' },
+    ]);
+    await expect(page.getByText('Continue while the computer starts.', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('session-busy-indicator')).toBeVisible();
+    await expect(page.getByTestId('session-busy-indicator')).toContainText('Thinking');
+    await expect(
+      page.getByText('Starting your computer… your message will send automatically.', { exact: true }),
+    ).toBeVisible();
+    await expect(editor).toHaveText('');
+    expect(startResponded).toBe(false);
+    await page.screenshot({ path: testInfo.outputPath('send-before-sandbox-ready.png'), fullPage: true });
+    const accepted = page.waitForResponse(
+      (r) => r.url().endsWith(`/sessions/${sessionId}/prompts`) && r.request().method() === 'POST',
+    );
+    releaseSend();
+    expect((await accepted).status()).toBe(201);
+    const inbox = await api<{ prompts: Array<{ text: string }> }>(
+      auth.access_token,
+      'GET',
+      `/projects/${projectId}/sessions/${sessionId}/prompts`,
+    );
+    expect(inbox.prompts.some((p) => p.text === 'Continue while the computer starts.')).toBe(true);
     releaseReads();
     await expect(
       page.getByText('This reply is stored in the database.', { exact: true }),
     ).toHaveCount(1);
   } finally {
     releaseReads();
+    releaseSend();
     await page.unrouteAll({ behavior: 'ignoreErrors' });
     if (projectId) {
       await runDatabaseSql(
@@ -139,7 +188,7 @@ test('30 — saved session history paints while sandbox start and the open bundl
         [projectId],
         env.databaseUrl,
       );
-      await deleteDatabaseProject(env, projectId);
+      await disposeProject();
     }
     await deleteAuthUser(user.id, {
       supabaseUrl: authOptions.supabaseUrl,

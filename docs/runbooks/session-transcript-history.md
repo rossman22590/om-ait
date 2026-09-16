@@ -9,6 +9,12 @@ of the shared snapshot and the runtime. It paints the last 40 saved messages fir
 The existing live reconciliation replaces those messages by their original OpenCode IDs.
 Older-message loading uses the live runtime once it is available.
 
+The composer accepts prompts during startup. A send immediately displays the user's message,
+the existing Thinking indicator, and a notice that delivery follows startup. The prompt uses
+the existing durable inbox. Before the runtime is ready, it can omit the model override and
+use the server's default. Normal model-selection checks return when the runtime is ready.
+Agent permissions, billing, and connector checks still apply on the API.
+
 ## Capture and storage
 
 The API captures messages when the sandbox reports `end` or `turn_end`. Manual sandbox stop
@@ -50,9 +56,10 @@ Supabase database. Sign in with your local account.
 2. Open a session, send a message, and wait for the answer to finish.
 3. Navigate away and reopen the session. Repeat after stopping its computer.
 4. Confirm both sides of the conversation appear while the computer starts.
-5. Wait for startup. Confirm the conversation remains in order, without duplicate messages.
-6. Send another message. Confirm streaming, completion, and reopening still work.
-7. Disable the flag and confirm the prior session-open behavior remains usable.
+5. Type and send before startup finishes. Confirm the message and Thinking appear immediately.
+6. Wait for startup. Confirm the message runs once and the conversation stays in order.
+7. Send another message. Confirm streaming, completion, and reopening still work.
+8. Disable the flag and confirm the prior session-open behavior remains usable.
 
 An old session with no saved transcript falls back to the live runtime. Complete a turn with
 the flag enabled to capture its full history. A stored transcript from a replaced OpenCode root
@@ -63,7 +70,9 @@ is rejected rather than used to select that old root.
 - `pnpm test -- --id SESS-30`: real HTTP flag enforcement, stopped-session reads, access checks,
   and replaced-root rejection.
 - `E2E_GREP='30 — saved session history' pnpm test -- --browser-only`: toggles the flag in the
-  real UI and verifies stored messages while `/start` and `/snapshot` remain pending.
+  real UI and verifies stored messages while `/start` and `/snapshot` remain pending. It sends
+  during startup, asserts the optimistic message and Thinking indicator, and reads back the
+  accepted prompt from the real API inbox.
 - `apps/api/src/__tests__/integration-session-transcript-capture.test.ts`: real PostgreSQL writes
   for more than 500 messages, retries, idempotence, concurrent captures, and flag rollback.
 - SDK hook tests cover disabled reads, missing history, session switching, and late responses.

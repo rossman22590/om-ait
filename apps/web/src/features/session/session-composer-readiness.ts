@@ -110,6 +110,7 @@ const RUNTIME_UNREACHABLE_NOTICE =
 
 export function sessionComposerReadiness(input: {
   runtimeReady: boolean;
+  pendingPrompt?: boolean;
   /**
    * The CONTROL PLANE holds an open turn for this session right now — pass
    * `serverHoldsOpenTurn(working)`, never `working.source === 'server'`.
@@ -193,6 +194,13 @@ export function sessionComposerReadiness(input: {
       notice:
         'Still waking this session up — taking longer than usual. Messages you send will be queued.',
       retryable: true,
+    };
+  }
+  if (input.pendingPrompt) {
+    return {
+      ready: false,
+      notice: 'Starting your computer… your message will send automatically.',
+      retryable: false,
     };
   }
   if (input.connection === 'waking') {
