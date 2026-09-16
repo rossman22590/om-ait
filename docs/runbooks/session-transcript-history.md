@@ -109,6 +109,10 @@ is rejected rather than used to select that old root.
   reply per send, and all three replies after a page reload. It also verifies first-message files,
   files sent during wake, and recovered legacy attachments through authenticated downloads. This cloud journey is excluded from
   the deterministic local profile. It deletes its sessions and auth user and archives its project.
+  On previews, `E2E_TRANSCRIPT_REUSE_PROJECT_ID` can reuse this journey's archived managed
+  project when GitHub repository creation is rate-limited. The journey checks the preview
+  environment and fixture name, grants temporary memberships, and removes them during cleanup.
+  Reply assertions require the exact expected text, allowing a single Markdown inline-code wrapper.
 - `apps/api/src/__tests__/integration-session-transcript-capture.test.ts`: real PostgreSQL writes
   for more than 500 messages, retries, idempotence, concurrent captures, and flag rollback.
 - SDK hook tests cover disabled reads, missing history, session switching, and late responses.

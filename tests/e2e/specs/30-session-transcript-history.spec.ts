@@ -290,26 +290,59 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
     let sessionId = '';
     let releaseStart = () => {};
     const submittedIds: string[] = [];
+    let reusedAccountId: string | undefined;
     try {
       const accounts = await api<Array<{ account_id: string; personal_account?: boolean }>>(
         auth.access_token,
         'GET',
         '/accounts',
       );
-      const accountId = (accounts.find((a) => a.personal_account) ?? accounts[0]).account_id;
+      let accountId = (accounts.find((a) => a.personal_account) ?? accounts[0]).account_id;
+      const reusableProjectId = process.env.E2E_TRANSCRIPT_REUSE_PROJECT_ID;
+      if (reusableProjectId) {
+        expect(process.env.KE2E_TARGET).toBe('preview');
+        const health = await api<{ environment: string }>(auth.access_token, 'GET', '/health');
+        expect(health.environment).toBe('preview');
+        const reusable = await queryDatabaseRows<{ account_id: string }>(
+          `SELECT p.account_id FROM kortix.projects p
+           JOIN kortix.project_git_connections g ON g.project_id=p.project_id
+           WHERE p.project_id=$1 AND p.status='archived' AND p.name LIKE 'Live transcript %'
+             AND g.managed=true AND g.provider='github' AND g.credential_ref IS NULL`,
+          [reusableProjectId],
+          env.databaseUrl,
+        );
+        expect(reusable).toHaveLength(1);
+        accountId = reusable[0].account_id;
+        reusedAccountId = accountId;
+        projectId = reusableProjectId;
+        await runDatabaseSql(
+          `INSERT INTO kortix.account_members (account_id,user_id,account_role) VALUES ($1,$2,'owner')`,
+          [accountId, user.id],
+          env.databaseUrl,
+        );
+        await runDatabaseSql(
+          `INSERT INTO kortix.project_members (account_id,project_id,user_id,project_role,granted_by)
+           VALUES ($1,$2,$3,'manager',$3)`,
+          [accountId, projectId, user.id],
+          env.databaseUrl,
+        );
+        await runDatabaseSql(
+          "UPDATE kortix.projects SET status='active' WHERE project_id=$1",
+          [projectId],
+          env.databaseUrl,
+        );
+      } else {
+        await fundAccount(env.databaseUrl!, accountId);
+        const project = await api<{ project_id: string }>(
+          auth.access_token,
+          'POST',
+          '/projects/provision',
+          { account_id: accountId, name: `Live transcript ${suffix}`, seed_starter: true },
+          201,
+        );
+        projectId = project.project_id;
+      }
       await fundAccount(env.databaseUrl!, accountId);
-      const project = await api<{ project_id: string }>(
-        auth.access_token,
-        'POST',
-        '/projects/provision',
-        {
-          account_id: accountId,
-          name: `Live transcript ${suffix}`,
-          seed_starter: true,
-        },
-        201,
-      );
-      projectId = project.project_id;
       await api(auth.access_token, 'PATCH', `/projects/${projectId}/onboarding`, {
         completed: true,
       });
@@ -317,12 +350,24 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
         feature: 'session_transcript_history',
         enabled: true,
       });
+      const imageModel = 'gpt-5.6-luna';
+      const picker = await api<{ models: Record<string, { attachment?: boolean }> }>(
+        auth.access_token,
+        'GET',
+        `/projects/${projectId}/model-picker`,
+      );
+      expect(picker.models[imageModel]?.attachment).toBe(true);
+      await api(auth.access_token, 'PUT', `/projects/${projectId}/model-defaults`, {
+        scope: 'project',
+        model: imageModel,
+      });
       const session = await api<{ session_id: string }>(
         auth.access_token,
         'POST',
         `/projects/${projectId}/sessions`,
         {
           name: `Live transcript ${suffix}`,
+          opencode_model: imageModel,
           pending_prompt: {
             text: prompt(firstReply),
             parts: [
@@ -362,7 +407,7 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
           (message) =>
             message.info.role === 'assistant' &&
             message.info.time.completed &&
-            textOf(message).trim() === text,
+            textOf(message).trim().replace(/^`([^`\n]+)`$/, '$1') === text,
         );
       await test.step('a real cloud sandbox reaches ready', async () => {
         await expect
@@ -549,7 +594,7 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
           `${sessionPath}/prompts`,
           {
             client_message_id: `legacy-${suffix}`,
-            message_id: `msg_${((Date.now() - 120_000) * 4096).toString(16).slice(-12).padStart(12, '0')}legacy00000001`,
+            message_id: `msg_${(Date.now() * 4096).toString(16).slice(-12).padStart(12, '0')}legacy00000001`,
             parts: [
               { type: 'text', text: legacyPrompt },
               {
@@ -652,6 +697,18 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
           if (result.status === 'rejected') throw result.reason;
         }
         await api(auth.access_token, 'DELETE', `/projects/${projectId}`);
+      }
+      if (reusedAccountId) {
+        await runDatabaseSql(
+          'DELETE FROM kortix.project_members WHERE project_id=$1 AND user_id=$2',
+          [projectId, user.id],
+          env.databaseUrl,
+        );
+        await runDatabaseSql(
+          'DELETE FROM kortix.account_members WHERE account_id=$1 AND user_id=$2',
+          [reusedAccountId, user.id],
+          env.databaseUrl,
+        );
       }
       await deleteAuthUser(user.id, {
         supabaseUrl: authOptions.supabaseUrl,
