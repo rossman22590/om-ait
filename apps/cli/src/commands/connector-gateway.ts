@@ -24,7 +24,7 @@ import {
   mintConnectLink,
   removeConnector,
 } from '../connector-gateway/gateway.ts';
-import { CliError, out, parseExecArgs } from '../connector-gateway/io.ts';
+import { CliError, connectorErrorPayload, out, parseExecArgs } from '../connector-gateway/io.ts';
 import { runConnectorMcpServer } from '../connector-gateway/mcp.ts';
 
 const PROVIDERS = ['composio', 'pipedream', 'mcp', 'openapi', 'postman', 'graphql', 'http'];
@@ -210,22 +210,9 @@ async function dispatch(
       break;
     }
 
-    case 'accounts': {
-      // Which accounts a call may run as. Same principal as `call`, so what
-      // this prints is exactly what `--account` accepts.
-      const slug = args[0];
-      if (!slug) throw new CliError('usage: kortix connectors accounts <connector>', 'USAGE');
-      const connector = connectorClient(flags.project);
-      const accounts = await connector.accounts(slug);
-      out({
-        connector: slug,
-        accounts,
-        ...(accounts.length === 0
-          ? { note: `Nothing is connected to "${slug}" yet. Run 'kortix connectors connect ${slug}'.` }
-          : {}),
-      });
-      break;
-    }
+    // `accounts` is NOT dispatched here. It is the one gateway read a human
+    // also runs, so it lives in connectors.ts: a table by default, and the
+    // same JSON payload under --json. The MCP keeps its own `accounts` tool.
 
     case 'add':
     case 'create': {
@@ -278,14 +265,25 @@ async function dispatch(
       if (!slug) throw new CliError('usage: kortix connectors connect <connector-slug>', 'USAGE');
       rejectBuiltinChannel(slug);
       const expires = flags.expires ? Number(flags.expires) : undefined;
+      // `--owner` picks WHO the new account belongs to: `me` (the human who
+      // opens the link — the default) or `project` (shared with every member).
+      // An agent should leave it alone unless the human asked for a shared
+      // account; minting a shared one needs project.connector.write.
+      const owner: 'me' | 'project' | undefined =
+        flags.owner === 'me' || flags.owner === 'project' ? flags.owner : undefined;
+      if (flags.owner !== undefined && owner === undefined) {
+        throw new CliError('--owner must be me or project', 'USAGE');
+      }
       const link = await mintConnectLink({
         slug,
         expiresInMinutes: expires,
         projectOverride: flags.project,
+        ...(owner ? { owner } : {}),
       });
       out({
         ok: true,
         slug: link.slug,
+        owner: owner ?? 'me',
         app: link.app,
         url: link.url,
         expires_at: link.expires_at,
@@ -311,11 +309,13 @@ async function dispatch(
           ls: 'kortix connectors ls — list connectors + tools this session can use',
           discover: 'kortix connectors discover "<intent>" — search tools by natural language',
           show: "kortix connectors show <connector>.<action> — show a tool's input schema",
-          call: "kortix connectors call <connector> <action> '<json-args>' — run a tool or return its approval link",
+          call: "kortix connectors call <connector> <action> '<json-args>' [--account <label|id|me|project>] — run a tool or return its approval link; the result echoes the account it ran as",
           add: 'kortix connectors add <slug> --provider composio --app <toolkit> — add a managed app connector NOW (no CR), then connect',
           rm: 'kortix connectors rm <slug> — remove a connector from the project',
+          accounts:
+            'kortix connectors accounts <connector> [--json] — the connected accounts a call may run as, default first; each is shared with the project or private to one member (the names --account takes)',
           connect:
-            'kortix connectors connect <connector-slug> — start the connector provider authorization and hand the URL to the human',
+            'kortix connectors connect <connector-slug> [--owner me|project] — start the connector provider authorization and hand the URL to the human; --owner project makes the account shared with every member',
           mcp: 'kortix connectors mcp — run the optional stdio MCP compatibility server',
         },
       });
@@ -336,11 +336,13 @@ export async function runConnector(argv: string[]): Promise<number> {
     return 0;
   } catch (err) {
     if (err instanceof ApiError) {
-      out({ ok: false, error: err.message, code: 'CONNECTOR_ERROR' });
+      // VERBATIM: a 403 denial carries the remedy (available_accounts, hint,
+      // connect_url). Printing only `err.message` threw all of it away.
+      out(connectorErrorPayload(err));
       return 1;
     }
     if (err instanceof CliError) {
-      out({ ok: false, error: err.message, code: err.code });
+      out(connectorErrorPayload(err, err.code));
       return err.exitCode;
     }
     out({ ok: false, error: err instanceof Error ? err.message : String(err) });

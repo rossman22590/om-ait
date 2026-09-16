@@ -34,6 +34,7 @@ import {
   type BrokerMethod,
   type ConnectorClient,
 } from './gateway.ts';
+import { connectorErrorPayload } from './io.ts';
 
 interface JsonRpcRequest {
   jsonrpc?: string;
@@ -287,7 +288,7 @@ const META_TOOLS = [
         account: {
           type: 'string',
           description:
-            'Which connected account to run as, when this connector has more than one (a shared project account and each member\'s own). Give the account label or its connection id, exactly as `accounts` returns it. Omit to use the default account. A name that matches nothing is refused and the refusal lists the available names — it never silently runs as a different account.',
+            'Which connected account to run as, when this connector has more than one (a shared project account and each member\'s own). Give the account label or its connection id exactly as `accounts` returns it, or the selector word `me` (the caller\'s own default private account) or `project` (the project\'s default shared account). Omit to use the default account. A name that matches nothing is refused and the refusal lists the available names — it never silently runs as a different account.',
         },
         attachment_files: {
           type: 'array',
@@ -332,7 +333,7 @@ const META_TOOLS = [
   {
     name: 'accounts',
     description:
-      'List the connected accounts a connector can be called as, default first. Use this before passing `account` to `call`, and when a call is denied `connector_not_connected` with a `requested_account`. An empty list means nothing is connected yet — call `connect` to get a link for the human.',
+      'List the connected accounts a connector can be called as, default first. Each account is either SHARED with the project (owner_type "project") or PRIVATE to one member (owner_type "member"). Use this before passing `account` to `call`, and when a call is denied `connector_not_connected` with a `requested_account`. `call` also accepts the two selector words `me` (the caller\'s own default private account) and `project` (the project\'s default shared account) instead of a label or id. An empty list means nothing is connected yet — call `connect` to get a link for the human.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -346,7 +347,7 @@ const META_TOOLS = [
   {
     name: 'connect',
     description:
-      'Start the configured provider authorization for a connector that is declared but not yet authenticated, and SURFACE any returned url to the human in your reply. This works for Composio and explicit legacy Pipedream connectors. In the web UI the link opens a connect popup; in Slack it is tappable. No credential ever touches the sandbox. The connector must already exist in kortix.yaml.',
+      'Start the configured provider authorization for a connector — its first account, or an additional one beside the accounts `accounts` already lists — and SURFACE any returned url to the human in your reply. This works for Composio and explicit legacy Pipedream connectors. In the web UI the link opens a connect popup; in Slack it is tappable. No credential ever touches the sandbox. The connector must already exist in kortix.yaml.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -357,6 +358,12 @@ const META_TOOLS = [
         expires_in_minutes: {
           type: 'number',
           description: 'Link lifetime in minutes (default 30, max 1440).',
+        },
+        owner: {
+          type: 'string',
+          enum: ['me', 'project'],
+          description:
+            'Who the new account belongs to: "me" (the human who opens the link, and only they can call with it — the default) or "project" (shared with every project member, which requires project.connector.write). Ask the human before choosing "project": it authorizes an identity the whole project can spend.',
         },
       },
       required: ['slug'],
@@ -668,10 +675,21 @@ async function runMetaTool(client: ConnectorClient, name: string, args: Record<s
       }
       // Returns the authenticated approval URL immediately when policy gates
       // the call. The server callback resumes the session after a decision.
-      const result = await callWithApprovalHandoff(client, connector, action, callArgs, {
-        account: typeof args.account === 'string' ? args.account : null,
-      });
+      let result;
+      try {
+        result = await callWithApprovalHandoff(client, connector, action, callArgs, {
+          account: typeof args.account === 'string' ? args.account : null,
+        });
+      } catch (err) {
+        // A denial is an HTTP 403, so the SDK THROWS it. Left to the JSON-RPC
+        // loop it would reach the model as a bare `message` string, dropping
+        // `available_accounts`, `hint` and `connect_url` — the only fields
+        // that tell the model what to do next. Hand back the API body itself.
+        return { content: content(connectorErrorPayload(err)), isError: true };
+      }
       return {
+        // The result passes through untouched, including the `account` echo
+        // that names WHICH identity ran the call.
         content: content(result),
         // Pending approval is a successful handoff, not a connector failure.
         isError: result.status !== 'pending_approval' && !result.ok,
@@ -711,12 +729,28 @@ async function runMetaTool(client: ConnectorClient, name: string, args: Record<s
         };
       const expires =
         typeof args.expires_in_minutes === 'number' ? args.expires_in_minutes : undefined;
+      // Default `me`: the human authorizes themselves. `project` is an explicit
+      // choice — it creates an account every member can spend — so anything
+      // else is refused rather than quietly downgraded.
+      const owner: 'me' | 'project' | undefined =
+        args.owner === 'me' || args.owner === 'project' ? args.owner : undefined;
+      if (args.owner !== undefined && owner === undefined) {
+        return {
+          content: content({ ok: false, error: 'owner must be "me" or "project"' }),
+          isError: true,
+        };
+      }
       try {
-        const link = await mintConnectLink({ slug, expiresInMinutes: expires });
+        const link = await mintConnectLink({
+          slug,
+          expiresInMinutes: expires,
+          ...(owner ? { owner } : {}),
+        });
         return {
           content: content({
             ok: true,
             slug: link.slug,
+            owner: owner ?? 'me',
             provider: link.provider,
             app: link.app,
             url: link.url,

@@ -58,6 +58,18 @@ interface Connection {
   metadata?: Record<string, unknown>;
 }
 
+/**
+ * One account a call may run as — GET .../connectors/:slug/accounts, resolved
+ * through the caller's own principal. Mirrors `ConnectorAccount` in
+ * `@kortix/sdk`; `label` is what `call --account` matches on.
+ */
+interface ConnectorAccountRow {
+  connection_id: string;
+  label: string;
+  owner_type: string;
+  is_default: boolean;
+}
+
 /** One condition on a policy rule: a dot path into the call's arguments, the
  *  value it must match (glob or /regex/), and whether the test is inverted. */
 interface PolicyCondition {
@@ -135,11 +147,14 @@ Subcommands:
   show <slug>[.<action>] [--json]   Show a connector or one action schema.
   discover <intent> [--json]        Search session tools by intent.
   call <slug> <action> [json]       Invoke one connector action.
-       [--account <name|id>]        Which connected account to run as. Omit for
-                                    the default. See \`accounts\`.
-  accounts <slug>                   The connected accounts a call may run as,
-                                    default first. These are the names
-                                    \`call --account\` accepts.
+       [--account <n|id|me|project>] Which connected account to run as: a label,
+                                    a connection id, \`me\` (your own default) or
+                                    \`project\` (the shared default). Omit for the
+                                    connector's default. See \`accounts\`.
+  accounts <slug> [--json]          The connected accounts a call may run as,
+                                    default first. Shared accounts belong to the
+                                    project, private ones to you. These are the
+                                    names \`call --account\` accepts.
   connections <subcommand>          Manage configured connector connections.
   add <slug> --provider <p> [...]   Add a [[connectors]] block to kortix.yaml.
                                     Add --apply to skip ship/CR and apply it
@@ -156,6 +171,10 @@ Subcommands:
                                     server-side credential. Add --clear to
                                     remove the binding.
   connect <slug>                    Start the connector provider authorization.
+       [--owner me|project]         Who the new account belongs to: \`me\` (yours
+                                    alone, the default) or \`project\` (shared
+                                    with every member; needs
+                                    project.connector.write).
   connect-finalize <slug>           Confirm authorization completed. Accepts
        [--connection-id <uuid>]     the IDs returned by \`connect\`.
        [--request-id <id>]
@@ -168,8 +187,10 @@ Subcommands:
   catalog show <id> [--json]        Show one catalogue record's surfaces.
   sensitive <slug> on|off           Gate this connector's READS too — every
                                     call needs approval (applies now).
-  owner <slug> project|user         Who authorizes: one project connection, or
-                                    each member's own (applies now).
+  owner <slug> project|user         Deprecated, does nothing. Ownership is per
+                                    account now: choose it per connection with
+                                    \`connect --owner me|project\`, read it back
+                                    with \`accounts\`.
   machines <slug> [--show]          Which paired computers a \`computer\`
            [--add <id>] [--rm <id>] connector may target (applies now).
   policy ls|show [--json]           Show project-wide execution policies.
@@ -282,9 +303,12 @@ export async function runConnectors(argv: string[]): Promise<number> {
     process.stdout.write(HELP);
     return 0;
   }
-  if (sub === 'discover' || sub === 'call' || sub === 'mcp' || sub === 'accounts') {
+  if (sub === 'discover' || sub === 'call' || sub === 'mcp') {
     return runConnector([sub, ...rest]);
   }
+  // `accounts` is the one gateway read a HUMAN also runs, so it is NOT
+  // forwarded to the JSON-only face: it prints a table below, and --json emits
+  // the same payload the MCP `accounts` tool returns.
   if (sub === 'show' && rest[0]?.includes('.')) {
     return runConnector(['show', ...rest]);
   }
@@ -662,6 +686,17 @@ export async function runConnectors(argv: string[]): Promise<number> {
         if (expires !== undefined && (!Number.isFinite(expires) || expires <= 0)) {
           return missing('--expires <positive minutes>');
         }
+        // WHO the new account belongs to. `me` is the default — the human
+        // authorizes themselves — and `project` shares the account with every
+        // member (the API gates that on project.connector.write). The field is
+        // sent ONLY when asked for: a shipped CLI talks to whatever API version
+        // its host runs and the connect body is `.strict()`, so an unrequested
+        // `owner` would 400 the whole command against an API that predates it.
+        const owner: 'me' | 'project' | undefined =
+          f.owner === 'me' || f.owner === 'project' ? f.owner : undefined;
+        if (f.owner !== undefined && owner === undefined) {
+          return invalid('--owner must be me or project');
+        }
         const resp = await ctx.client.post<{
           provider: string;
           app?: string | null;
@@ -671,10 +706,13 @@ export async function runConnectors(argv: string[]): Promise<number> {
           sessionId?: string;
           connectionId?: string;
           requestId?: string;
-        }>(`${ex}/connectors/${encodeURIComponent(slug)}/connect`, {});
+        }>(`${ex}/connectors/${encodeURIComponent(slug)}/connect`, {
+          ...(owner ? { owner } : {}),
+        });
         const output = {
           provider: resp.provider,
           slug,
+          owner: owner ?? 'me',
           app: resp.app ?? null,
           url: resp.connectUrl ?? null,
           connected: resp.connected === true,
@@ -687,10 +725,14 @@ export async function runConnectors(argv: string[]): Promise<number> {
           emitJson(output);
           return 0;
         }
+        const ownerNote =
+          output.owner === 'project'
+            ? 'The account is shared with every project member.'
+            : 'The account is yours alone — pass --owner project to share it.';
         process.stdout.write(
           `\n  ${C.bold}Connect ${slug}${C.reset}\n` +
             (output.url
-              ? `  ${C.cyan}${output.url}${C.reset}\n\n  ${C.dim}Open the URL and approve the ${output.provider} connection.${C.reset}\n\n`
+              ? `  ${C.cyan}${output.url}${C.reset}\n\n  ${C.dim}Open the URL and approve the ${output.provider} connection. ${ownerNote}${C.reset}\n\n`
               : `  ${C.green}${output.connected ? 'Connected' : 'No authorization URL returned'}${C.reset}\n\n`),
         );
         return 0;
@@ -727,6 +769,51 @@ export async function runConnectors(argv: string[]): Promise<number> {
         );
         return output.connected ? 0 : 1;
       }
+
+      // ── The accounts a call may run as ──────────────────────────────────
+      //
+      // The agent-facing JSON face of this read is the MCP `accounts` tool;
+      // this is the human table, with --json emitting the same payload. Both
+      // hit the same gateway route with the same principal as `call`, so what
+      // prints here is exactly what `call --account` accepts.
+      case 'accounts': {
+        const slug = positional[0];
+        if (!slug) return missing('a connector slug');
+        const response = await ctx.client.get<{
+          connector: string;
+          accounts: ConnectorAccountRow[];
+        }>(`${ex}/connectors/${encodeURIComponent(slug)}/accounts`);
+        const accounts = response.accounts ?? [];
+        const note = `Nothing is connected to "${slug}" yet. Run 'kortix connectors connect ${slug}'.`;
+        if (json) {
+          // Byte-identical to the gateway face agents already parse.
+          emitJson({ connector: slug, accounts, ...(accounts.length === 0 ? { note } : {}) });
+          return 0;
+        }
+        if (accounts.length === 0) {
+          process.stdout.write(
+            `  ${C.dim}No connected accounts.${C.reset} ` +
+              `${C.dim}Connect one: kortix connectors connect ${slug} --owner me|project${C.reset}\n`,
+          );
+          return 0;
+        }
+        const labelWidth = Math.max(5, ...accounts.map((account) => account.label.length));
+        process.stdout.write('\n');
+        process.stdout.write(
+          `  ${C.dim}${pad('LABEL', labelWidth)}  OWNER    DEFAULT  CONNECTION ID${C.reset}\n`,
+        );
+        for (const account of accounts) {
+          process.stdout.write(
+            `  ${pad(account.label, labelWidth)}  ${pad(accountOwnerLabel(account.owner_type), 8)} ` +
+              `${pad(account.is_default ? 'yes' : 'no', 8)} ${account.connection_id}\n`,
+          );
+        }
+        process.stdout.write(
+          `\n  ${C.dim}${accounts.length} account${accounts.length === 1 ? '' : 's'} — ` +
+            `run one with \`kortix connectors call ${slug} <action> --account <label|id>\`${C.reset}\n\n`,
+        );
+        return 0;
+      }
       case 'rename':
       case 'name': {
         const slug = positional[0];
@@ -746,7 +833,7 @@ export async function runConnectors(argv: string[]): Promise<number> {
         const mode = positional[1] ?? f.credential;
         if (mode === 'per_user') {
           process.stderr.write(
-            `${status.err('per_user credential mode was removed — connectors are always shared now')}\n`,
+            `${status.err('per_user credential mode was removed — a connector holds accounts now, each one shared with the project or private to one member (kortix connectors accounts <slug>)')}\n`,
           );
           return 1;
         }
@@ -862,22 +949,21 @@ export async function runConnectors(argv: string[]): Promise<number> {
         return 0;
       }
 
-      // ── Who authorizes a connector ──────────────────────────────────────
+      // ── Deprecated: ownership is a property of an ACCOUNT ────────────────
+      //
+      // `authorization_strategy` was a connector-level mode that made the two
+      // ownership kinds mutually exclusive, and it is why a `user` connector had
+      // no connect flow at all (2026-09-16). Ownership now lives on each
+      // connection: `connect --owner me|project`, read back with `accounts`.
+      // The command stays (scripts call it) but touches nothing and exits 0.
       case 'owner':
       case 'authorization-strategy': {
         const slug = positional[0];
         if (!slug) return missing('a connector slug');
-        const strategy = positional[1];
-        if (strategy !== 'project' && strategy !== 'user') return missing('project or user');
-        // The route's field is `authorization_strategy`, not `strategy`.
-        await ctx.client.put(
-          `${ex}/connectors/${encodeURIComponent(slug)}/authorization-strategy`,
-          { authorization_strategy: strategy },
-        );
         process.stdout.write(
-          strategy === 'project'
-            ? `${status.ok(`${C.bold}${slug}${C.reset}: one project connection everyone shares`)}\n`
-            : `${status.ok(`${C.bold}${slug}${C.reset}: each member authorizes their own connection`)}\n`,
+          `${status.ok(`${C.bold}${slug}${C.reset}: nothing to set — ownership is per account now`)} ` +
+            `${C.dim}— connect one with \`kortix connectors connect ${slug} --owner me|project\` ` +
+            `and list them with \`kortix connectors accounts ${slug}\`.${C.reset}\n`,
         );
         return 0;
       }
@@ -1720,6 +1806,18 @@ async function readStdin(): Promise<string> {
 function missing(what: string): number {
   process.stderr.write(`${status.err(`Pass ${what}.`)}\n`);
   return 2;
+}
+
+/**
+ * How an account's owner reads to a human: a `project`-owned connection is
+ * SHARED with every member, a `member`-owned one is PRIVATE to its owner. Any
+ * other owner kind (agent / subject / external) prints verbatim — those are
+ * machine-owned and have no shared/private reading.
+ */
+function accountOwnerLabel(ownerType: string): string {
+  if (ownerType === 'project') return 'shared';
+  if (ownerType === 'member') return 'private';
+  return ownerType;
 }
 
 function invalid(message: string): number {
