@@ -39,7 +39,7 @@ import {
 } from '../lib/access';
 import { resolveAndAuthorizeAgent } from '../lib/agent-access';
 import { assertAgentScope, isProjectSessionPrincipal } from '../../iam/agent-scope';
-import { resolveChangeRequestBase } from '../change-request-policy';
+import { resolveChangeRequestBase, resolveChangeRequestOrigin } from '../change-request-policy';
 import { PROJECT_ACTIONS } from '../../iam';
 import { callerKortixSessionId } from '../lib/caller-session';
 import { sandboxTokenMayActOnSession } from '../lib/sandbox-token-session';
@@ -1060,7 +1060,18 @@ projectsApp.openapi(
     if (!headRef) return c.json({ error: 'head_ref is required' }, 400);
     // The session must be resolved BEFORE the base, because a session's own
     // base is what the change request targets.
-    let originSessionId: string | null = normalizeString(body.session_id ?? body.sessionId);
+    const actorIsSession = isProjectSessionPrincipal(c);
+    const originDecision = resolveChangeRequestOrigin({
+      actorIsSession,
+      actingSessionId: actorIsSession
+        ? ((c.get('sessionId') as string | null | undefined) ?? null)
+        : null,
+      requestedSessionId: normalizeString(body.session_id ?? body.sessionId),
+    });
+    if (!originDecision.ok) {
+      return c.json({ error: originDecision.error, code: originDecision.code }, 400);
+    }
+    let originSessionId = originDecision.originSessionId;
     let sessionBaseRef: string | null = null;
     if (originSessionId) {
       const [sessionRow] = await db
@@ -1073,15 +1084,21 @@ projectsApp.openapi(
           ),
         )
         .limit(1);
-      if (!sessionRow) originSessionId = null;
-      else sessionBaseRef = normalizeString(sessionRow.baseRef);
+      if (!sessionRow) {
+        if (actorIsSession) {
+          return c.json({ error: 'Authenticated session not found in this project', code: 'CR_SESSION_NOT_FOUND' }, 403);
+        }
+        originSessionId = null;
+      } else {
+        sessionBaseRef = normalizeString(sessionRow.baseRef);
+      }
     }
 
     const baseDecision = resolveChangeRequestBase({
       requested: normalizeString(body.base_ref ?? body.baseRef),
       sessionBase: sessionBaseRef,
       projectDefault: loaded.row.defaultBranch,
-      actorIsSession: isProjectSessionPrincipal(c),
+      actorIsSession,
     });
     if (!baseDecision.ok) {
       return c.json({ error: baseDecision.error, code: baseDecision.code }, 400);
