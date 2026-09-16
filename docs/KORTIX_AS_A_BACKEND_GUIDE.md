@@ -214,6 +214,14 @@ Do not pass an OAuth provider token to `updateCredential()`.
 Declare `connectors_required` on the agent. Each entry must also exist in
 `connectors`.
 
+Only `require_connectors` and the running agent's `connectors_required` declare
+mandatory connectors. A `connector_bindings` entry selects a connection; it does
+not make the connector mandatory. If an optional bound connector becomes disabled
+or its connection is revoked, unrelated prompts remain admissible. Connector
+calls still enforce the connector's status, connection, and agent permissions.
+Explicit requirements are checked at prompt admission and delivery as well as
+session creation.
+
 Session creation resolves required connectors before sandbox startup.
 Missing connections return:
 

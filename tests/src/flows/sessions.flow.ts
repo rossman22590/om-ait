@@ -1345,6 +1345,42 @@ flow(
             throw new Error('Stop did not persist both markers');
         },
       );
+      await ctx.step('a disabled optional binding allows a prompt; an explicit requirement still refuses it', async () => {
+        const connector = await db.query(
+          `INSERT INTO kortix.connectors (account_id, project_id, slug, name, provider_type, config, enabled)
+           VALUES ($1, $2, 'optional-gmail', 'Optional Gmail', 'openapi', '{}'::jsonb, false)
+           RETURNING connector_id`, [ctx.P.accountId, project.id],
+        );
+        const connection = await db.query(
+          `INSERT INTO kortix.connector_connections (account_id, project_id, connector_id, owner_type, label)
+           VALUES ($1, $2, $3, 'project', 'Optional Gmail') RETURNING connection_id`,
+          [ctx.P.accountId, project.id, connector.rows[0].connector_id],
+        );
+        await db.query(
+          `INSERT INTO kortix.project_session_connector_bindings
+           (session_id, account_id, project_id, connector_alias, connector_id, connection_id)
+           VALUES ($1, $2, $3, 'optional-gmail', $4, $5)`,
+          [sessionId, ctx.P.accountId, project.id, connector.rows[0].connector_id, connection.rows[0].connection_id],
+        );
+        await db.query('UPDATE kortix.project_sessions SET required_connectors = NULL WHERE session_id = $1', [sessionId]);
+        const body = {
+          client_message_id: 'optional-connector',
+          message_id: 'msg_0123456789abAbCdEfGhIjKlMo',
+          parts: [{ type: 'text', text: 'hello without Gmail' }],
+        };
+        const accepted = await owner.post(promptPath, body, { params });
+        accepted.status(202);
+        const queued = await db.query(
+          `SELECT command_id FROM kortix.session_lifecycle_commands
+           WHERE session_id = $1 AND payload->>'clientMessageId' = 'optional-connector'`, [sessionId],
+        );
+        if (queued.rowCount !== 1) throw new Error('optional connector prompt was not persisted');
+        // The fixture's claimed delivery prevents this row from reaching a runtime.
+        await db.query('DELETE FROM kortix.session_lifecycle_commands WHERE command_id = $1', [queued.rows[0].command_id]);
+        await db.query(`UPDATE kortix.project_sessions SET required_connectors = '["optional-gmail"]'::jsonb WHERE session_id = $1`, [sessionId]);
+        const refused = await owner.post(promptPath, { ...body, client_message_id: 'explicit-connector' }, { params });
+        refused.status(409).body().has('$.code', 'CONNECTOR_CONNECTION_REQUIRED');
+      });
       await ctx.step('Resume clears both hold markers on a claimed delivery', async () => {
         const response = await owner.post(`${promptPath}/hold`, { held: false }, { params });
         response.status(200);
@@ -1357,7 +1393,7 @@ flow(
       });
     } finally {
       await db
-        .query('DELETE FROM kortix.session_lifecycle_commands WHERE command_id = $1', [commandId])
+        .query('DELETE FROM kortix.session_lifecycle_commands WHERE session_id = $1', [sessionId])
         .catch(() => {});
       await db
         .query('DELETE FROM kortix.project_sessions WHERE session_id = $1', [sessionId])

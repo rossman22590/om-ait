@@ -5228,3 +5228,19 @@ refusals and reload. `queued-continue-inbox-delivery.test.ts` proves a connector
 refusal sends once and Stop prevents a second POST after a transient failure.
 Production recovery removed the stale binding through the session scope API.
 The original hello received an assistant reply, and `GET /prompts` returned `[]`.
+
+### Connector bindings do not declare mandatory prompt dependencies (2026-09-15)
+
+**Incident.** The LibreMax incident above persisted after the agent's Gmail
+requirement was removed. Prompt preflight promoted every stored binding into a
+mandatory dependency. A disabled optional connector blocked unrelated messages.
+
+**Rule.** Only explicit session `require_connectors` and running-agent
+`connectors_required` gate prompts. Bindings select connections. Check optional
+connector availability when that connector is called. Preserve connector-call
+authorization and explicit requirement gates.
+
+**Enforcement.** `prompt-connector-preflight.test.ts` rejects implicit binding
+requirements. `SESS-29` stores a disabled bound connector, admits a prompt through
+HTTP, verifies the inbox row, then explicitly requires the same connector and
+asserts a 409 refusal.
