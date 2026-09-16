@@ -816,7 +816,7 @@
           "description": "Control which tools and destinations can receive project secrets."
         },
         "pooled_provider_secrets": {
-          "name": "Pooled provider secrets",
+          "name": "Pooled Provider Secrets",
           "description": "Share multiple provider keys with members and select a key pool for each session."
         },
         "pi_worker": {
