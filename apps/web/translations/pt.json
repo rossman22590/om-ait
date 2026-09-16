@@ -18457,7 +18457,11 @@
       "textf09704dad946": "Voltar aos conectores",
       "textf3c16c11f690": "Nada para adicionar",
       "textf75561ab0be6": "A credencial agora vem do segredo {value0}",
-      "textf91b7814f64d": "Nenhum conector com o slug “{value0}” existe neste projeto."
+      "textf91b7814f64d": "Nenhum conector com o slug “{value0}” existe neste projeto.",
+      "textc6309c452031": "Conectar conta compartilhada",
+      "textded4b88e52f7": "Ainda não há conta compartilhada",
+      "textc3bafa5156b4": "Você ainda não tem uma conta própria",
+      "textea5d0ffa0962": "Um gestor do projeto conecta a conta compartilhada."
     }
   },
   "projectOnboarding": {

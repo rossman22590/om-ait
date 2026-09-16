@@ -140,18 +140,15 @@ import { contract, qk, useFeatureFlag } from '@kortix/sdk/react';
 import {
   buildEasyConnectConnectorDraft,
   buildEmailConnectorConnectionSlug,
-  connectionOwnerTypeForStrategy,
-  connectorAuthorizationStrategyForProvider,
-  connectorAuthorizationStrategyIsEditable,
-  connectorAuthorizationUpdateIsPending,
   connectorConnectionQueryKeys,
   connectorSetupStatus,
   connectorSyncErrorForSlug,
   createOnlyConnectorDraft,
   type EasyConnectApp,
+  type EasyConnectConnectionInput,
   proposeConnectorConnectionSlug,
 } from './connector-connection-form';
-import { AuthorizationStrategyField, ConnectorConnectionModal } from './connector-connection-modal';
+import { ConnectorConnectionModal } from './connector-connection-modal';
 import {
   buildOAuth2ApplicationInput,
   buildOAuth2CredentialInput,
@@ -791,10 +788,94 @@ function ConnectionRow({
   );
 }
 
+/** Which owner a group of accounts belongs to. */
+type ConnectionOwner = 'project' | 'me';
+
 /**
- * Every connection that matches the connector's exclusive owner strategy.
- * A project connector lists project-managed accounts. A user connector
- * lists only the current member's accounts.
+ * One owner group: heading, its add control, and its rows.
+ *
+ * Both groups render the same `ConnectionRow`, so a shared and a private
+ * account read identically apart from the tile and the "Shared with the
+ * project" / "Private — only you" line the row already prints.
+ */
+function ConnectionOwnerGroup({
+  title,
+  action,
+  loading,
+  rows,
+  emptyTitle,
+  emptyDescription,
+  canManageConnections,
+  disabled,
+  pendingConnectionId,
+  onSetDefault,
+  onDisconnect,
+  onStartSession,
+}: {
+  title: string;
+  action: React.ReactNode;
+  loading: boolean;
+  rows: readonly Connection[];
+  emptyTitle: string;
+  emptyDescription: string;
+  canManageConnections: boolean;
+  disabled: boolean;
+  pendingConnectionId: string | null;
+  onSetDefault: (connection: Connection) => void;
+  onDisconnect: (connection: Connection) => void;
+  onStartSession?: (connection: Connection) => void;
+}) {
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <Label>{title}</Label>
+        <div className="flex items-center gap-2">{action}</div>
+      </div>
+      {loading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-14 rounded-md" />
+          <Skeleton className="h-14 rounded-md" />
+        </div>
+      ) : rows.length === 0 ? (
+        <EmptyState size="sm" icon={Plug} title={emptyTitle} description={emptyDescription} />
+      ) : (
+        <ul className="space-y-2">
+          {rows.map((connection) => (
+            <ConnectionRow
+              key={connection.connection_id}
+              connection={connection}
+              isMine={connection.owner_type === 'member'}
+              canManage={canManageConnections}
+              pending={pendingConnectionId === connection.connection_id}
+              disabled={disabled}
+              onSetDefault={() => onSetDefault(connection)}
+              onDisconnect={() => onDisconnect(connection)}
+              onStartSession={onStartSession ? () => onStartSession(connection) : undefined}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Every account this connector can run as, in two groups: the project's shared
+ * accounts and the caller's own.
+ *
+ * The two are NOT alternatives. A connector is a declared capability with no
+ * identity; an account is an authorized identity on it, owned by the project or
+ * by one member, and a call resolves the caller's own default first and the
+ * project's default second. `connectors.authorization_strategy` used to make
+ * the two owner types mutually exclusive, which is what left a `user`-mode
+ * connector with no connect flow anywhere — the incident this list is the fix
+ * for. Connecting a SHARED account is manager-gated
+ * (`PROJECT_CONNECTOR_CONNECTIONS_MANAGE`, the same right the API checks);
+ * connecting your own never is.
+ *
+ * The API already scopes the list to the caller, so "Only you" can only ever
+ * hold the caller's own rows — another member's private account is not visible
+ * here and is not meant to be.
  */
 
 export function ConnectionsList({
@@ -811,11 +892,12 @@ export function ConnectionsList({
   displayName: string;
   canManageConnections: boolean;
   onChanged: () => void;
-  onStartSession?: () => void;
+  /** Start a session bound to this exact account. Omitted where that is not offered. */
+  onStartSession?: (connection: Connection) => void;
   disabled?: boolean;
 }) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
-  const [addScope, setAddScope] = useState<'project' | 'member' | null>(null);
+  const [addOwner, setAddOwner] = useState<ConnectionOwner | null>(null);
   const [labelDraft, setLabelDraft] = useState('');
   const [confirmDisconnect, setConfirmDisconnect] = useState<Connection | null>(null);
 
@@ -824,28 +906,25 @@ export function ConnectionsList({
     queryFn: () => listConnections(projectId),
     staleTime: 30_000,
   });
-  const connectionOwnerType = connectionOwnerTypeForStrategy(connector.authorizationStrategy);
-  useEffect(() => {
-    setAddScope(null);
-    setLabelDraft('');
-  }, [connector.authorizationStrategy]);
   const refresh = () => {
     void connectionsQuery.refetch();
     onChanged();
   };
 
-  const rows = connectorConnectionRows(connectionsQuery.data?.connections, connector.slug).filter(
-    (connection) => connection.owner_type === connectionOwnerType,
-  );
+  const rows = connectorConnectionRows(connectionsQuery.data?.connections, connector.slug);
+  const sharedRows = rows.filter((connection) => connection.owner_type === 'project');
+  const myRows = rows.filter((connection) => connection.owner_type === 'member');
 
-  const addProject = usePipedreamConnectProject(projectId, connector.slug, () => {
-    setAddScope(null);
+  const closeAdd = () => {
+    setAddOwner(null);
     setLabelDraft('');
+  };
+  const addProject = usePipedreamConnectProject(projectId, connector.slug, () => {
+    closeAdd();
     refresh();
   });
   const addMine = usePipedreamConnectMember(projectId, connector.slug, () => {
-    setAddScope(null);
-    setLabelDraft('');
+    closeAdd();
     refresh();
   });
   const setDefault = useMutation({
@@ -868,96 +947,92 @@ export function ConnectionsList({
 
   const adding = addProject.isPending || addMine.isPending;
   const submitAdd = () => {
-    if (disabled || !labelDraft.trim()) return;
-    if (connectionOwnerType === 'project') addProject.mutate({ label: labelDraft });
+    if (disabled || !addOwner || !labelDraft.trim()) return;
+    if (addOwner === 'project') addProject.mutate({ label: labelDraft });
     else addMine.mutate({ label: labelDraft });
   };
+  const pendingConnectionId =
+    setDefault.isPending && typeof setDefault.variables === 'string'
+      ? setDefault.variables
+      : disconnect.isPending && typeof disconnect.variables === 'string'
+        ? disconnect.variables
+        : null;
 
   return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <Label>{tI18nComplete.raw('textdc273117482b')}</Label>
-        <div className="flex items-center gap-2">
-          {connectionOwnerType === 'project' && canManageConnections && (
+    <div className="space-y-6">
+      <ConnectionOwnerGroup
+        title={tI18nComplete.raw('text1c22fac2a9fd')}
+        action={
+          canManageConnections ? (
             <Button
               size="sm"
               variant="secondary"
-              onClick={() => setAddScope('project')}
+              onClick={() => setAddOwner('project')}
               disabled={disabled}
             >
               <Plus className="size-4" />
-              {tI18nComplete.raw('text9ba9dd084952')}
+              {tI18nComplete.raw('textc6309c452031')}
             </Button>
-          )}
-          {connectionOwnerType === 'member' && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setAddScope('member')}
-              disabled={disabled}
-            >
-              <Lock className="size-3.5 shrink-0" />
-              {tI18nComplete.raw('textcbf6389cf9df')}
-            </Button>
-          )}
-        </div>
-      </div>
+          ) : null
+        }
+        loading={connectionsQuery.isLoading}
+        rows={sharedRows}
+        emptyTitle={tI18nComplete.raw('textded4b88e52f7')}
+        // A reader cannot connect a shared account, so telling them to is a
+        // dead end. Name who can instead.
+        emptyDescription={
+          canManageConnections
+            ? tI18nComplete.raw('texte6e0b4594c95')
+            : tI18nComplete.raw('textea5d0ffa0962')
+        }
+        canManageConnections={canManageConnections}
+        disabled={disabled}
+        pendingConnectionId={pendingConnectionId}
+        onSetDefault={(connection) => setDefault.mutate(connection.connection_id)}
+        onDisconnect={setConfirmDisconnect}
+        onStartSession={onStartSession}
+      />
 
-      {connectionsQuery.isLoading ? (
-        <div className="space-y-2">
-          <Skeleton className="h-14 rounded-md" />
-          <Skeleton className="h-14 rounded-md" />
-        </div>
-      ) : rows.length === 0 ? (
-        <EmptyState
-          size="sm"
-          icon={Plug}
-          title={tI18nComplete('textee168539f43a', { value0: displayName })}
-          description={
-            connectionOwnerType === 'project'
-              ? tI18nComplete.raw('texte6e0b4594c95')
-              : tI18nComplete.raw('text6533f1aa30ab')
-          }
-        />
-      ) : (
-        <ul className="space-y-2">
-          {rows.map((connection) => (
-            <ConnectionRow
-              key={connection.connection_id}
-              connection={connection}
-              isMine={connection.owner_type === 'member'}
-              canManage={canManageConnections}
-              pending={
-                (setDefault.isPending && setDefault.variables === connection.connection_id) ||
-                (disconnect.isPending && disconnect.variables === connection.connection_id)
-              }
-              disabled={disabled}
-              onSetDefault={() => setDefault.mutate(connection.connection_id)}
-              onDisconnect={() => setConfirmDisconnect(connection)}
-              onStartSession={onStartSession}
-            />
-          ))}
-        </ul>
-      )}
+      <ConnectionOwnerGroup
+        title={tI18nComplete.raw('textc080649df657')}
+        action={
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setAddOwner('me')}
+            disabled={disabled}
+          >
+            <Lock className="size-3.5 shrink-0" />
+            {tI18nComplete.raw('textcbf6389cf9df')}
+          </Button>
+        }
+        loading={connectionsQuery.isLoading}
+        rows={myRows}
+        emptyTitle={tI18nComplete.raw('textc3bafa5156b4')}
+        emptyDescription={tI18nComplete.raw('text6533f1aa30ab')}
+        canManageConnections={canManageConnections}
+        disabled={disabled}
+        pendingConnectionId={pendingConnectionId}
+        onSetDefault={(connection) => setDefault.mutate(connection.connection_id)}
+        onDisconnect={setConfirmDisconnect}
+        onStartSession={onStartSession}
+      />
 
       <Modal
-        open={addScope !== null}
+        open={addOwner !== null}
         onOpenChange={(open) => {
-          if (!open && !adding) {
-            setAddScope(null);
-            setLabelDraft('');
-          }
+          if (!open && !adding) closeAdd();
         }}
       >
         <ModalContent className="lg:max-w-md">
           <ModalHeader>
             <ModalTitle>
-              {addScope === 'project'
+              {addOwner === 'project'
                 ? tI18nComplete('textca04bb211a4b', { value0: displayName })
                 : tI18nComplete('text9819d9aeec29', { value0: displayName })}
             </ModalTitle>
             <ModalDescription>
-              {addScope === 'project'
+              {addOwner === 'project'
                 ? tI18nComplete.raw('textcfc47949d9f8')
                 : tI18nComplete.raw('textf43ce58ed44c')}
             </ModalDescription>
@@ -978,7 +1053,7 @@ export function ConnectionsList({
                   value={labelDraft}
                   onChange={(e) => setLabelDraft(e.target.value)}
                   placeholder={
-                    addScope === 'project' ? tI18nComplete.raw('text945ce03ec79f') : 'Work'
+                    addOwner === 'project' ? tI18nComplete.raw('text945ce03ec79f') : 'Work'
                   }
                   maxLength={255}
                   autoFocus
@@ -991,10 +1066,7 @@ export function ConnectionsList({
               <Button
                 type="button"
                 variant="outline-ghost"
-                onClick={() => {
-                  setAddScope(null);
-                  setLabelDraft('');
-                }}
+                onClick={closeAdd}
                 disabled={adding}
               >
                 {tI18nComplete.raw('text19766ed6ccb2')}
@@ -1022,7 +1094,7 @@ export function ConnectionsList({
         isPending={disconnect.isPending}
         onConfirm={() => confirmDisconnect && disconnect.mutate(confirmDisconnect.connection_id)}
       />
-    </section>
+    </div>
   );
 }
 
@@ -1134,9 +1206,6 @@ export function ConnectorDetail({
   // project-scoped tool policy remains editable here like every other connector.
   const isComputer = connector.provider === 'computer';
   const isManaged = isComputer;
-  const authorizationStrategyEditable = connectorAuthorizationStrategyIsEditable(
-    connector.provider,
-  );
   const usesProjectAuthorization = connector.authorizationStrategy === 'project';
   // The connection's connection_id — the reference a backend (Kortix as a Backend)
   // passes in `connector_bindings` to run a session AS this connection. It isn't
@@ -1167,15 +1236,21 @@ export function ConnectorDetail({
   // is manager-gated; a member always manages their OWN connections.
   const canManageConnections =
     useProjectCan(projectId, PROJECT_ACTIONS.PROJECT_CONNECTOR_CONNECTIONS_MANAGE).allowed === true;
-  // Start a new session that uses this member's OWN connection for this connector.
-  // `inherit_unbound` keeps the project default for every OTHER connector the agent
-  // uses, so binding just this one doesn't null the rest. The session is private by
-  // default, which is required for a member-owned binding to resolve.
+  // Start a new session bound to a specific connection. `inherit_unbound` keeps
+  // the project default for every OTHER connector the agent uses, so binding
+  // just this one doesn't null the rest. Sessions are private by default, which
+  // is required for a member-owned binding to resolve. With no connection this
+  // just opens a fresh private session.
   const newSession = useNewProjectSession(projectId);
-  const startPrivateSession = () => {
-    // Require THIS user's own connection by alias — the server resolves their
-    // member connection and, if it was revoked, the connect-to-start gate re-prompts.
-    newSession({ create: { require_connectors: [connector.slug] } });
+  const startPrivateSession = (connection?: Connection) => {
+    newSession({
+      create: connection
+        ? {
+            connector_bindings: { [connector.slug]: { connection_id: connection.connection_id } },
+            inherit_unbound: true,
+          }
+        : {},
+    });
   };
   const [credOpen, setCredOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -1219,22 +1294,16 @@ export function ConnectorDetail({
     connector.slug,
   ).filter(
     (connection) =>
-      connection.owner_type === connectionOwnerTypeForStrategy(connector.authorizationStrategy),
+      connection.owner_type ===
+      (connector.authorizationStrategy === 'user' ? 'member' : 'project'),
   ).length;
 
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(displayName);
-  const [authorizationStrategyAwaitingRefresh, setAuthorizationStrategyAwaitingRefresh] =
-    useState<ConnectorAuthorizationStrategy | null>(null);
   useEffect(() => {
     setEditingName(false);
     setNameDraft(displayName);
   }, [connector.slug, displayName]);
-  useEffect(() => {
-    if (authorizationStrategyAwaitingRefresh === connector.authorizationStrategy) {
-      setAuthorizationStrategyAwaitingRefresh(null);
-    }
-  }, [authorizationStrategyAwaitingRefresh, connector.authorizationStrategy]);
 
   const rename = useMutation({
     mutationFn: () => setConnectorName(projectId, connector.slug, nameDraft.trim()),
@@ -1247,36 +1316,11 @@ export function ConnectorDetail({
       errorToast(e.message || tI18nHardcoded.raw('i18nComplete.text8fcf8ce07dcf')),
   });
 
-  const updateAuthorizationStrategy = useMutation({
-    mutationFn: (next: ConnectorAuthorizationStrategy) =>
-      setConnectorAuthorizationStrategy(projectId, connector.slug, next),
-    onSuccess: (result, next) => {
-      const syncError = result.sync?.errors.find((error) => error.slug === connector.slug);
-      if (syncError) {
-        warningToast(tI18nHardcoded('i18nComplete.textec7a4e3094f9', { value0: syncError.error }));
-        onChanged();
-        return;
-      }
-      successToast(
-        tI18nHardcoded('i18nComplete.text67ccb61d5f27', {
-          value0:
-            next === tI18nHardcoded.raw('i18nComplete.text244210e48437')
-              ? tI18nHardcoded.raw('i18nComplete.text985959785319')
-              : tI18nHardcoded.raw('i18nComplete.textb512d97e7cbf'),
-        }),
-      );
-      onChanged();
-    },
-    onError: (error: Error) => {
-      setAuthorizationStrategyAwaitingRefresh(null);
-      errorToast(error.message || tI18nHardcoded.raw('i18nComplete.texta743aa4452d3'));
-    },
-  });
-  const strategyUpdating = connectorAuthorizationUpdateIsPending(
-    connector.authorizationStrategy,
-    authorizationStrategyAwaitingRefresh,
-    updateAuthorizationStrategy.isPending,
-  );
+  // `ConnectorDetail` is unreachable from the live route (the mounted path is
+  // `connectors-page.tsx` -> `ConnectorModal` -> `ConnectorAccounts` ->
+  // `ConnectionsList`), kept only as a legacy shell. The "Connects as" control
+  // that used to drive this flag is gone — see `connector-settings.tsx`.
+  const strategyUpdating = false;
 
   const remove = useMutation({
     mutationFn: () => deleteConnector(projectId, connector.slug),
@@ -1409,31 +1453,10 @@ export function ConnectorDetail({
       </div>
 
       <div className="mt-7 space-y-5">
-        <section className="space-y-2">
-          <Label>{tI18nHardcoded.raw('i18nComplete.textca5839e38a15')}</Label>
-          <div className="bg-popover rounded-md border px-4 py-3">
-            <AuthorizationStrategyField
-              idPrefix={`connector-${connector.slug}`}
-              value={connector.authorizationStrategy}
-              onChange={(next) => {
-                setCredOpen(false);
-                setAuthorizationStrategyAwaitingRefresh(next);
-                updateAuthorizationStrategy.mutate(next);
-              }}
-              disabled={!canWrite || !authorizationStrategyEditable}
-              // Settled once the connector exists. Switching owner after the
-              // fact silently changes WHOSE account every future session runs
-              // as, and orphans the connections and permission rules already
-              // attached under the old owner — a change that looks like a
-              // toggle and behaves like a migration.
-              //
-              // UI-only: `updateAuthorizationStrategy` below and its route are
-              // left intact, so re-enabling is deleting this one prop.
-              lockedReason={tI18nHardcoded.raw('i18nComplete.text70e7dfb50669')}
-              pending={strategyUpdating}
-            />
-          </div>
-        </section>
+        {/* The "Connects as" / authorization-owner control that used to live
+            here is gone — see `connector-settings.tsx`. Ownership is now a
+            property of each ACCOUNT (`owner_type`), not a connector-level mode;
+            a project and a member account can coexist on the same connector. */}
         {/* Project-owned connectors accept only project-managed connections. */}
         {(isManagedProvider || connector.authSecret) &&
           !connected &&
@@ -1657,7 +1680,7 @@ export function ConnectorDetail({
             ? (connection?.connection_id ?? null)
             : (myPrivateConnection?.connection_id ?? null)
         }
-        authorizationStrategy={connector.authorizationStrategy}
+        owner={usesProjectAuthorization ? 'project' : 'me'}
         open={credOpen}
         onOpenChange={setCredOpen}
         onSaved={onChanged}
@@ -3863,11 +3886,7 @@ function AppCatalogue({
   const notConfigured =
     appsQuery.isError && /501|not configured/i.test((appsQuery.error as Error)?.message ?? '');
   const addApp = useMutation({
-    mutationFn: async (connector: {
-      name: string;
-      slug: string;
-      authorizationStrategy: ConnectorAuthorizationStrategy;
-    }) => {
+    mutationFn: async (connector: EasyConnectConnectionInput) => {
       if (!selectedApp) throw new Error('Select an app');
       const draft = buildEasyConnectConnectorDraft(selectedApp, connector);
       const result = await createConnector(projectId, draft);
@@ -4235,10 +4254,6 @@ function ConnectorConfigFields({
               const provider = v as ConnectorDraftInput['provider'];
               set({
                 provider,
-                authorization_strategy: connectorAuthorizationStrategyForProvider(
-                  provider,
-                  draft.authorization_strategy ?? 'project',
-                ),
                 platform:
                   provider === 'channel'
                     ? draft.platform === 'email' && !emailChannelEnabled
@@ -4632,16 +4647,10 @@ export function CustomConnectorForm({
   const [draft, setDraft] = useState<ConnectorDraftInput>({
     slug: '',
     provider: 'openapi',
-    authorization_strategy: 'project',
   });
   const [oauth2Selected, setOauth2Selected] = useState(false);
   const [oauth2, setOauth2] = useState<OAuth2CredentialForm>(EMPTY_OAUTH2_CREDENTIAL_FORM);
   const [discoveryDraft, setDiscoveryDraft] = useState(draft);
-  const effectiveAuthorizationStrategy = connectorAuthorizationStrategyForProvider(
-    draft.provider,
-    draft.authorization_strategy ?? 'project',
-  );
-  const sharedOAuth2Selected = oauth2Selected && effectiveAuthorizationStrategy === 'project';
   useEffect(() => {
     const timer = window.setTimeout(() => setDiscoveryDraft(draft), 400);
     return () => window.clearTimeout(timer);
@@ -4652,17 +4661,15 @@ export function CustomConnectorForm({
     }
   }, [draft.platform, draft.provider, emailChannelEnabled]);
   useEffect(() => {
-    if (
-      (draft.provider === 'channel' || effectiveAuthorizationStrategy === 'user') &&
-      oauth2Selected
-    ) {
+    // Channel connectors have no OAuth2-at-creation offer.
+    if (draft.provider === 'channel' && oauth2Selected) {
       setOauth2Selected(false);
     }
-  }, [draft.provider, effectiveAuthorizationStrategy, oauth2Selected]);
+  }, [draft.provider, oauth2Selected]);
 
   const save = useMutation({
     mutationFn: () =>
-      createConnectorWithOptionalOAuth2(projectId, draft, sharedOAuth2Selected ? oauth2 : null, {
+      createConnectorWithOptionalOAuth2(projectId, draft, oauth2Selected ? oauth2 : null, {
         createConnector,
         deleteConnector,
         setConnectorCredential,
@@ -4706,7 +4713,7 @@ export function CustomConnectorForm({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (sharedOAuth2Selected && !oauth2CredentialFormValid(oauth2)) return;
+          if (oauth2Selected && !oauth2CredentialFormValid(oauth2)) return;
           save.mutate();
         }}
       >
@@ -4725,23 +4732,10 @@ export function CustomConnectorForm({
                 : null
             }
             detectedTitle={discovery.data?.title ?? null}
-            oauth2Selected={sharedOAuth2Selected}
-            onOAuth2SelectedChange={
-              effectiveAuthorizationStrategy === 'project' ? setOauth2Selected : undefined
-            }
+            oauth2Selected={oauth2Selected}
+            onOAuth2SelectedChange={setOauth2Selected}
           />
-          <AuthorizationStrategyField
-            idPrefix="custom-connector"
-            value={connectorAuthorizationStrategyForProvider(
-              draft.provider,
-              draft.authorization_strategy ?? 'project',
-            )}
-            onChange={(authorizationStrategy) =>
-              setDraft({ ...draft, authorization_strategy: authorizationStrategy })
-            }
-            disabled={!connectorAuthorizationStrategyIsEditable(draft.provider)}
-          />
-          {sharedOAuth2Selected && (
+          {oauth2Selected && (
             <div className="space-y-4">
               <InfoBanner tone="info" title={tI18nHardcoded.raw('i18nComplete.textc2a08c85f9d8')}>
                 {tI18nHardcoded.raw('i18nComplete.text9dedee588b5e')}
@@ -4752,11 +4746,6 @@ export function CustomConnectorForm({
                 idPrefix="new-connector-oauth2"
               />
             </div>
-          )}
-          {effectiveAuthorizationStrategy === 'user' && authActive && (
-            <InfoBanner tone="info">
-              {tI18nHardcoded.raw('i18nComplete.text547a92020d87')}
-            </InfoBanner>
           )}
           {draft.auth === undefined && discovery.isFetching && (
             <InfoBanner tone="info">
@@ -4779,7 +4768,7 @@ export function CustomConnectorForm({
               {(discovery.error as Error).message}
             </InfoBanner>
           )}
-          {authActive && !sharedOAuth2Selected && effectiveAuthorizationStrategy === 'project' && (
+          {authActive && !oauth2Selected && (
             <InfoBanner tone="info">
               {tI18nHardcoded.raw(
                 'autoComponentsProjectsCustomizeSectionsConnectorsViewJsxTextYouLle5def626',
@@ -4794,7 +4783,7 @@ export function CustomConnectorForm({
                 !draft.slug ||
                 save.isPending ||
                 !connectionValid(draft, emailChannelEnabled) ||
-                (sharedOAuth2Selected && !oauth2CredentialFormValid(oauth2))
+                (oauth2Selected && !oauth2CredentialFormValid(oauth2))
               }
               className="gap-1.5"
             >
@@ -4814,7 +4803,7 @@ export function SetCredentialModal({
   projectId,
   connector,
   connectionId,
-  authorizationStrategy,
+  owner,
   open,
   onOpenChange,
   onSaved,
@@ -4822,7 +4811,8 @@ export function SetCredentialModal({
   projectId: string;
   connector: AdminConnector | null;
   connectionId: string | null;
-  authorizationStrategy: ConnectorAuthorizationStrategy;
+  /** Which owner this credential is being set for. */
+  owner: 'project' | 'me';
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onSaved: () => void;
@@ -4844,11 +4834,11 @@ export function SetCredentialModal({
   const configQuery = useQuery({
     queryKey: qk.project.connectorConfig(projectId, connector?.slug ?? ''),
     queryFn: () => getConnectorConfig(projectId, connector!.slug),
-    enabled: open && Boolean(connector) && authorizationStrategy === 'project',
+    enabled: open && Boolean(connector) && owner === 'project',
     ...contract('config'),
   });
   const requestAuth =
-    authorizationStrategy === 'user' ? connector?.requestAuthType : configQuery.data?.auth.type;
+    owner === 'me' ? connector?.requestAuthType : configQuery.data?.auth.type;
   const objectCredential = ['oauth1', 'hmac', 'aws_sigv4', 'mtls'].includes(requestAuth ?? '');
   const credentialExample =
     requestAuth === 'oauth1'
@@ -4929,7 +4919,7 @@ export function SetCredentialModal({
   }, [device, deviceConnectionId, onOpenChange, onSaved, projectId, tI18nHardcoded]);
   const resolveConnectionId = async (): Promise<string> => {
     if (connectionId) return connectionId;
-    if (authorizationStrategy === 'user') {
+    if (owner === 'me') {
       const connection = await reconcileMemberConnection(projectId, {
         connector_alias: connector!.slug,
         label: connector!.name.trim() || connector!.slug,
@@ -5028,7 +5018,7 @@ export function SetCredentialModal({
   const save = useMutation({
     mutationFn: async () => {
       if (credentialType === 'static') {
-        if (authorizationStrategy === 'user') {
+        if (owner === 'me') {
           return updateConnectionCredential(projectId, await resolveConnectionId(), {
             value,
           });
@@ -5037,7 +5027,7 @@ export function SetCredentialModal({
       }
       if (application.grant === 'client_credentials') {
         const oauth2Input = buildOAuth2CredentialInput(oauth2);
-        if (authorizationStrategy === 'user') {
+        if (owner === 'me') {
           return updateConnectionCredential(projectId, await resolveConnectionId(), oauth2Input);
         }
         return setConnectorCredential(projectId, connector!.slug, oauth2Input);
