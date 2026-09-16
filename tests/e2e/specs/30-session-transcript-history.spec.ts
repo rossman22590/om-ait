@@ -42,6 +42,7 @@ test('30 — saved session history paints while sandbox start and the open bundl
   const user = await createAuthUser(email, authOptions);
   const auth = await signIn(email, authOptions);
   let projectId = '';
+  let sessionId = '';
   let disposeProject = async () => {};
   let releaseReads = () => {};
   let releaseSend = () => {};
@@ -233,6 +234,7 @@ test('30 — saved session history paints while sandbox start and the open bundl
     releaseSend();
     await page.unrouteAll({ behavior: 'ignoreErrors' });
     if (projectId) {
+      if (sessionId) await api(auth.access_token, 'DELETE', `/projects/${projectId}/sessions/${sessionId}`);
       await runDatabaseSql(
         "UPDATE kortix.project_sessions SET metadata = metadata || jsonb_build_object('deletedAt', now()::text) WHERE project_id = $1",
         [projectId],
