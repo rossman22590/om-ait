@@ -173,6 +173,15 @@ runtime timeouts; `SNAP-2` deleted the shared image while sessions were booting.
 *Enforcers:* `client-ci-passthrough.test.ts`, `preview-stack.test.ts`, runner sandbox
 setup, and `SNAP-2` global scheduling. Vercel analytics also mounts only on Vercel.
 
+### Assert settled dialog geometry before capturing a responsive screenshot (2026-09-14)
+
+**When:** changing the viewport while a modal or select is opening or closing.
+Wait for the target geometry and for dismissed dialogs to leave the DOM.
+Disable animations for the screenshot itself. In PR #7234, a capture during
+resize showed a 208px dialog; its settled mobile width was 390px. This nearly
+triggered an unnecessary layout change. *Enforcer:* browser journey 28 asserts
+mobile dialog width, awaits dialog removal, and disables capture animations.
+
 ### Stop proxy maintenance timers and isolate background writers in package tests (2026-09-14)
 
 **When:** stopping the sandbox proxy or running package tests. Cancel boot and
@@ -5322,3 +5331,20 @@ polling after `404` or `410`; preserve transcript data and allow explicit recove
 paths across a runtime switch. Controller tests assert no retries for 60 seconds
 after `404` and `410`, then successful explicit recovery. The SDK browser journey
 switches between two real sandboxes while the first message read retries.
+
+### Check Docker guest capacity when isolated Supabase startup fails
+
+**Incident (2026-09-16, PR #7295):** a new worktree exhausted Docker's disk
+while downloading Supabase images. Ten stacks then exhausted the VM's 8 GB
+memory. PostgreSQL reported `No space left on device`; Docker recorded OOM
+kills. Host disk capacity did not describe the guest's available capacity.
+
+**Rule:** inspect Docker disk usage and VM OOM logs before retrying startup.
+Remove only verified unused, downloadable image caches. Preserve database
+volumes. Stop the current task's optional Studio and metadata containers before
+starting another stack. Obtain authorization before stopping other tasks.
+
+**Enforcement:** Docker rejects removal of an image used by a container without
+force. Use ordinary `docker image rm`, never forced removal or volume pruning.
+The local runner requires working Supabase and real HTTP assertions before it
+reports success; `SEC-30` passed after this recovery.
