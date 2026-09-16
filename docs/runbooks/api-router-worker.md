@@ -18,7 +18,7 @@ origin 502/503/504 into a synthetic
 |---|---|---|
 | prod (`api-kortix-router`) | `deploy-api-router` in `.github/workflows/deploy-prod.yml` | every prod release, after `deploy-ecs` |
 | staging (`staging-api-kortix-router`) | `wire-cloudflare` in `deploy-staging.yml` | every staging deploy |
-| dev (`dev-api-kortix-router`) | by hand | — |
+| dev (`dev-api-kortix-router`) | `deploy-api-router-dev.yml` | router/workflow changes on main; manual dispatch from main |
 
 Until 2026-09-07 nothing deployed the prod Worker. It ran a 2026-08-21 build for
 17 days, and 8 days of failed project creation reached Better Stack as a
@@ -35,6 +35,10 @@ curl -s "https://api.cloudflare.com/client/v4/accounts/9785405a992435bb0c7bd19f9
 Compare `modified_on` with the last commit to `worker.mjs`
 (`git log -1 --format=%ci -- infra/cloudflare/workers/api-router/worker.mjs`).
 If the live script is older than that commit, it is stale.
+
+The dev workflow also records `DEPLOYED_COMMIT` in the Worker bindings and
+checks it against the workflow SHA. Its unauthenticated SCIM probe omits
+`User-Agent` and requires a JSON `401`, proving the request reaches bearer auth.
 
 **Deploy by hand** (the scoped `CLOUDFLARE_API_TOKEN` from `apps/api/.env` works;
 `wrangler.toml` `[env.<env>.vars]` is the single source of bindings):

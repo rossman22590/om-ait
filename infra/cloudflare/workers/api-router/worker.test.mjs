@@ -24,6 +24,25 @@ afterEach(() => {
 });
 
 describe('api-router worker', () => {
+  test('deploys the dev router from main and verifies its commit and SCIM boundary', () => {
+    const workflow = Bun.YAML.parse(readFileSync(new URL('../../../../.github/workflows/deploy-api-router-dev.yml', import.meta.url), 'utf8'));
+    expect(workflow.on.push.branches).toEqual(['main']);
+    expect(workflow.on.push.paths).toContain('infra/cloudflare/workers/api-router/**');
+    const job = workflow.jobs.deploy;
+    expect(job.if).toBe("github.ref == 'refs/heads/main'");
+    expect(job['continue-on-error']).toBeUndefined();
+    const commands = job.steps.map((step) => step.run ?? '').join('\n');
+    expect(commands).toContain('deploy --env dev');
+    expect(commands).not.toContain('--env prod');
+    expect(commands).not.toContain('--env staging');
+    expect(commands).toContain('DEPLOYED_COMMIT:${GITHUB_SHA}');
+    expect(commands).toContain('dev-api-kortix-router/settings');
+    expect(commands).toContain('.text == $sha');
+    expect(commands).toContain("-H 'User-Agent:'");
+    expect(commands).toContain('[ "$status" = 401 ]');
+    expect(commands).toContain('urn:ietf:params:scim:api:messages:2.0:Error');
+  });
+
   test('keeps the staging API on EKS in config and deployment metadata', () => {
     const wrangler = readFileSync(
       new URL('./wrangler.toml', import.meta.url),
