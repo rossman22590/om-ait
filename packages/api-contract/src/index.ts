@@ -411,6 +411,13 @@ export const SessionScopeSchema = z
   .strict();
 export type SessionScope = z.infer<typeof SessionScopeSchema>;
 
+/**
+ * @deprecated Shape of one entry in the retired `CONNECTOR_CONNECTION_REQUIRED`
+ * error (see the comment above `SessionScopeInputSchema`). No route constructs
+ * this any more — the connector call is the gate now, not session preflight.
+ * Kept on the wire: this is a published `@kortix/sdk` type and removing it
+ * breaks every consumer that imports it.
+ */
 export const RequiredConnectorConnectionSchema = z
   .object({
     id: z.string().uuid(),
@@ -421,6 +428,12 @@ export const RequiredConnectorConnectionSchema = z
   .strict();
 export type RequiredConnectorConnection = z.infer<typeof RequiredConnectorConnectionSchema>;
 
+/**
+ * @deprecated The required-connector session gate is retired — no route
+ * returns this error any more (its 409 came from session create/preflight,
+ * which no longer checks required connectors). Kept on the wire for the same
+ * reason as `RequiredConnectorConnectionSchema` above.
+ */
 export const ConnectorConnectionRequiredErrorSchema = z
   .object({
     code: z.literal('CONNECTOR_CONNECTION_REQUIRED'),
