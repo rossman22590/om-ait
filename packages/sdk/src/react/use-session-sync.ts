@@ -1,5 +1,6 @@
 'use client';
 
+import type { SessionTranscriptSyncEnvelope } from '../core/rest/projects-client/sessions';
 import type { SessionStatus, Todo } from '@opencode-ai/sdk/v2/client';
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import {
@@ -51,6 +52,7 @@ const IDLE_STATUS = { type: 'idle' } as SessionStatus;
  * Network synchronization lives in the framework-free SessionSyncController.
  */
 interface UseSessionSyncOptions {
+  mirror?: SessionTranscriptSyncEnvelope | null;
   /**
    * Stable Kortix `(projectId, sessionId)` scope for disk transcript ownership.
    * This prevents equal OpenCode ids in different sandboxes from sharing data.
@@ -137,7 +139,7 @@ export function livenessBusy(input: {
 }
 
 export function useSessionSync(sessionId: string, options: UseSessionSyncOptions = {}) {
-  const { kortixSessionScope, networkEnabled = true, working, serverHoldsTurn } = options;
+  const { kortixSessionScope, networkEnabled = true, working, serverHoldsTurn, mirror } = options;
   const runtimeHealthy = useSandboxConnectionStore((state) => state.healthy === true);
   const runtimeScope = useCurrentRuntime((state) => state.sandboxId) ?? 'none';
   const cacheOwnerScope = resolveSessionCacheOwnerScope(runtimeScope, kortixSessionScope);
@@ -206,10 +208,10 @@ export function useSessionSync(sessionId: string, options: UseSessionSyncOptions
     // live read outranks a snapshot and must never be overwritten by one.
     if ((useSyncStore.getState().messages[sessionId]?.length ?? 0) > 0) return;
     const abort = new AbortController();
-    void loadSessionTranscriptMirror({
-      kortixSessionScope,
-      signal: abort.signal,
-    }).then((envelope) => {
+    const read = mirror !== undefined
+      ? Promise.resolve(mirror)
+      : loadSessionTranscriptMirror({ kortixSessionScope, signal: abort.signal });
+    void read.then((envelope) => {
       if (abort.signal.aborted || !envelope) return;
       const state = useSyncStore.getState();
       if (
@@ -224,7 +226,7 @@ export function useSessionSync(sessionId: string, options: UseSessionSyncOptions
       state.hydrate(sessionId, mirrorMessagesForHydrate(envelope), { source: 'cache' });
     });
     return () => abort.abort();
-  }, [kortixSessionScope, sessionId]);
+  }, [kortixSessionScope, sessionId, mirror]);
 
   // NO DISK PAINT. The transcript renders from the runtime and from this tab's
   // own optimistic writes — nothing else.
