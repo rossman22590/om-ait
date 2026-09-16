@@ -80,12 +80,9 @@
       "noGitHubAccount": "Nessun account GitHub è ancora collegato all'account di questo progetto.",
       "connectGitHub": "Collega un account GitHub",
       "connectGitHubSuffix": "per usare questa opzione.",
-      "loadingGitHubAccounts": "Caricamento degli account GitHub…",
-      "loadGitHubAccountsError": "Impossibile caricare gli account GitHub: {error}",
-      "githubAccount": "Account GitHub",
-      "selectGitHubAccount": "Seleziona un account GitHub",
+      "loadGitHubAccountsError": "Impossibile caricare gli account GitHub. Riprova.",
       "createsPath": "Crea <path>{path}</path>",
-      "loadRepositoriesError": "Impossibile caricare i repository: {error}",
+      "loadRepositoriesError": "Impossibile caricare i repository. Riprova.",
       "sources": {
         "managed": {
           "label": "Gestito da Kortix",
@@ -99,7 +96,17 @@
           "label": "Importa da GitHub",
           "description": "Seleziona un repository esistente dal tuo account GitHub."
         }
-      }
+      },
+      "repositoryLabel": "Repository",
+      "createInOwner": "Crea un repository in {owner}",
+      "importFromOwner": "Importa un repository da {owner}",
+      "selectOption": "Seleziona un'opzione per il repository",
+      "loadingOptions": "Caricamento delle opzioni del repository…",
+      "managedUnavailable": "I repository gestiti da Kortix non sono disponibili in questa istanza. Un amministratore della piattaforma lo configura nella console di amministrazione.",
+      "installationUnreachable": "Questa connessione GitHub non funziona più. Ricollegala per elencare i repository.",
+      "reconnect": "Ricollega nelle impostazioni Git",
+      "managedImportLabel": "Importa un repository gestito esistente",
+      "managedImportHint": "Solo per operatori self-hosted. Elenca i repository già posseduti dal proprietario git gestito."
     }
   },
   "projectHome": {
@@ -12409,7 +12416,6 @@
       "text588032878324": "Invia ora",
       "text5885ace14d89": "Recupero sessione",
       "text5887e718dea1": "scelto",
-      "text58a34c9573cf": "Installa l’app GitHub",
       "text58a4ba90dc79": "Riprenditi la settimana divorata dal coordinamento.",
       "text58aede554b21": "Connetti uno strumento una volta, per tutta l’azienda. Gli agenti lo raggiungono tramite un unico token con ambito limitato, mediato da Kortix lato server: così la credenziale grezza non arriva mai sulla macchina controllata dal modello.",
       "text58bf3410b028": "Imposta valore",
@@ -18457,7 +18463,21 @@
       "textf09704dad946": "Torna ai connettori",
       "textf3c16c11f690": "Niente da aggiungere",
       "textf75561ab0be6": "La credenziale ora proviene dal segreto {value0}",
-      "textf91b7814f64d": "Nessun connettore con slug “{value0}” esiste in questo progetto."
+      "textf91b7814f64d": "Nessun connettore con slug “{value0}” esiste in questo progetto.",
+      "text42888e8dc93e": "Una connessione per l'intera istanza. Kortix crea ed esegue il push di ogni repository di progetto tramite essa, in tutti gli account.",
+      "textf40d94365439": "L'identità GitHub di questa istanza proviene dalle variabili d'ambiente sul server. Non può essere modificata qui.",
+      "textbd6cc9a4cf4b": "Impostato da",
+      "text39481fc24bd5": "I repository gestiti da Kortix in questa istanza vengono creati sotto {value0}.",
+      "text89a9816ffa6f": "I repository gestiti da Kortix sono disponibili in questa istanza.",
+      "textb79bb0e54e4f": "I repository gestiti da Kortix non sono disponibili in questa istanza. Un amministratore della piattaforma lo configura nella console di amministrazione.",
+      "textf7be8a17b0e7": "Aggiungi un account GitHub",
+      "text659d5668b62b": "Collega un account personale o un'organizzazione GitHub a questo account Kortix.",
+      "textdc520b664af2": "GitHub elenca ogni account personale e organizzazione che amministri. Scegline uno, indica a quali repository può accedere l'app Kortix e quel proprietario viene collegato a questo account Kortix.",
+      "text8d3f36f31348": "Installa l'app Kortix",
+      "text183bc0d276cc": "Questa istanza non ha nessuna app GitHub da installare. Un amministratore della piattaforma lo configura nella console di amministrazione.",
+      "text7f59f014cd7b": "È già installata sul proprietario che ti serve?",
+      "text9180f7df8906": "Collega un'installazione che amministri già",
+      "text0b0e4c425624": "Già collegata a {value0, plural, one {# altro account Kortix} other {# altri account Kortix}}."
     }
   },
   "projectOnboarding": {

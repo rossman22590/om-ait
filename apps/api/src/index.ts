@@ -1496,11 +1496,15 @@ async function startReplicaServices() {
   await import('./platform/services/runtime-settings')
     .then((m) => m.refreshRuntimeSettings())
     .catch(() => {});
-  // Warm the managed-GitHub-App config cache too — so a self-host instance
-  // whose operator just ran the in-app GitHub App setup flow (rather than
-  // `.env`) gets its DB-stored creds from request #1, not after a 30s TTL.
-  await import('./platform/services/managed-github-app')
-    .then((m) => m.refreshManagedGithubAppConfig())
+  // Warm the instance GitHub identity + git backend caches too — so a
+  // self-host instance whose operator just ran the in-app setup flow (rather
+  // than `.env`) serves its stored configuration from request #1, not after a
+  // 30s TTL.
+  await import('./platform/services/github-app-identity')
+    .then((m) => m.refreshAppIdentity())
+    .catch(() => {});
+  await import('./platform/services/managed-git-backend')
+    .then((m) => m.refreshGitBackend())
     .catch(() => {});
   // Every replica stages snapshot/session-boot build contexts in tmpdir and can
   // leak them on error paths; sweep stale ones so they don't fill node disk and
