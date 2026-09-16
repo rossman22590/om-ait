@@ -643,7 +643,7 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
           .poll(() => savedImage.evaluate((node) => (node as HTMLImageElement).naturalWidth))
           .toBe(1);
         const downloaded = page.waitForEvent('download');
-        await page.getByRole('button', { name: 'wake-notes.txt', exact: false }).click();
+        await page.getByRole('button', { name: 'wake-notes.txt txt', exact: true }).click();
         const file = await downloaded;
         const stream = await file.createReadStream();
         const chunks: Buffer[] = [];
@@ -659,7 +659,7 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
             .poll(() => image.evaluate((node) => (node as HTMLImageElement).naturalWidth))
             .toBe(1);
           const download = page.waitForEvent('download');
-          await page.getByRole('button', { name: textName, exact: false }).click();
+          await page.getByRole('button', { name: `${textName} txt`, exact: true }).click();
           const stream = await (await download).createReadStream();
           const chunks: Buffer[] = [];
           for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
