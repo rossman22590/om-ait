@@ -35,6 +35,10 @@ import { isAllowedSourceValidationError } from '../marketplace/catalog';
 import { auth, errors, json, makeOpenApiApp } from '../openapi';
 import { INVALID_SOURCE_ADDRESS_CODE } from '../marketplace/catalog';
 import { UnsafeEgressError } from '../shared/ssrf-guard';
+import {
+  type ConnectorConnectOwner,
+  parseConnectorConnectOwner,
+} from '../projects/lib/connection-access';
 import { canonicalConnectorAlias } from '../projects/lib/session-connector-bindings';
 import {
   type ConnectorAttachmentStore,
@@ -110,6 +114,16 @@ const CallResponseSchema = z
     risk: z.any().optional(),
     status: z.string().optional(),
     reason: z.any().optional(),
+    // Which connection ran the call, so the transcript can always answer
+    // "whose account sent that". Absent when the connector resolved no
+    // connection (public/no-auth connector, or a Computers tunnel profile).
+    account: z
+      .object({
+        connection_id: z.string(),
+        label: z.string(),
+        owner_type: z.string(),
+      })
+      .optional(),
   })
   .passthrough()
   .openapi('ConnectorCallResult');
@@ -190,6 +204,11 @@ export interface AdminConnectorView extends CatalogConnector {
   /** Credential storage mode. Always `shared` — `per_user` (each member's
    *  own) was removed 2026-07-05. */
   credentialMode: 'shared';
+  /**
+   * @deprecated A DERIVED SUMMARY, not a setting: `user` when this connector's
+   * live accounts are member-owned only, `project` otherwise. The PUT that used
+   * to set it is an inert no-op. Kept on the wire for older clients.
+   */
   authorizationStrategy: 'project' | 'user';
   /** Authentication shape required when a member adds a private credential. */
   requestAuthType: ConnectorAuth['type'];
@@ -318,7 +337,7 @@ export interface ConnectorRouterDeps {
     slug: string,
     mode: 'shared',
   ): Promise<CrudOutcome>;
-  /** Set the exclusive connection owner model for this connector. */
+  /** @deprecated Retired. Its route is an inert 200 no-op and never calls this. */
   setAuthorizationStrategy?(
     projectId: string,
     accountId: string,
@@ -447,6 +466,8 @@ export interface ConnectorRouterDeps {
      *  the call. Persisted on the connection so finalize can tell that agent the
      *  account landed instead of it re-minting a link on its next run. */
     requestingSessionId?: string | null,
+    /** Whose account this authorization lands on. Defaults to `me`. */
+    owner?: ConnectorConnectOwner,
   ): Promise<{
     provider: string;
     token?: string;
@@ -463,7 +484,18 @@ export interface ConnectorRouterDeps {
     slug: string,
     userId: string,
     selector?: { connectionId?: string; requestId?: string },
+    /** Whose account the matching connect started on. Defaults to `me`. */
+    owner?: ConnectorConnectOwner,
   ): Promise<{ provider: string; connected: boolean; accountId?: string; connectionId?: string; isNoAuth?: boolean } | null>;
+  /**
+   * Does this caller hold the connections-manage capability on the project?
+   * The same gate r4's project-owned connection create asserts — connecting an
+   * account the WHOLE project can then use is administration, not self-service.
+   */
+  resolveConnectionsManager?(
+    c: Context,
+    projectId: string,
+  ): Promise<{ accountId: string; userId: string } | null>;
   /** Connectors this session's agent asked a human to authorize, and whether
    *  each is connected yet. Drives the in-session Connect button. */
   listSessionConnectRequests?(
@@ -810,7 +842,12 @@ export function createConnectorRouter(deps: ConnectorRouterDeps): OpenAPIHono {
     });
     switch (result.status) {
       case 'ok':
-        return c.json({ ok: true, data: result.data, risk: result.risk });
+        return c.json({
+          ok: true,
+          data: result.data,
+          risk: result.risk,
+          ...(result.account ? { account: result.account } : {}),
+        });
       case 'pending_approval':
         return c.json(
           {
@@ -1916,28 +1953,20 @@ export function createConnectorRouter(deps: ConnectorRouterDeps): OpenAPIHono {
       const slug = c.req.param('slug');
       const admin = await deps.resolveAdmin(c, projectId);
       if (!admin) return c.json({ error: 'forbidden' }, 403);
-      if (!deps.setAuthorizationStrategy) {
-        return featureNotSupportedResponse(c, 'connector_authorization_strategy');
-      }
-      let body: any;
-      try {
-        body = await c.req.json();
-      } catch {
-        return c.json({ error: 'invalid_json' }, 400);
-      }
-      const authorizationStrategy = body?.authorization_strategy;
-      if (authorizationStrategy !== 'project' && authorizationStrategy !== 'user') {
-        return c.json({ error: 'authorization_strategy must be "project" or "user"' }, 400);
-      }
-      const result = await deps.setAuthorizationStrategy(
-        projectId,
-        admin.accountId,
-        slug,
-        authorizationStrategy,
-      );
-      return result.ok
-        ? c.json({ ok: true, sync: result.sync })
-        : c.json({ error: result.error }, result.status as 400 | 409 | 502);
+      // DEPRECATED NO-OP. The connector-level authorization strategy is retired:
+      // an account is shared or private per CONNECTION (`owner_type`), and both
+      // kinds can exist on one connector. The route stays, and stays a 200, so
+      // an older CLI or web build that still calls it is not broken by a 404 or
+      // a 501 — it simply changes nothing. The body is not even read: there is
+      // no value it could carry that would mean anything.
+      void slug;
+      return c.json({
+        ok: true,
+        deprecated: true,
+        note:
+          'Connector authorization strategy is retired. An account is shared or private ' +
+          'per connection — connect one with owner "project" or "me" instead.',
+      });
     },
   );
 
@@ -2139,20 +2168,38 @@ export function createConnectorRouter(deps: ConnectorRouterDeps): OpenAPIHono {
       // Native clients pass app deep-link redirect URIs so the in-app browser
       // auto-dismisses back to the app instead of landing on a web page.
       let redirects: { success?: string; error?: string } | undefined;
+      let rawOwner: unknown;
       try {
         const body = await c.req.json();
         if (body?.success_redirect_uri || body?.error_redirect_uri) {
           redirects = { success: body.success_redirect_uri, error: body.error_redirect_uri };
         }
+        rawOwner = body?.owner;
       } catch {
         /* no body */
+      }
+      const owner = parseConnectorConnectOwner(rawOwner);
+      if (!owner) return c.json({ error: 'owner must be "me" or "project"' }, 400);
+      // Connecting an account the whole project can then use is administration.
+      // `me` — the default — is self-service and needs nothing beyond the
+      // connector-write gate already asserted above.
+      if (owner === 'project' && deps.resolveConnectionsManager) {
+        const manager = await deps.resolveConnectionsManager(c, projectId);
+        if (!manager) return c.json({ error: 'forbidden' }, 403);
       }
       // Set by the auth middleware from a scoped session token, so this is
       // populated exactly when the agent in a sandbox made the call — and null
       // when a human clicked Connect in project settings, which has no session
       // waiting on the answer.
       const requestingSessionId = (c.get('sessionId') as string | undefined) ?? null;
-      const result = await connect(projectId, slug, admin.userId, redirects, requestingSessionId);
+      const result = await connect(
+        projectId,
+        slug,
+        admin.userId,
+        redirects,
+        requestingSessionId,
+        owner,
+      );
       if (!result) return c.json({ error: 'not a supported connect connector' }, 404);
       return c.json(result);
     },
@@ -2187,11 +2234,15 @@ export function createConnectorRouter(deps: ConnectorRouterDeps): OpenAPIHono {
         : undefined);
       if (!finalize) return featureNotSupportedResponse(c, 'connector_finalize');
       let selector: { connectionId?: string; requestId?: string } | undefined;
+      let rawOwner: unknown;
       try {
         const body = await c.req.json();
         if (body?.connection_id || body?.request_id) selector = { connectionId: body.connection_id, requestId: body.request_id };
+        rawOwner = body?.owner;
       } catch { /* no body */ }
-      const result = await finalize(projectId, slug, admin.userId, selector);
+      const owner = parseConnectorConnectOwner(rawOwner);
+      if (!owner) return c.json({ error: 'owner must be "me" or "project"' }, 400);
+      const result = await finalize(projectId, slug, admin.userId, selector, owner);
       if (!result) return c.json({ error: 'not a supported connect connector' }, 404);
       return c.json(result);
     },
