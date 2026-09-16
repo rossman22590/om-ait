@@ -96,7 +96,7 @@ is rejected rather than used to select that old root.
 ## Automated checks
 
 - `pnpm test -- --id SESS-31`: stopped-session upload/download, immutable retries, 50 MiB limit, access checks, flag rollback, and deletion cleanup.
-- `pnpm test -- --id SESS-30`: real HTTP flag enforcement, stopped-session reads, access checks,
+- `pnpm test -- --id SESS-32`: real HTTP flag enforcement, stopped-session reads, access checks,
   and replaced-root rejection.
 - `E2E_GREP='30 — saved session history' pnpm test -- --browser-only`: toggles the flag in the
   real UI and verifies stored messages while `/start` and `/snapshot` remain pending. It sends

@@ -4,7 +4,7 @@ import { createDatabaseSession } from "../fixtures/database-project";
 import { seedSessionTranscript } from "../fixtures/session-transcript";
 
 flow(
-  "SESS-30",
+  "SESS-32",
   {
     domain: "sessions",
     requires: ["database"],
