@@ -126,6 +126,7 @@ export function SessionOverridesToolbar({
   sandboxSlot,
 }: SessionOverridesToolbarProps) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
+  const tPooled = useTranslations('pooledSecrets');
   const pooledSecretsEnabled = useFeatureFlag(projectId, 'pooled_provider_secrets').enabled;
   const llmGatewayEnabled = useFeatureFlag(projectId, 'llm_gateway').enabled;
   const { scope, catalog, saveScope, isLoading, isScopeLoading } = useSessionScope({
@@ -266,16 +267,16 @@ export function SessionOverridesToolbar({
     if (pooledSecretsEnabled) {
       list.push({
         id: 'provider-keys',
-        name: 'Provider keys',
+        name: tPooled('providerKeys'),
         icon: KeyRound,
-        hint: 'Choose the shared keys this session can use.',
-        summary: sessionId ? 'Session key pool' : Object.keys(providerPoolDraft).length
-          ? `${selectedProviderKeyCount} ${selectedProviderKeyCount === 1 ? 'key' : 'keys'} selected`
-          : 'Project default',
+        hint: tPooled('chooseSharedKeys'),
+        summary: sessionId ? tPooled('sessionKeyPool') : Object.keys(providerPoolDraft).length
+          ? tPooled(selectedProviderKeyCount === 1 ? 'selectedOne' : 'selectedKeys', { count: selectedProviderKeyCount })
+          : tPooled('projectDefaultShort'),
         overridden: !sessionId && Object.keys(providerPoolDraft).length > 0,
-        description: 'The gateway rotates through selected keys when a provider reports a rate limit.',
+        description: tPooled('rateLimitDescription'),
         editor: !llmGatewayEnabled
-          ? <p className="text-muted-foreground text-xs">Enable LLM gateway in project settings to use pooled keys.</p>
+          ? <p className="text-muted-foreground text-xs">{tPooled('enableGateway')}</p>
           : sessionId
           ? <ProviderSecretPoolEditor projectId={projectId} sessionId={sessionId} />
           : <NewProviderSecretPoolEditor projectId={projectId} selection={providerPoolDraft} onChange={setProviderPoolDraft} />,
@@ -344,6 +345,7 @@ export function SessionOverridesToolbar({
     sandboxSlot,
     saveScope.isPending,
     tI18nComplete,
+    tPooled,
   ]);
 
   return (
