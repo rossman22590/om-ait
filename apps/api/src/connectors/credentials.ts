@@ -183,6 +183,40 @@ export async function connectorIdsWithSharedCredentials(
   return new Set(rows.map((row) => row.connectorId));
 }
 
+/**
+ * Which of these connectors does ACTING USER have a credentialed, active
+ * member-owned account on?
+ *
+ * connection-access.ts's reachability rule does not gate on the connector's
+ * (retired) authorization strategy: a member reaches their OWN account
+ * regardless of whether the connector has a project-wide shared credential.
+ * The admin list (`listConnectors`) must agree, or a connector with only
+ * private, credentialed accounts reports `needs_auth` to the very people who
+ * can already call it — the connector IS connected for them.
+ */
+export async function connectorIdsWithReachableMemberCredential(
+  connectorIds: string[],
+  actingUserId: string,
+): Promise<Set<string>> {
+  if (connectorIds.length === 0 || !actingUserId) return new Set();
+  const rows = await db
+    .select({ connectorId: connectionCredentials.connectorId })
+    .from(connectionCredentials)
+    .innerJoin(
+      connectorConnections,
+      eq(connectorConnections.connectionId, connectionCredentials.connectionId),
+    )
+    .where(
+      and(
+        inArray(connectionCredentials.connectorId, connectorIds),
+        eq(connectorConnections.ownerType, 'member'),
+        eq(connectorConnections.ownerId, actingUserId),
+        eq(connectorConnections.status, 'active'),
+      ),
+    );
+  return new Set(rows.map((row) => row.connectorId));
+}
+
 async function defaultConnectionIdForConnector(connectorId: string): Promise<string | null> {
   const [connection] = await db
     .select({ connectionId: connectorConnections.connectionId })
