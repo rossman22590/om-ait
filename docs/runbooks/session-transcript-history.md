@@ -106,7 +106,8 @@ is rejected rather than used to select that old root.
   or deployed test target and provisions a real cloud session. It sends through the UI, reads
   the completed reply from the database before stopping, reopens the stopped session, and
   sends while wake is pending. It checks delivery records, one user message and one completed
-  reply per send, and both replies after a page reload. This cloud journey is excluded from
+  reply per send, and all three replies after a page reload. It also verifies first-message files,
+  files sent during wake, and recovered legacy attachments through authenticated downloads. This cloud journey is excluded from
   the deterministic local profile. It deletes its sessions and auth user and archives its project.
 - `apps/api/src/__tests__/integration-session-transcript-capture.test.ts`: real PostgreSQL writes
   for more than 500 messages, retries, idempotence, concurrent captures, and flag rollback.
@@ -116,6 +117,6 @@ The local browser fixture proves startup request initiation and pre-readiness re
 The deployed browser journey additionally verifies cloud startup, streaming, turn-end capture,
 stop, wake, queued delivery, and reload. Both checks are required before merging.
 
-On 2026-09-16, the shared local database returned `PGRST203` for `atomic_use_credits` because
-two function signatures matched. The released browser startup request returned `402`.
-This prevents that fixture from proving cloud startup; transcript rendering passed before the request was released.
+Use an isolated local Supabase stack when the shared database has schema drift. Test migrations
+must not alter another worktree’s database. The browser fixture requires healthy Auth, PostgreSQL,
+and Storage services. A stopped or restarting Storage service cannot verify attachment uploads.
