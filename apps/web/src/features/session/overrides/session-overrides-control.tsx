@@ -83,6 +83,7 @@ export function SessionOverridesControlContent({
 }: SessionOverridesControlProps) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
   const t = useTranslations('threads');
+  const tPooled = useTranslations('pooledSecrets');
   const [focusedId, setFocusedId] = useState<string | null>(rows[0]?.id ?? null);
   const focused = rows.find((row) => row.id === focusedId) ?? rows[0];
   const controlsDisabled = disabled || saving;
@@ -171,7 +172,7 @@ export function SessionOverridesControlContent({
           size="sm"
         >
           {saving ? <Loading className="size-3.5 shrink-0" /> : null}
-          {tI18nComplete.raw('text1509f561f241')}
+          {focused?.id === 'provider-keys' ? tPooled('done') : tI18nComplete.raw('text1509f561f241')}
         </Button>
       </div>
     </div>
