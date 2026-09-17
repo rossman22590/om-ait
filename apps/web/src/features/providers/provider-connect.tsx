@@ -784,6 +784,18 @@ const CONNECTION_REFRESH_TIMEOUT_MS = 45_000;
  */
 export const PROVIDER_PAGE_SIZE = 12;
 
+// Mirrors the gateway's base-URL fallbacks in provider-registry.ts. A provider
+// without an API host or one of these fallbacks cannot create a gateway key.
+const GATEWAY_BASE_URL_FALLBACK_IDS = new Set([
+  'anthropic', 'openai', 'groq', 'x-ai', 'xai', 'mistral', 'deepseek',
+  'perplexity', 'cerebras', 'vercel', 'v0', 'deepinfra', 'togetherai',
+]);
+
+export function supportsPooledProviderKey(entry: LlmProviderEntry | undefined): boolean {
+  return Boolean(entry && entry.envVars.length === 1 && entry.id !== 'google' &&
+    (entry.apiHost || GATEWAY_BASE_URL_FALLBACK_IDS.has(entry.id)));
+}
+
 function toRow(entry: LlmProviderEntry, connectedIds: Set<string>): ProviderConnectRow {
   return {
     id: entry.id,
@@ -1134,7 +1146,7 @@ export function ProviderConnect({
       <ProviderConnectView
         pooledSecretsEnabled={pooledSecretsEnabled}
         pooledSlots={pooledSecretsEnabled ? Object.fromEntries(
-          visibleRows.filter((row) => row.id !== 'kortix' && row.envVars.length === 1).map((row) => [
+          visibleRows.filter((row) => supportsPooledProviderKey(LLM_PROVIDER_BY_ID.get(row.id))).map((row) => [
             row.id,
             accountId ? <AccountSecretResourcesPanel
               key={row.id}

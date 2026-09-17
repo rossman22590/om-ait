@@ -6,9 +6,11 @@ import {
   PROVIDER_PAGE_SIZE,
   ProviderConnectView,
   providerKeyFieldId,
+  supportsPooledProviderKey,
   type ProviderConnectRow,
   type ProviderConnectViewProps,
 } from './provider-connect';
+import { LLM_PROVIDER_BY_ID } from '@/lib/llm-providers';
 
 /**
  * `ProviderConnectView` is the pure, props-only half of `provider-connect.tsx`
@@ -478,6 +480,13 @@ describe('ProviderConnectView — the subscription slot', () => {
 });
 
 describe('ProviderConnectView — pooled provider keys', () => {
+  test('offers pooled keys only where the gateway can route a single API key', () => {
+    expect(supportsPooledProviderKey(LLM_PROVIDER_BY_ID.get('anthropic'))).toBe(true);
+    expect(supportsPooledProviderKey(LLM_PROVIDER_BY_ID.get('openai'))).toBe(true);
+    expect(supportsPooledProviderKey(LLM_PROVIDER_BY_ID.get('google'))).toBe(false);
+    expect(supportsPooledProviderKey(LLM_PROVIDER_BY_ID.get('qvac'))).toBe(false);
+  });
+
   test('shows the key manager in place of the single-key field when enabled', () => {
     const out = renderToStaticMarkup(
       <ProviderConnectView {...props({
