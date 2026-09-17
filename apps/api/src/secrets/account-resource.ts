@@ -64,6 +64,7 @@ export async function listGrantedGatewaySecretNames(accountId: string, projectId
 export async function resolveDefaultCodexAccountSecret(accountId: string, projectId: string, userId: string): Promise<{
   secretId: string; label: string; value: string;
 } | null> {
+  if (!(await memberMayReadProject(accountId, projectId, userId))) return null;
   const [row] = await db.select({
     secretId: accountSecretResources.secretId,
     label: accountSecretResources.label,
