@@ -26,7 +26,7 @@ await runtime.lifecycle.start()
 | `open-code/events.ts`, `open-code/event-bus.ts` | Native event reading, session identity and recovery instructions |
 | `open-code/config.ts`, `open-code/paths.ts` | Native environment, authored config discovery and paths |
 | `open-code/assets.ts` | Native binary/plugin updates and skill placement |
-| `open-code/background.ts`, `open-code/resource-diagnostics.ts` | Native offload, turn guard and diagnostic projection |
+| `open-code/background.ts`, `open-code/resource-diagnostics.ts`, `open-code/quick-queue-interrupt.ts` | Native offload, turn guard, tool-boundary queue interrupt and diagnostic projection |
 | Other `open-code/` modules | Native database, projections, pins, attachments, audit and recovery |
 
 The host retains its entrypoint, monitor mode, Git/files/PTYs, authentication,

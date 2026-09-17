@@ -93,7 +93,12 @@ describe('harness ownership boundary', () => {
           body: JSON.stringify({ nativeFeature: input.path, input: await new Response(input.body).text() }),
         }),
       },
-      control: { bind: () => ({ applyEnvironment: unexpected, refresh: unexpected, abort: unexpected }) },
+      control: {
+        bind: () => ({
+          applyEnvironment: unexpected, refresh: unexpected, abort: unexpected,
+          armAbortAfterTool: unexpected, disarmAbortAfterTool: unexpected,
+        }),
+      },
       diagnostics: {
         health: async () => ({ daemon: 'ok', status: 'ok', runtimeReady: true, uptime_s: 1, exclusiveFeature: 'preserved' }),
         report: unexpected, logSources: () => [], readLog: unexpected,

@@ -1,10 +1,13 @@
 import type { OpenCodeConfig as Config } from './config'
+import { kortixEventBus } from '../../kortix-event-bus'
 import { logger } from '../../logger'
 import { startResourceMonitor, type ResourceMonitor } from '../../resources'
 import type { Opencode } from './lifecycle'
 import { OPENCODE_HOME } from './paths'
 import { defaultSidecarDir, opencodeDbPath, runAttachmentOffloadPass } from './attachment-offload'
-import { opencodeTurnInFlight, readPinnedSessionId } from './opencode-turn-state'
+import { opencodeSessionInFlight, opencodeTurnInFlight, readPinnedSessionId } from './opencode-turn-state'
+import { OpencodeDb } from './opencode-db'
+import { QuickQueueInterrupt, quickQueueSnapshotFromPage } from './quick-queue-interrupt'
 import {
   evaluateOpenCodePressure,
   findOpencodePids,
@@ -14,14 +17,64 @@ import {
   projectOpenCodeResourceSnapshot,
 } from './resource-diagnostics'
 
+/** Quick Queue interrupt over the pinned OpenCode root; created once per service. */
+export function createOpenCodeQuickQueueInterrupt(
+  opencode: Pick<Opencode, 'getInternalUrl'>,
+  cfg: Pick<Config, 'workspace'>,
+): QuickQueueInterrupt {
+  const quickQueueDb = new OpencodeDb(opencodeDbPath(OPENCODE_HOME))
+  const readQuickQueueSnapshot = async (input: {
+    opencodeSessionId: string
+    messageId: string
+  }) => {
+    if (readPinnedSessionId() !== input.opencodeSessionId) {
+      return { state: 'stale' as const, runningTool: false }
+    }
+    const inFlight = await opencodeSessionInFlight(
+      opencode.getInternalUrl(), cfg.workspace, input.opencodeSessionId,
+    )
+    if (!quickQueueDb.probe().supported) return { state: 'unknown' as const, runningTool: false }
+    const page = quickQueueDb.messagePage({ sessionId: input.opencodeSessionId, limit: 12 })
+    return quickQueueSnapshotFromPage(
+      inFlight,
+      page?.messages as Parameters<typeof quickQueueSnapshotFromPage>[1] ?? null,
+      input.messageId,
+    )
+  }
+  return new QuickQueueInterrupt({
+    readSnapshot: readQuickQueueSnapshot,
+    abort: async (input) => {
+      // Recheck at the wire boundary: an older arm must not kill a later tool
+      // or a new turn that began while the first snapshot was in flight.
+      const snapshot = await readQuickQueueSnapshot(input)
+      if (snapshot.state !== 'active' || snapshot.runningTool) return false
+      const url =
+        `${opencode.getInternalUrl()}/session/${encodeURIComponent(input.opencodeSessionId)}/abort` +
+        `?directory=${encodeURIComponent(cfg.workspace)}`
+      const response = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(10_000) })
+      if (response.ok) logger.info('[quick-queue] interrupted at tool boundary', {
+        promptId: input.promptId, messageId: input.messageId,
+      })
+      return response.ok
+    },
+  })
+}
+
 /** Native attachment upkeep and abort policy over host resource measurements. */
-export function startOpenCodeBackground(opencode: Opencode, cfg: Config): ResourceMonitor {
+export function startOpenCodeBackground(
+  opencode: Opencode,
+  cfg: Config,
+  quickQueue: Pick<QuickQueueInterrupt, 'observe' | 'stop'>,
+): ResourceMonitor {
   const turnInFlight = () => opencodeTurnInFlight(opencode.getInternalUrl(), cfg.workspace)
   // Attachment offload (attachment-offload.ts): inline image bytes out of the
   // transcript store, only while no turn runs. Every 5 min, and right after a
   // memory-guard abort.
   const offloadDbPath = opencodeDbPath(OPENCODE_HOME)
   const offloadSidecarDir = defaultSidecarDir(OPENCODE_HOME)
+  const quickQueueEvents = kortixEventBus().subscribe((event) => {
+    void quickQueue.observe(event)
+  })
   let offloadRunning = false
   let stopped = false
   const runOffloadIfIdle = async (why: string): Promise<void> => {
@@ -75,12 +128,14 @@ export function startOpenCodeBackground(opencode: Opencode, cfg: Config): Resour
       },
     },
   })
-  // Stopping the background work stops the offload timers too, so a proxy
-  // stop never leaves a pass that touches the transcript store behind.
+  // Stopping the background work stops the offload timers and the queue
+  // interrupt too, so a proxy stop leaves no transcript read or abort behind.
   return {
     ...monitor,
     stop() {
       stopped = true
+      quickQueueEvents.unsubscribe()
+      quickQueue.stop()
       clearTimeout(offloadBootTimer)
       clearInterval(offloadTimer)
       monitor.stop()

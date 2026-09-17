@@ -10,21 +10,22 @@ import { createOpenCodeControlService } from '../../harness/open-code/control'
 import { createOpenCodeDiagnosticsService } from '../../harness/open-code/diagnostics'
 import { createOpenCodeQueryService } from '../../harness/open-code/queries'
 import { createOpenCodeAssetsService } from '../../harness/open-code/assets'
-import { startOpenCodeBackground } from '../../harness/open-code/background'
+import { createOpenCodeQuickQueueInterrupt, startOpenCodeBackground } from '../../harness/open-code/background'
 import { buildDaemonApp } from '../../proxy'
 import type { PtyRegistry } from '../../routes/pty'
 
 /** Exercise the real service boundary while substituting only native execution. */
 export function createOpenCodeHarnessFixture(cfg: Config, lifecycle: Opencode): HarnessService {
+  const quickQueue = createOpenCodeQuickQueueInterrupt(lifecycle, cfg)
   return {
     id: 'opencode',
     environment: { home: OPENCODE_HOME },
     lifecycle,
     proxy: createOpenCodeProxyService(lifecycle),
-    control: createOpenCodeControlService(lifecycle),
+    control: createOpenCodeControlService(lifecycle, quickQueue),
     diagnostics: createOpenCodeDiagnosticsService(lifecycle),
     queries: createOpenCodeQueryService(lifecycle),
-    background: { start: (currentCfg) => startOpenCodeBackground(lifecycle, requireOpenCodeConfig(currentCfg)) },
+    background: { start: (currentCfg) => startOpenCodeBackground(lifecycle, requireOpenCodeConfig(currentCfg), quickQueue) },
     assets: createOpenCodeAssetsService({
       getInternalUrl: () => lifecycle.getInternalUrl(),
       restart: () => lifecycle.restart(),

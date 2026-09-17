@@ -8,7 +8,7 @@ import { createOpenCodeProxyService } from './proxy'
 import { createOpenCodeControlService } from './control'
 import { createOpenCodeDiagnosticsService } from './diagnostics'
 import { createOpenCodeQueryService } from './queries'
-import { startOpenCodeBackground } from './background'
+import { createOpenCodeQuickQueueInterrupt, startOpenCodeBackground } from './background'
 import {
   startOpencodeEventLoop,
   type OpencodeEventHandlers,
@@ -55,14 +55,16 @@ export function createOpenCodeHarnessService(
   options: OpencodeLifecycleOptions = {},
 ): OpenCodeHarnessService {
   const lifecycle = createOpencodeLifecycle(cfg, opencodeConfigDir, projectEnv, options)
+  // One interrupt per service: control arms it, background delivers events to it.
+  const quickQueue = createOpenCodeQuickQueueInterrupt(lifecycle, cfg)
   return {
     id: 'opencode',
     environment: { home: OPENCODE_HOME },
     proxy: createOpenCodeProxyService(lifecycle),
-    control: createOpenCodeControlService(lifecycle),
+    control: createOpenCodeControlService(lifecycle, quickQueue),
     diagnostics: createOpenCodeDiagnosticsService(lifecycle),
     queries: createOpenCodeQueryService(lifecycle),
-    background: { start: (currentCfg) => startOpenCodeBackground(lifecycle, requireOpenCodeConfig(currentCfg)) },
+    background: { start: (currentCfg) => startOpenCodeBackground(lifecycle, requireOpenCodeConfig(currentCfg), quickQueue) },
     assets: createOpenCodeAssetsService({
       getInternalUrl: () => lifecycle.getInternalUrl(),
       restart: () => lifecycle.restart(),
