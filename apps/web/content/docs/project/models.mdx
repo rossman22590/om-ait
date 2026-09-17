@@ -143,8 +143,13 @@ key has its own member access and can be rotated or deleted separately. Select
 the keys a session may use in its session settings. An existing project key
 remains available when the session has no explicit key selection.
 Google Gemini API keys use Google's OpenAI-compatible endpoint when the LLM
-gateway is on. ChatGPT Plus/Pro uses a separate OAuth login. It currently
-supports one login per project; reconnecting replaces that login.
+gateway is on. ChatGPT Plus/Pro uses OAuth. Under the flag, each member can
+connect several named ChatGPT accounts. An account is private when connected.
+Its owner can grant another account member access. A session can select one or
+more granted accounts. The gateway tries another selected account after a
+pre-output rate limit. Without a session selection, a member's newest personal
+account is used. The older project login remains available when that member
+has no personal account.
 
 Models hidden by older picker preferences show **Hidden from picker**. Direct requests remain allowed. Open that model’s menu and choose **Disable model** to block inference too.
 

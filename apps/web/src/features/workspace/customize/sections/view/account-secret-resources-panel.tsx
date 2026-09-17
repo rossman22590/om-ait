@@ -1,13 +1,16 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   type AccountSecretResource, createAccountSecretResource, deleteAccountSecretResource,
   grantAccountSecretResource, listAccountMembers, listAccountSecretResources,
   revokeAccountSecretResourceGrant, rotateAccountSecretResource,
+  pollProjectProviderOAuth, startProjectProviderOAuth,
 } from '@kortix/sdk';
+import { qk, refreshProjectProviderState } from '@kortix/sdk/react';
+import { ChatGptDeviceChallenge } from '@/components/projects/chatgpt-device-challenge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Field, FieldLabel } from '@/components/ui/field';
@@ -21,12 +24,13 @@ import { useAuth } from '@/features/providers/auth-provider';
 import { PrincipalPicker, type PrincipalSelection } from '@/features/workspace/shared/access/principal-picker';
 
 /** Provider keys live beside the provider they configure. The secret value stays write-only. */
-export function AccountSecretResourcesPanel({ accountId, providerId, providerName, envVar, canWrite }: {
+export function AccountSecretResourcesPanel({ accountId, providerId, providerName, envVar, canWrite, oauth }: {
   accountId: string;
   providerId: string;
   providerName: string;
   envVar: string;
   canWrite: boolean;
+  oauth?: { projectId: string; onConnected: (providerId: string) => void };
 }) {
   const t = useTranslations('pooledSecrets');
   const { user } = useAuth();
@@ -40,10 +44,54 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
   const [sharing, setSharing] = useState<AccountSecretResource | null>(null);
   const [selectedMembers, setSelectedMembers] = useState<PrincipalSelection>({ memberIds: [], groupIds: [], inviteEmails: [] });
   const [deleting, setDeleting] = useState<AccountSecretResource | null>(null);
+  const [oauthChallenge, setOauthChallenge] = useState<{ url: string; code: string | null } | null>(null);
+  const [oauthWaiting, setOauthWaiting] = useState(false);
+  const cancelledRef = useRef(false);
+  useEffect(() => () => { cancelledRef.current = true; }, []);
   const members = useQuery({ queryKey: ['account-members', accountId], queryFn: () => listAccountMembers(accountId) });
   const actorRole = members.data?.find((member) => member.user_id === user?.id)?.account_role;
   const keys = (resources.data?.secrets ?? []).filter((secret) => secret.provider_id === providerId);
   const refresh = async () => { await queryClient.invalidateQueries({ queryKey }); };
+  const connectOAuth = async () => {
+    if (!oauth || !label.trim()) return;
+    cancelledRef.current = false;
+    setOauthWaiting(true);
+    setOauthChallenge(null);
+    try {
+      const start = await startProjectProviderOAuth(oauth.projectId, 'openai', { resourceLabel: label.trim() });
+      if (cancelledRef.current) return;
+      setOauthChallenge({ url: start.verification_url, code: start.user_code });
+      const interval = Math.max(2000, start.interval_ms || 3000);
+      const deadline = start.expires_at || Date.now() + 10 * 60_000;
+      while (!cancelledRef.current && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, interval));
+        if (cancelledRef.current) return;
+        let result: Awaited<ReturnType<typeof pollProjectProviderOAuth>>;
+        try {
+          result = await pollProjectProviderOAuth(oauth.projectId, 'openai', start.flow_id);
+        } catch {
+          // A temporary network failure does not invalidate the device code.
+          continue;
+        }
+        if (result.status === 'pending') continue;
+        if (result.status === 'success') {
+          await refresh();
+          queryClient.invalidateQueries({ queryKey: qk.project.secrets(oauth.projectId) });
+          refreshProjectProviderState(queryClient, oauth.projectId, { expectProviderId: 'codex' });
+          oauth.onConnected('codex');
+          setCreating(false); setLabel(''); setOauthChallenge(null);
+          successToast(t('saved'));
+          return;
+        }
+        throw new Error(result.status === 'failed' ? result.error : t('oauthExpired'));
+      }
+      if (!cancelledRef.current) throw new Error(t('oauthExpired'));
+    } catch (error) {
+      if (!cancelledRef.current) errorToast(error instanceof Error ? error.message : t('saveError'));
+    } finally {
+      if (!cancelledRef.current) setOauthWaiting(false);
+    }
+  };
   const save = useMutation({
     mutationFn: async () => {
       if (rotating) return rotateAccountSecretResource(accountId, rotating.secret_id, value);
@@ -81,10 +129,10 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
   });
 
   return (
-    <section className="min-w-0 space-y-2" aria-label={t('providerKeysFor', { provider: providerName })}>
+    <section className="min-w-0 space-y-2" aria-label={oauth ? t('chatGptAccounts') : t('providerKeysFor', { provider: providerName })}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-muted-foreground text-xs">{t('keyCount', { count: keys.length })}</p>
-        {canWrite && <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>{t('addKey')}</Button>}
+        <p className="text-muted-foreground text-xs">{oauth ? t('accountCount', { count: keys.length }) : t('keyCount', { count: keys.length })}</p>
+        {canWrite && <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>{oauth ? t('addAccount') : t('addKey')}</Button>}
       </div>
       {resources.isLoading ? <Loading /> : resources.isError ? (
         <p className="text-muted-foreground text-xs">{t('loadError')}</p>
@@ -102,32 +150,34 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
                 <DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('actionsFor', { label: secret.label })}><DotsThreeIcon className="size-4" /></Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onSelect={() => { setSelectedMembers({ memberIds: secret.granted_user_ids, groupIds: [], inviteEmails: [] }); setSharing(secret); }}>{t('manageAccess')}</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => { setValue(''); setRotating(secret); }}>{t('rotateKey')}</DropdownMenuItem>
-                  <DropdownMenuItem onSelect={() => setDeleting(secret)}>{t('deleteKey')}</DropdownMenuItem>
+                  {!oauth && <DropdownMenuItem onSelect={() => { setValue(''); setRotating(secret); }}>{t('rotateKey')}</DropdownMenuItem>}
+                  <DropdownMenuItem onSelect={() => setDeleting(secret)}>{oauth ? t('deleteAccount') : t('deleteKey')}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>}
             </li>
           ))}</ul>
       ) : null}
 
-      <Modal open={creating || rotating !== null} onOpenChange={(open) => { if (!open) { setCreating(false); setRotating(null); setValue(''); } }}>
+      <Modal open={creating || rotating !== null} onOpenChange={(open) => { if (!open) { cancelledRef.current = true; setCreating(false); setRotating(null); setValue(''); setOauthWaiting(false); setOauthChallenge(null); } }}>
         <ModalContent className="sm:max-w-md">
-          <ModalHeader><ModalTitle>{rotating ? t('rotateLabel', { label: rotating.label }) : `${t('addKey')} · ${providerName}`}</ModalTitle>
-            <ModalDescription>{t('valueNeverShown')}</ModalDescription></ModalHeader>
+          <ModalHeader><ModalTitle>{rotating ? t('rotateLabel', { label: rotating.label }) : `${oauth ? t('addAccount') : t('addKey')} · ${providerName}`}</ModalTitle>
+            <ModalDescription>{oauth ? t('oauthPrivateDescription') : t('valueNeverShown')}</ModalDescription></ModalHeader>
           <ModalBody className="space-y-3">
             {!rotating && <>
-              <Field><FieldLabel htmlFor={`provider-key-label-${providerId}`}>{t('label')}</FieldLabel><Input id={`provider-key-label-${providerId}`} value={label} onChange={(event) => setLabel(event.target.value)} placeholder={t('primaryKey')} maxLength={100} /></Field>
+              <Field><FieldLabel htmlFor={`provider-key-label-${providerId}`}>{t('label')}</FieldLabel><Input id={`provider-key-label-${providerId}`} value={label} onChange={(event) => setLabel(event.target.value)} placeholder={oauth ? t('accountLabelPlaceholder') : t('primaryKey')} maxLength={100} /></Field>
             </>}
-            <Field><FieldLabel htmlFor={`provider-key-value-${providerId}`}>{t('apiKey')}</FieldLabel><Input id={`provider-key-value-${providerId}`} type="password" value={value} onChange={(event) => setValue(event.target.value)} autoComplete="off" /></Field>
+            {oauth ? oauthChallenge && <ChatGptDeviceChallenge url={oauthChallenge.url} code={oauthChallenge.code} /> :
+              <Field><FieldLabel htmlFor={`provider-key-value-${providerId}`}>{t('apiKey')}</FieldLabel><Input id={`provider-key-value-${providerId}`} type="password" value={value} onChange={(event) => setValue(event.target.value)} autoComplete="off" /></Field>}
           </ModalBody>
-          <ModalFooter><Button variant="secondary" onClick={() => { setCreating(false); setRotating(null); setValue(''); }}>{t('cancel')}</Button>
-            <Button disabled={save.isPending || !value.trim() || (!rotating && !label.trim())} onClick={() => save.mutate()}>{save.isPending ? t('saving') : t('saveKey')}</Button></ModalFooter>
+          <ModalFooter><Button variant="secondary" onClick={() => { cancelledRef.current = true; setCreating(false); setRotating(null); setValue(''); setOauthWaiting(false); setOauthChallenge(null); }}>{t('cancel')}</Button>
+            <Button disabled={oauth ? oauthWaiting || !label.trim() : save.isPending || !value.trim() || (!rotating && !label.trim())}
+              onClick={() => oauth ? void connectOAuth() : save.mutate()}>{oauth ? oauthWaiting ? t('oauthWaiting') : t('connectAccount') : save.isPending ? t('saving') : t('saveKey')}</Button></ModalFooter>
         </ModalContent>
       </Modal>
 
       <Modal open={sharing !== null} onOpenChange={(open) => { if (!open && !changeGrant.isPending) setSharing(null); }}>
         <ModalContent className="sm:max-w-md"><ModalHeader><ModalTitle>{t('accessTo', { label: sharing?.label ?? '' })}</ModalTitle>
-          <ModalDescription>{t('grantedMembers')}</ModalDescription></ModalHeader>
+          <ModalDescription>{t(oauth ? 'oauthGrantedMembers' : 'grantedMembers')}</ModalDescription></ModalHeader>
           <ModalBody className="max-h-[60vh] space-y-4 overflow-y-auto">
             <Field className="gap-1.5">
               <PrincipalPicker scope={{ kind: 'account', accountId }} selection="multi" kinds={['member']}
@@ -142,8 +192,9 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
         </ModalContent>
       </Modal>
       <ConfirmDialog open={deleting !== null} onOpenChange={(open) => { if (!open) setDeleting(null); }}
-        title={t('deleteConfirmTitle')} description={deleting ? t('deleteConfirmDescription', { label: deleting.label }) : ''}
-        confirmLabel={t('deleteKey')} confirmVariant="destructive" isPending={remove.isPending}
+        title={t(oauth ? 'deleteAccountConfirmTitle' : 'deleteConfirmTitle')}
+        description={deleting ? t(oauth ? 'deleteAccountConfirmDescription' : 'deleteConfirmDescription', { label: deleting.label }) : ''}
+        confirmLabel={oauth ? t('deleteAccount') : t('deleteKey')} confirmVariant="destructive" isPending={remove.isPending}
         onConfirm={() => { if (deleting) remove.mutate(deleting.secret_id); }} />
     </section>
   );

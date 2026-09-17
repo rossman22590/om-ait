@@ -1190,7 +1190,24 @@ export function ProviderConnect({
         search={search}
         onSearchChange={setSearch}
         subscriptionSlots={
-          canWrite
+          pooledSecretsEnabled && accountId ? {
+            openai: <div className="space-y-2">
+              <div className="bg-popover space-y-3 rounded-md border px-4 py-4">
+                <div className="flex items-start gap-3">
+                  <ProviderLogo providerID="openai" name="OpenAI" size="default" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-foreground text-sm font-medium">{tPooled('chatGptAccounts')}</p>
+                    <p className="text-muted-foreground mt-0.5 text-xs leading-5">{tPooled('oauthPrivateDescription')}</p>
+                  </div>
+                  <ProviderAccessMenu access={access} providerId="codex" name="ChatGPT subscription" canWrite={canWrite} />
+                </div>
+                <AccountSecretResourcesPanel accountId={accountId} providerId="codex"
+                  providerName="ChatGPT Plus/Pro" envVar="CODEX_AUTH_JSON" canWrite={true}
+                  oauth={{ projectId, onConnected: setPendingRequest }} />
+              </div>
+              <ChatGptSubscriptionConnect projectId={projectId} onConnected={setPendingRequest} legacyOnly />
+            </div>,
+          } : canWrite
             ? {
                 // The ONLY live provider subscription flow in the repo. Anthropic
                 // has no OAuth anywhere — see this file's header comment.

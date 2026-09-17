@@ -107,6 +107,27 @@ test.describe('30 — pooled provider secrets', () => {
       await api(session.access_token, 'PATCH', `/projects/${projectId}/features`, {
         feature: 'llm_gateway', enabled: true,
       });
+      await page.route(`**/v1/projects/${projectId}/oauth/openai/start`, async (route) => {
+        await route.fulfill({ status: 200, json: {
+          flow_id: 'browser-device-flow', verification_url: 'https://example.test/device',
+          user_code: 'TEST-CODE', expires_at: Date.now() + 60_000, interval_ms: 5000,
+        } });
+      });
+      await page.goto(`/projects/${projectId}/customize/models`, { waitUntil: 'domcontentloaded' });
+      const chatGptAccounts = page.getByRole('region', { name: 'ChatGPT accounts' });
+      await expect(chatGptAccounts.getByRole('button', { name: 'Add account' })).toBeVisible();
+      for (const label of ['Personal ChatGPT', 'Second ChatGPT']) {
+        await chatGptAccounts.getByRole('button', { name: 'Add account' }).click();
+        const dialog = page.getByRole('dialog', { name: 'Add account · ChatGPT Plus/Pro' });
+        await dialog.getByRole('textbox', { name: 'Label' }).fill(label);
+        const startRequest = page.waitForRequest((request) => request.method() === 'POST'
+          && request.url().endsWith(`/v1/projects/${projectId}/oauth/openai/start`));
+        await dialog.getByRole('button', { name: 'Connect account' }).click();
+        expect((await startRequest).postDataJSON()).toEqual({ resource_label: label });
+        await expect(dialog.getByText('TEST-CODE')).toBeVisible();
+        await dialog.getByRole('button', { name: 'Cancel' }).click();
+      }
+      await page.unroute(`**/v1/projects/${projectId}/oauth/openai/start`);
       await page.goto(`/projects/${projectId}`, { waitUntil: 'domcontentloaded' });
       await page.getByRole('button', { name: 'Session overrides' }).click();
       await page.getByRole('button', { name: /Provider keys/ }).click();

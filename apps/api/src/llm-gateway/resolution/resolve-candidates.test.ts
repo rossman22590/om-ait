@@ -61,8 +61,12 @@ let secretsByName: Record<string, string | null> = {};
 let resolvedSecrets: Array<{ identifier: string; value: string }> = [];
 let pooledEnabled = false;
 let pooledSecrets: { configured: boolean; coolingDown: boolean; retryAfterSeconds?: number; secrets: Array<{ secretId: string; label: string; value: string }> } = { configured: false, coolingDown: false, secrets: [] };
+let defaultCodexSecret: { secretId: string; label: string; value: string } | null = null;
 mock.module('../../feature-flags/for-project', () => ({ projectFeatureFlagEnabled: async () => pooledEnabled }));
-mock.module('../../secrets/account-resource', () => ({ resolveSessionProviderSecrets: async () => pooledSecrets }));
+mock.module('../../secrets/account-resource', () => ({
+  resolveSessionProviderSecrets: async () => pooledSecrets,
+  resolveDefaultCodexAccountSecret: async () => defaultCodexSecret,
+}));
 const getProjectSecretValueForConsumer = mock(async (input: { name: string }) => {
   const name = input.name;
   if (name in secretsByName) return secretsByName[name] ?? null;
@@ -85,7 +89,11 @@ const resolveCodexCredential = mock(async () => {
   if (codexThrows) throw new CodexRefreshError('codex refresh failed');
   return codexCredential;
 });
-mock.module('../credentials/codex', () => ({ resolveCodexCredential, CodexRefreshError }));
+const resolveCodexAccountCredential = mock(async (input: { value: string }) => {
+  const parsed = JSON.parse(input.value) as { openai?: { access?: string } };
+  return parsed.openai?.access ? { access: parsed.openai.access } : null;
+});
+mock.module('../credentials/codex', () => ({ resolveCodexCredential, resolveCodexAccountCredential, CodexRefreshError }));
 
 // Captures every id `livePricing` is called with, in call order — lets tests
 // assert resolveCandidates strips the Bedrock cross-region inference-profile
@@ -183,6 +191,7 @@ function principal(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   pooledEnabled = false;
   pooledSecrets = { configured: false, coolingDown: false, secrets: [] };
+  defaultCodexSecret = null;
   tierByAccount = {};
   modelAccess = { disabledProviders: [], disabledModels: [] };
   for (const key of Object.keys(config)) delete config[key];
@@ -207,6 +216,7 @@ beforeEach(() => {
   getProjectSecretValueForConsumer.mockClear();
   resolveProjectSecretsForConsumer.mockClear();
   resolveCodexCredential.mockClear();
+  resolveCodexAccountCredential.mockClear();
 });
 
 describe('resolveCandidates — selected account key pool', () => {
@@ -564,6 +574,29 @@ describe('resolveCandidates — managed model tier gating', () => {
 });
 
 describe('resolveCandidates — codex + unknown provider', () => {
+  test('an unselected session uses the caller’s newest personal ChatGPT account', async () => {
+    pooledEnabled = true;
+    codexCredential = { access: 'legacy-token' };
+    defaultCodexSecret = { secretId: 'mine', label: 'My account', value: JSON.stringify({ openai: { access: 'mine-token' } }) };
+    const candidates = await resolveCandidates(principal({ sessionId: 'session-1' }), 'codex/gpt-5.5');
+    expect(candidates.map((candidate) => [candidate.credentialRef, candidate.apiKey])).toEqual([['mine', 'mine-token']]);
+    expect(resolveCodexCredential).not.toHaveBeenCalled();
+  });
+
+  test('a selected ChatGPT pool uses separate OAuth accounts and never the project login', async () => {
+    pooledEnabled = true;
+    codexCredential = { access: 'legacy-token' };
+    pooledSecrets = { configured: true, coolingDown: false, secrets: [
+      { secretId: 'account-a', label: 'Personal', value: JSON.stringify({ openai: { access: 'oauth-a' } }) },
+      { secretId: 'account-b', label: 'Team', value: JSON.stringify({ openai: { access: 'oauth-b' } }) },
+    ] };
+    const candidates = await resolveCandidates(principal({ sessionId: 'session-1' }), 'codex/gpt-5.5');
+    expect(candidates.map((candidate) => [candidate.poolSecretId, candidate.apiKey])).toEqual([
+      ['account-a', 'oauth-a'], ['account-b', 'oauth-b'],
+    ]);
+    expect(resolveCodexCredential).not.toHaveBeenCalled();
+  });
+
   test('codex provider without a projectId throws provider_not_connected', async () => {
     await expect(
       resolveCandidates(principal({ projectId: undefined }), 'codex/gpt-5.5'),

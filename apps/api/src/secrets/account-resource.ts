@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { accountMembers, accountSecretGrants, accountSecretResources, sessionProviderSecretPools } from '@kortix/db';
 import { config } from '../config';
 import { db } from '../shared/db';
@@ -48,6 +48,31 @@ export async function listGrantedGatewaySecretNames(accountId: string, userId: s
       eq(accountSecretGrants.userId, userId),
     ));
   return [...new Set(rows.map((row) => row.name))];
+}
+
+/** An unconfigured session uses the caller's newest personal ChatGPT connection. */
+export async function resolveDefaultCodexAccountSecret(accountId: string, userId: string): Promise<{
+  secretId: string; label: string; value: string;
+} | null> {
+  const [row] = await db.select({
+    secretId: accountSecretResources.secretId,
+    label: accountSecretResources.label,
+    valueEnc: accountSecretResources.valueEnc,
+  }).from(accountSecretResources)
+    .innerJoin(accountSecretGrants, and(eq(accountSecretGrants.secretId, accountSecretResources.secretId), eq(accountSecretGrants.accountId, accountId)))
+    .innerJoin(accountMembers, and(eq(accountMembers.accountId, accountId), eq(accountMembers.userId, userId)))
+    .where(and(
+      eq(accountSecretResources.accountId, accountId),
+      eq(accountSecretResources.providerId, 'codex'),
+      eq(accountSecretResources.name, 'CODEX_AUTH_JSON'),
+      eq(accountSecretResources.consumer, 'llm_gateway'),
+      eq(accountSecretResources.active, true),
+      eq(accountSecretResources.createdBy, userId),
+      eq(accountSecretGrants.userId, userId),
+    ))
+    .orderBy(desc(accountSecretResources.createdAt), desc(accountSecretResources.secretId))
+    .limit(1);
+  return row ? { secretId: row.secretId, label: row.label, value: decryptAccountSecret(accountId, row.valueEnc) } : null;
 }
 
 /** Resolve at use time so grant revocation and deletion affect the next call. */

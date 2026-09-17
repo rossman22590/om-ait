@@ -23,7 +23,9 @@ export async function validateProviderSecretPool(input: {
   manifestPath: string | null; agentName: string; userId: string;
   providerId: string; ids: string[];
 }): Promise<{ status: 400 | 403 | 409; error: string } | null> {
-  const provider = resolveCatalogUpstream(input.providerId);
+  const provider = input.providerId === 'codex'
+    ? { envVar: 'CODEX_AUTH_JSON' }
+    : resolveCatalogUpstream(input.providerId);
   if (!provider) return { status: 400, error: 'Unknown provider' };
   if (input.ids.length > 10 || new Set(input.ids).size !== input.ids.length) {
     return { status: 400, error: 'Invalid or duplicate secret id' };

@@ -54,10 +54,10 @@ export function ProviderSecretPoolEditor({ projectId, sessionId }: { projectId: 
       <label className="text-foreground text-xs font-medium" htmlFor="session-provider-pool-provider">{t('provider')}</label>
       <Select value={activeProvider} onValueChange={(id) => { setProviderId(id); setDraft(null); }}>
         <SelectTrigger id="session-provider-pool-provider"><SelectValue /></SelectTrigger>
-        <SelectContent>{providers.map((id) => <SelectItem key={id} value={id}>{id}</SelectItem>)}</SelectContent>
+        <SelectContent>{providers.map((id) => <SelectItem key={id} value={id}>{id === 'codex' ? 'ChatGPT' : id}</SelectItem>)}</SelectContent>
       </Select>
     </div>
-    <p className="text-muted-foreground text-xs">{pool.data?.configured ? t(selected.length === 1 ? 'selectedOneForSession' : 'selectedForSession', { count: selected.length }) : t('projectDefault')}</p>
+    <p className="text-muted-foreground text-xs">{pool.data?.configured ? t(selected.length === 1 ? 'selectedOneForSession' : 'selectedForSession', { count: selected.length }) : t(activeProvider === 'codex' ? 'personalChatGptDefault' : 'projectDefault')}</p>
     <div className="max-h-44 space-y-1 overflow-y-auto">
       {keys.map((secret) => <label key={secret.secret_id} className="hover:bg-hover flex items-center gap-2 rounded-md px-2 py-2 text-sm">
         <Checkbox checked={selected.includes(secret.secret_id)} disabled={save.isPending}
@@ -72,7 +72,7 @@ export function ProviderSecretPoolEditor({ projectId, sessionId }: { projectId: 
       <Button size="sm" disabled={save.isPending || !activeProvider || (pool.data?.configured && JSON.stringify(selected) === JSON.stringify(pool.data.secret_ids))}
         onClick={() => save.mutate(selected)}>{t('saveSelection')}</Button>
       <Button size="sm" variant="secondary" disabled={save.isPending || !pool.data?.configured}
-        onClick={() => save.mutate(null)}>{t('resetDefault')}</Button>
+        onClick={() => save.mutate(null)}>{t(activeProvider === 'codex' ? 'resetPersonalChatGptDefault' : 'resetDefault')}</Button>
     </div>
   </div>;
 }
@@ -104,9 +104,9 @@ export function NewProviderSecretPoolEditor({ projectId, selection, onChange }: 
     <label className="text-foreground block text-xs font-medium" htmlFor="new-provider-pool-provider">{t('provider')}</label>
     <Select value={activeProvider} onValueChange={setProviderId}>
       <SelectTrigger id="new-provider-pool-provider"><SelectValue /></SelectTrigger>
-      <SelectContent>{providers.map((id) => <SelectItem key={id} value={id}>{id}</SelectItem>)}</SelectContent>
+      <SelectContent>{providers.map((id) => <SelectItem key={id} value={id}>{id === 'codex' ? 'ChatGPT' : id}</SelectItem>)}</SelectContent>
     </Select>
-    <p className="text-muted-foreground text-xs">{activeProvider in selection ? t(selected.length === 1 ? 'selectedOne' : 'selectedKeys', { count: selected.length }) : t('projectDefault')}</p>
+    <p className="text-muted-foreground text-xs">{activeProvider in selection ? t(selected.length === 1 ? 'selectedOne' : 'selectedKeys', { count: selected.length }) : t(activeProvider === 'codex' ? 'personalChatGptDefault' : 'projectDefault')}</p>
     <div className="max-h-44 space-y-1 overflow-y-auto">
       {keys.map((secret) => <label key={secret.secret_id} className="hover:bg-hover flex items-center gap-2 rounded-md px-2 py-2 text-sm">
         <Checkbox checked={selected.includes(secret.secret_id)} onCheckedChange={(checked) => {
@@ -120,6 +120,6 @@ export function NewProviderSecretPoolEditor({ projectId, selection, onChange }: 
       const next = { ...selection };
       delete next[activeProvider];
       onChange(next);
-    }}>{t('resetDefault')}</Button>}
+    }}>{t(activeProvider === 'codex' ? 'resetPersonalChatGptDefault' : 'resetDefault')}</Button>}
   </div>;
 }
