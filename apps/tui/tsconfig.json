@@ -1,0 +1,20 @@
+{
+  "extends": "@tsconfig/bun/tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@opentui/react",
+    "types": ["bun", "react"],
+    // The workspace deps this app imports (`@kortix/sdk`, `@kortix/cli`)
+    // resolve to their TypeScript sources, so `tsc` type-checks them in this
+    // program. Two base options have to match theirs or their files fail on
+    // rules they were never written against:
+    //  - `lib` adds DOM: packages/sdk/src/browser/* reads `document`,
+    //    `indexedDB`, `IDBDatabase`.
+    //  - `noUncheckedIndexedAccess` is off: apps/cli and packages/sdk index
+    //    arrays/records directly (their own tsconfigs do not set it).
+    // Everything in `src/` is still checked under `strict`.
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "noUncheckedIndexedAccess": false
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx"]
+}
