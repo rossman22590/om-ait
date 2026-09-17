@@ -175,7 +175,6 @@ export function Transcript({
   // native setter, and a commit only happens when something actually changed,
   // so running it unconditioned is cheaper than tracking a content signature
   // that has to include every streaming part.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-pin on every commit, by design
   useEffect(() => {
     if (!sticky) return;
     const box = scrollRef.current;
