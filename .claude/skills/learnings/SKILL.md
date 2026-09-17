@@ -5892,7 +5892,6 @@ it live against `GET /status.mutable`). The card renders only at `/admin/git`
 never renders "Managed GitHub" (journey `30`). The instance backend has its own
 namespace, `GET /v1/projects/git/backend[/repositories]`, and is no longer a
 synthetic entry in the account connection list (flow `GH-18`).
-||||||| 709fbc4681
 
 ### 2026-09-17 — Quick Queue must not wait behind Queue List to interrupt
 
