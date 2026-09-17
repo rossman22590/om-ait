@@ -20,7 +20,7 @@ import { decryptProjectSecret, encryptProjectSecret } from '../projects/secrets'
 import { db } from '../shared/db';
 import { isUniqueViolation } from '../shared/postgres-errors';
 import { config } from '../config';
-import { upsertConnectionCredential } from './credentials';
+import { connectionIsEffectiveProjectDefault, upsertConnectionCredential } from './credentials';
 import { nativeOAuth2CallbackUrl } from './oauth2-callback-url';
 import {
   createStoredDelegatedCredential,
@@ -114,7 +114,16 @@ async function rematerializeAfterOAuthCompletion(connectionId: string): Promise<
       .where(eq(connectorConnections.connectionId, connectionId))
       .limit(1);
     if (!row) return;
-    const input = oauthCompletionRematerializeInput(row);
+    // INVARIANT (2026-09-16, account_required rule): `row.isDefault` is the
+    // raw (possibly unpinned) flag; the project-wide MCP catalog rematerialize
+    // must key on the EFFECTIVE default — pinned, or the connector's sole
+    // active project-owned connection — so a never-pinned solo MCP connector
+    // still rematerializes on OAuth completion exactly as before this rule.
+    const isEffectiveDefault =
+      row.ownerType === 'project'
+        ? await connectionIsEffectiveProjectDefault(row.connectorId, connectionId)
+        : row.isDefault;
+    const input = oauthCompletionRematerializeInput({ ...row, isDefault: isEffectiveDefault });
     if (!input) return;
     // Imported lazily: sync.ts pulls in the whole materialization graph, and
     // this module is on the OAuth request path.
