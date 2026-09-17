@@ -16,7 +16,11 @@ import {
 const NOW = new Date(2026, 8, 17, 12, 0, 0).getTime();
 const DAY_MS = 86_400_000;
 
-function session(id: string, activityMsBack: number, extra: Partial<SessionLike> = {}): SessionLike {
+function session(
+  id: string,
+  activityMsBack: number,
+  extra: Partial<SessionLike> = {},
+): SessionLike {
   return {
     session_id: id,
     name: id,
@@ -114,11 +118,7 @@ describe('parentSessionId', () => {
 describe('groupSessionsByDay', () => {
   test('sections are ordered by activity and labelled by day', () => {
     const groups = groupSessionsByDay(
-      [
-        session('older', 3 * DAY_MS),
-        session('newest', 60_000),
-        session('yesterday', DAY_MS),
-      ],
+      [session('older', 3 * DAY_MS), session('newest', 60_000), session('yesterday', DAY_MS)],
       { now: NOW },
     );
     expect(groups.map((group) => group.label)).toEqual(['Today', 'Yesterday', 'Monday']);
@@ -196,7 +196,10 @@ describe('groupSessionsByDay', () => {
       metadata: { last_activity_at: new Date(NOW - 60_000).toISOString(), spawned_by_session: 'b' },
     });
     const b = session('b', 120_000, {
-      metadata: { last_activity_at: new Date(NOW - 120_000).toISOString(), spawned_by_session: 'a' },
+      metadata: {
+        last_activity_at: new Date(NOW - 120_000).toISOString(),
+        spawned_by_session: 'a',
+      },
     });
     const rows = groupSessionsByDay([a, b], { now: NOW }).flatMap((group) => group.rows);
     expect(rows.map((row) => row.session.session_id).sort()).toEqual(['a', 'b']);

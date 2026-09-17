@@ -166,9 +166,7 @@ export function groupSessionsByDay<T extends SessionLike>(
   sessions: readonly T[],
   options: { now: number },
 ): SessionDayGroup<T>[] {
-  const byActivity = sessions
-    .slice()
-    .sort((a, b) => sessionActivityMs(b) - sessionActivityMs(a));
+  const byActivity = sessions.slice().sort((a, b) => sessionActivityMs(b) - sessionActivityMs(a));
   const present = new Set(byActivity.map((session) => session.session_id));
 
   const parentOf = new Map<string, string>();
