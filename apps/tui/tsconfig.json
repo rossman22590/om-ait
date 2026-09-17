@@ -12,9 +12,13 @@
     //    `indexedDB`, `IDBDatabase`.
     //  - `noUncheckedIndexedAccess` is off: apps/cli and packages/sdk index
     //    arrays/records directly (their own tsconfigs do not set it).
+    //  - `noImplicitOverride` is off: `AttachOpenCodeError` and
+    //    `SessionRuntimeError` (apps/cli, reached from features/attach) declare
+    //    `cause` without an `override` modifier — TS4114 under the Bun base.
     // Everything in `src/` is still checked under `strict`.
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "noUncheckedIndexedAccess": false
+    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": false
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "scripts/**/*.tsx"]
 }
