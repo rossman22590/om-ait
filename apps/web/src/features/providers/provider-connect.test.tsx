@@ -483,7 +483,7 @@ describe('ProviderConnectView — pooled provider keys', () => {
   test('offers pooled keys only where the gateway can route a single API key', () => {
     expect(supportsPooledProviderKey(LLM_PROVIDER_BY_ID.get('anthropic'))).toBe(true);
     expect(supportsPooledProviderKey(LLM_PROVIDER_BY_ID.get('openai'))).toBe(true);
-    expect(supportsPooledProviderKey(LLM_PROVIDER_BY_ID.get('google'))).toBe(false);
+    expect(supportsPooledProviderKey(LLM_PROVIDER_BY_ID.get('google'))).toBe(true);
     expect(supportsPooledProviderKey(LLM_PROVIDER_BY_ID.get('qvac'))).toBe(false);
   });
 

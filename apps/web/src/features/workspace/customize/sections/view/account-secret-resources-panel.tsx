@@ -9,7 +9,6 @@ import {
   revokeAccountSecretResourceGrant, rotateAccountSecretResource,
 } from '@kortix/sdk';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -19,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { DotsThreeIcon } from '@phosphor-icons/react';
 import { errorToast, successToast } from '@/components/ui/toast';
 import { useAuth } from '@/features/providers/auth-provider';
+import { PrincipalPicker, type PrincipalSelection } from '@/features/workspace/shared/access/principal-picker';
 
 /** Provider keys live beside the provider they configure. The secret value stays write-only. */
 export function AccountSecretResourcesPanel({ accountId, providerId, providerName, envVar, canWrite }: {
@@ -38,6 +38,7 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
   const [value, setValue] = useState('');
   const [rotating, setRotating] = useState<AccountSecretResource | null>(null);
   const [sharing, setSharing] = useState<AccountSecretResource | null>(null);
+  const [selectedMembers, setSelectedMembers] = useState<PrincipalSelection>({ memberIds: [], groupIds: [], inviteEmails: [] });
   const [deleting, setDeleting] = useState<AccountSecretResource | null>(null);
   const members = useQuery({ queryKey: ['account-members', accountId], queryFn: () => listAccountMembers(accountId) });
   const actorRole = members.data?.find((member) => member.user_id === user?.id)?.account_role;
@@ -64,9 +65,18 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
     onError: (error) => errorToast(error instanceof Error ? error.message : t('deleteError')),
   });
   const changeGrant = useMutation({
-    mutationFn: ({ secretId, userId, grant }: { secretId: string; userId: string; grant: boolean }) =>
-      grant ? grantAccountSecretResource(accountId, secretId, userId) : revokeAccountSecretResourceGrant(accountId, secretId, userId),
-    onSuccess: async (updated) => { setSharing(updated); await refresh(); },
+    mutationFn: async () => {
+      if (!sharing) return;
+      const current = new Set(sharing.granted_user_ids);
+      const next = new Set([...selectedMembers.memberIds, sharing.created_by]);
+      const changes = [
+        ...[...next].filter((userId) => !current.has(userId)).map((userId) => grantAccountSecretResource(accountId, sharing.secret_id, userId)),
+        ...[...current].filter((userId) => !next.has(userId)).map((userId) => revokeAccountSecretResourceGrant(accountId, sharing.secret_id, userId)),
+      ];
+      const results = await Promise.allSettled(changes);
+      if (results.some((result) => result.status === 'rejected')) throw new Error(t('accessError'));
+    },
+    onSuccess: async () => { await refresh(); setSharing(null); successToast(t('saved')); },
     onError: (error) => errorToast(error instanceof Error ? error.message : t('accessError')),
   });
 
@@ -91,7 +101,7 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
               {canWrite && (secret.created_by === user?.id || actorRole === 'owner' || actorRole === 'admin') && <DropdownMenu>
                 <DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('actionsFor', { label: secret.label })}><DotsThreeIcon className="size-4" /></Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setSharing(secret)}>{t('manageAccess')}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => { setSelectedMembers({ memberIds: secret.granted_user_ids, groupIds: [], inviteEmails: [] }); setSharing(secret); }}>{t('manageAccess')}</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => { setValue(''); setRotating(secret); }}>{t('rotateKey')}</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setDeleting(secret)}>{t('deleteKey')}</DropdownMenuItem>
                 </DropdownMenuContent>
@@ -115,18 +125,20 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
         </ModalContent>
       </Modal>
 
-      <Modal open={sharing !== null} onOpenChange={(open) => { if (!open) setSharing(null); }}>
+      <Modal open={sharing !== null} onOpenChange={(open) => { if (!open && !changeGrant.isPending) setSharing(null); }}>
         <ModalContent className="sm:max-w-md"><ModalHeader><ModalTitle>{t('accessTo', { label: sharing?.label ?? '' })}</ModalTitle>
           <ModalDescription>{t('grantedMembers')}</ModalDescription></ModalHeader>
-          <ModalBody className="max-h-72 space-y-1 overflow-y-auto">{members.data?.map((member) => (
-            <label key={member.user_id} className="hover:bg-hover flex items-center gap-2 rounded-md px-2 py-2 text-sm">
-              <Checkbox checked={sharing?.granted_user_ids.includes(member.user_id) ?? false}
-                disabled={changeGrant.isPending || member.user_id === sharing?.created_by}
-                onCheckedChange={(checked) => sharing && changeGrant.mutate({ secretId: sharing.secret_id, userId: member.user_id, grant: checked === true })} />
-              <span className="text-foreground truncate">{member.email ?? member.user_id}</span>
-            </label>
-          ))}</ModalBody>
-          <ModalFooter><Button onClick={() => setSharing(null)}>{t('done')}</Button></ModalFooter>
+          <ModalBody className="max-h-[60vh] space-y-4 overflow-y-auto">
+            <Field className="gap-1.5">
+              <PrincipalPicker scope={{ kind: 'account', accountId }} selection="multi" kinds={['member']}
+                value={selectedMembers} onChange={(next) => setSelectedMembers({ ...next, memberIds: [...new Set([...next.memberIds, sharing?.created_by ?? ''].filter(Boolean))] })} disabled={changeGrant.isPending}
+                autoFocus={false} />
+            </Field>
+          </ModalBody>
+          <ModalFooter className="sm:justify-between">
+            <Button size="sm" variant="outline-ghost" disabled={changeGrant.isPending} onClick={() => setSharing(null)}>{t('cancel')}</Button>
+            <Button size="sm" disabled={changeGrant.isPending} onClick={() => changeGrant.mutate()}>{changeGrant.isPending ? t('saving') : t('done')}</Button>
+          </ModalFooter>
         </ModalContent>
       </Modal>
       <ConfirmDialog open={deleting !== null} onOpenChange={(open) => { if (!open) setDeleting(null); }}

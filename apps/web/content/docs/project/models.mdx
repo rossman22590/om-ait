@@ -142,6 +142,9 @@ When the `pooled_provider_secrets` flag and LLM gateway are enabled, open
 key has its own member access and can be rotated or deleted separately. Select
 the keys a session may use in its session settings. An existing project key
 remains available when the session has no explicit key selection.
+Google Gemini API keys use Google's OpenAI-compatible endpoint when the LLM
+gateway is on. ChatGPT Plus/Pro uses a separate OAuth login. It currently
+supports one login per project; reconnecting replaces that login.
 
 Models hidden by older picker preferences show **Hidden from picker**. Direct requests remain allowed. Open that model’s menu and choose **Disable model** to block inference too.
 

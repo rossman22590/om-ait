@@ -129,6 +129,28 @@ test('provider and model access persists, keeps credentials, and updates control
     }
     const listed = await api<{ secrets: Array<{ label: string; provider_id: string }> }>(session.access_token, 'GET', `/accounts/${account.account_id}/secret-resources`);
     expect(listed.secrets.filter((secret) => secret.provider_id === 'anthropic').map((secret) => secret.label).sort()).toEqual(['Backup test key', 'Primary test key']);
+    await anthropicKeys.getByRole('button', { name: 'Actions for Primary test key' }).click();
+    await page.getByRole('menuitem', { name: 'Manage access' }).click();
+    const accessDialog = page.getByRole('dialog');
+    await expect(accessDialog.getByRole('heading', { name: 'Access to Primary test key' })).toBeVisible();
+    await expect(accessDialog.getByRole('textbox', { name: 'Search members' })).toBeVisible();
+    await expect(accessDialog.getByRole('button', { name: new RegExp(email) })).toBeVisible();
+    await accessDialog.getByRole('button', { name: 'Done' }).click();
+    await expect(accessDialog).toHaveCount(0);
+
+    const googleKeys = page.getByRole('region', { name: 'Google API keys' });
+    await googleKeys.getByRole('button', { name: 'Add key' }).click();
+    const googleDialog = page.getByRole('dialog');
+    await googleDialog.getByRole('textbox', { name: 'Label' }).fill('Gemini test key');
+    await googleDialog.getByRole('textbox', { name: 'API key' }).fill('gemini-e2e-unused');
+    const googleCreated = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(`/accounts/${account.account_id}/secret-resources`));
+    await googleDialog.getByRole('button', { name: 'Save key' }).click();
+    expect((await googleCreated).status()).toBe(201);
+    await expect(googleKeys.getByText('Gemini test key', { exact: true })).toBeVisible();
+    await googleKeys.getByRole('button', { name: 'Actions for Gemini test key' }).click();
+    await page.getByRole('menuitem', { name: 'Delete key' }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Delete key' }).click();
+    await expect(googleKeys.getByText('Gemini test key', { exact: true })).toHaveCount(0);
     for (const label of ['Primary test key', 'Backup test key']) {
       await anthropicKeys.getByRole('button', { name: `Actions for ${label}` }).click();
       await page.getByRole('menuitem', { name: 'Delete key' }).click();

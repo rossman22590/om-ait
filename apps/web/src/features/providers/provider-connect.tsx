@@ -789,12 +789,12 @@ export const PROVIDER_PAGE_SIZE = 12;
 // Mirrors the gateway's base-URL fallbacks in provider-registry.ts. A provider
 // without an API host or one of these fallbacks cannot create a gateway key.
 const GATEWAY_BASE_URL_FALLBACK_IDS = new Set([
-  'anthropic', 'openai', 'groq', 'x-ai', 'xai', 'mistral', 'deepseek',
+  'anthropic', 'openai', 'google', 'groq', 'x-ai', 'xai', 'mistral', 'deepseek',
   'perplexity', 'cerebras', 'vercel', 'v0', 'deepinfra', 'togetherai',
 ]);
 
 export function supportsPooledProviderKey(entry: LlmProviderEntry | undefined): boolean {
-  return Boolean(entry && entry.envVars.length === 1 && entry.id !== 'google' &&
+  return Boolean(entry && entry.envVars.length === 1 &&
     (entry.apiHost || GATEWAY_BASE_URL_FALLBACK_IDS.has(entry.id)));
 }
 
