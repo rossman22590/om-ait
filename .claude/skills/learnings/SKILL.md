@@ -6071,3 +6071,21 @@ the real gateway process with a control plane whose first
 `/internal/gateway/authorize` takes 6 s: `main` answered `503 gateway_error` in
 5017 ms with one authorize call; the fix answered `400 provider_disabled` in
 5104 ms with two.
+
+### 2026-09-17 — A cancelled preview workflow can leave its remote tests running
+
+**Incident.** PR #7319's persistent Platinum preview kept running `target-full`
+after GitHub cancelled its workflow. A later workflow redeployed the same sandbox
+while the first test process still used it. The first process then recorded 502
+and 503 responses across unrelated IAM, billing, gateway, and session flows.
+The later workflow also collected output from both processes, so its report could
+not prove the new commit. GitHub concurrency only serialized Actions jobs; it
+did not stop or serialize remote work in the persistent sandbox.
+
+**Rule.** Serialize checkout, compose redeploy, and tests on the remote sandbox.
+Hold a sandbox-local lock before changing test status files or the running stack.
+Use an isolated preview sandbox when a previous remote run may still be active.
+
+**Enforcement.** `buildPreviewBootstrapScript` holds `$STATE/deploy.lock` with
+`flock` across the full remote run. `tests/unit/sandbox-preview.test.ts` asserts
+that the lock precedes checkout and status reset.
