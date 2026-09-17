@@ -14,8 +14,8 @@
 import { useProjectSessions, useSession } from '@kortix/sdk/react';
 import { useState } from 'react';
 
-import { glyph, theme } from '../../theme.ts';
 import { formatElapsed, lastTextMessage, messageText, oneLine } from '../../lib/transcript-view.ts';
+import { glyph, theme } from '../../theme.ts';
 import { List, Spinner } from '../../ui/index.ts';
 
 export interface SessionSidebarProbeProps {
@@ -107,7 +107,9 @@ export function SessionProbe({ projectId, sessionId, focused, height }: SessionP
         )}
       </box>
       {session.sendError ? (
-        <text fg={theme.danger}>{`send failed: ${session.sendError.kind} — ${session.sendError.message}`}</text>
+        <text
+          fg={theme.danger}
+        >{`send failed: ${session.sendError.kind} — ${session.sendError.message}`}</text>
       ) : null}
       <box flexDirection="row" height={1}>
         {working ? <Spinner label={`working ${elapsed}`} /> : <text fg={theme.faint}>idle</text>}

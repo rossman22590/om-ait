@@ -12,13 +12,18 @@ export interface ToastProps {
   onDismiss?: () => void;
 }
 
-/** A one-line notice pinned to the bottom-right, above the status bar. */
+/**
+ * A one-line notice pinned to the bottom-right, above the status bar.
+ *
+ * Give it `key={message}` when the same mount can show different messages:
+ * the dismiss timer starts on mount, so a remount is what restarts it.
+ */
 export function Toast({ message, kind = 'info', timeoutMs = 4000, onDismiss }: ToastProps) {
   useEffect(() => {
     if (!timeoutMs) return;
     const timer = setTimeout(() => onDismiss?.(), timeoutMs);
     return () => clearTimeout(timer);
-  }, [timeoutMs, onDismiss, message]);
+  }, [timeoutMs, onDismiss]);
 
   return (
     <box

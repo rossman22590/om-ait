@@ -59,7 +59,8 @@ export function layoutRow(label: string, right: string, width: number): string {
   if (width <= 0) return label;
   const rightRoom = right ? right.length + 1 : 0;
   const labelRoom = Math.max(width - rightRoom, 0);
-  const clipped = label.length > labelRoom ? `${label.slice(0, Math.max(labelRoom - 1, 0))}…` : label;
+  const clipped =
+    label.length > labelRoom ? `${label.slice(0, Math.max(labelRoom - 1, 0))}…` : label;
   if (!right) return clipped;
   return `${clipped}${' '.repeat(Math.max(labelRoom - clipped.length, 0))} ${right}`;
 }

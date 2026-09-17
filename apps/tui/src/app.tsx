@@ -1,4 +1,4 @@
-import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/react';
+import { useKeyboard, useTerminalDimensions } from '@opentui/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { ResolvedHost } from './auth/hosts.ts';
@@ -39,8 +39,9 @@ export interface AppProps {
  * overlays. Route state lives here and nowhere else (SPEC §3).
  */
 export function App({ host, projectId, initialSessionId = null, onQuit }: AppProps) {
+  // A SIGWINCH re-renders through this hook, and the re-render is what
+  // repaints: every region's width/height is derived from it.
   const dimensions = useTerminalDimensions();
-  const renderer = useRenderer();
   const [focus, setFocus] = useState<Focus>('sidebar');
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -93,12 +94,6 @@ export function App({ host, projectId, initialSessionId = null, onQuit }: AppPro
     if (matchesBinding(key, 'focus.next')) return setFocus((f) => nextFocus(f, focusOrder, 1));
     if (matchesBinding(key, 'panel.terminal')) return toggleTerminal();
   });
-
-  // A resize repaints the whole frame; `useTerminalDimensions` already
-  // re-renders, so this only keeps the native buffer in step.
-  useEffect(() => {
-    renderer.requestRender();
-  }, [renderer, dimensions.width, dimensions.height]);
 
   const hints = [
     '? help',

@@ -120,12 +120,7 @@ export const KEYMAP: readonly Binding[] = [
   },
   { id: 'list.up', scope: 'sidebar', chords: [chord('k'), chord('up')], description: 'Move up.' },
   { id: 'list.first', scope: 'sidebar', chords: [chord('g')], description: 'Go to the first row.' },
-  {
-    id: 'list.last',
-    scope: 'sidebar',
-    chords: [chord('g', { shift: true }), chord('G')],
-    description: 'Go to the last row.',
-  },
+  { id: 'list.last', scope: 'sidebar', chords: [chord('G')], description: 'Go to the last row.' },
   {
     id: 'list.pageDown',
     scope: 'sidebar',
@@ -147,7 +142,7 @@ export const KEYMAP: readonly Binding[] = [
   {
     id: 'transcript.bottom',
     scope: 'transcript',
-    chords: [chord('g', { shift: true }), chord('G')],
+    chords: [chord('G')],
     description: 'Jump to the newest turn and re-lock autoscroll.',
   },
   {
@@ -173,19 +168,39 @@ export const KEYMAP: readonly Binding[] = [
   },
 ] as const;
 
+/**
+ * One key plus its shift state, in the single form both sides compare in.
+ *
+ * A terminal reports a capital letter two ways: name `G` with `shift:false`
+ * (raw mode) or name `g` with `shift:true` (kitty protocol). Both mean the
+ * same chord, so an uppercase single letter always normalizes to
+ * lowercase + shift. Without this, `chord('G')` also matched a plain `g` —
+ * `list.last` then swallowed `list.first`.
+ */
+function normalizeKey(name: string, shift: boolean): { key: string; shift: boolean } {
+  if (name.length === 1 && name >= 'A' && name <= 'Z')
+    return { key: name.toLowerCase(), shift: true };
+  return { key: name.toLowerCase(), shift };
+}
+
+/**
+ * Shift is part of the identity of a named key (`Tab` vs `Shift+Tab`) and of a
+ * letter or digit, but not of punctuation: `?` is shift+`/` on a US layout and
+ * arrives as name `?` with `shift` set on some terminals and clear on others.
+ */
+function shiftIsSignificant(key: string): boolean {
+  return key.length > 1 || /[a-z0-9]/i.test(key);
+}
+
 /** True when `event` is this chord. */
 export function matchesChord(event: KeyEvent, target: Chord): boolean {
-  const name = event.name?.toLowerCase();
-  if (!name) return false;
-  if (name !== target.key.toLowerCase()) return false;
+  if (!event.name) return false;
+  const pressed = normalizeKey(event.name, Boolean(event.shift));
+  const wanted = normalizeKey(target.key, Boolean(target.shift));
+  if (pressed.key !== wanted.key) return false;
   if (Boolean(target.ctrl) !== Boolean(event.ctrl)) return false;
   if (Boolean(target.alt) !== Boolean(event.option)) return false;
-  // A shift-less binding must not swallow its shifted twin (`g` vs `G`), but a
-  // terminal reports `shift` inconsistently for punctuation (`?` is shift+`/`
-  // on a US layout and arrives as name `?`), so shift is only compared for
-  // single letters.
-  const isLetter = target.key.length === 1 && /[a-z]/i.test(target.key);
-  if (isLetter && Boolean(target.shift) !== Boolean(event.shift)) return false;
+  if (shiftIsSignificant(wanted.key) && pressed.shift !== wanted.shift) return false;
   return true;
 }
 
@@ -205,7 +220,10 @@ export function formatChord(target: Chord): string {
   const parts: string[] = [];
   if (target.ctrl) parts.push('Ctrl');
   if (target.alt) parts.push('Alt');
-  if (target.shift && /[a-z]/i.test(target.key) && target.key.length === 1) parts.push('Shift');
+  // An uppercase letter prints as itself (`G`); anything else shifted prints
+  // its modifier (`Shift+Tab`).
+  const upper = target.key.length === 1 && target.key >= 'A' && target.key <= 'Z';
+  if (target.shift && !upper) parts.push('Shift');
   const NAMES: Record<string, string> = {
     return: 'Enter',
     escape: 'Esc',
