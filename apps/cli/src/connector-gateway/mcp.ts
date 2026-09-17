@@ -269,7 +269,7 @@ const META_TOOLS = [
   {
     name: 'call',
     description:
-      'Run a tool. The gateway resolves the credential server-side, enforces sharing + policy, executes the call, and audits it. Returns { ok, data, risk } on success, or a denial / pending-approval result. For email attachments, pass local file references in attachment_files; this MCP uploads raw bytes outside the model and JSON-RPC payloads. GraphQL tools take selected fields via an "__select" arg, e.g. {"id":"1","__select":"id name email"}.',
+      'Run a tool. The gateway resolves the credential server-side, enforces sharing + policy, executes the call, and audits it. Returns { ok, data, risk, account } on success — `account` names WHICH connected account actually ran the call — or a denial / pending-approval result. A connector may have several accounts (see `accounts`); if it does and the human did not say which one, ask — or say which one you used, reading it off the result\'s `account`. If several accounts are reachable, none is named, and none is pinned as the default, the call is denied with reason "account_required" (not a guess) — pass `account`, or tell the human to pin one with `kortix connectors accounts <slug> --default <label>`. For email attachments, pass local file references in attachment_files; this MCP uploads raw bytes outside the model and JSON-RPC payloads. GraphQL tools take selected fields via an "__select" arg, e.g. {"id":"1","__select":"id name email"}.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -333,7 +333,7 @@ const META_TOOLS = [
   {
     name: 'accounts',
     description:
-      'List the connected accounts a connector can be called as, default first. Each account is either SHARED with the project (owner_type "project") or PRIVATE to one member (owner_type "member"). Use this before passing `account` to `call`, and when a call is denied `connector_not_connected` with a `requested_account`. `call` also accepts the two selector words `me` (the caller\'s own default private account) and `project` (the project\'s default shared account) instead of a label or id. An empty list means nothing is connected yet — call `connect` to get a link for the human.',
+      'Use this whenever the human asks which/how many accounts are connected, or before a call where the account matters. Never infer accounts from a profile/whoami call — a connector can hold several accounts, and a single get_profile/get_me only ever answers for one of them. List the connected accounts a connector can be called as, default first. Each account is either SHARED with the project (owner_type "project") or PRIVATE to one member (owner_type "member"). Use this before passing `account` to `call`, and when a call is denied `connector_not_connected` (nothing named matched) or `account_required` (several accounts, none named, none pinned — the denial lists `available_accounts`). `call` also accepts the two selector words `me` (the caller\'s own default private account) and `project` (the project\'s default shared account) instead of a label or id. A human can pin one account as the default with `kortix connectors accounts <slug> --default <label>`, after which unnamed calls use it. An empty list means nothing is connected yet — call `connect` to get a link for the human.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -541,6 +541,54 @@ const META_TOOLS = [
   },
 ] as const;
 
+/** One account, as summarized on `connectors` / `describe` tool output. */
+interface AccountSummaryEntry {
+  label: string;
+  /** `private` = one member's own account. `shared` = the project's account. */
+  owner: 'shared' | 'private';
+  default: boolean;
+  connection_id: string;
+}
+
+/** `private` for a member-owned account, `shared` for everything else (the project's). */
+function ownerKind(ownerType: string): 'shared' | 'private' {
+  return ownerType === 'member' ? 'private' : 'shared';
+}
+
+/**
+ * Summarize a connector's accounts for a meta-tool result: the
+ * label/owner/default table, `default_account`, and — only when there is a
+ * real choice to make (more than one account) — `how_to_choose`, a
+ * copy-pasteable `call` shape naming the default.
+ */
+function accountsSummary(
+  connector: string,
+  accounts: ReadonlyArray<{
+    connection_id: string;
+    label: string;
+    owner_type: string;
+    is_default: boolean;
+  }>,
+  defaultLabel: string | null,
+): { accounts: AccountSummaryEntry[]; default_account: string | null; how_to_choose?: string } {
+  const entries: AccountSummaryEntry[] = accounts.map((a) => ({
+    label: a.label,
+    owner: ownerKind(a.owner_type),
+    default: a.is_default,
+    connection_id: a.connection_id,
+  }));
+  const resolvedDefault = defaultLabel ?? entries[0]?.label ?? null;
+  return {
+    accounts: entries,
+    default_account: resolvedDefault,
+    ...(entries.length > 1 && resolvedDefault
+      ? {
+          how_to_choose: `call {connector: "${connector}", action: "<action>", account: "${resolvedDefault}"}`,
+        }
+      : {}),
+  };
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -567,13 +615,17 @@ async function runMetaTool(client: ConnectorClient, name: string, args: Record<s
       const connectors = await client.catalog();
       return {
         content: content({
-          connectors: connectors.map((c) => ({
-            slug: c.slug,
-            name: c.name,
-            provider: c.provider,
-            status: c.status,
-            tools: c.actions.length,
-          })),
+          connectors: connectors.map((c) => {
+            const summary = accountsSummary(c.slug, c.accounts ?? [], c.default_account ?? null);
+            return {
+              slug: c.slug,
+              name: c.name,
+              provider: c.provider,
+              status: c.status,
+              tools: c.actions.length,
+              ...summary,
+            };
+          }),
         }),
         isError: false,
       };
@@ -616,12 +668,18 @@ async function runMetaTool(client: ConnectorClient, name: string, args: Record<s
           isError: true,
         };
       }
+      // Same accounts summary as `connectors` — a describe call is often the
+      // step right before `call`, so this is where `account` gets decided.
+      const accounts = await client.accounts(tool.connector).catch(() => []);
       return {
         content: content({
           tool: tool.tool,
           risk: tool.risk,
           description: tool.description,
           inputSchema: tool.inputSchema,
+          // `accounts` comes back default-first (see listEntitledConnectorConnections),
+          // so the first entry is what an unnamed call resolves to.
+          ...accountsSummary(tool.connector, accounts, accounts[0]?.label ?? null),
         }),
         isError: false,
       };
