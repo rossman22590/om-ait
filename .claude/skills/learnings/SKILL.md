@@ -21,6 +21,15 @@ linked, not inlined.
 
 ## Register
 
+### Keep subscription picker prices distinct from session charges (2026-09-16)
+
+**When:** publishing ChatGPT/Codex models to the picker. Retain the published
+model price fields. Zeroing catalog rates makes the picker call a paid ChatGPT
+subscription “Free.” Keep subscription session cost at `$0.00` in SDK accounting;
+the picker rates are reference prices, not an extra per-token subscription bill.
+*Correction to the 2026-09-15 entry below:* zero catalog rates misstate the
+subscription price. *Enforcers:* catalog model tests, `GW-5`, and browser journey 26.
+
 ### Ship the same change to `main` and `staging` ONCE, through the promote — never twice (2026-09-16)
 
 **When:** a fix is wanted on staging before the next promote. Land it on `main`,
@@ -50,6 +59,7 @@ scans every `git ls-files` path and fails with `path:line`; proven against the
 real corruption replanted in the same file, and against the naive rule.
 
 
+||||||| 88cb598b14
 ### A shared admission budget must charge what a request COSTS, and strict FIFO turns one mis-charged waiter into a fleet-wide outage (2026-09-16)
 
 **When:** writing or reviewing any admission/quota gate that reserves a
