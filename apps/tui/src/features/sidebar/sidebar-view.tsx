@@ -18,7 +18,7 @@ import {
   sessionTitle,
 } from '../../lib/session-groups.ts';
 import { glyph as GLYPH, theme } from '../../theme.ts';
-import { Modal, Spinner, layoutRow, windowStart } from '../../ui/index.ts';
+import { Spinner, layoutRow, windowStart } from '../../ui/index.ts';
 import { matchesSidebarBinding } from './keys.ts';
 
 /** The screens the sidebar's nav rows route to. */
@@ -287,7 +287,11 @@ export function SidebarView({
     }
   });
 
-  const rowsAvailable = Math.max(height - (mode === 'filter' ? 1 : 0) - (busyMessage ? 1 : 0), 1);
+  const confirming = mode === 'confirm-delete';
+  const rowsAvailable = Math.max(
+    height - (mode === 'filter' ? 1 : 0) - (busyMessage ? 1 : 0) - (confirming ? 3 : 0),
+    1,
+  );
   const cursorFlatIndex = Math.max(
     entries.findIndex((entry) => entry.id === currentId),
     0,
@@ -298,6 +302,18 @@ export function SidebarView({
 
   return (
     <box flexDirection="column" width={width}>
+      {/* The confirm is drawn IN the column, not as a centered `Modal`:
+          `ui/panel.tsx` sets `overflow: 'hidden'`, so an overlay a panel's
+          subtree draws is scissored to that panel (proved with
+          `scripts/dev-sidebar.tsx` + `SIDEBAR_NO_PANEL=1`). */}
+      {confirming ? (
+        <box flexDirection="column" width={width}>
+          <text fg={theme.danger}>Delete session</text>
+          <text fg={theme.fg}>{layoutRow(currentEntry?.label ?? '', '', bodyWidth)}</text>
+          <text fg={theme.faint}>y delete · Esc cancel</text>
+        </box>
+      ) : null}
+
       {mode === 'filter' ? (
         <box flexDirection="row" width={width}>
           <text fg={theme.accent}>/</text>
@@ -374,19 +390,6 @@ export function SidebarView({
         <text fg={theme.danger}>{layoutRow(errorMessage, '', bodyWidth)}</text>
       ) : null}
       {busyMessage ? <text fg={theme.faint}>{busyMessage}</text> : null}
-
-      {mode === 'confirm-delete' ? (
-        <Modal
-          title="Delete session"
-          hint="y delete · Esc cancel"
-          onClose={leaveInput}
-          width={Math.max(width + 16, 36)}
-          height={7}
-        >
-          <text fg={theme.fg}>{currentEntry?.label ?? ''}</text>
-          <text fg={theme.dim}>This deletes the session and its sandbox.</text>
-        </Modal>
-      ) : null}
     </box>
   );
 }

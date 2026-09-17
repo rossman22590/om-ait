@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ResolvedHost } from '../../auth/hosts.ts';
 import { kortix } from '../../kortix.ts';
 import { filterSessionsByTitle, groupSessionsByDay } from '../../lib/session-groups.ts';
-import { Picker } from '../../ui/index.ts';
+import { ColumnPicker } from './column-picker.tsx';
 import { type SidebarScreen, SidebarView } from './sidebar-view.tsx';
 
 export interface SidebarProps {
@@ -198,58 +198,51 @@ export function Sidebar({
   const listError = sessionsQuery.isError ? errorText(sessionsQuery.error) : null;
   const busyMessage = busy ?? (sessionsQuery.isFetchingNextPage ? 'loading more…' : null);
 
-  return (
-    <box flexDirection="column" width={width}>
-      <SidebarView
-        accountName={accountName}
-        projectName={projectName}
-        reviewCount={reviewCount}
-        groups={groups}
-        selectedSessionId={selectedSessionId}
-        // A picker owns the keyboard while it is open.
-        focused={focused && picker === 'none'}
+  if (picker !== 'none') {
+    return (
+      <ColumnPicker
+        title={picker === 'account' ? 'Switch account' : 'Switch project'}
+        items={pickerItems}
         width={width}
         height={height}
-        now={now}
-        loading={sessionsQuery.isLoading}
-        errorMessage={listError}
-        busyMessage={busyMessage}
-        onOpenSession={onOpenSession}
-        onOpenAccountPicker={() => setPicker('account')}
-        onOpenProjectPicker={() => setPicker('project')}
-        onNewSession={() => void createSession()}
-        onNavigate={(screen: SidebarScreen) => onNavigate(screen)}
-        onRename={(sessionId, name) => void renameSession(sessionId, name)}
-        onDelete={(sessionId) => void deleteSession(sessionId)}
-        onAttach={attach}
-        onFilterChange={setFilter}
-        onReachEnd={reachEnd}
-      />
-
-      {picker === 'account' ? (
-        <Picker
-          title="Switch account"
-          items={pickerItems}
-          onPick={(item) => {
-            setPicker('none');
+        onPick={(item) => {
+          setPicker('none');
+          if (picker === 'account') {
             onAccountChange(item.id);
-          }}
-          onClose={() => setPicker('none')}
-        />
-      ) : null}
+            return;
+          }
+          const project = projects.find((entry) => entry.project_id === item.id);
+          onProjectChange(item.id, project?.account_id ?? effectiveAccountId ?? '');
+        }}
+        onClose={() => setPicker('none')}
+      />
+    );
+  }
 
-      {picker === 'project' ? (
-        <Picker
-          title="Switch project"
-          items={pickerItems}
-          onPick={(item) => {
-            setPicker('none');
-            const project = projects.find((entry) => entry.project_id === item.id);
-            onProjectChange(item.id, project?.account_id ?? effectiveAccountId ?? '');
-          }}
-          onClose={() => setPicker('none')}
-        />
-      ) : null}
-    </box>
+  return (
+    <SidebarView
+      accountName={accountName}
+      projectName={projectName}
+      reviewCount={reviewCount}
+      groups={groups}
+      selectedSessionId={selectedSessionId}
+      focused={focused}
+      width={width}
+      height={height}
+      now={now}
+      loading={sessionsQuery.isLoading}
+      errorMessage={listError}
+      busyMessage={busyMessage}
+      onOpenSession={onOpenSession}
+      onOpenAccountPicker={() => setPicker('account')}
+      onOpenProjectPicker={() => setPicker('project')}
+      onNewSession={() => void createSession()}
+      onNavigate={(screen: SidebarScreen) => onNavigate(screen)}
+      onRename={(sessionId, name) => void renameSession(sessionId, name)}
+      onDelete={(sessionId) => void deleteSession(sessionId)}
+      onAttach={attach}
+      onFilterChange={setFilter}
+      onReachEnd={reachEnd}
+    />
   );
 }
