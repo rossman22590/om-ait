@@ -6099,3 +6099,23 @@ Use an isolated preview sandbox when a previous remote run may still be active.
 **Enforcement.** `buildPreviewBootstrapScript` holds `$STATE/deploy.lock` with
 `flock` across the full remote run. `tests/unit/sandbox-preview.test.ts` asserts
 that the lock precedes checkout and status reset.
+
+### 2026-09-17 — Provider pools must preserve the credential's principal
+
+**Near miss.** The review of draft PR #7319 found two authorization gaps before
+release. Pool routes passed null session bindings to `loadVisibleSession`, so a
+session credential could address a sibling pool. Pool updates checked the
+manager's secret grants but omitted the session owner's grants. Gateway
+resolution also used a shared project's gateway-key creator as the principal
+for a personal ChatGPT default.
+
+**Rule.** Narrow every pool route to the credential's bound session. A manager
+can select a resource only when both the manager and session owner can use it.
+A shared gateway key never inherits its creator's personal connection. Empty
+configured pools remain explicit and recoverable after resource deletion.
+
+**Enforcement.** `provider-secret-pools.test.ts` drives the routes through Hono
+and asserts sibling rejection, owner grants, machine-owner rejection, and empty
+pool discovery. `SEC-POOL-2` verifies owner grants and deletion through HTTP and
+Postgres. `resolve-candidates.test.ts` verifies that a shared gateway key uses the
+legacy project credential even when its creator has a personal connection.

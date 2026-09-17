@@ -1213,6 +1213,7 @@ export function createKortix(config: KortixPlatformConfig, opts?: { global?: boo
       /** Read the authoritative secret allowlist and connections. */
       scope: () => P.getProjectSessionScope(projectId, sessionId),
       providerSecretPool: {
+        list: () => P.listSessionProviderSecretPools(projectId, sessionId),
         get: (providerId: string) => P.getSessionProviderSecretPool(projectId, sessionId, providerId),
         set: (providerId: string, secretIds: string[] | null) =>
           P.setSessionProviderSecretPool(projectId, sessionId, providerId, secretIds),

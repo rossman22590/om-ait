@@ -4,6 +4,7 @@ import {
   createAccountSecretResource, deleteAccountSecretResource, grantAccountSecretResource,
   listAccountSecretResources, revokeAccountSecretResourceGrant, rotateAccountSecretResource,
   getSessionProviderSecretPool, setSessionProviderSecretPool,
+  listSessionProviderSecretPools,
 } from './account-secret-resources';
 
 const calls: Array<{ url: string; method: string; body: unknown }> = [];
@@ -43,4 +44,17 @@ test('session pool preserves inherited, empty, and selected states', async () =>
   expect(calls.slice(1).map((call) => call.body)).toEqual([
     { secret_ids: [] }, { secret_ids: ['secret-a', 'secret-b'] }, { secret_ids: null },
   ]);
+});
+
+test('list preserves an empty configured pool after its last resource disappears', async () => {
+  const result = { pools: [{ provider_id: 'anthropic', configured: true, secret_ids: [] }], can_edit: false };
+  globalThis.fetch = mock(async (url: unknown, init: RequestInit = {}) => {
+    calls.push({ url: String(url), method: init.method ?? 'GET', body: null });
+    return Response.json(result);
+  }) as unknown as typeof fetch;
+  expect(await listSessionProviderSecretPools('project/id', 'session/id')).toEqual(result);
+  expect(calls).toEqual([{
+    url: 'http://test.local/projects/project%2Fid/sessions/session%2Fid/provider-secret-pools',
+    method: 'GET', body: null,
+  }]);
 });

@@ -60,6 +60,10 @@ export async function revokeAccountSecretResourceGrant(accountId: string, secret
 export async function getSessionProviderSecretPool(projectId: string, sessionId: string, providerId: string) {
   return unwrap(await backendApi.get<SessionProviderSecretPool>(poolPath(projectId, sessionId, providerId)));
 }
+export async function listSessionProviderSecretPools(projectId: string, sessionId: string) {
+  const path = `/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(sessionId)}/provider-secret-pools`;
+  return unwrap(await backendApi.get<{ pools: SessionProviderSecretPool[]; can_edit: boolean }>(path));
+}
 export async function setSessionProviderSecretPool(projectId: string, sessionId: string, providerId: string, secretIds: string[] | null) {
   return unwrap(await backendApi.put<SessionProviderSecretPool>(poolPath(projectId, sessionId, providerId), { secret_ids: secretIds }));
 }

@@ -574,6 +574,14 @@ describe('resolveCandidates — managed model tier gating', () => {
 });
 
 describe('resolveCandidates — codex + unknown provider', () => {
+  test('a shared project gateway key never borrows its creator’s personal ChatGPT account', async () => {
+    pooledEnabled = true;
+    codexCredential = { access: 'legacy-token' };
+    defaultCodexSecret = { secretId: 'private', label: 'Private account', value: JSON.stringify({ openai: { access: 'private-token' } }) };
+    const candidates = await resolveCandidates(principal({ keyId: 'shared-project-key' }), 'codex/gpt-5.5');
+    expect(candidates.map((candidate) => candidate.apiKey)).toEqual(['legacy-token']);
+  });
+
   test('an unselected session uses the caller’s newest personal ChatGPT account', async () => {
     pooledEnabled = true;
     codexCredential = { access: 'legacy-token' };

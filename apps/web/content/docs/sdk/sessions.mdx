@@ -35,6 +35,7 @@ ID, and the branch name are the same value. See
 | `s.rescope(input)` | `PUT …/sessions/:sid/scope` | Replaces supplied scope fields for the next prompt or tool call |
 | `s.commit(input?)` | — | Commits the agent's work |
 | `s.providerSecretPool.get(providerId)` | `GET …/provider-secret-pools/:providerId` | Reads selected account secret IDs |
+| `s.providerSecretPool.list()` | `GET …/provider-secret-pools` | Lists configured pools, including empty pools, and reports `can_edit` |
 | `s.providerSecretPool.set(providerId, secretIds)` | `PUT …/provider-secret-pools/:providerId` | Replaces the selection; `null` restores the project default |
 
 :::warning

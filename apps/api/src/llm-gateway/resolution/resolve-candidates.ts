@@ -184,7 +184,7 @@ export async function resolveCandidates(
         expired ? 'The selected ChatGPT connections need reconnection.' : 'No ChatGPT connection is available.',
         'Reconnect a selected ChatGPT account or select another granted connection.');
     }
-    if (pooledEnabled && principal.userId) {
+    if (pooledEnabled && principal.userId && !principal.keyId) {
       const personal = await resolveDefaultCodexAccountSecret(principal.accountId, principal.userId);
       if (personal) {
         if (Array.isArray(principal.agentGrant?.env) &&

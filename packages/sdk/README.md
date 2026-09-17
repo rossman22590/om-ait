@@ -243,6 +243,7 @@ const shared = await kortix.accounts.secretResources.create(accountId, {
 });
 await kortix.accounts.secretResources.grant(accountId, shared.secret_id, memberUserId);
 await kortix.session(pid, sid).providerSecretPool.set("anthropic", [shared.secret_id]);
+const { pools, can_edit } = await kortix.session(pid, sid).providerSecretPool.list();
 // Passing null to set() resets the session to the project default.
 const visibleSessions = await kortix.project(pid).sessions.list();
 const projectInventory = await kortix
