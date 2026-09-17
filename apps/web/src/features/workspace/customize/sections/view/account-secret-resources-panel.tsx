@@ -159,7 +159,7 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
       ) : null}
 
       <Modal open={creating || rotating !== null} onOpenChange={(open) => { if (!open) { cancelledRef.current = true; setCreating(false); setRotating(null); setValue(''); setOauthWaiting(false); setOauthChallenge(null); } }}>
-        <ModalContent className="sm:max-w-md">
+        <ModalContent className="lg:max-w-md">
           <ModalHeader><ModalTitle>{rotating ? t('rotateLabel', { label: rotating.label }) : `${oauth ? t('addAccount') : t('addKey')} · ${providerName}`}</ModalTitle>
             <ModalDescription>{oauth ? t('oauthPrivateDescription') : t('valueNeverShown')}</ModalDescription></ModalHeader>
           <ModalBody className="space-y-3">
@@ -176,7 +176,7 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
       </Modal>
 
       <Modal open={sharing !== null} onOpenChange={(open) => { if (!open && !changeGrant.isPending) setSharing(null); }}>
-        <ModalContent className="sm:max-w-md"><ModalHeader><ModalTitle>{t('accessTo', { label: sharing?.label ?? '' })}</ModalTitle>
+        <ModalContent className="lg:max-w-md"><ModalHeader><ModalTitle>{t('accessTo', { label: sharing?.label ?? '' })}</ModalTitle>
           <ModalDescription>{t(oauth ? 'oauthGrantedMembers' : 'grantedMembers')}</ModalDescription></ModalHeader>
           <ModalBody className="max-h-[60vh] space-y-4 overflow-y-auto">
             <Field className="gap-1.5">
