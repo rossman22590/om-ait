@@ -233,6 +233,25 @@ await settle(4000);
 banner('FRAME 5 — final (idle)');
 console.log(setup.captureCharFrame());
 
+// Prove the collapse toggle on the real transcript, not only in tests: Enter
+// with no cursor opens the NEWEST collapsible row.
+setup.mockInput.pressEnter();
+await settle(2000);
+banner('FRAME 6 — Enter expanded the newest collapsible row');
+console.log(setup.captureCharFrame());
+
+setup.mockInput.pressEnter();
+await settle(2000);
+banner('FRAME 7 — Enter collapsed it again');
+console.log(setup.captureCharFrame());
+
+// `K` walks the cursor back to the previous collapsible row — the steps group.
+setup.mockInput.pressKey('K');
+setup.mockInput.pressEnter();
+await settle(2000);
+banner('FRAME 8 — K then Enter expanded the steps group');
+console.log(setup.captureCharFrame());
+
 root.unmount();
 setup.renderer.destroy();
 process.exit(0);

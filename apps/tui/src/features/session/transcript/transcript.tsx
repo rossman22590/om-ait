@@ -166,8 +166,27 @@ export function Transcript({
   const lastMessageId = ordered.at(-1)?.info.id;
   const startFailed = session.phase === 'error';
 
+  // Re-pin to the bottom after EVERY commit while sticky is on.
+  //
+  // `stickyScroll` alone does not survive a content-height jump: expanding a
+  // steps group adds ~30 rows in one commit, and the viewport stayed where it
+  // was, showing the middle of an older turn. Verified in a live run — frame 8
+  // of `scripts/dev-transcript.tsx` before this effect existed. `scrollTo` is a
+  // native setter, and a commit only happens when something actually changed,
+  // so running it unconditioned is cheaper than tracking a content signature
+  // that has to include every streaming part.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-pin on every commit, by design
+  useEffect(() => {
+    if (!sticky) return;
+    const box = scrollRef.current;
+    if (box) box.scrollTo(box.scrollHeight);
+  });
+
   return (
-    <box flexDirection="column" width={width} height={height}>
+    // `overflow: hidden` is load-bearing, not tidiness: without it the
+    // scrollbox's last row painted over the working line below it ("idle"
+    // overwrote "◆ kortix · now" in a live frame).
+    <box flexDirection="column" width={width} height={height} overflow="hidden">
       <scrollbox
         ref={scrollRef}
         focused={focused}
