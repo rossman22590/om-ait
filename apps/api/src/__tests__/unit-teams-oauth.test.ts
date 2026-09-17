@@ -86,7 +86,11 @@ beforeEach(() => {
   catalogIds.length = 0;
   publishImpl = async () => ({ ok: true, published: true, teamsAppId: 'cat-1' });
   globalThis.fetch = (async (url: any) => {
-    if (!String(url).includes('login.microsoftonline.com')) throw new Error(`unexpected fetch ${url}`);
+    // Only the token endpoint may be called from the callback; the catalog
+    // publish is mocked at the module boundary above.
+    if (new URL(String(url)).hostname !== 'login.microsoftonline.com') {
+      throw new Error(`unexpected fetch ${url}`);
+    }
     if (!tokenExchangeOk) return new Response('{"error":"invalid_grant"}', { status: 400 });
     return new Response(JSON.stringify({ access_token: graphJwt(TENANT_ID), expires_in: 3600 }), {
       status: 200,
