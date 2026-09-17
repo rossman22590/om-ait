@@ -42,6 +42,50 @@ function hooks(usage: UsageEvent[], traces: GatewayTrace[]): GatewayHooks {
 }
 
 describe('simple gateway pipeline', () => {
+  test('HTTP pool exhaustion returns the earliest bounded cooldown', async () => {
+    const keys: string[] = [];
+    const upstream = Bun.serve({ port: 0, fetch: (request) => {
+      const key = request.headers.get('authorization') ?? '';
+      keys.push(key);
+      return new Response('limited', { status: 429, headers: { 'retry-after': key.includes('first') ? '7' : '120' } });
+    } });
+    try {
+      const response = await handleChatCompletions({
+        hooks: { ...hooks([], []), resolveUpstream: async () => [
+          { ...primary, baseUrl: upstream.url.toString(), poolSecretId: 'first', apiKey: 'first' },
+          { ...primary, baseUrl: upstream.url.toString(), poolSecretId: 'second', apiKey: 'second' },
+        ] },
+        logger: { info() {}, warn() {}, error() {} },
+      }, { authorization: 'Bearer token', rawBody: JSON.stringify({ model: 'requested-model', messages: [] }) });
+      expect(response.status).toBe(429);
+      expect(response.headers.get('retry-after')).toBe('7');
+      expect(keys).toEqual(['Bearer first', 'Bearer second']);
+    } finally { await upstream.stop(true); }
+  });
+
+  test('pool failover never replays streamed output or a provider-wide failure', async () => {
+    for (const status of [200, 503]) {
+      const calls: string[] = [];
+      const response = await handleChatCompletions({
+        hooks: { ...hooks([], []), resolveUpstream: async () => [
+          { ...primary, poolSecretId: 'first', apiKey: 'first' },
+          { ...primary, poolSecretId: 'second', apiKey: 'second' },
+        ] },
+        logger: { info() {}, warn() {}, error() {} },
+        fetchImpl: async (_url, init) => {
+          calls.push(new Headers(init.headers).get('authorization') ?? '');
+          return new Response(status === 200
+            ? 'data: {"choices":[{"delta":{"content":"hello"}}]}\n\ndata: {"error":{"code":429,"message":"limited"}}\n\ndata: [DONE]\n\n'
+            : 'provider unavailable', { status, headers: { 'content-type': 'text/event-stream' } });
+        },
+      }, { authorization: 'Bearer token', rawBody: JSON.stringify({ model: 'requested-model', stream: true, messages: [] }) });
+      expect(response.status).toBe(status);
+      const body = await response.text();
+      if (status === 200) expect(body).toContain('hello');
+      expect(calls).toEqual(['Bearer first']);
+    }
+  });
+
   test('a pooled credential moves to the next key after a pre-output 429', async () => {
     const usedKeys: string[] = [];
     const cooldowns: Array<{ secretId: string; seconds: number }> = [];
