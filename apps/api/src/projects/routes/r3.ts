@@ -21,7 +21,7 @@ import { isGatewayManagedEnv } from '../../llm-gateway/sandbox-credentials';
 import { seedProjectDefaultModelOnConnect } from '../../llm-gateway/models/seed-default';
 import { projectLlmGatewayEnabled } from '../../llm-gateway/enablement';
 import { createRoute, z } from '@hono/zod-openapi';
-import { accountSecretGrants, accountSecretResources } from '@kortix/db';
+import { accountMembers, accountSecretGrants, accountSecretResources } from '@kortix/db';
 import { encryptAccountSecret } from '../../secrets/account-resource';
 import {
   SecretConsumerSchema,
@@ -1379,6 +1379,11 @@ projectsApp.openapi(
     !projectLlmGatewayEnabled(loaded.row.metadata))) {
     return c.json({ error: 'Pooled OAuth connections require pooled provider secrets and the LLM gateway' }, 403);
   }
+  if (resourceLabel !== null) {
+    const [member] = await db.select({ userId: accountMembers.userId }).from(accountMembers)
+      .where(and(eq(accountMembers.accountId, loaded.row.accountId), eq(accountMembers.userId, loaded.userId))).limit(1);
+    if (!member) return c.json({ error: 'An account member must own a ChatGPT connection' }, 403);
+  }
 
   let sharing: ReturnType<typeof parseSharingIntent> | undefined;
   if (body.sharing != null) {
@@ -1477,6 +1482,11 @@ projectsApp.openapi(
     typeof state.e !== 'number' || Date.now() > state.e
   ) {
     return c.json({ status: 'expired' });
+  }
+  if (state.l && state.rid) {
+    const [member] = await db.select({ userId: accountMembers.userId }).from(accountMembers)
+      .where(and(eq(accountMembers.accountId, loaded.row.accountId), eq(accountMembers.userId, loaded.userId))).limit(1);
+    if (!member) return c.json({ status: 'failed', error: 'Account membership is required' });
   }
 
   const result = await pollCodexDeviceAuth({ deviceAuthId: state.d, userCode: state.u });
