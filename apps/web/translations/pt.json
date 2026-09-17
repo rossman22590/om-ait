@@ -160,6 +160,7 @@
     "actions": {
       "create": "Criar projeto",
       "tryAgain": "Tentar novamente",
+      "upgrade": "Atualizar plano",
       "logOut": "Sair",
       "signingOut": "Saindo",
       "back": "Voltar aos projetos"
