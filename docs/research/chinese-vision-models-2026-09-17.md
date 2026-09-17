@@ -1,8 +1,8 @@
 # Chinese vision models for Kortix Managed — 2026-09-17
 
-## Revised provider decision: Fireworks US-only Serverless
+## Revised provider decision: regional US and EU inference
 
-The US inference and provider-side zero-retention requirements supersede the Morph-only selection below. **Fireworks is the easiest documented match for model inference.** Its [US-only Serverless documentation](https://docs.fireworks.ai/serverless/us-only-serverless) specifies `https://us.api.fireworks.ai/inference/v1/chat/completions` and US-only model IDs. Its [zero data retention documentation](https://docs.fireworks.ai/guides/security_compliance/data_handling) says open-model prompts and generations stay in volatile memory, apart from optional prompt cache data held in memory for several minutes. Usage metadata remains logged. Use Chat Completions; the Responses API stores conversations for 30 days by default unless `store=false`.
+The regional inference and provider-side zero-retention requirements supersede the Morph-only selection below. **Fireworks is the easiest documented US match for model inference.** Its [US-only Serverless documentation](https://docs.fireworks.ai/serverless/us-only-serverless) specifies `https://us.api.fireworks.ai/inference/v1/chat/completions` and US-only model IDs. Its [zero data retention documentation](https://docs.fireworks.ai/guides/security_compliance/data_handling) says open-model prompts and generations stay in volatile memory, apart from optional prompt cache data held in memory for several minutes. Usage metadata remains logged. Use Chat Completions; the Responses API stores conversations for 30 days by default unless `store=false`.
 
 | Fireworks US-only model | Text + image | Input / cached input / output per 1M tokens | Use |
 | --- | --- | --- | --- |
@@ -10,6 +10,14 @@ The US inference and provider-side zero-retention requirements supersede the Mor
 | `accounts/fireworks/routers/kimi-k3-us` | [Yes](https://fireworks.ai/models/fireworks/kimi-k3) | [Published US rate](https://docs.fireworks.ai/serverless/pricing): $4.50 / $0.45 / $22.50 | Highest-quality option and image-capable fallback |
 
 The [Fireworks data residency control](https://docs.fireworks.ai/accounts/data-residency) is an Enterprise feature. It restricts every API key on an account to the US and rejects requests to other regions or non-US models. For a self-service trial, use the US host and the two US model IDs. Before a production US-only claim, enable the account-wide residency control and verify that a request to the global host or a global model fails. FireRouter is blocked by that control because it can route to other providers. There is no Fireworks key in the current encrypted API environment, so no live text/image request has been run yet.
+
+### EU option
+
+Fireworks' [US-only documentation](https://docs.fireworks.ai/serverless/us-only-serverless) says EU-only Serverless requires contacting sales. It does not publish an EU self-service host or EU model IDs. If one provider and one API surface are the priority, request an EU-only Fireworks endpoint and model availability from sales.
+
+For an immediate EU-hosted candidate, [Sference](https://sference.com/) says it processes every request on European GPUs. Its [catalog](https://sference.com/docs/models) lists the vision-capable `zai-org/GLM-5.3-Flash` at $0.20 / $0.07 / $0.60 per million input / cached input / output tokens. It also lists `Qwen/Qwen3-VL-30B-A3B-Instruct` with vision at $0.40 / $0.10 / $2.00. The Sference catalog does **not** mark its Kimi K3 endpoint as vision-capable. Its [DPA](https://sference.com/legal/dpa) commits to EEA inference and transient input/output processing but permits security and abuse-prevention logs. Its API exposes a `zero_data_retention_enabled` team field. Verify this field is enabled and obtain written detail on content in those logs before treating it as ZDR. An [Opper partnership page](https://opper.ai/provider/sference) claims ZDR on its Sference route, but that does not establish the setting for a direct Sference account.
+
+[Nebius Token Factory](https://nebius.com/services/token-factory) offers zero-retention mode and regional dedicated deployments in EU or US data centers. Its public page does not give a self-service per-token regional model ID or regional rate. This is a second single-vendor enterprise path if Fireworks cannot serve the required EU models. [Baseten](https://www.baseten.co/pricing/) also offers full residency control at Enterprise level, with ZDR on Model APIs, but requires a regional deployment agreement.
 
 The model's [older Fireworks page](https://fireworks.ai/models/fireworks/kimi-k3) still says the US premium is 10%. The current [US-only documentation](https://docs.fireworks.ai/serverless/us-only-serverless) says 1.5× from September 1, 2026, and the [pricing table](https://docs.fireworks.ai/serverless/pricing) gives the explicit Kimi K3 US rate. Use the latter for budgeting.
 
