@@ -381,6 +381,12 @@ describe('connector catalog and call resolver use one session scope', () => {
   });
 
   test('the fixed create-path default (inherit_unbound=true) lists unbound aliases without the safety net', async () => {
+    // THE RULE (2026-09-16): `unbound` is reachable to USER through TWO
+    // accounts — their own unpinned CONNECTION_UNBOUND_MEMBER, and the
+    // project's PINNED CONNECTION_UNBOUND_DEFAULT ("Unbound default",
+    // is_default: true in the fixture above). An unnamed call honors the
+    // deliberate pin over an unpinned "mine" row — see
+    // `selectEntitledConnectorConnection` — so this resolves the pinned one.
     const unbound = await resolveSessionConnectorConnection({
       accountId: ACCOUNT,
       projectId: PROJECT,
@@ -388,7 +394,7 @@ describe('connector catalog and call resolver use one session scope', () => {
       alias: 'unbound',
       actingUserId: USER,
     });
-    expect(unbound).toMatchObject({ connectionId: CONNECTION_UNBOUND_MEMBER, source: 'default' });
+    expect(unbound).toMatchObject({ connectionId: CONNECTION_UNBOUND_DEFAULT, source: 'default' });
 
     const catalog = await dbConnectorRouterDeps.listCatalog(principalFor(SESSION_INHERIT));
     const slugs = catalog.map((c) => c.slug).sort();
@@ -396,7 +402,7 @@ describe('connector catalog and call resolver use one session scope', () => {
 
     const deps = dbConnectorRouterDeps.makeGatewayDeps(principalFor(SESSION_INHERIT));
     expect((await deps.loadConnectorBySlug(PROJECT, 'unbound'))?.connectionId).toBe(
-      CONNECTION_UNBOUND_MEMBER,
+      CONNECTION_UNBOUND_DEFAULT,
     );
   });
 
@@ -409,9 +415,11 @@ describe('connector catalog and call resolver use one session scope', () => {
     // and connected, so a legacy session sees it via the project default.
     expect(slugs).toEqual(['revoked', 'unbound', 'veyris']);
 
+    // Same pin as above: the project's PINNED default wins over USER's own
+    // unpinned row.
     const deps = dbConnectorRouterDeps.makeGatewayDeps(principalFor(SESSION_LEGACY));
     expect((await deps.loadConnectorBySlug(PROJECT, 'unbound'))?.connectionId).toBe(
-      CONNECTION_UNBOUND_MEMBER,
+      CONNECTION_UNBOUND_DEFAULT,
     );
   });
 

@@ -22,6 +22,7 @@ import {
 import {
   credentialExists,
   connectionCredentialExists,
+  connectionIsEffectiveProjectDefault,
 } from '../../connectors/credentials';
 import { db } from '../../shared/db';
 import { isUniqueViolation } from '../../shared/postgres-errors';
@@ -125,7 +126,15 @@ export async function connectorConnectionIsConnected(input: {
   ) {
     return true;
   }
-  if (connection.ownerType !== 'project' || !connection.isDefault) return false;
+  if (connection.ownerType !== 'project') return false;
+  // INVARIANT (2026-09-16, account_required rule): only the connector's
+  // EFFECTIVE project default may inherit the legacy connector-level
+  // credential — pinned, or (unchanged from before this rule) the connector's
+  // sole active project-owned connection when nothing is pinned. See
+  // `defaultConnectionIdForConnector`.
+  if (!(await connectionIsEffectiveProjectDefault(connector.connectorId, connection.connectionId))) {
+    return false;
+  }
   if (await credentialExists(connector.connectorId, null)) return true;
   const [stored] = await db
     .select({ authSecret: connectors.authSecret })
@@ -466,8 +475,20 @@ export async function sessionHasMemberConnectorBinding(input: {
 /**
  * Resolve the effective connection on every connector request. A present but
  * revoked/error binding never falls through to a project default.
+ *
+ * Returns the full outcome (see `ResolvedConnectorConnectionOutcome`) so a
+ * caller that must distinguish "nothing reachable" from "several reachable
+ * accounts and none named or pinned" — the gateway's `account_required`
+ * denial — can. `resolveSessionConnectorConnection` below is a thin wrapper
+ * for the many callers that only ever asked "did this resolve".
+ *
+ * A session PIN (an explicit `projectSessionConnectorBindings` row) is never
+ * ambiguous — it is the caller's own prior explicit choice, so it resolves
+ * directly (`ok`) or fails closed (`none`) exactly as before; only the
+ * project-default FALLBACK (no binding, or an inherit-unbound session) can
+ * ever return `ambiguous`.
  */
-export async function resolveSessionConnectorConnection(input: {
+export async function resolveSessionConnectorConnectionOutcome(input: {
   accountId: string;
   projectId: string;
   sessionId: string | null;
@@ -477,14 +498,15 @@ export async function resolveSessionConnectorConnection(input: {
   /**
    * Name or id of the account to run this call as, when the caller named one.
    * Omitted resolves exactly as before: the session's binding if it holds one,
-   * otherwise the first entitled account (default first).
+   * otherwise the project-default resolution rule (see
+   * `selectEntitledConnectorConnection`).
    *
    * A NAMED account is never silently substituted. It is matched against the
    * accounts this caller is entitled to and, failing that, the call is denied —
    * running "send mail as Work" against Personal is worse than not running.
    */
   account?: string | null;
-}): Promise<ResolvedSessionConnectorConnection | null> {
+}): Promise<ResolvedConnectorConnectionOutcome> {
   const alias = canonicalConnectorAlias(input.alias);
   let actingUserId = input.actingUserId ?? '';
   let actingPrincipalIsServiceAccount = input.actingPrincipalIsServiceAccount ?? false;
@@ -518,7 +540,7 @@ export async function resolveSessionConnectorConnection(input: {
         ),
       )
       .limit(1);
-    if (!session) return null;
+    if (!session) return { kind: 'none' };
     actingUserId = session.createdBy ?? '';
     actingPrincipalIsServiceAccount = session.createdByServiceAccountId !== null;
     visibility = session.visibility;
@@ -597,27 +619,30 @@ export async function resolveSessionConnectorConnection(input: {
         }) ||
         !(await connectorConnectionIsConnected({ connector, connection }))
       ) {
-        return null;
+        return { kind: 'none' };
       }
       // A session that PINNED an account is a constraint, not a suggestion. A
       // call that names a different one is denied rather than quietly run
       // against the pinned account — the caller asked for a specific mailbox.
       if (input.account?.trim() && !boundConnectionAnswersTo(input.account, bound)) {
-        return null;
+        return { kind: 'none' };
       }
       return {
-        connectionId: bound.connectionId,
-        connectorId: bound.connectorId,
-        status: bound.connectionStatus,
-        isDefault: bound.isDefault,
-        source: bound.source,
-        alias,
-        metadata: bound.metadata ?? {},
-        label: bound.connectionLabel,
-        ownerType: bound.ownerType,
+        kind: 'ok',
+        connection: {
+          connectionId: bound.connectionId,
+          connectorId: bound.connectorId,
+          status: bound.connectionStatus,
+          isDefault: bound.isDefault,
+          source: bound.source,
+          alias,
+          metadata: bound.metadata ?? {},
+          label: bound.connectionLabel,
+          ownerType: bound.ownerType,
+        },
       };
     }
-    if (connectorBindingsConfigured && !inheritUnbound) return null;
+    if (connectorBindingsConfigured && !inheritUnbound) return { kind: 'none' };
   }
 
   // Hand the project-default fallback the SAME principal identity the original
@@ -626,7 +651,7 @@ export async function resolveSessionConnectorConnection(input: {
   // re-run (the original skipped it when `input.sessionId` was set). When no
   // session is in scope, pass the RAW caller value so the helper's
   // `=== undefined` detection runs exactly as before.
-  const fallbackFromDefault = await resolveProjectDefaultConnectorConnection({
+  return resolveProjectDefaultConnectorConnectionOutcome({
     accountId: input.accountId,
     projectId: input.projectId,
     alias,
@@ -637,7 +662,19 @@ export async function resolveSessionConnectorConnection(input: {
     visibility,
     account: input.account,
   });
-  return fallbackFromDefault;
+}
+
+/** `resolveSessionConnectorConnectionOutcome`, collapsed to the pre-existing
+ *  `T | null` shape for the many callers that only ever asked "did this
+ *  resolve" — `ambiguous` collapses to `null` here exactly like "nothing
+ *  reachable" did before this rule existed; a caller that must tell them
+ *  apart (the gateway's `account_required` denial) uses the outcome-returning
+ *  sibling above directly. */
+export async function resolveSessionConnectorConnection(
+  input: Parameters<typeof resolveSessionConnectorConnectionOutcome>[0],
+): Promise<ResolvedSessionConnectorConnection | null> {
+  const outcome = await resolveSessionConnectorConnectionOutcome(input);
+  return outcome.kind === 'ok' ? outcome.connection : null;
 }
 
 /**
@@ -791,50 +828,93 @@ function entitledConnectionRank(connection: EntitledConnectorConnection): number
 }
 
 /**
+ * The outcome of picking one entitled account.
+ *
+ * THE RULE (INC-class, 2026-09-16): an unnamed (or `me`/`project`-shorthand)
+ * connector call uses an account implicitly ONLY when exactly one account is
+ * reachable, OR a human has deliberately pinned a default. A silent tie-break
+ * among several equally-reachable accounts is a guess with real consequences
+ * — mail sent from the wrong mailbox. `ambiguous` is a DISTINCT outcome from
+ * `none` so a caller can never conflate "nothing here" with "several things
+ * here and I refuse to guess which."
+ */
+export type EntitledConnectionSelection =
+  | { kind: 'none' }
+  | { kind: 'one'; connection: EntitledConnectorConnection }
+  | { kind: 'ambiguous'; connections: readonly EntitledConnectorConnection[] };
+
+/** 0 → none; 1 → it; 2+ → the pinned one iff exactly one is pinned, else ambiguous. */
+function resolveEntitledTier(
+  connections: readonly EntitledConnectorConnection[],
+): EntitledConnectionSelection {
+  if (connections.length === 0) return { kind: 'none' };
+  if (connections.length === 1) return { kind: 'one', connection: connections[0]! };
+  const pinned = connections.filter((c) => c.isDefault);
+  if (pinned.length === 1) return { kind: 'one', connection: pinned[0]! };
+  return { kind: 'ambiguous', connections };
+}
+
+/**
  * Pick one entitled account by name.
  *
  * Matches a connection id exactly, a label case-insensitively — the CLI prints
  * both, and a human types the label — or the two selector words:
  *
- *   `me`      the caller's own default private account
- *   `project` the project's default shared account
+ *   `me`      the caller's pinned private account, else their only private
+ *             one, else AMBIGUOUS among their private accounts.
+ *   `project` the pinned shared account, else the only shared one, else
+ *             AMBIGUOUS among the shared accounts.
  *
  * The words are matched BEFORE labels, so a connection literally labelled
- * "me" is still reachable by its id. Returns null when nothing matches, which
- * the caller reports as "no such account" rather than silently running as a
- * different account than the one asked for. Silently falling back would be the
- * worst outcome here: the call would succeed against the wrong mailbox.
+ * "me" is still reachable by its id. An unnamed call (no `account` at all)
+ * applies the same 0/1/pinned/ambiguous rule to the WHOLE entitled list,
+ * unfiltered — this is what replaced "always take the first entry".
+ *
+ * A named-but-unknown account returns `none`, which the caller reports as "no
+ * such account" rather than silently running as a different one than asked
+ * for. Silently falling back would be the worst outcome here: the call would
+ * succeed against the wrong mailbox. `ambiguous` is reported differently
+ * (`account_required`): several real candidates exist and none was named.
  */
 export function selectEntitledConnectorConnection(
   connections: readonly EntitledConnectorConnection[],
   account: string | null | undefined,
-): EntitledConnectorConnection | null {
-  if (!account || !account.trim()) return connections[0] ?? null;
+): EntitledConnectionSelection {
+  if (!account || !account.trim()) return resolveEntitledTier(connections);
   const wanted = account.trim().toLowerCase();
   if (wanted === 'me') {
-    const mine = connections.filter((c) => c.ownerType === 'member');
-    return mine.find((c) => c.isDefault) ?? mine[0] ?? null;
+    return resolveEntitledTier(connections.filter((c) => c.ownerType === 'member'));
   }
   if (wanted === 'project') {
-    const shared = connections.filter((c) => c.ownerType !== 'member');
-    return shared.find((c) => c.isDefault) ?? shared[0] ?? null;
+    return resolveEntitledTier(connections.filter((c) => c.ownerType !== 'member'));
   }
-  return (
+  const named =
     connections.find((c) => c.connectionId.toLowerCase() === wanted) ??
     connections.find((c) => c.label.trim().toLowerCase() === wanted) ??
-    null
-  );
+    null;
+  return named ? { kind: 'one', connection: named } : { kind: 'none' };
 }
+
+/** The outcome of resolving a connector connection: found, absent, or
+ *  AMBIGUOUS (several reachable accounts, none named, none pinned — see
+ *  `EntitledConnectionSelection`). A `null`-collapsing caller cannot tell
+ *  "nothing here" from "several things here and nobody said which"; a caller
+ *  that must (the gateway's `account_required` denial) uses this instead. */
+export type ResolvedConnectorConnectionOutcome =
+  | { kind: 'ok'; connection: ResolvedSessionConnectorConnection }
+  | { kind: 'none' }
+  | { kind: 'ambiguous'; accounts: readonly EntitledConnectorConnection[] };
 
 /**
  * Project-default connection resolution — the fallback an UNBOUND alias resolves
  * to when no session binding covers it (or no session is in scope at all).
  *
- * Now a thin pick over `listEntitledConnectorConnections`, which preserves the
- * original ordering (default first, then connection id) and the original three
- * filters, so an unselected call resolves to exactly what it always did.
+ * A thin pick over `listEntitledConnectorConnections` + `selectEntitledConnectorConnection`,
+ * which preserves the original ordering (default first, then connection id) and
+ * the original three filters, so a call naming one account (or exactly one
+ * reachable, or exactly one pinned) resolves to exactly what it always did.
  */
-export async function resolveProjectDefaultConnectorConnection(input: {
+export async function resolveProjectDefaultConnectorConnectionOutcome(input: {
   accountId: string;
   projectId: string;
   alias: string;
@@ -843,21 +923,38 @@ export async function resolveProjectDefaultConnectorConnection(input: {
   visibility?: 'private' | 'project' | 'restricted';
   /** Name or id of the account to run as. Omitted = the default. */
   account?: string | null;
-}): Promise<ResolvedSessionConnectorConnection | null> {
+}): Promise<ResolvedConnectorConnectionOutcome> {
   const entitled = await listEntitledConnectorConnections(input);
-  const chosen = selectEntitledConnectorConnection(entitled, input.account);
-  if (!chosen) return null;
+  const selection = selectEntitledConnectorConnection(entitled, input.account);
+  if (selection.kind === 'none') return { kind: 'none' };
+  if (selection.kind === 'ambiguous') return { kind: 'ambiguous', accounts: selection.connections };
+  const chosen = selection.connection;
   return {
-    connectionId: chosen.connectionId,
-    connectorId: chosen.connectorId,
-    status: chosen.status,
-    isDefault: chosen.isDefault,
-    alias: chosen.alias,
-    metadata: chosen.metadata,
-    source: 'default',
-    label: chosen.label,
-    ownerType: chosen.ownerType,
+    kind: 'ok',
+    connection: {
+      connectionId: chosen.connectionId,
+      connectorId: chosen.connectorId,
+      status: chosen.status,
+      isDefault: chosen.isDefault,
+      alias: chosen.alias,
+      metadata: chosen.metadata,
+      source: 'default',
+      label: chosen.label,
+      ownerType: chosen.ownerType,
+    },
   };
+}
+
+/** `resolveProjectDefaultConnectorConnectionOutcome`, collapsed to the pre-existing
+ *  `T | null` shape for the many callers that only ever asked "did this resolve" —
+ *  `ambiguous` collapses to `null` here exactly like "nothing reachable" did
+ *  before this rule existed; a caller that must tell them apart uses the
+ *  outcome-returning sibling above directly. */
+export async function resolveProjectDefaultConnectorConnection(
+  input: Parameters<typeof resolveProjectDefaultConnectorConnectionOutcome>[0],
+): Promise<ResolvedSessionConnectorConnection | null> {
+  const outcome = await resolveProjectDefaultConnectorConnectionOutcome(input);
+  return outcome.kind === 'ok' ? outcome.connection : null;
 }
 
 /**

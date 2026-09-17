@@ -139,7 +139,9 @@ export interface GatewayDeps {
   explainMissingConnector?(
     projectId: string,
     slug: string,
-  ): Promise<'connector_not_found' | 'connector_not_connected' | 'connector_disabled'>;
+  ): Promise<
+    'connector_not_found' | 'connector_not_connected' | 'connector_disabled' | 'account_required'
+  >;
   loadAction(connectorId: string, relPath: string): Promise<GatewayAction | null>;
   /**
    * Resolve the credential value/binding for a connector. `userId=null` = shared;

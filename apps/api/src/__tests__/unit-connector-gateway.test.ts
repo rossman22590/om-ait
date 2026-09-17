@@ -168,6 +168,19 @@ describe('handleCall — denials', () => {
     });
   });
 
+  // THE RULE: several accounts reachable, none named, none pinned → the
+  // gateway is reason-agnostic — it surfaces whatever `explainMissingConnector`
+  // answers verbatim, so `account_required` passes through exactly like
+  // `connector_not_connected`/`connector_disabled` already do.
+  test('account_required passes through from explainMissingConnector verbatim', async () => {
+    const { deps } = makeDeps({ connector: null });
+    deps.explainMissingConnector = async () => 'account_required';
+    expect(await handleCall(deps, baseInput)).toEqual({
+      status: 'denied',
+      reason: 'account_required',
+    });
+  });
+
   test('credential not set → needs_auth', async () => {
     const { deps } = makeDeps({ secret: null });
     expect(await handleCall(deps, baseInput)).toEqual({ status: 'denied', reason: 'needs_auth' });

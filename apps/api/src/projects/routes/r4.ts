@@ -62,6 +62,7 @@ import {
 } from '../../channels/turn-relay';
 import { config } from '../../config';
 import {
+  connectionIsEffectiveProjectDefault,
   resolveConnectionCredentialValue,
   upsertConnectionCredential,
   upsertConnectionOAuth2Credential,
@@ -838,17 +839,27 @@ for (const operation of ['credential', 'revoke', 'activate', 'default'] as const
         } catch (error) {
           return c.json({ error: (error as Error).message || 'credential validation failed' }, 400);
         }
+        // INVARIANT (2026-09-16, account_required rule): `connection.isDefault`
+        // is the raw (possibly unpinned) row flag; the project-wide catalog
+        // write below must key on the EFFECTIVE default — pinned, or the
+        // connector's sole active project-owned connection — so setting a
+        // credential on a never-pinned solo MCP connection still publishes
+        // exactly as it did before this rule existed.
+        const isEffectiveDefault =
+          connection.isDefault ||
+          (connection.ownerType === 'project' &&
+            (await connectionIsEffectiveProjectDefault(connection.connectorId, connectionId)));
         await rematerializeCatalogAfterCredentialUpdate({
           projectId,
           accountId: loaded.row.accountId,
           provider: connection.providerType,
           ownerType: connection.ownerType,
-          isDefault: connection.isDefault,
+          isDefault: isEffectiveDefault,
           connectorId: connection.connectorId,
           credential:
             connection.providerType === 'mcp' &&
             connection.ownerType === 'project' &&
-            connection.isDefault
+            isEffectiveDefault
               ? await resolveConnectionCredentialValue({
                   connectorId: connection.connectorId,
                   connectionId,
@@ -990,7 +1001,16 @@ for (const operation of ['connect', 'connect/finalize'] as const) {
       ) {
         return c.json({ error: 'Not found' }, 404);
       }
-      if (connection.isDefault) {
+      // INVARIANT (2026-09-16, account_required rule): a project-owned
+      // connection with nothing PINNED is still blocked here when it is the
+      // connector's sole active project-owned row — it is the connector's
+      // EFFECTIVE default even unpinned, and must still go through the shared
+      // connect endpoint. See `connectionIsEffectiveProjectDefault`.
+      const isEffectiveDefault =
+        connection.isDefault ||
+        (connection.ownerType === 'project' &&
+          (await connectionIsEffectiveProjectDefault(connection.connectorId, connectionId)));
+      if (isEffectiveDefault) {
         return c.json(
           { error: 'Use the shared connector connect endpoint for the default connection' },
           409,

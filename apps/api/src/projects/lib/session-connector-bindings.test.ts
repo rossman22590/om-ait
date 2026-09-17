@@ -82,28 +82,93 @@ describe('selectEntitledConnectorConnection', () => {
   const personal = { ...work, connectionId: '22222222-2222-4222-a222-222222222222', label: 'Personal', ownerType: 'member' as const, isDefault: false };
   const accounts = [work, personal];
 
-  test('no account named → the default (first) account, exactly as before', () => {
-    expect(selectEntitledConnectorConnection(accounts, null)?.label).toBe('Work');
-    expect(selectEntitledConnectorConnection(accounts, undefined)?.label).toBe('Work');
-    expect(selectEntitledConnectorConnection(accounts, '   ')?.label).toBe('Work');
+  test('no account named, exactly one pinned → the pinned account, exactly as before', () => {
+    expect(selectEntitledConnectorConnection(accounts, null)).toEqual({ kind: 'one', connection: work });
+    expect(selectEntitledConnectorConnection(accounts, undefined)).toEqual({ kind: 'one', connection: work });
+    expect(selectEntitledConnectorConnection(accounts, '   ')).toEqual({ kind: 'one', connection: work });
+  });
+
+  test('no account named, several reachable and NONE pinned → ambiguous, not a guess', () => {
+    const neitherPinned = [{ ...work, isDefault: false }, personal];
+    expect(selectEntitledConnectorConnection(neitherPinned, null)).toEqual({
+      kind: 'ambiguous',
+      connections: neitherPinned,
+    });
+  });
+
+  test('exactly one entitled account → it, unnamed, pinned or not', () => {
+    expect(selectEntitledConnectorConnection([{ ...personal, isDefault: false }], null)).toEqual({
+      kind: 'one',
+      connection: { ...personal, isDefault: false },
+    });
   });
 
   test('matches a label case-insensitively — humans type the printed name', () => {
-    expect(selectEntitledConnectorConnection(accounts, 'Personal')?.connectionId).toBe(personal.connectionId);
-    expect(selectEntitledConnectorConnection(accounts, 'personal')?.connectionId).toBe(personal.connectionId);
-    expect(selectEntitledConnectorConnection(accounts, '  PERSONAL ')?.connectionId).toBe(personal.connectionId);
+    for (const query of ['Personal', 'personal', '  PERSONAL ']) {
+      const sel = selectEntitledConnectorConnection(accounts, query);
+      expect(sel.kind === 'one' && sel.connection.connectionId).toBe(personal.connectionId);
+    }
   });
 
   test('matches a connection id, which is what the connections API prints', () => {
-    expect(selectEntitledConnectorConnection(accounts, personal.connectionId)?.label).toBe('Personal');
+    const sel = selectEntitledConnectorConnection(accounts, personal.connectionId);
+    expect(sel.kind === 'one' && sel.connection.label).toBe('Personal');
   });
 
   test('an unknown account resolves to nothing rather than the default', () => {
-    expect(selectEntitledConnectorConnection(accounts, 'Archive')).toBeNull();
+    expect(selectEntitledConnectorConnection(accounts, 'Archive')).toEqual({ kind: 'none' });
   });
 
-  test('no entitled account at all → null for every input', () => {
-    expect(selectEntitledConnectorConnection([], null)).toBeNull();
-    expect(selectEntitledConnectorConnection([], 'Work')).toBeNull();
+  test('no entitled account at all → none for every input', () => {
+    expect(selectEntitledConnectorConnection([], null)).toEqual({ kind: 'none' });
+    expect(selectEntitledConnectorConnection([], 'Work')).toEqual({ kind: 'none' });
+  });
+
+  describe('me / project shorthand', () => {
+    const workPinned = { ...work, connectionId: 'aaaaaaaa-1111-4111-a111-111111111111', label: 'Work', ownerType: 'project' as const, isDefault: true };
+    const workOther = { ...work, connectionId: 'aaaaaaaa-2222-4111-a111-111111111111', label: 'Other shared', ownerType: 'project' as const, isDefault: false };
+    const mePinned = { ...work, connectionId: 'aaaaaaaa-3333-4111-a111-111111111111', label: 'Work email', ownerType: 'member' as const, isDefault: true };
+    const meOther = { ...work, connectionId: 'aaaaaaaa-4444-4111-a111-111111111111', label: 'Personal email', ownerType: 'member' as const, isDefault: false };
+
+    test('me: pinned private wins even when a shared account is also pinned', () => {
+      const all = [workPinned, mePinned, meOther];
+      expect(selectEntitledConnectorConnection(all, 'me')).toEqual({ kind: 'one', connection: mePinned });
+    });
+
+    test('me: exactly one private, unpinned → it', () => {
+      expect(selectEntitledConnectorConnection([workPinned, meOther], 'me')).toEqual({
+        kind: 'one',
+        connection: meOther,
+      });
+    });
+
+    test('me: several private, none pinned → ambiguous among MY OWN accounts only', () => {
+      const mineUnpinned = { ...meOther, isDefault: false };
+      const otherMine = { ...meOther, connectionId: 'aaaaaaaa-5555-4111-a111-111111111111', label: 'Work 2', isDefault: false };
+      expect(selectEntitledConnectorConnection([workPinned, mineUnpinned, otherMine], 'me')).toEqual({
+        kind: 'ambiguous',
+        connections: [mineUnpinned, otherMine],
+      });
+    });
+
+    test('me: no private account reachable → none', () => {
+      expect(selectEntitledConnectorConnection([workPinned, workOther], 'me')).toEqual({ kind: 'none' });
+    });
+
+    test('project: pinned shared wins', () => {
+      expect(selectEntitledConnectorConnection([workPinned, workOther, mePinned], 'project')).toEqual({
+        kind: 'one',
+        connection: workPinned,
+      });
+    });
+
+    test('project: several shared, none pinned → ambiguous among shared accounts only', () => {
+      const sharedA = { ...workOther, isDefault: false };
+      const sharedB = { ...workOther, connectionId: 'aaaaaaaa-6666-4111-a111-111111111111', label: 'Sales', isDefault: false };
+      expect(selectEntitledConnectorConnection([sharedA, sharedB, mePinned], 'project')).toEqual({
+        kind: 'ambiguous',
+        connections: [sharedA, sharedB],
+      });
+    });
   });
 });
