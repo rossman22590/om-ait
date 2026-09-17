@@ -1344,18 +1344,26 @@ async function listConnectors(
       ).then(
         (entries) => new Set(entries.filter(([, connected]) => connected).map(([slug]) => slug)),
       ),
-      // The SAME predicate the gateway applies at call time: resolve the
-      // project-default connection (which checks `connected_account_id`) and
+      // The SAME predicate the gateway applies at call time: resolve a
+      // connection FOR THIS CALLER (which checks `connected_account_id`) and
       // treat "resolves" as authorized. `connectorConnected(row, null)` with no
       // connection argument answered `false` for every Composio row, so a
       // fully connected app was listed as `needs_auth` while its calls
       // succeeded (INC-2026-09-08-CONNECTOR-GATEWAY, E6).
+      //
+      // Resolved as the acting user, in a private-session view: Composio
+      // accounts are authorized per connection row (no credential row is ever
+      // written), so a connector whose only accounts are the caller's own
+      // member-owned ones read `needs_auth` to the very person whose calls
+      // through them succeed — two connected Gmail accounts, "Needs setup".
       Promise.all(
         composioRows.map(async (row) => {
           const connection = await resolveProjectDefaultConnectorConnection({
             accountId: row.accountId,
             projectId: row.projectId,
             alias: row.slug,
+            actingUserId: actingUserId ?? undefined,
+            visibility: 'private',
           }).catch(() => null);
           return [row.slug, connection !== null] as const;
         }),

@@ -32,6 +32,12 @@ const CONNECTION_A = crypto.randomUUID();
 const CONNECTION_B = crypto.randomUUID();
 // A second connector with literally zero connections — the true "zero accounts" case.
 const CONNECTOR_NONE = crypto.randomUUID();
+// Gmail via Composio: authorization lives on the CONNECTION ROW
+// (`metadata.connected_account_id`), never in connection_credentials. Two
+// member-owned accounts, both authorized, no shared account at all.
+const CONNECTOR_GMAIL = crypto.randomUUID();
+const GMAIL_A1 = crypto.randomUUID();
+const GMAIL_A2 = crypto.randomUUID();
 
 const USER_A = crypto.randomUUID();
 const USER_B = crypto.randomUUID();
@@ -65,6 +71,18 @@ beforeAll(async () => {
       providerType: 'openapi',
       config: { baseUrl: 'https://no-accounts.example.test', auth: { type: 'bearer' } },
     },
+    {
+      connectorId: CONNECTOR_GMAIL,
+      accountId: ACCOUNT,
+      projectId: PROJECT,
+      slug: 'gmail',
+      name: 'Gmail',
+      providerType: 'composio',
+      // Real Composio connectors carry no `auth` block: authorization is the
+      // hosted OAuth handshake recorded on the connection row, so this is the
+      // shape `materialize` writes — and the shape the status check must read.
+      config: { app: 'gmail' },
+    },
   ]);
   await db.insert(connectorConnections).values([
     {
@@ -86,6 +104,28 @@ beforeAll(async () => {
       ownerId: USER_B,
       status: 'active',
       label: "B's CRM",
+    },
+    {
+      connectionId: GMAIL_A1,
+      accountId: ACCOUNT,
+      projectId: PROJECT,
+      connectorId: CONNECTOR_GMAIL,
+      ownerType: 'member',
+      ownerId: USER_A,
+      status: 'active',
+      label: 'a@example.test',
+      metadata: { provider: 'composio', toolkit: 'gmail', connected_account_id: 'ca_a1' },
+    },
+    {
+      connectionId: GMAIL_A2,
+      accountId: ACCOUNT,
+      projectId: PROJECT,
+      connectorId: CONNECTOR_GMAIL,
+      ownerType: 'member',
+      ownerId: USER_A,
+      status: 'active',
+      label: 'a2@example.test',
+      metadata: { provider: 'composio', toolkit: 'gmail', connected_account_id: 'ca_a2' },
     },
   ]);
   await db.insert(connectionCredentials).values([
@@ -145,5 +185,32 @@ describe('admin connector list matches per-caller reachability, not just the sha
     if (!none) throw new Error('no_accounts connector missing from admin list');
     expect(none.status).toBe('needs_auth');
     expect(none.secretSet).toBe(false);
+  });
+});
+
+describe('Composio accounts authorize on the connection row, not a credential row', () => {
+  async function gmailView(actingUserId?: string) {
+    const list = await dbConnectorRouterDeps.listConnectors(PROJECT, actingUserId);
+    const gmail = list.find((c) => c.slug === 'gmail');
+    if (!gmail) throw new Error('gmail connector missing from admin list');
+    return gmail;
+  }
+
+  test('the owner of two authorized member accounts sees the connector as connected', async () => {
+    // Two connected Gmail accounts and a "Needs setup" badge is the exact
+    // screenshot that prompted this: the Composio check resolved the PROJECT
+    // default with no acting user, so member-owned accounts never counted.
+    const view = await gmailView(USER_A);
+    expect(view.status).toBe('active');
+  });
+
+  test('a member with no Gmail account of their own still sees needs_auth', async () => {
+    const view = await gmailView(USER_C);
+    expect(view.status).toBe('needs_auth');
+  });
+
+  test('no acting user reports needs_auth — there is no shared account to fall back to', async () => {
+    const view = await gmailView(undefined);
+    expect(view.status).toBe('needs_auth');
   });
 });
