@@ -51,11 +51,11 @@ export async function rotateAccountSecretResource(accountId: string, secretId: s
 export async function deleteAccountSecretResource(accountId: string, secretId: string) {
   return unwrap(await backendApi.delete<{ ok: boolean }>(secretPath(accountId, secretId)));
 }
-export async function grantAccountSecretResource(accountId: string, secretId: string, userId: string) {
-  return unwrap(await backendApi.put<AccountSecretResource>(`${secretPath(accountId, secretId)}/grants/${encodeURIComponent(userId)}`, {}));
+export async function grantAccountSecretResource(accountId: string, secretId: string, userId: string, options?: { showErrors?: boolean }) {
+  return unwrap(await backendApi.put<AccountSecretResource>(`${secretPath(accountId, secretId)}/grants/${encodeURIComponent(userId)}`, {}, options));
 }
-export async function revokeAccountSecretResourceGrant(accountId: string, secretId: string, userId: string) {
-  return unwrap(await backendApi.delete<AccountSecretResource>(`${secretPath(accountId, secretId)}/grants/${encodeURIComponent(userId)}`));
+export async function revokeAccountSecretResourceGrant(accountId: string, secretId: string, userId: string, options?: { showErrors?: boolean }) {
+  return unwrap(await backendApi.delete<AccountSecretResource>(`${secretPath(accountId, secretId)}/grants/${encodeURIComponent(userId)}`, options));
 }
 export async function getSessionProviderSecretPool(projectId: string, sessionId: string, providerId: string) {
   return unwrap(await backendApi.get<SessionProviderSecretPool>(poolPath(projectId, sessionId, providerId)));

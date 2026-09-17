@@ -58,3 +58,14 @@ test('list preserves an empty configured pool after its last resource disappears
     method: 'GET', body: null,
   }]);
 });
+
+test('grant editors can handle a failure once without a duplicate global notification', async () => {
+  let notifications = 0;
+  configureKortix({ backendUrl: 'http://test.local', getToken: async () => 'tok', onError: () => { notifications++; } });
+  globalThis.fetch = mock(async () => Response.json({ error: 'Access change denied' }, { status: 403 })) as unknown as typeof fetch;
+  await expect(grantAccountSecretResource('account', 'secret', 'member', { showErrors: false })).rejects.toMatchObject({ status: 403 });
+  await expect(revokeAccountSecretResourceGrant('account', 'secret', 'member', { showErrors: false })).rejects.toMatchObject({ status: 403 });
+  expect(notifications).toBe(0);
+  await expect(grantAccountSecretResource('account', 'secret', 'member')).rejects.toMatchObject({ status: 403 });
+  expect(notifications).toBe(1);
+});

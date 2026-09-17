@@ -1,7 +1,7 @@
 {
   "pooledSecrets": {
     "providerDisabled": "此提供商已在当前会话中禁用。",
-    "unavailableKeys": "有{count}个所选密钥不可用。请移除不可用的密钥或恢复访问权限。",
+    "unavailableKeys": "{count, plural, other {有#个所选密钥不可用。}} 请移除不可用的密钥或恢复访问权限。",
     "removeUnavailable": "移除不可用的密钥",
     "selectionLimit": "每个提供商最多10个密钥",
     "manageKeys": "管理提供商密钥",

@@ -1,7 +1,7 @@
 {
   "pooledSecrets": {
     "providerDisabled": "このセッションではこのプロバイダーは無効です。",
-    "unavailableKeys": "選択したキーのうち{count}個が利用できません。利用できないキーを削除するか、アクセス権を復元してください。",
+    "unavailableKeys": "{count, plural, other {選択したキーのうち#個が利用できません。}} 利用できないキーを削除するか、アクセス権を復元してください。",
     "removeUnavailable": "利用できないキーを削除",
     "selectionLimit": "プロバイダーごとに最大10個のキー",
     "manageKeys": "プロバイダーのキーを管理",

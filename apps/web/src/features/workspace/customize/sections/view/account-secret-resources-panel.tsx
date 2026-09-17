@@ -129,14 +129,13 @@ export function AccountSecretResourcesPanel({ accountId, projectId, providerId, 
       const next = new Set(selectedMembers.memberIds);
       if (oauth && sharing.granted_user_ids.includes(sharing.created_by)) next.add(sharing.created_by);
       const changes = [
-        ...[...next].filter((userId) => !current.has(userId)).map((userId) => grantAccountSecretResource(accountId, sharing.secret_id, userId)),
-        ...[...current].filter((userId) => !next.has(userId)).map((userId) => revokeAccountSecretResourceGrant(accountId, sharing.secret_id, userId)),
+        ...[...next].filter((userId) => !current.has(userId)).map((userId) => grantAccountSecretResource(accountId, sharing.secret_id, userId, { showErrors: false })),
+        ...[...current].filter((userId) => !next.has(userId)).map((userId) => revokeAccountSecretResourceGrant(accountId, sharing.secret_id, userId, { showErrors: false })),
       ];
       const results = await Promise.allSettled(changes);
       if (results.some((result) => result.status === 'rejected')) throw new Error(t('accessError'));
     },
     onSuccess: () => { setSharing(null); successToast(t('saved')); },
-    onError: (error) => errorToast(error instanceof Error ? error.message : t('accessError')),
     onSettled: async () => {
       const updated = await resources.refetch();
       setSharing((current) => current ? updated.data?.secrets.find((secret) => secret.secret_id === current.secret_id) ?? current : null);
@@ -166,7 +165,7 @@ export function AccountSecretResourcesPanel({ accountId, projectId, providerId, 
               {canWrite && (secret.created_by === user?.id || actorRole === 'owner' || actorRole === 'admin') && <DropdownMenu>
                 <DropdownMenuTrigger asChild><Button size="icon-sm" variant="ghost" aria-label={t('actionsFor', { label: secret.label })}><DotsThreeIcon className="size-4" /></Button></DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => { setSelectedMembers({ memberIds: secret.granted_user_ids, groupIds: [], inviteEmails: [] }); setSharing(secret); }}>{t('manageAccess')}</DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => { changeGrant.reset(); setSelectedMembers({ memberIds: secret.granted_user_ids, groupIds: [], inviteEmails: [] }); setSharing(secret); }}>{t('manageAccess')}</DropdownMenuItem>
                   {!oauth && <DropdownMenuItem onSelect={() => { setValue(''); setRotating(secret); }}>{t('rotateKey')}</DropdownMenuItem>}
                   <DropdownMenuItem onSelect={() => setDeleting(secret)}>{oauth ? t('deleteAccount') : t('deleteKey')}</DropdownMenuItem>
                 </DropdownMenuContent>
@@ -196,6 +195,7 @@ export function AccountSecretResourcesPanel({ accountId, projectId, providerId, 
         <ModalContent className="lg:max-w-md"><ModalHeader><ModalTitle>{t('accessTo', { label: sharing?.label ?? '' })}</ModalTitle>
           <ModalDescription>{t(oauth ? 'oauthGrantedMembers' : 'grantedMembers')}</ModalDescription></ModalHeader>
           <ModalBody className="max-h-[60vh] space-y-4 overflow-y-auto">
+            {changeGrant.isError && <p role="alert" className="text-destructive text-sm">{t('accessError')}</p>}
             <Field className="gap-1.5">
               <PrincipalPicker scope={{ kind: 'account', accountId }} selection="multi" kinds={['member']}
                 value={selectedMembers} onChange={(next) => setSelectedMembers(oauth && sharing?.granted_user_ids.includes(sharing.created_by)

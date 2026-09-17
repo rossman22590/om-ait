@@ -60,7 +60,8 @@ test.describe('30 — pooled provider secrets', () => {
       const denied = page.waitForResponse((response) => response.url().endsWith(`/grants/${second.id}`) && response.status() === 403);
       await dialog.getByRole('button', { name: 'Done', exact: true }).click();
       await denied;
-      await expect(page.getByText('Access could not be changed', { exact: true })).toBeVisible();
+      await expect(dialog.getByRole('alert')).toHaveText('Access could not be changed');
+      await expect(page.getByText('Access change denied', { exact: true })).toHaveCount(0);
       await expect(dialog.getByRole('button', { name: 'Done', exact: true })).toBeEnabled();
       rejectSecond = false;
       await dialog.getByRole('button', { name: firstEmail }).click();
