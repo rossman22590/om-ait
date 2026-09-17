@@ -59,17 +59,21 @@ export async function rotateAccountSecretResource(accountId: string, secretId: s
 export async function deleteAccountSecretResource(accountId: string, secretId: string) {
   return unwrap(await backendApi.delete<{ ok: boolean }>(secretPath(accountId, secretId)));
 }
-export async function grantAccountSecretResource(accountId: string, secretId: string, userId: string) {
-  return unwrap(await backendApi.put<AccountSecretResource>(`${secretPath(accountId, secretId)}/grants/${encodeURIComponent(userId)}`, {}));
+export async function grantAccountSecretResource(accountId: string, secretId: string, userId: string, options?: { showErrors?: boolean }) {
+  return unwrap(await backendApi.put<AccountSecretResource>(`${secretPath(accountId, secretId)}/grants/${encodeURIComponent(userId)}`, {}, options));
 }
-export async function revokeAccountSecretResourceGrant(accountId: string, secretId: string, userId: string) {
-  return unwrap(await backendApi.delete<AccountSecretResource>(`${secretPath(accountId, secretId)}/grants/${encodeURIComponent(userId)}`));
+export async function revokeAccountSecretResourceGrant(accountId: string, secretId: string, userId: string, options?: { showErrors?: boolean }) {
+  return unwrap(await backendApi.delete<AccountSecretResource>(`${secretPath(accountId, secretId)}/grants/${encodeURIComponent(userId)}`, options));
 }
 export async function setAccountSecretResourceAccess(accountId: string, secretId: string, mode: 'project' | 'members', userIds: string[]) {
   return unwrap(await backendApi.put<AccountSecretResource>(`${secretPath(accountId, secretId)}/access`, { mode, user_ids: userIds }));
 }
 export async function getSessionProviderSecretPool(projectId: string, sessionId: string, providerId: string) {
   return unwrap(await backendApi.get<SessionProviderSecretPool>(poolPath(projectId, sessionId, providerId)));
+}
+export async function listSessionProviderSecretPools(projectId: string, sessionId: string) {
+  const path = `/projects/${encodeURIComponent(projectId)}/sessions/${encodeURIComponent(sessionId)}/provider-secret-pools`;
+  return unwrap(await backendApi.get<{ pools: SessionProviderSecretPool[]; can_edit: boolean }>(path));
 }
 export async function setSessionProviderSecretPool(projectId: string, sessionId: string, providerId: string, secretIds: string[] | null) {
   return unwrap(await backendApi.put<SessionProviderSecretPool>(poolPath(projectId, sessionId, providerId), { secret_ids: secretIds }));

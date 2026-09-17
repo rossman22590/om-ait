@@ -93,7 +93,7 @@ export function SessionOverridesControlContent({
       // Radix reports how much room it actually has; without this the panel is
       // taller than the gap above the composer on a short or narrow viewport and
       // its first row slides off the top of the screen.
-      className="flex h-96 max-h-96 flex-col overflow-hidden"
+      className="flex h-[28rem] max-h-[var(--radix-popover-content-available-height,28rem)] flex-col overflow-hidden"
     >
       <div className="border-border flex min-h-0 flex-1 flex-col sm:flex-row">
         <ul
@@ -122,7 +122,7 @@ export function SessionOverridesControlContent({
                     )}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="text-foreground block truncate text-sm font-medium">
+                    <span className="text-foreground block text-sm leading-tight font-medium text-pretty">
                       {row.name}
                     </span>
                     <span className="text-muted-foreground block truncate text-xs">

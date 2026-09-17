@@ -117,6 +117,7 @@ export function noManagedModelsError(model: string, tierIsPaid: boolean): Gatewa
 export async function resolveCandidates(
   principal: AuthedPrincipal,
   model: string,
+  options?: { providerSecretPools?: Record<string, string[]>; probe?: boolean },
 ): Promise<UpstreamDescriptor[]> {
   const effectiveModel = toWireModel(model);
   const access = principal.projectId
@@ -131,6 +132,7 @@ export async function resolveCandidates(
     );
   }
   const provider = effectiveModel.includes('/') ? effectiveModel.split('/')[0] : '';
+  const prospectiveIds = options?.providerSecretPools?.[provider];
 
   if (provider === 'codex') {
     if (!principal.projectId) {
@@ -141,9 +143,11 @@ export async function resolveCandidates(
       );
     }
     const pooledEnabled = await projectFeatureFlagEnabled(principal.projectId, 'pooled_provider_secrets');
-    const selectedPool = principal.sessionId && principal.userId && pooledEnabled
+    const selectedPool = (prospectiveIds !== undefined || principal.sessionId) && principal.userId && pooledEnabled
       ? await resolveSessionProviderSecrets({
-          accountId: principal.accountId, projectId: principal.projectId, sessionId: principal.sessionId,
+          accountId: principal.accountId, projectId: principal.projectId,
+          ...(prospectiveIds !== undefined ? { secretIds: prospectiveIds } : { sessionId: principal.sessionId! }),
+          ...(options?.probe ? { advanceIndex: false } : {}),
           userId: principal.userId, providerId: 'codex', name: 'CODEX_AUTH_JSON',
         })
       : null;
@@ -168,7 +172,7 @@ export async function resolveCandidates(
         try {
           const accountCredential = await resolveCodexAccountCredential({
             projectId: principal.projectId, accountId: principal.accountId,
-            sessionId: principal.sessionId!, userId: principal.userId,
+            sessionId: principal.sessionId ?? null, userId: principal.userId,
             secretId: secret.secretId, value: secret.value,
           });
           if (!accountCredential) { expired = true; continue; }
@@ -184,7 +188,7 @@ export async function resolveCandidates(
         expired ? 'The selected ChatGPT connections need reconnection.' : 'No ChatGPT connection is available.',
         'Reconnect a selected ChatGPT account or select another granted connection.');
     }
-    if (pooledEnabled && principal.userId) {
+    if (pooledEnabled && principal.userId && !principal.keyId) {
       const personal = await resolveDefaultCodexAccountSecret(principal.accountId, principal.projectId, principal.userId);
       if (personal) {
         if (Array.isArray(principal.agentGrant?.env) &&
@@ -246,8 +250,6 @@ export async function resolveCandidates(
   let byokFailure: GatewayResolutionError | null = null;
 
   if (byok && principal.projectId) {
-    // Provider keys are always project-wide (shared) — there is no
-    // per-user/private key concept. See getProjectSecretValue.
     const readGatewaySecret = (name: string) =>
       getProjectSecretValueForConsumer({
         projectId: principal.projectId!,
@@ -257,12 +259,13 @@ export async function resolveCandidates(
         name,
         consumer: 'llm_gateway',
       });
-    const selectedPool = principal.sessionId && principal.userId &&
+    const selectedPool = (prospectiveIds !== undefined || principal.sessionId) && principal.userId &&
       await projectFeatureFlagEnabled(principal.projectId, 'pooled_provider_secrets')
       ? await resolveSessionProviderSecrets({
           accountId: principal.accountId,
           projectId: principal.projectId,
-          sessionId: principal.sessionId,
+          ...(prospectiveIds !== undefined ? { secretIds: prospectiveIds } : { sessionId: principal.sessionId! }),
+          ...(options?.probe ? { advanceIndex: false } : {}),
           userId: principal.userId,
           providerId: provider,
           name: byok.envVar,

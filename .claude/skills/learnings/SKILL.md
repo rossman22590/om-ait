@@ -6099,3 +6099,131 @@ Use an isolated preview sandbox when a previous remote run may still be active.
 **Enforcement.** `buildPreviewBootstrapScript` holds `$STATE/deploy.lock` with
 `flock` across the full remote run. `tests/unit/sandbox-preview.test.ts` asserts
 that the lock precedes checkout and status reset.
+
+### 2026-09-17 — Provider pools must preserve the credential's principal
+
+**Near miss.** The review of draft PR #7319 found two authorization gaps before
+release. Pool routes passed null session bindings to `loadVisibleSession`, so a
+session credential could address a sibling pool. Pool updates checked the
+manager's secret grants but omitted the session owner's grants. Gateway
+resolution also used a shared project's gateway-key creator as the principal
+for a personal ChatGPT default.
+
+**Rule.** Narrow every pool route to the credential's bound session. A manager
+can select a resource only when both the manager and session owner can use it.
+A shared gateway key never inherits its creator's personal connection. Empty
+configured pools remain explicit and recoverable after resource deletion.
+
+**Enforcement.** `provider-secret-pools.test.ts` drives the routes through Hono
+and asserts sibling rejection, owner grants, machine-owner rejection, and empty
+pool discovery. `SEC-POOL-2` verifies owner grants and deletion through HTTP and
+Postgres. `resolve-candidates.test.ts` verifies that a shared gateway key uses the
+legacy project credential even when its creator has a personal connection.
+
+
+### 2026-09-17 — Validate a model against the session's selected credential resources
+
+**Near miss.** The #7331 preview offered an OpenRouter model backed by account
+resources. Creating its session returned `400 INVALID_SESSION_MODEL` because
+preflight resolved only legacy project credentials. Existing-session model
+changes also omitted the session's saved pool.
+
+**Rule.** Preflight uses the prospective pool during creation and the saved pool
+for an existing session. It uses the same membership, grant, provider, and
+active-state checks as generation. Passive checks never advance the pool cursor.
+An empty explicit selection cannot fall back to a legacy credential.
+
+**Enforcement.** `SEC-POOL-2` exercises explicit model creation and model changes
+through HTTP. `default-model.test.ts` and `resolve-candidates.test.ts` verify the
+selection context. `account-resource-pool.test.ts` rejects a cursor update from
+a passive check. Preview verification must name an account-backed model and
+assert actual assistant output, not only a submitted selection.
+
+### 2026-09-17 — Prompt-admission fixtures need a readable agent manifest
+
+**Near miss.** The #7331 preview repeatedly failed `SESS-30` with
+`503 CONNECTOR_REQUIREMENTS_UNRESOLVED`. Its database-only project pointed to
+`https://ke2e.invalid/...git`. Attachment storage passed, but prompt admission
+could not read that repository's connector requirements.
+
+**Rule.** A flow that enqueues prompts uses a seeded repository fixture, even
+when the session itself is a database fixture. Do not bypass manifest checks
+or treat their failure as an accepted prompt.
+
+**Enforcement.** `SESS-30` uses `ctx.fixtures.project({ seed: true })`. The fixture
+creates a local repository for the local profile and a managed repository for
+the preview. The flow still requires `202` and durable attachment read-back.
+Its credential-binding helper preserves a sandbox row already created by the
+live worker. A duplicate fixture insert must not fail or overwrite runtime state.
+
+### 2026-09-17 — Deferred composer focus must respect open overlays
+
+**Near miss.** The #7331 preview closed Provider keys while the new-session page
+finished loading. The composer focus hook could focus the editor after the
+user opened session overrides. Radix then dismissed the popover.
+
+**Rule.** Mount, visibility, and deferred focus requests leave an open popover,
+dialog, menu, or listbox in control of focus.
+
+**Enforcement.** The pooled-provider browser journey opens session overrides,
+dispatches `focus-session-textarea`, and asserts that Provider keys stays open.
+The assertion fails before the guard in `use-composer-focus.ts` and passes after it.
+
+TipTap also requires an explicit `autofocus: false`. Passing `undefined`
+overrides its default and schedules focus when the lazy editor mounts. The
+browser journey keeps settings open through editor initialization. Start a
+paint deadline after the input action completes, not while `fill()` and
+`press()` are still pending.
+
+### 2026-09-17 — Queue placement needs an active-session fixture
+
+**Near miss.** The #7331 preview queue test filled the startup composer while
+it handed off to the active session. Its input disappeared before Enter. The
+URL had changed, but the startup shell still owned the disabled Stop control.
+
+**Rule.** Establish an active session before timing active-session queue
+placement. A route change alone does not prove the composer handoff finished.
+
+**Enforcement.** The deployed queue fixture waits for the enabled Stop control.
+Both one-second paint assertions and real API acceptance/read-back remain.
+The startup draft handoff has its own ownership guard. The hidden replacement
+composer waits to restore until it becomes active. The old composer flushes
+pending text in a layout effect before the replacement's restore effect runs.
+Late changes or send completion from the old composer cannot erase that draft.
+A Chromium check with both composers mounted fails on the original hook and
+passes after this change. The draft gate and shell forwarding have unit coverage.
+
+The queue fixture also keeps one test-owned delivery lease in flight. A live
+model can finish before queue editing and reload assertions complete. New
+prompts must stay pending for those assertions; a timer-based model prompt
+is not a durable fixture. Cleanup removes the lease by its exact command ID.
+
+### 2026-09-17 — Admin browser assertions wait for the role probe
+
+**Near miss.** The #7331 preview admin journey reported a missing grant while
+its trace contained five successful `GET /v1/user-roles` responses with
+`isAdmin: true`. Its helper treated the initial refusal view as a settled
+result and navigated again before the role response reached the UI.
+
+**Rule.** Wait for the authenticated role probe before interpreting the admin
+guard. A temporary refusal view during authentication is not proof of a
+missing database grant.
+
+**Enforcement.** `openAdminOverview` observes the real role response, then
+asserts the overview heading for an admin. It still retries denied or failed
+probes and fails if the granted user never reaches the overview.
+
+### 2026-09-17 — Stop preview provisioning after a GitHub secondary limit
+
+**Near miss.** Repeated full #7331 previews each created 32 managed repositories
+in the HTTP lane, plus browser fixtures. GitHub then returned `403` with a
+secondary content-creation limit. The API propagated that as provisioning
+`503`; the feature's HTTP, native, and real-generation checks had passed.
+
+**Rule.** After a provider rate limit, stop full preview retries. Fix failures
+locally, reuse completed evidence for unchanged code, and wait for the provider
+to permit a single provisioning check before starting another full run.
+
+**Enforcement.** The pending queue fixture is verified with the local browser
+runner, which uses local Git. The preview gate stays explicitly blocked until
+GitHub provisioning recovers; a local pass does not replace that gate.

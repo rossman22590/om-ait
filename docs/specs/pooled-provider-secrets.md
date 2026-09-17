@@ -23,6 +23,7 @@ A project stores one shared provider key in its secrets screen. Every project me
 ## Session selection and pool
 
 - A session selects a set of stable secret IDs per provider. An empty explicit selection means no resource secret for that provider. The SDK and UI preserve omitted, empty, and explicit selections distinctly. Without a ChatGPT selection, the caller's newest personal OAuth account is the default. If the caller has none, the legacy project login remains the fallback. Another member's shared account requires explicit selection.
+- Model validation uses the prospective selection before session creation and the saved pool for later model changes. Passive validation does not advance the round-robin cursor.
 - A selected secret must match the provider, be active, be granted to the session's principal, and be allowed by the running agent. Invalid or unauthorized IDs fail the write atomically. Every gateway request re-evaluates authorization and active state.
 - For each new model request, choose a starting key from the eligible pool and visit each selected key at most once. On a pre-output `429`, bound `Retry-After` to 60 seconds, put that key on a shared cooldown, and try the next eligible key. A `429` is not counted against the provider as a whole. If every key is unavailable, return `429` with the earliest retry time.
 - Never replay a request once response content has streamed. Do not cycle keys for a provider-wide `5xx`. Other credential errors return without changing resource state.
@@ -54,3 +55,28 @@ A project stores one shared provider key in its secrets screen. Every project me
 4. Add request-level pool selection, shared cooldown, bounded failover, audit records, and explicit failure responses.
 5. Build the Models provider-key and session settings UI from existing components. Add browser journeys and desktop checks.
 6. Run local HTTP, SDK, browser, and package gates. Open a draft PR with preview, then prove the same objective through a real preview session. Do not merge without explicit approval.
+
+## Takeover review, 2026-09-17
+
+PR #7311 reverted the earlier user/project connection implementation in commit
+`79679326abdc6383da8e24e1635846718b29c757`. PR #7319 replaces it with this resource
+model. Its canonical branch is `pooled-provider-secrets`. Continue that work;
+do not restore #7295 or replace Marko's PR without agreeing on the handoff.
+
+The review starts from `ce8a3531a027f9d5617c521bb2bd137f2654abf5`.
+The existing preview and CI pass at that commit. They do not prove the following
+failure paths, which must be covered before the feature is ready:
+
+1. A session still exposes its configured provider after its last key is revoked
+   or deleted. The user can inspect the empty pool and explicitly reset it.
+   A failed selection read cannot be mistaken for an inherited selection.
+2. A cancelled ChatGPT authorization cannot update a later authorization dialog.
+   Grant mutations refresh the authoritative state even after partial failure.
+3. Session-bound credentials cannot read or change a sibling session's pool.
+   A manager's selection requires grants for both the manager and session owner.
+   Background sessions cannot acquire personal account credentials.
+4. Browser controls distinguish inherited, selected, empty, unavailable, loading,
+   and failed states. Selection limits and pending writes are enforced in the UI.
+5. Local HTTP and browser regressions pass. SDK export, type, test, and install
+   gates pass. The updated preview proves selection and gateway behavior through
+   an actual session. Human OAuth approval remains a separate explicit check.

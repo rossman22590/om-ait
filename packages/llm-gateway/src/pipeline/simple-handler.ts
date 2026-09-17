@@ -475,9 +475,11 @@ export async function handleChatCompletions(
   const poolCandidates = served.poolSecretId
     ? resolvedCandidates.filter((candidate) => Boolean(candidate.poolSecretId) && candidate.provider === served.provider)
     : [];
+  let earliestPoolRetryAt = Infinity;
   const noteRateLimit = async (candidate: UpstreamDescriptor, response: Response): Promise<void> => {
-    if (!candidate.poolSecretId || !hooks.notePoolRateLimit) return;
     const seconds = clampRetryAfterSeconds(response.headers.get('retry-after')) ?? 30;
+    earliestPoolRetryAt = Math.min(earliestPoolRetryAt, Date.now() + seconds * 1000);
+    if (!candidate.poolSecretId || !hooks.notePoolRateLimit) return;
     try {
       await hooks.notePoolRateLimit(principal, candidate.poolSecretId, seconds);
     } catch (error) {
@@ -562,6 +564,11 @@ export async function handleChatCompletions(
         }
         if (upstream.status === 429) await noteRateLimit(candidate, upstream);
         if (upstream.status !== 429) break;
+      }
+      if (upstream.status === 429) {
+        const headers = new Headers(upstream.headers);
+        headers.set('retry-after', String(Math.max(1, Math.ceil((earliestPoolRetryAt - Date.now()) / 1000))));
+        upstream = new Response(upstream.body, { status: upstream.status, statusText: upstream.statusText, headers });
       }
     }
     retryWithoutEffort = null;

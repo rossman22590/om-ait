@@ -100,8 +100,8 @@ import {
 } from '@/features/workspace/customize/sections/llm-provider/utils';
 import { LLM_PROVIDERS, LLM_PROVIDER_BY_ID, type LlmProviderEntry } from '@/lib/llm-providers';
 import { cn } from '@/lib/utils';
-import { deleteProjectProviderOAuth, deleteProjectSecret, getProjectDetail, listAccountSecretResources, upsertProjectSecret } from '@kortix/sdk';
-import { qk, refreshProjectProviderState, useFeatureFlag, useModelAccess, useProjectModelPickerCatalog } from '@kortix/sdk/react';
+import { deleteProjectProviderOAuth, deleteProjectSecret, getProjectDetail, upsertProjectSecret } from '@kortix/sdk';
+import { qk, refreshProjectProviderState, useAccountSecretResources, useFeatureFlag, useModelAccess, useProjectModelPickerCatalog } from '@kortix/sdk/react';
 import {
   CheckCircleIcon as Check,
   ArrowSquareOutIcon as ExternalLink,
@@ -839,13 +839,9 @@ export function ProviderConnect({
     enabled: enabled && pooledSecretsEnabled,
   });
   const accountId = project.data?.project?.account_id;
-  const pooledResources = useQuery({
-    queryKey: ['account-secret-resources', accountId, projectId],
-    queryFn: () => listAccountSecretResources(accountId!, projectId),
-    enabled: enabled && pooledSecretsEnabled && Boolean(accountId),
-  });
+  const pooledResources = useAccountSecretResources(enabled && pooledSecretsEnabled ? accountId : null, projectId);
   const pooledProviderIds = useMemo(
-    () => new Set((pooledResources.data?.secrets ?? []).map((secret) => secret.provider_id)),
+    () => new Set((pooledResources.data?.secrets ?? []).filter((secret) => secret.can_use && secret.active).map((secret) => secret.provider_id)),
     [pooledResources.data],
   );
   const tAccess = useTranslations('modelAccess');

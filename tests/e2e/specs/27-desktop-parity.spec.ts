@@ -482,6 +482,7 @@ for (const runtime of runtimes) {
       let project: ManifestProject | undefined;
       let sessionId = "";
       let bootSessionId = "";
+      const deliveryFixtureId = randomUUID();
       try {
         const accounts = await api<{ account_id: string }[]>(
           auth.access_token,
@@ -653,27 +654,34 @@ for (const runtime of runtimes) {
             timeout: 60_000,
           });
           sessionId = new URL(page.url()).pathname.split("/").at(-1)!;
+          await expect(page.getByRole("button", { name: "Stop", exact: true }))
+            .toBeEnabled({ timeout: 60_000 });
           await expect(input).toBeEmpty();
         } else {
           await expect(
             page.getByText("Previous response", { exact: true }),
           ).toBeVisible();
         }
-        const send = async (
+        await runDatabaseSql(
+          `INSERT INTO kortix.session_lifecycle_commands
+           (command_id, command_type, source, status, project_id, session_id,
+            account_id, actor_user_id, payload, locked_by, locked_until)
+           VALUES ($1, 'continue_session', 'ui', 'running', $2, $3, $4, $5,
+             $6::jsonb, 'browser-queue-fixture', now() + interval '10 minutes')`,
+          [deliveryFixtureId, project.id, sessionId, accounts[0].account_id, user.id,
+            JSON.stringify({ text: "Pending delivery fixture", clientMessageId: `msg_${deliveryFixtureId.replaceAll("-", "")}` })],
+          databaseUrl,
+        );
+        const promptRequest = () => page.waitForRequest(
+          (request) =>
+            request.method() === "POST" &&
+            new URL(request.url()).pathname.endsWith(`/sessions/${sessionId}/prompts`),
+        );
+        const verifySend = async (
+          request: Promise<import("@playwright/test").Request>,
           text: string,
-          key: string,
           placement: string,
-          fill = true,
         ) => {
-          const request = page.waitForRequest(
-            (request) =>
-              request.method() === "POST" &&
-              new URL(request.url()).pathname.endsWith(
-                `/sessions/${sessionId}/prompts`,
-              ),
-          );
-          if (fill) await input.fill(text);
-          await input.press(key);
           const sent = await request;
           const outgoing = sent.postDataJSON();
           expect(outgoing.placement).toBe(placement);
@@ -682,6 +690,12 @@ for (const runtime of runtimes) {
           );
           await expect(input).toBeEmpty();
           expect([200, 202]).toContain((await sent.response())?.status());
+        };
+        const send = async (text: string, key: string, placement: string, fill = true) => {
+          const request = promptRequest();
+          if (fill) await input.fill(text);
+          await input.press(key);
+          await verifySend(request, text, placement);
         };
         const transcriptText = "Enter pending placement";
         const composerText = "Command pending placement";
@@ -710,7 +724,10 @@ for (const runtime of runtimes) {
           await acceptanceGate;
           await route.fulfill({ response });
         });
-        const firstSend = send(transcriptText, "Enter", "transcript");
+        const firstRequest = promptRequest();
+        await input.fill(transcriptText);
+        await input.press("Enter");
+        const firstSend = verifySend(firstRequest, transcriptText, "transcript");
         let nextRequest: Promise<import("@playwright/test").Request> | undefined;
         try {
           await expect(pending).toBeVisible({ timeout: 1_000 });
@@ -919,6 +936,10 @@ for (const runtime of runtimes) {
             "DELETE",
             `/projects/${project.id}/sessions/${sessionId}`,
           ).catch(() => undefined);
+        await runDatabaseSql(
+          "DELETE FROM kortix.session_lifecycle_commands WHERE command_id = $1",
+          [deliveryFixtureId], databaseUrl,
+        );
         await project?.dispose();
         await deleteAuthUser(user.id, authOptions);
       }

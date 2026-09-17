@@ -63,8 +63,9 @@ let pooledEnabled = false;
 let pooledSecrets: { configured: boolean; coolingDown: boolean; retryAfterSeconds?: number; secrets: Array<{ secretId: string; label: string; value: string }> } = { configured: false, coolingDown: false, secrets: [] };
 let defaultCodexSecret: { secretId: string; label: string; value: string } | null = null;
 mock.module('../../feature-flags/for-project', () => ({ projectFeatureFlagEnabled: async () => pooledEnabled }));
+const resolveSessionProviderSecrets = mock(async (_input: unknown) => pooledSecrets);
 mock.module('../../secrets/account-resource', () => ({
-  resolveSessionProviderSecrets: async () => pooledSecrets,
+  resolveSessionProviderSecrets,
   resolveDefaultCodexAccountSecret: async () => defaultCodexSecret,
 }));
 const getProjectSecretValueForConsumer = mock(async (input: { name: string }) => {
@@ -190,6 +191,7 @@ function principal(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   pooledEnabled = false;
+  resolveSessionProviderSecrets.mockClear();
   pooledSecrets = { configured: false, coolingDown: false, secrets: [] };
   defaultCodexSecret = null;
   tierByAccount = {};
@@ -574,6 +576,14 @@ describe('resolveCandidates — managed model tier gating', () => {
 });
 
 describe('resolveCandidates — codex + unknown provider', () => {
+  test('a shared project gateway key never borrows its creator’s personal ChatGPT account', async () => {
+    pooledEnabled = true;
+    codexCredential = { access: 'legacy-token' };
+    defaultCodexSecret = { secretId: 'private', label: 'Private account', value: JSON.stringify({ openai: { access: 'private-token' } }) };
+    const candidates = await resolveCandidates(principal({ keyId: 'shared-project-key' }), 'codex/gpt-5.5');
+    expect(candidates.map((candidate) => candidate.apiKey)).toEqual(['legacy-token']);
+  });
+
   test('an unselected session uses the caller’s newest personal ChatGPT account', async () => {
     pooledEnabled = true;
     codexCredential = { access: 'legacy-token' };
@@ -695,4 +705,24 @@ describe('explicit project model access', () => {
     expect(candidates).toHaveLength(1);
     expect(candidates[0].credentialRef).toBe('key');
   });
+});
+
+test('a prospective ChatGPT pool validates through the same member-bound resolver before a session exists', async () => {
+  pooledEnabled = true;
+  pooledSecrets = { configured: true, coolingDown: false, secrets: [
+    { secretId: 'shared', label: 'Shared', value: JSON.stringify({ openai: { access: 'shared-token' } }) },
+  ] };
+  const actor = principal();
+  const candidates = await resolveCandidates(actor, 'codex/gpt-5.5', { providerSecretPools: { codex: ['shared'] } });
+  expect(candidates.map(candidate => candidate.poolSecretId)).toEqual(['shared']);
+  expect(resolveSessionProviderSecrets).toHaveBeenCalledWith({ accountId: actor.accountId, userId: actor.userId, providerId: 'codex', name: 'CODEX_AUTH_JSON', secretIds: ['shared'] });
+  expect(resolveCodexAccountCredential).toHaveBeenCalledWith(expect.objectContaining({ sessionId: null }));
+});
+
+test('an explicitly empty prospective pool never borrows the legacy project credential', async () => {
+  pooledEnabled = true;
+  codexCredential = { access: 'legacy-token' };
+  pooledSecrets = { configured: true, coolingDown: false, secrets: [] };
+  await expect(resolveCandidates(principal(), 'codex/gpt-5.5', { providerSecretPools: { codex: [] } })).rejects.toMatchObject({ code: 'provider_not_connected' });
+  expect(resolveCodexCredential).not.toHaveBeenCalled();
 });

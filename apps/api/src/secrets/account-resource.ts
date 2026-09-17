@@ -90,15 +90,24 @@ export async function resolveDefaultCodexAccountSecret(accountId: string, projec
 export async function resolveSessionProviderSecrets(input: {
   accountId: string;
   projectId: string;
-  sessionId: string;
   userId: string;
   providerId: string;
   name: string;
-}): Promise<{ configured: boolean; coolingDown: boolean; retryAfterSeconds?: number; secrets: { secretId: string; label: string; value: string }[] }> {
-  const [pool] = await db.update(sessionProviderSecretPools)
-    .set({ nextIndex: sql`case when ${sessionProviderSecretPools.nextIndex} >= 2147483646 then 0 else ${sessionProviderSecretPools.nextIndex} + 1 end` })
-    .where(and(eq(sessionProviderSecretPools.sessionId, input.sessionId), eq(sessionProviderSecretPools.providerId, input.providerId)))
-    .returning({ secretIds: sessionProviderSecretPools.secretIds, nextIndex: sessionProviderSecretPools.nextIndex });
+  advanceIndex?: boolean;
+} & ({ sessionId: string; secretIds?: never } | { secretIds: string[]; sessionId?: never })): Promise<{ configured: boolean; coolingDown: boolean; retryAfterSeconds?: number; secrets: { secretId: string; label: string; value: string }[] }> {
+  let pool: { secretIds: string[]; nextIndex: number } | undefined;
+  if (input.secretIds !== undefined) {
+    pool = { secretIds: input.secretIds, nextIndex: 1 };
+  } else if (input.advanceIndex === false) {
+    [pool] = await db.select({ secretIds: sessionProviderSecretPools.secretIds, nextIndex: sessionProviderSecretPools.nextIndex })
+      .from(sessionProviderSecretPools)
+      .where(and(eq(sessionProviderSecretPools.sessionId, input.sessionId), eq(sessionProviderSecretPools.providerId, input.providerId))).limit(1);
+  } else {
+    [pool] = await db.update(sessionProviderSecretPools)
+      .set({ nextIndex: sql`case when ${sessionProviderSecretPools.nextIndex} >= 2147483646 then 0 else ${sessionProviderSecretPools.nextIndex} + 1 end` })
+      .where(and(eq(sessionProviderSecretPools.sessionId, input.sessionId), eq(sessionProviderSecretPools.providerId, input.providerId)))
+      .returning({ secretIds: sessionProviderSecretPools.secretIds, nextIndex: sessionProviderSecretPools.nextIndex });
+  }
   if (!pool) return { configured: false, coolingDown: false, secrets: [] };
   if (!pool.secretIds.length) return { configured: true, coolingDown: false, secrets: [] };
   if (!(await memberMayReadProject(input.accountId, input.projectId, input.userId))) return { configured: true, coolingDown: false, secrets: [] };

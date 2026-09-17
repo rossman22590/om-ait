@@ -70,6 +70,7 @@ export function ComposerChatInput({
   onAgentSelectionChange,
   sandboxSlot,
   draftScope,
+  draftActive,
   promptAttachments,
 }: {
   onSend: (
@@ -121,6 +122,7 @@ export function ComposerChatInput({
   sandboxSlot?: SessionOverrideSlot;
   /** Persist the unsent draft under this scope — see `composer/draft/`. */
   draftScope?: DraftScope | null;
+  draftActive?: boolean;
   /** Host-owned upload controller. See `SessionChatInputProps.promptAttachments`. */
   promptAttachments?: SessionChatInputProps['promptAttachments'];
 }) {
@@ -281,6 +283,7 @@ export function ComposerChatInput({
       onVariantChange={(v) => local.model.variant.set(v ?? undefined)}
       commands={commands || []}
       draftScope={draftScope}
+      draftActive={draftActive}
     />
   );
 }

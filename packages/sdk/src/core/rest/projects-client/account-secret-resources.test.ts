@@ -5,6 +5,7 @@ import {
   listAccountSecretResources, revokeAccountSecretResourceGrant, rotateAccountSecretResource,
   setAccountSecretResourceAccess,
   getSessionProviderSecretPool, setSessionProviderSecretPool,
+  listSessionProviderSecretPools,
 } from './account-secret-resources';
 
 const calls: Array<{ url: string; method: string; body: unknown }> = [];
@@ -60,4 +61,28 @@ test('project access and member restriction use one scoped request', async () =>
   ]);
   expect(calls[1]?.body).toMatchObject({ project_id: 'project' });
   expect(calls[2]?.body).toEqual({ mode: 'members', user_ids: ['member'] });
+});
+
+test('list preserves an empty configured pool after its last resource disappears', async () => {
+  const result = { pools: [{ provider_id: 'anthropic', configured: true, secret_ids: [] }], can_edit: false };
+  globalThis.fetch = mock(async (url: unknown, init: RequestInit = {}) => {
+    calls.push({ url: String(url), method: init.method ?? 'GET', body: null });
+    return Response.json(result);
+  }) as unknown as typeof fetch;
+  expect(await listSessionProviderSecretPools('project/id', 'session/id')).toEqual(result);
+  expect(calls).toEqual([{
+    url: 'http://test.local/projects/project%2Fid/sessions/session%2Fid/provider-secret-pools',
+    method: 'GET', body: null,
+  }]);
+});
+
+test('grant editors can handle a failure once without a duplicate global notification', async () => {
+  let notifications = 0;
+  configureKortix({ backendUrl: 'http://test.local', getToken: async () => 'tok', onError: () => { notifications++; } });
+  globalThis.fetch = mock(async () => Response.json({ error: 'Access change denied' }, { status: 403 })) as unknown as typeof fetch;
+  await expect(grantAccountSecretResource('account', 'secret', 'member', { showErrors: false })).rejects.toMatchObject({ status: 403 });
+  await expect(revokeAccountSecretResourceGrant('account', 'secret', 'member', { showErrors: false })).rejects.toMatchObject({ status: 403 });
+  expect(notifications).toBe(0);
+  await expect(grantAccountSecretResource('account', 'secret', 'member')).rejects.toMatchObject({ status: 403 });
+  expect(notifications).toBe(1);
 });
