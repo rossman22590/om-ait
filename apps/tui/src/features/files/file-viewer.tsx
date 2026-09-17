@@ -223,15 +223,14 @@ export function FileViewer({ state, offset, width, height, focused = false }: Fi
         {layoutRow(state.path, filetype ?? 'text', bodyWidth)}
       </text>
       <box flexDirection="row" width={width} height={rows}>
-        <box flexDirection="column" width={gutterWidth + 1}>
-          {visible.map((_line, index) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: the row index IS the
-            // identity of a gutter cell — it is a fixed grid of line numbers.
-            <text key={`gutter-${index}`} fg={theme.faint}>
-              {String(start + index + 1).padStart(gutterWidth)}
-            </text>
-          ))}
-        </box>
+        {/* The gutter is ONE text whose content carries the newlines, so it
+            stays row-for-row aligned with the `<code>` beside it and needs no
+            index-keyed array of one-row elements. */}
+        <text fg={theme.faint} width={gutterWidth + 1} flexShrink={0}>
+          {visible
+            .map((_line, index) => String(start + index + 1).padStart(gutterWidth))
+            .join('\n')}
+        </text>
         {/* `conceal` defaults to TRUE (`Code.d.ts:60`), which HIDES markup the
             grammar marks concealable — a markdown `# ` heading prefix renders
             as nothing. A file viewer shows the file, byte for byte, so it is

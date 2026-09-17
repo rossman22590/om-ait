@@ -3,9 +3,9 @@ import { act } from 'react';
 
 import { testRender } from '@opentui/react/test-utils';
 
-import { type TreeNode } from './file-tree.ts';
+import type { TreeNode } from './file-tree.ts';
+import type { ReadResult } from './file-viewer.tsx';
 import { type FileLoaders, FilesView } from './files-screen.tsx';
-import { type ReadResult } from './file-viewer.tsx';
 
 // React 19 needs this before `act`; without it a key press is asserted against
 // the frame React had not yet committed. See docs/opentui-notes.md.

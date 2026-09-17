@@ -371,15 +371,12 @@ export function FilesView({
         <text fg={theme.faint}>{layoutRow('Enter open · / filter · r reload', '', bodyWidth)}</text>
       </box>
 
-      <box flexDirection="column" width={1}>
-        {Array.from({ length: Math.max(height, 1) }, (_unused, index) => (
-          // biome-ignore lint/suspicious/noArrayIndexKey: the index IS the
-          // identity of a rule cell — it is a fixed one-column grid.
-          <text key={`rule-${index}`} fg={theme.border}>
-            │
-          </text>
-        ))}
-      </box>
+      {/* The column rule, as ONE text whose content carries the newlines. A
+          `<text>` per row would be an array keyed by index, and the rule has no
+          identity per row to key on. */}
+      <text fg={theme.border} width={1} flexShrink={0}>
+        {Array(Math.max(height, 1)).fill('│').join('\n')}
+      </text>
 
       <box flexDirection="column" flexGrow={1}>
         <FileViewer

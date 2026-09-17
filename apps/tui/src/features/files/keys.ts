@@ -33,7 +33,12 @@ export const FILES_KEYS: readonly FilesBinding[] = [
     chords: [{ key: 'k' }, { key: 'up' }],
     description: 'Move up the tree.',
   },
-  { id: 'files.first', scope: 'files', chords: [{ key: 'g' }], description: 'Go to the first row.' },
+  {
+    id: 'files.first',
+    scope: 'files',
+    chords: [{ key: 'g' }],
+    description: 'Go to the first row.',
+  },
   { id: 'files.last', scope: 'files', chords: [{ key: 'G' }], description: 'Go to the last row.' },
   {
     id: 'files.open',

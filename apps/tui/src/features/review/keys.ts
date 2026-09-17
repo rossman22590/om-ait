@@ -82,7 +82,8 @@ export const REVIEW_KEYS: readonly ReviewBinding[] = [
     id: 'review.approve',
     scope: 'review',
     chords: [{ key: 'a' }],
-    description: 'Approve. Not a separate Kortix action — approving a change request is merging it.',
+    description:
+      'Approve. Not a separate Kortix action — approving a change request is merging it.',
   },
   {
     id: 'review.merge',

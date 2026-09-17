@@ -1,4 +1,12 @@
-export { ReviewScreen, type ReviewScreenProps } from './review-screen.tsx';
+export {
+  ReviewScreen,
+  type ReviewScreenProps,
+  ReviewView,
+  type ReviewViewProps,
+  type ReviewActions,
+  type DiffPayload,
+  compareRows,
+} from './review-screen.tsx';
 export {
   ChangeList,
   type ChangeListProps,

@@ -135,9 +135,19 @@ export function DiffView({ state, fileIndex, mode, offset, width, height }: Diff
   );
 
   return (
-    <box flexDirection="column" width={width} height={height}>
-      <text fg={theme.fg}>{header}</text>
-      <text fg={theme.faint}>
+    // `overflow: hidden` is load-bearing, not tidiness: without it the
+    // scrollbox's rows paint over the two header lines above it (verified —
+    // the first captured row read `112 sconstpstartb=o1;path`, the title and
+    // the diff's first line interleaved). Same trap the transcript hit.
+    <box flexDirection="column" width={width} height={height} overflow="hidden">
+      {/* `flexShrink={0}` on every fixed row: the box has an explicit height
+          and a `flexGrow` child, so without it flexbox shrinks these one-row
+          texts to zero and they paint on top of each other (verified — row 0
+          read `1/2 src/app.tse boot path`, both headers in one row). */}
+      <text fg={theme.fg} flexShrink={0}>
+        {header}
+      </text>
+      <text fg={theme.faint} flexShrink={0}>
         {layoutRow(
           file
             ? `${index + 1}/${state.files.length} ${file.path}`
@@ -146,13 +156,17 @@ export function DiffView({ state, fileIndex, mode, offset, width, height }: Diff
           bodyWidth,
         )}
       </text>
+      {/* The scrollbox takes no `width` and never forces
+          `scrollbarOptions.visible`: an explicit width on the box or on the
+          `<diff>` makes the content paint outside the viewport, and
+          `{ visible: true }` blanks the viewport entirely in 0.5.11
+          (docs/opentui-notes.md). */}
       {file ? (
         <scrollbox
           ref={scrollRef}
           scrollY
           flexGrow={1}
-          width={width}
-          scrollbarOptions={{ showArrows: false }}
+          contentOptions={{ flexDirection: 'column' }}
         >
           {/* No `filetype`: a diff's colors come from the renderable's own
               add/remove styling, and naming a grammar that is not one of the
@@ -163,14 +177,17 @@ export function DiffView({ state, fileIndex, mode, offset, width, height }: Diff
             diff={file.patch}
             view={mode}
             showLineNumbers
-            width={width}
             height={Math.max(file.patch.split('\n').length, 1)}
           />
         </scrollbox>
       ) : (
-        <text fg={theme.faint}>This change request has no file changes.</text>
+        <text fg={theme.faint} flexShrink={0}>
+          This change request has no file changes.
+        </text>
       )}
-      <text fg={theme.faint}>s unified/split · n/p file · J/K scroll · Esc list</text>
+      <text fg={theme.faint} flexShrink={0}>
+        s unified/split · n/p file · J/K scroll · Esc list
+      </text>
     </box>
   );
 }
