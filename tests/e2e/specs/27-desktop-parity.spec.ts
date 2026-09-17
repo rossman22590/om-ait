@@ -653,6 +653,8 @@ for (const runtime of runtimes) {
             timeout: 60_000,
           });
           sessionId = new URL(page.url()).pathname.split("/").at(-1)!;
+          await expect(page.getByRole("button", { name: "Stop", exact: true }))
+            .toBeEnabled({ timeout: 60_000 });
           await expect(input).toBeEmpty();
         } else {
           await expect(

@@ -6174,3 +6174,17 @@ overrides its default and schedules focus when the lazy editor mounts. The
 browser journey keeps settings open through editor initialization. Start a
 paint deadline after the input action completes, not while `fill()` and
 `press()` are still pending.
+
+### 2026-09-17 — Queue placement needs an active-session fixture
+
+**Near miss.** The #7331 preview queue test filled the startup composer while
+it handed off to the active session. Its input disappeared before Enter. The
+URL had changed, but the startup shell still owned the disabled Stop control.
+
+**Rule.** Establish an active session before timing active-session queue
+placement. A route change alone does not prove the composer handoff finished.
+
+**Enforcement.** The deployed queue fixture waits for the enabled Stop control.
+Both one-second paint assertions and real API acceptance/read-back remain.
+The separate startup draft handoff needs a deterministic regression and fix;
+this prerequisite does not claim to fix draft transfer between composers.
