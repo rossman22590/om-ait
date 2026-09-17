@@ -1209,18 +1209,41 @@ async function listCatalog(p: ConnectorPrincipal): Promise<CatalogConnector[]> {
     // every human with project access (no per-connector member scoping).
     // Canonical on both sides — the grant is canonicalized at construction.
     if (!principalMayUseConnector(p, canonicalConnectorAlias(row.slug))) continue;
-    const connection = await resolveActiveConnectorConnection(p, row);
-    if (!connection) continue;
+    // The accounts come first, and they decide whether the connector is listed.
+    // `resolveActiveConnectorConnection` answers "what would an UNNAMED call run
+    // as" — and under the account_required rule that is null when several
+    // accounts are reachable and none is pinned. A connector with two connected
+    // Gmail accounts must not vanish from the catalog for exactly the reason it
+    // is interesting; the agent sees its accounts and names one.
+    // Ask the session-scoped resolver WHY, not just whether: `none` means the
+    // session's scope (explicit empty scope, revoked pin, visibility) hides
+    // this connector and the catalog must hide it too — the catalog never
+    // advertises what a call would refuse. `ambiguous` is the one exception:
+    // several reachable accounts, none pinned — the connector IS usable, the
+    // agent just has to name an account, so it is listed with its accounts.
+    const outcome = await resolveSessionConnectorConnectionOutcome({
+      accountId: p.accountId,
+      projectId: row.projectId,
+      sessionId: p.sessionId,
+      alias: row.slug,
+      actingUserId: p.userId,
+      account: null,
+    });
+    if (outcome.kind === 'none') continue;
+    const connection =
+      outcome.kind === 'ok' && outcome.connection.status === 'active' ? outcome.connection : null;
+    if (outcome.kind === 'ok' && !connection) continue;
+    const accounts = await catalogAccountsFor(p, row.slug, accountVisibility);
     const { hasAuth } = authOf(row);
-    if (hasAuth) {
+    if (connection && hasAuth) {
       // Always the shared credential — `per_user` was removed 2026-07-05.
       if (!(await connectorConnected(row, null, connection))) continue;
     }
     const connectorPolicies = await loadConnectorPoliciesFor(row.connectorId);
-    const [actions, accounts] = await Promise.all([
-      db.select().from(connectorActions).where(eq(connectorActions.connectorId, row.connectorId)),
-      catalogAccountsFor(p, row.slug, accountVisibility),
-    ]);
+    const actions = await db
+      .select()
+      .from(connectorActions)
+      .where(eq(connectorActions.connectorId, row.connectorId));
     out.push({
       slug: row.slug,
       name: row.name,
@@ -1247,9 +1270,12 @@ async function listCatalog(p: ConnectorPrincipal): Promise<CatalogConnector[]> {
           inputSchema: a.inputSchema ?? null,
         })),
       accounts,
-      // Accounts already come back default-first (see listEntitledConnectorConnections),
-      // so the first entry is exactly what an unselected call resolves to.
-      default_account: accounts[0]?.label ?? null,
+      // What an UNNAMED call runs as: the one pinned account, or the only
+      // account. Several accounts with no pin is `null` — the call would be
+      // refused with `account_required`, so the catalog must not promise one.
+      default_account:
+        accounts.find((account) => account.is_default)?.label ??
+        (accounts.length === 1 ? accounts[0].label : null),
     });
   }
   return out;

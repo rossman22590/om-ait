@@ -445,10 +445,12 @@ describe('connector catalog and call resolver use one session scope', () => {
         is_default: true,
       },
     ]);
-    // The member account ranks first (the caller's own identity wins ties over
-    // the project default — see `entitledConnectionRank`), so it is what an
-    // unselected call actually resolves to, not merely the `is_default` row.
-    expect(veyris?.default_account).toBe('Veyris my workspace');
+    // The member account ranks first in the LIST (the caller's own identity
+    // sorts ahead of shared ones — see `entitledConnectionRank`), but the
+    // account an UNNAMED call runs as is the one a human pinned: the project
+    // default here. With several accounts and no pin it would be `null`, and
+    // the call would answer `account_required` (THE RULE, 2026-09-16).
+    expect(veyris?.default_account).toBe('Veyris default');
 
     // `unbound` holds exactly one entitled account for this caller.
     const unbound = catalog.find((c) => c.slug === 'unbound');
@@ -466,6 +468,8 @@ describe('connector catalog and call resolver use one session scope', () => {
         is_default: true,
       },
     ]);
-    expect(unbound?.default_account).toBe('Unbound my workspace');
+    // Same rule: the caller's own account lists first, but the PINNED project
+    // account is what an unnamed call runs as.
+    expect(unbound?.default_account).toBe('Unbound default');
   });
 });

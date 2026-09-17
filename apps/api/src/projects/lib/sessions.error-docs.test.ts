@@ -99,11 +99,12 @@ describe('KaaB error tables match the codes the API emits', () => {
     }
   });
 
-  test('the active CONNECTOR_CONNECTION_REQUIRED code stays in the tables', () => {
-    // The required-connection gate emits this code from session creation and
-    // prompt preflight. Keep both public error tables aligned with that contract.
+  test('the retired CONNECTOR_CONNECTION_REQUIRED code is no longer documented as live', () => {
+    // No route emits it since the session-level connector gate was retired
+    // (2026-09-16). The guides mention it only as history, outside the error
+    // tables; a table row would promise a refusal that can never happen.
     for (const relativePath of ERROR_TABLES) {
-      expect(documentedErrorCodes(readFileSync(join(REPO_ROOT, relativePath), 'utf8'))).toContain(
+      expect(documentedErrorCodes(readFileSync(join(REPO_ROOT, relativePath), 'utf8'))).not.toContain(
         'CONNECTOR_CONNECTION_REQUIRED',
       );
     }
