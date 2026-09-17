@@ -260,10 +260,37 @@ flow(
       const r = await ctx.client.as(ctx.P.OWNER).get("/v1/projects/github/installation");
       r.status([200, 400, 409, 503]);
     });
-    await ctx.step("OWNER lists account git connections", async () => {
-      const r = await ctx.client.as(ctx.P.OWNER).get("/v1/projects/github/installations");
-      r.status([200, 400, 409, 503]);
-    });
+    await ctx.step(
+      "OWNER lists account git connections: real installations only, no synthetic instance-backend entry",
+      async () => {
+        const r = await ctx.client.as(ctx.P.OWNER).get("/v1/projects/github/installations");
+        r.status([200, 400, 409, 503]);
+        if (r.statusCode !== 200) return;
+        const body = r.json<any>();
+        if (!Array.isArray(body.installations)) {
+          throw new Error(`expected installations[], got: ${JSON.stringify(body)}`);
+        }
+        // The instance git backend used to ride here as `installation_id:
+        // "pat"`, which made one instance-global credential read as this
+        // account's own connection (2026-09-16). Every id is a real GitHub
+        // installation id now.
+        for (const installation of body.installations) {
+          if (!/^[0-9]+$/.test(String(installation.installation_id))) {
+            throw new Error(
+              `non-numeric installation_id in the account connection list: ${installation.installation_id}`,
+            );
+          }
+        }
+        // The install link is derived from GET /app, or null when the
+        // instance has no App at all — never a URL for a slug nobody verified.
+        if (
+          body.install_url !== null &&
+          !(typeof body.install_url === "string" && body.install_url.startsWith("https://github.com/apps/"))
+        ) {
+          throw new Error(`expected install_url to be null or a github.com/apps URL, got: ${body.install_url}`);
+        }
+      },
+    );
   },
 );
 
@@ -651,5 +678,106 @@ flow(
       await db.end();
       await rm(root, { recursive: true, force: true });
     }
+  },
+);
+
+// ── Instance git backend ("Kortix managed") — its own namespace ──────────────
+//
+// One deployment-wide thing. It used to be injected into GET
+// /projects/github/installations as a synthetic installation with the id
+// `pat`, which made an instance-global credential look like one account's
+// GitHub connection — the same conflation that let a platform admin replace
+// production's App from a customer's settings page on 2026-09-16.
+
+flow(
+  "GH-18",
+  {
+    domain: "git",
+    routes: [
+      "GET /v1/projects/git/backend",
+      "GET /v1/projects/git/backend/repositories",
+    ],
+  },
+  async (ctx) => {
+    await ctx.step("ANON → 401 on GET /git/backend", async () => {
+      const r = await ctx.client.as(ctx.P.ANON).get("/v1/projects/git/backend");
+      r.status(401);
+    });
+
+    await ctx.step(
+      "OWNER reads the instance backend: {configured, kind, owner} and never a credential",
+      async () => {
+        const r = await ctx.client.as(ctx.P.OWNER).get("/v1/projects/git/backend");
+        r.status(200);
+        const body = r.json<any>();
+        if (typeof body.configured !== "boolean") {
+          throw new Error(`expected boolean configured, got: ${JSON.stringify(body)}`);
+        }
+        if (![null, "app", "pat"].includes(body.kind)) {
+          throw new Error(`expected kind ∈ {app, pat, null}, got: ${body.kind}`);
+        }
+        if (body.configured !== (body.kind !== null)) {
+          throw new Error(`configured=${body.configured} disagrees with kind=${body.kind}`);
+        }
+        if (body.configured && typeof body.owner !== "string") {
+          throw new Error(`a configured backend must name its owner, got: ${JSON.stringify(body)}`);
+        }
+        // The owner login is public (every managed repo_url carries it). The
+        // token, private key and installation id are not, and this route is
+        // readable by every authenticated user.
+        for (const key of ["token", "pat", "private_key", "privateKey", "installation_id", "installationId"]) {
+          if (key in body) throw new Error(`GET /git/backend leaks ${key}`);
+        }
+      },
+    );
+
+    await ctx.step("ANON → 401 on GET /git/backend/repositories", async () => {
+      const r = await ctx.client.as(ctx.P.ANON).get("/v1/projects/git/backend/repositories");
+      r.status(401);
+    });
+
+    await ctx.step(
+      "OWNER on GET /git/backend/repositories: 403 unless a self-host operator, never a customer-wide listing by role",
+      async () => {
+        // `isSelfHostOperator`, NOT `isPlatformAdmin`: on cloud the backend
+        // owner is the shared `managed-kortix` org holding every customer's
+        // repository. The local and cloud profiles run with an empty operator
+        // allowlist, so the account OWNER is refused. A self-host target that
+        // lists this user as its operator answers with the owner's
+        // repositories (200) or, with no backend configured, 409.
+        const r = await ctx.client.as(ctx.P.OWNER).get("/v1/projects/git/backend/repositories");
+        r.status([403, 200, 409]);
+        const body = r.json<any>();
+        if (r.statusCode === 403 && typeof body.error !== "string") {
+          throw new Error(`403 must carry an error string, got: ${JSON.stringify(body)}`);
+        }
+        if (r.statusCode === 200 && !(typeof body.owner === "string" && Array.isArray(body.repositories))) {
+          throw new Error(`expected {owner, repositories[]}, got: ${JSON.stringify(body)}`);
+        }
+        if (r.statusCode === 409 && typeof body.error !== "string") {
+          throw new Error(`409 must carry an error string, got: ${JSON.stringify(body)}`);
+        }
+      },
+    );
+
+    await ctx.step(
+      "OWNER POST /link-repository {source: managed} → 403 unless an operator; with installation_id too → 400",
+      async () => {
+        const both = await ctx.client.as(ctx.P.OWNER).post("/v1/projects/link-repository", {
+          repo_full_name: "managed-kortix/does-not-matter",
+          source: "managed",
+          installation_id: "12345",
+        });
+        both.status(400);
+        const managed = await ctx.client.as(ctx.P.OWNER).post("/v1/projects/link-repository", {
+          repo_full_name: "managed-kortix/does-not-matter",
+          source: "managed",
+        });
+        // 403 for a non-operator (local + cloud). A self-host operator reaches
+        // the backend and gets 409 (token-less backend) or 400 (GitHub says
+        // the repository does not exist) — but never a project.
+        managed.status([403, 409, 400]);
+      },
+    );
   },
 );
