@@ -218,7 +218,9 @@ export function SessionOverridesToolbar({
     [],
   );
   const controlsDisabled = isLoading || (Boolean(sessionId) && !scope);
-  const selectedProviderKeyCount = Object.values(providerPoolDraft).reduce((count, ids) => count + ids.length, 0);
+  const selectedProviderKeyCount = sessionId
+    ? (providerPools.data?.pools ?? []).reduce((count, pool) => count + pool.secret_ids.length, 0)
+    : Object.values(providerPoolDraft).reduce((count, ids) => count + ids.length, 0);
 
   const rows = useMemo(() => {
     const list: SessionOverrideRow[] = [];
@@ -273,7 +275,7 @@ export function SessionOverridesToolbar({
         summary: sessionId ? providerPools.isError ? tPooled('keysLoadError')
           : providerPools.isLoading ? tPooled('loadingKeys')
           : providerPools.data?.pools.length
-            ? tPooled('selectedKeys', { count: providerPools.data.pools.reduce((count, pool) => count + pool.secret_ids.length, 0) })
+            ? tPooled(selectedProviderKeyCount === 1 ? 'selectedOne' : 'selectedKeys', { count: selectedProviderKeyCount })
             : tPooled('projectDefaultShort') : Object.keys(providerPoolDraft).length
           ? tPooled(selectedProviderKeyCount === 1 ? 'selectedOne' : 'selectedKeys', { count: selectedProviderKeyCount })
           : tPooled('projectDefaultShort'),

@@ -276,6 +276,13 @@ test.describe('30 — pooled provider secrets', () => {
         } });
       });
       const poolPath = `/projects/${projectId}/sessions/${existingSession}/provider-secret-pools`;
+      await api(session.access_token, 'PUT', `${poolPath}/anthropic`, { secret_ids: [createdIds[1]] });
+      await page.setViewportSize({ width: 720, height: 480 });
+      await page.goto(`/projects/${projectId}/sessions/${existingSession}`, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('button', { name: 'Session overrides' }).click();
+      await page.getByRole('button', { name: 'Provider keys 1 key selected Override', exact: true }).click();
+      await expect(page.getByRole('checkbox', { name: 'Backup test key' })).toBeChecked();
+      await expect(page.getByRole('button', { name: 'Save key selection', exact: true })).toBeInViewport({ ratio: 1 });
       await api(session.access_token, 'PUT', `${poolPath}/anthropic`, { secret_ids: [] });
       await api(session.access_token, 'DELETE', `/accounts/${accountId}/secret-resources/${createdIds[1]}`);
       let failPoolRead = true;

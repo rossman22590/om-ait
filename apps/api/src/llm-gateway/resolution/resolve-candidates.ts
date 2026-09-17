@@ -172,7 +172,7 @@ export async function resolveCandidates(
         try {
           const accountCredential = await resolveCodexAccountCredential({
             projectId: principal.projectId, accountId: principal.accountId,
-            sessionId: principal.sessionId!, userId: principal.userId,
+            sessionId: principal.sessionId ?? null, userId: principal.userId,
             secretId: secret.secretId, value: secret.value,
           });
           if (!accountCredential) { expired = true; continue; }
@@ -250,8 +250,6 @@ export async function resolveCandidates(
   let byokFailure: GatewayResolutionError | null = null;
 
   if (byok && principal.projectId) {
-    // Provider keys are always project-wide (shared) — there is no
-    // per-user/private key concept. See getProjectSecretValue.
     const readGatewaySecret = (name: string) =>
       getProjectSecretValueForConsumer({
         projectId: principal.projectId!,
