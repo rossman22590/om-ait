@@ -21,6 +21,16 @@ linked, not inlined.
 
 ## Register
 
+### Use generic fixtures before publishing a public branch (2026-09-17)
+
+**Rule:** before pushing a public branch, inspect the complete commit diff,
+commit message, and PR body for customer names, repository URLs, account IDs,
+and project IDs. Use generic fixtures such as `example-org` and `example.test`.
+**When:** adding tests or documentation from a customer cutover. *Incident:*
+a public PR included a private customer name in a test fixture; deleting the
+branch did not make its commit unreachable. *Enforcer:* manual pre-push diff
+sweep; an automated fixture privacy gate remains to be built.
+
 ### A branch migration's timestamp is re-checked at MERGE time, not at write time (2026-09-17)
 
 **Rule:** before merging a branch that adds a migration, confirm its file sorts
