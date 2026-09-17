@@ -36,6 +36,11 @@ describe('managed catalog', () => {
     }
   });
 
+  test('DeepSeek cache-read rates match the Morph model feed', () => {
+    expect(getManagedModel('morph-dsv41flash')?.pricing?.cachedInputPerMillion).toBe(0.009);
+    expect(getManagedModel('morph-dsv4flash')?.pricing?.cachedInputPerMillion).toBe(0.0359375);
+  });
+
   test('old Kortix managed IDs and BYOK refs do not resolve as managed', () => {
     for (const old of [
       'grok-4.6', 'deepseek-v4-flash', 'deepseek-v4-pro-0813', 'muse-spark-1.2',

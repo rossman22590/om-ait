@@ -506,13 +506,13 @@ export const MANAGED_MODELS: ManagedModel[] = [
   {
     id: 'morph-dsv41flash', name: 'DeepSeek V4.1 Flash', upstreamModelId: 'morph-dsv41flash',
     transport: 'morph', pricingRef: 'morph/morph-dsv41flash',
-    pricing: { inputPerMillion: 0.3, cachedInputPerMillion: 0.03, outputPerMillion: 1.2 },
+    pricing: { inputPerMillion: 0.3, cachedInputPerMillion: 0.009, outputPerMillion: 1.2 },
     tier: 'balanced', vision: true, limit: { context: 1_048_576, output: 16_384 },
   },
   {
     id: 'morph-dsv4flash', name: 'DeepSeek V4 Flash 0731', upstreamModelId: 'morph-dsv4flash',
     transport: 'morph', pricingRef: 'morph/morph-dsv4flash',
-    pricing: { inputPerMillion: 0.141953, outputPerMillion: 0.399625 },
+    pricing: { inputPerMillion: 0.141953, cachedInputPerMillion: 0.0359375, outputPerMillion: 0.399625 },
     tier: 'fast', vision: false, limit: { context: 1_048_576, output: 16_384 },
   },
 ];
