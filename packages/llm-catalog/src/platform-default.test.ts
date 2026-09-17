@@ -8,7 +8,7 @@ import {
 
 describe('PLATFORM_DEFAULT_MODEL_ID', () => {
   test('is a concrete managed model', () => {
-    expect(PLATFORM_DEFAULT_MODEL_ID).toBe('morph-glm53-744b');
+    expect(PLATFORM_DEFAULT_MODEL_ID).toBe('morph-dsv41flash');
     expect(getManagedModel(PLATFORM_DEFAULT_MODEL_ID)).toBeDefined();
   });
 

@@ -97,11 +97,11 @@ const { gatewayModelCatalog, managedModels } = await import('./catalog-models');
 const { managedPickerModels } = await import('./picker-catalog');
 
 const FAKE_MANAGED_MODEL = {
-  id: 'morph-glm53-744b',
-  name: 'GLM-5.3 744B',
-  upstreamModelId: 'morph-glm53-744b',
+  id: 'morph-dsv41flash',
+  name: 'DeepSeek V4.1 Flash',
+  upstreamModelId: 'morph-dsv41flash',
   transport: 'morph' as const,
-  pricingRef: 'morph/morph-glm53-744b',
+  pricingRef: 'morph/morph-dsv41flash',
   tier: 'flagship' as const,
   vision: true,
   limit: { context: 200_000, output: 32_000 },

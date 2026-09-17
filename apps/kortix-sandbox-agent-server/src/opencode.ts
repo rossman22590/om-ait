@@ -1231,20 +1231,10 @@ export const MINIMAL_FALLBACK_MODELS: Record<string, KortixGatewayModel> = {
     attachment: true, temperature: true,
     limit: { context: 1_048_576, output: 16_384 }, cost: { input: 6, output: 22.5, cache_read: 0.6 },
   },
-  'morph-glm53-744b': {
-    name: 'GLM-5.3 744B', provider: 'kortix', reasoning: true, tool_call: true,
-    attachment: false, temperature: true,
-    limit: { context: 1_048_576, output: 16_384 }, cost: { input: 1.19, output: 3.74, cache_read: 0.1955 },
-  },
   'morph-dsv41flash': {
     name: 'DeepSeek V4.1 Flash', provider: 'kortix', reasoning: true, tool_call: true,
     attachment: true, temperature: true,
-    limit: { context: 1_048_576, output: 16_384 }, cost: { input: 0.3, output: 1.2, cache_read: 0.03 },
-  },
-  'morph-dsv4flash': {
-    name: 'DeepSeek V4 Flash 0731', provider: 'kortix', reasoning: true, tool_call: true,
-    attachment: false, temperature: true,
-    limit: { context: 1_048_576, output: 16_384 }, cost: { input: 0.141953, output: 0.399625 },
+    limit: { context: 1_048_576, output: 16_384 }, cost: { input: 0.3, output: 1.2, cache_read: 0.009 },
   },
   'openai/gpt-5.5': {
     name: 'GPT-5.5',

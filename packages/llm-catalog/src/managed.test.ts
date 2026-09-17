@@ -11,9 +11,7 @@ import {
 const served = [
   'morph-kimik3',
   'morph-kimik3-fast',
-  'morph-glm53-744b',
   'morph-dsv41flash',
-  'morph-dsv4flash',
 ];
 
 // This is the set confirmed by the supplied Morph key through GET /v1/models.
@@ -21,7 +19,7 @@ const served = [
 describe('managed catalog', () => {
   test('serves only confirmed Morph agent models', () => {
     expect(DEFAULT_MANAGED_MODEL_IDS).toEqual(served);
-    expect(PLATFORM_DEFAULT_MODEL_ID).toBe('morph-glm53-744b');
+    expect(PLATFORM_DEFAULT_MODEL_ID).toBe('morph-dsv41flash');
     expect(MANAGED_FLAGSHIP_MODEL_ID).toBe('morph-kimik3');
   });
 
@@ -33,12 +31,13 @@ describe('managed catalog', () => {
       expect(model.pricing?.inputPerMillion).toBeGreaterThan(0);
       expect(model.pricing?.outputPerMillion).toBeGreaterThan(0);
       expect(model.providerBrand).toBeUndefined();
+      expect(model.vision).toBe(true);
     }
   });
 
   test('DeepSeek cache-read rates match the Morph model feed', () => {
     expect(getManagedModel('morph-dsv41flash')?.pricing?.cachedInputPerMillion).toBe(0.009);
-    expect(getManagedModel('morph-dsv4flash')?.pricing?.cachedInputPerMillion).toBe(0.0359375);
+    expect(getManagedModel('morph-dsv4flash')).toBeUndefined();
   });
 
   test('old Kortix managed IDs and BYOK refs do not resolve as managed', () => {
@@ -50,6 +49,6 @@ describe('managed catalog', () => {
       expect(getManagedModel(old)).toBeUndefined();
       expect(isManagedModelId(old)).toBe(false);
     }
-    expect(getManagedModel('morph-glm53-744b')?.name).toBe('GLM-5.3 744B');
+    expect(getManagedModel('morph-dsv41flash')?.name).toBe('DeepSeek V4.1 Flash');
   });
 });

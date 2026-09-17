@@ -25,12 +25,12 @@ const { MANAGED_MODELS } = (await import(catalogSource)) as { MANAGED_MODELS: Ca
 
 describe('BUNDLED_MANAGED_MODELS mirrors @kortix/llm-catalog MANAGED_MODELS', () => {
   test('the default remains usable when the live catalog is unavailable', () => {
-    expect(BUNDLED_MANAGED_MODELS['morph-glm53-744b']).toMatchObject({
-      name: 'GLM-5.3 744B',
+    expect(BUNDLED_MANAGED_MODELS['morph-dsv41flash']).toMatchObject({
+      name: 'DeepSeek V4.1 Flash',
       provider: 'kortix',
       reasoning: true,
       temperature: true,
-      attachment: false,
+      attachment: true,
       tool_call: true,
       limit: { context: 1_048_576, output: 16_384 },
     })

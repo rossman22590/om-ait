@@ -92,6 +92,7 @@ const BUNDLED_BY_ID = new Map(BUNDLED_MANAGED_MODELS.map((model) => [model.id, m
 const RETIRED_MANAGED_MODEL_IDS = new Set([
   'glm-5.2', 'grok-4.6', 'deepseek-v4-flash', 'deepseek-v4-pro-0813',
   'muse-spark-1.2', 'minimax-m3', 'gpt-5.6-luna', 'gpt-6-astra', 'glm-5.3-flash',
+  'morph-glm53-744b', 'morph-dsv4flash',
 ]);
 
 export function isKnownManagedModelId(id: string): boolean {

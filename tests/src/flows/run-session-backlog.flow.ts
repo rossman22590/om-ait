@@ -387,13 +387,13 @@ flow(
     // authorization request from agent session ses_fc0decd80ffeYPyIR1B5efRcz3`.
     // CONN-25 passed in the same run (real connect.composio.dev link in 7.4s),
     // so staging holds a working COMPOSIO_API_KEY — the unproven part is the
-    // live morph-glm53-744b turn calling `add_connector` inside the 300s wait, and
+    // live morph-dsv41flash turn calling `add_connector` inside the 300s wait, and
     // the harness dumps no transcript on that timeout. Quarantined until it
     // passes a staging dry run of tests-release.yml with the transcript
     // captured on failure; un-quarantine ONLY in the PR that carries that
     // green run.
     quarantine:
-      'real-agent Composio selection: morph-glm53-744b turn produced no add_connector call / connect.composio.dev link within 300s on staging (gate run 32992496089, api shard 1) — unproven flow, quarantined 2026-08-26 pending a green staging dry run',
+      'real-agent Composio selection: morph-dsv41flash turn produced no add_connector call / connect.composio.dev link within 300s on staging (gate run 32992496089, api shard 1) — unproven flow, quarantined 2026-08-26 pending a green staging dry run',
     routes: [
       'POST /v1/projects/:projectId/sessions',
       'POST /v1/projects/:projectId/sessions/:sessionId/start',
@@ -419,7 +419,7 @@ flow(
       const prompted = await ctx.client
         .as(ctx.P.OWNER)
         .post(ocPath(sandboxId, `/session/${ocId}/prompt_async`), {
-          model: { providerID: 'kortix', modelID: 'morph-glm53-744b' },
+          model: { providerID: 'kortix', modelID: 'morph-dsv41flash' },
           parts: [
             {
               type: 'text',

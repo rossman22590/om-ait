@@ -498,22 +498,10 @@ export const MANAGED_MODELS: ManagedModel[] = [
     tier: 'flagship', vision: true, limit: { context: 1_048_576, output: 16_384 },
   },
   {
-    id: 'morph-glm53-744b', name: 'GLM-5.3 744B', upstreamModelId: 'morph-glm53-744b',
-    transport: 'morph', pricingRef: 'morph/morph-glm53-744b',
-    pricing: { inputPerMillion: 1.19, cachedInputPerMillion: 0.1955, outputPerMillion: 3.74 },
-    tier: 'flagship', vision: false, limit: { context: 1_048_576, output: 16_384 },
-  },
-  {
     id: 'morph-dsv41flash', name: 'DeepSeek V4.1 Flash', upstreamModelId: 'morph-dsv41flash',
     transport: 'morph', pricingRef: 'morph/morph-dsv41flash',
     pricing: { inputPerMillion: 0.3, cachedInputPerMillion: 0.009, outputPerMillion: 1.2 },
     tier: 'balanced', vision: true, limit: { context: 1_048_576, output: 16_384 },
-  },
-  {
-    id: 'morph-dsv4flash', name: 'DeepSeek V4 Flash 0731', upstreamModelId: 'morph-dsv4flash',
-    transport: 'morph', pricingRef: 'morph/morph-dsv4flash',
-    pricing: { inputPerMillion: 0.141953, cachedInputPerMillion: 0.0359375, outputPerMillion: 0.399625 },
-    tier: 'fast', vision: false, limit: { context: 1_048_576, output: 16_384 },
   },
 ];
 
@@ -534,7 +522,7 @@ export const MANAGED_FLAGSHIP_MODEL_ID = (
 ).id;
 
 /** Concrete Kortix-managed default used when no account or project default exists. */
-export const PLATFORM_DEFAULT_MODEL_ID = 'morph-glm53-744b';
+export const PLATFORM_DEFAULT_MODEL_ID = 'morph-dsv41flash';
 
 function modelsByWireId(catalog: Catalog): Map<string, CatalogModel> {
   const byId = new Map<string, CatalogModel>();

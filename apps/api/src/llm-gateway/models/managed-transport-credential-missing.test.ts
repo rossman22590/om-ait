@@ -5,9 +5,9 @@ mock.module('../../repositories/project-model-access', () => ({ getProjectModelA
 
 const configuredModels = [
   {
-    id: 'morph-glm53-744b', name: 'GLM-5.3 744B',
-    upstreamModelId: 'morph-glm53-744b', transport: 'morph',
-    pricingRef: 'morph/morph-glm53-744b', tier: 'balanced', vision: false,
+    id: 'morph-dsv41flash', name: 'DeepSeek V4.1 Flash',
+    upstreamModelId: 'morph-dsv41flash', transport: 'morph',
+    pricingRef: 'morph/morph-dsv41flash', tier: 'balanced', vision: true,
     limit: { context: 1_048_576, output: 16_384 },
   },
 ];
@@ -26,7 +26,7 @@ mock.module('../../config', () => ({
         if (key === 'LLM_GATEWAY_MANAGED_MODELS') return JSON.stringify(configuredModels);
         if (key === 'TUNNEL_ENABLED') return false;
         if (key === 'LLM_GATEWAY_BYOK_FALLBACK_MODEL') return '';
-        if (key === 'LLM_GATEWAY_DEFAULT_MODEL') return 'morph-glm53-744b';
+        if (key === 'LLM_GATEWAY_DEFAULT_MODEL') return 'morph-dsv41flash';
         if (key === 'LLM_GATEWAY_VISION_MODEL') return undefined;
         if (key === 'LLM_GATEWAY_FALLBACK_POLICIES') return [];
         if (key === 'AWS_BEDROCK_REGION') return 'us-west-2';
@@ -82,16 +82,16 @@ const { resolveCandidates } = await import('../resolution/resolve-candidates');
 
 describe('a Morph model without a credential is not offered', () => {
   test('removes the model from every served catalog', () => {
-    expect(RUNTIME_MANAGED_MODELS.map((model) => model.id)).toContain('morph-glm53-744b');
+    expect(RUNTIME_MANAGED_MODELS.map((model) => model.id)).toContain('morph-dsv41flash');
     expect(SERVED_MANAGED_MODELS).toEqual([]);
-    expect(managedModels()['morph-glm53-744b']).toBeUndefined();
-    expect(gatewayModelCatalog('proj')['morph-glm53-744b']).toBeUndefined();
-    expect(managedPickerModels().map((model) => model.id)).not.toContain('kortix/morph-glm53-744b');
+    expect(managedModels()['morph-dsv41flash']).toBeUndefined();
+    expect(gatewayModelCatalog('proj')['morph-dsv41flash']).toBeUndefined();
+    expect(managedPickerModels().map((model) => model.id)).not.toContain('kortix/morph-dsv41flash');
   });
 
   test('refuses an explicit request for the uncredentialed model', async () => {
     await expect(
-      resolveCandidates({ userId: 'u', accountId: 'a', projectId: 'p' }, 'morph-glm53-744b'),
+      resolveCandidates({ userId: 'u', accountId: 'a', projectId: 'p' }, 'morph-dsv41flash'),
     ).rejects.toMatchObject({ name: 'GatewayResolutionError' });
   });
 });

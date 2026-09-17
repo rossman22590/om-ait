@@ -28,14 +28,14 @@ const fallbackPoliciesSchema = z.array(fallbackPolicySchema).superRefine((polici
 export const DEFAULT_LLM_GATEWAY_FALLBACK_POLICIES = JSON.stringify([
   {
     id: 'platform-default-resilience',
-    models: ['morph-glm53-744b'],
-    fallbackModels: ['morph-dsv4flash'],
+    models: ['morph-dsv41flash'],
+    fallbackModels: ['morph-kimik3'],
     fallbackOn: 'transient',
   },
   {
     id: 'platform-default-degrade',
     models: ['codex/gpt-5.6-sol'],
-    fallbackModels: ['morph-glm53-744b'],
+    fallbackModels: ['morph-dsv41flash'],
     fallbackOn: 'any-error',
   },
 ]);

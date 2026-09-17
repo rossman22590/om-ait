@@ -190,27 +190,27 @@ describe('livePricing + stripBedrockInferenceProfilePrefix — the actual $0 bug
 describe('managed Morph descriptor', () => {
   test('routes through Morph with Kortix credits and declared prices', () => {
     expect(managedCandidates({
-      id: 'morph-glm53-744b',
-      name: 'GLM-5.3 744B',
-      upstreamModelId: 'morph-glm53-744b',
+      id: 'morph-dsv41flash',
+      name: 'DeepSeek V4.1 Flash',
+      upstreamModelId: 'morph-dsv41flash',
       transport: 'morph',
-      pricingRef: 'morph/morph-glm53-744b',
-      pricing: { inputPerMillion: 1.19, cachedInputPerMillion: 0.1955, outputPerMillion: 3.74 },
-      tier: 'flagship',
-      vision: false,
+      pricingRef: 'morph/morph-dsv41flash',
+      pricing: { inputPerMillion: 0.3, cachedInputPerMillion: 0.009, outputPerMillion: 1.2 },
+      tier: 'balanced',
+      vision: true,
       limit: { context: 1_048_576, output: 16_384 },
     })).toEqual([expect.objectContaining({
       provider: 'morph',
       kind: 'openai-compat',
       baseUrl: 'https://api.morphllm.com/v1',
       apiKey: 'morph-test-key',
-      resolvedModel: 'morph-glm53-744b',
+      resolvedModel: 'morph-dsv41flash',
       billingMode: 'credits',
       markup: 2,
       pricing: expect.objectContaining({
-        inputPerMillion: 1.19,
-        cachedInputPerMillion: 0.1955,
-        outputPerMillion: 3.74,
+        inputPerMillion: 0.3,
+        cachedInputPerMillion: 0.009,
+        outputPerMillion: 1.2,
       }),
     })]);
   });
