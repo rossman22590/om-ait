@@ -2365,6 +2365,7 @@ flow(
       'GET /v1/connectors/projects/:projectId/connectors/:slug/accounts',
       'POST /v1/connectors/projects/:projectId/call',
       'PUT /v1/projects/:projectId/agents/:agentName/config',
+      'PUT /v1/projects/:projectId/connections/:connectionId/default',
     ],
   },
   async (ctx) => {
@@ -2563,6 +2564,63 @@ flow(
           if (!available.includes(SHARED_DEFAULT)) {
             throw new Error(`the denial did not name the reachable accounts: ${r.text()}`);
           }
+        },
+      );
+
+      await ctx.step(
+        'several reachable accounts, none named, none pinned → 403 account_required naming every one',
+        async () => {
+          // Unpin the seeded shared default. Nothing is pinned now — 3
+          // reachable accounts (2 shared, 1 private) and no way to pick one
+          // without guessing.
+          await db.query(
+            `UPDATE kortix.connector_connections SET is_default = false WHERE connection_id = $1`,
+            [sharedDefaultId],
+          );
+          const denied = await session.post(
+            '/v1/connectors/projects/:projectId/call',
+            { connector: slug, action: 'anything', args: {} },
+            { params: { projectId: p.id }, timeoutMs: 60_000 },
+          );
+          denied
+            .status(403)
+            .body()
+            .has('$.ok', false)
+            .has('$.reason', 'account_required')
+            .has('$.default_account', null)
+            .exists('$.hint');
+          const namedInDenial = denied.json<{ available_accounts?: string[] }>().available_accounts ?? [];
+          for (const label of [SHARED_DEFAULT, SHARED_SECOND, PRIVATE_OWN]) {
+            if (!namedInDenial.includes(label)) {
+              throw new Error(`account_required did not name "${label}": ${denied.text()}`);
+            }
+          }
+          const unpinnedList = await readAccounts(session);
+          unpinnedList.status(200).body().has('$.default_account', null);
+
+          // Pin one. That is the deliberate choice the rule asks for.
+          const pinned = await ctx.client.as(ctx.P.OWNER).put(
+            '/v1/projects/:projectId/connections/:connectionId/default',
+            {},
+            { params: { projectId: p.id, connectionId: sharedDefaultId } },
+          );
+          pinned.status(200);
+          const pinnedList = await readAccounts(session);
+          pinnedList.status(200).body().has('$.default_account', SHARED_DEFAULT);
+
+          // The unnamed call now resolves the pinned account and clears the
+          // account-resolution gate entirely — it advances to action lookup,
+          // which is the only thing left to deny for a made-up action path on
+          // this fixture's connector (no real action is registered on it).
+          // `action_not_found` (not `account_required`) is exactly the proof
+          // that account resolution succeeded and the call ran as the pinned
+          // account, not a guess.
+          const resolved = await session.post(
+            '/v1/connectors/projects/:projectId/call',
+            { connector: slug, action: 'anything', args: {} },
+            { params: { projectId: p.id }, timeoutMs: 60_000 },
+          );
+          resolved.status(404).body().has('$.ok', false).has('$.reason', 'action_not_found');
         },
       );
 
