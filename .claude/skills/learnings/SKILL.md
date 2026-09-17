@@ -21,6 +21,19 @@ linked, not inlined.
 
 ## Register
 
+### Use the loopback migration command when starting an isolated worktree (2026-09-17)
+
+**When:** an isolated worktree applies its branch migration before an earlier-dated
+`main` migration lands. Run `migrate:local` on its loopback database. The strict
+`migrate` command rejects the valid local ledger order before starting the app.
+
+**Near-miss (PR #7319):** the pooled worktree applied its migration first. After
+merging `main`, `worktree start` failed on the new managed GitHub migration.
+`local-up` applied it without deleting the local OAuth and key test data.
+
+**Enforcement:** `runMigrate` calls `migrate:local` for isolated worktrees.
+`scripts/worktree/__tests__/contract.test.ts` checks that command exists and is used.
+
 ### Verify pre-create settings in the session create request (2026-09-16)
 
 **When:** adding a setting that the new-session composer must carry into
