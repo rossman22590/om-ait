@@ -5,25 +5,10 @@ mock.module('../../repositories/project-model-access', () => ({ getProjectModelA
 
 const configuredModels = [
   {
-    id: 'glm-5.3-flash',
-    name: 'GLM 5.3 Flash',
-    upstreamModelId: 'z-ai/glm-5.3-flash',
-    transport: 'openrouter',
-    pricingRef: 'openrouter/z-ai/glm-5.3-flash',
-    tier: 'balanced',
-    vision: false,
-    limit: { context: 64_000, output: 8_000 },
-    openrouterProvider: { order: ['z-ai'] },
-  },
-  {
-    id: 'managed-bedrock-test',
-    name: 'Managed Bedrock Test',
-    upstreamModelId: 'us.anthropic.claude-sonnet-4-6',
-    transport: 'bedrock',
-    pricingRef: 'anthropic/claude-sonnet-4-6',
-    tier: 'flagship',
-    vision: true,
-    limit: { context: 1_000_000, output: 64_000 },
+    id: 'morph-glm53-744b', name: 'GLM-5.3 744B',
+    upstreamModelId: 'morph-glm53-744b', transport: 'morph',
+    pricingRef: 'morph/morph-glm53-744b', tier: 'balanced', vision: false,
+    limit: { context: 1_048_576, output: 16_384 },
   },
 ];
 
@@ -41,12 +26,13 @@ mock.module('../../config', () => ({
         if (key === 'LLM_GATEWAY_MANAGED_MODELS') return JSON.stringify(configuredModels);
         if (key === 'TUNNEL_ENABLED') return false;
         if (key === 'LLM_GATEWAY_BYOK_FALLBACK_MODEL') return '';
-        if (key === 'LLM_GATEWAY_DEFAULT_MODEL') return 'glm-5.3-flash';
+        if (key === 'LLM_GATEWAY_DEFAULT_MODEL') return 'morph-glm53-744b';
         if (key === 'LLM_GATEWAY_VISION_MODEL') return undefined;
         if (key === 'LLM_GATEWAY_FALLBACK_POLICIES') return [];
         if (key === 'AWS_BEDROCK_REGION') return 'us-west-2';
         if (key === 'AWS_BEDROCK_API_KEY') return 'bedrock-key';
         if (key === 'OPENROUTER_API_KEY') return undefined;
+        if (key === 'MORPH_API_KEY') return undefined;
         if (key === 'OPENROUTER_API_URL') return 'https://openrouter.ai/api/v1';
         return target[key];
       },
@@ -89,32 +75,23 @@ mock.module('../credentials/codex', () => ({
 }));
 
 const { RUNTIME_MANAGED_MODELS } = await import('./managed-models');
-const { SERVED_MANAGED_MODELS, platformDefaultModelId } = await import('./served-managed-models');
+const { SERVED_MANAGED_MODELS } = await import('./served-managed-models');
 const { gatewayModelCatalog, managedModels } = await import('./catalog-models');
 const { managedPickerModels } = await import('./picker-catalog');
 const { resolveCandidates } = await import('../resolution/resolve-candidates');
 
-describe('a managed model whose transport credential is missing is never offered', () => {
-  test('keeps the configured model but removes it from every served catalog', () => {
-    expect(RUNTIME_MANAGED_MODELS.map((model) => model.id)).toContain('glm-5.3-flash');
-    expect(SERVED_MANAGED_MODELS.map((model) => model.id)).toEqual(['managed-bedrock-test']);
-    expect(managedModels()['glm-5.3-flash']).toBeUndefined();
-    expect(gatewayModelCatalog('proj')['glm-5.3-flash']).toBeUndefined();
-    expect(managedPickerModels().map((model) => model.id)).not.toContain('kortix/glm-5.3-flash');
-  });
-
-  test('degrades the unreachable platform default to a credentialed model', async () => {
-    expect(platformDefaultModelId()).toBe('managed-bedrock-test');
-    const candidates = await resolveCandidates(
-      { userId: 'u', accountId: 'a', projectId: 'p' },
-      platformDefaultModelId(),
-    );
-    expect(candidates[0]?.apiKey).toBe('bedrock-key');
+describe('a Morph model without a credential is not offered', () => {
+  test('removes the model from every served catalog', () => {
+    expect(RUNTIME_MANAGED_MODELS.map((model) => model.id)).toContain('morph-glm53-744b');
+    expect(SERVED_MANAGED_MODELS).toEqual([]);
+    expect(managedModels()['morph-glm53-744b']).toBeUndefined();
+    expect(gatewayModelCatalog('proj')['morph-glm53-744b']).toBeUndefined();
+    expect(managedPickerModels().map((model) => model.id)).not.toContain('kortix/morph-glm53-744b');
   });
 
   test('refuses an explicit request for the uncredentialed model', async () => {
     await expect(
-      resolveCandidates({ userId: 'u', accountId: 'a', projectId: 'p' }, 'glm-5.3-flash'),
+      resolveCandidates({ userId: 'u', accountId: 'a', projectId: 'p' }, 'morph-glm53-744b'),
     ).rejects.toMatchObject({ name: 'GatewayResolutionError' });
   });
 });

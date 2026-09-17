@@ -3,8 +3,8 @@ import * as realTiers from '../../billing/services/tiers';
 
 const config: Record<string, unknown> = {
   KORTIX_MANAGED_PROVIDER_ENABLED: true,
-  OPENROUTER_API_KEY: 'openrouter-test-key',
-  OPENROUTER_API_URL: 'https://openrouter.ai/api/v1',
+  MORPH_API_KEY: 'morph-test-key',
+  MORPH_API_URL: 'https://api.morphllm.com/v1',
 };
 mock.module('../../config', () => ({ config }));
 // Spread the real module — see the note in resolve-candidates.test.ts. Listing
@@ -187,79 +187,31 @@ describe('livePricing + stripBedrockInferenceProfilePrefix — the actual $0 bug
   });
 });
 
-describe('managed Grok 4.6 descriptor', () => {
-  test('routes through OpenRouter xAI with context-tier pricing', () => {
+describe('managed Morph descriptor', () => {
+  test('routes through Morph with Kortix credits and declared prices', () => {
     expect(managedCandidates({
-      id: 'grok-4.6',
-      name: 'Grok 4.6',
-      upstreamModelId: 'x-ai/grok-4.6',
-      transport: 'openrouter',
-      pricingRef: 'openrouter/x-ai/grok-4.6',
+      id: 'morph-glm53-744b',
+      name: 'GLM-5.3 744B',
+      upstreamModelId: 'morph-glm53-744b',
+      transport: 'morph',
+      pricingRef: 'morph/morph-glm53-744b',
+      pricing: { inputPerMillion: 1.19, cachedInputPerMillion: 0.1955, outputPerMillion: 3.74 },
       tier: 'flagship',
-      vision: true,
-      limit: { context: 500_000, output: 500_000 },
-      openrouterProvider: { order: ['xai'], allow_fallbacks: true },
+      vision: false,
+      limit: { context: 1_048_576, output: 16_384 },
     })).toEqual([expect.objectContaining({
-      provider: 'openrouter',
+      provider: 'morph',
       kind: 'openai-compat',
-      baseUrl: 'https://openrouter.ai/api/v1',
-      apiKey: 'openrouter-test-key',
-      resolvedModel: 'x-ai/grok-4.6',
+      baseUrl: 'https://api.morphllm.com/v1',
+      apiKey: 'morph-test-key',
+      resolvedModel: 'morph-glm53-744b',
       billingMode: 'credits',
       markup: 2,
-      pricing: {
-        inputPerMillion: 2,
-        outputPerMillion: 6,
-        cachedInputPerMillion: 0.5,
-        cacheWritePerMillion: undefined,
-        tiers: undefined,
-        contextOver200k: {
-          inputPerMillion: 4,
-          outputPerMillion: 12,
-          cachedInputPerMillion: 1,
-          cacheWritePerMillion: undefined,
-          contextThreshold: 200_000,
-        },
-      },
-      bodyExtras: { provider: { order: ['xai'], allow_fallbacks: true } },
-    })]);
-  });
-});
-
-describe('managed DeepSeek V4 Pro 0813 descriptor', () => {
-  test('routes DeepSeek V4 Pro 0813 through the reachable GMICloud endpoint', () => {
-    expect(managedCandidates({
-      id: 'deepseek-v4-pro-0813',
-      name: 'DeepSeek V4 Pro 0813',
-      upstreamModelId: 'deepseek/deepseek-v4-pro-0813',
-      transport: 'openrouter',
-      pricingRef: 'openrouter/deepseek/deepseek-v4-pro-0813',
-      pricing: {
-        inputPerMillion: 1.74,
-        cachedInputPerMillion: 0.145,
-        outputPerMillion: 3.48,
-      },
-      tier: 'balanced',
-      vision: false,
-      limit: { context: 1_048_575, output: 384_000 },
-      openrouterProvider: {
-        order: ['gmicloud'],
-        allow_fallbacks: true,
-      },
-    })).toEqual([expect.objectContaining({
-      provider: 'openrouter',
-      resolvedModel: 'deepseek/deepseek-v4-pro-0813',
       pricing: expect.objectContaining({
-        inputPerMillion: 1.74,
-        cachedInputPerMillion: 0.145,
-        outputPerMillion: 3.48,
+        inputPerMillion: 1.19,
+        cachedInputPerMillion: 0.1955,
+        outputPerMillion: 3.74,
       }),
-      bodyExtras: {
-        provider: {
-          order: ['gmicloud'],
-          allow_fallbacks: true,
-        },
-      },
     })]);
   });
 });
