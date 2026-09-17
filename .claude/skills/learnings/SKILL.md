@@ -59,7 +59,42 @@ scans every `git ls-files` path and fails with `path:line`; proven against the
 real corruption replanted in the same file, and against the naive rule.
 
 
-||||||| 88cb598b14
+
+### Bounding a list API strands every OLDER client that shipped before the paging UI (2026-09-16)
+
+**When:** adding a default `limit` to a collection endpoint an existing frontend
+already consumes, and choosing the deploy ORDER. v0.13.20 rolled the API before
+the web app. For that window `kortix.com` ran the 0.13.19 frontend — no
+`hasNextPage`, no Load more — against the 0.13.20 API, which answers 50 rows.
+The list was fast and **truncated with no control to reach the rest**: the old
+client cannot ask for page two because it does not know pages exist. Reported as
+"its working but there is no load more btn". The rule: a bound is a BREAKING
+change for any client that assumed "all", even though the response shape is
+byte-compatible. Ship the client that can page FIRST (it works against an
+unbounded API — it just never gets a cursor), then bound the server. Where the
+order cannot be controlled, keep the old default unbounded behind an explicit
+opt-in (`?limit=`) until the client rollout completes. *Incident:* prod
+v0.13.20, ~11 min of API-ahead-of-frontend skew, self-resolving.
+*Automation:* none — candidate: deploy-prod orders web before api when the
+release touches a list contract.
+
+### A prod merge does not guarantee a prod deploy — `deploy-prod` can silently not fire (2026-09-16)
+
+**When:** merging a release PR into `prod` and assuming the pipeline started.
+`deploy-prod.yml` declares `on: push: branches: [prod]`, and the v0.13.20
+release merge (`7e7f79b579`, 19:31:47Z) produced **no workflow run at all** —
+not deploy-prod, not CodeQL, nothing for that SHA. `prod` sat at VERSION
+0.13.20 with production still serving 0.13.19 and no run to watch. Recovered
+with `gh workflow run deploy-prod.yml --ref prod`, which deployed normally.
+The rule: after merging a release PR, ASSERT a run exists for the merge SHA
+(`gh run list --workflow=deploy-prod.yml --json headSha`) before you start
+watching one; an absent run looks exactly like a slow queue. Never infer the
+deploy from the merge. *Incident:* prod v0.13.20; caught within ~2 min because
+the run list was checked, not assumed. *Automation:* none — candidate: a
+scheduled reconcile that alerts when `prod` HEAD has no deploy-prod run.
+
+
+
 ### A shared admission budget must charge what a request COSTS, and strict FIFO turns one mis-charged waiter into a fleet-wide outage (2026-09-16)
 
 **When:** writing or reviewing any admission/quota gate that reserves a
@@ -145,7 +180,6 @@ as "ITS GIGA LAGGING"; no alert fired — every request was a 200.
 *Enforcer:* `SESSION_PAGE_MAX_LIMIT` (route rejects `limit > 200` with 400) and
 the cursor/paging tests in `apps/api/src/projects/lib/session-inventory.test.ts`.
 
-||||||| fd612fe8b7
 
 ### An honest 404 catch-all changes every proxy that passed the old status through (2026-09-15)
 
@@ -2274,9 +2308,7 @@ including a free-tier + `active` $0-subscription case modeled on the real prod
 row; `per-seat-pricing.test.ts` pins `resolveRenewalGrant` for per-seat,
 configured-grant and paid-by-amount branches.
 
-||||||| bd5aae39c4
 
-||||||| 0c247496b6
 
 ### A URL that carries a credential must never reach a log line (2026-08-20)
 
@@ -4065,7 +4097,6 @@ still blocked, and the own-session credential still allowed.
 
 *Incident:* essentia project `e7170bf8`, origin counts user 568 / backend 43.
 PR #6828.
-||||||| base
 
 ## Measure the amplification factor; never decode what you can forward
 
