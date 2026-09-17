@@ -1,8 +1,25 @@
 # Chinese vision models for Kortix Managed — 2026-09-17
 
-## Decision
+## Revised provider decision: Fireworks US-only Serverless
 
-Offer only Morph models that accept both text and images with the configured key. Set DeepSeek V4.1 Flash as the default. Offer Kimi K3 and Kimi K3 Fast as quality and latency choices. Keep the managed default's transient fallback on Kimi K3 so an image turn remains valid after fallback. Keep text-only Morph models out of the Kortix managed picker.
+The US inference and provider-side zero-retention requirements supersede the Morph-only selection below. **Fireworks is the easiest documented match for model inference.** Its [US-only Serverless documentation](https://docs.fireworks.ai/serverless/us-only-serverless) specifies `https://us.api.fireworks.ai/inference/v1/chat/completions` and US-only model IDs. Its [zero data retention documentation](https://docs.fireworks.ai/guides/security_compliance/data_handling) says open-model prompts and generations stay in volatile memory, apart from optional prompt cache data held in memory for several minutes. Usage metadata remains logged. Use Chat Completions; the Responses API stores conversations for 30 days by default unless `store=false`.
+
+| Fireworks US-only model | Text + image | Input / cached input / output per 1M tokens | Use |
+| --- | --- | --- | --- |
+| `accounts/fireworks/routers/glm-5p3-flash-us` | [Yes](https://fireworks.ai/models/fireworks/glm-5p3-flash) | $0.225 / $0.045 / $0.75, calculated from the published $0.15 / $0.03 / $0.50 base rate and [1.5× US rate](https://docs.fireworks.ai/serverless/pricing) | Low-cost default candidate; verify image/tool behavior with a real key |
+| `accounts/fireworks/routers/kimi-k3-us` | [Yes](https://fireworks.ai/models/fireworks/kimi-k3) | [Published US rate](https://docs.fireworks.ai/serverless/pricing): $4.50 / $0.45 / $22.50 | Highest-quality option and image-capable fallback |
+
+The [Fireworks data residency control](https://docs.fireworks.ai/accounts/data-residency) is an Enterprise feature. It restricts every API key on an account to the US and rejects requests to other regions or non-US models. For a self-service trial, use the US host and the two US model IDs. Before a production US-only claim, enable the account-wide residency control and verify that a request to the global host or a global model fails. FireRouter is blocked by that control because it can route to other providers. There is no Fireworks key in the current encrypted API environment, so no live text/image request has been run yet.
+
+The model's [older Fireworks page](https://fireworks.ai/models/fireworks/kimi-k3) still says the US premium is 10%. The current [US-only documentation](https://docs.fireworks.ai/serverless/us-only-serverless) says 1.5× from September 1, 2026, and the [pricing table](https://docs.fireworks.ai/serverless/pricing) gives the explicit Kimi K3 US rate. Use the latter for budgeting.
+
+**Alternatives.** [Together AI](https://www.together.ai/blog/together-ai-announces-strategic-partnership-with-moonshot-ai-to-natively-serve-kimi-models) advertises US-hosted Kimi K3 with ZDR, and its [terms](https://www.together.ai/terms-of-service) describe a ZDR setting. I did not find a documented US-only serverless host and model ID with account-level fail-closed controls. [Baseten](https://www.baseten.co/security-practices/) documents ZDR for Model APIs and serves [Kimi K3 with vision](https://www.baseten.co/blog/how-to-build-a-day-zero-api-for-kimi-k3/), but its [pricing](https://www.baseten.co/pricing/) places full data-residency control in Enterprise. Neither is as simple to verify for US-only serverless inference as Fireworks.
+
+This recommendation covers **inference-provider handling**. Kortix production still stores project and session data in `eu-west-2`, as documented below. The Morph implementation in the accompanying draft PR must be replaced before launch under the revised requirement.
+
+## Earlier Morph-only decision
+
+The current draft PR offers only Morph models that accept both text and images with the configured key. It sets DeepSeek V4.1 Flash as the default and offers Kimi K3 and Kimi K3 Fast as quality and latency choices. Its transient fallback is Kimi K3. This lineup meets the image requirement, but it does not meet the revised US-only and ZDR launch requirement.
 
 This decision keeps the existing Morph-only upstream rule. A public model listing is insufficient evidence for launch: the same key must complete a real image chat request through the configured endpoint. The live test used a 128 × 128 PNG with a red square and asked for its color. All three selected models returned HTTP 200 and answered “red.”
 
