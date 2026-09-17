@@ -118,6 +118,7 @@ import {
 } from './policy';
 import type {
   AdminConnectorView,
+  CatalogAccount,
   CatalogConnector,
   ConnectorPrincipal,
   ConnectorRouterDeps,
@@ -1112,6 +1113,46 @@ async function resolveProjectPrincipal(
   };
 }
 
+/** A session's connection visibility, defaulting to `private` (also the no-session default). */
+async function sessionVisibility(
+  sessionId: string | null,
+): Promise<'private' | 'project' | 'restricted'> {
+  const [session] = sessionId
+    ? await db
+        .select({ visibility: projectSessions.visibility })
+        .from(projectSessions)
+        .where(eq(projectSessions.sessionId, sessionId))
+        .limit(1)
+    : [];
+  return session?.visibility ?? 'private';
+}
+
+/**
+ * The accounts a principal may run one connector as, default first — the same
+ * computation `GET .../connectors/{slug}/accounts` (`listConnectorAccounts`)
+ * exposes, reused here so the catalog can carry it inline without a second
+ * round trip per connector.
+ */
+async function catalogAccountsFor(
+  p: ConnectorPrincipal,
+  slug: string,
+  visibility: 'private' | 'project' | 'restricted',
+): Promise<CatalogAccount[]> {
+  const entitled = await listEntitledConnectorConnections({
+    accountId: p.accountId,
+    projectId: p.projectId,
+    alias: canonicalConnectorAlias(slug),
+    actingUserId: p.userId,
+    visibility,
+  });
+  return entitled.map((connection) => ({
+    connection_id: connection.connectionId,
+    label: connection.label,
+    owner_type: connection.ownerType,
+    is_default: connection.isDefault,
+  }));
+}
+
 /** The catalog a principal can actually use (agent grant + credential present + not blocked). */
 async function listCatalog(p: ConnectorPrincipal): Promise<CatalogConnector[]> {
   const conns = hideSupersededSlack(
@@ -1122,9 +1163,12 @@ async function listCatalog(p: ConnectorPrincipal): Promise<CatalogConnector[]> {
   );
 
   // Project-scoped layer is the same for every connector in this list — load once.
-  const [projectPolicies, defaultMode] = await Promise.all([
+  const [projectPolicies, defaultMode, accountVisibility] = await Promise.all([
     loadProjectPoliciesFor(p.projectId),
     loadDefaultModeFor(p.projectId),
+    // Same rule `listConnectorAccounts` uses: a private session can also see
+    // the caller's own member-owned accounts, anything else stays project-only.
+    sessionVisibility(p.sessionId),
   ]);
 
   const out: CatalogConnector[] = [];
@@ -1149,10 +1193,10 @@ async function listCatalog(p: ConnectorPrincipal): Promise<CatalogConnector[]> {
       if (!(await connectorConnected(row, null, connection))) continue;
     }
     const connectorPolicies = await loadConnectorPoliciesFor(row.connectorId);
-    const actions = await db
-      .select()
-      .from(connectorActions)
-      .where(eq(connectorActions.connectorId, row.connectorId));
+    const [actions, accounts] = await Promise.all([
+      db.select().from(connectorActions).where(eq(connectorActions.connectorId, row.connectorId)),
+      catalogAccountsFor(p, row.slug, accountVisibility),
+    ]);
     out.push({
       slug: row.slug,
       name: row.name,
@@ -1178,6 +1222,10 @@ async function listCatalog(p: ConnectorPrincipal): Promise<CatalogConnector[]> {
           risk: a.risk,
           inputSchema: a.inputSchema ?? null,
         })),
+      accounts,
+      // Accounts already come back default-first (see listEntitledConnectorConnections),
+      // so the first entry is exactly what an unselected call resolves to.
+      default_account: accounts[0]?.label ?? null,
     });
   }
   return out;
@@ -1321,6 +1369,7 @@ async function listConnectors(
     connectedChannelSlugs,
     authorizedComposioSlugs,
     validBoundSecrets,
+    accountsByConnectorEntries,
   ] =
     await Promise.all([
       db
@@ -1385,7 +1434,32 @@ async function listConnectors(
                 eq(projectSecrets.consumer, 'connector'),
               ),
             ),
+      // The accounts THIS caller may run each connector as, default first —
+      // same computation as `listConnectorAccounts` (the `.../accounts` route
+      // and the MCP `accounts` tool read it), reused here so `kortix connectors
+      // ls`/`show` carry it without a client round trip per connector.
+      // Dashboard-wide, not session-scoped, so visibility is always `private` —
+      // the same rule an admin listing has always applied to "connected for me".
+      Promise.all(
+        conns.map(async (row) => {
+          const entitled = await listEntitledConnectorConnections({
+            accountId: row.accountId,
+            projectId: row.projectId,
+            alias: canonicalConnectorAlias(row.slug),
+            actingUserId: actingUserId ?? undefined,
+            visibility: 'private',
+          }).catch(() => []);
+          const accounts: CatalogAccount[] = entitled.map((connection) => ({
+            connection_id: connection.connectionId,
+            label: connection.label,
+            owner_type: connection.ownerType,
+            is_default: connection.isDefault,
+          }));
+          return [row.connectorId, accounts] as const;
+        }),
+      ),
     ]);
+  const accountsByConnector = new Map(accountsByConnectorEntries);
   // `authorization_strategy` is a DERIVED SUMMARY now, not a setting. The
   // column is retired (see migration 20260916182954570) and the PUT route is an
   // inert no-op, but the field stays on the wire so an older client keeps
@@ -1503,6 +1577,8 @@ async function listConnectors(
             : row.authSecret
               ? ('project_secret' as const)
               : ('none' as const),
+      accounts: accountsByConnector.get(row.connectorId) ?? [],
+      defaultAccount: accountsByConnector.get(row.connectorId)?.[0]?.label ?? null,
     };
   });
   return buildAdminConnectorViews(candidates, connectedSlugs);

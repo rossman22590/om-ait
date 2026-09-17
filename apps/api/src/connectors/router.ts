@@ -67,6 +67,14 @@ const CatalogActionSchema = z
     inputSchema: z.any().nullable(),
   })
   .openapi('ConnectorCatalogAction');
+const CatalogAccountSchema = z
+  .object({
+    connection_id: z.string(),
+    label: z.string(),
+    owner_type: z.string(),
+    is_default: z.boolean(),
+  })
+  .openapi('ConnectorCatalogAccount');
 const CatalogConnectorSchema = z
   .object({
     slug: z.string(),
@@ -76,6 +84,15 @@ const CatalogConnectorSchema = z
     iconUrl: z.string().nullable().optional(),
     status: z.string(),
     actions: z.array(CatalogActionSchema),
+    /**
+     * The accounts THIS principal may run this connector as, default first.
+     * One connector can hold the project's shared account and each member's
+     * own — this is what tells a caller (human or agent) that more than one
+     * exists, without a separate accounts call.
+     */
+    accounts: z.array(CatalogAccountSchema).optional(),
+    /** Label of the account an unnamed call resolves to, or null if none. */
+    default_account: z.string().nullable().optional(),
   })
   .openapi('ConnectorCatalogConnector');
 const ConnectorsResponseSchema = z
@@ -184,6 +201,13 @@ interface CatalogAction {
   risk: string;
   inputSchema: Record<string, unknown> | null;
 }
+/** One account a connector can run as, as surfaced in the catalog. See {@link CatalogConnector.accounts}. */
+export interface CatalogAccount {
+  connection_id: string;
+  label: string;
+  owner_type: string;
+  is_default: boolean;
+}
 export interface CatalogConnector {
   slug: string;
   name: string;
@@ -193,6 +217,17 @@ export interface CatalogConnector {
   iconUrl?: string | null;
   status: string;
   actions: CatalogAction[];
+  /**
+   * The accounts THIS principal may run this connector as, default first.
+   *
+   * One connector can hold the project's shared account and each member's own
+   * — this is the signal that tells a caller (human or agent) more than one
+   * account exists, without a separate round trip. Undefined only for a fake
+   * `ConnectorRouterDeps.listCatalog` that predates this field.
+   */
+  accounts?: CatalogAccount[];
+  /** Label of the account an unnamed call resolves to, or null if none. */
+  default_account?: string | null;
 }
 
 export interface AdminConnectorView extends CatalogConnector {

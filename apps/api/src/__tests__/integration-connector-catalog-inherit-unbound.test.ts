@@ -414,4 +414,50 @@ describe('connector catalog and call resolver use one session scope', () => {
       CONNECTION_UNBOUND_MEMBER,
     );
   });
+
+  test('the catalog carries every entitled account per connector, default first', async () => {
+    // `veyris` holds two accounts the caller may run it as: their own member
+    // connection and the project's shared default. The catalog must say so —
+    // this is the fix for an agent that never learned a connector can hold more
+    // than one account and answered "one account connected" from a single
+    // get_profile call instead of listing them.
+    const catalog = await dbConnectorRouterDeps.listCatalog(principalFor(SESSION_LEGACY));
+    const veyris = catalog.find((c) => c.slug === 'veyris');
+    expect(veyris?.accounts).toEqual([
+      {
+        connection_id: CONNECTION_BOUND_MEMBER,
+        label: 'Veyris my workspace',
+        owner_type: 'member',
+        is_default: false,
+      },
+      {
+        connection_id: CONNECTION_BOUND_DEFAULT,
+        label: 'Veyris default',
+        owner_type: 'project',
+        is_default: true,
+      },
+    ]);
+    // The member account ranks first (the caller's own identity wins ties over
+    // the project default — see `entitledConnectionRank`), so it is what an
+    // unselected call actually resolves to, not merely the `is_default` row.
+    expect(veyris?.default_account).toBe('Veyris my workspace');
+
+    // `unbound` holds exactly one entitled account for this caller.
+    const unbound = catalog.find((c) => c.slug === 'unbound');
+    expect(unbound?.accounts).toEqual([
+      {
+        connection_id: CONNECTION_UNBOUND_MEMBER,
+        label: 'Unbound my workspace',
+        owner_type: 'member',
+        is_default: false,
+      },
+      {
+        connection_id: CONNECTION_UNBOUND_DEFAULT,
+        label: 'Unbound default',
+        owner_type: 'project',
+        is_default: true,
+      },
+    ]);
+    expect(unbound?.default_account).toBe('Unbound my workspace');
+  });
 });
