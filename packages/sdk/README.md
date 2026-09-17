@@ -789,6 +789,28 @@ await kortix.projects.setModelAccess(projectId, {
 
 `useModelAccess(projectId)` from `@kortix/sdk/react` exposes the policy, write state, and `setEnabled(change)`. Successful writes refresh both picker caches. Rejected writes leave the displayed policy unchanged. The policy blocks gateway inference; legacy `setProjectModelEnablement` remains display-only. Native runtimes that bypass the gateway return `enforced: false`.
 
+### Pooled ChatGPT connections
+
+With the `pooled_provider_secrets` and `llm_gateway` project flags enabled, a
+member can create a named ChatGPT OAuth account resource:
+
+```ts
+const challenge = await kortix.project(projectId).secrets.startProviderOAuth('openai', {
+  resourceLabel: 'My ChatGPT account',
+});
+// Show challenge.verification_url and challenge.user_code, then poll the flow.
+const result = await kortix.project(projectId).secrets.pollProviderOAuth('openai', challenge.flow_id);
+```
+
+Poll until `result.status` is `success`, `failed`, or `expired`. A successful
+named flow returns `credential.secret_id`. It creates a separate private
+account resource; reconnecting does not replace another account. The owner can
+grant members access to that resource. A session can select one or more granted
+ChatGPT resources through its provider secret pool (`providerId: 'codex'`).
+Without an explicit session selection, the caller's newest personal ChatGPT
+resource is used. The legacy project login remains the fallback when that
+caller has no personal resource.
+
 ### ChatGPT subscription usage
 
 `getSessionCost` and `getTurnCost` report zero LLM cost for ChatGPT/Codex
