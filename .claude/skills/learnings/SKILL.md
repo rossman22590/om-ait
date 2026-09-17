@@ -6188,3 +6188,18 @@ placement. A route change alone does not prove the composer handoff finished.
 Both one-second paint assertions and real API acceptance/read-back remain.
 The separate startup draft handoff needs a deterministic regression and fix;
 this prerequisite does not claim to fix draft transfer between composers.
+
+### 2026-09-17 — Admin browser assertions wait for the role probe
+
+**Near miss.** The #7331 preview admin journey reported a missing grant while
+its trace contained five successful `GET /v1/user-roles` responses with
+`isAdmin: true`. Its helper treated the initial refusal view as a settled
+result and navigated again before the role response reached the UI.
+
+**Rule.** Wait for the authenticated role probe before interpreting the admin
+guard. A temporary refusal view during authentication is not proof of a
+missing database grant.
+
+**Enforcement.** `openAdminOverview` observes the real role response, then
+asserts the overview heading for an admin. It still retries denied or failed
+probes and fails if the granted user never reaches the overview.
