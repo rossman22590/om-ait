@@ -350,9 +350,21 @@ async function reconcileConnectionRow(input: {
   );
   const [existing] = await db.select().from(connectorConnections).where(identity).limit(1);
   if (existing) {
+    // Reconciling the label of a REVOKED row is a re-connect, not a metadata
+    // touch: the caller is adding "this account" back, and the credential they
+    // set next must land on a live row. Left `revoked`, the row kept its new
+    // credential but stayed invisible to every call and every list of usable
+    // accounts (found 2026-09-17: header "Add credential" on a connector whose
+    // only shared account had just been disconnected saved into a dead row).
+    // `error` is a live-state flag the next sync owns; it is not cleared here.
     const [connection] = await db
       .update(connectorConnections)
-      .set({ label: input.label, metadata: input.metadata, updatedAt: new Date() })
+      .set({
+        label: input.label,
+        metadata: input.metadata,
+        ...(existing.status === 'revoked' ? { status: 'active' as const } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(connectorConnections.connectionId, existing.connectionId))
       .returning();
     return { connection, created: false };
