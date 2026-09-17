@@ -418,14 +418,14 @@ for (const runtime of runtimes) {
         );
         pooledResource = { accountId, secretId: key.secret_id };
         await resize(720, 480);
-        await page.goto(`${baseURL}/projects/${project.id}/customize/secrets`);
-        const sharedSecrets = page.getByRole('region', { name: 'Shared provider secrets' });
-        await expect(sharedSecrets.getByText('Desktop pooled key')).toBeVisible();
+        await page.goto(`${baseURL}/projects/${project.id}/customize/models`);
+        const providerKeys = page.getByRole('region', { name: 'Anthropic API keys' });
+        await expect(providerKeys.getByText('Desktop pooled key')).toBeVisible();
         const welcome = page.getByRole('complementary', { name: 'Welcome from Marko' });
         if (await welcome.isVisible().catch(() => false)) {
           await welcome.getByRole('button', { name: 'Dismiss' }).click();
         }
-        await sharedSecrets.getByRole('button', { name: 'Actions for Desktop pooled key' }).click();
+        await providerKeys.getByRole('button', { name: 'Actions for Desktop pooled key' }).click();
         await expect(page.getByRole('menuitem', { name: 'Manage access' })).toBeVisible();
         await page.keyboard.press('Escape');
         await page.goto(`${baseURL}/projects/${project.id}`);
