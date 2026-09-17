@@ -6186,8 +6186,12 @@ placement. A route change alone does not prove the composer handoff finished.
 
 **Enforcement.** The deployed queue fixture waits for the enabled Stop control.
 Both one-second paint assertions and real API acceptance/read-back remain.
-The separate startup draft handoff needs a deterministic regression and fix;
-this prerequisite does not claim to fix draft transfer between composers.
+The startup draft handoff has its own ownership guard. The hidden replacement
+composer waits to restore until it becomes active. The old composer flushes
+pending text in a layout effect before the replacement's restore effect runs.
+Late changes or send completion from the old composer cannot erase that draft.
+A Chromium check with both composers mounted fails on the original hook and
+passes after this change. The draft gate and shell forwarding have unit coverage.
 
 The queue fixture also keeps one test-owned delivery lease in flight. A live
 model can finish before queue editing and reload assertions complete. New
