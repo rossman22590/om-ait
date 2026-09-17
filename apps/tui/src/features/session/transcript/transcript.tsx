@@ -70,10 +70,7 @@ export function Transcript({
   const [now, setNow] = useState(() => Date.now());
 
   const messages = session.messages as unknown as MessageWithParts[];
-  const ordered = useMemo(
-    () => orderedMessages(groupMessagesIntoTurns(messages)),
-    [messages],
-  );
+  const ordered = useMemo(() => orderedMessages(groupMessagesIntoTurns(messages)), [messages]);
 
   // Every collapsible row in the whole transcript, in document order. The
   // cursor is an index into THIS list, so `J`/`K` never land on a row that
@@ -104,13 +101,10 @@ export function Transcript({
     });
   }, []);
 
-  const scrollBy = useCallback(
-    (delta: number) => {
-      setSticky(false);
-      scrollRef.current?.scrollBy(delta);
-    },
-    [],
-  );
+  const scrollBy = useCallback((delta: number) => {
+    setSticky(false);
+    scrollRef.current?.scrollBy(delta);
+  }, []);
 
   const questions = session.questions;
   const permissions = session.permissions;
@@ -180,7 +174,9 @@ export function Transcript({
         stickyScroll={sticky}
         stickyStart="bottom"
         flexGrow={1}
-        scrollbarOptions={{ visible: true }}
+        // NOT `scrollbarOptions={{ visible: true }}` — forcing both bars on
+        // blanks the viewport in 0.5.11 (verified: the content rows render
+        // empty and only the bar glyphs paint). Let the bars auto-show.
         contentOptions={{ flexDirection: 'column' }}
       >
         {session.isLoadingOlder ? <text fg={theme.faint}>loading older turns…</text> : null}

@@ -19,15 +19,16 @@ import { theme } from '../../../../theme.ts';
 
 export function FilePart({ part, width }: { part: ClassifiedFilePart; width: number }) {
   const kind = part.isImage ? 'image' : part.isPdf ? 'pdf' : part.mime;
-  return (
-    <text fg={theme.dim}>{clip(`📎 ${part.filename ?? part.url} (${kind})`, width)}</text>
-  );
+  return <text fg={theme.dim}>{clip(`📎 ${part.filename ?? part.url} (${kind})`, width)}</text>;
 }
 
 export function SubtaskPart({ part, width }: { part: ClassifiedSubtaskPart; width: number }) {
   return (
     <text fg={theme.dim}>
-      {clip(`→ delegated to ${part.agent}${part.description ? `: ${part.description}` : ''}`, width)}
+      {clip(
+        `→ delegated to ${part.agent}${part.description ? `: ${part.description}` : ''}`,
+        width,
+      )}
     </text>
   );
 }
@@ -38,9 +39,7 @@ export function PatchPart({ part, width }: { part: ClassifiedPatchPart; width: n
 }
 
 export function RetryPart({ part, width }: { part: ClassifiedRetryPart; width: number }) {
-  return (
-    <text fg={theme.danger}>{clip(`↻ retry ${part.attempt}: ${part.message}`, width)}</text>
-  );
+  return <text fg={theme.danger}>{clip(`↻ retry ${part.attempt}: ${part.message}`, width)}</text>;
 }
 
 export function CompactionPart({ part, width }: { part: ClassifiedCompactionPart; width: number }) {

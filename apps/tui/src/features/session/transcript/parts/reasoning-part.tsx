@@ -3,8 +3,8 @@
  * text on `Enter`/`Space` while the cursor is on it.
  */
 
-import { glyph, theme } from '../../../../theme.ts';
 import { clip } from '../../../../lib/turn-layout.ts';
+import { glyph, theme } from '../../../../theme.ts';
 
 export interface ReasoningPartProps {
   text: string;

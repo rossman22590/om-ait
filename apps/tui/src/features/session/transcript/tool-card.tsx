@@ -86,11 +86,7 @@ function ShellBody({
   );
 }
 
-function FileBody({
-  path,
-  preview,
-  width,
-}: { path: string; preview?: string; width: number }) {
+function FileBody({ path, preview, width }: { path: string; preview?: string; width: number }) {
   const { lines, hidden } = headLines(preview ?? '', PREVIEW_LINES);
   const body = Math.max(width - 2, 10);
   return (
@@ -192,7 +188,9 @@ function WebSearchBody({
       <Detail fg={theme.dim}>{`  “${clip(model.query, body)}”`}</Detail>
       {model.error ? <Detail fg={theme.danger}>{`  ${clip(model.error, body)}`}</Detail> : null}
       {results.map((result) => (
-        <Detail key={result.url || result.title}>{`  · ${clip(result.title || result.url, body)}`}</Detail>
+        <Detail
+          key={result.url || result.title}
+        >{`  · ${clip(result.title || result.url, body)}`}</Detail>
       ))}
     </box>
   );

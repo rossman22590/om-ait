@@ -59,9 +59,7 @@ function PartRow({
     case 'text':
       return <TextPart text={part.text} streaming={streaming} width={width} />;
     case 'reasoning':
-      return (
-        <ReasoningPart text={part.text} expanded={expanded} cursor={cursor} width={width} />
-      );
+      return <ReasoningPart text={part.text} expanded={expanded} cursor={cursor} width={width} />;
     case 'tool':
       return <StepsGroup tools={[part]} expanded cursor={false} width={width} />;
     case 'file':
@@ -110,10 +108,7 @@ function Header({
 
 export function Turn({ message, width, expanded, cursorKey, streaming, now }: TurnProps) {
   const classified = useMemo(() => classifyTurn(message), [message]);
-  const rows: TurnRow[] = useMemo(
-    () => collapseToolRuns(classified.parts),
-    [classified.parts],
-  );
+  const rows: TurnRow[] = useMemo(() => collapseToolRuns(classified.parts), [classified.parts]);
   const isUser = message.info.role === 'user';
   const inner = Math.max(width - (isUser ? 4 : 0), 8);
   const lastRowKey = rows.at(-1)?.key;
@@ -144,9 +139,7 @@ export function Turn({ message, width, expanded, cursorKey, streaming, now }: Tu
       {classified.error ? (
         <ErrorBanner content={describeTurnError(classified.error)} width={inner} />
       ) : null}
-      {classified.isEmpty && rows.length === 0 ? (
-        <text fg={theme.faint}>(no content)</text>
-      ) : null}
+      {classified.isEmpty && rows.length === 0 ? <text fg={theme.faint}>(no content)</text> : null}
     </box>
   );
 

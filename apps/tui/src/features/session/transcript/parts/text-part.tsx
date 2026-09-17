@@ -20,6 +20,11 @@
  * `web-tree-sitter` is not installed in this workspace, so fenced code blocks
  * render unhighlighted. The structure (headings, lists, emphasis markers) is
  * concealed correctly regardless; verified in `transcript.test.tsx`.
+ *
+ * Trap — `<markdown>` paints NOTHING on its first frame. Its parse pass is
+ * async, so a test that captures a frame straight after `flush()` reads an
+ * empty content area. Verified: the same content is blank at 0 ms and correct
+ * at 600 ms. `transcript.test.tsx` settles before every assertion.
  */
 
 import { SyntaxStyle } from '@opentui/core';
