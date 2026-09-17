@@ -52,7 +52,7 @@ import { useOpenCodePendingStore } from '../browser/stores/opencode-pending-stor
 import { useSyncStore } from '../browser/stores/sync-store';
 import { BillingError } from '../core/http/api/errors';
 import { clearSessionFresh, markSessionFresh } from '../core/http/fresh-sessions';
-import { SessionStartError } from '../core/rest/projects-client';
+import { SessionStartError, type SessionStartResult } from '../core/rest/projects-client';
 import { setCurrentRuntime } from '../core/session/current-runtime';
 import { promptOpenCodeMessage } from './use-opencode-sessions/messages';
 import {
@@ -71,6 +71,7 @@ import {
   markDispatchedForPartIds,
   nextInconclusiveSince,
   rejectQuestion,
+  resolveSessionRuntimeUrl,
   sendReceiptId,
   sendStateOnError,
   sendStateOnStart,
@@ -1063,5 +1064,66 @@ describe('classifySendError — connector refusals', () => {
     expect(classifySendError(refusal({ code: 'CONNECTOR_CONNECTION_REQUIRED' })).kind).not.toBe(
       'billing',
     );
+  });
+});
+
+// ── resolveSessionRuntimeUrl — the runtime URL `useSession` now returns ──────
+//
+// `/start` carries `runtime_url`, and `startProjectSession` already derives the
+// same absolute URL for the session-runtime registry — but `useSession`
+// returned only `sandbox`, so a host that needed the URL (a TUI PTY attach, a
+// file read, anything below the hook's own actions) had to rebuild it. These
+// pin the resolution, including the part the raw field cannot be used for:
+// `runtime_url` is a RELATIVE path (`/p/<ext>/8000`, see
+// `apps/api/src/projects/routes/shared.ts:526`), never an absolute URL.
+
+describe('resolveSessionRuntimeUrl', () => {
+  const sandbox = (externalId: string | null) =>
+    ({ external_id: externalId }) as NonNullable<SessionStartResult['sandbox']>;
+
+  test('is null until /start answers', () => {
+    expect(resolveSessionRuntimeUrl(null)).toBeNull();
+    expect(resolveSessionRuntimeUrl(undefined)).toBeNull();
+  });
+
+  test('is null while the box is still booting', () => {
+    // A sandbox row exists from `provisioning` onward. Handing its URL out
+    // before `stage==='ready'` would invite a host to dial a box that is not
+    // serving yet — the exact class of bug `SessionNotReadyError` exists for.
+    for (const stage of ['provisioning', 'starting', 'stopped', 'failed'] as const) {
+      expect(
+        resolveSessionRuntimeUrl({ stage, sandbox: sandbox('ext-1'), runtime_url: '/p/ext-1/8000' }),
+      ).toBeNull();
+    }
+  });
+
+  test('derives the absolute proxy URL from the sandbox external id', () => {
+    expect(
+      resolveSessionRuntimeUrl({ stage: 'ready', sandbox: sandbox('ext-1'), runtime_url: null }),
+    ).toBe('http://localhost:8008/v1/p/ext-1/8000');
+  });
+
+  test('composes the relative runtime_url against the backend when no external id is known', () => {
+    // The server sends `/p/<ext>/8000`, a PATH. Returning it verbatim would
+    // hand the host a string it cannot fetch.
+    expect(
+      resolveSessionRuntimeUrl({ stage: 'ready', sandbox: null, runtime_url: '/p/ext-9/8000' }),
+    ).toBe('http://localhost:8008/v1/p/ext-9/8000');
+  });
+
+  test('passes an absolute runtime_url through unchanged', () => {
+    expect(
+      resolveSessionRuntimeUrl({
+        stage: 'ready',
+        sandbox: null,
+        runtime_url: 'https://box.example.com/p/ext-9/8000',
+      }),
+    ).toBe('https://box.example.com/p/ext-9/8000');
+  });
+
+  test('is null when a ready payload carries neither an external id nor a path', () => {
+    expect(
+      resolveSessionRuntimeUrl({ stage: 'ready', sandbox: sandbox(null), runtime_url: null }),
+    ).toBeNull();
   });
 });

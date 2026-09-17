@@ -38,6 +38,7 @@ import {
   setSandboxStatus,
 } from '../browser/stores/sandbox-connection-store';
 import { getSandboxUrlForExternalId } from '../browser/stores/server-store';
+import { getBackendUrl } from '../core/session/server-store/url-helpers';
 import { ascendingId, useSyncStore } from '../browser/stores/sync-store';
 import { BillingError, parseBillingError } from '../core/http/api/errors';
 import { isSessionFresh } from '../core/http/fresh-sessions';
@@ -125,6 +126,40 @@ export function shouldRetrySessionStart(
  * pause between holds, not the latency to observe `ready`.
  */
 export const SESSION_START_POLL_MS = 1_500;
+
+/**
+ * The absolute URL of this session's OpenCode runtime, or `null` until the box
+ * is ready.
+ *
+ * `/start` reports the runtime two ways and NEITHER is directly usable:
+ *
+ *  - `sandbox.external_id` — the provider sandbox id. The proxy route is the
+ *    SDK's to compose (`getSandboxUrlForExternalId`), never the host's.
+ *  - `runtime_url` — a RELATIVE path, `/p/<external_id>/8000`
+ *    (`apps/api/src/projects/routes/shared.ts:526`). Returned verbatim it is a
+ *    string no host can fetch.
+ *
+ * The external id wins because it is the same derivation `startProjectSession`
+ * writes into the session-runtime registry and `useSession` hands to
+ * `setCurrentRuntime` — one URL for the session, from one function. The
+ * `runtime_url` branch covers a ready payload whose sandbox row is absent,
+ * and composes the path against the configured backend.
+ *
+ * Gated on `stage === 'ready'`: a sandbox row exists from `provisioning`
+ * onward, and a URL for a box that is not serving yet is an invitation to dial
+ * it — the condition `SessionNotReadyError` exists to prevent.
+ */
+export function resolveSessionRuntimeUrl(
+  start: Pick<SessionStartResult, 'stage' | 'sandbox' | 'runtime_url'> | null | undefined,
+): string | null {
+  if (!start || start.stage !== 'ready') return null;
+  const externalId = start.sandbox?.external_id;
+  if (externalId) return getSandboxUrlForExternalId(externalId);
+  const path = start.runtime_url;
+  if (!path) return null;
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${getBackendUrl()}${path.startsWith('/') ? '' : '/'}${path}`;
+}
 
 /**
  * Should the `/start` boot poll fire again, given the last tick's outcome?
@@ -1460,6 +1495,13 @@ export function useSession(projectId: string, sessionId: string, options: UseSes
       : null,
     /** The serialized session_sandboxes row from /start (status, metadata, ids), or null. */
     sandbox,
+    /**
+     * Absolute URL of this session's OpenCode runtime (the `/p/<ext>/8000`
+     * proxy), or null until `stage === 'ready'`. The same URL the hook hands
+     * to `setCurrentRuntime` — hosts that need it for a PTY attach or a direct
+     * daemon call read it here instead of rebuilding it from `sandbox`.
+     */
+    runtimeUrl: resolveSessionRuntimeUrl(startData),
     /** True once the runtime is switched in and ready (equivalent to phase==='ready'). */
     switched,
     /** Whether polling /start again can still make progress (false = terminal). */
