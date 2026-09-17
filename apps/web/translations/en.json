@@ -161,14 +161,12 @@
       "create": "Create project",
       "tryAgain": "Try again",
       "logOut": "Log out",
-      "signingOut": "Signing out"
+      "signingOut": "Signing out",
+      "back": "Back to projects"
     },
     "repository": {
       "label": "Repository",
       "defaultBranch": "Default branch",
-      "noGitHubAccount": "No GitHub account is connected to this project's account yet.",
-      "connectGitHub": "Connect a GitHub account",
-      "connectGitHubSuffix": "to use this option.",
       "loadGitHubAccountsError": "Could not load GitHub accounts. Try again.",
       "createsPath": "Creates <path>{path}</path>",
       "loadRepositoriesError": "Could not load repositories. Try again.",
@@ -178,24 +176,23 @@
           "description": "Kortix creates and manages a private repository for this project."
         },
         "githubCreate": {
-          "label": "Create in GitHub",
           "description": "Kortix creates a private repository in your GitHub account."
-        },
-        "githubImport": {
-          "label": "Import from GitHub",
-          "description": "Select an existing repository from your GitHub account."
         }
       },
       "repositoryLabel": "Repository",
-      "createInOwner": "Create a repository in {owner}",
-      "importFromOwner": "Import a repository from {owner}",
-      "selectOption": "Select a repository option",
       "loadingOptions": "Loading repository options…",
       "managedUnavailable": "Kortix-managed repositories are not available on this instance. A platform admin sets this up in the admin console.",
       "installationUnreachable": "This GitHub connection no longer works. Reconnect it to list repositories.",
       "reconnect": "Reconnect in Git settings",
       "managedImportLabel": "Import an existing managed repository",
-      "managedImportHint": "Self-host operators only. Lists repositories the managed git owner already holds."
+      "managedImportHint": "Self-host operators only. Lists repositories the managed git owner already holds.",
+      "gitAccountLabel": "Git account",
+      "selectGitAccount": "Select a git account",
+      "addGitHubAccount": "Add a GitHub account…",
+      "actionCreate": "Create a new repository",
+      "actionImport": "Import an existing repository",
+      "ownerTypePersonal": "Personal account",
+      "ownerTypeOrg": "Organization"
     }
   },
   "projectHome": {

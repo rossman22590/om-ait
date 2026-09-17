@@ -161,14 +161,12 @@
       "create": "创建项目",
       "tryAgain": "重试",
       "logOut": "退出登录",
-      "signingOut": "正在退出"
+      "signingOut": "正在退出",
+      "back": "返回项目"
     },
     "repository": {
       "label": "代码仓库",
       "defaultBranch": "默认分支",
-      "noGitHubAccount": "此项目的账户尚未连接 GitHub 账户。",
-      "connectGitHub": "连接 GitHub 账户",
-      "connectGitHubSuffix": "以使用此选项。",
       "loadGitHubAccountsError": "无法加载 GitHub 账户。请重试。",
       "createsPath": "创建 <path>{path}</path>",
       "loadRepositoriesError": "无法加载仓库。请重试。",
@@ -178,24 +176,23 @@
           "description": "Kortix 为此项目创建并管理私有代码仓库。"
         },
         "githubCreate": {
-          "label": "在 GitHub 中创建",
           "description": "Kortix 在您的 GitHub 账户中创建私有代码仓库。"
-        },
-        "githubImport": {
-          "label": "从 GitHub 导入",
-          "description": "从您的 GitHub 账户中选择现有代码仓库。"
         }
       },
       "repositoryLabel": "仓库",
-      "createInOwner": "在 {owner} 中创建仓库",
-      "importFromOwner": "从 {owner} 导入仓库",
-      "selectOption": "选择仓库选项",
       "loadingOptions": "正在加载仓库选项…",
       "managedUnavailable": "此实例无法使用由 Kortix 托管的仓库。平台管理员可在管理控制台中完成设置。",
       "installationUnreachable": "此 GitHub 连接已失效。请重新连接以列出仓库。",
       "reconnect": "在 Git 设置中重新连接",
       "managedImportLabel": "导入现有的托管仓库",
-      "managedImportHint": "仅限自托管运维人员。列出托管 git 所有者已持有的仓库。"
+      "managedImportHint": "仅限自托管运维人员。列出托管 git 所有者已持有的仓库。",
+      "gitAccountLabel": "Git 账户",
+      "selectGitAccount": "选择 Git 账户",
+      "addGitHubAccount": "添加 GitHub 账户…",
+      "actionCreate": "创建新仓库",
+      "actionImport": "导入现有仓库",
+      "ownerTypePersonal": "个人账户",
+      "ownerTypeOrg": "组织"
     }
   },
   "projectHome": {

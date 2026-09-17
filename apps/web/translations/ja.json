@@ -161,14 +161,12 @@
       "create": "プロジェクトを作成",
       "tryAgain": "もう一度試す",
       "logOut": "ログアウト",
-      "signingOut": "ログアウト中"
+      "signingOut": "ログアウト中",
+      "back": "プロジェクトに戻る"
     },
     "repository": {
       "label": "リポジトリ",
       "defaultBranch": "デフォルトブランチ",
-      "noGitHubAccount": "このプロジェクトのアカウントには、まだ GitHub アカウントが接続されていません。",
-      "connectGitHub": "GitHub アカウントを接続",
-      "connectGitHubSuffix": "すると、このオプションを使用できます。",
       "loadGitHubAccountsError": "GitHub アカウントを読み込めませんでした。もう一度お試しください。",
       "createsPath": "<path>{path}</path> を作成します",
       "loadRepositoriesError": "リポジトリを読み込めませんでした。もう一度お試しください。",
@@ -178,24 +176,23 @@
           "description": "Kortix がこのプロジェクト用のプライベートリポジトリを作成して管理します。"
         },
         "githubCreate": {
-          "label": "GitHub に作成",
           "description": "Kortix が GitHub アカウントにプライベートリポジトリを作成します。"
-        },
-        "githubImport": {
-          "label": "GitHub からインポート",
-          "description": "GitHub アカウントから既存のリポジトリを選択します。"
         }
       },
       "repositoryLabel": "リポジトリ",
-      "createInOwner": "{owner} にリポジトリを作成",
-      "importFromOwner": "{owner} からリポジトリをインポート",
-      "selectOption": "リポジトリの選択肢を選ぶ",
       "loadingOptions": "リポジトリの選択肢を読み込んでいます…",
       "managedUnavailable": "このインスタンスでは Kortix 管理リポジトリを利用できません。プラットフォーム管理者が管理コンソールで設定します。",
       "installationUnreachable": "この GitHub 接続は使えなくなりました。リポジトリを一覧表示するには接続し直してください。",
       "reconnect": "Git 設定で接続し直す",
       "managedImportLabel": "既存の管理リポジトリをインポート",
-      "managedImportHint": "セルフホスト運用者のみ。管理 git の所有者がすでに保有しているリポジトリを一覧表示します。"
+      "managedImportHint": "セルフホスト運用者のみ。管理 git の所有者がすでに保有しているリポジトリを一覧表示します。",
+      "gitAccountLabel": "Git アカウント",
+      "selectGitAccount": "Git アカウントを選択",
+      "addGitHubAccount": "GitHub アカウントを追加…",
+      "actionCreate": "新しいリポジトリを作成",
+      "actionImport": "既存のリポジトリをインポート",
+      "ownerTypePersonal": "個人アカウント",
+      "ownerTypeOrg": "組織"
     }
   },
   "projectHome": {
