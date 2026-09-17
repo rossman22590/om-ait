@@ -6119,3 +6119,22 @@ and asserts sibling rejection, owner grants, machine-owner rejection, and empty
 pool discovery. `SEC-POOL-2` verifies owner grants and deletion through HTTP and
 Postgres. `resolve-candidates.test.ts` verifies that a shared gateway key uses the
 legacy project credential even when its creator has a personal connection.
+
+
+### 2026-09-17 — Validate a model against the session's selected credential resources
+
+**Near miss.** The #7331 preview offered an OpenRouter model backed by account
+resources. Creating its session returned `400 INVALID_SESSION_MODEL` because
+preflight resolved only legacy project credentials. Existing-session model
+changes also omitted the session's saved pool.
+
+**Rule.** Preflight uses the prospective pool during creation and the saved pool
+for an existing session. It uses the same membership, grant, provider, and
+active-state checks as generation. Passive checks never advance the pool cursor.
+An empty explicit selection cannot fall back to a legacy credential.
+
+**Enforcement.** `SEC-POOL-2` exercises explicit model creation and model changes
+through HTTP. `default-model.test.ts` and `resolve-candidates.test.ts` verify the
+selection context. `account-resource-pool.test.ts` rejects a cursor update from
+a passive check. Preview verification must name an account-backed model and
+assert actual assistant output, not only a submitted selection.

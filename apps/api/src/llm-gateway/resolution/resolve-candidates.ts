@@ -117,6 +117,7 @@ export function noManagedModelsError(model: string, tierIsPaid: boolean): Gatewa
 export async function resolveCandidates(
   principal: AuthedPrincipal,
   model: string,
+  options?: { providerSecretPools?: Record<string, string[]>; probe?: boolean },
 ): Promise<UpstreamDescriptor[]> {
   const effectiveModel = toWireModel(model);
   const access = principal.projectId
@@ -131,6 +132,7 @@ export async function resolveCandidates(
     );
   }
   const provider = effectiveModel.includes('/') ? effectiveModel.split('/')[0] : '';
+  const prospectiveIds = options?.providerSecretPools?.[provider];
 
   if (provider === 'codex') {
     if (!principal.projectId) {
@@ -141,9 +143,11 @@ export async function resolveCandidates(
       );
     }
     const pooledEnabled = await projectFeatureFlagEnabled(principal.projectId, 'pooled_provider_secrets');
-    const selectedPool = principal.sessionId && principal.userId && pooledEnabled
+    const selectedPool = (prospectiveIds !== undefined || principal.sessionId) && principal.userId && pooledEnabled
       ? await resolveSessionProviderSecrets({
-          accountId: principal.accountId, sessionId: principal.sessionId,
+          accountId: principal.accountId,
+          ...(prospectiveIds !== undefined ? { secretIds: prospectiveIds } : { sessionId: principal.sessionId! }),
+          ...(options?.probe ? { advanceIndex: false } : {}),
           userId: principal.userId, providerId: 'codex', name: 'CODEX_AUTH_JSON',
         })
       : null;
@@ -257,11 +261,12 @@ export async function resolveCandidates(
         name,
         consumer: 'llm_gateway',
       });
-    const selectedPool = principal.sessionId && principal.userId &&
+    const selectedPool = (prospectiveIds !== undefined || principal.sessionId) && principal.userId &&
       await projectFeatureFlagEnabled(principal.projectId, 'pooled_provider_secrets')
       ? await resolveSessionProviderSecrets({
           accountId: principal.accountId,
-          sessionId: principal.sessionId,
+          ...(prospectiveIds !== undefined ? { secretIds: prospectiveIds } : { sessionId: principal.sessionId! }),
+          ...(options?.probe ? { advanceIndex: false } : {}),
           userId: principal.userId,
           providerId: provider,
           name: byok.envVar,

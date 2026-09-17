@@ -23,6 +23,7 @@ A project stores one shared provider key in its secrets screen. Every project me
 ## Session selection and pool
 
 - A session selects a set of stable secret IDs per provider. An empty explicit selection means no resource secret for that provider. The SDK and UI preserve omitted, empty, and explicit selections distinctly. Without a ChatGPT selection, the caller's newest personal OAuth account is the default. If the caller has none, the legacy project login remains the fallback. Another member's shared account requires explicit selection.
+- Model validation uses the prospective selection before session creation and the saved pool for later model changes. Passive validation does not advance the round-robin cursor.
 - A selected secret must match the provider, be active, be granted to the session's principal, and be allowed by the running agent. Invalid or unauthorized IDs fail the write atomically. Every gateway request re-evaluates authorization and active state.
 - For each new model request, choose a starting key from the eligible pool and visit each selected key at most once. On a pre-output `429`, bound `Retry-After` to 60 seconds, put that key on a shared cooldown, and try the next eligible key. A `429` is not counted against the provider as a whole. If every key is unavailable, return `429` with the earliest retry time.
 - Never replay a request once response content has streamed. Do not cycle keys for a provider-wide `5xx`. Other credential errors return without changing resource state.

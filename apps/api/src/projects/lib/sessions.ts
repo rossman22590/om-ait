@@ -1127,6 +1127,7 @@ export async function createProjectSession(input: {
         projectId,
         freeModelsOnly,
         model: requestedModel,
+        providerSecretPools: body.provider_secret_pools as Record<string, string[]> | undefined,
       });
       if (!servable) {
         return {
@@ -1151,6 +1152,7 @@ export async function createProjectSession(input: {
         agentName,
         explicit: null,
         freeModelsOnly,
+        providerSecretPools: body.provider_secret_pools as Record<string, string[]> | undefined,
       });
       const concreteModel =
         resolved.model ??

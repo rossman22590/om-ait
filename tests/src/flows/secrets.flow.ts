@@ -72,6 +72,7 @@ flow(
       "GET /v1/projects/:projectId/sessions/:sessionId/provider-secret-pools",
       "PUT /v1/projects/:projectId/sessions/:sessionId/provider-secret-pools/:providerId",
       "POST /v1/projects/:projectId/sessions",
+      "PUT /v1/projects/:projectId/sessions/:sessionId/model",
       "DELETE /v1/accounts/:accountId/secret-resources/:secretId",
     ],
   },
@@ -139,6 +140,23 @@ flow(
       (await owner.get(poolsPath, { params: poolParams })).status(200).body()
         .has('$.can_edit', true).has('$.pools', [{ provider_id: 'anthropic', configured: true, secret_ids: ids }]);
     });
+    await ctx.step('an account-key model passes creation preflight with the selected pool', async () => {
+      const created = await owner.post('/v1/projects/:projectId/sessions', {
+        opencode_model: 'anthropic/claude-sonnet-4.6', provider_secret_pools: { anthropic: ids },
+      }, { params: { projectId: project.id } });
+      if (ctx.env.target === 'local') {
+        created.status(503).body().has('$.code', 'KORTIX_URL_UNREACHABLE');
+      } else {
+        created.status(201);
+        const createdId = created.json<any>().session_id;
+        ctx.track('session', createdId, { projectId: project.id });
+        (await owner.get(poolPath, { params: { ...poolParams, sessionId: createdId } })).status(200).body().has('$.secret_ids', ids);
+      }
+      const refused = await owner.post('/v1/projects/:projectId/sessions', {
+        opencode_model: 'anthropic/claude-sonnet-4.6', provider_secret_pools: { anthropic: [] },
+      }, { params: { projectId: project.id } });
+      refused.status(400).body().has('$.code', 'INVALID_SESSION_MODEL');
+    });
     await ctx.step('manager selection requires grants for the session owner', async () => {
       await team.grantProjectRole(project.id, member.userId!, 'member');
       const memberSession = await createDatabaseSession(ctx.env, {
@@ -154,6 +172,9 @@ flow(
       }
       (await owner.put(poolPath, { secret_ids: ids }, { params })).status(200);
       (await ctx.client.as(member).get(poolPath, { params })).status(200).body().has('$.secret_ids', ids);
+      (await owner.put('/v1/projects/:projectId/sessions/:sessionId/model', {
+        opencode_model: 'anthropic/claude-sonnet-4.6',
+      }, { params })).status(200).body().has('$.opencode_model', 'kortix/anthropic/claude-sonnet-4.6');
     });
     await ctx.step('create rejects a secret ID without a grant before provisioning', async () => {
       const created = await owner.post('/v1/projects/:projectId/sessions', {
