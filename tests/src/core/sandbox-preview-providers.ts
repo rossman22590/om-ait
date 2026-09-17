@@ -34,6 +34,7 @@ import {
   PreviewInfrastructureError,
   type SandboxPreviewResult,
   buildPreviewBootstrapScript,
+  previewAttemptPaths,
   previewLockfileHash,
   previewSandboxIdentity,
   previewSandboxName,
@@ -175,6 +176,7 @@ export async function deployPlatinumPreview(
 ): Promise<SandboxPreviewResult> {
   if (!input.platinum.apiKey) throw new PreviewInfrastructureError('PLATINUM_API_KEY is required');
   const api = new PlatinumApi(input.platinum.apiUrl, input.platinum.apiKey);
+  const attempt = previewAttemptPaths(input.runId, input.runAttempt);
   let sandboxId = '';
   let launched = false;
   // Set only when this run adopted an existing branch environment, so the
@@ -287,11 +289,11 @@ export async function deployPlatinumPreview(
       startedAt: Date.now(),
       timeoutMs: PREVIEW_TIMEOUT_MS,
       checkExitCode: async () => {
-        const status = await statPlatinum(api, sandboxId, '/workspace/kortix-preview/kortix-preview.exit', 1);
+        const status = await statPlatinum(api, sandboxId, attempt.status, 1);
         if (!status) return null;
         const bytes = await api.read(
           sandboxId,
-          '/workspace/kortix-preview/kortix-preview.exit',
+          attempt.status,
           undefined,
           undefined,
           1,
@@ -300,11 +302,11 @@ export async function deployPlatinumPreview(
         if (!Number.isInteger(value)) throw new Error('Platinum preview wrote an invalid exit code');
         return value;
       },
-      statLog: () => statPlatinum(api, sandboxId, '/workspace/kortix-preview/kortix-preview.log', 1),
+      statLog: () => statPlatinum(api, sandboxId, attempt.log, 1),
       readLog: (offset, limit) =>
         api.read(
           sandboxId,
-          '/workspace/kortix-preview/kortix-preview.log',
+          attempt.log,
           offset,
           Math.min(limit, LOG_CHUNK_BYTES),
           1,
@@ -361,6 +363,7 @@ export async function deployDaytonaPreview(
     );
   }
   const api = new DaytonaApi(input.daytona.apiUrl, input.daytona.apiKey);
+  const attempt = previewAttemptPaths(input.runId, input.runAttempt);
   let sandbox: DaytonaSandbox | null = null;
   let launched = false;
   try {
@@ -445,16 +448,16 @@ export async function deployDaytonaPreview(
         readRemoteExitCode(
           api,
           sandbox!,
-          '/workspace/kortix-preview/kortix-preview.exit',
+          attempt.status,
           'preview',
         ),
       statLog: () =>
-        statRemoteLog(api, sandbox!, '/workspace/kortix-preview/kortix-preview.log', 'preview'),
+        statRemoteLog(api, sandbox!, attempt.log, 'preview'),
       readLog: (offset, limit) =>
         readRemoteLog(
           api,
           sandbox!,
-          '/workspace/kortix-preview/kortix-preview.log',
+          attempt.log,
           offset,
           Math.min(limit, LOG_CHUNK_BYTES),
           'preview',

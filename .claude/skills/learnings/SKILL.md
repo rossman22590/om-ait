@@ -21,6 +21,15 @@ linked, not inlined.
 
 ## Register
 
+### Scope preview result files to the workflow attempt (2026-09-17)
+
+**Rule:** a persistent preview must write its completion status and log to
+attempt-specific paths. Its observer must read those same paths. A fixed status
+file can report a previous run before the new bootstrap acquires its lock.
+**When:** changing preview deployment or result polling. *Near-miss:* a PR
+preview reported an older SHA and replayed stale test failures after a new push.
+*Enforcer:* `tests/unit/sandbox-preview.test.ts` checks distinct attempt paths.
+
 ### Use generic fixtures before publishing a public branch (2026-09-17)
 
 **Rule:** before pushing a public branch, inspect the complete commit diff,

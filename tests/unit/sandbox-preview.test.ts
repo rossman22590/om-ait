@@ -5,6 +5,7 @@ import {
   previewLockfileHash,
   previewSandboxIdentity,
   previewSandboxName,
+  previewAttemptPaths,
   runSandboxPreview,
   selectStalePreviewSandboxIds,
   selectTeardownSandboxIds,
@@ -22,6 +23,15 @@ const input = {
 };
 
 describe('provider-neutral preview lifecycle', () => {
+  it('uses attempt-specific completion and log paths on a reused sandbox', () => {
+    const first = previewAttemptPaths('100', '1');
+    const second = previewAttemptPaths('101', '1');
+    const retry = previewAttemptPaths('100', '2');
+    expect(first).not.toEqual(second);
+    expect(first).not.toEqual(retry);
+    expect(first.status).toContain('100-1');
+    expect(first.log).toContain('100-1');
+  });
   it('uses one stable sandbox name per pull request', () => {
     expect(previewSandboxName(6337)).toBe('kortix-preview-pr-6337');
   });
@@ -33,10 +43,13 @@ describe('provider-neutral preview lifecycle', () => {
       sha: input.sha,
       prNumber: input.prNumber,
       origin: 'https://preview.example.com/',
+      runId: '100', runAttempt: '1',
     });
     const lock = script.indexOf('flock -x 9');
     expect(lock).toBeGreaterThan(-1);
-    expect(lock).toBeLessThan(script.indexOf('rm -f "$STATUS" "$PHASE"'));
+    expect(lock).toBeLessThan(script.indexOf('rm -f "$STATUS" "$PHASE" "$GUARD_STATUS"'));
+    expect(script).toContain('LOG=/workspace/kortix-preview/attempt-100-1.log');
+    expect(script).toContain('STATUS=/workspace/kortix-preview/attempt-100-1.exit');
     expect(lock).toBeLessThan(script.indexOf('git -C "$ROOT" checkout'));
   });
 
@@ -76,6 +89,7 @@ describe('provider-neutral preview lifecycle', () => {
       sha: 'a'.repeat(40),
       prNumber: 6998,
       origin: 'https://x.example.test',
+      runId: '100', runAttempt: '1',
     };
     // Match the executed LINE: the skip branch names the command in a hint, so
     // a substring check would report it as running.
@@ -106,6 +120,7 @@ describe('provider-neutral preview lifecycle', () => {
       sha: 'a'.repeat(40),
       prNumber: 6998,
       origin: 'https://pi.example.test',
+      runId: '100', runAttempt: '1',
       runTests: false,
     });
     // 1. The offline install is the fast path, not the only path.
@@ -149,6 +164,7 @@ describe('provider-neutral preview lifecycle', () => {
       sha: 'a'.repeat(40),
       prNumber: 7109,
       origin: 'https://preview.example.test',
+      runId: '100', runAttempt: '1',
     });
     const repair = script.indexOf('node-v22.22.2-linux-x64.tar.xz');
     const install = script.indexOf('pnpm install --offline --frozen-lockfile');
@@ -170,6 +186,7 @@ describe('provider-neutral preview lifecycle', () => {
       sha: 'a'.repeat(40),
       prNumber: 6998,
       origin: 'https://pi.example.test',
+      runId: '100', runAttempt: '1',
       runTests: false,
     });
     expect(script).toContain('HEALTH=http://127.0.0.1:8080/v1/health');
@@ -333,6 +350,7 @@ describe('provider-neutral preview lifecycle', () => {
       sha: 'a'.repeat(40),
       prNumber: 6337,
       origin: 'https://preview.example',
+      runId: '100', runAttempt: '1',
     });
     expect(script).toContain('git -C "$ROOT" checkout --detach --force FETCH_HEAD');
     expect(script).toContain('test "$actual_sha" = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"');
