@@ -4,12 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import {
-  type AccountSecretResource, createAccountSecretResource, deleteAccountSecretResource,
-  grantAccountSecretResource, listAccountMembers, listAccountSecretResources,
+  ApiError, type AccountSecretResource, createAccountSecretResource, deleteAccountSecretResource,
+  grantAccountSecretResource, listAccountMembers,
   revokeAccountSecretResourceGrant, rotateAccountSecretResource,
   pollProjectProviderOAuth, startProjectProviderOAuth,
 } from '@kortix/sdk';
-import { qk, refreshProjectProviderState } from '@kortix/sdk/react';
+import { refreshProjectProviderState, useAccountSecretResources } from '@kortix/sdk/react';
 import { ChatGptDeviceChallenge } from '@/components/projects/chatgpt-device-challenge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -24,8 +24,9 @@ import { useAuth } from '@/features/providers/auth-provider';
 import { PrincipalPicker, type PrincipalSelection } from '@/features/workspace/shared/access/principal-picker';
 
 /** Provider keys live beside the provider they configure. The secret value stays write-only. */
-export function AccountSecretResourcesPanel({ accountId, providerId, providerName, envVar, canWrite, oauth }: {
+export function AccountSecretResourcesPanel({ accountId, projectId, providerId, providerName, envVar, canWrite, oauth }: {
   accountId: string;
+  projectId: string;
   providerId: string;
   providerName: string;
   envVar: string;
@@ -36,7 +37,7 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const queryKey = ['account-secret-resources', accountId] as const;
-  const resources = useQuery({ queryKey, queryFn: () => listAccountSecretResources(accountId) });
+  const resources = useAccountSecretResources(accountId);
   const [creating, setCreating] = useState(false);
   const [label, setLabel] = useState('');
   const [value, setValue] = useState('');
@@ -46,38 +47,47 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
   const [deleting, setDeleting] = useState<AccountSecretResource | null>(null);
   const [oauthChallenge, setOauthChallenge] = useState<{ url: string; code: string | null } | null>(null);
   const [oauthWaiting, setOauthWaiting] = useState(false);
-  const cancelledRef = useRef(false);
-  useEffect(() => () => { cancelledRef.current = true; }, []);
+  const oauthGeneration = useRef(0);
+  useEffect(() => () => { oauthGeneration.current++; }, []);
   const members = useQuery({ queryKey: ['account-members', accountId], queryFn: () => listAccountMembers(accountId) });
   const actorRole = members.data?.find((member) => member.user_id === user?.id)?.account_role;
   const keys = (resources.data?.secrets ?? []).filter((secret) => secret.provider_id === providerId);
-  const refresh = async () => { await queryClient.invalidateQueries({ queryKey }); };
+  const refresh = async () => {
+    await queryClient.invalidateQueries({ queryKey });
+    refreshProjectProviderState(queryClient, projectId);
+    await queryClient.invalidateQueries({ queryKey: ['session-provider-secret-pools'] });
+  };
   const connectOAuth = async () => {
     if (!oauth || !label.trim()) return;
-    cancelledRef.current = false;
+    const generation = ++oauthGeneration.current;
+    const isCurrent = () => generation === oauthGeneration.current;
     setOauthWaiting(true);
     setOauthChallenge(null);
     try {
       const start = await startProjectProviderOAuth(oauth.projectId, 'openai', { resourceLabel: label.trim() });
-      if (cancelledRef.current) return;
+      if (!isCurrent()) return;
       setOauthChallenge({ url: start.verification_url, code: start.user_code });
-      const interval = Math.max(2000, start.interval_ms || 3000);
+      let interval = Math.max(2000, start.interval_ms || 3000);
       const deadline = start.expires_at || Date.now() + 10 * 60_000;
-      while (!cancelledRef.current && Date.now() < deadline) {
+      while (isCurrent() && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, interval));
-        if (cancelledRef.current) return;
+        if (!isCurrent()) return;
         let result: Awaited<ReturnType<typeof pollProjectProviderOAuth>>;
         try {
           result = await pollProjectProviderOAuth(oauth.projectId, 'openai', start.flow_id);
-        } catch {
-          // A temporary network failure does not invalidate the device code.
+        } catch (error) {
+          if (!isCurrent()) return;
+          if (error instanceof ApiError && error.status && error.status < 500 && ![408, 429].includes(error.status)) throw error;
           continue;
         }
-        if (result.status === 'pending') continue;
+        if (!isCurrent()) return;
+        if (result.status === 'pending') {
+          interval = Math.max(interval, result.next_poll_ms ?? interval);
+          continue;
+        }
         if (result.status === 'success') {
           await refresh();
-          queryClient.invalidateQueries({ queryKey: qk.project.secrets(oauth.projectId) });
-          refreshProjectProviderState(queryClient, oauth.projectId, { expectProviderId: 'codex' });
+          if (!isCurrent()) return;
           oauth.onConnected('codex');
           setCreating(false); setLabel(''); setOauthChallenge(null);
           successToast(t('saved'));
@@ -85,11 +95,11 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
         }
         throw new Error(result.status === 'failed' ? result.error : t('oauthExpired'));
       }
-      if (!cancelledRef.current) throw new Error(t('oauthExpired'));
+      if (isCurrent()) throw new Error(t('oauthExpired'));
     } catch (error) {
-      if (!cancelledRef.current) errorToast(error instanceof Error ? error.message : t('saveError'));
+      if (isCurrent()) errorToast(error instanceof Error ? error.message : t('saveError'));
     } finally {
-      if (!cancelledRef.current) setOauthWaiting(false);
+      if (isCurrent()) setOauthWaiting(false);
     }
   };
   const save = useMutation({
@@ -116,7 +126,8 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
     mutationFn: async () => {
       if (!sharing) return;
       const current = new Set(sharing.granted_user_ids);
-      const next = new Set([...selectedMembers.memberIds, sharing.created_by]);
+      const next = new Set(selectedMembers.memberIds);
+      if (oauth && sharing.granted_user_ids.includes(sharing.created_by)) next.add(sharing.created_by);
       const changes = [
         ...[...next].filter((userId) => !current.has(userId)).map((userId) => grantAccountSecretResource(accountId, sharing.secret_id, userId)),
         ...[...current].filter((userId) => !next.has(userId)).map((userId) => revokeAccountSecretResourceGrant(accountId, sharing.secret_id, userId)),
@@ -124,8 +135,14 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
       const results = await Promise.allSettled(changes);
       if (results.some((result) => result.status === 'rejected')) throw new Error(t('accessError'));
     },
-    onSuccess: async () => { await refresh(); setSharing(null); successToast(t('saved')); },
+    onSuccess: () => { setSharing(null); successToast(t('saved')); },
     onError: (error) => errorToast(error instanceof Error ? error.message : t('accessError')),
+    onSettled: async () => {
+      const updated = await resources.refetch();
+      setSharing((current) => current ? updated.data?.secrets.find((secret) => secret.secret_id === current.secret_id) ?? current : null);
+      refreshProjectProviderState(queryClient, projectId);
+      await queryClient.invalidateQueries({ queryKey: ['session-provider-secret-pools'] });
+    },
   });
 
   return (
@@ -158,18 +175,18 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
           ))}</ul>
       ) : null}
 
-      <Modal open={creating || rotating !== null} onOpenChange={(open) => { if (!open) { cancelledRef.current = true; setCreating(false); setRotating(null); setValue(''); setOauthWaiting(false); setOauthChallenge(null); } }}>
+      <Modal open={creating || rotating !== null} onOpenChange={(open) => { if (!open && !save.isPending) { oauthGeneration.current++; setCreating(false); setRotating(null); setValue(''); setOauthWaiting(false); setOauthChallenge(null); } }}>
         <ModalContent className="lg:max-w-md">
           <ModalHeader><ModalTitle>{rotating ? t('rotateLabel', { label: rotating.label }) : `${oauth ? t('addAccount') : t('addKey')} · ${providerName}`}</ModalTitle>
             <ModalDescription>{oauth ? t('oauthPrivateDescription') : t('valueNeverShown')}</ModalDescription></ModalHeader>
           <ModalBody className="space-y-3">
             {!rotating && <>
-              <Field><FieldLabel htmlFor={`provider-key-label-${providerId}`}>{t('label')}</FieldLabel><Input id={`provider-key-label-${providerId}`} value={label} onChange={(event) => setLabel(event.target.value)} placeholder={oauth ? t('accountLabelPlaceholder') : t('primaryKey')} maxLength={100} /></Field>
+              <Field><FieldLabel htmlFor={`provider-key-label-${providerId}`}>{t('label')}</FieldLabel><Input id={`provider-key-label-${providerId}`} value={label} disabled={oauthWaiting || save.isPending} onChange={(event) => setLabel(event.target.value)} placeholder={oauth ? t('accountLabelPlaceholder') : t('primaryKey')} maxLength={100} /></Field>
             </>}
             {oauth ? oauthChallenge && <ChatGptDeviceChallenge url={oauthChallenge.url} code={oauthChallenge.code} /> :
-              <Field><FieldLabel htmlFor={`provider-key-value-${providerId}`}>{t('apiKey')}</FieldLabel><Input id={`provider-key-value-${providerId}`} type="password" value={value} onChange={(event) => setValue(event.target.value)} autoComplete="off" /></Field>}
+              <Field><FieldLabel htmlFor={`provider-key-value-${providerId}`}>{t('apiKey')}</FieldLabel><Input id={`provider-key-value-${providerId}`} type="password" value={value} disabled={save.isPending} onChange={(event) => setValue(event.target.value)} autoComplete="off" /></Field>}
           </ModalBody>
-          <ModalFooter><Button variant="secondary" onClick={() => { cancelledRef.current = true; setCreating(false); setRotating(null); setValue(''); setOauthWaiting(false); setOauthChallenge(null); }}>{t('cancel')}</Button>
+          <ModalFooter><Button variant="secondary" disabled={save.isPending} onClick={() => { oauthGeneration.current++; setCreating(false); setRotating(null); setValue(''); setOauthWaiting(false); setOauthChallenge(null); }}>{t('cancel')}</Button>
             <Button disabled={oauth ? oauthWaiting || !label.trim() : save.isPending || !value.trim() || (!rotating && !label.trim())}
               onClick={() => oauth ? void connectOAuth() : save.mutate()}>{oauth ? oauthWaiting ? t('oauthWaiting') : t('connectAccount') : save.isPending ? t('saving') : t('saveKey')}</Button></ModalFooter>
         </ModalContent>
@@ -181,7 +198,8 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
           <ModalBody className="max-h-[60vh] space-y-4 overflow-y-auto">
             <Field className="gap-1.5">
               <PrincipalPicker scope={{ kind: 'account', accountId }} selection="multi" kinds={['member']}
-                value={selectedMembers} onChange={(next) => setSelectedMembers({ ...next, memberIds: [...new Set([...next.memberIds, sharing?.created_by ?? ''].filter(Boolean))] })} disabled={changeGrant.isPending}
+                value={selectedMembers} onChange={(next) => setSelectedMembers(oauth && sharing?.granted_user_ids.includes(sharing.created_by)
+                  ? { ...next, memberIds: [...new Set([...next.memberIds, sharing.created_by])] } : next)} disabled={changeGrant.isPending}
                 autoFocus={false} />
             </Field>
           </ModalBody>

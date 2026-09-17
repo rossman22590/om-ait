@@ -1,5 +1,11 @@
 {
   "pooledSecrets": {
+    "providerDisabled": "此提供商已在当前会话中禁用。",
+    "unavailableKeys": "有{count}个所选密钥不可用。请移除不可用的密钥或恢复访问权限。",
+    "removeUnavailable": "移除不可用的密钥",
+    "selectionLimit": "每个提供商最多10个密钥",
+    "manageKeys": "管理提供商密钥",
+    "readOnlyPool": "只有会话所有者或项目管理员可以更改此池。",
     "legacyChatGptLogin": "现有项目登录",
     "legacyChatGptDescription": "此旧连接与整个项目共享。上方的新 ChatGPT 账户在您共享前仅供本人使用。",
     "chatGptAccounts": "ChatGPT 账户",

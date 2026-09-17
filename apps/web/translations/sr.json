@@ -1,5 +1,11 @@
 {
   "pooledSecrets": {
+    "providerDisabled": "Ovaj provajder je isključen za ovu sesiju.",
+    "unavailableKeys": "{count, plural, one {# izabrani ključ nije dostupan.} few {# izabrana ključa nisu dostupna.} other {# izabranih ključeva nije dostupno.}} Uklonite ove ključeve ili vratite pristup.",
+    "removeUnavailable": "Ukloni nedostupne ključeve",
+    "selectionLimit": "Najviše 10 ključeva po provajderu",
+    "manageKeys": "Upravljaj ključevima provajdera",
+    "readOnlyPool": "Samo vlasnik sesije ili menadžer projekta može da promeni ovaj skup.",
     "legacyChatGptLogin": "Постојећа пријава за пројекат",
     "legacyChatGptDescription": "Ова старија веза се дели са пројектом. Нови ChatGPT налози изнад остају приватни док их не поделите.",
     "chatGptAccounts": "ChatGPT налози",

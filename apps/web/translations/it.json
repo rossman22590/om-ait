@@ -1,5 +1,11 @@
 {
   "pooledSecrets": {
+    "providerDisabled": "Questo provider è disabilitato per questa sessione.",
+    "unavailableKeys": "{count, plural, one {# chiave selezionata non è disponibile.} other {# chiavi selezionate non sono disponibili.}} Rimuovi queste chiavi o ripristina l’accesso.",
+    "removeUnavailable": "Rimuovi chiavi non disponibili",
+    "selectionLimit": "Massimo 10 chiavi per provider",
+    "manageKeys": "Gestisci le chiavi dei provider",
+    "readOnlyPool": "Solo il proprietario della sessione o un responsabile del progetto può modificare questo gruppo.",
     "legacyChatGptLogin": "Accesso al progetto esistente",
     "legacyChatGptDescription": "Questa vecchia connessione è condivisa con il progetto. I nuovi account ChatGPT sopra restano privati finché non li condividi.",
     "chatGptAccounts": "Account ChatGPT",

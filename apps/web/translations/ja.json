@@ -1,5 +1,11 @@
 {
   "pooledSecrets": {
+    "providerDisabled": "このセッションではこのプロバイダーは無効です。",
+    "unavailableKeys": "選択したキーのうち{count}個が利用できません。利用できないキーを削除するか、アクセス権を復元してください。",
+    "removeUnavailable": "利用できないキーを削除",
+    "selectionLimit": "プロバイダーごとに最大10個のキー",
+    "manageKeys": "プロバイダーのキーを管理",
+    "readOnlyPool": "このプールを変更できるのは、セッションの所有者またはプロジェクト管理者のみです。",
     "legacyChatGptLogin": "既存のプロジェクトログイン",
     "legacyChatGptDescription": "この従来の接続はプロジェクト全体で共有されます。上の新しい ChatGPT アカウントは共有するまで非公開です。",
     "chatGptAccounts": "ChatGPT アカウント",

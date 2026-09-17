@@ -1,5 +1,11 @@
 {
   "pooledSecrets": {
+    "providerDisabled": "This provider is disabled for this session.",
+    "unavailableKeys": "{count, plural, one {# selected key is unavailable.} other {# selected keys are unavailable.}} Remove unavailable keys or restore access.",
+    "removeUnavailable": "Remove unavailable keys",
+    "selectionLimit": "Maximum 10 keys per provider",
+    "manageKeys": "Manage provider keys",
+    "readOnlyPool": "Only the session owner or a project manager can change this pool.",
     "legacyChatGptLogin": "Existing project login",
     "legacyChatGptDescription": "This older connection is shared with the project. New ChatGPT accounts above are private until you share them.",
     "chatGptAccounts": "ChatGPT accounts",

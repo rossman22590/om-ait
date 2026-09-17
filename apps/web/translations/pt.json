@@ -1,5 +1,11 @@
 {
   "pooledSecrets": {
+    "providerDisabled": "Este provedor está desativado para esta sessão.",
+    "unavailableKeys": "{count, plural, one {# chave selecionada está indisponível.} other {# chaves selecionadas estão indisponíveis.}} Remova essas chaves ou restaure o acesso.",
+    "removeUnavailable": "Remover chaves indisponíveis",
+    "selectionLimit": "Máximo de 10 chaves por provedor",
+    "manageKeys": "Gerenciar chaves dos provedores",
+    "readOnlyPool": "Somente o proprietário da sessão ou um gerente do projeto pode alterar este grupo.",
     "legacyChatGptLogin": "Login existente do projeto",
     "legacyChatGptDescription": "Esta conexão antiga é compartilhada com o projeto. As novas contas ChatGPT acima são privadas até você compartilhá-las.",
     "chatGptAccounts": "Contas ChatGPT",

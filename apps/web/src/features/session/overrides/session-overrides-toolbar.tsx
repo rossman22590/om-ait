@@ -34,7 +34,7 @@ import {
   getSessionScopeAvailability,
 } from '@/features/session/scope/session-scope-toolbar';
 import { useSessionScope } from '@/features/session/scope/use-session-scope';
-import { useFeatureFlag } from '@kortix/sdk/react';
+import { useFeatureFlag, useSessionProviderSecretPools } from '@kortix/sdk/react';
 
 import { SessionOverridesControl, type SessionOverrideRow } from './session-overrides-control';
 import { NewProviderSecretPoolEditor, ProviderSecretPoolEditor } from './provider-secret-pool-editor';
@@ -129,6 +129,9 @@ export function SessionOverridesToolbar({
   const tPooled = useTranslations('pooledSecrets');
   const pooledSecretsEnabled = useFeatureFlag(projectId, 'pooled_provider_secrets').enabled;
   const llmGatewayEnabled = useFeatureFlag(projectId, 'llm_gateway').enabled;
+  const providerPools = useSessionProviderSecretPools(
+    pooledSecretsEnabled && llmGatewayEnabled ? projectId : null, sessionId,
+  );
   const { scope, catalog, saveScope, isLoading, isScopeLoading } = useSessionScope({
     projectId,
     sessionId,
@@ -267,10 +270,14 @@ export function SessionOverridesToolbar({
         name: tPooled('providerKeys'),
         icon: KeyRound,
         hint: tPooled('chooseSharedKeys'),
-        summary: sessionId ? tPooled('sessionKeyPool') : Object.keys(providerPoolDraft).length
+        summary: sessionId ? providerPools.isError ? tPooled('keysLoadError')
+          : providerPools.isLoading ? tPooled('loadingKeys')
+          : providerPools.data?.pools.length
+            ? tPooled('selectedKeys', { count: providerPools.data.pools.reduce((count, pool) => count + pool.secret_ids.length, 0) })
+            : tPooled('projectDefaultShort') : Object.keys(providerPoolDraft).length
           ? tPooled(selectedProviderKeyCount === 1 ? 'selectedOne' : 'selectedKeys', { count: selectedProviderKeyCount })
           : tPooled('projectDefaultShort'),
-        overridden: !sessionId && Object.keys(providerPoolDraft).length > 0,
+        overridden: sessionId ? Boolean(providerPools.data?.pools.length) : Object.keys(providerPoolDraft).length > 0,
         description: tPooled('rateLimitDescription'),
         editor: !llmGatewayEnabled
           ? <p className="text-muted-foreground text-xs">{tPooled('enableGateway')}</p>
@@ -335,6 +342,9 @@ export function SessionOverridesToolbar({
     pooledSecretsEnabled,
     llmGatewayEnabled,
     providerPoolDraft,
+    providerPools.data,
+    providerPools.isError,
+    providerPools.isLoading,
     onProviderSecretPoolsChange,
     selectedProviderKeyCount,
     projectId,
