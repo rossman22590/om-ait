@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync } from '@/i18n/test-source';
+import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 
 const connectorsSource = readFileSync(join(import.meta.dir, 'connectors-view.tsx'), 'utf8');
@@ -7,10 +7,13 @@ const discoverPath = join(import.meta.dir, 'discover-catalogue.tsx');
 const discoverSource = existsSync(discoverPath) ? readFileSync(discoverPath, 'utf8') : '';
 
 describe('feature-flagged Discover connector marketplace', () => {
+  // `AddAppPanel` takes `discoverEnabled` as a prop; it no longer computes the
+  // flag itself. The legacy `ConnectorsMasterDetail` wrapper that used to wire
+  // `useFeatureFlag(projectId, 'connectors_api_discover')` here was dead code
+  // (0 importers, unreachable from the live route) and was deleted. The live
+  // route computes the flag in
+  // `features/workspace/capabilities/connectors/connectors-page.tsx` instead.
   test('keeps Easy Connect and adds Discover only for explicit project opt-in', () => {
-    expect(connectorsSource).toContain(
-      "const discoverEnabled = useFeatureFlag(projectId, 'connectors_api_discover').enabled;",
-    );
     expect(connectorsSource).toContain(
       '<TabsTrigger value="apps">{easyConnectLabel}</TabsTrigger>',
     );
