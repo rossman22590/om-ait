@@ -1517,7 +1517,7 @@ async function listConnectors(
     ]);
   const accountsByConnector = new Map(accountsByConnectorEntries);
   // `authorization_strategy` is a DERIVED SUMMARY now, not a setting. The
-  // column is retired (see migration 20260916182954570) and the PUT route is an
+  // column is retired (see migration 20260917160000000) and the PUT route is an
   // inert no-op, but the field stays on the wire so an older client keeps
   // parsing the response. It answers one question: does this connector's live
   // set of accounts look private-only?

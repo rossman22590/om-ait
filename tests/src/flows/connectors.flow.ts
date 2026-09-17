@@ -2452,14 +2452,22 @@ flow(
           // `auth: {type:'none'}` is the fixture's whole point: the connector
           // needs no credential, so every ACTIVE connection on it counts as
           // connected and the list is decided purely by the access rule.
+          //
+          // `http`, not `mcp`, on purpose: pinning a project-owned MCP account
+          // re-materializes the project catalog from the manifest (a full sync
+          // that prunes a DB-only connector together with every account on it,
+          // and that marks an unreachable MCP URL `error`, which empties the
+          // list). An `http` connector is inert on pin, so the fixture row
+          // survives exactly as seeded. Found 2026-09-17: `default_account`
+          // read back null after the PUT.
           const connector = await db.query<{ connector_id: string }>(
             `INSERT INTO kortix.connectors (account_id, project_id, slug, name, provider_type, config, status)
-             VALUES ($1, $2, $3, 'KE2E Accounts', 'mcp', $4::jsonb, 'active') RETURNING connector_id`,
+             VALUES ($1, $2, $3, 'KE2E Accounts', 'http', $4::jsonb, 'active') RETURNING connector_id`,
             [
               team.id,
               p.id,
               slug,
-              JSON.stringify({ url: 'https://ke2e.kortix.test/mcp', auth: { type: 'none' } }),
+              JSON.stringify({ base_url: 'https://ke2e.kortix.test', auth: { type: 'none' } }),
             ],
           );
           connectorId = connector.rows[0]?.connector_id ?? '';

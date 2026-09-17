@@ -11,7 +11,7 @@
  * was the direct cause of the original bug: a `user`-strategy connector had no
  * connect flow anywhere, because three separate call sites refused anything
  * that was not `project`. It is retired (the column stays, unread — see
- * migration `20260916182954570_revoke_unreachable_connector_connections`).
+ * migration `20260917160000000_revoke_unreachable_connector_connections`).
  *
  * Its one useful property — an unattended automation must never run as somebody's
  * personal account — moves onto the `member` row below. That is strictly better:
