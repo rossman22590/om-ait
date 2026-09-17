@@ -396,7 +396,7 @@ DB `change_requests` (per-project `number`, `status open|merged|closed`).
 `CR-4` `PATCH …/:crId` → `write`, open only.
 `CR-5` `GET …/:crId/diff` → `read` → file list + unified patch.
 `CR-6` `GET …/:crId/merge-preview` → `read` → mergeable / fast-forward / conflicts.
-`CR-7` `POST …/:crId/merge {message?}` → **`write` required** → 200 status `merged` + sha; not-open → 409.
+`CR-7` `POST …/:crId/merge {message?}` → **`write` and `project.gitops.merge` required** → 200 status `merged` + sha; not-open → 409. A session can merge its own CR only with an explicit agent merge grant (`project.gitops.merge` or `kortix_cli: all`). A null agent grant does not permit self merge.
 `CR-8` `POST …/:crId/close` · `POST …/:crId/reopen` → `write`.
 `CR-8b` `POST …/:crId/request-changes {feedback}` → **`write` required** → 200 `{change_request, delivering}` — persists the note under CR metadata `requested_changes` + delivers it to the origin session's agent (Review Center "request changes"). Missing `feedback` → 400; not-open → 409.
 `CR-9` CLI mirror: `kortix cr ls|show|diff|open|merge|close|reopen` (reads `KORTIX_PROJECT_ID` inside sandbox).
@@ -804,7 +804,7 @@ supplied scope field without restarting the session.
 `GH-15` `POST /projects/link-repository` → PROJECT_CREATE; missing repo → 400; no install → 400/409/502; bad token → 400.
 `GH-16` `GET /projects/github/repository-branches` → PROJECT_CREATE; returns the repository default plus every existing branch; missing installation → 409; wrong installation owner → 400.
 `GH-18` The instance git backend ("Kortix managed") has its own namespace. `GET /projects/git/backend` reports `{configured, kind: app|pat|null, owner}` to any authenticated user and never a credential or installation id. `GET /projects/git/backend/repositories` lists the backend owner's repositories to a self-host operator only; every other principal → 403. `POST /projects/link-repository {source: "managed"}` imports one of them, operator-gated, and rejects a body that also names an `installation_id` → 400. The backend is never injected into `GET /projects/github/installations` as a synthetic installation.
-`GH-17` Real Git processes authenticate with session PATs. An owner session creates and deletes a shared branch. A member session with `kortix_cli: all` can push its own branch but cannot create another branch or delete the shared branch. HTTP ref read-back proves denied pushes leave the repository unchanged.
+`GH-17` Real Git processes authenticate with session PATs. An owner session creates and deletes a shared branch. A member session with `kortix_cli: all` can push its own branch but cannot create another branch or delete the shared branch. HTTP ref read-back proves denied pushes leave the repository unchanged. The owner session pushes a commit, receives `CR_SESSION_ID_MISMATCH` for a false `session_id`, opens a CR without `session_id`, and reads back its bound origin. Its explicit wildcard grant permits self merge. CR read-back and the base Git ref confirm the merge. A second CR with a null grant returns `403 CR_SELF_MERGE_REFUSED`; the base ref remains unchanged.
 `IAM-14` `GET …/iam/groups/:gid/project-grants` → 200; unknown → 404; NONMEMBER → 403.
 `IAM-15` `POST …/iam/members/:userId/effective:batch` → 200; non-array → 400.
 `IAM-16` `GET …/iam/members/:userId/project-access` → 200; NONMEMBER → 403.
