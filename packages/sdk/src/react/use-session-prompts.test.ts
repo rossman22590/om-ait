@@ -235,6 +235,32 @@ describe('startSessionWithPrompt', () => {
     expect(receipt?.acceptedAtMs ?? null).not.toBeNull();
   });
 
+  test('a held first prompt keeps its Send time as clientSentAtMs, not the POST time', async () => {
+    // The server orders racing rows by `clientSentAtMs`. A first prompt whose
+    // POST waited on its uploads must still sort before a message the user
+    // sent after it; the POST-time clock would put it behind that message.
+    useSessionWorkingStore.getState().reset();
+    const inputs: any[] = [];
+    const create = async (_p: string, _s: string, input: any) => {
+      inputs.push(input);
+      return { prompt_id: 'p1', state: 'queued' as const, message_id: input.messageId, deduped: false };
+    };
+    await startSessionWithPrompt(
+      'proj-1',
+      'sess-4',
+      { parts: [{ type: 'text', text: 'go' }], clientSentAtMs: 1_000 },
+      { create, nowMs: () => 9_000 },
+    );
+    await startSessionWithPrompt(
+      'proj-1',
+      'sess-5',
+      { parts: [{ type: 'text', text: 'go' }] },
+      { create, nowMs: () => 9_000 },
+    );
+
+    expect(inputs.map((input) => input.clientSentAtMs)).toEqual([1_000, 9_000]);
+  });
+
   test('a refused row drops the receipt and throws instead of posing as sent', async () => {
     useSessionWorkingStore.getState().reset();
     await expect(
@@ -296,6 +322,21 @@ describe('optimistic queue rows', () => {
     expect(row.text).toBe('hello there');
     expect(row.attempts).toBe(0);
     expect(row.created_at).toBe(new Date(1_000).toISOString());
+  });
+
+  test('placement and full content survive optimistic acceptance', () => {
+    const text = 'const result = await run();\n'.repeat(120);
+    const inputWithPlacement = {
+      ...input,
+      placement: 'transcript' as const,
+      parts: [{ type: 'text' as const, text }],
+    };
+    const rows = applyOptimisticPrompt([], inputWithPlacement, 1_000);
+    const settled = settleOptimisticPrompt(rows, 'c1', {
+      prompt_id: 'p-real', state: 'waiting', message_id: input.messageId, deduped: false,
+    });
+    expect(settled[0].placement).toBe('transcript');
+    expect(settled[0].full_text).toBe(text.trim());
   });
 
   test('applyOptimisticPrompt appends once and is idempotent for the same submission', () => {

@@ -29,6 +29,7 @@ import { KORTIX_SERVICE_CALL_HEADER } from '../kortix-user-context'
 import type { Opencode } from '../harness/open-code/lifecycle'
 import { createRefreshRouter } from '../routes/refresh'
 import { createOpenCodeControlService } from '../harness/open-code/control'
+import { createOpenCodeQuickQueueInterrupt } from '../harness/open-code/background'
 
 const CONFIG_DIR = '.kortix/opencode'
 const AGENT = `${CONFIG_DIR}/agents/kortix.md`
@@ -354,7 +355,7 @@ describe('base=1 requires a DIRECT service call', () => {
       getState: () => 'ready',
       getPid: () => 1,
     } as unknown as Opencode
-    return createRefreshRouter(cfg, createOpenCodeControlService(opencode).bind({ cfg }))
+    return createRefreshRouter(cfg, createOpenCodeControlService(opencode, createOpenCodeQuickQueueInterrupt(opencode, cfg)).bind({ cfg }))
   }
 
   async function post(path: string, headers: Record<string, string>) {

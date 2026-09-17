@@ -11,8 +11,9 @@
  * anything was ever running. This module is the same finalize, reachable from
  * the reaper pass.
  *
- * `/kortix/abort` cannot be used per-turn: apps/kortix-sandbox-agent-server/
- * src/routes/abort.ts:29 resolves `readPinnedOpencodeSessionId()` and ignores
+ * `/kortix/abort` cannot be used per-turn: its OpenCode `abort()` in
+ * apps/kortix-sandbox-agent-server/src/harness/open-code/control.ts
+ * resolves `readPinnedOpencodeSessionId()` and ignores
  * the session the caller asked about. It would abort the PINNED root, which is
  * a different root than a husk left by a secondary session. The abort here is
  * issued against the turn's own root through the OpenCode REST surface.

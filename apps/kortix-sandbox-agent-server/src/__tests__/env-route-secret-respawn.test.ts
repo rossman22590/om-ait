@@ -25,6 +25,7 @@ import { createProjectEnvStore } from '../project-env'
 import { Hono } from 'hono'
 import { createEnvRouter } from '../routes/env'
 import { createOpenCodeControlService } from '../harness/open-code/control'
+import { createOpenCodeQuickQueueInterrupt } from '../harness/open-code/background'
 
 const TEST_TOKEN = 'respawn-test-kortix-token-32-chars'
 const TEST_ENV_DIR = mkdtempSync(join(tmpdir(), 'kortix-env-respawn-'))
@@ -82,7 +83,7 @@ function fakeOpencode(): { opencode: Opencode; calls: ReloadCall[] } {
 
 function buildTestApp(opencode: Opencode, store: ReturnType<typeof createProjectEnvStore>) {
   const cfg = baseConfig()
-  const control = createOpenCodeControlService(opencode).bind({
+  const control = createOpenCodeControlService(opencode, createOpenCodeQuickQueueInterrupt(opencode, cfg)).bind({
     cfg,
     projectEnv: store,
     agentEnvFile: join(TEST_ENV_DIR, `agent-env-${testEnvFileSequence++}.sh`),

@@ -31,7 +31,13 @@ session (a restart or resume re-reads the selection).
 | `control.ts`, `diagnostics.ts`, `queries.ts`, `proxy.ts` | Named host-facing operation contracts; no router dependencies |
 | `open-code/service.ts` | Composition over one lifecycle; native typed ports |
 | `open-code/boot.ts` | Native cold boot, warm seed/adoption, first turn, reconciliation and relays |
-| `open-code/*` | Native process lifecycle, config, events, database, projections, attachments, audit |
+| `open-code/control.ts`, `open-code/diagnostics.ts`, `open-code/queries.ts` | Native execution, configuration, state queries, diagnostics and attachments |
+| `open-code/proxy.ts` | Native readiness, upstream client, timeout classification and payload processing |
+| `open-code/events.ts`, `open-code/event-bus.ts` | Native event reading, session identity and recovery instructions |
+| `open-code/config.ts`, `open-code/paths.ts` | Native environment, authored config discovery and paths |
+| `open-code/assets.ts` | Native binary/plugin updates and skill placement |
+| `open-code/background.ts`, `open-code/resource-diagnostics.ts`, `open-code/quick-queue-interrupt.ts` | Native offload, turn guard, tool-boundary queue interrupt and diagnostic projection |
+| Other `open-code/` modules | Native database, projections, pins, attachments, audit and recovery |
 | `pi/service.ts` | Composition; loads pi lazily so an OpenCode boot never pays for it |
 | `pi/runtime.ts` | The in-process pi `Agent`: model, tools, skills, turns, transcript, durability |
 | `pi/boot.ts` | Session boot: the same host steps as OpenCode, then `pi-ready` |

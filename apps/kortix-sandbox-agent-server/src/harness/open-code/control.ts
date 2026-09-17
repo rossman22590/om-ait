@@ -11,6 +11,7 @@ import { reconcileProjectEnv } from '../../project-env'
 import { refreshRepo, syncConfigDirToBase, syncWorkspaceToBase } from '../../git'
 import { scheduleRuntimeAssetsReconcile } from '../../runtime-assets'
 import { readPinnedOpencodeSessionId } from './boot'
+import type { QuickQueueInterrupt } from './quick-queue-interrupt'
 
 const OPENCODE_RUNTIME_ENV_NAMES = new Set([
   'KORTIX_LLM_BASE_URL',
@@ -129,7 +130,10 @@ export function refreshMayConvergeRuntime(runtimeState: string): boolean {
 }
 
 /** Native control operations. HTTP parsing, authorization and status mapping stay in routes. */
-export function createOpenCodeControlService(opencode: Opencode): HarnessControlService {
+export function createOpenCodeControlService(
+  opencode: Opencode,
+  quickQueue: Pick<QuickQueueInterrupt, 'arm' | 'disarm'>,
+): HarnessControlService {
   return {
     bind(context): HarnessControlOperations {
       const { projectEnv, agentEnvFile } = context
@@ -383,6 +387,8 @@ export function createOpenCodeControlService(opencode: Opencode): HarnessControl
             return { outcome: 'failed', body: { ok: false, error: message } }
           }
         },
+        armAbortAfterTool: (input) => quickQueue.arm(input),
+        disarmAbortAfterTool: (promptId) => quickQueue.disarm(promptId),
       }
     },
   }

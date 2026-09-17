@@ -27,6 +27,7 @@ import { createProjectEnvStore } from '../project-env'
 import { Hono } from 'hono'
 import { createEnvRouter } from '../routes/env'
 import { createOpenCodeControlService } from '../harness/open-code/control'
+import { createOpenCodeQuickQueueInterrupt } from '../harness/open-code/background'
 
 const TEST_TOKEN = 'egress-shim-test-kortix-token-32ch'
 const TEST_ENV_DIR = mkdtempSync(join(tmpdir(), 'kortix-env-shim-'))
@@ -150,7 +151,7 @@ function buildTestApp(opencode: Opencode): { app: Hono; envFile: string } {
     API_KEY: 'v1',
   } as NodeJS.ProcessEnv)
   const cfg = baseConfig()
-  const control = createOpenCodeControlService(opencode).bind({ cfg, projectEnv: store, agentEnvFile: envFile })
+  const control = createOpenCodeControlService(opencode, createOpenCodeQuickQueueInterrupt(opencode, cfg)).bind({ cfg, projectEnv: store, agentEnvFile: envFile })
   const app = new Hono().route('/kortix/env', createEnvRouter(cfg, control))
   return { app, envFile }
 }

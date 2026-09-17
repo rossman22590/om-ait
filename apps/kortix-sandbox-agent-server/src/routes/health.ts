@@ -14,7 +14,9 @@ export function createHealthRouter(
           messageId: c.req.query('turn_message_id')?.trim(),
         }
       : undefined
-    return c.json(await diagnostics.health(context, { turn }))
+    // `capabilities` names host-owned `/file` routes, so the controller adds it for every harness.
+    const { daemon, ...report } = await diagnostics.health(context, { turn })
+    return c.json({ daemon, capabilities: ['file.import', 'file.append'], ...report })
   })
   return router
 }

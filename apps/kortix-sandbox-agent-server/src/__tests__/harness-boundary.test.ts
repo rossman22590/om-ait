@@ -111,7 +111,12 @@ describe('harness ownership boundary', () => {
           body: JSON.stringify({ nativeFeature: input.path, input: await new Response(input.body).text() }),
         }),
       },
-      control: { bind: () => ({ applyEnvironment: unexpected, refresh: unexpected, abort: unexpected }) },
+      control: {
+        bind: () => ({
+          applyEnvironment: unexpected, refresh: unexpected, abort: unexpected,
+          armAbortAfterTool: unexpected, disarmAbortAfterTool: unexpected,
+        }),
+      },
       diagnostics: {
         health: async () => ({ daemon: 'ok', status: 'ok', runtimeReady: true, uptime_s: 1, exclusiveFeature: 'preserved' }),
         report: unexpected, logSources: () => [], readLog: unexpected,
@@ -126,7 +131,7 @@ describe('harness ownership boundary', () => {
     const app = buildDaemonApp(cfg, service, 0)
     const response = await app.request('/kortix/health')
     expect(response.status).toBe(200)
-    expect(await response.json()).toEqual({ daemon: 'ok', status: 'ok', runtimeReady: true, uptime_s: 1, exclusiveFeature: 'preserved' })
+    expect(await response.json()).toEqual({ daemon: 'ok', capabilities: ['file.import', 'file.append'], status: 'ok', runtimeReady: true, uptime_s: 1, exclusiveFeature: 'preserved' })
     expect((await app.request('/session/native-command')).status).toBe(503)
 
     // The transport controller preserves features that are not common methods.
