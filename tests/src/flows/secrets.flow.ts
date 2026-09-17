@@ -206,6 +206,7 @@ flow('SEC-POOL-4', {
     'POST /v1/accounts/:accountId/secret-resources',
     'GET /v1/accounts/:accountId/secret-resources',
     'PUT /v1/accounts/:accountId/secret-resources/:secretId/access',
+    'POST /v1/projects/:projectId/sessions',
     'DELETE /v1/accounts/:accountId/secret-resources/:secretId',
   ],
 }, async (ctx) => {
@@ -239,6 +240,13 @@ flow('SEC-POOL-4', {
     const other = await owner.get(`${path}?project_id=${otherProject.id}`, { params });
     other.status(200);
     if ((other.json<any>().secrets as any[]).some((secret) => secret.secret_id === secretId)) throw new Error('key leaked into another project');
+    for (const feature of ['llm_gateway', 'pooled_provider_secrets']) {
+      (await owner.patch('/v1/projects/:projectId/features', { feature, enabled: true },
+        { params: { projectId: otherProject.id } })).status(200);
+    }
+    (await owner.post('/v1/projects/:projectId/sessions', {
+      provider_secret_pools: { anthropic: [secretId] },
+    }, { params: { projectId: otherProject.id } })).status(403);
   });
   await ctx.step('selected-member mode revokes and restores access atomically', async () => {
     const accessPath = `${path}/:secretId/access`;

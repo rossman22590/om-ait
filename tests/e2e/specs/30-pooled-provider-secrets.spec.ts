@@ -14,7 +14,7 @@ const authOptions = { supabaseUrl, password: 'E2ePooledSecrets123!' };
 const api = createApiJsonClient(apiBase);
 
 test.describe('30 — pooled provider secrets', () => {
-  test('a partially failed access change reloads grants before retrying', async ({ page }) => {
+  test('a failed access change retains grants and retries atomically', async ({ page }) => {
     test.skip(!databaseUrl, 'KE2E_DATABASE_URL is required');
     test.setTimeout(120_000);
     const runId = Date.now().toString(36);
