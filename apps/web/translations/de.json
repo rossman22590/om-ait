@@ -153,14 +153,12 @@
       "create": "Projekt erstellen",
       "tryAgain": "Erneut versuchen",
       "logOut": "Abmelden",
-      "signingOut": "Abmeldung läuft"
+      "signingOut": "Abmeldung läuft",
+      "back": "Zurück zu den Projekten"
     },
     "repository": {
       "label": "Repository",
       "defaultBranch": "Standard-Branch",
-      "noGitHubAccount": "Mit dem Konto dieses Projekts ist noch kein GitHub-Konto verbunden.",
-      "connectGitHub": "GitHub-Konto verbinden",
-      "connectGitHubSuffix": "um diese Option zu verwenden.",
       "loadGitHubAccountsError": "GitHub-Konten konnten nicht geladen werden. Versuchen Sie es erneut.",
       "createsPath": "Erstellt <path>{path}</path>",
       "loadRepositoriesError": "Repositories konnten nicht geladen werden. Versuchen Sie es erneut.",
@@ -170,24 +168,23 @@
           "description": "Kortix erstellt und verwaltet ein privates Repository für diesen Projekt."
         },
         "githubCreate": {
-          "label": "In GitHub erstellen",
           "description": "Kortix erstellt ein privates Repository in deinem GitHub-Konto."
-        },
-        "githubImport": {
-          "label": "Aus GitHub importieren",
-          "description": "Wähle ein vorhandenes Repository aus deinem GitHub-Konto aus."
         }
       },
       "repositoryLabel": "Repository",
-      "createInOwner": "Ein Repository in {owner} erstellen",
-      "importFromOwner": "Ein Repository aus {owner} importieren",
-      "selectOption": "Repository-Option auswählen",
       "loadingOptions": "Repository-Optionen werden geladen …",
       "managedUnavailable": "Von Kortix verwaltete Repositories sind auf dieser Instanz nicht verfügbar. Ein Plattform-Administrator richtet das in der Admin-Konsole ein.",
       "installationUnreachable": "Diese GitHub-Verbindung funktioniert nicht mehr. Stellen Sie sie wieder her, um Repositories aufzulisten.",
       "reconnect": "In den Git-Einstellungen neu verbinden",
       "managedImportLabel": "Ein vorhandenes verwaltetes Repository importieren",
-      "managedImportHint": "Nur für Self-Host-Betreiber. Listet Repositories auf, die der verwaltete Git-Inhaber bereits besitzt."
+      "managedImportHint": "Nur für Self-Host-Betreiber. Listet Repositories auf, die der verwaltete Git-Inhaber bereits besitzt.",
+      "gitAccountLabel": "Git-Konto",
+      "selectGitAccount": "Git-Konto auswählen",
+      "addGitHubAccount": "GitHub-Konto hinzufügen…",
+      "actionCreate": "Neues Repository erstellen",
+      "actionImport": "Bestehendes Repository importieren",
+      "ownerTypePersonal": "Persönliches Konto",
+      "ownerTypeOrg": "Organisation"
     }
   },
   "projectHome": {

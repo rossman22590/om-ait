@@ -153,14 +153,12 @@
       "create": "Направи пројекат",
       "tryAgain": "Покушај поново",
       "logOut": "Одјави се",
-      "signingOut": "Одјављивање"
+      "signingOut": "Одјављивање",
+      "back": "Назад на пројекте"
     },
     "repository": {
       "label": "Репозиторијум",
       "defaultBranch": "Подразумевана грана",
-      "noGitHubAccount": "Ниједан GitHub налог још није повезан са налогом овог пројекта.",
-      "connectGitHub": "Повежи GitHub налог",
-      "connectGitHubSuffix": "да бисте користили ову опцију.",
       "loadGitHubAccountsError": "Učitavanje GitHub naloga nije uspelo. Pokušajte ponovo.",
       "createsPath": "Прави <path>{path}</path>",
       "loadRepositoriesError": "Učitavanje repozitorijuma nije uspelo. Pokušajte ponovo.",
@@ -170,24 +168,23 @@
           "description": "Kortix прави и управља приватним репозиторијумом за овај пројекат."
         },
         "githubCreate": {
-          "label": "Направи на GitHub-у",
           "description": "Kortix прави приватни репозиторијум на вашем GitHub налогу."
-        },
-        "githubImport": {
-          "label": "Увези са GitHub-а",
-          "description": "Изаберите постојећи репозиторијум са свог GitHub налога."
         }
       },
       "repositoryLabel": "Repozitorijum",
-      "createInOwner": "Napravi repozitorijum u {owner}",
-      "importFromOwner": "Uvezi repozitorijum iz {owner}",
-      "selectOption": "Izaberite opciju repozitorijuma",
       "loadingOptions": "Učitavanje opcija repozitorijuma…",
       "managedUnavailable": "Repozitorijumi kojima upravlja Kortix nisu dostupni na ovoj instanci. Administrator platforme to podešava u administratorskoj konzoli.",
       "installationUnreachable": "Ova GitHub veza više ne radi. Povežite je ponovo da biste izlistali repozitorijume.",
       "reconnect": "Ponovo poveži u Git podešavanjima",
       "managedImportLabel": "Uvezi postojeći upravljani repozitorijum",
-      "managedImportHint": "Samo za self-host operatere. Izlistava repozitorijume koje vlasnik upravljanog git-a već poseduje."
+      "managedImportHint": "Samo za self-host operatere. Izlistava repozitorijume koje vlasnik upravljanog git-a već poseduje.",
+      "gitAccountLabel": "Git налог",
+      "selectGitAccount": "Изаберите Git налог",
+      "addGitHubAccount": "Додај GitHub налог…",
+      "actionCreate": "Направи нови репозиторијум",
+      "actionImport": "Увези постојећи репозиторијум",
+      "ownerTypePersonal": "Лични налог",
+      "ownerTypeOrg": "Организација"
     }
   },
   "projectHome": {
