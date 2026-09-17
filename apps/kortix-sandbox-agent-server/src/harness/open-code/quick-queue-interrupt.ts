@@ -23,7 +23,8 @@ export function quickQueueSnapshotFromPage(
 ): QuickQueueSnapshot {
   if (inFlight === false) return { state: 'idle', runningTool: false }
   if (inFlight === null || !messages) return { state: 'unknown', runningTool: false }
-  const latestUser = messages.findLast((message) => message.info.role === 'user')
+  // Not `findLast`: apps/api's typecheck program reaches this file and its lib is ES2022.
+  const latestUser = [...messages].reverse().find((message) => message.info.role === 'user')
   if (latestUser && latestUser.info.id !== expectedMessageId) {
     return { state: 'stale', runningTool: false }
   }

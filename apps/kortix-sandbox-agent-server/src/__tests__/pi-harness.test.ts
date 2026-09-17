@@ -287,6 +287,55 @@ describe('pi harness', () => {
     expect(state.statuses.value[root]).toEqual({ type: 'idle' })
   })
 
+  test('an armed abort-after-tool lets the running tool finish, then ends the turn', async () => {
+    const r = await boot({ script: [{ tool: 'bash', args: { command: 'sleep 0.6; echo tool-finished' } }, { text: 'unreachable' }] })
+    const root = r.service.runtime()!.rootId
+    const messageID = 'msg_0198e2a4b0c3ABCDEFGHIJKLMN'
+    expect((await r.user(`/session/${root}/prompt_async`, { method: 'POST', body: JSON.stringify({ messageID, parts: [{ type: 'text', text: 'run it' }] }) })).status).toBe(204)
+    await waitFor(() => r.service.runtime()!.busy())
+    await Bun.sleep(150)
+    const armed = await r.user('/kortix/abort/after-tool', {
+      method: 'POST',
+      body: JSON.stringify({ prompt_id: 'prm_queue_1', opencode_session_id: root, turn_message_id: messageID }),
+    })
+    expect(armed.status).toBe(202)
+    // The tool is still running: arming must not kill it.
+    expect(r.service.runtime()!.busy()).toBe(true)
+    await waitFor(() => !r.service.runtime()!.busy())
+    const messages = (await r.user(`/session/${root}/message`).then((res) => res.json())) as Array<{ info: any; parts: any[] }>
+    const tool = messages.flatMap((m) => m.parts).find((p) => p.type === 'tool')
+    expect(tool.state.status).toBe('completed')
+    expect(String(tool.state.output)).toContain('tool-finished')
+    const text = messages.flatMap((m) => m.parts).filter((p) => p.type === 'text').map((p) => p.text).join(' ')
+    expect(text).not.toContain('unreachable')
+  })
+
+  test('an abort-after-tool armed for another turn is ignored, and disarm clears a pending one', async () => {
+    const r = await boot({ script: [{ tool: 'bash', args: { command: 'sleep 0.5; echo ok' } }, { text: 'finished normally' }] })
+    const root = r.service.runtime()!.rootId
+    const messageID = 'msg_0198e2a4b0c4ABCDEFGHIJKLMN'
+    expect((await r.user(`/session/${root}/prompt_async`, { method: 'POST', body: JSON.stringify({ messageID, parts: [{ type: 'text', text: 'run it' }] }) })).status).toBe(204)
+    await waitFor(() => r.service.runtime()!.busy())
+    await Bun.sleep(100)
+    // Stale: names a different turn.
+    const stale = await r.user('/kortix/abort/after-tool', {
+      method: 'POST',
+      body: JSON.stringify({ prompt_id: 'prm_stale', opencode_session_id: root, turn_message_id: 'msg_0198e2a4b0c5ABCDEFGHIJKLMN' }),
+    })
+    expect(stale.status).toBe(202)
+    // Armed for this turn, then disarmed before the tool ends.
+    await r.user('/kortix/abort/after-tool', {
+      method: 'POST',
+      body: JSON.stringify({ prompt_id: 'prm_live', opencode_session_id: root, turn_message_id: messageID }),
+    })
+    const disarmed = await r.user('/kortix/abort/after-tool', { method: 'DELETE', body: JSON.stringify({ prompt_id: 'prm_live' }) })
+    expect(disarmed.status).toBe(200)
+    await waitFor(() => !r.service.runtime()!.busy())
+    const messages = (await r.user(`/session/${root}/message`).then((res) => res.json())) as Array<{ info: any; parts: any[] }>
+    const text = messages.flatMap((m) => m.parts).filter((p) => p.type === 'text').map((p) => p.text).join(' ')
+    expect(text).toContain('finished normally')
+  })
+
   test('the transcript survives a runtime restart', async () => {
     const r = await boot({ script: [{ text: 'first answer' }] })
     const root = r.service.runtime()!.rootId

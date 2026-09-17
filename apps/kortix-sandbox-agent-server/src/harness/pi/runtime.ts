@@ -209,6 +209,8 @@ export class PiRuntime {
   private adapter: PiWireAdapter | null = null
   private queue: Promise<unknown> = Promise.resolve()
   private active: Turn | null = null
+  private runningTools = 0
+  private abortAfterTool: { promptId: string; messageId: string } | null = null
   private status: 'idle' | 'busy' = 'idle'
   private readonly completedTurns = new Map<string, 'idle' | 'error'>()
   private workspaceReady = true
@@ -429,6 +431,35 @@ export class PiRuntime {
     return true
   }
 
+  /**
+   * Quick Queue: end the named turn once no tool is running. A tool in flight
+   * is never killed; the model's own streaming may be cut.
+   */
+  armAbortAfterTool(input: { promptId: string; opencodeSessionId: string; messageId: string }): void {
+    if (input.opencodeSessionId !== this.rootId) return
+    this.abortAfterTool = { promptId: input.promptId, messageId: input.messageId }
+    this.checkAbortAfterTool()
+  }
+
+  /** Without a prompt id, disarm whatever is pending. */
+  disarmAbortAfterTool(promptId?: string): void {
+    if (promptId && this.abortAfterTool?.promptId !== promptId) return
+    this.abortAfterTool = null
+  }
+
+  private checkAbortAfterTool(): void {
+    const armed = this.abortAfterTool
+    if (!armed) return
+    // Idle, or another turn is running: a late arm must not stop its successor.
+    if (this.active?.messageId !== armed.messageId) {
+      this.abortAfterTool = null
+      return
+    }
+    if (this.runningTools > 0) return
+    this.abortAfterTool = null
+    void this.abort()
+  }
+
   private async runTurn(turn: Turn): Promise<void> {
     const agent = this.agent!
     this.active = turn
@@ -464,6 +495,8 @@ export class PiRuntime {
       this.permissions.rejectAll()
       this.questions.rejectAll()
       this.active = null
+      this.runningTools = 0
+      this.abortAfterTool = null
       this.status = 'idle'
       this.completedTurns.set(turn.messageId, outcome === 'error' ? 'error' : 'idle')
       this.persist()
@@ -473,6 +506,14 @@ export class PiRuntime {
   }
 
   private onAgentEvent(event: AgentEvent): void {
+    if (event.type === 'tool_execution_start') this.runningTools += 1
+    if (event.type === 'tool_execution_end') this.runningTools = Math.max(0, this.runningTools - 1)
+    this.translateAndPublish(event)
+    // After the frames: the finished tool part is on the transcript before the turn is cut.
+    if (event.type === 'tool_execution_end') this.checkAbortAfterTool()
+  }
+
+  private translateAndPublish(event: AgentEvent): void {
     if (!this.adapter) return
     let frames: WireEmission[]
     try {
