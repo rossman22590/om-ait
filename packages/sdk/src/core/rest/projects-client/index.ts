@@ -5,6 +5,7 @@
 export * from './accounts';
 export * from './projects';
 export * from './github';
+export * from './git-backend';
 export * from './access';
 export * from './secrets';
 export * from './connectors';
@@ -51,5 +52,5 @@ export type {
   ProjectGitConnection,
   ProjectFileEntry,
 } from './shared';
-export * from './provider-connections';
+
 export * from './model-access';
