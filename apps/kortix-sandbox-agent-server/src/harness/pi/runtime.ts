@@ -305,8 +305,8 @@ export class PiRuntime {
       })
       this.agent.beforeToolCall = async (context) => {
         const tool = context.toolCall.name
-        const rule = this.permissions.rule(tool)
-        if (rule === 'deny') return { block: true, reason: `The project policy denies the ${tool} tool.` }
+        const rule = this.permissions.rule(tool, context.args)
+        if (rule === 'deny') return { block: true, reason: `The project policy denies this ${tool} call.` }
         if (rule !== 'ask') return undefined
         const reply = await this.permissions.ask({
           tool,

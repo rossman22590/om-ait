@@ -269,6 +269,35 @@ describe('pi harness', () => {
     expect(String((tool.state as { error: string }).error)).toContain('rejected')
   })
 
+  test('a per-pattern deny blocks the command it names and lets the rest run', async () => {
+    // `bash: { 'rm -rf *': 'deny', '*': 'allow' }` is a valid manifest rule.
+    // Compiling it down to its `*` entry would run the denied command.
+    const permission = { bash: { 'rm -rf *': 'deny', '*': 'allow' } }
+    const denied = await boot({
+      script: [{ tool: 'bash', args: { command: 'rm -rf /workspace' } }, { text: 'blocked' }],
+      env: { KORTIX_COMPILED_AGENT_CONFIG: JSON.stringify({ agent: { build: { permission } } }) },
+    })
+    const deniedRoot = denied.service.runtime()!.rootId
+    expect((await denied.user(`/session/${deniedRoot}/prompt_async`, { method: 'POST', body: JSON.stringify({ parts: [{ type: 'text', text: 'go' }] }) })).status).toBe(204)
+    await waitFor(() => !denied.service.runtime()!.busy())
+    expect(denied.service.runtime()!.permissions.list()).toHaveLength(0)
+    const deniedPage = (await denied.bearer(`/kortix/opencode/messages/${deniedRoot}`).then((res) => res.json())) as { messages: Array<{ parts: Array<Record<string, unknown>> }> }
+    const deniedTool = deniedPage.messages.flatMap((m) => m.parts).find((p) => p.type === 'tool')!
+    expect(deniedTool.state).toMatchObject({ status: 'error' })
+    expect(String((deniedTool.state as { error: string }).error)).toContain('denies')
+
+    const allowed = await boot({
+      script: [{ tool: 'bash', args: { command: 'echo fine' } }, { text: 'done' }],
+      env: { KORTIX_COMPILED_AGENT_CONFIG: JSON.stringify({ agent: { build: { permission } } }) },
+    })
+    const allowedRoot = allowed.service.runtime()!.rootId
+    expect((await allowed.user(`/session/${allowedRoot}/prompt_async`, { method: 'POST', body: JSON.stringify({ parts: [{ type: 'text', text: 'go' }] }) })).status).toBe(204)
+    await waitFor(() => !allowed.service.runtime()!.busy())
+    const allowedPage = (await allowed.bearer(`/kortix/opencode/messages/${allowedRoot}`).then((res) => res.json())) as { messages: Array<{ parts: Array<Record<string, unknown>> }> }
+    const allowedTool = allowedPage.messages.flatMap((m) => m.parts).find((p) => p.type === 'tool')!
+    expect(allowedTool.state).toMatchObject({ status: 'completed', output: expect.stringContaining('fine') })
+  })
+
   test('abort stops a running tool and ends the turn as aborted', async () => {
     const r = await boot({ script: [{ tool: 'bash', args: { command: 'sleep 20' } }, { text: 'unreachable' }] })
     const root = r.service.runtime()!.rootId

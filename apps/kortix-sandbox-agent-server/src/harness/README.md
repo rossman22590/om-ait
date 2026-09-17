@@ -88,6 +88,12 @@ pi-only: `KORTIX_PI_STATE_DIR`, `KORTIX_PI_MODEL_MODE=faux` +
 Boot marks: `git-identity`, `proxy-up`, `llm-proxy-started`, `repo-materialized`,
 `pi-ready`, `initial-prompt-delivered`, `initial-turn-accepted`, `runtime-ready`.
 
+Permission rules follow OpenCode's semantics (`pi/interactions.ts`): a per-tool
+action, or a glob-pattern -> action map matched against the `bash` command line
+or a workspace tool's path, with the longest matching pattern winning and `*`
+the weakest. A pattern map is never collapsed to its `*` entry, and a `deny`
+outranks an earlier "always" reply on the same tool.
+
 Not supported by pi today (answered honestly, never silently): session rewind
 (`/session/:id/revert`, 501 `feature_not_supported`), slash commands
 (`/session/:id/command`), summarize/compaction, subagent sessions, MCP/connector
