@@ -2296,6 +2296,18 @@ export function createConnectorRouter(deps: ConnectorRouterDeps): OpenAPIHono {
       } catch { /* no body */ }
       const owner = parseConnectorConnectOwner(rawOwner);
       if (!owner) return c.json({ error: 'owner must be "me" or "project"' }, 400);
+      // Same gate the `/connect` START route asserts above: landing an account
+      // the WHOLE project can then use is administration, not self-service, and
+      // finalize is what actually persists `connected_account_id` on the shared
+      // connection. Without this a principal holding `project.connector.write`
+      // but NOT `project.connector.connections.manage` was refused when
+      // STARTING a project-owned connection and still allowed to FINISH one —
+      // sibling routes on one resource disagreeing about who may act (CWE-862).
+      // `me` stays self-service on both routes.
+      if (owner === 'project' && deps.resolveConnectionsManager) {
+        const manager = await deps.resolveConnectionsManager(c, projectId);
+        if (!manager) return c.json({ error: 'forbidden' }, 403);
+      }
       const result = await finalize(projectId, slug, admin.userId, selector, owner);
       if (!result) return c.json({ error: 'not a supported connect connector' }, 404);
       return c.json(result);
