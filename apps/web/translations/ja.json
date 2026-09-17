@@ -152,6 +152,7 @@
     "actions": {
       "create": "プロジェクトを作成",
       "tryAgain": "もう一度試す",
+      "upgrade": "プランをアップグレード",
       "logOut": "ログアウト",
       "signingOut": "ログアウト中",
       "back": "プロジェクトに戻る"

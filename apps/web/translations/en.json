@@ -152,6 +152,7 @@
     "actions": {
       "create": "Create project",
       "tryAgain": "Try again",
+      "upgrade": "Upgrade plan",
       "logOut": "Log out",
       "signingOut": "Signing out",
       "back": "Back to projects"

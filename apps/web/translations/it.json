@@ -152,6 +152,7 @@
     "actions": {
       "create": "Crea progetto",
       "tryAgain": "Riprova",
+      "upgrade": "Aggiorna il piano",
       "logOut": "Esci",
       "signingOut": "Disconnessione",
       "back": "Torna ai progetti"

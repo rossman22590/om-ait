@@ -152,6 +152,7 @@
     "actions": {
       "create": "Projekt erstellen",
       "tryAgain": "Erneut versuchen",
+      "upgrade": "Tarif upgraden",
       "logOut": "Abmelden",
       "signingOut": "Abmeldung läuft",
       "back": "Zurück zu den Projekten"
