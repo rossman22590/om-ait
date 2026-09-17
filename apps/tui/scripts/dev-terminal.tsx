@@ -25,9 +25,9 @@ import { createRoot } from '@opentui/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { resolveHost } from '../src/auth/hosts.ts';
-import { TerminalPanel } from '../src/features/terminal/terminal-panel.tsx';
 import { openPtyWebSocket } from '../src/features/terminal/open-socket.ts';
 import type { PtySocket } from '../src/features/terminal/pty-session.ts';
+import { TerminalPanel } from '../src/features/terminal/terminal-panel.tsx';
 import { initKortix } from '../src/kortix.ts';
 
 const WIDTH = Number(process.env.PROBE_WIDTH ?? 100);
@@ -145,7 +145,10 @@ console.log(echoed);
 // Drop the socket the way a network does: an abrupt close, not a clean one.
 // `close()` would be reported as code 1000 and classified as a finished shell.
 banner('DROPPING THE SOCKET');
-const socket = liveSocket as unknown as { terminate?: () => void; close: (c?: number, r?: string) => void };
+const socket = liveSocket as unknown as {
+  terminate?: () => void;
+  close: (c?: number, r?: string) => void;
+};
 if (typeof socket.terminate === 'function') socket.terminate();
 else socket.close(4999, 'upstream error');
 

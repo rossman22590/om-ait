@@ -2,11 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { CLIPBOARD_COMMANDS, copyToClipboard } from './clipboard.ts';
 import { CLI_INSTALL_COMMAND, connectCommand } from './connect-hint.tsx';
-import {
-  TERMINAL_KEYMAP,
-  isReservedWhileTerminalFocused,
-  matchesTerminalBinding,
-} from './keys.ts';
+import { TERMINAL_KEYMAP, isReservedWhileTerminalFocused, matchesTerminalBinding } from './keys.ts';
 
 /** A `KeyEvent`-shaped literal. Only the fields `matchesChord` reads matter. */
 function key(name: string, mods: { ctrl?: boolean; shift?: boolean; option?: boolean } = {}) {
@@ -79,7 +75,9 @@ describe('terminal keymap', () => {
     expect(matchesTerminalBinding(key('y'), 'terminal.copyConnect')).toBe(false);
     expect(matchesTerminalBinding(key('x', { option: true }), 'terminal.close')).toBe(true);
     expect(matchesTerminalBinding(key('x'), 'terminal.close')).toBe(false);
-    expect(matchesTerminalBinding(key('return', { option: true }), 'terminal.reconnect')).toBe(true);
+    expect(matchesTerminalBinding(key('return', { option: true }), 'terminal.reconnect')).toBe(
+      true,
+    );
     expect(matchesTerminalBinding(key('return'), 'terminal.reconnect')).toBe(false);
   });
 
