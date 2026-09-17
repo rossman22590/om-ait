@@ -71,9 +71,9 @@ export function AccountSecretResourcesPanel({ accountId, providerId, providerNam
   });
 
   return (
-    <section className="min-w-0 space-y-2" aria-label={`${providerName} API keys`}>
+    <section className="min-w-0 space-y-2" aria-label={t('providerKeysFor', { provider: providerName })}>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-muted-foreground text-xs">{keys.length} {keys.length === 1 ? 'key' : 'keys'}</p>
+        <p className="text-muted-foreground text-xs">{t('keyCount', { count: keys.length })}</p>
         {canWrite && <Button size="sm" variant="secondary" onClick={() => setCreating(true)}>{t('addKey')}</Button>}
       </div>
       {resources.isLoading ? <Loading /> : resources.isError ? (

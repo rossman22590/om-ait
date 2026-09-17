@@ -34,10 +34,10 @@ test.describe('30 — pooled provider secrets', () => {
         accountId, userId: user.id, name: `Pooled provider secrets ${runId}`,
       });
       projectId = project.id;
-      await installBrowserSessionDirect(page, session, `/projects/${projectId}/customize/secrets`, authOptions);
+      await installBrowserSessionDirect(page, session, `/projects/${projectId}/customize/models`, authOptions);
       await selectAccountForUi(page, accountId);
-      await page.goto(`/projects/${projectId}/customize/secrets`, { waitUntil: 'domcontentloaded' });
-      const panel = page.getByRole('region', { name: 'Shared provider secrets' });
+      await page.goto(`/projects/${projectId}/customize/models`, { waitUntil: 'domcontentloaded' });
+      const panel = page.getByRole('region', { name: 'Anthropic API keys' });
       await expect(panel).toHaveCount(0);
 
       await api(session.access_token, 'PATCH', `/projects/${projectId}/features`, {
@@ -51,7 +51,7 @@ test.describe('30 — pooled provider secrets', () => {
       }
       for (const label of ['Primary test key', 'Backup test key']) {
         await panel.getByRole('button', { name: 'Add key' }).click();
-        const dialog = page.getByRole('dialog', { name: 'Add provider key' });
+        const dialog = page.getByRole('dialog', { name: 'Add key · Anthropic' });
         await dialog.getByPlaceholder('Primary key').fill(label);
         await dialog.locator('input[type="password"]').fill(`fake-${label.replaceAll(' ', '-')}`);
         const request = page.waitForRequest((candidate) => candidate.method() === 'POST'
@@ -123,12 +123,12 @@ test.describe('30 — pooled provider secrets', () => {
         provider_secret_pools: { anthropic: createdIds },
       });
       await page.unroute(`**/v1/projects/${projectId}/detail`);
-      await page.goto(`/projects/${projectId}/customize/secrets`, { waitUntil: 'domcontentloaded' });
+      await page.goto(`/projects/${projectId}/customize/models`, { waitUntil: 'domcontentloaded' });
       await expect(panel.getByText('Primary test key', { exact: true })).toBeVisible();
 
       await panel.getByRole('button', { name: 'Actions for Primary test key' }).click();
       await page.getByRole('menuitem', { name: 'Delete key' }).click();
-      await page.getByRole('button', { name: 'Delete key', exact: true }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Delete key', exact: true }).click();
       await expect(panel.getByText('Primary test key', { exact: true })).toHaveCount(0);
       await expect(panel.getByText('Backup test key', { exact: true })).toBeVisible();
       const after = await api<{ secrets: Array<{ secret_id: string }> }>(

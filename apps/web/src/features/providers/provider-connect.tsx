@@ -528,6 +528,7 @@ function ProviderRow({
   onOpenModels?: (providerId: string) => void;
 }) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
+  const tPooled = useTranslations('pooledSecrets');
   const identity = (
     <div className="flex min-w-0 items-start gap-2.5">
       <ProviderLogo providerID={row.id} name={row.label} size="small" />
@@ -585,7 +586,7 @@ function ProviderRow({
           {pooledSlot}
           {row.connected && canWrite && (
             <div className="space-y-1.5">
-              <p className="text-muted-foreground text-xs">Existing project key · Used when this session has no key selection</p>
+              <p className="text-muted-foreground text-xs">{tPooled('legacyProjectKey')}</p>
               <ProviderKeyFields
                 row={row}
                 values={values}
@@ -688,6 +689,7 @@ export function ProviderConnectView({
   className,
 }: ProviderConnectViewProps) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
+  const tPooled = useTranslations('pooledSecrets');
   return (
     <div className={cn('flex flex-col gap-4 px-5 py-5', className)}>
       <InputGroupSearch data-provider-search="">
@@ -712,7 +714,7 @@ export function ProviderConnectView({
           was lost. */}
       <p className="text-muted-foreground px-0.5 text-xs text-pretty">
         {pooledSecretsEnabled
-          ? 'Add named keys for each provider. Share access with members, then select keys in session settings.'
+          ? tPooled('sharedDescription')
           : canWrite ? tI18nComplete.raw('text9253b4fa8e06') : tI18nComplete.raw('text30674c348b84')}
       </p>
 
@@ -872,6 +874,7 @@ export function ProviderConnect({
     managed: true,
   }), [pickerCatalog, tAccess]);
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
+  const tPooled = useTranslations('pooledSecrets');
   useLiveLlmProviderCatalog(projectId, enabled);
   const catalogRevision = useLlmProviderCatalogRevision();
   const { connectedProviders, providerStateLoading } = useConnectedProviders(projectId, enabled);
@@ -1155,7 +1158,7 @@ export function ProviderConnect({
               providerName={row.label}
               envVar={row.envVars[0]!}
               canWrite={true}
-            /> : <p key={row.id} className="text-muted-foreground text-xs">Account unavailable</p>,
+            /> : <p key={row.id} className="text-muted-foreground text-xs">{tPooled('loadError')}</p>,
           ]),
         ) : undefined}
         accessSlots={Object.fromEntries(
