@@ -10,6 +10,11 @@ export function useAccountSecretResources(accountId: string | null | undefined) 
     queryKey: ['account-secret-resources', accountId],
     queryFn: () => listAccountSecretResources(accountId!),
     enabled: Boolean(accountId),
+    refetchInterval: (query) => {
+      const now = Date.now();
+      const deadlines = (query.state.data?.secrets ?? []).map((secret) => Date.parse(secret.cooldown_until ?? '')).filter((deadline) => deadline > now);
+      return deadlines.length ? Math.max(1000, Math.min(...deadlines) - now) : false;
+    },
   });
 }
 

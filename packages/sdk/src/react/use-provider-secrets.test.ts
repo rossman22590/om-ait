@@ -1,6 +1,8 @@
-import { beforeEach, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, expect, mock, setSystemTime, test } from 'bun:test';
 import { configureKortix } from '../core/http/config';
 
+const originalFetch = globalThis.fetch;
+afterEach(() => { globalThis.fetch = originalFetch; setSystemTime(); });
 let invalidated: unknown[][] = [];
 mock.module('@tanstack/react-query', () => ({
   useQuery: (options: unknown) => options,
@@ -42,4 +44,20 @@ test('account resources are queried through the public REST contract without val
     return Response.json(expected);
   }) as unknown as typeof fetch;
   expect(await (useAccountSecretResources('account') as any).queryFn()).toEqual(expected);
+});
+
+test('resource metadata refreshes when the nearest cooldown expires, then stops polling', () => {
+  const now = new Date('2026-09-17T07:00:00Z');
+  setSystemTime(now);
+  const query = useAccountSecretResources('account') as any;
+  const state = { data: { secrets: [
+    { cooldown_until: '2026-09-17T07:00:07Z' },
+    { cooldown_until: '2026-09-17T07:01:00Z' },
+  ] } };
+  expect(query.refetchInterval({ state })).toBe(7000);
+  setSystemTime(new Date('2026-09-17T07:00:07Z'));
+  expect(query.refetchInterval({ state })).toBe(53000);
+  setSystemTime(new Date('2026-09-17T07:01:01Z'));
+  expect(query.refetchInterval({ state })).toBe(false);
+  expect(query.refetchInterval({ state: {} })).toBe(false);
 });
