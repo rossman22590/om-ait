@@ -3397,6 +3397,7 @@
     "TaskPerformance",
     "TeamsInstallation",
     "TeamsMode",
+    "TeamsPublishState",
     "TechnicalIssue",
     "ThreadAnalytics",
     "ThreadBrowseParams",
