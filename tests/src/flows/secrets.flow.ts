@@ -177,6 +177,61 @@ flow(
   },
 );
 
+flow('SEC-POOL-3', {
+  domain: 'secrets', requires: ['database'],
+  routes: [
+    'POST /v1/accounts/tokens',
+    'GET /v1/projects/:projectId/sessions/:sessionId/provider-secret-pools',
+    'GET /v1/projects/:projectId/sessions/:sessionId/provider-secret-pools/:providerId',
+    'PUT /v1/projects/:projectId/sessions/:sessionId/provider-secret-pools/:providerId',
+    'POST /v1/llm/chat/completions',
+  ],
+}, async (ctx) => {
+  const { Client: PgClient } = await import('pg');
+  const team = await ctx.fixtures.team();
+  const project = await team.project({ seed: true, allowAllSecrets: true });
+  const owner = ctx.client.as(ctx.P.OWNER);
+  const first = await createDatabaseSession(ctx.env, { projectId: project.id, accountId: team.id, userId: ctx.P.OWNER.userId! });
+  const sibling = await createDatabaseSession(ctx.env, { projectId: project.id, accountId: team.id, userId: ctx.P.OWNER.userId! });
+  for (const feature of ['llm_gateway', 'pooled_provider_secrets']) {
+    (await owner.patch('/v1/projects/:projectId/features', { feature, enabled: true }, { params: { projectId: project.id } })).status(200);
+  }
+  const minted = await owner.post('/v1/accounts/tokens', { name: 'Pool session isolation', account_id: team.id });
+  minted.status(201);
+  const credential = minted.json<{ token_id: string; secret_key: string }>();
+  const databaseUrl = ctx.env.databaseUrl!;
+  const database = new PgClient({ connectionString: databaseUrl,
+    ssl: /localhost|127\.0\.0\.1/.test(databaseUrl) ? false : { rejectUnauthorized: false } });
+  await database.connect();
+  try {
+    await database.query("INSERT INTO kortix.session_sandboxes (sandbox_id, session_id, account_id, project_id, status) VALUES ($1::uuid, $1, $2, $3, 'active')", [first, team.id, project.id]);
+    await database.query('UPDATE kortix.account_tokens SET project_id = $2, session_id = $3, agent_grant = $4::jsonb, account_id = $5 WHERE token_id = $1', [
+      credential.token_id, project.id, first,
+      JSON.stringify({ agent: 'kortix', kortixCli: 'all', connectors: 'all', env: 'all' }), team.id,
+    ]);
+  } finally { await database.end(); }
+  const caller = ctx.client.withBearer(credential.secret_key, 'BOUND_SESSION');
+  const poolsPath = '/v1/projects/:projectId/sessions/:sessionId/provider-secret-pools';
+  const poolPath = `${poolsPath}/:providerId`;
+  const ownParams = { projectId: project.id, sessionId: first, providerId: 'anthropic' };
+  const siblingParams = { ...ownParams, sessionId: sibling };
+  await ctx.step('session token reads and changes only its own pool', async () => {
+    (await caller.get(poolsPath, { params: ownParams })).status(200);
+    (await caller.put(poolPath, { secret_ids: [] }, { params: ownParams })).status(200);
+    for (const path of [poolsPath, poolPath]) {
+      (await caller.get(path, { params: siblingParams })).status(404);
+    }
+    (await caller.put(poolPath, { secret_ids: null }, { params: siblingParams })).status(404);
+    (await owner.get(poolPath, { params: siblingParams })).status(200).body().has('$.configured', false);
+  });
+  await ctx.step('a real gateway request refuses the explicitly empty session pool', async () => {
+    const result = await caller.post('/v1/llm/chat/completions', {
+      model: 'anthropic/claude-sonnet-4.6', messages: [{ role: 'user', content: 'Do not use another credential' }],
+    });
+    result.status(400).body().has('$.error.code', 'provider_not_connected');
+  });
+});
+
 flow(
   "SEC-1",
   { domain: "secrets", routes: ["GET /v1/projects/:projectId/secrets"] },
