@@ -175,7 +175,7 @@ export function AccountSecretResourcesPanel({ accountId, projectId, providerId, 
       <Modal open={creating || rotating !== null} onOpenChange={(open) => { if (!open && !save.isPending) { oauthGeneration.current++; setCreating(false); setRotating(null); setValue(''); setOauthWaiting(false); setOauthChallenge(null); } }}>
         <ModalContent className="lg:max-w-md">
           <ModalHeader><ModalTitle>{rotating ? t('rotateLabel', { label: rotating.label }) : `${oauth ? t('addAccount') : t('addKey')} · ${providerName}`}</ModalTitle>
-            <ModalDescription>{t('creationDescription')}</ModalDescription></ModalHeader>
+            <ModalDescription>{t(rotating ? 'valueNeverShown' : 'creationDescription')}</ModalDescription></ModalHeader>
           <ModalBody className="space-y-3">
             {!rotating && <>
               <Field><FieldLabel htmlFor={`provider-key-label-${providerId}`}>{t('label')}</FieldLabel><Input id={`provider-key-label-${providerId}`} value={label} disabled={oauthWaiting || save.isPending} onChange={(event) => setLabel(event.target.value)} placeholder={oauth ? t('accountLabelPlaceholder') : t('primaryKey')} maxLength={100} /></Field>
