@@ -309,11 +309,11 @@ async function dispatch(
           ls: 'kortix connectors ls — list connectors + tools this session can use',
           discover: 'kortix connectors discover "<intent>" — search tools by natural language',
           show: "kortix connectors show <connector>.<action> — show a tool's input schema",
-          call: "kortix connectors call <connector> <action> '<json-args>' [--account <label|id|me|project>] — run a tool or return its approval link; the result echoes the account it ran as",
+          call: "kortix connectors call <connector> <action> '<json-args>' [--account <label|id|me|project>] — run a tool or return its approval link; the result echoes the account it ran as. With several accounts and none named/pinned, denied with reason account_required — name --account or pin a default",
           add: 'kortix connectors add <slug> --provider composio --app <toolkit> — add a managed app connector NOW (no CR), then connect',
           rm: 'kortix connectors rm <slug> — remove a connector from the project',
           accounts:
-            'kortix connectors accounts <connector> [--json] — the connected accounts a call may run as, default first; each is shared with the project or private to one member (the names --account takes)',
+            'kortix connectors accounts <connector> [--json] [--default <label|id>] — the connected accounts a call may run as, default first; each is shared with the project or private to one member (the names --account takes). --default pins one so unnamed calls use it',
           connect:
             'kortix connectors connect <connector-slug> [--owner me|project] — start the connector provider authorization and hand the URL to the human; --owner project makes the account shared with every member',
           mcp: 'kortix connectors mcp — run the optional stdio MCP compatibility server',

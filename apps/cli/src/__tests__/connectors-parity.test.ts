@@ -83,6 +83,13 @@ function startServer(): string {
           accounts: connectorAccounts,
         });
       }
+      if (
+        url.pathname.startsWith(`/v1/projects/${PROJECT}/connections/`) &&
+        url.pathname.endsWith('/default') &&
+        req.method === 'PUT'
+      ) {
+        return Response.json({ ok: true });
+      }
       if (url.pathname === `${ex}/discover/connectors/detail` && req.method === 'GET') {
         return Response.json({
           item: { id: 'stripe', kind: 'api', slug: 'stripe', name: 'Stripe', description: 'Payments', url: null, categories: ['finance'] },
@@ -352,13 +359,73 @@ describe('kortix connectors — capability-page parity', () => {
     // Order is the API's: the default account first.
     const rows = lines.filter((line) => /^(Sales inbox|user@example\.test)\s/.test(line));
     expect(rows[0]).toMatch(
-      /^Sales inbox\s+shared\s+yes\s+11111111-1111-4111-8111-111111111111$/,
+      /^Sales inbox\s+shared\s+yes\s+11111111-1111-4111-8111-111111111111\s+\(pinned default\)$/,
     );
     expect(rows[1]).toMatch(
       /^user@example\.test\s+private\s+no\s+22222222-2222-4222-8222-222222222222$/,
     );
     expect(r.stdout).toContain('2 accounts');
-    expect(r.stdout).toContain('--account <label|id>');
+    // A ready-to-copy example per account, plus the two selector words.
+    expect(r.stdout).toContain('kortix connectors call gmail <action> --account "Sales inbox"');
+    expect(r.stdout).toContain(
+      'kortix connectors call gmail <action> --account "user@example.test"',
+    );
+    expect(r.stdout).toContain('kortix connectors call gmail <action> --account me');
+    expect(r.stdout).toContain('kortix connectors call gmail <action> --account project');
+    // A default IS pinned here (Sales inbox), so no account_required warning.
+    expect(r.stdout).not.toContain('No default pinned');
+  });
+
+  test('accounts warns when several accounts exist and none is pinned', async () => {
+    connectorAccounts = [
+      {
+        connection_id: '11111111-1111-4111-8111-111111111111',
+        label: 'Sales inbox',
+        owner_type: 'project',
+        is_default: false,
+      },
+      {
+        connection_id: '22222222-2222-4222-8222-222222222222',
+        label: 'user@example.test',
+        owner_type: 'member',
+        is_default: false,
+      },
+    ];
+    const config = writeConfig(startServer());
+    const r = await runCli(['connectors', 'accounts', 'gmail', '--project', PROJECT], config);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('No default pinned');
+    expect(r.stdout).toContain('account_required');
+    expect(r.stdout).toContain('kortix connectors accounts gmail --default <label>');
+  });
+
+  test('accounts --default pins one account by label, resolved through the accounts list', async () => {
+    const config = writeConfig(startServer());
+    const r = await runCli(
+      ['connectors', 'accounts', 'gmail', '--project', PROJECT, '--default', 'user@example.test'],
+      config,
+    );
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('Pinned');
+    expect(r.stdout).toContain('user@example.test');
+    expect(calls.at(-1)).toEqual({
+      method: 'PUT',
+      path: `/v1/projects/${PROJECT}/connections/22222222-2222-4222-8222-222222222222/default`,
+      body: {},
+    });
+  });
+
+  test('accounts --default reports an unknown label clearly and makes no write', async () => {
+    const config = writeConfig(startServer());
+    const before = calls.length;
+    const r = await runCli(
+      ['connectors', 'accounts', 'gmail', '--project', PROJECT, '--default', 'nope@example.test'],
+      config,
+    );
+    expect(r.code).toBe(1);
+    expect(r.stderr).toContain('No account "nope@example.test"');
+    // Only the accounts GET happened — no PUT default was attempted.
+    expect(calls.slice(before).every((c) => c.method === 'GET')).toBe(true);
   });
 
   test('accounts --json emits the payload agents parse', async () => {
@@ -390,14 +457,15 @@ describe('kortix connectors — capability-page parity', () => {
     const human = await runCli(['connectors', 'accounts', 'gmail', '--project', PROJECT], config);
     expect(human.code).toBe(0);
     expect(human.stdout).toContain('No connected accounts.');
-    expect(human.stdout).toContain('kortix connectors connect gmail --owner me|project');
+    expect(human.stdout).toContain('kortix connectors connect gmail --owner me');
+    expect(human.stdout).toContain('kortix connectors connect gmail --owner project');
 
     const json = await runCli(['connectors', 'accounts', 'gmail', '--project', PROJECT, '--json'], config);
     expect(json.code).toBe(0);
     expect(JSON.parse(json.stdout)).toEqual({
       connector: 'gmail',
       accounts: [],
-      note: `Nothing is connected to "gmail" yet. Run 'kortix connectors connect gmail'.`,
+      note: `Nothing is connected to "gmail" yet. Run 'kortix connectors connect gmail --owner me'.`,
     });
   });
 
