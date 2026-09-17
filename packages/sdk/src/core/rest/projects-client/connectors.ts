@@ -25,6 +25,17 @@ export interface ConnectorCatalogEntry {
   provider: string;
   status: string;
   actions: ConnectorAction[];
+  /**
+   * The accounts THIS caller may run this connector as, default first.
+   *
+   * One connector can hold the project's shared account and each member's own
+   * — this is the signal that a connector is not single-account, without a
+   * separate {@link listConnectorAccounts} round trip. Undefined on a server
+   * that predates this field.
+   */
+  accounts?: ConnectorAccount[];
+  /** Label of the account an unnamed call resolves to, or null if none. */
+  default_account?: string | null;
 }
 
 /** One callable connector action, identified by `<connector>.<action>`. */
