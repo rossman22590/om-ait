@@ -3,10 +3,9 @@
 import { useTranslations } from '@/i18n/use-translations';
 import {
   type AdminConnector,
-  type ConnectorAuthorizationStrategy,
+  type Connection,
   listConnections,
   listPipedreamApps,
-  setConnectorAuthorizationStrategy,
   setConnectorName,
 } from '@kortix/sdk';
 import { useProjectAccountId } from '@kortix/sdk/react';
@@ -29,9 +28,8 @@ import {
 } from '@/components/ui/modal';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { errorToast, successToast, warningToast } from '@/components/ui/toast';
+import { errorToast, successToast } from '@/components/ui/toast';
 import { ErrorState } from '@/features/layout/section/error-state';
-import { connectorAuthorizationUpdateIsPending } from '@/features/workspace/customize/sections/connector-connection-form';
 import { SetCredentialModal } from '@/features/workspace/customize/sections/connectors-view';
 import { usePipedreamConnect } from '@/hooks/connectors/use-pipedream-connect-app';
 
@@ -242,47 +240,31 @@ function ConnectorModalBody({
       .allowed === true;
 
   const newSession = useNewProjectSession(projectId);
-  const startPrivateSession = () => {
-    newSession({ create: { require_connectors: [connector.slug] } });
+  /**
+   * Start a new session. Given a connection, bind it to THIS connector so the
+   * session runs as that exact account — `inherit_unbound` keeps the project
+   * default for every OTHER connector, so binding just this one doesn't null
+   * the rest. Sessions are private by default, which is what lets a
+   * member-owned binding resolve.
+   *
+   * No connection (the "not connected yet" banner) just opens a fresh private
+   * session — there is no more session-level connector requirement to carry;
+   * connecting an account already has its own direct flow on this tab.
+   */
+  const startPrivateSession = (connection?: Connection) => {
+    newSession({
+      create: connection
+        ? {
+            connector_bindings: { [connector.slug]: { connection_id: connection.connection_id } },
+            inherit_unbound: true,
+          }
+        : {},
+    });
   };
 
-  const [authorizationStrategyAwaitingRefresh, setAuthorizationStrategyAwaitingRefresh] =
-    useState<ConnectorAuthorizationStrategy | null>(null);
-  useEffect(() => {
-    if (authorizationStrategyAwaitingRefresh === connector.authorizationStrategy) {
-      setAuthorizationStrategyAwaitingRefresh(null);
-    }
-  }, [authorizationStrategyAwaitingRefresh, connector.authorizationStrategy]);
-  const updateAuthorizationStrategy = useMutation({
-    mutationFn: (next: ConnectorAuthorizationStrategy) =>
-      setConnectorAuthorizationStrategy(projectId, connector.slug, next),
-    onSuccess: (result, next) => {
-      const syncError = result.sync?.errors.find((error) => error.slug === connector.slug);
-      if (syncError) {
-        warningToast(tI18nComplete('textec7a4e3094f9', { value0: syncError.error }));
-        onChanged();
-        return;
-      }
-      successToast(
-        tI18nComplete('text67ccb61d5f27', {
-          value0:
-            next === tI18nComplete.raw('text244210e48437')
-              ? tI18nComplete.raw('text985959785319')
-              : tI18nComplete.raw('textb512d97e7cbf'),
-        }),
-      );
-      onChanged();
-    },
-    onError: (error: Error) => {
-      setAuthorizationStrategyAwaitingRefresh(null);
-      errorToast(error.message || tI18nComplete.raw('texta743aa4452d3'));
-    },
-  });
-  const strategyUpdating = connectorAuthorizationUpdateIsPending(
-    connector.authorizationStrategy,
-    authorizationStrategyAwaitingRefresh,
-    updateAuthorizationStrategy.isPending,
-  );
+  // The "Connects as" control that used to mutate `authorization_strategy`
+  // from this modal is gone — see `connector-settings.tsx`. Ownership is now
+  // an ACCOUNT property (`owner_type`), set per connection on the Accounts tab.
 
   const showConnectCta =
     canWrite &&
@@ -306,7 +288,7 @@ function ConnectorModalBody({
               slug={connector.slug}
               displayName={displayName}
               canWrite={canWrite}
-              disabled={strategyUpdating}
+              disabled={false}
               onChanged={onChanged}
             />
             <ConnectorStatusBadge connector={connector} />
@@ -323,7 +305,7 @@ function ConnectorModalBody({
                 size="sm"
                 className="gap-1.5 active:scale-[0.96]"
                 onClick={() => (isManagedProvider ? reconnect.mutate() : setCredOpen(true))}
-                disabled={strategyUpdating || (isManagedProvider && reconnect.isPending)}
+                disabled={isManagedProvider && reconnect.isPending}
               >
                 {isManagedProvider && reconnect.isPending ? (
                   <Loading className="size-4 shrink-0" />
@@ -340,7 +322,7 @@ function ConnectorModalBody({
                   variant="outline"
                   className="gap-1.5 active:scale-[0.96]"
                   onClick={() => reconnect.mutate()}
-                  disabled={reconnect.isPending || strategyUpdating}
+                  disabled={reconnect.isPending}
                 >
                   {reconnect.isPending ? <Loading className="size-4 shrink-0" /> : null}
                   {tI18nComplete.raw('textbf8a9eab9e7e')}
@@ -351,7 +333,6 @@ function ConnectorModalBody({
                   variant="outline"
                   className="gap-1.5 active:scale-[0.96]"
                   onClick={() => setCredOpen(true)}
-                  disabled={strategyUpdating}
                 >
                   <KeyIcon className="size-4 shrink-0" />
                   {tI18nComplete.raw('text54483ce856e0')}
@@ -388,7 +369,7 @@ function ConnectorModalBody({
                   size="sm"
                   className="gap-1.5"
                   onClick={() => (isManagedProvider ? reconnect.mutate() : setCredOpen(true))}
-                  disabled={strategyUpdating || (isManagedProvider && reconnect.isPending)}
+                  disabled={isManagedProvider && reconnect.isPending}
                 >
                   {isManagedProvider && reconnect.isPending ? (
                     <Loading className="size-4 shrink-0" />
@@ -398,7 +379,7 @@ function ConnectorModalBody({
                     : tI18nComplete.raw('text2dcccf29ebf4')}
                 </Button>
               ) : !usesProjectAuthorization ? (
-                <Button size="sm" variant="outline" onClick={startPrivateSession}>
+                <Button size="sm" variant="outline" onClick={() => startPrivateSession()}>
                   {tI18nComplete.raw('text9676bdc9332f')}
                 </Button>
               ) : undefined
@@ -408,7 +389,7 @@ function ConnectorModalBody({
               ? canWrite
                 ? tI18nComplete.raw('text7acd4ac590c6')
                 : tI18nComplete.raw('text6a05ddf8cca1')
-              : tI18nComplete.raw('text607b97fdc5aa')}
+              : tI18nComplete.raw('text929505ef815a')}
           </InfoBanner>
         ) : null}
         <Tabs
@@ -474,11 +455,9 @@ function ConnectorModalBody({
                   displayName={displayName}
                   canWrite={canWrite}
                   canManageConnections={canManageConnections}
-                  strategyUpdating={strategyUpdating}
                   onChanged={onChanged}
                   onRemoved={onRemoved}
                   onStartSession={startPrivateSession}
-                  onSetCredential={() => setCredOpen(true)}
                 />
               )}
             </TabsContent>
@@ -489,7 +468,7 @@ function ConnectorModalBody({
                 connector={connector}
                 displayName={displayName}
                 canWrite={canWrite}
-                disabled={strategyUpdating}
+                disabled={false}
                 onChanged={onChanged}
               />
             </TabsContent>
@@ -499,13 +478,7 @@ function ConnectorModalBody({
                 projectId={projectId}
                 connector={connector}
                 displayName={displayName}
-                canWrite={canWrite}
-                strategyUpdating={strategyUpdating}
-                onAuthorizationStrategyChange={(next) => {
-                  setCredOpen(false);
-                  setAuthorizationStrategyAwaitingRefresh(next);
-                  updateAuthorizationStrategy.mutate(next);
-                }}
+                onChanged={onChanged}
                 onRemoved={onRemoved}
               />
             </TabsContent>
@@ -521,7 +494,7 @@ function ConnectorModalBody({
             ? (projectConnection?.connection_id ?? null)
             : (myPrivateConnection?.connection_id ?? null)
         }
-        authorizationStrategy={connector.authorizationStrategy}
+        owner={usesProjectAuthorization ? 'project' : 'me'}
         open={credOpen}
         onOpenChange={setCredOpen}
         onSaved={onChanged}
