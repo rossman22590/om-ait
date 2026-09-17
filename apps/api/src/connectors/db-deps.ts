@@ -53,8 +53,8 @@ import {
   canonicalConnectorAlias,
   listEntitledConnectorConnections,
   publicConnectorAlias,
-  resolveProjectDefaultConnectorConnection,
   resolveSessionConnectorConnection,
+  resolveSessionConnectorConnectionOutcome,
 } from '../projects/lib/session-connector-bindings';
 import { validateAccountToken } from '../repositories/account-tokens';
 import { db } from '../shared/db';
@@ -69,7 +69,9 @@ import { validateConnectorSecretBinding } from './connector-secret-binding';
 import {
   connectorIdsWithSharedCredentials,
   connectorIdsWithReachableMemberCredential,
+  connectionIsEffectiveProjectDefault,
   credentialExists,
+  defaultConnectionIdForConnector,
   deleteCredential,
   connectionCredentialExists,
   ensureDefaultConnection,
@@ -504,13 +506,22 @@ async function connectorConnected(
   if (row.providerType === 'composio') {
     return composioConnectionIsNoAuth(connection?.metadata) || composioConnectedAccountId(connection?.metadata) !== null;
   }
-  return connection
-    ? (await connectionCredentialExists({
-        connectorId: row.connectorId,
-        connectionId: connection.connectionId,
-      })) ||
-        (connection.isDefault && (await credentialExists(row.connectorId, userId)))
-    : credentialExists(row.connectorId, userId);
+  if (!connection) return credentialExists(row.connectorId, userId);
+  if (
+    await connectionCredentialExists({ connectorId: row.connectorId, connectionId: connection.connectionId })
+  ) {
+    return true;
+  }
+  // `connection.isDefault` covers a PINNED default of any owner type (kept as
+  // before). INVARIANT (2026-09-16, account_required rule): a project-owned
+  // connection with nothing pinned ALSO inherits the legacy connector-level
+  // credential when it is the connector's sole active project-owned row — see
+  // `defaultConnectionIdForConnector`. A project connector with one shared
+  // account keeps working exactly as before this change.
+  const inheritsLegacyCredential =
+    connection.isDefault ||
+    (await connectionIsEffectiveProjectDefault(row.connectorId, connection.connectionId));
+  return inheritsLegacyCredential && (await credentialExists(row.connectorId, userId));
 }
 
 function toGatewayConnector(
@@ -620,7 +631,20 @@ export function makeDbGatewayDeps(principal: ConnectorPrincipal): GatewayDeps {
         .limit(1);
       if (!row) return 'connector_not_found';
       if (!row.enabled || row.status === 'disabled') return 'connector_disabled';
-      return 'connector_not_connected';
+      // Re-run the SAME resolution `loadConnectorBySlug` just failed (session
+      // binding, visibility, explicit-only gate — all of it), to learn WHY:
+      // `ambiguous` (several reachable accounts, none named or pinned) is
+      // `account_required`, a denial the caller can fix by naming one. Every
+      // other `none` outcome keeps the original `connector_not_connected`.
+      const outcome = await resolveSessionConnectorConnectionOutcome({
+        accountId: principal.accountId,
+        projectId,
+        sessionId: principal.sessionId,
+        alias: slug,
+        actingUserId: principal.userId,
+        account: principal.requestedConnectorAccount ?? null,
+      });
+      return outcome.kind === 'ambiguous' ? 'account_required' : 'connector_not_connected';
     },
     loadAction: async (connectorId, relPath) => {
       const [a] = await db
@@ -1356,16 +1380,22 @@ async function listConnectors(
       // written), so a connector whose only accounts are the caller's own
       // member-owned ones read `needs_auth` to the very person whose calls
       // through them succeed — two connected Gmail accounts, "Needs setup".
+      //
+      // Deliberately `listEntitledConnectorConnections` (ANY usable account),
+      // not the call-time resolver: this is a dashboard "is it connected at
+      // all" summary, not an authorization decision. Two connected-but-unpinned
+      // accounts are genuinely connected even though an unnamed CALL would now
+      // be denied `account_required` — this row must not read "needs setup".
       Promise.all(
         composioRows.map(async (row) => {
-          const connection = await resolveProjectDefaultConnectorConnection({
+          const entitled = await listEntitledConnectorConnections({
             accountId: row.accountId,
             projectId: row.projectId,
             alias: row.slug,
             actingUserId: actingUserId ?? undefined,
             visibility: 'private',
-          }).catch(() => null);
-          return [row.slug, connection !== null] as const;
+          }).catch(() => []);
+          return [row.slug, entitled.length > 0] as const;
         }),
       ).then(
         (entries) => new Set(entries.filter(([, connected]) => connected).map(([slug]) => slug)),
@@ -2223,7 +2253,11 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
         .update(connectorConnections)
         .set({
           status: 'active',
-          isDefault: true,
+          // INVARIANT (2026-09-16, account_required rule): never set is_default
+          // here — an auto-authorized account is not a deliberately pinned one.
+          // `connectorFinalize` below finds this row back by recency
+          // (`updatedAt`), not by `is_default`, so dropping this never breaks
+          // the handshake.
           // Clear any previous account binding before authorization starts.
           // Pending rows stay active because the DB enum has no needs_auth
           // value. The gateway still fails closed on missing auth metadata.
@@ -2326,11 +2360,18 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
                   eq(connectorConnections.ownerType, 'project'),
                   isNull(connectorConnections.ownerId),
                 ),
-            selector?.connectionId
-              ? eq(connectorConnections.connectionId, selector.connectionId)
-              : eq(connectorConnections.isDefault, true),
+            ...(selector?.connectionId
+              ? [eq(connectorConnections.connectionId, selector.connectionId)]
+              : []),
           ),
         )
+        // No explicit connectionId: find the connection the matching `connect`
+        // call just started. INVARIANT (2026-09-16, account_required rule):
+        // that row is never marked `is_default` (a Composio authorization is
+        // never a deliberate pin), so this can no longer key off `is_default` —
+        // `connectorConnect`'s two updates both touch `updatedAt`, so the most
+        // recently touched row in this owner scope IS the one just started.
+        .orderBy(desc(connectorConnections.updatedAt))
         .limit(1);
       if (selector?.connectionId && !connection) throw new HTTPException(404, { message: 'connector connection not found' });
       if (!connection) return { provider: 'composio', connected: false };
@@ -2407,17 +2448,19 @@ export const dbConnectorRouterDeps: ConnectorRouterDeps = {
       userId: null,
     });
     if (r.connected) {
-      const [row] = await db
-        .select({ metadata: connectorConnections.metadata })
-        .from(connectorConnections)
-        .where(
-          and(
-            eq(connectorConnections.connectorId, pipedream.connectorId),
-            eq(connectorConnections.isDefault, true),
-            eq(connectorConnections.ownerType, 'project'),
-          ),
-        )
-        .limit(1);
+      // INVARIANT (2026-09-16, account_required rule): the row `connectorConnect`
+      // primed via `ensureDefaultConnection` is never marked `is_default`
+      // itself — `defaultConnectionIdForConnector` still finds it (pinned, or
+      // the connector's sole project row), which is exactly the resolution the
+      // legacy Pipedream hosted flow (project-account-only) needs here.
+      const defaultConnectionId = await defaultConnectionIdForConnector(pipedream.connectorId);
+      const [row] = defaultConnectionId
+        ? await db
+            .select({ metadata: connectorConnections.metadata })
+            .from(connectorConnections)
+            .where(eq(connectorConnections.connectionId, defaultConnectionId))
+            .limit(1)
+        : [];
       const waiting = readRequestingSessionId(row?.metadata);
       if (waiting) void notifyConnectorSession(waiting, projectId, _userId ?? null, slug, pipedream.app);
     }

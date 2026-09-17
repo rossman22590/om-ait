@@ -744,6 +744,7 @@ const CONNECTOR_DENIAL_REASONS: ReadonlySet<string> = new Set<ConnectorDenialRea
   'connector_not_connected',
   'connector_disabled',
   'action_not_found',
+  'account_required',
 ]);
 
 function isConnectorDenialReason(reason: string): reason is ConnectorDenialReason {
@@ -883,11 +884,14 @@ export function createConnectorRouter(deps: ConnectorRouterDeps): OpenAPIHono {
                 })
                 .catch(() => null)
             : null;
-        // Only when the caller NAMED an account. A plain call that finds nothing
-        // connected is a connect problem, not a wrong-name problem, and listing
-        // an empty set would just be noise.
+        // Two cases want the account list: the caller NAMED one that didn't
+        // match (a plain unconnected call is a connect problem, not a
+        // wrong-name problem, and listing an empty set would just be noise),
+        // or the call is `account_required` — several accounts exist and the
+        // retry needs to know what to name.
+        const accountRequired = result.reason === 'account_required';
         const availableAccounts =
-          notConnected && requestedAccount && deps.listConnectorAccounts
+          ((notConnected && requestedAccount) || accountRequired) && deps.listConnectorAccounts
             ? await deps
                 .listConnectorAccounts({
                   projectId: p.projectId,
@@ -1351,14 +1355,21 @@ export function createConnectorRouter(deps: ConnectorRouterDeps): OpenAPIHono {
           403,
         );
       }
+      const accounts = await deps.listConnectorAccounts({
+        projectId,
+        slug,
+        userId: p.userId,
+        sessionId: p.sessionId,
+      });
+      // The pinned account, when exactly one is pinned — the SAME "is a
+      // default reachable" question an unnamed `/call` answers. Two or more
+      // pinned accounts (a member's own pin + the project's, both entitled)
+      // is not reported as a single default here either.
+      const pinned = accounts.filter((account) => account.is_default);
       return c.json({
         connector: slug,
-        accounts: await deps.listConnectorAccounts({
-          projectId,
-          slug,
-          userId: p.userId,
-          sessionId: p.sessionId,
-        }),
+        default_account: pinned.length === 1 ? pinned[0]!.label : null,
+        accounts,
       });
     },
   );

@@ -39,7 +39,14 @@ export type ConnectorDenialReason =
   | 'connector_not_found'
   | 'connector_not_connected'
   | 'connector_disabled'
-  | 'action_not_found';
+  | 'action_not_found'
+  /**
+   * THE RULE (2026-09-16): several accounts are reachable, none was named,
+   * and none is pinned. A silent tie-break here is a guess with real
+   * consequences (mail from the wrong mailbox) — the call is denied instead,
+   * naming every account the caller could pass or pin.
+   */
+  | 'account_required';
 
 /**
  * The body a denied call answers with. `reason` is the stable machine code the
@@ -116,6 +123,16 @@ export function connectorDenialBody(
           : `Connector "${input.connector}" exists in this project but has no usable connection for this session: no credential is stored, or the app was never authorized. Run \`kortix connectors connect ${input.connector}\` or add its credential, then retry.`,
       };
     }
+    case 'account_required':
+      return {
+        ...base,
+        available_accounts: [...(input.availableAccounts ?? [])],
+        default_account: null,
+        hint:
+          `Several accounts are connected to "${input.connector}"; pass ` +
+          `account:<label|id|me|project>, or pin one with \`kortix connectors ` +
+          `accounts ${input.connector} --default <label>\`.`,
+      };
     case 'connector_disabled':
       return {
         ...base,
