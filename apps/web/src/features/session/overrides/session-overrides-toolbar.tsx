@@ -29,8 +29,10 @@ import {
   getSessionScopeAvailability,
 } from '@/features/session/scope/session-scope-toolbar';
 import { useSessionScope } from '@/features/session/scope/use-session-scope';
+import { useFeatureFlag, useSessionProviderSecretPools } from '@kortix/sdk/react';
 
 import { SessionOverridesControl, type SessionOverrideRow } from './session-overrides-control';
+import { NewProviderSecretPoolEditor, ProviderSecretPoolEditor } from './provider-secret-pool-editor';
 
 const unavailableCatalog: SessionScopeSelectionCatalog = {
   secrets: { status: 'unavailable' },
@@ -62,6 +64,8 @@ export interface SessionOverridesToolbarProps {
    */
   agentName?: string;
   onCommittedDraft?: (commit: SessionScopeCommit | undefined) => void;
+  providerSecretPools?: Record<string, string[]>;
+  onProviderSecretPoolsChange?: (selection: Record<string, string[]>) => void;
   /** Create-time only. Shown so the session's environment is not a mystery. */
   sandbox?: { slug: string | null; provider: string | null };
   /**
@@ -111,10 +115,18 @@ export function SessionOverridesToolbar({
   sessionId,
   agentName,
   onCommittedDraft,
+  providerSecretPools,
+  onProviderSecretPoolsChange,
   sandbox,
   sandboxSlot,
 }: SessionOverridesToolbarProps) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
+  const tPooled = useTranslations('pooledSecrets');
+  const pooledSecretsEnabled = useFeatureFlag(projectId, 'pooled_provider_secrets').enabled;
+  const llmGatewayEnabled = useFeatureFlag(projectId, 'llm_gateway').enabled;
+  const providerPools = useSessionProviderSecretPools(
+    pooledSecretsEnabled && llmGatewayEnabled ? projectId : null, sessionId,
+  );
   const { scope, catalog, saveScope, isLoading, isScopeLoading } = useSessionScope({
     projectId,
     sessionId,
@@ -140,6 +152,7 @@ export function SessionOverridesToolbar({
     draft: {},
   });
   const [retroactive, setRetroactive] = useState<boolean | undefined>();
+  const providerPoolDraft = useMemo(() => providerSecretPools ?? {}, [providerSecretPools]);
 
   useEffect(() => {
     if (!catalog || !initializationKey) return;
@@ -200,6 +213,9 @@ export function SessionOverridesToolbar({
     [],
   );
   const controlsDisabled = isLoading || (Boolean(sessionId) && !scope);
+  const selectedProviderKeyCount = sessionId
+    ? (providerPools.data?.pools ?? []).reduce((count, pool) => count + pool.secret_ids.length, 0)
+    : Object.values(providerPoolDraft).reduce((count, ids) => count + ids.length, 0);
 
   const rows = useMemo(() => {
     const list: SessionOverrideRow[] = [];
@@ -229,6 +245,28 @@ export function SessionOverridesToolbar({
     // card it showed. Credentials are not a session-minting decision: the agent
     // may use every account it is entitled to and names one at call time
     // (`kortix connectors call --account`, `accounts` to see them).
+    if (pooledSecretsEnabled) {
+      list.push({
+        id: 'provider-keys',
+        name: tPooled('providerKeys'),
+        icon: KeyRound,
+        hint: tPooled('chooseSharedKeys'),
+        summary: sessionId ? providerPools.isError ? tPooled('keysLoadError')
+          : providerPools.isLoading ? tPooled('loadingKeys')
+          : providerPools.data?.pools.length
+            ? tPooled(selectedProviderKeyCount === 1 ? 'selectedOne' : 'selectedKeys', { count: selectedProviderKeyCount })
+            : tPooled('projectDefaultShort') : Object.keys(providerPoolDraft).length
+          ? tPooled(selectedProviderKeyCount === 1 ? 'selectedOne' : 'selectedKeys', { count: selectedProviderKeyCount })
+          : tPooled('projectDefaultShort'),
+        overridden: sessionId ? Boolean(providerPools.data?.pools.length) : Object.keys(providerPoolDraft).length > 0,
+        description: tPooled('rateLimitDescription'),
+        editor: !llmGatewayEnabled
+          ? <p className="text-muted-foreground text-xs">{tPooled('enableGateway')}</p>
+          : sessionId
+          ? <ProviderSecretPoolEditor projectId={projectId} sessionId={sessionId} />
+          : <NewProviderSecretPoolEditor projectId={projectId} selection={providerPoolDraft} onChange={onProviderSecretPoolsChange ?? (() => {})} />,
+      });
+    }
     if (sandboxSlot) {
       // Pre-create: the template is still a real choice.
       list.push({
@@ -282,10 +320,21 @@ export function SessionOverridesToolbar({
     controlsDisabled,
     draft,
     onChange,
+    pooledSecretsEnabled,
+    llmGatewayEnabled,
+    providerPoolDraft,
+    providerPools.data,
+    providerPools.isError,
+    providerPools.isLoading,
+    onProviderSecretPoolsChange,
+    selectedProviderKeyCount,
+    projectId,
+    sessionId,
     sandbox,
     sandboxSlot,
     saveScope.isPending,
     tI18nComplete,
+    tPooled,
   ]);
 
   return (

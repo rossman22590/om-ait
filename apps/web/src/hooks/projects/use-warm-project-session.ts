@@ -67,6 +67,7 @@ export interface WarmSendCreateInput {
   sandbox_slug?: string;
   agent_name?: string;
   connector_bindings?: SessionConnectorBindingsInput;
+  provider_secret_pools?: Record<string, string[]>;
   inherit_unbound?: boolean;
 }
 
@@ -105,6 +106,7 @@ export function warmSessionFitsSend(
 ): boolean {
   if (!create) return true;
   if (create.connector_bindings !== undefined) return false;
+  if (create.provider_secret_pools !== undefined) return false;
   if (create.inherit_unbound !== undefined) return false;
   if (create.agent_name !== undefined && create.agent_name !== warm.agentName) return false;
   if (create.sandbox_slug !== undefined && create.sandbox_slug !== warm.sandboxSlug) return false;
