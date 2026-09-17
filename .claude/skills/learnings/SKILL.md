@@ -6153,6 +6153,8 @@ or treat their failure as an accepted prompt.
 **Enforcement.** `SESS-30` uses `ctx.fixtures.project({ seed: true })`. The fixture
 creates a local repository for the local profile and a managed repository for
 the preview. The flow still requires `202` and durable attachment read-back.
+Its credential-binding helper preserves a sandbox row already created by the
+live worker. A duplicate fixture insert must not fail or overwrite runtime state.
 
 ### 2026-09-17 — Deferred composer focus must respect open overlays
 
