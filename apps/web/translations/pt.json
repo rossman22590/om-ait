@@ -14432,6 +14432,7 @@
       "text922315177668": "Tudo o que o inicializador pode ver",
       "text9224d9e82502": "De volta a \"Provisioning\" → \"Settings\", defina \"Scope\" como \"Sync only assigned users and groups\" — essa opção só aparece aqui depois que as credenciais são salvas. Depois clique em \"Start provisioning\" no topo da página de visão geral de Provisioning (ou em \"Provision on demand\" para enviar instantaneamente um usuário atribuído, sem esperar o ciclo de ~40 minutos).",
       "text9225e456b795": "Mencione seu agente em um canal ou chat do Teams.",
+      "text8ccfe10f2f2d": "Publicar no seu catálogo do Teams",
       "text36f6474748b3": "Publicando o app no seu catálogo do Teams…",
       "text45b9df5730ac": "Aguardando a aprovação do app por um administrador do Teams",
       "textdf5e72815836": "Falha ao publicar no catálogo",

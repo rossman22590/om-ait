@@ -19,7 +19,7 @@ Last verified against `main` @ `786880d9a2` (2026-09-17). Unit baseline:
 | Piece | Behavior |
 |---|---|
 | Gate | Per-project flag `teams` (default off, experimental). Server creds `MICROSOFT_APP_ID` / `MICROSOFT_APP_PASSWORD` decide only whether the **managed** install path is offered (`teamsMode().available`). |
-| Install modes | **Managed one-click**: tenant admin opens `orgConsentUrl` → `/v1/webhooks/teams/oauth/callback` → saves install (tenant id) → publishes app package to the org catalog via Graph (delegated `AppCatalog.ReadWrite.All`) → redirects `/projects/:id?teams=connected\|review\|consented\|declined\|failed\|disabled\|unconfigured` (`/?teams_error=expired` on bad state). **Managed manual**: `GET /channels/teams/manifest` → zip + icons → upload in Teams → `POST /channels/teams/connect {tenant_id, team_name}`. **BYO bot**: `POST /connect {tenant_id, app_id, app_password}`; messaging endpoint becomes `/v1/webhooks/teams/:projectId/messages`. |
+| Install modes | **Managed one-click**: tenant admin opens `orgConsentUrl` → `/v1/webhooks/teams/oauth/callback` → saves install (tenant id) → publishes the app package to the org catalog via Graph (delegated `AppCatalog.ReadWrite.All`, 120 s budget, runs in the background) → redirects to the Channels page `/projects/:id/customize/connectors?scope=channels&teams=connected\|review\|failed\|publishing\|declined\|disabled\|unconfigured` (`/?teams_error=expired` on bad state). The browser waits at most 8 s for the publish; `publishing` means it is still running and the row polls every 3 s. The outcome is persisted on the install as `publishState` (`publishing\|published\|review\|failed`) + `publishError` (the Graph reason). **Managed manual**: `GET /channels/teams/manifest` → zip + icons → upload in Teams → `POST /channels/teams/connect {tenant_id, team_name}`. **BYO bot**: `POST /connect {tenant_id, app_id, app_password}`; messaging endpoint becomes `/v1/webhooks/teams/:projectId/messages`. |
 | Inbound auth | Every activity carries a Bot Framework JWT. Verified against `MICROSOFT_BOT_OPENID_METADATA` JWKS, issuer `api.botframework.com`/`.us`, audience = app id, `serviceurl` claim must equal `activity.serviceUrl`. No creds → 503. Bad/missing token → 401. BYO route with flag off → plain 404. |
 | Dedup | `chat_event_dedup` keyed `teams:event:<activity.id>` (5 min). |
 | Project resolution | `chat_channel_bindings` (tenant + conversation) → else first `chat_installs` row for the tenant. |
@@ -186,8 +186,9 @@ repeat the "dev" column on `https://dev.kortix.com` for the ones marked ★.
 
 | ID | Action | Expected | Proof |
 |---|---|---|---|
-| B1 | Click "Add to Teams" (row button = `orgConsentUrl`) as User A (Teams admin) → consent | Redirect `/projects/P1?teams=connected`; row shows tenant; "Open in Teams" button (deep link `teams.microsoft.com/l/app/<catalogAppId>`); app visible in Teams → Apps → Built for your org | `chat_installs` row platform=teams workspace_id=<tenant>; secrets `MS_TEAMS_TENANT_ID`, `MS_TEAMS_ORG_INSTALLED=1`, `MS_TEAMS_CATALOG_APP_ID`; API log `[teams-oauth] install complete status=connected` |
-| B2 | Same as B1 but as a non-admin tenant user | `?teams=review` (package submitted for admin review); install saved; `orgInstalled:false`; no deep link | log `status=review` |
+| B1 | Click "Add to Teams" (row button = `orgConsentUrl`) as User A (Teams admin) → consent | Redirect to the Channels page with `?teams=connected` (or `?teams=publishing` if Graph took > 8 s, then the row badge "Publishing…" resolves by itself within ~2 min); toast; row shows tenant; "Open in Teams" button (deep link `teams.microsoft.com/l/app/<catalogAppId>`); app visible in Teams → Apps → Built for your org | `chat_installs` row platform=teams workspace_id=<tenant>; secrets `MS_TEAMS_TENANT_ID`, `MS_TEAMS_ORG_INSTALLED=1`, `MS_TEAMS_CATALOG_APP_ID`, `MS_TEAMS_PUBLISH_STATE=published`; `GET …/channels/teams/installation` → `publishState:"published"`; API log `[teams-oauth] install complete status=connected` |
+| B1b | Graph rejects the package or times out | `?teams=failed`; toast; row badge "Catalog publish failed" with the Graph reason under the row; **Retry** button re-opens the consent URL | `MS_TEAMS_PUBLISH_STATE=failed`, `MS_TEAMS_PUBLISH_ERROR=<reason>`; `kortix channels status --platform teams` prints the reason |
+| B2 | Same as B1 but as a non-admin tenant user | `?teams=review` (package submitted for admin review); install saved; badge "Waiting for a Teams admin to approve the app"; `orgInstalled:false`; no deep link | log `status=review`; `publishState:"review"` |
 | B3 | Decline consent | `?teams=declined`; no install row | DB |
 | B4 | Open `orgConsentUrl`, wait > 10 min, then consent | `/?teams_error=expired` | browser |
 | B5 | Tamper `state` query param | `/?teams_error=expired` | browser |
@@ -369,7 +370,8 @@ repeat the "dev" column on `https://dev.kortix.com` for the ones marked ★.
 | O2 | Viewer (no write) | Row visible, no action buttons |
 | O3 | Panel: Connect disabled until tenant id; in BYO mode also app id + secret | DOM |
 | O4 | Panel error banner on 400 from connect | Shows server message |
-| O5 | `?teams=connected|review|consented|declined|failed|disabled|unconfigured` landing | Each renders the matching toast/notice (grep the project page for the `teams` query handling and assert copy) |
+| O5 | `?teams=connected|review|failed|publishing|declined|disabled|unconfigured` landing on the Channels page | Each renders its toast once, and the `teams` param is removed from the URL (a reload shows no second toast) |
+| O5b | Row with `publishState:"publishing"` | Badge with spinner; `GET …/installation` is re-requested every 3 s until the state settles, then polling stops (network tab) |
 | O6 | `/teams/login/<token>` unauthenticated | Login → returns to the same page → bind runs once |
 | O7 | Both themes, 720×480 window, Electron shell | No clipping in the row/panel (desktop-parity gate) |
 

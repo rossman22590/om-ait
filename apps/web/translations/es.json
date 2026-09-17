@@ -14432,6 +14432,7 @@
       "text922315177668": "Todo lo que el lanzador puede ver",
       "text9224d9e82502": "De vuelta en «Provisioning» → «Settings», establece «Scope» en «Sync only assigned users and groups»; esta opción solo aparece aquí después de guardar las credenciales. Luego haz clic en «Start provisioning» en la parte superior de la página de resumen de Provisioning (o en «Provision on demand» para enviar al instante un usuario asignado, en lugar de esperar el ciclo de unos 40 minutos).",
       "text9225e456b795": "Menciona a tu agente en un canal o chat de Teams.",
+      "text8ccfe10f2f2d": "Publicar en tu catálogo de Teams",
       "text36f6474748b3": "Publicando la app en tu catálogo de Teams…",
       "text45b9df5730ac": "Esperando que un administrador de Teams apruebe la app",
       "textdf5e72815836": "Error al publicar en el catálogo",

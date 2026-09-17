@@ -14432,6 +14432,7 @@
       "text922315177668": "ランチャーが確認できるすべて",
       "text9224d9e82502": "「Provisioning」→「Settings」に戻り、「Scope」を「Sync only assigned users and groups」に設定します。認証情報を保存した後にのみ、ここに表示されます。その後、Provisioning概要ページ上部の「Start provisioning」をクリックします（または「Provision on demand」で、約40分のサイクルを待たずに割り当て済みユーザーを1人だけ即時プッシュできます）。",
       "text9225e456b795": "Teamsのチャンネルまたはチャットでエージェントをメンションできます。",
+      "text8ccfe10f2f2d": "Teams カタログに公開",
       "text36f6474748b3": "Teams カタログにアプリを公開しています…",
       "text45b9df5730ac": "Teams 管理者によるアプリの承認を待っています",
       "textdf5e72815836": "カタログへの公開に失敗しました",
