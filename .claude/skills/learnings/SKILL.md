@@ -21,6 +21,36 @@ linked, not inlined.
 
 ## Register
 
+### A branch migration's timestamp is re-checked at MERGE time, not at write time (2026-09-17)
+
+**Rule:** before merging a branch that adds a migration, confirm its file sorts
+after every migration on `main` at that moment; if `main` grew a newer one,
+rename yours to a fresh timestamp. A persistent preview DB that already ran the
+old name will then refuse (`Not run migration … is preceding already run
+migration …`) — recycle the `preview` label so it rebuilds from scratch; do not
+hand-edit `pgmigrations`. **When:** a long-lived branch (days) with a migration,
+or any merge of `main` into it. *Near-miss:* `connector-creds` wrote
+`20260916182954570_…` on day 1; by merge day `main` had `20260916194914446_…`,
+and the PR's preview died in `kortix-migrate` on the first redeploy after the
+merge. *Enforcer:* none yet — `packages/db` has no "newest on branch > newest on
+main" check; until it exists, `ls packages/db/migrations | sort | tail` against
+`git ls-tree origin/main` is the check.
+
+### A gate the product cannot clear is a dead end (2026-09-16)
+
+**Rule:** every refusal must carry its remedy — a link, a button, a next
+command — and a refusal that can only be cleared from a surface that does not
+exist must not exist. **When:** adding a pre-flight check (create-time,
+admission-time) ahead of a real action. Before shipping it, name the exact UI
+control or CLI command that clears it, for every caller who can hit it
+(including a service account). If none exists, the gate is the bug, not the
+missing UI. *Incident:* a `user`-strategy connector had no connect flow
+anywhere — no shared account to offer, so the card rendered a button-less
+refusal and the composer spun on "Thinking" forever. *Enforcer:*
+`apps/api/src/projects/routes/r8-session-prompts.test.ts:377` ("queues the
+prompt even when the project has an unconnected connector"); the denial's
+`connect_url` remedy: `apps/api/src/connectors/principal-access.ts:110-114`.
+
 ### Keep persistent preview migrations tolerant of branch ledger order (2026-09-17)
 
 **When:** redeploying a branch preview after merging `main`. The preview keeps
