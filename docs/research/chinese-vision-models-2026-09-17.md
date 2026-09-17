@@ -6,6 +6,25 @@ Offer only Morph models that accept both text and images with the configured key
 
 This decision keeps the existing Morph-only upstream rule. A public model listing is insufficient evidence for launch: the same key must complete a real image chat request through the configured endpoint. The live test used a 128 × 128 PNG with a red square and asked for its color. All three selected models returned HTTP 200 and answered “red.”
 
+## US residency and zero data retention: launch gate
+
+The three image tests establish model capability only. They do **not** establish US-only processing or zero data retention (ZDR) for the supplied key. Do not describe Kortix Managed as US-hosted or ZDR until the full serving path meets both requirements.
+
+Morph's [privacy policy](https://www.morphllm.com/privacy) allows up to 90 days of content retention on its free/pay-as-you-go tier and up to 30 days on its paid tier. The policy gives its enterprise tier ZDR. It says primary processing occurs in the United States, with additional processing in select other countries. “Primary” does not guarantee that a specific request remains in the US. Regional data centers are described as an option, but the public policy does not identify a US-pinned endpoint for this key.
+
+Morph's [dedicated inference](https://www.morphllm.com/dedicated-inference) advertises no stored prompts or responses and retains operational and billing metadata. It uses GPU-hour billing, a 90-day initial term, and a different model catalog. That catalog lists Kimi K3 and GLM-5.3-Flash, but does not list the current default DeepSeek V4.1 Flash. The page does not specify the physical region. The per-token prices below therefore apply to the current shared API only; they are not a dedicated-endpoint quote.
+
+Kortix itself also stores project and session data. The [production US East 2 migration runbook](../runbooks/prod-us-east-2-supabase-migration.md) says production traffic still uses the `eu-west-2` source. It records a US shadow whose replication is broken and whose deployment lane is disabled. The [sandbox-provider runbook](../runbooks/enable-sandbox-provider.md) places the production API secret and ECS service in `eu-west-2`. Provider-side ZDR would not make the whole Kortix product ZDR, and a US Morph endpoint would not make the current Kortix production data plane US-only.
+
+Before launch, obtain written terms and technical verification for:
+
+1. The exact Morph account, key, endpoint, and selected model IDs covered by ZDR, including image inputs, tool calls, errors, caches, logs, backups, and subprocessors.
+2. A US-only processing and storage region for inference, failover, support access, and operational metadata. Confirm that the endpoint fails closed when US capacity is unavailable.
+3. The dedicated or enterprise price, capacity, minimum term, and an image-capable default model available in that US region.
+4. A Kortix product scope: either move all relevant production data and sandbox surfaces to the US, or state narrowly that **model inference** runs in the US with provider-side ZDR. Do not imply Kortix deletes customers' stored projects or conversations.
+
+The current PR remains a model-capability preview. Its public privacy and residency claims must wait for these checks.
+
 ## Current eligible models
 
 Morph's [machine-readable model feed](https://www.morphllm.com/api/models/json) supplies input types, context, and rates. Prices below are upstream USD per million tokens, before Kortix credit markup. All three output text and list 1,048,576 input context tokens. The Kortix catalog advertises a conservative 16,384 output-token ceiling.
