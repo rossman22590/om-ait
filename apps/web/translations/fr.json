@@ -72,14 +72,12 @@
       "create": "Créer le projet",
       "tryAgain": "Réessayer",
       "logOut": "Se déconnecter",
-      "signingOut": "Déconnexion"
+      "signingOut": "Déconnexion",
+      "back": "Retour aux projets"
     },
     "repository": {
       "label": "Dépôt",
       "defaultBranch": "Branche par défaut",
-      "noGitHubAccount": "Aucun compte GitHub n’est encore connecté au compte de cet projet.",
-      "connectGitHub": "Connecter un compte GitHub",
-      "connectGitHubSuffix": "pour utiliser cette option.",
       "loadGitHubAccountsError": "Impossible de charger les comptes GitHub. Réessayez.",
       "createsPath": "Crée <path>{path}</path>",
       "loadRepositoriesError": "Impossible de charger les dépôts. Réessayez.",
@@ -89,24 +87,23 @@
           "description": "Kortix crée et gère un dépôt privé pour cet projet."
         },
         "githubCreate": {
-          "label": "Créer dans GitHub",
           "description": "Kortix crée un dépôt privé dans votre compte GitHub."
-        },
-        "githubImport": {
-          "label": "Importer depuis GitHub",
-          "description": "Sélectionnez un dépôt existant dans votre compte GitHub."
         }
       },
       "repositoryLabel": "Dépôt",
-      "createInOwner": "Créer un dépôt dans {owner}",
-      "importFromOwner": "Importer un dépôt depuis {owner}",
-      "selectOption": "Sélectionnez une option de dépôt",
       "loadingOptions": "Chargement des options de dépôt…",
       "managedUnavailable": "Les dépôts gérés par Kortix ne sont pas disponibles sur cette instance. Un administrateur de la plateforme les configure dans la console d'administration.",
       "installationUnreachable": "Cette connexion GitHub ne fonctionne plus. Reconnectez-la pour lister les dépôts.",
       "reconnect": "Reconnecter dans les réglages Git",
       "managedImportLabel": "Importer un dépôt géré existant",
-      "managedImportHint": "Réservé aux opérateurs auto-hébergés. Liste les dépôts que le propriétaire git géré possède déjà."
+      "managedImportHint": "Réservé aux opérateurs auto-hébergés. Liste les dépôts que le propriétaire git géré possède déjà.",
+      "gitAccountLabel": "Compte Git",
+      "selectGitAccount": "Sélectionner un compte Git",
+      "addGitHubAccount": "Ajouter un compte GitHub…",
+      "actionCreate": "Créer un nouveau dépôt",
+      "actionImport": "Importer un dépôt existant",
+      "ownerTypePersonal": "Compte personnel",
+      "ownerTypeOrg": "Organisation"
     }
   },
   "projectHome": {

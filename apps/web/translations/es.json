@@ -72,14 +72,12 @@
       "create": "Crear proyecto",
       "tryAgain": "Intentar de nuevo",
       "logOut": "Cerrar sesión",
-      "signingOut": "Cerrando sesión"
+      "signingOut": "Cerrando sesión",
+      "back": "Volver a los proyectos"
     },
     "repository": {
       "label": "Repositorio",
       "defaultBranch": "Rama predeterminada",
-      "noGitHubAccount": "Todavía no hay una cuenta de GitHub conectada a la cuenta de este proyecto.",
-      "connectGitHub": "Conectar una cuenta de GitHub",
-      "connectGitHubSuffix": "para usar esta opción.",
       "loadGitHubAccountsError": "No se pudieron cargar las cuentas de GitHub. Inténtalo de nuevo.",
       "createsPath": "Crea <path>{path}</path>",
       "loadRepositoriesError": "No se pudieron cargar los repositorios. Inténtalo de nuevo.",
@@ -89,24 +87,23 @@
           "description": "Kortix crea y gestiona un repositorio privado para este proyecto."
         },
         "githubCreate": {
-          "label": "Crear en GitHub",
           "description": "Kortix crea un repositorio privado en tu cuenta de GitHub."
-        },
-        "githubImport": {
-          "label": "Importar desde GitHub",
-          "description": "Selecciona un repositorio existente de tu cuenta de GitHub."
         }
       },
       "repositoryLabel": "Repositorio",
-      "createInOwner": "Crear un repositorio en {owner}",
-      "importFromOwner": "Importar un repositorio de {owner}",
-      "selectOption": "Selecciona una opción de repositorio",
       "loadingOptions": "Cargando opciones de repositorio…",
       "managedUnavailable": "Los repositorios gestionados por Kortix no están disponibles en esta instancia. Un administrador de la plataforma lo configura en la consola de administración.",
       "installationUnreachable": "Esta conexión de GitHub ya no funciona. Vuelve a conectarla para ver los repositorios.",
       "reconnect": "Volver a conectar en los ajustes de Git",
       "managedImportLabel": "Importar un repositorio gestionado existente",
-      "managedImportHint": "Solo para operadores autoalojados. Muestra los repositorios que ya tiene el propietario de git gestionado."
+      "managedImportHint": "Solo para operadores autoalojados. Muestra los repositorios que ya tiene el propietario de git gestionado.",
+      "gitAccountLabel": "Cuenta de Git",
+      "selectGitAccount": "Selecciona una cuenta de Git",
+      "addGitHubAccount": "Añadir una cuenta de GitHub…",
+      "actionCreate": "Crear un repositorio nuevo",
+      "actionImport": "Importar un repositorio existente",
+      "ownerTypePersonal": "Cuenta personal",
+      "ownerTypeOrg": "Organización"
     }
   },
   "projectHome": {
