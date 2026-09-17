@@ -659,21 +659,16 @@ for (const runtime of runtimes) {
             page.getByText("Previous response", { exact: true }),
           ).toBeVisible();
         }
-        const send = async (
+        const promptRequest = () => page.waitForRequest(
+          (request) =>
+            request.method() === "POST" &&
+            new URL(request.url()).pathname.endsWith(`/sessions/${sessionId}/prompts`),
+        );
+        const verifySend = async (
+          request: Promise<import("@playwright/test").Request>,
           text: string,
-          key: string,
           placement: string,
-          fill = true,
         ) => {
-          const request = page.waitForRequest(
-            (request) =>
-              request.method() === "POST" &&
-              new URL(request.url()).pathname.endsWith(
-                `/sessions/${sessionId}/prompts`,
-              ),
-          );
-          if (fill) await input.fill(text);
-          await input.press(key);
           const sent = await request;
           const outgoing = sent.postDataJSON();
           expect(outgoing.placement).toBe(placement);
@@ -682,6 +677,12 @@ for (const runtime of runtimes) {
           );
           await expect(input).toBeEmpty();
           expect([200, 202]).toContain((await sent.response())?.status());
+        };
+        const send = async (text: string, key: string, placement: string, fill = true) => {
+          const request = promptRequest();
+          if (fill) await input.fill(text);
+          await input.press(key);
+          await verifySend(request, text, placement);
         };
         const transcriptText = "Enter pending placement";
         const composerText = "Command pending placement";
@@ -710,7 +711,10 @@ for (const runtime of runtimes) {
           await acceptanceGate;
           await route.fulfill({ response });
         });
-        const firstSend = send(transcriptText, "Enter", "transcript");
+        const firstRequest = promptRequest();
+        await input.fill(transcriptText);
+        await input.press("Enter");
+        const firstSend = verifySend(firstRequest, transcriptText, "transcript");
         let nextRequest: Promise<import("@playwright/test").Request> | undefined;
         try {
           await expect(pending).toBeVisible({ timeout: 1_000 });

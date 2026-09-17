@@ -6168,3 +6168,9 @@ dialog, menu, or listbox in control of focus.
 **Enforcement.** The pooled-provider browser journey opens session overrides,
 dispatches `focus-session-textarea`, and asserts that Provider keys stays open.
 The assertion fails before the guard in `use-composer-focus.ts` and passes after it.
+
+TipTap also requires an explicit `autofocus: false`. Passing `undefined`
+overrides its default and schedules focus when the lazy editor mounts. The
+browser journey keeps settings open through editor initialization. Start a
+paint deadline after the input action completes, not while `fill()` and
+`press()` are still pending.
