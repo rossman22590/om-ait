@@ -482,6 +482,7 @@ for (const runtime of runtimes) {
       let project: ManifestProject | undefined;
       let sessionId = "";
       let bootSessionId = "";
+      const deliveryFixtureId = randomUUID();
       try {
         const accounts = await api<{ account_id: string }[]>(
           auth.access_token,
@@ -661,6 +662,16 @@ for (const runtime of runtimes) {
             page.getByText("Previous response", { exact: true }),
           ).toBeVisible();
         }
+        await runDatabaseSql(
+          `INSERT INTO kortix.session_lifecycle_commands
+           (command_id, command_type, source, status, project_id, session_id,
+            account_id, actor_user_id, payload, locked_by, locked_until)
+           VALUES ($1, 'continue_session', 'ui', 'running', $2, $3, $4, $5,
+             $6::jsonb, 'browser-queue-fixture', now() + interval '10 minutes')`,
+          [deliveryFixtureId, project.id, sessionId, accounts[0].account_id, user.id,
+            JSON.stringify({ text: "Pending delivery fixture", clientMessageId: `msg_${deliveryFixtureId.replaceAll("-", "")}` })],
+          databaseUrl,
+        );
         const promptRequest = () => page.waitForRequest(
           (request) =>
             request.method() === "POST" &&
@@ -925,6 +936,10 @@ for (const runtime of runtimes) {
             "DELETE",
             `/projects/${project.id}/sessions/${sessionId}`,
           ).catch(() => undefined);
+        await runDatabaseSql(
+          "DELETE FROM kortix.session_lifecycle_commands WHERE command_id = $1",
+          [deliveryFixtureId], databaseUrl,
+        );
         await project?.dispose();
         await deleteAuthUser(user.id, authOptions);
       }

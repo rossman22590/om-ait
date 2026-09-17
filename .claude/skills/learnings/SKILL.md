@@ -6189,6 +6189,11 @@ Both one-second paint assertions and real API acceptance/read-back remain.
 The separate startup draft handoff needs a deterministic regression and fix;
 this prerequisite does not claim to fix draft transfer between composers.
 
+The queue fixture also keeps one test-owned delivery lease in flight. A live
+model can finish before queue editing and reload assertions complete. New
+prompts must stay pending for those assertions; a timer-based model prompt
+is not a durable fixture. Cleanup removes the lease by its exact command ID.
+
 ### 2026-09-17 — Admin browser assertions wait for the role probe
 
 **Near miss.** The #7331 preview admin journey reported a missing grant while
@@ -6203,3 +6208,18 @@ missing database grant.
 **Enforcement.** `openAdminOverview` observes the real role response, then
 asserts the overview heading for an admin. It still retries denied or failed
 probes and fails if the granted user never reaches the overview.
+
+### 2026-09-17 — Stop preview provisioning after a GitHub secondary limit
+
+**Near miss.** Repeated full #7331 previews each created 32 managed repositories
+in the HTTP lane, plus browser fixtures. GitHub then returned `403` with a
+secondary content-creation limit. The API propagated that as provisioning
+`503`; the feature's HTTP, native, and real-generation checks had passed.
+
+**Rule.** After a provider rate limit, stop full preview retries. Fix failures
+locally, reuse completed evidence for unchanged code, and wait for the provider
+to permit a single provisioning check before starting another full run.
+
+**Enforcement.** The pending queue fixture is verified with the local browser
+runner, which uses local Git. The preview gate stays explicitly blocked until
+GitHub provisioning recovers; a local pass does not replace that gate.
