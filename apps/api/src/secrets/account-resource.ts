@@ -3,7 +3,6 @@ import { and, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { accountMembers, accountSecretGrants, accountSecretResources, sessionProviderSecretPools } from '@kortix/db';
 import { config } from '../config';
 import { db } from '../shared/db';
-import { actorForUser, authorize, PROJECT_ACTIONS } from '../iam';
 
 const envelopeVersion = 'v1';
 
@@ -43,6 +42,9 @@ export function secretUsableInProject(row: { projectId: string | null; accessMod
 }
 
 export async function memberMayReadProject(accountId: string, projectId: string, userId: string): Promise<boolean> {
+  const [{ actorForUser }, { authorize }, { PROJECT_ACTIONS }] = await Promise.all([
+    import('../iam/actor'), import('../iam/authorize'), import('../iam/actions'),
+  ]);
   return (await authorize(actorForUser(userId, accountId), PROJECT_ACTIONS.PROJECT_READ, { type: 'project', id: projectId })).allowed;
 }
 
