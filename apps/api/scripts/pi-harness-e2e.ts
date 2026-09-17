@@ -222,6 +222,7 @@ async function run(): Promise<void> {
     // Wait for the turn to END: the daemon's own transcript, read through the proxy.
     const root = health.opencode_session_id as string;
     let reply: any = null;
+    let ledgerEnded = false;
     let firstAssistantMs: number | null = null;
     while (performance.now() < deadline) {
       const page = await api(base, token, `${daemon}/kortix/opencode/messages/${encodeURIComponent(root)}?limit=50`);
@@ -230,8 +231,19 @@ async function run(): Promise<void> {
       const assistants = messages.filter((m) => m.info?.role === 'assistant' && m.info?.parentID === messageId);
       if (assistants.length && firstAssistantMs === null) firstAssistantMs = Math.round(performance.now() - tp);
       const done = assistants.find((m) => m.info?.time?.completed && m.parts?.some((p: any) => p.type === 'text' && p.text?.trim()));
+      const collect = (from: any) => ({ text: from.parts.filter((p: any) => p.type === 'text').map((p: any) => p.text).join(''), tools: assistants.flatMap((m) => m.parts.filter((p: any) => p.type === 'tool').map((p: any) => ({ tool: p.tool, status: p.state?.status, output: String(p.state?.output ?? '').slice(0, 120) }))) });
       if (user && done) {
-        reply = { text: done.parts.filter((p: any) => p.type === 'text').map((p: any) => p.text).join(''), tools: assistants.flatMap((m) => m.parts.filter((p: any) => p.type === 'tool').map((p: any) => ({ tool: p.tool, status: p.state?.status, output: String(p.state?.output ?? '').slice(0, 120) }))) };
+        reply = collect(done);
+        break;
+      }
+      // Harness-neutral stop: the API's turn ledger says the turn ended. OpenCode's
+      // transcript read does not always satisfy the `done` shape above, so the
+      // ledger is the authority for "the turn is over"; the reply is best effort.
+      const ledgerState = psql(`select state from kortix.session_turns where session_id='${sessionId}' order by created_at desc limit 1`);
+      if (ledgerState === 'ended') {
+        ledgerEnded = true;
+        const last = assistants[assistants.length - 1];
+        if (last) reply = collect(last);
         break;
       }
       await sleep(500);
@@ -240,10 +252,12 @@ async function run(): Promise<void> {
     out.first_assistant_ms = firstAssistantMs;
     out.reply = reply;
     out.turn_ledger = psql(`select state||'/'||coalesce(end_reason,'') from kortix.session_turns where session_id='${sessionId}' order by created_at desc limit 1`);
+    // Turn duration as the control plane saw it: ledger row created → ended.
+    out.ledger_turn_ms = Number(psql(`select round(extract(epoch from (ended_at - created_at))*1000) from kortix.session_turns where session_id='${sessionId}' and ended_at is not null order by created_at desc limit 1`)) || null;
     // The API's own read of the transcript (server mirror) for the same session.
     const apiTurn = await api(base, token, `/projects/${projectId}/sessions/${sessionId}/turn`);
     out.api_turn_status = apiTurn.status;
-    if (!reply) throw new Error('no completed assistant reply before deadline');
+    if (!reply && !ledgerEnded) throw new Error('no completed assistant reply before deadline');
   } catch (err) {
     out.error = err instanceof Error ? err.message : String(err);
   } finally {
