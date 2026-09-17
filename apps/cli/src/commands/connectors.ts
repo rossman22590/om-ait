@@ -1927,11 +1927,17 @@ function accountOwnerLabel(ownerType: string): string {
   return ownerType;
 }
 
-/** `ls`'s ACCOUNTS column: `2 · Work*, Personal` (`*` = the pinned default). */
+/**
+ * `ls`'s ACCOUNTS column: `2 · Work*, Personal` (`*` = the pinned default).
+ * The pinned account is sorted first so it survives the column's truncation
+ * even when an earlier, longer label (e.g. an email) would otherwise eat the
+ * whole budget before the marker ever renders.
+ */
 function accountsCell(connector: Pick<AdminConnector, 'accounts'>): string {
   const accounts = connector.accounts ?? [];
   if (accounts.length === 0) return '—';
-  const names = accounts.map((a) => `${a.label}${a.is_default ? '*' : ''}`).join(', ');
+  const ordered = [...accounts].sort((a, b) => Number(b.is_default) - Number(a.is_default));
+  const names = ordered.map((a) => `${a.label}${a.is_default ? '*' : ''}`).join(', ');
   return `${accounts.length} · ${names}`;
 }
 
