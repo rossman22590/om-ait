@@ -85,13 +85,15 @@ pnpm --filter @kortix/tui typecheck   # tsc --noEmit
 npx biome check apps/tui
 ```
 
-Component tests render through OpenTUI's headless test renderer and assert on
-captured frame text. `apps/tui/docs/opentui-notes.md` has the API cheat sheet
+Tests sit next to the file they cover (`src/**/*.test.ts[x]`) — the repo
+`.gitignore` ignores every `test/` directory, so the layout in `SPEC.md` §3
+would not be tracked. Component tests render through OpenTUI's headless test
+renderer and assert on captured frame text. `apps/tui/docs/opentui-notes.md` has the API cheat sheet
 and the traps, including why key presses must be wrapped in React's `act`.
 
 ### Live probe
 
-`test/live-probe.tsx` mounts the real app against a real API and a real
+`scripts/live-probe.tsx` mounts the real app against a real API and a real
 sandbox, sends a prompt, and exits non-zero unless the reply streams back:
 
 ```bash
@@ -99,7 +101,7 @@ cd apps/tui
 KORTIX_API_URL=http://localhost:8008 KORTIX_API_KEY="$JWT" \
 KORTIX_PROJECT_ID="$PID" KORTIX_SESSION_ID="$SID" \
 PROBE_EXPECT="MARKER-123" \
-  bun run test/live-probe.tsx "Reply with exactly: MARKER-123"
+  bun run scripts/live-probe.tsx "Reply with exactly: MARKER-123"
 ```
 
 It prints the captured frame at each milestone. It is not part of `bun test`:

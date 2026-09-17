@@ -2,7 +2,8 @@
 
 What wave 0 actually used, with pointers into the installed type definitions.
 Paths are relative to `apps/tui/node_modules/`. This is a cheat sheet, not a
-reference — read the `.d.ts` when a prop is not listed here.
+reference: `docs/opentui-api-reference.md` is the full extracted surface, and
+the `.d.ts` files are the contract.
 
 ## Runtime and versions
 
@@ -176,5 +177,5 @@ The test renderer proves component behavior. To prove the real process boots,
 paints, answers keys and restores the terminal, run it under a pseudo-terminal
 (macOS `script` cannot: it needs a controlling tty on stdin). `python3 -c` with
 `pty.openpty()` + `TIOCSWINSZ` works, and SIGWINCH to the process group
-exercises resize. `apps/tui/test/live-probe.tsx` is the in-process equivalent
+exercises resize. `apps/tui/scripts/live-probe.tsx` is the in-process equivalent
 for API behavior.
