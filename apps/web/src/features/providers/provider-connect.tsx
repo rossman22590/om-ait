@@ -82,6 +82,7 @@ import { errorToast, successToast, warningToast } from '@/components/ui/toast';
 import { EmptyState } from '@/features/layout/section/empty-state';
 import { PROVIDER_NOTES, ProviderLogo } from '@/features/providers/provider-branding';
 import { ChatGptSubscriptionConnect } from '@/features/workspace/customize/sections/llm-provider/chatgpt-subscription-connect';
+import { AccountSecretResourcesPanel } from '@/features/workspace/customize/sections/view/account-secret-resources-panel';
 import {
   ProviderAccessMenu,
 } from '@/features/workspace/customize/sections/llm-provider/provider-access-menu';
@@ -99,8 +100,8 @@ import {
 } from '@/features/workspace/customize/sections/llm-provider/utils';
 import { LLM_PROVIDERS, LLM_PROVIDER_BY_ID, type LlmProviderEntry } from '@/lib/llm-providers';
 import { cn } from '@/lib/utils';
-import { deleteProjectProviderOAuth, deleteProjectSecret, upsertProjectSecret } from '@kortix/sdk';
-import { qk, refreshProjectProviderState, useModelAccess, useProjectModelPickerCatalog } from '@kortix/sdk/react';
+import { deleteProjectProviderOAuth, deleteProjectSecret, getProjectDetail, listAccountSecretResources, upsertProjectSecret } from '@kortix/sdk';
+import { qk, refreshProjectProviderState, useFeatureFlag, useModelAccess, useProjectModelPickerCatalog } from '@kortix/sdk/react';
 import {
   CheckCircleIcon as Check,
   ArrowSquareOutIcon as ExternalLink,
@@ -111,7 +112,7 @@ import {
   PlugsIcon as Unplug,
   WarningCircleIcon as Warning,
 } from '@phosphor-icons/react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 /**
  * The three providers JAY-510 makes first-class: "Anthropic (Claude), OpenAI
@@ -205,6 +206,8 @@ export interface ProviderConnectViewProps {
   /** Per-provider extra auth affordance. Only `openai` has one today. */
   subscriptionSlots?: Record<string, ReactNode>;
   accessSlots?: Record<string, ReactNode>;
+  pooledSlots?: Record<string, ReactNode>;
+  pooledSecretsEnabled?: boolean;
   /** Open the shared Models tab with all provider groups. */
   onOpenModels?: (providerId: string) => void;
   className?: string;
@@ -506,6 +509,7 @@ function ProviderRow({
   onRemoveKey,
   subscriptionSlot,
   accessSlot,
+  pooledSlot,
   onOpenModels,
 }: {
   row: ProviderConnectRow;
@@ -520,6 +524,7 @@ function ProviderRow({
   onRemoveKey?: ProviderConnectViewProps['onRemoveKey'];
   subscriptionSlot?: ReactNode;
   accessSlot?: ReactNode;
+  pooledSlot?: ReactNode;
   onOpenModels?: (providerId: string) => void;
 }) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
@@ -561,7 +566,7 @@ function ProviderRow({
 
   // Read-only members get the identity column and nothing else — no field to
   // type in, so no second column to line it up against either.
-  if (!canWrite) {
+  if (!canWrite && !pooledSlot) {
     return (
       <div className="py-1.5" data-provider-row={row.id}>
         {identity}
@@ -575,7 +580,28 @@ function ProviderRow({
       className="grid gap-1.5 py-1.5 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] sm:items-start sm:gap-4"
     >
       {identity}
-      {row.envVars.length === 0 ? (
+      {pooledSlot ? (
+        <div className="min-w-0 space-y-2">
+          {pooledSlot}
+          {row.connected && canWrite && (
+            <div className="space-y-1.5">
+              <p className="text-muted-foreground text-xs">Existing project key · Used when this session has no key selection</p>
+              <ProviderKeyFields
+                row={row}
+                values={values}
+                onValueChange={onValueChange}
+                onCommit={onCommit}
+                status={status}
+                errorMessage={errorMessage}
+                revealedFields={revealedFields}
+                onToggleReveal={onToggleReveal}
+                onRemoveKey={onRemoveKey}
+              />
+            </div>
+          )}
+          {subscriptionSlot}
+        </div>
+      ) : row.envVars.length === 0 ? (
         <p className="text-muted-foreground py-2 text-xs text-pretty">{row.note}</p>
       ) : (
         <ProviderKeyFields
@@ -656,6 +682,8 @@ export function ProviderConnectView({
   onSearchChange,
   subscriptionSlots,
   accessSlots,
+  pooledSlots,
+  pooledSecretsEnabled = false,
   onOpenModels,
   className,
 }: ProviderConnectViewProps) {
@@ -683,7 +711,9 @@ export function ProviderConnectView({
           auto-save nobody is told about is indistinguishable from an edit that
           was lost. */}
       <p className="text-muted-foreground px-0.5 text-xs text-pretty">
-        {canWrite ? tI18nComplete.raw('text9253b4fa8e06') : tI18nComplete.raw('text30674c348b84')}
+        {pooledSecretsEnabled
+          ? 'Add named keys for each provider. Share access with members, then select keys in session settings.'
+          : canWrite ? tI18nComplete.raw('text9253b4fa8e06') : tI18nComplete.raw('text30674c348b84')}
       </p>
 
       {rows.length === 0 ? (
@@ -705,6 +735,7 @@ export function ProviderConnectView({
               onRemoveKey={onRemoveKey}
               subscriptionSlot={subscriptionSlots?.[row.id]}
               accessSlot={accessSlots?.[row.id]}
+              pooledSlot={pooledSlots?.[row.id]}
               onOpenModels={onOpenModels}
             />
           ))}
@@ -786,6 +817,23 @@ export function ProviderConnect({
   className,
 }: ProviderConnectProps) {
   const access = useModelAccess(enabled ? projectId : null);
+  const pooledFlag = useFeatureFlag(enabled ? projectId : null, 'pooled_provider_secrets');
+  const pooledSecretsEnabled = pooledFlag.enabled;
+  const project = useQuery({
+    queryKey: qk.project.detail(projectId),
+    queryFn: () => getProjectDetail(projectId),
+    enabled: enabled && pooledSecretsEnabled,
+  });
+  const accountId = project.data?.project?.account_id;
+  const pooledResources = useQuery({
+    queryKey: ['account-secret-resources', accountId],
+    queryFn: () => listAccountSecretResources(accountId!),
+    enabled: enabled && pooledSecretsEnabled && Boolean(accountId),
+  });
+  const pooledProviderIds = useMemo(
+    () => new Set((pooledResources.data?.secrets ?? []).map((secret) => secret.provider_id)),
+    [pooledResources.data],
+  );
   const tAccess = useTranslations('modelAccess');
   const pickerCatalog = useProjectModelPickerCatalog(enabled ? projectId : null);
   const managedProvider = useMemo<LlmProviderEntry>(() => ({
@@ -890,8 +938,8 @@ export function ProviderConnect({
    * instead: the rows before it come too, and nothing moves.
    */
   const lastConnectedIndex = useMemo(
-    () => rows.reduce((last, row, index) => (row.connected ? index : last), -1),
-    [rows],
+    () => rows.reduce((last, row, index) => (row.connected || pooledProviderIds.has(row.id) ? index : last), -1),
+    [rows, pooledProviderIds],
   );
   const limit = searching ? rows.length : Math.max(visibleCount, lastConnectedIndex + 1);
   const visibleRows = useMemo(() => rows.slice(0, limit), [rows, limit]);
@@ -1069,7 +1117,7 @@ export function ProviderConnect({
       null)
     : null;
 
-  if (providerStateLoading) {
+  if (providerStateLoading || pooledFlag.isLoading || (pooledSecretsEnabled && (project.isLoading || pooledResources.isLoading))) {
     return (
       <div
         className="flex min-h-[200px] items-center justify-center"
@@ -1084,6 +1132,20 @@ export function ProviderConnect({
   return (
     <>
       <ProviderConnectView
+        pooledSecretsEnabled={pooledSecretsEnabled}
+        pooledSlots={pooledSecretsEnabled ? Object.fromEntries(
+          visibleRows.filter((row) => row.id !== 'kortix' && row.envVars.length === 1).map((row) => [
+            row.id,
+            accountId ? <AccountSecretResourcesPanel
+              key={row.id}
+              accountId={accountId}
+              providerId={row.id}
+              providerName={row.label}
+              envVar={row.envVars[0]!}
+              canWrite={true}
+            /> : <p key={row.id} className="text-muted-foreground text-xs">Account unavailable</p>,
+          ]),
+        ) : undefined}
         accessSlots={Object.fromEntries(
           visibleRows.map((row) => [
             row.id,

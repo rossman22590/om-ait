@@ -476,3 +476,31 @@ describe('ProviderConnectView — the subscription slot', () => {
     expect(out).not.toContain('role="dialog"');
   });
 });
+
+describe('ProviderConnectView — pooled provider keys', () => {
+  test('shows the key manager in place of the single-key field when enabled', () => {
+    const out = renderToStaticMarkup(
+      <ProviderConnectView {...props({
+        rows: [ANTHROPIC],
+        pooledSecretsEnabled: true,
+        pooledSlots: { anthropic: <button>Add another Anthropic key</button> },
+      })} />,
+    );
+    expect(out).toContain('Add another Anthropic key');
+    expect(out).toContain('select keys in session settings');
+    expect(out).not.toContain('Paste your Anthropic API key');
+    expect(out).not.toContain('it saves when you click away');
+  });
+
+  test('keeps an existing project key visible during the pooled transition', () => {
+    const out = renderToStaticMarkup(
+      <ProviderConnectView {...props({
+        rows: [{ ...ANTHROPIC, connected: true }],
+        pooledSecretsEnabled: true,
+        pooledSlots: { anthropic: <button>Add another Anthropic key</button> },
+      })} />,
+    );
+    expect(out).toContain('Existing project key');
+    expect(out).toContain('Saved — paste a new key to replace it');
+  });
+});

@@ -31,7 +31,7 @@ A project stores one shared provider key in its secrets screen. Every project me
 
 ## User experience
 
-- Put secret resource management in the existing Secrets surface. Use its table, filters, row actions, modal, and access-row patterns. Each key is one row with a distinct label and status. Keep `Remove from this session` separate from `Delete secret for everyone`.
+- Put provider key management in Models → Providers, beside each provider. Show each named key as a distinct row with its access count and actions. Keep general project secrets in Secrets. Keep `Remove from this session` separate from `Delete secret for everyone`.
 - Add secret grants to the existing resource-access presentation. A secret's Access control lists members who may use it. Do not add a second, unsynchronized grant editor.
 - Add provider secret selection to the existing session overrides control. Show the effective choice and distinguish inherited from explicit selection. Support multiple selected keys and a clear reset to inherited behavior.
 - Verify both themes, 720 × 480, collapsed sidebar, keyboard focus, scrolling, and the native Electron shell. The UI sends IDs, never values, after initial creation or rotation.
@@ -52,5 +52,5 @@ A project stores one shared provider key in its secrets screen. Every project me
 2. Add one server authorization resolver for gateway keys. Keep the legacy resolver for flag-off compatibility.
 3. Add feature flag and API contracts. Add typed SDK calls with a failing test first. Update public exports, snapshots, and documentation.
 4. Add request-level pool selection, shared cooldown, bounded failover, audit records, and explicit failure responses.
-5. Build the Secrets and session settings UI from existing components. Add browser journeys and desktop checks.
+5. Build the Models provider-key and session settings UI from existing components. Add browser journeys and desktop checks.
 6. Run local HTTP, SDK, browser, and package gates. Open a draft PR with preview, then prove the same objective through a real preview session. Do not merge without explicit approval.
