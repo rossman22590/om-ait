@@ -31,7 +31,7 @@ import {
 } from '@kortix/sdk/react';
 import type { useSession } from '@kortix/sdk/react';
 import type { EmbeddedTerminalRenderable } from '@opentui/core';
-import { useKeyboard, useRenderer } from '@opentui/react';
+import { useKeyboard } from '@opentui/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { theme } from '../../theme.ts';
@@ -40,7 +40,7 @@ import { copyToClipboard } from './clipboard.ts';
 import { ConnectHint, connectCommand } from './connect-hint.tsx';
 import { isReservedWhileTerminalFocused, matchesTerminalBinding } from './keys.ts';
 import { openPtyWebSocket } from './open-socket.ts';
-import { PtySession, type PtySessionState, ptyPanelTitle } from './pty-session.ts';
+import { PtySession, type PtySessionState, type PtySocket, ptyPanelTitle } from './pty-session.ts';
 import { registerEmbeddedTerminal } from './register.ts';
 
 registerEmbeddedTerminal();
@@ -77,6 +77,12 @@ export interface TerminalPanelProps {
   /** `Alt+X`, and the panel asking to be dismissed. */
   onClose: () => void;
   onToast?: (message: string, kind?: ToastKind) => void;
+  /**
+   * Socket factory. The default is the real Bun WebSocket. `scripts/
+   * dev-terminal.tsx` overrides it to hold the socket and drop it on purpose,
+   * which is how the reconnect path is exercised against a live sandbox.
+   */
+  openSocket?: (url: string) => PtySocket;
 }
 
 export function TerminalPanel({
@@ -88,8 +94,8 @@ export function TerminalPanel({
   height,
   onClose,
   onToast,
+  openSocket = openPtyWebSocket,
 }: TerminalPanelProps) {
-  const renderer = useRenderer();
   const terminalRef = useRef<EmbeddedTerminalRenderable | null>(null);
   const focusedRef = useRef(false);
   const ptySessionRef = useRef<PtySession | null>(null);
@@ -138,7 +144,7 @@ export function TerminalPanel({
     if (!ptyId) return;
     const ptySession = new PtySession({
       resolveUrl: ({ wake }) => getPtyWebSocketUrl(ptyId, undefined, { wake }),
-      openSocket: openPtyWebSocket,
+      openSocket,
       onOutput: (text) => terminalRef.current?.write(text),
       onState: setState,
     });
@@ -148,7 +154,7 @@ export function TerminalPanel({
       ptySession.close();
       if (ptySessionRef.current === ptySession) ptySessionRef.current = null;
     };
-  }, [ptyId]);
+  }, [ptyId, openSocket]);
 
   // 3. The daemon no longer owns this id. Reconnecting can never work; mint a
   //    new terminal once, then stop.
@@ -196,9 +202,15 @@ export function TerminalPanel({
     [],
   );
 
-  // 5. Renderer focus is what routes keys to the emulator (the internal
-  //    dispatch delivers `keypress` only to the FOCUSED renderable) AND what
-  //    makes it paint the shell's cursor. Both follow the `focused` prop.
+  // 5. Focus routes keys to the emulator AND makes it paint the shell's
+  //    cursor. Both follow the `focused` prop.
+  //
+  //    It must be `terminal.focus()`, NOT `renderer.focusRenderable(terminal)`.
+  //    `focusRenderable` only records which renderable is current and emits
+  //    the event; `Renderable.focus()` is what installs the keypress handler
+  //    on `_internalKeyInput` (and then calls `focusRenderable` itself).
+  //    Measured: with `focusRenderable` alone the panel painted a live prompt
+  //    and swallowed every keystroke.
   //
   //    A ref callback, not a plain ref: the element mounts after this effect
   //    on the first ready render, so focus has to be applied at attach time
@@ -207,17 +219,14 @@ export function TerminalPanel({
     focusedRef.current = focused;
     const terminal = terminalRef.current;
     if (!terminal) return;
-    if (focused) renderer.focusRenderable(terminal);
-    else renderer.blurRenderable(terminal);
-  }, [focused, renderer]);
+    if (focused) terminal.focus();
+    else terminal.blur();
+  }, [focused]);
 
-  const attachTerminal = useCallback(
-    (terminal: EmbeddedTerminalRenderable | null) => {
-      terminalRef.current = terminal;
-      if (terminal && focusedRef.current) renderer.focusRenderable(terminal);
-    },
-    [renderer],
-  );
+  const attachTerminal = useCallback((terminal: EmbeddedTerminalRenderable | null) => {
+    terminalRef.current = terminal;
+    if (terminal && focusedRef.current) terminal.focus();
+  }, []);
 
   const copyConnect = useCallback(async () => {
     const result = await copyToClipboard(connectCommand(sessionId));
