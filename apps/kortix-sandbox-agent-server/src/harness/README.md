@@ -49,6 +49,12 @@ adapter module; adapters import no other adapter (`harness-boundary.test.ts`).
 
 ## The pi harness
 
+> **Direction: pi replaces OpenCode.** OpenCode support is temporary and will
+> be dropped. Kortix moves every session to pi once pi is verified to work for
+> everything OpenCode does today — the gaps are listed at the end of this
+> section. Until then OpenCode stays the default. When the move is complete,
+> `open-code/` and the `opencode` harness id are removed.
+
 pi (`@earendil-works/pi-agent-core`) is bundled into the daemon binary and runs
 INSIDE the daemon process. There is no child process, no port, no RPC and no
 second sandbox: pi's built-in `bash`/`read`/`write`/`edit` run on
