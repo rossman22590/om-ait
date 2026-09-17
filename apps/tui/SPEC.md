@@ -241,6 +241,27 @@ Tabs: Agents · Skills · Secrets · Triggers · Connectors.
 - Members (`kortix.accounts.members`), invites, roles (read-only table).
 - Billing: `kortix.billing.accountState` → plan, credits, hard-block state.
 
+### 5.11 Attach mode — hand a session to the stock opencode TUI
+
+The CLI already ships a version-matched opencode attach (`kortix sessions
+connect`, memory `kortix-tui-attach-shipped`): resolve the session runtime,
+download the exact opencode binary the sandbox runs, start a localhost proxy
+that injects the Kortix token, `opencode attach <proxy> --session <id>`.
+The TUI reuses that seam instead of re-implementing it:
+
+- `a` on a session row, or `/attach` in the composer, or `Alt+O`.
+- Flow: `renderer.suspend()`-equivalent (leave the alternate screen, restore
+  the cursor, release stdin) → call `attachOpenCodeSession({ auth, projectId,
+  sessionId })` from `@kortix/cli` (extracted from `runSessionsConnect`, same
+  behavior, no stdout prints in library mode; status via callback) → on exit
+  re-enter the TUI on the same session, toast the exit code.
+- Non-running sessions restart first (the same `/start` poll the CLI uses).
+- Failure modes render as a toast + banner: binary download failure (offline),
+  proxy start failure, missing session. Never leave the terminal in the
+  alternate screen on any path.
+- This is the fallback chat surface while the native transcript (§5.3)
+  matures, and the "pro" surface afterwards.
+
 ### 5.10 Help overlay (`features/help`)
 
 - `?` renders the keymap table grouped by scope. Generated from `keymap.ts`.
@@ -260,6 +281,7 @@ Tabs: Agents · Skills · Secrets · Triggers · Connectors.
 | `Alt+A` | apps screen |
 | `Alt+C` | customize screen |
 | `Ctrl+H` | host switcher |
+| `a` (session row) / `Alt+O` / `/attach` | attach the session in the stock opencode TUI (§5.11) |
 | `Esc` | close modal / back / clear composer / (busy) stop prompt |
 | `j k ↑ ↓ g G PgUp PgDn` | list and transcript navigation |
 
@@ -274,6 +296,7 @@ Tabs: Agents · Skills · Secrets · Triggers · Connectors.
 | sessions list | `useProjectSessions` |
 | session | `useSession` |
 | models/agents | fields of `useSession`; `useSessionModelSelection`, `useProjectModels` |
+| attach | `@kortix/cli` `attachOpenCodeSession` (extracted from `sessions-connect.ts`) |
 | PTY | `useOpenCodePtyList`, `useCreatePty`, `getPtyWebSocketUrl` |
 | files | `kortix.session(pid,sid).files` |
 | review | `useChangeRequests` |
