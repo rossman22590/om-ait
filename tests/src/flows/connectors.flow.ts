@@ -939,6 +939,25 @@ flow(
       },
     );
 
+    await ctx.step(
+      'reconciling the SAME label after a revoke re-activates that row (a re-connect, not a metadata touch)',
+      async () => {
+        // The web header's "Add credential" on a connector whose only shared
+        // account was just disconnected reconciles the same label and then sets
+        // a credential on the returned row. Left `revoked`, that row kept the
+        // credential but stayed out of every usable-accounts list.
+        const r = await ctx.client.as(ctx.P.OWNER).post(
+          '/v1/projects/:projectId/connections',
+          { connector_alias: slug, owner_type: 'project', label: 'KE2E connection' },
+          { params: { projectId: p.id } },
+        );
+        r.status([200, 201])
+          .body()
+          .has('$.connection_id', connectionId)
+          .has('$.status', 'active');
+      },
+    );
+
     await ctx.step('activate/credential/revoke on an unknown connectionId → 404', async () => {
       const unknown = '00000000-0000-4000-a000-000000000000';
       for (const op of ['activate', 'credential', 'revoke'] as const) {

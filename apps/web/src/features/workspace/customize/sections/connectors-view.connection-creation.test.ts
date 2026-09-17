@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'bun:test';
 import { readFileSync } from '@/i18n/test-source';
+import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 
 const source = readFileSync(join(import.meta.dir, 'connectors-view.tsx'), 'utf8');
@@ -51,24 +51,6 @@ describe('connection creation controls', () => {
     expect(source).toContain('connector?.requestAuthType');
   });
 
-  test('invalidates every authorization-derived query on a connection change', () => {
-    expect(source).toContain('connectorConnectionQueryKeys(projectId)');
-    expect(source).toContain('for (const affectedQueryKey of connectionQueryKeys)');
-  });
-
-  // `showRoster` (the legacy `ConnectorDetail` shell, unreachable from the live
-  // route) still reads the derived `authorizationStrategy` summary to decide
-  // whether to show the team roster — that field itself is not deleted, only
-  // the UI that used to SET it.
-  test('shows member connection controls only for user-owned connectors', () => {
-    expect(source).toContain(
-      "showConnections && canManageConnections && connector.authorizationStrategy === 'user'",
-    );
-    expect(source).toContain(
-      "connector.authorizationStrategy === 'user' ? 'member' : 'project'",
-    );
-  });
-
   test('surfaces connector synchronization errors after adding a connector', () => {
     expect(source).toContain('connectorSyncErrorForSlug(result, draft.slug)');
     expect(source).toContain("tI18nHardcoded('i18nComplete.textd6a135de3872'");
@@ -84,23 +66,20 @@ describe('connection creation controls', () => {
     expect(source).not.toContain('effectiveAuthorizationStrategy');
   });
 
-  test('does not load manager-only connector configuration for read-only users', () => {
-    expect(source).toContain(
-      'const showConnectionTab = canWrite && !isManagedProvider && !isManaged;',
-    );
-    expect(source).toContain('const showPermissions = canWrite;');
-    expect(source).toContain('enabled: canWrite');
-  });
-
-  // The in-flight "authorization strategy is updating" lock is gone with the
-  // mutation that drove it — `ConnectorDetail` (unreachable from the live
-  // route) hardcodes `strategyUpdating = false` now, so nothing disables on it
-  // dynamically any more.
-  test('no longer locks connector actions on an in-flight strategy update', () => {
-    expect(source).not.toContain('connectorAuthorizationUpdateIsPending(');
-    expect(source).not.toContain(
-      'authorizationStrategyAwaitingRefresh === connector.authorizationStrategy',
-    );
-    expect(source).toContain('const strategyUpdating = false;');
+  // `ConnectorsView`, `ConnectorsMasterDetail`, `ConnectorDetail`, and
+  // `PermissionsSection` were the legacy master-detail shell: 0 importers in
+  // apps/web/src, unreachable from the live route (`connectors-page.tsx`
+  // mounts the new catalog instead). Deleted as dead code, along with the
+  // helpers only they used (`ruleId`/`_rid`, `isPatternMatch`, `clientMatch`,
+  // `policiesSig`, `tsSignature`, `PermissionPicker`, `GlobalRulesPanel`,
+  // `ConnectorRail`, `statusDot`, `MasterDetailSkeleton`, and the
+  // `connectorConnectionQueryKeys`-driven multi-key invalidation on
+  // selection change). This asserts the shell stays gone rather than
+  // creeping back in.
+  test('the legacy ConnectorDetail shell is gone', () => {
+    expect(source).not.toContain('export function ConnectorDetail');
+    expect(source).not.toContain('export function ConnectorsView');
+    expect(source).not.toContain('export function PermissionsSection');
+    expect(source).not.toContain('strategyUpdating');
   });
 });

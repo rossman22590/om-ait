@@ -121,8 +121,8 @@ export function ConnectorConnectionModal({
         >
           <ModalBody className="max-h-[60vh] space-y-4 overflow-y-auto">
             <p className="text-muted-foreground text-sm text-pretty">
-              {tI18nComplete.raw('text17e9f72b9ba8')}
-              {displayName} {tI18nComplete.raw('texte99baf469ca8')}
+              {tI18nComplete.raw('text17e9f72b9ba8')} {displayName}{' '}
+              {tI18nComplete.raw('texte99baf469ca8')}
             </p>
             <Disclosure
               variant="outline"
