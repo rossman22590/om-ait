@@ -143,7 +143,7 @@ export async function resolveCandidates(
     const pooledEnabled = await projectFeatureFlagEnabled(principal.projectId, 'pooled_provider_secrets');
     const selectedPool = principal.sessionId && principal.userId && pooledEnabled
       ? await resolveSessionProviderSecrets({
-          accountId: principal.accountId, sessionId: principal.sessionId,
+          accountId: principal.accountId, projectId: principal.projectId, sessionId: principal.sessionId,
           userId: principal.userId, providerId: 'codex', name: 'CODEX_AUTH_JSON',
         })
       : null;
@@ -185,7 +185,7 @@ export async function resolveCandidates(
         'Reconnect a selected ChatGPT account or select another granted connection.');
     }
     if (pooledEnabled && principal.userId) {
-      const personal = await resolveDefaultCodexAccountSecret(principal.accountId, principal.userId);
+      const personal = await resolveDefaultCodexAccountSecret(principal.accountId, principal.projectId, principal.userId);
       if (personal) {
         if (Array.isArray(principal.agentGrant?.env) &&
           !principal.agentGrant.env.some((name) => name.toUpperCase() === 'CODEX_AUTH_JSON')) {
@@ -261,6 +261,7 @@ export async function resolveCandidates(
       await projectFeatureFlagEnabled(principal.projectId, 'pooled_provider_secrets')
       ? await resolveSessionProviderSecrets({
           accountId: principal.accountId,
+          projectId: principal.projectId,
           sessionId: principal.sessionId,
           userId: principal.userId,
           providerId: provider,

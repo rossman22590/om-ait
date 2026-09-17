@@ -18,8 +18,8 @@ export function ProviderSecretPoolEditor({ projectId, sessionId }: { projectId: 
   const project = useQuery({ queryKey: ['provider-pool-project', projectId], queryFn: () => getProjectDetail(projectId) });
   const accountId = project.data?.project?.account_id;
   const resources = useQuery({
-    queryKey: ['account-secret-resources', accountId],
-    queryFn: () => listAccountSecretResources(accountId!),
+    queryKey: ['account-secret-resources', accountId, projectId],
+    queryFn: () => listAccountSecretResources(accountId!, projectId),
     enabled: Boolean(accountId),
   });
   const providers = useMemo(() => [...new Set((resources.data?.secrets ?? [])
@@ -86,8 +86,8 @@ export function NewProviderSecretPoolEditor({ projectId, selection, onChange }: 
   const project = useQuery({ queryKey: ['provider-pool-project', projectId], queryFn: () => getProjectDetail(projectId) });
   const accountId = project.data?.project?.account_id;
   const resources = useQuery({
-    queryKey: ['account-secret-resources', accountId],
-    queryFn: () => listAccountSecretResources(accountId!),
+    queryKey: ['account-secret-resources', accountId, projectId],
+    queryFn: () => listAccountSecretResources(accountId!, projectId),
     enabled: Boolean(accountId),
   });
   const providers = useMemo(() => [...new Set((resources.data?.secrets ?? [])

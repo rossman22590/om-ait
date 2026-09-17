@@ -840,8 +840,8 @@ export function ProviderConnect({
   });
   const accountId = project.data?.project?.account_id;
   const pooledResources = useQuery({
-    queryKey: ['account-secret-resources', accountId],
-    queryFn: () => listAccountSecretResources(accountId!),
+    queryKey: ['account-secret-resources', accountId, projectId],
+    queryFn: () => listAccountSecretResources(accountId!, projectId),
     enabled: enabled && pooledSecretsEnabled && Boolean(accountId),
   });
   const pooledProviderIds = useMemo(
@@ -1154,6 +1154,7 @@ export function ProviderConnect({
             accountId ? <AccountSecretResourcesPanel
               key={row.id}
               accountId={accountId}
+              projectId={projectId}
               providerId={row.id}
               providerName={row.label}
               envVar={row.envVars[0]!}
@@ -1201,7 +1202,7 @@ export function ProviderConnect({
                   </div>
                   <ProviderAccessMenu access={access} providerId="codex" name="ChatGPT subscription" canWrite={canWrite} />
                 </div>
-                <AccountSecretResourcesPanel accountId={accountId} providerId="codex"
+                <AccountSecretResourcesPanel accountId={accountId} projectId={projectId} providerId="codex"
                   providerName="ChatGPT Plus/Pro" envVar="CODEX_AUTH_JSON" canWrite={true}
                   oauth={{ projectId, onConnected: setPendingRequest }} />
               </div>
