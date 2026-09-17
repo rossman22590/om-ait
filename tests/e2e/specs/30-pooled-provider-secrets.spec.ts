@@ -219,6 +219,9 @@ test.describe('30 — pooled provider secrets', () => {
       await page.unroute(`**/v1/projects/${projectId}/oauth/openai/start`);
       await page.goto(`/projects/${projectId}`, { waitUntil: 'domcontentloaded' });
       await page.getByRole('button', { name: 'Session overrides' }).click();
+      await expect(page.getByRole('button', { name: /Provider keys/ })).toBeVisible();
+      await page.evaluate(() => window.dispatchEvent(new CustomEvent('focus-session-textarea')));
+      await expect(page.getByRole('button', { name: /Provider keys/ })).toBeVisible();
       await page.getByRole('button', { name: /Provider keys/ }).click();
       await page.getByRole('checkbox', { name: 'Primary test key' }).check();
       await page.getByRole('checkbox', { name: 'Backup test key' }).check();

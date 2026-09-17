@@ -6138,3 +6138,31 @@ through HTTP. `default-model.test.ts` and `resolve-candidates.test.ts` verify th
 selection context. `account-resource-pool.test.ts` rejects a cursor update from
 a passive check. Preview verification must name an account-backed model and
 assert actual assistant output, not only a submitted selection.
+
+### 2026-09-17 — Prompt-admission fixtures need a readable agent manifest
+
+**Near miss.** The #7331 preview repeatedly failed `SESS-30` with
+`503 CONNECTOR_REQUIREMENTS_UNRESOLVED`. Its database-only project pointed to
+`https://ke2e.invalid/...git`. Attachment storage passed, but prompt admission
+could not read that repository's connector requirements.
+
+**Rule.** A flow that enqueues prompts uses a seeded repository fixture, even
+when the session itself is a database fixture. Do not bypass manifest checks
+or treat their failure as an accepted prompt.
+
+**Enforcement.** `SESS-30` uses `ctx.fixtures.project({ seed: true })`. The fixture
+creates a local repository for the local profile and a managed repository for
+the preview. The flow still requires `202` and durable attachment read-back.
+
+### 2026-09-17 — Deferred composer focus must respect open overlays
+
+**Near miss.** The #7331 preview closed Provider keys while the new-session page
+finished loading. The composer focus hook could focus the editor after the
+user opened session overrides. Radix then dismissed the popover.
+
+**Rule.** Mount, visibility, and deferred focus requests leave an open popover,
+dialog, menu, or listbox in control of focus.
+
+**Enforcement.** The pooled-provider browser journey opens session overrides,
+dispatches `focus-session-textarea`, and asserts that Provider keys stays open.
+The assertion fails before the guard in `use-composer-focus.ts` and passes after it.
