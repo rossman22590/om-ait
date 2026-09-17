@@ -17,10 +17,10 @@
  *   --bench           run the markdown-vs-text streaming measurement instead
  */
 
-import { createTestRenderer } from '@opentui/core/testing';
-import { SyntaxStyle } from '@opentui/core';
-import { createRoot } from '@opentui/react';
 import { useSession } from '@kortix/sdk/react';
+import { SyntaxStyle } from '@opentui/core';
+import { createTestRenderer } from '@opentui/core/testing';
+import { createRoot } from '@opentui/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 
@@ -129,8 +129,21 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 2 } },
 });
 
-/** Whatever the harness last saw, for the milestone log. */
-const live = { phase: '', messages: 0, busy: false, send: null as ((t: string) => void) | null };
+/**
+ * What the harness last saw. `assistantText` and `toolCalls` are read from the
+ * SESSION, never from the captured frame: the frame also holds the user's own
+ * prompt, so a frame-text assertion for the expected word passed the instant
+ * the prompt echoed — before the agent had answered anything. Assert on the
+ * data, print the frame.
+ */
+const live = {
+  phase: '',
+  messages: 0,
+  busy: false,
+  assistantText: '',
+  toolCalls: 0,
+  send: null as ((t: string) => void) | null,
+};
 
 /**
  * The shape `session-view.tsx` will have: ONE `useSession`, handed down.
@@ -141,6 +154,15 @@ function Harness() {
   live.phase = session.phase;
   live.messages = session.messages.length;
   live.busy = session.isBusy;
+  live.assistantText = session.messages
+    .filter((entry) => entry.info.role === 'assistant')
+    .flatMap((entry) => entry.parts)
+    .filter((part) => part.type === 'text')
+    .map((part) => (part as { text?: string }).text ?? '')
+    .join('\n');
+  live.toolCalls = session.messages
+    .flatMap((entry) => entry.parts)
+    .filter((part) => part.type === 'tool').length;
   live.send = (text: string) => {
     void session.send(text);
   };
@@ -168,17 +190,13 @@ async function settle(ms: number): Promise<void> {
   }
 }
 
-async function waitFor(
-  predicate: (frame: string) => boolean,
-  timeoutMs: number,
-  label: string,
-): Promise<string> {
+async function waitFor(done: () => boolean, timeoutMs: number, label: string): Promise<string> {
   const until = Date.now() + timeoutMs;
   let last = '';
   while (Date.now() < until) {
     await setup.renderOnce();
     last = setup.captureCharFrame();
-    if (predicate(last)) return last;
+    if (done()) return last;
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
   banner(`TIMEOUT waiting for ${label}`);
@@ -190,7 +208,7 @@ await settle(3000);
 banner('FRAME 0 — first paint');
 console.log(setup.captureCharFrame());
 
-const ready = await waitFor((frame) => frame.includes('phase ready'), READY_TIMEOUT_MS, 'phase ready');
+const ready = await waitFor(() => live.phase === 'ready', READY_TIMEOUT_MS, 'phase ready');
 banner('FRAME 1 — phase ready');
 console.log(ready);
 
@@ -199,12 +217,16 @@ await settle(4000);
 banner('FRAME 2 — prompt sent, first stream frames');
 console.log(setup.captureCharFrame());
 
-await waitFor((frame) => /Working ·|Completed \d+ step/.test(frame), STREAM_TIMEOUT_MS, 'a tool step row');
-banner('FRAME 3 — a tool step row');
+await waitFor(() => live.toolCalls > 0, STREAM_TIMEOUT_MS, 'a tool call');
+banner('FRAME 3 — a tool call');
 console.log(setup.captureCharFrame());
 
-const done = await waitFor((frame) => frame.includes(EXPECT), STREAM_TIMEOUT_MS, `"${EXPECT}"`);
-banner(`FRAME 4 — the reply contains "${EXPECT}"`);
+const done = await waitFor(
+  () => live.assistantText.includes(EXPECT),
+  STREAM_TIMEOUT_MS,
+  `an ASSISTANT text part containing "${EXPECT}"`,
+);
+banner(`FRAME 4 — the assistant reply contains "${EXPECT}"`);
 console.log(done);
 
 await settle(4000);

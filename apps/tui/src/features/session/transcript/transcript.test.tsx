@@ -113,6 +113,35 @@ describe('<Transcript/> step collapsing', () => {
     renderer.destroy();
   });
 
+  test('a lone tool call is a bare card, never a one-row group', async () => {
+    const single = fakeSession({
+      messages: [
+        message('m1', 'user', [textPart('p0', 'list the workspace')]),
+        message(
+          'm2',
+          'assistant',
+          [
+            toolPart(
+              'p1',
+              'bash',
+              'completed',
+              { command: 'ls -la /workspace' },
+              shellOutput('total 0'),
+            ),
+            textPart('p2', 'FINISHED'),
+          ],
+          { agent: 'galileo', parentID: 'm1' },
+        ),
+      ],
+    });
+    const { captureCharFrame, flush, renderer } = await render(single);
+    await settle(flush);
+    const frame = captureCharFrame();
+    expect(frame).not.toContain('Completed 1 step');
+    expect(frame).toContain('$ ls -la /workspace');
+    renderer.destroy();
+  });
+
   test('an unfocused transcript ignores Enter', async () => {
     const { captureCharFrame, flush, mockInput, renderer } = await testRender(
       <Transcript session={session} focused={false} width={70} height={22} />,

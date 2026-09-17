@@ -25,6 +25,7 @@ import {
 import { ReasoningPart } from './parts/reasoning-part.tsx';
 import { TextPart } from './parts/text-part.tsx';
 import { StepsGroup } from './steps-group.tsx';
+import { ToolCard } from './tool-card.tsx';
 
 /** `❯` is the prompt the reader typed; `◆` is the agent answering. */
 const ROLE_GLYPH = { user: '❯', assistant: '◆' } as const;
@@ -60,8 +61,12 @@ function PartRow({
       return <TextPart text={part.text} streaming={streaming} width={width} />;
     case 'reasoning':
       return <ReasoningPart text={part.text} expanded={expanded} cursor={cursor} width={width} />;
+    // A lone tool call is its own card, never a one-row group. `collapseToolRuns`
+    // already refuses to fold a run of one; wrapping it here put the
+    // "▾ Completed 1 step" header back on top of a single card — verified in a
+    // live run before this line existed.
     case 'tool':
-      return <StepsGroup tools={[part]} expanded cursor={false} width={width} />;
+      return <ToolCard tool={part.tool} width={width} />;
     case 'file':
       return <FilePart part={part} width={width} />;
     case 'subtask':
