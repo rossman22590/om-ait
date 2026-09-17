@@ -496,7 +496,7 @@ describe('ProviderConnectView — pooled provider keys', () => {
       })} />,
     );
     expect(out).toContain('Add another Anthropic key');
-    expect(out).toContain('select keys in session settings');
+    expect(out).toContain('select it per session');
     expect(out).not.toContain('Paste your Anthropic API key');
     expect(out).not.toContain('it saves when you click away');
   });
