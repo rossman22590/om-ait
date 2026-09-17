@@ -54,3 +54,28 @@ A project stores one shared provider key in its secrets screen. Every project me
 4. Add request-level pool selection, shared cooldown, bounded failover, audit records, and explicit failure responses.
 5. Build the Models provider-key and session settings UI from existing components. Add browser journeys and desktop checks.
 6. Run local HTTP, SDK, browser, and package gates. Open a draft PR with preview, then prove the same objective through a real preview session. Do not merge without explicit approval.
+
+## Takeover review, 2026-09-17
+
+PR #7311 reverted the earlier user/project connection implementation in commit
+`79679326abdc6383da8e24e1635846718b29c757`. PR #7319 replaces it with this resource
+model. Its canonical branch is `pooled-provider-secrets`. Continue that work;
+do not restore #7295 or replace Marko's PR without agreeing on the handoff.
+
+The review starts from `ce8a3531a027f9d5617c521bb2bd137f2654abf5`.
+The existing preview and CI pass at that commit. They do not prove the following
+failure paths, which must be covered before the feature is ready:
+
+1. A session still exposes its configured provider after its last key is revoked
+   or deleted. The user can inspect the empty pool and explicitly reset it.
+   A failed selection read cannot be mistaken for an inherited selection.
+2. A cancelled ChatGPT authorization cannot update a later authorization dialog.
+   Grant mutations refresh the authoritative state even after partial failure.
+3. Session-bound credentials cannot read or change a sibling session's pool.
+   A manager's selection requires grants for both the manager and session owner.
+   Background sessions cannot acquire personal account credentials.
+4. Browser controls distinguish inherited, selected, empty, unavailable, loading,
+   and failed states. Selection limits and pending writes are enforced in the UI.
+5. Local HTTP and browser regressions pass. SDK export, type, test, and install
+   gates pass. The updated preview proves selection and gateway behavior through
+   an actual session. Human OAuth approval remains a separate explicit check.
