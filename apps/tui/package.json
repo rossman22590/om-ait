@@ -14,6 +14,12 @@
     "@kortix/cli": "workspace:*",
     "@kortix/sdk": "workspace:*",
     "@opentui/core": "0.5.11",
+    "@opentui/core-darwin-arm64": "0.5.11",
+    "@opentui/core-darwin-x64": "0.5.11",
+    "@opentui/core-linux-arm64": "0.5.11",
+    "@opentui/core-linux-arm64-musl": "0.5.11",
+    "@opentui/core-linux-x64": "0.5.11",
+    "@opentui/core-linux-x64-musl": "0.5.11",
     "@opentui/react": "0.5.11",
     "@tanstack/react-query": "^5.75.2",
     "react": "^19.2.0"

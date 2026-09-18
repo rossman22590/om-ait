@@ -1,5 +1,12 @@
 {
+  // `kortix tui` dynamically imports @kortix/tui, whose entry is .tsx, so this
+  // program has to understand JSX to type-check across that boundary — and
+  // then it DOES type-check it, which is the point: a breaking change in the
+  // TUI's `runTui` signature fails `pnpm --filter @kortix/cli typecheck`.
+  // OpenTUI, not React DOM, owns the jsx factory (apps/tui/tsconfig.json).
   "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@opentui/react",
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",

@@ -300,6 +300,9 @@ importers:
       '@kortix/starter':
         specifier: workspace:*
         version: link:../../packages/starter
+      '@kortix/tui':
+        specifier: workspace:*
+        version: link:../tui
       ignore:
         specifier: 7.0.5
         version: 7.0.5
@@ -761,6 +764,24 @@ importers:
       '@opentui/core':
         specifier: 0.5.11
         version: 0.5.11(typescript@5.9.3)(web-tree-sitter@0.25.10)
+      '@opentui/core-darwin-arm64':
+        specifier: 0.5.11
+        version: 0.5.11
+      '@opentui/core-darwin-x64':
+        specifier: 0.5.11
+        version: 0.5.11
+      '@opentui/core-linux-arm64':
+        specifier: 0.5.11
+        version: 0.5.11
+      '@opentui/core-linux-arm64-musl':
+        specifier: 0.5.11
+        version: 0.5.11
+      '@opentui/core-linux-x64':
+        specifier: 0.5.11
+        version: 0.5.11
+      '@opentui/core-linux-x64-musl':
+        specifier: 0.5.11
+        version: 0.5.11
       '@opentui/react':
         specifier: 0.5.11
         version: 0.5.11(react-devtools-core@7.0.1)(react@19.3.0)(typescript@5.9.3)(web-tree-sitter@0.25.10)(ws@8.21.3)
@@ -7717,7 +7738,6 @@ packages:
     os: [darwin]
     requiresBuild: true
     dev: false
-    optional: true
 
   /@opentui/core-darwin-x64@0.5.11:
     resolution: {integrity: sha512-yP/8GliJDiJNm8YYJKvgWuy6xyCEd8d4GwBVOIzCFOI7ZIbGP8GOTvmwIjRW4Paw20pTttWMWyRoQiCvOXvH2g==}
@@ -7725,7 +7745,6 @@ packages:
     os: [darwin]
     requiresBuild: true
     dev: false
-    optional: true
 
   /@opentui/core-linux-arm64-musl@0.5.11:
     resolution: {integrity: sha512-x+xeR2LYibvIi/qQetRjJR008sFRve60QuDcO8ItxUwzFeKTDzl5CEiZpBXfm5I4FhRNuyuj0TSPIFadMvrjFQ==}
@@ -7733,7 +7752,6 @@ packages:
     os: [linux]
     requiresBuild: true
     dev: false
-    optional: true
 
   /@opentui/core-linux-arm64@0.5.11:
     resolution: {integrity: sha512-zBIsRFHlLUYFNhapRSNt9dz4mC8gZ4Wxcfy3A+2AwqsgCipcr2FkIuAXYqN08q+IvqFX7DfqgIFGWDNedHTPUg==}
@@ -7741,7 +7759,6 @@ packages:
     os: [linux]
     requiresBuild: true
     dev: false
-    optional: true
 
   /@opentui/core-linux-x64-musl@0.5.11:
     resolution: {integrity: sha512-MyqOnSs8pTYG2xmFr1xt6xZIuHu2Xu4pkle9my9JdE+WClmusHf0YN9Eas6jQLAq5XUi34r22wMeK0juk93zyw==}
@@ -7749,7 +7766,6 @@ packages:
     os: [linux]
     requiresBuild: true
     dev: false
-    optional: true
 
   /@opentui/core-linux-x64@0.5.11:
     resolution: {integrity: sha512-pSOXqOADrv+zINOgR3FDFA9zVRaim3zl8/yhtO+X9rEJ6f34z3gDund0Gf88hNJSMpZK5xWtipEVm28RY5VF8w==}
@@ -7757,7 +7773,6 @@ packages:
     os: [linux]
     requiresBuild: true
     dev: false
-    optional: true
 
   /@opentui/core-win32-arm64@0.5.11:
     resolution: {integrity: sha512-MGGRXIDJ//HyaqC5ndSr7/CUl+ICdYEAMcjbA00UWsthh4ZO/rYhPkyqOaTn5ck6+G4ca3/+M76J+jImMYTjNg==}
