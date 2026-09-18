@@ -81,6 +81,8 @@ export interface TeamsLiveTurn {
   steps: StreamTaskChunk[];
   expiry: number;
   finalized: boolean;
+  /** When the row last changed — a turn that has not moved is not "in flight". */
+  updatedAt?: number;
   projectId: string;
   sessionId: string;
   originatingActivity: TeamsActivity;
