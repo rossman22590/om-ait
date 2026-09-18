@@ -1588,6 +1588,7 @@
     "search": "Buscar modelos",
     "free": "Gratis",
     "included": "Incluido",
+    "showModels": "Mostrar {count} modelos",
     "addProvider": "Añadir proveedor",
     "connectProvider": "Conectar proveedor",
     "manageModels": "Gestionar modelos",

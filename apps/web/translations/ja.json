@@ -1588,6 +1588,7 @@
     "search": "モデルを検索",
     "free": "無料",
     "included": "プラン内",
+    "showModels": "{count} 件のモデルを表示",
     "addProvider": "プロバイダーを追加",
     "connectProvider": "プロバイダーに接続",
     "manageModels": "モデルを管理",

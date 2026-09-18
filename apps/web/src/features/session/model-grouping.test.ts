@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { modelItemValue, pickerGroupId, pickerGroupLabel, splitModelLabel } from './model-grouping';
+import { isPickerGroupOpen, modelItemValue, pickerGroupId, pickerGroupLabel, splitModelLabel } from './model-grouping';
 import type { FlatModel } from './session-chat-input';
 
 // Regression coverage for the "every provider shows as Kortix" picker bug.
@@ -205,5 +205,41 @@ describe('modelItemValue', () => {
     expect(modelItemValue('model', { providerID: 'kortix', modelID: 'gpt-5.6' })).not.toBe(
       modelItemValue('model', { providerID: 'openai', modelID: 'gpt-5.6' }),
     );
+  });
+});
+
+describe('isPickerGroupOpen', () => {
+  const base = {
+    groupIndex: 1,
+    groupProviderID: 'codex',
+    hasSearch: false,
+    containsSelected: false,
+    expanded: new Set<string>(),
+  };
+
+  test('a secondary group is collapsed by default', () => {
+    expect(isPickerGroupOpen(base)).toBe(false);
+  });
+
+  test('the first group — the managed set — is always open', () => {
+    expect(isPickerGroupOpen({ ...base, groupIndex: 0 })).toBe(true);
+  });
+
+  test('a search reaches every group, or the model reads as missing', () => {
+    expect(isPickerGroupOpen({ ...base, hasSearch: true })).toBe(true);
+  });
+
+  test('the group holding the selected model opens, so the check has a home', () => {
+    expect(isPickerGroupOpen({ ...base, containsSelected: true })).toBe(true);
+  });
+
+  test('what the user expanded stays expanded', () => {
+    expect(isPickerGroupOpen({ ...base, expanded: new Set(['codex']) })).toBe(true);
+  });
+
+  test('expanding one group does not open its neighbour', () => {
+    expect(
+      isPickerGroupOpen({ ...base, groupProviderID: 'anthropic', expanded: new Set(['codex']) }),
+    ).toBe(false);
   });
 });

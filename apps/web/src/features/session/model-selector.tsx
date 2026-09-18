@@ -22,6 +22,7 @@ import { contract, qk, useModelStore, type ProviderListResponse } from '@kortix/
 import {
   CheckIcon as Check,
   CaretDownIcon as ChevronDown,
+  CaretRightIcon as CaretRight,
   CreditCardIcon as CreditCard,
   KeyIcon as KeyRound,
   PlusIcon as Plus,
@@ -33,7 +34,7 @@ import { useTranslations } from '@/i18n/use-translations';
 import { useParams } from 'next/navigation';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { resolveAvailableSelectedModel } from './model-availability';
-import { modelItemValue, pickerGroupId, pickerGroupLabel, splitModelLabel } from './model-grouping';
+import { isPickerGroupOpen, modelItemValue, pickerGroupId, pickerGroupLabel, splitModelLabel } from './model-grouping';
 import { modelInDefaultView } from './model-picker-default-view';
 import { isSubscriptionModel, pickerModelName, shouldShowFreeTag } from './model-tags';
 import type { FlatModel } from './session-chat-input';
@@ -386,6 +387,7 @@ export function ModelSelector({
   );
 
   const [search, setSearch] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(new Set());
   const {
     openConnectProvider,
     openUpgrade,
@@ -421,6 +423,10 @@ export function ModelSelector({
   useEffect(() => {
     if (!open) {
       setSearch('');
+      // Collapse back to the managed set on every open. A section the user
+      // expanded last time is not a preference they set; carrying it would
+      // make the picker's height depend on history.
+      setExpandedGroups(new Set());
     }
   }, [open]);
 
@@ -670,7 +676,36 @@ export function ModelSelector({
                         }
                         forceMount
                       >
-                        {group.models.map((model) => (
+                        {!isPickerGroupOpen({
+                          groupIndex,
+                          groupProviderID: group.providerID,
+                          hasSearch: search.trim().length > 0,
+                          containsSelected: group.models.some(
+                            (m) =>
+                              availableSelectedModel?.providerID === m.providerID &&
+                              availableSelectedModel?.modelID === m.modelID,
+                          ),
+                          expanded: expandedGroups,
+                        }) ? (
+                          /* One row stands in for the whole section: its name
+                             and how many models are behind it. Selecting it
+                             expands in place — no animation, because this is a
+                             keyboard-driven list and motion here would lag the
+                             key that caused it. */
+                          <CommandItem
+                            value={`expand-${group.providerID}`}
+                            onSelect={() =>
+                              setExpandedGroups((prev) => new Set(prev).add(group.providerID))
+                            }
+                            className="cursor-pointer"
+                          >
+                            <CaretRight className="text-muted-foreground size-3.5 shrink-0" />
+                            <span className="min-w-0 flex-1 truncate text-sm">
+                              {tModel('showModels', { count: group.models.length })}
+                            </span>
+                          </CommandItem>
+                        ) : (
+                          group.models.map((model) => (
                           <ModelRow
                             key={`${model.providerID}:${model.modelID}`}
                             model={model}
@@ -688,7 +723,8 @@ export function ModelSelector({
                             onSelect={handleSelect}
                             scope="model"
                           />
-                        ))}
+                          ))
+                        )}
                       </CommandGroup>
                     </Fragment>
                   ))}

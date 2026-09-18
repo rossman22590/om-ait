@@ -1588,6 +1588,7 @@
     "search": "Претражи моделе",
     "free": "Бесплатно",
     "included": "Укључено",
+    "showModels": "Прикажи {count} модела",
     "addProvider": "Додај добављача",
     "connectProvider": "Повежи добављача",
     "manageModels": "Управљај моделима",

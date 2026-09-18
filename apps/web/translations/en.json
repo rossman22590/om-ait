@@ -1588,6 +1588,7 @@
     "search": "Search models",
     "free": "Free",
     "included": "Included",
+    "showModels": "Show {count} models",
     "addProvider": "Add provider",
     "connectProvider": "Connect provider",
     "manageModels": "Manage models",

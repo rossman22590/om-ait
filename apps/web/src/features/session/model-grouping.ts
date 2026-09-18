@@ -87,3 +87,38 @@ export function splitModelLabel(modelName: string | undefined): {
   if (!match) return { lead: trimmed, trail: '' };
   return { lead: match[1], trail: match[2].trim() };
 }
+
+/**
+ * Whether a provider section renders its models or a single "expand" row.
+ *
+ * The picker opened as one long list: 8 managed models, then every connected
+ * provider's, then one row per subscription model — and with two ChatGPT
+ * accounts connected that list doubles again. Almost every session uses a
+ * managed model, so the rest is scrolling the user pays for on every open.
+ *
+ * Collapsed by default, with four exceptions that each exist because the
+ * alternative is a picker that looks broken:
+ *
+ *  1. SEARCH. A query must reach every provider — a collapsed group that hides
+ *     a match reads as "the model is gone", which is the bug this picker had
+ *     once already.
+ *  2. THE FIRST GROUP. `MODEL_SELECTOR_PROVIDER_IDS` puts `kortix` first, so
+ *     this is the managed set: the models most sessions use, always open. On a
+ *     BYOK-only project there is no kortix group and this keeps the picker from
+ *     opening fully collapsed.
+ *  3. THE SELECTED MODEL'S GROUP. Opening the picker must always show what you
+ *     are currently on, or the check mark has nowhere to live.
+ *  4. What the user expanded by hand, this time the popover was open.
+ */
+export function isPickerGroupOpen(input: {
+  groupIndex: number;
+  groupProviderID: string;
+  hasSearch: boolean;
+  containsSelected: boolean;
+  expanded: ReadonlySet<string>;
+}): boolean {
+  if (input.hasSearch) return true;
+  if (input.groupIndex === 0) return true;
+  if (input.containsSelected) return true;
+  return input.expanded.has(input.groupProviderID);
+}
