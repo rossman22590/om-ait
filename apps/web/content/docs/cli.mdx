@@ -314,7 +314,7 @@ The local coding-tool selection does not change the cloud OpenCode runtime.
 `kortix ship` stages, commits, and pushes your current branch to the project's git repo. Run it once to create the project. Run it again any time to sync. Alias: `kortix deploy`.
 
 Each run:
-- Parses and validates `kortix.yaml` (skip with `--no-verify`).
+- Parses and validates `kortix.yaml`, merged with every file it lists under [`imports:`](/docs/project/manifest#imports) (skip with `--no-verify`).
 - Commits any dirty working tree (skip with `--no-commit`).
 - Prompts for any missing `env` secret (skip with `--no-env`).
 - Pushes the current branch to the same-named remote branch.

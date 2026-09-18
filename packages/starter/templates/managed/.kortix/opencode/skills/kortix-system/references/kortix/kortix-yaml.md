@@ -476,7 +476,10 @@ and only one should actually fire.
 ### Common gotchas
 
 - `triggers:` must be a **list** (`- slug: …`), not a map — the parser
-  surfaces a clear error otherwise.
+  surfaces a clear error otherwise. The same holds in an imported file.
+- A slug must be unique across `kortix.yaml` AND every imported file. A
+  duplicate is not a per-entry error: it fails the whole manifest, and no
+  trigger fires until it is fixed. `kortix validate` names both files.
 - Slugs must be lowercase + URL-safe. Uppercase or spaces fail.
 - A webhook trigger without `secret_env` is rejected.
 - A cron trigger without a `cron` expression is rejected.
