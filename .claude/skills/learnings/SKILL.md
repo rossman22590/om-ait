@@ -21,6 +21,17 @@ linked, not inlined.
 
 ## Register
 
+### Preserve the session-bearing project during repository consolidation (2026-09-18)
+
+**Rule:** Before archiving a project during a repository cutover, count its
+sessions and dependent resources. Keep the project ID that owns the historical
+sessions as the canonical project. Copy Git refs before moving session rows,
+then verify session, connector, transcript, and sandbox reads through the
+canonical API. **Near-miss:** a project with over 16,000 historical sessions was
+archived while a new project with four sessions remained active; restoration
+required a guarded production transfer. **Enforcer:** none; a cutover preflight
+that reports project and session counts remains to be built.
+
 ### An account-scoped read on an always-mounted surface toasts 403 at every member (2026-09-18)
 
 **Rule:** before adding a query to a component that renders on every project
