@@ -15,6 +15,18 @@ const UPLOAD_TTL_MS = 15 * 60 * 1000;
 const ALLOWED_DOWNLOAD_HOST =
   /(^|\.)(sharepoint\.com|sharepoint-df\.com|svc\.ms|microsoft\.com|office\.com)$/i;
 
+/**
+ * Bot Framework attachment hosts — the only hosts that may receive the bot
+ * connector token on the DOWNLOAD path.
+ *
+ * Deliberately narrower than `ALLOWED_SERVICE_HOST` (teams-service-url.ts),
+ * which also allows `azurewebsites.net`, a customer-registrable namespace.
+ * The download url is caller-supplied, so reusing the broad list let anyone
+ * with project read point the proxy at their own `*.azurewebsites.net` host
+ * and capture the bot connector token (CWE-918).
+ */
+const ALLOWED_BOT_ATTACHMENT_HOST = /(^|\.)(botframework\.com|botframework\.us|trafficmanager\.net)$/i;
+
 export type FileProxyError = { ok: false; error: string; status: number };
 
 export async function downloadTeamsFile(
@@ -29,13 +41,13 @@ export async function downloadTeamsFile(
   }
   if (
     parsed.protocol !== 'https:' ||
-    (!ALLOWED_DOWNLOAD_HOST.test(parsed.hostname) && !assertValidTeamsServiceUrl(parsed.href))
+    (!ALLOWED_DOWNLOAD_HOST.test(parsed.hostname) && !ALLOWED_BOT_ATTACHMENT_HOST.test(parsed.hostname))
   ) {
     return { ok: false, error: 'url must be an https Microsoft/SharePoint file URL', status: 400 };
   }
 
   const headers: Record<string, string> = {};
-  if (assertValidTeamsServiceUrl(parsed.href)) {
+  if (ALLOWED_BOT_ATTACHMENT_HOST.test(parsed.hostname)) {
     // A Bot Framework attachment (an image pasted into the chat): the
     // connector token that posts our cards is the credential that reads it.
     const creds = await loadTeamsBotCredentials(projectId);
@@ -210,6 +222,30 @@ export async function initiateTeamsUpload(
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 const DRIVE_FOLDER = 'Kortix';
 
+/**
+ * Does the channel this conversation belongs to live in that team? A Teams
+ * channel conversation id IS the channel id (`19:…@thread.tacv2`, sometimes
+ * with a `;messageid=…` suffix), so Graph answers this directly: the lookup
+ * succeeds only when the team owns the channel.
+ */
+async function channelBelongsToTeam(
+  token: string,
+  teamGroupId: string,
+  conversationId: string,
+): Promise<boolean> {
+  const channelId = conversationId.split(';')[0];
+  if (!channelId.startsWith('19:')) return false;
+  try {
+    const res = await fetch(
+      `${GRAPH}/teams/${encodeURIComponent(teamGroupId)}/channels/${encodeURIComponent(channelId)}`,
+      { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) },
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Upload to the team's SharePoint drive and post an org-wide view link. Needs `Files.ReadWrite.All` (application) on the bot app. */
 async function uploadToTeamDrive(
   projectId: string,
@@ -221,6 +257,15 @@ async function uploadToTeamDrive(
   const creds = await loadTeamsBotCredentials(projectId);
   const token = await graphToken(tenant, creds).catch(() => null);
   if (!token) return { ok: false, error: 'could not mint a Graph token', status: 502 };
+
+  // The drive is chosen by the TEAM THAT OWNS THIS CONVERSATION, verified
+  // server-side — never by the client-supplied id alone. Without this, a
+  // caller holding connector-write on one project could write into any
+  // Microsoft 365 group's SharePoint drive in the tenant with the bot's
+  // tenant-wide credential (CWE-862).
+  if (!(await channelBelongsToTeam(token, args.teamGroupId, ref.conversationId))) {
+    return { ok: false, error: 'that team does not own this conversation', status: 403 };
+  }
 
   const bytes = Buffer.from(args.contentBase64, 'base64');
   const path = `${DRIVE_FOLDER}/${args.filename.replace(/[\\/:*?"<>|]/g, '_')}`;

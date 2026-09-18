@@ -72,6 +72,7 @@ const { downloadTeamsFile, initiateTeamsUpload, handleFileConsentInvoke } = awai
 
 let fetchCalls: Array<{ url: string; method: string; headers?: Record<string, string> }> = [];
 let graphStatus = 200;
+let channelOwnershipOk = true;
 let nextFetchOk = true;
 const realFetch = globalThis.fetch;
 beforeEach(() => {
@@ -81,10 +82,14 @@ beforeEach(() => {
   fetchCalls = [];
   nextFetchOk = true;
   graphStatus = 200;
+  channelOwnershipOk = true;
   globalThis.fetch = (async (url: string, init: { method?: string; headers?: Record<string, string> }) => {
     fetchCalls.push({ url: String(url), method: init?.method ?? 'GET', headers: init?.headers });
     const u = String(url);
     if (u.startsWith('https://graph.microsoft.com/')) {
+      if (u.includes('/channels/') && (init?.method ?? 'GET') === 'GET') {
+        return { ok: channelOwnershipOk, status: channelOwnershipOk ? 200 : 404, json: async () => ({ id: 'ch' }), text: async () => '' };
+      }
       if (graphStatus !== 200) {
         return { ok: false, status: graphStatus, text: async () => '{"error":{"code":"accessDenied"}}', json: async () => ({}) };
       }
@@ -288,5 +293,81 @@ describe('initiateTeamsUpload outside a personal chat', () => {
       expect(r.status).toBe(502);
       expect(r.error).toContain('Files.ReadWrite.All');
     }
+  });
+});
+
+/**
+ * Security review on #7395 (Strix), both HIGH:
+ * - CWE-918: the download proxy attached the bot connector token to any host
+ *   the broad outbound allowlist accepted — including the customer-registrable
+ *   `*.azurewebsites.net` namespace, so a caller could capture the token.
+ * - CWE-862: the team-drive upload trusted a client-supplied `team_group_id`,
+ *   so connector-write on one project could write into ANY team's SharePoint
+ *   drive in the tenant.
+ */
+describe('file proxy — token and drive authorization', () => {
+  test('an azurewebsites.net url is refused outright — never fetched, never tokened', async () => {
+    const r = await downloadTeamsFile('proj-1', 'https://attacker.azurewebsites.net/steal');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.status).toBe(400);
+    expect(fetchCalls).toHaveLength(0);
+  });
+
+  test('a real Bot Framework attachment host still gets the token', async () => {
+    const r = await downloadTeamsFile('proj-1', 'https://smba.trafficmanager.net/emea/x/v3/attachments/1/views/original');
+    expect(r.ok).toBe(true);
+    expect(fetchCalls[0].headers?.Authorization).toBe('Bearer bot-tok');
+  });
+
+  test('a SharePoint url is fetched with NO bot token', async () => {
+    const r = await downloadTeamsFile('proj-1', 'https://contoso.sharepoint.com/f/report.pdf');
+    expect(r.ok).toBe(true);
+    expect(fetchCalls[0].headers?.Authorization).toBeUndefined();
+  });
+
+  test('uploading to a team that does not own the conversation is refused 403, with no write', async () => {
+    channelOwnershipOk = false;
+    const r = await initiateTeamsUpload('proj-1', {
+      serviceUrl: 'https://smba.trafficmanager.net/emea/',
+      conversationId: '19:chan@thread.tacv2;messageid=1',
+      conversationType: 'channel',
+      teamGroupId: 'someone-elses-group',
+      filename: 'report.pdf',
+      contentBase64: Buffer.from('%PDF').toString('base64'),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe(403);
+      expect(r.error).toMatch(/does not own this conversation/);
+    }
+    expect(fetchCalls.some((c) => c.method === 'PUT')).toBe(false);
+  });
+
+  test('the ownership check asks Graph for the channel under that team, stripping the messageid suffix', async () => {
+    await initiateTeamsUpload('proj-1', {
+      serviceUrl: 'https://smba.trafficmanager.net/emea/',
+      conversationId: '19:chan@thread.tacv2;messageid=1',
+      conversationType: 'channel',
+      teamGroupId: 'group-1',
+      filename: 'report.pdf',
+      contentBase64: Buffer.from('%PDF').toString('base64'),
+    });
+    const check = fetchCalls.find((c) => c.url.includes('/channels/') && c.method === 'GET');
+    expect(check?.url).toBe(
+      'https://graph.microsoft.com/v1.0/teams/group-1/channels/19%3Achan%40thread.tacv2',
+    );
+  });
+
+  test('a non-channel conversation id can never select a drive', async () => {
+    const r = await initiateTeamsUpload('proj-1', {
+      serviceUrl: 'https://smba.trafficmanager.net/emea/',
+      conversationId: 'a:1FQyR2jW1pEUK',
+      conversationType: 'channel',
+      teamGroupId: 'group-1',
+      filename: 'report.pdf',
+      contentBase64: Buffer.from('%PDF').toString('base64'),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.status).toBe(403);
   });
 });
