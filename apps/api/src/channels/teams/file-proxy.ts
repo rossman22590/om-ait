@@ -5,7 +5,7 @@ import { db } from '../../shared/db';
 import { loadTeamsBotCredentials, loadTeamsTenantForProject } from '../install-store';
 import { sendActivity } from '../teams-api';
 import { assertValidTeamsServiceUrl } from '../teams-service-url';
-import { graphToken } from '../teams-auth';
+import { botConnectorToken, graphToken } from '../teams-auth';
 import type { TeamsActivity, TeamsConversationRef } from './types';
 
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
@@ -26,12 +26,22 @@ export async function downloadTeamsFile(
   } catch {
     return { ok: false, error: 'invalid url', status: 400 };
   }
-  if (parsed.protocol !== 'https:' || !ALLOWED_DOWNLOAD_HOST.test(parsed.hostname)) {
+  if (
+    parsed.protocol !== 'https:' ||
+    (!ALLOWED_DOWNLOAD_HOST.test(parsed.hostname) && !assertValidTeamsServiceUrl(parsed.href))
+  ) {
     return { ok: false, error: 'url must be an https Microsoft/SharePoint file URL', status: 400 };
   }
 
   const headers: Record<string, string> = {};
-  if (/(^|\.)graph\.microsoft\.com$/i.test(parsed.hostname)) {
+  if (assertValidTeamsServiceUrl(parsed.href)) {
+    // A Bot Framework attachment (an image pasted into the chat): the
+    // connector token that posts our cards is the credential that reads it.
+    const creds = await loadTeamsBotCredentials(projectId);
+    const token = await botConnectorToken(creds).catch(() => null);
+    if (!token) return { ok: false, error: 'could not mint a bot token', status: 502 };
+    headers.Authorization = `Bearer ${token}`;
+  } else if (/(^|\.)graph\.microsoft\.com$/i.test(parsed.hostname)) {
     const tenant = await loadTeamsTenantForProject(projectId);
     if (!tenant) return { ok: false, error: 'Teams not connected for this project', status: 404 };
     const creds = await loadTeamsBotCredentials(projectId);

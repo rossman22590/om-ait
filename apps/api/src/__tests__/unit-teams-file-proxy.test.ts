@@ -19,6 +19,7 @@ mock.module('../channels/teams-api', () => ({
 }));
 mock.module('../channels/teams-auth', () => ({
   graphToken: async () => 'graph-tok',
+  botConnectorToken: async () => 'bot-tok',
   teamsChannelEnabled: () => true,
   teamsConfigured: () => true,
 }));
@@ -66,7 +67,7 @@ const { downloadTeamsFile, initiateTeamsUpload, handleFileConsentInvoke } = awai
   '../channels/teams/file-proxy'
 );
 
-let fetchCalls: Array<{ url: string; method: string }> = [];
+let fetchCalls: Array<{ url: string; method: string; headers?: Record<string, string> }> = [];
 let nextFetchOk = true;
 const realFetch = globalThis.fetch;
 beforeEach(() => {
@@ -75,8 +76,8 @@ beforeEach(() => {
   dbResults = [];
   fetchCalls = [];
   nextFetchOk = true;
-  globalThis.fetch = (async (url: string, init: { method?: string }) => {
-    fetchCalls.push({ url: String(url), method: init?.method ?? 'GET' });
+  globalThis.fetch = (async (url: string, init: { method?: string; headers?: Record<string, string> }) => {
+    fetchCalls.push({ url: String(url), method: init?.method ?? 'GET', headers: init?.headers });
     return {
       ok: nextFetchOk,
       status: nextFetchOk ? 200 : 502,
@@ -100,6 +101,16 @@ describe('downloadTeamsFile', () => {
     const r = await downloadTeamsFile('proj-1', 'https://contoso.sharepoint.com/f/report.pdf');
     expect(r.ok).toBe(true);
     expect(fetchCalls).toHaveLength(1);
+  });
+
+  test('a Bot Framework attachment URL (pasted image) is fetched with the bot connector token', async () => {
+    const r = await downloadTeamsFile(
+      'proj-1',
+      'https://smba.trafficmanager.net/emea/36009a52/v3/attachments/0-abc/views/original',
+    );
+    expect(r.ok).toBe(true);
+    expect(fetchCalls).toHaveLength(1);
+    expect(fetchCalls[0].headers?.Authorization).toBe('Bearer bot-tok');
   });
 });
 

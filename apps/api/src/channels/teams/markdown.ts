@@ -92,9 +92,26 @@ function paragraph(lines: string[], separator: boolean): CardElement | null {
   return textBlock(inlineCode(raw), extra);
 }
 
+const ENTITIES: Record<string, string> = {
+  '&#39;': "'",
+  '&#x27;': "'",
+  '&apos;': "'",
+  '&quot;': '"',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&nbsp;': ' ',
+};
+
+/** `I&#39;ll` reached a card verbatim once; TextBlock shows entities literally. `&amp;` last, so `&amp;lt;` stays `&lt;`. */
+export function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&(#39|#x27|apos|quot|lt|gt|nbsp);/g, (m) => ENTITIES[m] ?? m)
+    .replace(/&amp;/g, '&');
+}
+
 export function markdownToCardElements(markdown: string): CardElement[] {
   const out: CardElement[] = [];
-  const lines = (markdown ?? '').replace(/\r\n?/g, '\n').split('\n');
+  const lines = decodeHtmlEntities(markdown ?? '').replace(/\r\n?/g, '\n').split('\n');
 
   let para: string[] = [];
   let code: string[] | null = null;
