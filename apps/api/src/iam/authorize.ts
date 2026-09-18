@@ -314,9 +314,14 @@ async function listAccessibleProjects(actor: Actor, action: string): Promise<Acc
   }
 
   if (rec.isSuperAdmin) return { mode: 'all' };
-  if (mfaGateBlocks(rec, tokenId, actor.ctx.mfaAal)) {
-    return { mode: 'none', reason: 'account_mfa_required' };
-  }
+
+  // The account-wide MFA gate is DELIBERATELY not applied here. Enumerating a
+  // project is not using it: every per-project action goes through
+  // `authorize`, which still denies `account_mfa_required` and returns the
+  // coded 403 that opens the step-up dialog. Gating the LIST instead turned
+  // opening the project switcher into a modal auth challenge, and before that
+  // (when the listing swallowed the reason) into an account that looked empty.
+  // Show the projects; challenge on open. See `list-denial-parity.test.ts`.
 
   const roles = await loadSystemRoles();
 
