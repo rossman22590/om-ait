@@ -8,6 +8,7 @@ import {
   createRepo,
   getFileSha,
   GitHubAppPermissionError,
+  GitHubIpAllowListError,
   getGitHubAppInstallation,
   listLinkableGitHubAppInstallations,
   resetGitHubAppSlugCache,
@@ -366,6 +367,34 @@ describe('GitHub App project repository auth', () => {
     await expect(attempt).rejects.toThrow(
       'https://github.com/organizations/libremax/settings/installations/42',
     );
+    resetGitHubAppSlugCache();
+  });
+
+  // An Enterprise Cloud organization can restrict access by IP address. GitHub
+  // then refuses the membership read from the Kortix API address with a 403.
+  test('names the organization IP allow list instead of blaming the caller', async () => {
+    resetGitHubAppSlugCache();
+    globalThis.fetch = mock(async (url: string | URL | Request) => {
+      const href = typeof url === 'string' || url instanceof URL ? String(url) : url.url;
+      if (href.endsWith('/user')) return json({ login: 'markokraemer' });
+      if (href.endsWith('/app')) return json({ slug: 'kortix-managed', permissions: { members: 'read' } });
+      return json(
+        {
+          message:
+            'Although you appear to have the correct authorization credentials, the `libremax` ' +
+            'organization has an IP allow list enabled, and your IP address is not permitted to access this resource.',
+        },
+        403,
+      );
+    }) as unknown as typeof fetch;
+
+    const attempt = verifyGitHubInstallationAdmin('user-token', {
+      id: 42,
+      account: { login: 'libremax', type: 'Organization' },
+      permissions: { members: 'read' },
+    });
+    await expect(attempt).rejects.toBeInstanceOf(GitHubIpAllowListError);
+    await expect(attempt).rejects.toThrow('IP allow list');
     resetGitHubAppSlugCache();
   });
 

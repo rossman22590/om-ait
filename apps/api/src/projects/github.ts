@@ -32,6 +32,29 @@ export class GitHubAppPermissionError extends Error {
   }
 }
 
+/**
+ * The organization restricts access by IP address (GitHub Enterprise Cloud) and
+ * refused a request from this API's egress address. The caller's role is not
+ * the cause. An organization owner resolves it: enable "IP allow list
+ * configuration for installed GitHub Apps", which imports the addresses the
+ * App owner published on the App, or add those addresses by hand.
+ */
+export class GitHubIpAllowListError extends Error {
+  constructor(readonly organization: string) {
+    super(
+      `${organization} restricts GitHub access with an IP allow list, and it blocked Kortix. ` +
+        `An owner of ${organization} must enable "IP allow list configuration for installed GitHub Apps" ` +
+        '(organization Settings → Authentication security), then verify again.',
+    );
+    this.name = 'GitHubIpAllowListError';
+  }
+}
+
+/** GitHub's 403 body for a request an organization IP allow list refused. */
+export function isGitHubIpAllowListRefusal(error: unknown): boolean {
+  return error instanceof GitHubApiError && error.status === 403 && /IP allow list/i.test(error.message);
+}
+
 // 'managed' = a Kortix-managed git token minted server-side by the managed backend.
 // 'project_credential' = provider-neutral git credential stored outside
 // user-readable runtime secrets.
@@ -719,6 +742,7 @@ export async function verifyGitHubInstallationAdmin(
       { token },
     );
   } catch (error) {
+    if (isGitHubIpAllowListRefusal(error)) throw new GitHubIpAllowListError(ownerLogin);
     if (
       error instanceof GitHubApiError &&
       error.status === 403 &&
