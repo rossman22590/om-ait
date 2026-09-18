@@ -5,7 +5,7 @@ import { config } from '../../config';
 import { classifyTurnError, type TurnErrorInfo } from '../slack/errors';
 import { sessionWebUrl } from '../slack/util';
 import type { StreamTaskChunk } from '../slack-api';
-import { sendCard, sendTyping, updateCard } from '../teams-api';
+import { sendCard, updateCard } from '../teams-api';
 import { saveTeamsServiceUrl } from '../install-store';
 import { buildAnswerCard, buildFinalCard, buildPlanCard } from './cards';
 import { STREAM_TTL_MS, STALE_AFTER_MS } from './app';
@@ -122,13 +122,10 @@ export async function startTurn(
     tenantId,
     projectId,
   };
-  // The typing indicator and the card are independent round trips to the
-  // Bot Framework; the card used to wait for the indicator's ack.
+  // No typing indicator: the live card is the acknowledgement, and an
+  // indicator sent alongside it renders as stray dots under the card.
   const t0 = Date.now();
-  const [, messageActivityId] = await Promise.all([
-    sendTyping(ref),
-    sendCard(ref, buildPlanCard(LIVE_PLAN_TITLE, [])).then((id) => id ?? ''),
-  ]);
+  const messageActivityId = (await sendCard(ref, buildPlanCard(LIVE_PLAN_TITLE, []))) ?? '';
   console.info('[teams-webhook] live card posted', {
     projectId,
     ms: Date.now() - t0,

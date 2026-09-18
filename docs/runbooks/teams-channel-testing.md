@@ -25,6 +25,10 @@ Last verified against `main` @ `786880d9a2` (2026-09-17). Unit baseline:
 | Project resolution | `chat_channel_bindings` (tenant + conversation) → else first `chat_installs` row for the tenant. |
 | Identity | `TEAMS_REQUIRE_USER_IDENTITY=true` (default): sender (`from.aadObjectId`) must be linked in `chat_user_identities`, be an account member, and hold `project.write`. Unlinked → "Connect your Kortix account" card with a 10-min signed link; the message is parked in `chat_pending_auth_messages` and replayed after bind. Linked but no access → "Request access" card → `project_access_requests` row + manager notification. `=false` → runs as the project automation actor. |
 | Commands | `/login /connect /logout /disconnect /whoami /who /help /status /config /settings /models /model <ref\|default> /agents /agent <name\|default> /projects /use <name\|id> /switch`. Anything else starting with `/` is NOT a command and starts a session. |
+| Channels and mentions | Personal chat: every message reaches the bot. Channel / group chat: Teams delivers @-mentions; with the manifest's RSC permission `ChannelMessage.Read.Group` (manifest 1.1.0, consented by the team owner when the app is added/updated on the team) it delivers every channel message. An **un-mentioned** channel message is handled only as a follow-up in a thread that already has a session (`chat_threads` row); otherwise it is ignored and never runs a command. `<at>…</at>` mention markup is stripped from the title source, the agent prompt, and the web display. |
+| Card body | The `teams send` markdown is converted to card elements (`teams/markdown.ts`): fenced code → Monospace TextBlock, inline code → bold, headings → sized text, pipe tables → Table, `>` → subtle, `---` → separator. |
+| First card | Posted right after the project row (before identity/membership/thread lookups); an identity failure REPLACES it in place. Typing + card in parallel; bot token prewarmed at boot and every 50 min. Log line `[teams-webhook] live card posted {ms}`. |
+| Catalog upgrade | Re-consenting (Channels row → "Publish to your Teams catalog", shown for any managed install not mid-publish) on an app already in the catalog submits the package as a new app definition (`POST /appCatalogs/teamsApps/{id}/appDefinitions`, result `updated:true`). |
 | Session | First message in a conversation → `createSession(source:'teams')` with `agent_name`/`opencode_model` from the conversation selection, bound in `chat_threads`. Later messages in the same conversation → `continueSession`. Live "Working on it…" Adaptive Card + typing indicator posted before the session starts. `teams step` repaints it; `teams send` finalizes ("Task complete" + session link). Stale open turn (30 min no update) → "_This run ended without a reply._". |
 | Start errors | 402 → out of credits copy; 429 → cap copy; 404 → project gone copy; other → generic; queued/pending → queued copy. |
 | Card actions (invoke `adaptiveCard/action`) | `teams_set_model`, `teams_set_agent`, `teams_pick_project`, `teams_answer` (question tool), `teams_review` (approve/changes/reject), `teams_request_access`. |
@@ -237,6 +241,10 @@ repeat the "dev" column on `https://dev.kortix.com` for the ones marked ★.
 | E3 | Add the app to a **team channel** | Same card in the channel |
 | E4 | Add the bot in a tenant with no install | Nothing posted, log `no project installed` |
 | E5 | Remove and re-add the bot in the same conversation within 5 min | No second card (dedup TTL) |
+| E6 | Channel: `@Kortix Dev summarize the README` | New session (channel post = its own conversation); live card, then the answer as a thread reply; session title has no `<at>` markup |
+| E7 | Reply in that thread WITHOUT a mention (RSC consented on the team) | Same session continues (follow-up); without RSC consent Teams never delivers it |
+| E8 | New channel post without a mention | Ignored (no session, no command), even `/help` |
+| E9 | Reply `/status` in an owned thread without a mention | Delivered as text to the session, not run as a command |
 
 ### F. Identity (linking)
 
@@ -394,6 +402,13 @@ repeat the "dev" column on `https://dev.kortix.com` for the ones marked ★.
 
 ---
 
+## 3b. Verified live on dev (2026-09-17/18)
+
+- One-click install end to end: consent → `?teams=publishing` → row polls → `publishState:"published"`, catalog id `58f4d2ec…` (PR #7341).
+- Welcome card, `/help`, `/login` + bind, `/whoami`, first task → live card → "Task complete" with session link; follow-up in the same personal chat joins the same session.
+- Channel: `@Kortix Dev /help` → help card; `@Kortix Dev summarize …` → new session, answer in thread. An un-mentioned "hmm" got nothing (pre-RSC) — expected.
+- Web: Teams badge/facet/card, `?teams=` toast, stripped titles (PRs #7385, #7388).
+
 ## 4. Known gaps found while reading the code (fix or accept before sign-off)
 
 1. `TEAMS_CHANNEL_ENABLED` in `apps/api/.env.dev` is unread since #5908.
@@ -401,7 +416,7 @@ repeat the "dev" column on `https://dev.kortix.com` for the ones marked ★.
 3. No public docs page: `apps/web/content/docs/connect/` has `slack.mdx` but no `teams.mdx`.
 4. `apps/api/src/channels/teams-app-manifest.json` is a stale hand file (id `3f3c0cf4…`, `validDomains: kortix-teams.ngrok.app`); the API generates the real manifest.
 5. `listTenantProjects` selects every row of `projects` (no `WHERE`) and filters in memory.
-6. `/anything-not-a-command` starts a session instead of answering "unknown command".
+6. `/anything-not-a-command` starts a session instead of answering "unknown command" (personal chat / mentioned only).
 7. `POST /identity/bind` returns `hasAccess` from account membership only, not project write, so the page can say "linked" to a user who will still get the Request-access card.
 8. `MICROSOFT_APP_TENANT` on dev is pinned to one tenant; if the dev app registration is single-tenant, no external customer tenant can use the dev bot.
 9. `ChannelMessage.Read.All` app-only needs Microsoft protected-API approval; three connector actions will 403 until then.
