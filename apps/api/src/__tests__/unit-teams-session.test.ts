@@ -15,7 +15,12 @@ const CONVERSATION_ID = 'a:1FQyR2jW1pEUK';
 
 const calls: string[] = [];
 let actor: { userId: string } | { reason: 'unlinked' | 'not_member' } = { userId: 'user-1' };
-let existingThread: Array<{ sessionId: string; createdBy?: string | null; metadata?: Record<string, unknown> | null }> = [];
+let existingThread: Array<{
+  sessionId: string;
+  createdBy?: string | null;
+  metadata?: Record<string, unknown> | null;
+  status?: string | null;
+}> = [];
 let claimWins = true;
 /** Per-call insert results: the thread-create claim first, then the error-notice claim. */
 let insertQueue: unknown[][] = [];
