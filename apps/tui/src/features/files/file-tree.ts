@@ -172,6 +172,35 @@ export function filterRows(rows: readonly TreeRow[], query: string): TreeRow[] {
   return rows.filter((row) => keep.has(row.id));
 }
 
+/**
+ * Dot-prefixed names that are shown even when hidden entries are off.
+ *
+ * Same two `apps/web`'s explorer exempts (`use-file-list.ts`): they hold the
+ * project's agents, skills and commands, so hiding them hides the product.
+ */
+export const ALWAYS_VISIBLE_DOTFILES: ReadonlySet<string> = new Set(['.kortix', '.opencode']);
+
+/**
+ * Drop dot-prefixed rows, and every row beneath a dropped directory.
+ *
+ * Without this the first thing a reader sees in a Kortix workspace is `.git`
+ * with its 15 plumbing files — verified against the live sandbox. `apps/web`
+ * hides the same names behind the same exemptions and offers the same toggle.
+ */
+export function hideDotfiles(rows: readonly TreeRow[]): TreeRow[] {
+  const hiddenPrefixes: string[] = [];
+  const kept: TreeRow[] = [];
+  for (const row of rows) {
+    if (hiddenPrefixes.some((prefix) => row.path.startsWith(prefix))) continue;
+    if (row.name.startsWith('.') && !ALWAYS_VISIBLE_DOTFILES.has(row.name)) {
+      if (row.type === 'directory') hiddenPrefixes.push(`${row.path}/`);
+      continue;
+    }
+    kept.push(row);
+  }
+  return kept;
+}
+
 /** The load state of a directory, for a caller deciding whether to fetch. */
 export function loadStateOf(tree: FileTree, path: string): DirectoryLoad | undefined {
   return tree.loads.get(path);

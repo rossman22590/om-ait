@@ -9,6 +9,7 @@ import {
   filterRows,
   flatten,
   forgetLoads,
+  hideDotfiles,
   loadStateOf,
   markLoading,
   parentOf,
@@ -172,5 +173,41 @@ describe('parentOf', () => {
     expect(parentOf(tree, ROOT)).toBeNull();
     expect(parentOf(tree, '/workspace/src/lib')).toBe('/workspace/src');
     expect(parentOf(tree, '/workspace/src')).toBe(ROOT);
+  });
+});
+
+describe('hideDotfiles', () => {
+  function treeWithDots() {
+    let tree = setChildren(createTree(ROOT), ROOT, [
+      node('/workspace/.git', 'directory'),
+      node('/workspace/.kortix', 'directory'),
+      node('/workspace/.gitignore', 'file'),
+      node('/workspace/README.md', 'file'),
+    ]);
+    tree = setChildren(expand(tree, '/workspace/.git'), '/workspace/.git', [
+      node('/workspace/.git/HEAD', 'file'),
+    ]);
+    tree = setChildren(expand(tree, '/workspace/.kortix'), '/workspace/.kortix', [
+      node('/workspace/.kortix/agents', 'directory'),
+    ]);
+    return tree;
+  }
+
+  test('drops dot entries and everything beneath a dropped directory', () => {
+    const rows = hideDotfiles(flatten(treeWithDots()));
+    expect(rows.map((row) => row.name)).toEqual(['.kortix', 'agents', 'README.md']);
+  });
+
+  test('.kortix and .opencode are always visible', () => {
+    const rows = hideDotfiles(flatten(treeWithDots()));
+    expect(rows.some((row) => row.name === '.kortix')).toBe(true);
+    expect(rows.some((row) => row.name === '.git')).toBe(false);
+    expect(rows.some((row) => row.name === 'HEAD')).toBe(false);
+  });
+
+  test('a tree with no dot entries is unchanged', () => {
+    const tree = setChildren(createTree(ROOT), ROOT, [node('/workspace/src', 'directory')]);
+    const rows = flatten(tree);
+    expect(hideDotfiles(rows)).toEqual(rows);
   });
 });

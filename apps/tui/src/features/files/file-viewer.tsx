@@ -240,6 +240,12 @@ export function FileViewer({ state, offset, width, height, focused = false }: Fi
           filetype={filetype}
           syntaxStyle={viewerSyntaxStyle()}
           conceal={false}
+          // A wrapped long line pushes every following line down while the
+          // gutter beside it does not move, so the numbers stop matching the
+          // code (verified live on an 8 KiB kortix.yaml). A file viewer reads
+          // like `less -S`: one screen line per file line, clipped at the right
+          // edge. Horizontal scrolling is not implemented.
+          wrapMode="none"
           flexGrow={1}
           height={rows}
         />

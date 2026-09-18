@@ -41,13 +41,20 @@ import {
   filterRows,
   flatten,
   forgetLoads,
+  hideDotfiles,
   loadStateOf,
   markLoading,
   parentOf,
   setChildren,
   setError,
 } from './file-tree.ts';
-import { FileViewer, type ReadResult, type ViewerState, toViewerState } from './file-viewer.tsx';
+import {
+  FileViewer,
+  type ReadResult,
+  type ViewerState,
+  toViewerState,
+  viewerLines,
+} from './file-viewer.tsx';
 import { matchesFilesBinding } from './keys.ts';
 
 /** The whole session, exactly as `useSession` returns it. */
@@ -166,6 +173,7 @@ export function FilesView({
   const [filter, setFilter] = useState('');
   const [viewer, setViewer] = useState<ViewerState>({ kind: 'empty' });
   const [viewerOffset, setViewerOffset] = useState(0);
+  const [showHidden, setShowHidden] = useState(false);
   /** The path of the read the viewer is waiting on. A slower earlier read that
    *  lands after it must not overwrite the newer file. */
   const pendingRead = useRef<string | null>(null);
@@ -207,7 +215,11 @@ export function FilesView({
   );
 
   const allRows = useMemo(() => flatten(tree), [tree]);
-  const rows = useMemo(() => filterRows(allRows, filter), [allRows, filter]);
+  const visibleRows = useMemo(
+    () => (showHidden ? allRows : hideDotfiles(allRows)),
+    [allRows, showHidden],
+  );
+  const rows = useMemo(() => filterRows(visibleRows, filter), [visibleRows, filter]);
 
   const cursorIndex = useMemo(() => {
     const found = rows.findIndex((row) => row.id === cursorId);
@@ -265,6 +277,9 @@ export function FilesView({
   }, []);
 
   const viewerRows = Math.max(height - 3, 1);
+  // The last page keeps a full screen of text instead of stranding one line at
+  // the top — verified live: a 10-line file paged to `10-10/10` before this.
+  const maxViewerOffset = Math.max(viewerLines(viewer).length - viewerRows, 0);
 
   useKeyboard((key) => {
     if (!focused) return;
@@ -276,7 +291,7 @@ export function FilesView({
     }
 
     if (matchesFilesBinding(key, 'files.viewerDown'))
-      return setViewerOffset((offset) => offset + viewerRows);
+      return setViewerOffset((offset) => Math.min(offset + viewerRows, maxViewerOffset));
     if (matchesFilesBinding(key, 'files.viewerUp'))
       return setViewerOffset((offset) => Math.max(offset - viewerRows, 0));
     if (matchesFilesBinding(key, 'files.down')) return moveTo(cursorIndex + 1);
@@ -299,6 +314,7 @@ export function FilesView({
       return;
     }
     if (matchesFilesBinding(key, 'files.filter')) return setMode('filter');
+    if (matchesFilesBinding(key, 'files.toggleHidden')) return setShowHidden((value) => !value);
     if (matchesFilesBinding(key, 'files.refresh')) return refresh();
     if (matchesFilesBinding(key, 'files.copyPath')) return copyPath();
     if (matchesFilesBinding(key, 'files.back')) {
@@ -310,7 +326,8 @@ export function FilesView({
   const columnWidth = treeWidth(width);
   const viewerWidth = Math.max(width - columnWidth - 1, 10);
   const bodyWidth = Math.max(columnWidth - 1, 0);
-  const listRows = Math.max(height - (mode === 'filter' ? 3 : 2), 1);
+  // Header + two hint rows, plus the filter input when it is open.
+  const listRows = Math.max(height - (mode === 'filter' ? 4 : 3), 1);
   const start = windowStart(cursorIndex, rows.length, listRows);
   const visible = rows.slice(start, start + listRows);
   const rootLoad = loadStateOf(tree, root);
@@ -368,7 +385,12 @@ export function FilesView({
           <text fg={theme.faint}>{filter ? 'No match in loaded rows.' : 'Empty directory.'}</text>
         ) : null}
 
-        <text fg={theme.faint}>{layoutRow('Enter open · / filter · r reload', '', bodyWidth)}</text>
+        {/* Two lines, not one: the tree column is ~30 columns at a 90-column
+            terminal and a single hint row truncated to `r re…`. */}
+        <text fg={theme.faint}>{layoutRow('Enter open · / filter', '', bodyWidth)}</text>
+        <text fg={theme.faint}>
+          {layoutRow(`r reload · . ${showHidden ? 'hide' : 'show'} dotfiles`, '', bodyWidth)}
+        </text>
       </box>
 
       {/* The column rule, as ONE text whose content carries the newlines. A

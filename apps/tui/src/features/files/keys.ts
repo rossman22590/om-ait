@@ -65,6 +65,12 @@ export const FILES_KEYS: readonly FilesBinding[] = [
     description: 'Filter the loaded rows by name. Esc clears it.',
   },
   {
+    id: 'files.toggleHidden',
+    scope: 'files',
+    chords: [{ key: '.' }],
+    description: 'Show or hide dot-prefixed entries (.kortix and .opencode always show).',
+  },
+  {
     id: 'files.refresh',
     scope: 'files',
     chords: [{ key: 'r' }],

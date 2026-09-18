@@ -5,7 +5,7 @@ import { testRender } from '@opentui/react/test-utils';
 
 import type { TreeNode } from './file-tree.ts';
 import type { ReadResult } from './file-viewer.tsx';
-import { type FileLoaders, FilesView } from './files-screen.tsx';
+import { type FileLoaders, FilesScreen, FilesView, type SessionState } from './files-screen.tsx';
 
 // React 19 needs this before `act`; without it a key press is asserted against
 // the frame React had not yet committed. See docs/opentui-notes.md.
@@ -17,6 +17,7 @@ const ROOT_NODES: TreeNode[] = [
   { name: 'README.md', path: '/workspace/README.md', type: 'file', ignored: false },
   { name: 'src', path: '/workspace/src', type: 'directory', ignored: false },
   { name: 'logo.png', path: '/workspace/logo.png', type: 'file', ignored: false },
+  { name: '.git', path: '/workspace/.git', type: 'directory', ignored: false },
 ];
 
 const SRC_NODES: TreeNode[] = [
@@ -225,6 +226,39 @@ describe('<FilesView/> through the OpenTUI test renderer', () => {
     renderer.destroy();
   });
 
+  test('dot entries are hidden until . turns them on', async () => {
+    const { element } = view();
+    const { captureCharFrame, flush, mockInput, renderer } = await testRender(element, SIZE);
+    await settle(flush, 120);
+    expect(captureCharFrame()).not.toContain('.git');
+
+    await press(mockInput, flush, '.');
+    expect(captureCharFrame()).toContain('.git');
+    expect(captureCharFrame()).toContain('. hide dotfiles');
+
+    await press(mockInput, flush, '.');
+    expect(captureCharFrame()).not.toContain('.git');
+    renderer.destroy();
+  });
+
+  test('J never scrolls a short file past its last full page', async () => {
+    const { element } = view();
+    const { captureCharFrame, flush, mockInput, renderer } = await testRender(element, SIZE);
+    await settle(flush, 120);
+
+    // src, logo.png, README.md — README.md is a 3-line file.
+    await press(mockInput, flush, 'j');
+    await press(mockInput, flush, 'j');
+    await pressEnter(mockInput, flush);
+    await settle(flush, 150);
+    expect(captureCharFrame()).toContain('1-3/3');
+
+    await press(mockInput, flush, 'J');
+    expect(captureCharFrame()).toContain('1-3/3');
+    expect(captureCharFrame()).toContain('# Kortix');
+    renderer.destroy();
+  });
+
   test('Esc with no filter leaves the screen', async () => {
     let backs = 0;
     const calls: Calls = { listed: [], read: [] };
@@ -241,6 +275,76 @@ describe('<FilesView/> through the OpenTUI test renderer', () => {
       SIZE,
     );
     await settle(flush, 120);
+    await act(async () => {
+      mockInput.pressEscape();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
+    await flush();
+    expect(backs).toBe(1);
+    renderer.destroy();
+  });
+});
+
+/** Only the `useSession` fields the readiness gate reads. */
+function sessionStub(overrides: Partial<SessionState>): SessionState {
+  return {
+    phase: 'starting',
+    stage: 'provisioning',
+    reason: null,
+    startError: null,
+    activelyStarting: false,
+    ...overrides,
+  } as unknown as SessionState;
+}
+
+describe('<FilesScreen/> readiness gate', () => {
+  test('a session that is not ready renders its phase instead of spinning', async () => {
+    const { captureCharFrame, flush, renderer } = await testRender(
+      <FilesScreen
+        projectId="p1"
+        sessionId="s1"
+        focused
+        width={SIZE.width}
+        height={SIZE.height}
+        onBack={() => {}}
+        session={sessionStub({ reason: 'runtime_waking', activelyStarting: true })}
+      />,
+      SIZE,
+    );
+    await settle(flush);
+    const frame = captureCharFrame();
+    expect(frame).toContain('runtime provisioning · runtime_waking');
+    expect(frame).toContain('Open the session to start it');
+    expect(frame).toContain('Esc back');
+    renderer.destroy();
+  });
+
+  test('a failed runtime says so and Esc still leaves', async () => {
+    let backs = 0;
+    const { captureCharFrame, flush, mockInput, renderer } = await testRender(
+      <FilesScreen
+        projectId="p1"
+        sessionId="s1"
+        focused
+        width={SIZE.width}
+        height={SIZE.height}
+        onBack={() => {
+          backs += 1;
+        }}
+        session={sessionStub({
+          phase: 'error',
+          stage: 'failed',
+          // `SessionStartError` carries a `terminal` flag on top of Error; the
+          // gate only reads `.message`.
+          startError: Object.assign(new Error('no capacity'), {
+            terminal: true,
+          }) as SessionState['startError'],
+        })}
+      />,
+      SIZE,
+    );
+    await settle(flush);
+    expect(captureCharFrame()).toContain('runtime failed · no capacity');
     await act(async () => {
       mockInput.pressEscape();
       await new Promise((resolve) => setTimeout(resolve, 200));
