@@ -41,7 +41,11 @@ Status: **experimental**. Not in the release CLI bundle. Run from the repo.
 | Component kit | Own primitives in `src/ui/*`; `@tuiparts/react` only if a primitive is not trivial (dialog, checkbox). termcn as reference only. | Keep the dependency graph small; the brand kit is ours. |
 | Key routing | `@opentui/keymap` if it fits; otherwise a small `src/keymap.ts` | One keymap table; help overlay renders from it. |
 
-Package: `@kortix/tui`, `private: true`, `apps/tui`. Entry: `src/index.tsx`.
+Package: `@kortix/tui`, `private: true`, `apps/tui`. Entries: `src/main.tsx`
+(`runTui(options)`, the app as a function) and `src/index.tsx` (the
+standalone `dev` wrapper that owns `process.exit`). `kortix tui` calls
+`runTui` through a dynamic import, so no other subcommand loads React or the
+OpenTUI native library.
 Scripts: `dev` (`bun run src/index.tsx`), `typecheck`, `keymap`, `test`
 (`bun test`). Dependencies: `@kortix/sdk` (workspace), `@kortix/cli`
 (workspace, deep imports — the allowlist below), `@opentui/core`,
@@ -66,6 +70,19 @@ pnpm note: `minimumReleaseAge` is 72 h; `@opentui/*` 0.5.11 was published
 2026-09-07 and resolves. Add nothing to `onlyBuiltDependencies` unless install
 fails; report if it does.
 
+**Why the six `@opentui/core-<platform>` packages are direct dependencies.**
+`@opentui/core` declares its prebuilt native libraries as `optionalDependencies`
+gated on `os`/`cpu`, so pnpm installs only the current machine's. `bun build
+--compile --target=bun-<os>-<arch>` inlines `process.platform`/`process.arch`
+and keeps exactly the matching `await import("@opentui/core-<os>-<arch>")`
+branch, which then has to RESOLVE at build time — otherwise every cross-target
+CLI bundle dies on `Could not resolve: "@opentui/core-linux-x64"`. Declaring
+all six here (both libc variants for Linux, because `OPENTUI_LIBC` is read at
+runtime and neither branch is eliminated) puts them in pnpm's hoisted store
+next to `@opentui/core`, where Bun finds them for every target. `pnpm
+cli:bundle:all` and the release workflows — which cross-compile all four
+targets on one linux-x64 runner — depend on this.
+
 ## 3. Architecture
 
 ```
@@ -74,7 +91,8 @@ apps/tui/
   README.md                  run / keys / troubleshooting
   package.json  tsconfig.json
   src/
-    index.tsx                boot: config → kortix client → QueryClient → createCliRenderer → <App/>
+    index.tsx                standalone entry (`pnpm --filter @kortix/tui dev`): resolveHost + env → runTui → process.exit
+    main.tsx                 `runTui()`: config → kortix client → QueryClient → createCliRenderer → <App/>; resolves an exit code
     app.tsx                  route state (screen enum), global keymap, layout frame
     kortix.ts                createKortix once; exports `kortix` + `hostInfo`
     auth/hosts.ts            load hosts from CLI config; env override; `saveHost` after login
@@ -351,8 +369,17 @@ never patch around it in the TUI.
 - Docs: `apps/tui/README.md` and a docs page under
   `apps/web/content/docs/` (follow the timestamp-manifest rule from memory
   `new-docs-page-needs-timestamp-manifest`).
-- Experimental flag: the CLI gets no new command in this PR. README documents
-  `pnpm --filter @kortix/tui dev`.
+- Experimental surface: the CLI gets `kortix tui`
+  (`apps/cli/src/commands/tui.ts`). It resolves auth exactly like every other
+  subcommand (`--host` → `loadAuthForHost`, else `loadAuth()`), builds the
+  `ResolvedHost` from that `Auth`, and calls `runTui()` through a dynamic
+  import. `kortix --help` lists it with the same `Experimental:` blurb prefix
+  `apps` uses; `kortix tui --help` prints the usage, the key summary and the
+  docs URL; and one stderr line names it experimental before the renderer
+  takes the screen, so it survives in scrollback after the alternate screen
+  exits. No env gate. `@kortix/tui` is a workspace dependency of
+  `@kortix/cli`, so the four release binaries carry it. README and
+  `/docs/tui` lead with `kortix tui`, then the repo `dev` command.
 
 ## 10. Waves (orchestration plan)
 

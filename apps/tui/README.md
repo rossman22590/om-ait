@@ -5,16 +5,30 @@ A full terminal client for Kortix. It renders with
 Kortix data through `@kortix/sdk`. `apps/tui/SPEC.md` is the plan; this file is
 how to run it.
 
-**Status: experimental.** Not in the release CLI bundle. Run it from the repo.
-The public page is [`/docs/tui`](https://kortix.com/docs/tui)
+**Status: experimental.** It ships inside the `kortix` binary as
+`kortix tui`; keys, screens and flags can change without a deprecation. The
+public page is [`/docs/tui`](https://kortix.com/docs/tui)
 (`apps/web/content/docs/tui.mdx`); this file is the longer operator's guide.
 
 ## Run
 
 ```bash
+kortix login            # writes ~/.config/kortix/config.json
+kortix tui              # the installed CLI — experimental
+```
+
+`kortix tui` takes `--host <name>`, `--project <id>` and `--session <id>`.
+It resolves auth exactly like every other `kortix` command
+(`apps/cli/src/commands/tui.ts`), builds the `ResolvedHost` from that `Auth`,
+and calls `runTui()` in `src/main.tsx` through a dynamic import — so no other
+subcommand loads React or the OpenTUI native library. With no host logged in it
+opens the login screen rather than failing.
+
+From a clone of the repo, which is what you want while changing the TUI:
+
+```bash
 # from the repo root, once
 pnpm install
-kortix login            # writes ~/.config/kortix/config.json
 
 pnpm --filter @kortix/tui dev
 ```
@@ -43,6 +57,10 @@ saved). `Ctrl+H` reopens it later to switch hosts.
 | A real tty | `script` on macOS gives the child no controlling tty; use a pty (see [Driving it headlessly](#driving-it-headlessly)). |
 
 ## Environment variables
+
+These drive `pnpm --filter @kortix/tui dev`. Under `kortix tui` the CLI owns
+host resolution and `--host` / `--project` / `--session` are the equivalents —
+except `KORTIX_TOKEN`, which the CLI reads too (see Troubleshooting).
 
 | Variable | Effect |
 | --- | --- |
@@ -284,6 +302,9 @@ _143 bindings._
 pnpm --filter @kortix/tui test        # bun test
 pnpm --filter @kortix/tui typecheck   # tsc --noEmit
 npx biome check apps/tui
+
+# the `kortix tui` command itself lives in the CLI's suite
+pnpm --filter @kortix/cli test        # includes src/commands/tui.test.ts
 ```
 
 ### What it depends on
@@ -294,6 +315,14 @@ five of its modules and nothing else (`SPEC.md` §2 has the table): `src/api/
 config.ts` and `src/api/sdk.ts` for hosts and tokens, `src/web-url.ts` for the
 web links the account screen prints, and `src/attach-opencode.ts` +
 `src/api/auth.ts` for `Alt+O`.
+
+The dependency also runs the other way: `@kortix/cli` depends on `@kortix/tui`
+so the four release binaries carry `kortix tui`. The six
+`@opentui/core-<platform>` packages are direct dependencies for that reason —
+`@opentui/core` declares them as `os`/`cpu`-gated `optionalDependencies`, so
+pnpm would install only this machine's, and `bun build --compile
+--target=bun-linux-x64` would then die on `Could not resolve:
+"@opentui/core-linux-x64"`. `SPEC.md` §2 has the full note.
 
 Tests sit next to the file they cover (`src/**/*.test.ts[x]`) — the repo
 `.gitignore` ignores every `test/` directory, so the layout in `SPEC.md` §3
@@ -351,7 +380,7 @@ tty on stdin:
 import fcntl, os, pty, select, struct, subprocess, sys, termios, time
 master, slave = pty.openpty()
 fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 40, 120, 0, 0))
-proc = subprocess.Popen(['bun', 'run', 'src/index.tsx'], stdin=slave,
+proc = subprocess.Popen(['bun', 'run', 'src/index.tsx'], stdin=slave,  # or: [kortix, 'tui']
                         stdout=slave, stderr=slave, close_fds=True,
                         preexec_fn=os.setsid,
                         env={**os.environ, 'TERM': 'xterm-256color'})

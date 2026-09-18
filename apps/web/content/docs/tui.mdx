@@ -3,8 +3,7 @@ title: TUI
 description: The experimental Kortix terminal client — run it, drive it with the keyboard, and hand a session to opencode.
 ---
 
-> **Experimental.** The TUI is not in the release CLI bundle and has no
-> `kortix` subcommand: you run it from a clone of the repo. Its keys, screens
+> **Experimental.** `kortix tui` ships in the CLI binary, but its keys, screens
 > and flags can change without a deprecation.
 
 `@kortix/tui` is a full terminal client for Kortix. It renders with
@@ -21,25 +20,46 @@ Files, Review, Apps, Customize and Account screens.
 ## Run it
 
 ```sh
+kortix login          # writes ~/.config/kortix/config.json
+kortix tui
+```
+
+That is the whole setup. `kortix tui` is part of the [CLI](/docs/cli) binary and
+signs in with the host you are already on, so there is nothing else to install —
+the renderer and its native library are compiled into the binary.
+
+| Flag | Effect |
+| --- | --- |
+| `--host <name>` | Use this configured host instead of the active one. A host that is not logged in is an error. |
+| `--project <id>` | List this project's sessions. Defaults to the host's default project, else its first project. |
+| `--session <id>` | Open this session at boot. |
+
+With no host logged in at all, the TUI opens its own login screen instead of
+failing: pick a configured host, or press `n` to add one (name, API URL, token —
+validated before it is saved).
+
+The terminal needs at least 80 × 24.
+
+To run it from a clone of the repo instead — which is what you want when you are
+changing the TUI itself:
+
+```sh
 git clone https://github.com/kortix-ai/suna
 cd suna
 pnpm install
-kortix login          # writes ~/.config/kortix/config.json
 pnpm --filter @kortix/tui dev
 ```
 
-Authentication is the [CLI's](/docs/cli) own host config, so `kortix login` is
-the whole setup. The TUI only reads that file. With no usable host it opens its
-own login screen: pick a configured host, or press `n` to add one (name, API
-URL, token — validated before it is saved).
-
-Bun 1.3 or newer is required: `@opentui/core` ships a Bun-FFI native renderer.
-The terminal needs at least 80 × 24.
+That path needs Bun 1.3 or newer: `@opentui/core` ships a Bun-FFI native
+renderer.
 
 ## Environment variables
 
-The environment beats the config and writes nothing to disk, which is what a
-script or a second host wants.
+These apply to `pnpm --filter @kortix/tui dev`. The environment beats the config
+and writes nothing to disk, which is what a script or a second host wants. Under
+`kortix tui` the CLI resolves the host, so `--host`, `--project` and `--session`
+are the equivalents — with one exception: `KORTIX_TOKEN` is read by the CLI too,
+and a stale one left exported in a shell outranks `kortix login` for both.
 
 | Variable | Effect |
 | --- | --- |
@@ -140,7 +160,8 @@ ignores. The Kortix TUI repaints as soon as opencode exits.
 
 ## Source
 
-`apps/tui` in the [Kortix repo](https://github.com/kortix-ai/suna). `SPEC.md`
+`apps/tui` in the [Kortix repo](https://github.com/kortix-ai/suna), wired into
+the CLI by `apps/cli/src/commands/tui.ts`. `SPEC.md`
 there is the plan, `README.md` is the operator's guide (every key, every
 troubleshooting path), and `docs/opentui-notes.md` records the OpenTUI
 behaviors the app had to work around.
