@@ -13,6 +13,7 @@ import { ensureTeamsConversationBinding, teamsChannelCtx } from './binding';
 import { postTeamsIdentityPrompt, resolveTeamsActor, teamsUserId } from './identity';
 import {
   buildTeamsTurnEnv,
+  closeAbandonedTurn,
   deleteTurn,
   finalizeTurn,
   loadTurn,
@@ -145,6 +146,29 @@ async function clearConversationErrorNotice(tenantId: string, conversationId: st
  * a real session gets orphaned), only a deleted session (`no-session`) is
  * replaced.
  */
+/**
+ * How long a turn may go without writing a step and still count as "in
+ * flight". Past this the row is treated as abandoned even if the session row
+ * still claims to be running — a wedged conversation is worse than a
+ * duplicate card.
+ */
+const TURN_LIVE_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * Is this turn actually still streaming? `finalized: false` alone is not
+ * enough: a sandbox that dies mid-turn never relays `turn_end`, leaving a row
+ * that looks live forever. Such a zombie used to swallow every later message
+ * behind "I'll take this after the current step" until the 30-minute sweeper
+ * ran (dev, 2026-09-18). A turn counts as live only while its session is
+ * running AND the row has moved recently.
+ */
+function turnIsLive(turn: TeamsLiveTurn | null, sessionStatus: string | null): boolean {
+  if (!turn || turn.finalized) return false;
+  if (sessionStatus !== 'running') return false;
+  const movedAt = turn.updatedAt ?? 0;
+  return Date.now() - movedAt < TURN_LIVE_WINDOW_MS;
+}
+
 async function deliverFollowUp(input: {
   projectId: string;
   tenantId: string;
@@ -152,6 +176,7 @@ async function deliverFollowUp(input: {
   sessionId: string;
   sessionOwnerId: string | null;
   sessionMetadata: Record<string, unknown> | null;
+  sessionStatus: string | null;
   handle: TeamsLiveTurn | null;
   activity: TeamsActivity;
   userId: string;
@@ -190,13 +215,16 @@ async function deliverFollowUp(input: {
     }
   }
 
-  // A turn is already streaming for this session: the running stream keeps
-  // its card; ours becomes a short notice and is not saved as the turn.
   const inflight = await loadTurn(sessionId);
-  if (inflight && !inflight.finalized) {
+  if (turnIsLive(inflight, input.sessionStatus)) {
+    // A turn really is streaming: the running stream keeps its card, ours
+    // becomes a short notice and is not saved as the turn.
     if (handle) await noticeOnLiveCard(handle, 'Got it — I’ll take this after the current step.');
     handle = null;
   } else {
+    // Either no turn, or one that stopped without finishing. Close the dead
+    // card so the conversation is not wedged behind it, then take over.
+    if (inflight && !inflight.finalized) await closeAbandonedTurn(inflight);
     await bindTurnToSession(handle, sessionId);
   }
 
@@ -296,6 +324,7 @@ export async function createOrJoinTeamsConversationSession(input: {
         sessionId: chatThreads.sessionId,
         createdBy: projectSessions.createdBy,
         metadata: projectSessions.metadata,
+        status: projectSessions.status,
       })
       .from(chatThreads)
       .innerJoin(projectSessions, eq(projectSessions.sessionId, chatThreads.sessionId))
@@ -315,6 +344,7 @@ export async function createOrJoinTeamsConversationSession(input: {
         sessionId: existing.sessionId,
         sessionOwnerId: existing.createdBy ?? null,
         sessionMetadata: (existing.metadata as Record<string, unknown> | null) ?? null,
+        sessionStatus: (existing.status as string | null) ?? null,
         handle,
         activity,
         userId,
@@ -329,7 +359,7 @@ export async function createOrJoinTeamsConversationSession(input: {
     const sessionId = await waitForConversationSession(tenantId, conversationId);
     if (sessionId) {
       const [row] = await db
-        .select({ createdBy: projectSessions.createdBy, metadata: projectSessions.metadata })
+        .select({ createdBy: projectSessions.createdBy, metadata: projectSessions.metadata, status: projectSessions.status })
         .from(projectSessions)
         .where(eq(projectSessions.sessionId, sessionId))
         .limit(1);
@@ -340,6 +370,7 @@ export async function createOrJoinTeamsConversationSession(input: {
         sessionId,
         sessionOwnerId: row?.createdBy ?? null,
         sessionMetadata: (row?.metadata as Record<string, unknown> | null) ?? null,
+        sessionStatus: (row?.status as string | null) ?? null,
         handle,
         activity,
         userId,

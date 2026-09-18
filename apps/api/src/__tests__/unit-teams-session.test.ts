@@ -20,7 +20,7 @@ let claimWins = true;
 /** Per-call insert results: the thread-create claim first, then the error-notice claim. */
 let insertQueue: unknown[][] = [];
 let followUpOutcome: string = 'delivered';
-let inflightTurn: { finalized: boolean } | null = null;
+let inflightTurn: { finalized: boolean; updatedAt?: number; sessionId?: string } | null = null;
 const finalized: Array<Record<string, unknown>> = [];
 const notices: string[] = [];
 const dbOps: string[] = [];
@@ -95,6 +95,9 @@ mock.module('../channels/teams/turn', () => ({
     finalized.push(opts);
   },
   loadTurn: async () => inflightTurn,
+  closeAbandonedTurn: async () => {
+    calls.push('closeAbandonedTurn');
+  },
   deleteTurn: async () => {
     calls.push('deleteTurn');
   },
@@ -329,7 +332,8 @@ describe('follow-up outcomes — the conversation is never left on "Working on i
   });
 
   test('a turn already in flight: the new card becomes a short notice and never replaces the running stream', async () => {
-    inflightTurn = { finalized: false };
+    existingThread = [{ sessionId: 'sess-existing', createdBy: 'user-1', status: 'running' }];
+    inflightTurn = { finalized: false, updatedAt: Date.now(), sessionId: 'sess-existing' };
     await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
     expect(calls).toContain('noticeOnLiveCard');
     expect(saved).toHaveLength(0);
@@ -384,5 +388,40 @@ describe('join policy on a follow-up', () => {
     ]);
     const meta = created[0].metadata as { teams: { conversation_policy: string } };
     expect(meta.teams.conversation_policy).toBe('project_open');
+  });
+});
+
+describe('a turn that died mid-flight does not wedge the conversation', () => {
+  test('stopped session + unfinished turn: the dead card is closed and the new message gets its own', async () => {
+    existingThread = [{ sessionId: 'sess-existing', createdBy: 'user-1', status: 'stopped' }];
+    inflightTurn = { finalized: false, updatedAt: Date.now(), sessionId: 'sess-existing' };
+
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+
+    expect(calls).toContain('closeAbandonedTurn');
+    // No "I'll take this after the current step" — that was the wedge.
+    expect(notices).toHaveLength(0);
+    expect(saved).toEqual([{ sessionId: 'sess-existing', messageActivityId: 'live-card-1' }]);
+    expect(continued).toHaveLength(1);
+  });
+
+  test('running session but the turn has not moved in over 10 minutes: also treated as abandoned', async () => {
+    existingThread = [{ sessionId: 'sess-existing', createdBy: 'user-1', status: 'running' }];
+    inflightTurn = { finalized: false, updatedAt: Date.now() - 11 * 60 * 1000, sessionId: 'sess-existing' };
+
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+
+    expect(calls).toContain('closeAbandonedTurn');
+    expect(notices).toHaveLength(0);
+  });
+
+  test('an already-finalized row is not closed again', async () => {
+    existingThread = [{ sessionId: 'sess-existing', createdBy: 'user-1', status: 'stopped' }];
+    inflightTurn = { finalized: true, updatedAt: Date.now(), sessionId: 'sess-existing' };
+
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+
+    expect(calls).not.toContain('closeAbandonedTurn');
+    expect(saved).toHaveLength(1);
   });
 });
