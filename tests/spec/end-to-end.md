@@ -239,6 +239,9 @@ DB `projects` (`status active|archived`, unique `(account_id, repo_url)`). Soft 
 `PACC-4` `DELETE /projects/:id/access/:userId` → `manage`.
 `PACC-7` `GET/POST/DELETE /projects/:id/resource-grants[/:grantId]` → manager-only per-resource scoping. **AGENT-ONLY (resource-model simplification): `agent` is the only member/department-scopable resource** — assigning an agent lets the assignee USE it and inherit its declared skills/connectors/secrets (to USE, not edit; editing needs the manager role). A POST with `resource_type=skill` or `secret` → **400** (agent-only; the guard runs before any config/DB load, so no existing resource is needed). Reading/listing/revoking pre-existing skill/secret grant rows still works (back-compat), but none can be CREATED. GET lists grantable resources (`$.resources.agents`) + existing grants. POST `resource_type=agent` with a real agent id + member/group principal → 201; unknown/invalid `resource_type` (e.g. `database`) → 400; invalid/foreign principal → 400/404; deleting unknown grant → 404.
 
+Browser coverage for `PACC-7`: attaching an account group to a project as a project member offers the selected project's agent inventory. **All agents** saves one group assignment per current agent. **Only these** saves the selected agent assignments. An inventory failure blocks attachment and offers retry. A failed agent write keeps the dialog open; retry completes the attachment without duplicate grants. A group member can select the granted agent and use the composer when a model is connected. The browser asserts the assignment request and persisted grants before signing in as that member.
+
+
 ---
 
 ## 7. Sessions (ephemeral branch + sandbox)
