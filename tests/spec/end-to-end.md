@@ -555,6 +555,8 @@ DB `project_secrets` (AES-256-GCM, key bound to `projectId`, unique `(project_id
 
 `COST-2` `GET /usage/cost-by-project?account_id=&from=&to=&sort=&limit=&offset=` → the project spend rollup behind the explorer's first level: same account/spend gate as `COST-1`, paginated `{projects,total,limit,offset,next_offset}`, sorts `total_desc|total_asc|recent|name_asc`. `GET /usage/cost-summary?account_id=&project_id=&session_id=&from=&to=` returns `{totals,previous,series,models}` for whichever scope is supplied, so one route serves all three levels; `series` is gap-filled with one point per UTC day so an empty day reads as zero rather than being skipped, and `previous` covers the equally long window immediately before. Windows are half-open `[from,to)` and always UTC; an inverted or over-long window → 400; ANON → 401. Both routes accept `format=csv`, which runs the same filtered query rather than the visible page, caps at 10,000 rows (reported in `x-kortix-row-cap`) and neutralises a leading `=`/`+`/`-`/`@` so a spreadsheet cannot evaluate a project name as a formula.
 
+`COST-3` A real sandbox on an account that never subscribed is metered. `credit_accounts.billing_model` defaults to `legacy`; a session on such an account, whose tier is not a legacy paid plan, opens a `sandbox_compute_sessions` row once its sandbox is active. Only a legacy paid plan (`tier_2_20`, `tier_6_50`, `tier_25_200`, `tier_200_1000`, `pro`) on the legacy billing model is exempt.
+
 ---
 
 ## 17. Router / LLM / proxy (sandbox-facing; `apiKeyAuth`)
