@@ -21,6 +21,36 @@ linked, not inlined.
 
 ## Register
 
+### A disabled react-query is `isPending` forever — never restate its `enabled` (2026-09-17)
+
+**When:** reading `.isPending` from any `useQuery` whose `enabled` is
+conditional, or adding a condition to an existing query's `enabled`.
+A disabled query never leaves `status: 'pending'` — there is no fetch to settle
+it — so any gate built on `isPending` must compensate. `useModelConnectionGate`
+compensated by hand-restating each query's `enabled` inline, and the copy went
+stale the first time someone changed one: `secretsQuery` gained
+`&& canReadSecrets`, the restatement did not. `project.secret.read` is
+manager-tier, so for every project MEMBER the query never ran, the clause was
+`true && true && true` forever, and the composer model picker spun with zero
+rows over a `/model-picker` catalog that had already returned 200. A third
+clause (`accountStatePending`) had no guard at all.
+**The rule:** do not restate `enabled` — ask what the query is DOING.
+`isPending && fetchStatus === 'fetching'` is enabled-aware by construction
+(exactly query-core's own `isLoading`): disabled reads `idle` and releases the
+gate, offline-`paused` releases it rather than spinning over data already in the
+browser, and a background refetch cannot re-open it.
+**Diagnostic:** a spinner that outlives a 200 whose body is already in the
+Network tab is a gate, not a fetch. Check `fetchStatus`, not `isPending`.
+*Incident:* dev.kortix.com project `441011b6`, members only; introduced
+`1c8b5434b8` (2026-08-19), found 2026-09-17, fixed in PR #7380. Reproduced and
+A/B-proven on the real UI: same member, same project — `main` gave
+`spinnerPresent:true, rowCount:0`, the fix gave `false, 8`.
+*Enforcer:* `apps/web/src/features/session/entitlements-pending.test.ts` pins
+the rule AND the call site (no clause may name `secretsQuery.isPending`,
+`projectDetailQuery.isPending` or `accountStatePending` again). Nothing yet
+lints the general pattern repo-wide — a sweep found 4 conditionally-enabled
+queries read via `isPending`; this was the only live one.
+
 ### A control-required alarm comes back with a threshold the workload cannot cross in steady state (2026-09-17)
 
 **When:** an external control (Drata DCF-86 / test 294) requires an alarm the
