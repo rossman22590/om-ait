@@ -53,7 +53,10 @@ export function helpLines(bindings: readonly Binding[] = allBindings()): HelpLin
     if (rows.length === 0) continue;
     lines.push({ kind: 'section', scope, title: SCOPE_TITLE[scope] ?? scope });
     for (const binding of rows) {
-      lines.push({ kind: 'binding', binding, keys: formatBinding(binding) });
+      // A row with no chords is a rule, not a key: `terminal.passthrough`
+      // documents that everything unlisted reaches the remote shell. It still
+      // has to be printed, so it gets a printed stand-in rather than a blank.
+      lines.push({ kind: 'binding', binding, keys: formatBinding(binding) || 'any other key' });
     }
   }
   return lines;

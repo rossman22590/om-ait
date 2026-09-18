@@ -231,31 +231,41 @@ export const KEYMAP: readonly Binding[] = [
   { id: 'list.open', scope: 'modal', chords: [chord('return')], description: 'Open the row.' },
 ] as const;
 
-/** Every feature table, in help-overlay order. */
-const FEATURE_TABLES: readonly (readonly Binding[])[] = [
-  SIDEBAR_KEYS,
-  TRANSCRIPT_KEYS,
-  COMPOSER_KEYMAP,
-  TERMINAL_KEYMAP,
-  FILES_KEYS,
-  REVIEW_KEYS,
-  APPS_KEYS,
-  CUSTOMIZE_KEYS,
-  ACCOUNT_KEYS,
-  LOGIN_KEYS,
-];
-
 let merged: readonly Binding[] | null = null;
 let byId: Map<string, Binding> | null = null;
 
 /**
+ * Every feature table, in help-overlay order.
+ *
+ * Read INSIDE the function, never at module scope: every one of these modules
+ * imports `matchesChord` from this file, so whichever of them the program
+ * enters through evaluates first and its export is still in the temporal dead
+ * zone while this module body runs. A top-level `[...SIDEBAR_KEYS]` threw
+ * `ReferenceError: Cannot access 'TERMINAL_KEYMAP' before initialization` the
+ * moment a test imported `features/terminal/keys.ts` first.
+ */
+function featureTables(): readonly (readonly Binding[])[] {
+  return [
+    SIDEBAR_KEYS,
+    TRANSCRIPT_KEYS,
+    COMPOSER_KEYMAP,
+    TERMINAL_KEYMAP,
+    FILES_KEYS,
+    REVIEW_KEYS,
+    APPS_KEYS,
+    CUSTOMIZE_KEYS,
+    ACCOUNT_KEYS,
+    LOGIN_KEYS,
+  ];
+}
+
+/**
  * Every binding in the app: this file's table plus every feature's.
  *
- * Memoized on first call. See the module header for why it is not a top-level
- * constant.
+ * Memoized on first call, which is always after every module has evaluated.
  */
 export function allBindings(): readonly Binding[] {
-  if (!merged) merged = [...KEYMAP, ...FEATURE_TABLES.flat()];
+  if (!merged) merged = [...KEYMAP, ...featureTables().flat()];
   return merged;
 }
 

@@ -28,6 +28,13 @@ import { useProjectSessions } from '@kortix/sdk/react';
 import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import {
+  type AppKeyState,
+  type Focus,
+  type Overlay,
+  type Route,
+  globalKeyAction,
+} from './app-keys.ts';
 import { type ResolvedHost, hostOrigin } from './auth/hosts.ts';
 import { AccountScreen } from './features/account/index.ts';
 import { AppsScreen } from './features/apps/index.ts';
@@ -41,21 +48,10 @@ import { SessionView } from './features/session/index.ts';
 import { focusHints } from './features/session/session-view.tsx';
 import { Sidebar } from './features/sidebar/index.ts';
 import { Switcher } from './features/switcher/index.ts';
-import { isReservedWhileTerminalFocused } from './features/terminal/keys.ts';
-import { matchesBinding } from './keymap.ts';
 import { kortix } from './kortix.ts';
 import { sessionTitle } from './lib/session-groups.ts';
 import { theme } from './theme.ts';
 import { Panel, StatusBar, Toast, type ToastKind } from './ui/index.ts';
-
-/** The screens the app routes between. Overlays are separate state. */
-export type Route = 'session' | 'files' | 'review' | 'apps' | 'customize' | 'account';
-
-/** The regions Tab cycles through. */
-export type Focus = 'sidebar' | 'transcript' | 'composer' | 'terminal' | 'screen';
-
-/** The one overlay slot's contents. */
-export type Overlay = 'help' | 'switcher' | null;
 
 const SIDEBAR_WIDTH = 28;
 /** Below this width the terminal panel takes the whole main area. */
@@ -64,15 +60,6 @@ export const SPLIT_MIN_COLUMNS = 100;
 export const SIDEBAR_MIN_COLUMNS = 60;
 /** Ctrl+C arms the quit; a second press inside this window leaves. */
 const QUIT_ARM_MS = 2000;
-
-/** Route chords, in the order the handler tests them. */
-const SCREEN_BINDINGS: readonly (readonly [string, Route])[] = [
-  ['screen.files', 'files'],
-  ['screen.review', 'review'],
-  ['screen.apps', 'apps'],
-  ['screen.customize', 'customize'],
-  ['screen.account', 'account'],
-] as const;
 
 /**
  * The Tab ring for a route.
@@ -96,16 +83,6 @@ export function nextFocus(current: Focus, order: Focus[], step: 1 | -1): Focus {
   if (index < 0) return order[0] as Focus;
   const next = (index + step + order.length) % order.length;
   return order[next] as Focus;
-}
-
-/** Is this key one the app must not steal from the region that has focus? */
-export function globalKeyBlocked(focus: Focus, id: 'help' | 'back'): boolean {
-  if (focus === 'terminal') return true;
-  // The composer is a text field: `?` is a character and Esc clears the draft.
-  if (focus === 'composer') return true;
-  // A screen may have its own filter input; Esc is how it goes back, so only
-  // `?` is at risk there — and the screens bind `?` to nothing.
-  return false;
 }
 
 export interface AppProps {
@@ -279,88 +256,40 @@ export function App({
   );
 
   useKeyboard((key) => {
-    // An overlay owns the keyboard outright; so does a suspended renderer.
-    if (overlay || attaching) return;
+    // The decision is a pure function (`app-keys.ts`); this handler only
+    // performs it. That is what makes the gating rules assertable.
+    const action = globalKeyAction(key, { focus, route, overlay, quitArmed, attaching });
+    if (!action) return;
+    if (action.kind !== 'quit' && action.kind !== 'arm-quit') key.preventDefault();
+    if (quitArmed && action.kind !== 'quit' && action.kind !== 'arm-quit') setQuitArmed(false);
 
-    const terminalFocused = focus === 'terminal';
-    // While the shell has focus the app keeps four chords and nothing else.
-    if (terminalFocused && !isReservedWhileTerminalFocused(key)) return;
-
-    if (matchesBinding(key, 'quit')) {
-      // Ctrl+Q leaves at once. Ctrl+C asks first — and inside the terminal it
-      // is not ours at all, so it never arms.
-      if (key.name === 'q' || quitArmed) {
-        onQuit();
-        return;
-      }
-      if (terminalFocused) return;
-      setQuitArmed(true);
-      return;
-    }
-    if (quitArmed) setQuitArmed(false);
-
-    if (matchesBinding(key, 'focus.next')) {
-      key.preventDefault();
-      setFocus((current) => nextFocus(current, order, 1));
-      return;
-    }
-    if (matchesBinding(key, 'focus.prev')) {
-      key.preventDefault();
-      setFocus((current) => nextFocus(current, order, -1));
-      return;
-    }
-    if (matchesBinding(key, 'panel.terminal')) {
-      key.preventDefault();
-      toggleTerminal();
-      return;
-    }
-    if (terminalFocused) return;
-
-    if (matchesBinding(key, 'help')) {
-      if (globalKeyBlocked(focus, 'help')) return;
-      key.preventDefault();
-      setOverlay('help');
-      return;
-    }
-    if (matchesBinding(key, 'switcher')) {
-      key.preventDefault();
-      setOverlay('switcher');
-      return;
-    }
-    if (matchesBinding(key, 'session.new')) {
-      key.preventDefault();
-      void createSession();
-      return;
-    }
-    if (matchesBinding(key, 'attach')) {
-      key.preventDefault();
-      if (sessionId) void attach(sessionId);
-      else pushToast('Open a session first.', 'error');
-      return;
-    }
-    if (matchesBinding(key, 'hosts')) {
-      key.preventDefault();
-      if (onSwitchHost) onSwitchHost();
-      else pushToast('Host switching needs the login screen.', 'error');
-      return;
-    }
-    const screen = SCREEN_BINDINGS.find(([id]) => matchesBinding(key, id));
-    if (screen) {
-      key.preventDefault();
-      setRoute(screen[1]);
-      setFocus('screen');
-      return;
-    }
-
-    if (matchesBinding(key, 'back')) {
-      if (route !== 'session') {
+    switch (action.kind) {
+      case 'quit':
+        return onQuit();
+      case 'arm-quit':
+        return setQuitArmed(true);
+      case 'focus':
+        return setFocus((current) => nextFocus(current, order, action.step));
+      case 'toggle-terminal':
+        return toggleTerminal();
+      case 'overlay':
+        return setOverlay(action.overlay);
+      case 'new-session':
+        return void createSession();
+      case 'attach':
+        if (sessionId) return void attach(sessionId);
+        return pushToast('Open a session first.', 'error');
+      case 'switch-host':
+        if (onSwitchHost) return onSwitchHost();
+        return pushToast('Host switching needs the login screen.', 'error');
+      case 'route':
+        setRoute(action.route);
+        return setFocus('screen');
+      case 'back':
         setRoute('session');
-        setFocus('composer');
-        return;
-      }
-      if (globalKeyBlocked(focus, 'back')) return;
-      // Esc in the transcript hands the keyboard back to the composer.
-      if (focus === 'transcript') setFocus('composer');
+        return setFocus('composer');
+      case 'focus-composer':
+        return setFocus('composer');
     }
   });
 

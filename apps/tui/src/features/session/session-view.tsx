@@ -107,6 +107,13 @@ export interface SessionViewProps {
   onCloseTerminal(): void;
   onCommand(command: AppCommandId): void;
   onToast(message: string, kind?: ToastKind): void;
+  /**
+   * Test seam. Production passes nothing and the real `useSession` runs; a test
+   * passes a fake so the focus and layout contract can be asserted without an
+   * API, a sandbox and an SSE stream. The same pattern `TerminalPanel` uses for
+   * its socket factory.
+   */
+  useSessionImpl?: typeof useSession;
 }
 
 export function SessionView({
@@ -122,9 +129,10 @@ export function SessionView({
   onCloseTerminal,
   onCommand,
   onToast,
+  useSessionImpl = useSession,
 }: SessionViewProps) {
   // The one call. Every child reads this object; none of them calls a hook.
-  const session = useSession(projectId, sessionId);
+  const session = useSessionImpl(projectId, sessionId);
   const [metrics, setMetrics] = useState<ComposerMetrics>({ rows: 1, overlayOpen: false });
 
   const onMetrics = useCallback((next: ComposerMetrics) => {
@@ -154,10 +162,9 @@ export function SessionView({
     <>
       {showSession ? (
         <Panel
-          title={undefined}
           focused={focus === 'transcript' || focus === 'composer'}
-          width={terminalOpen && wide ? sessionWidth : undefined}
-          flexGrow={terminalOpen && wide ? 0 : 1}
+          width={sessionWidth}
+          flexGrow={0}
           flexShrink={1}
           minWidth={20}
         >
