@@ -116,7 +116,25 @@ export function sessionDisplayLabel(session: ProjectSession): string {
   const fallback = session.branch_name
     ? session.branch_name.slice(0, 14)
     : session.session_id.slice(0, 8);
-  return session.custom_name?.trim() || session.name?.trim() || metadataName?.trim() || fallback;
+  return (
+    stripChatMentionMarkup(session.custom_name ?? '') ||
+    stripChatMentionMarkup(session.name ?? '') ||
+    stripChatMentionMarkup(metadataName ?? '') ||
+    fallback
+  );
+}
+
+/**
+ * Teams wraps a channel @-mention of the bot in `<at>…</at>`. Sessions titled
+ * from such a message before the API stripped it (#7388) still carry the tag
+ * in `name`; nothing a person reads should show it.
+ */
+export function stripChatMentionMarkup(value: string): string {
+  return value
+    .replace(/<at[^>]*>.*?<\/at>/gi, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**

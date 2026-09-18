@@ -10,6 +10,16 @@ describe('buildTeamsManifest', () => {
     expect(m.validDomains).toEqual(['api.kortix.com']);
     expect(m.manifestVersion).toBe('1.16');
   });
+
+  test('requests ChannelMessage.Read.Group (RSC) so thread replies reach the bot without a mention', () => {
+    const m = buildTeamsManifest({ appId: 'app-123', baseUrl: 'https://api.kortix.com' });
+    expect(m.webApplicationInfo).toEqual({ id: 'app-123', resource: 'https://RscBasedStoreApp' });
+    expect(m.authorization.permissions.resourceSpecific).toEqual([
+      { name: 'ChannelMessage.Read.Group', type: 'Application' },
+    ]);
+    // A manifest that changes shape must bump so the catalog takes the upgrade.
+    expect(m.version).not.toBe('1.0.0');
+  });
 });
 
 mock.module('../config', () => ({ config: { MICROSOFT_APP_ID: 'app-123', MICROSOFT_APP_PASSWORD: 'secret' } }));
