@@ -472,7 +472,9 @@ export function AccessDialog({
     setDraft((d) => ({ ...d, agents: typeof next === 'function' ? next(d.agents) : next }));
   const setExpires = (next: string) => setDraft((d) => ({ ...d, expires: next }));
   const setAttachProjectId = (next: string) =>
-    setDraft((d) => next === d.attachProjectId ? d : { ...d, attachProjectId: next, agents: ALL_AGENTS });
+    setDraft((d) =>
+      next === d.attachProjectId ? d : { ...d, attachProjectId: next, agents: ALL_AGENTS },
+    );
   const setProjectGrants = (next: ProjectGrantRow[]) =>
     setDraft((d) => ({ ...d, projectGrants: next }));
   const setProjectAccessOpen = (next: boolean) =>
@@ -1147,7 +1149,11 @@ export function AccessDialog({
                 {resourceGrantsQuery.isError ? (
                   <InfoBanner
                     tone="destructive"
-                    action={<Button size="sm" variant="outline" onClick={() => void resourceGrantsQuery.refetch()}>{tCommon('retry')}</Button>}
+                    action={
+                      <Button size="sm" variant="outline" onClick={() => void resourceGrantsQuery.refetch()}>
+                        {tCommon('retry')}
+                      </Button>
+                    }
                   >
                     {resourceGrantsQuery.error.message}
                   </InfoBanner>
