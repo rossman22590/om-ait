@@ -39,6 +39,7 @@
  *     `enabledValueSchema` — not left to this warning-level exemption.
  */
 
+import { IMPORT_PATH_PATTERN } from './imports';
 import {
   AGENT_MODES_V2,
   AGENT_THEME_COLORS_V2,
@@ -721,6 +722,12 @@ export function buildManifestV2Schema(): JsonSchemaFragment {
     required: ['kortix_version', 'default_agent', 'agents'],
     properties: {
       kortix_version: { const: 2 },
+      // Other YAML files (or directories of them) whose `triggers`,
+      // `connectors`, `agents`, and `apps` merge into this manifest.
+      imports: {
+        type: 'array',
+        items: { type: 'string', pattern: IMPORT_PATH_PATTERN },
+      },
       // Cross-field: must resolve to a declared, enabled agent — dynamic,
       // left to the imperative validator.
       default_agent: NON_EMPTY_STRING,
