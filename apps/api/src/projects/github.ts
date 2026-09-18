@@ -50,6 +50,22 @@ export class GitHubIpAllowListError extends Error {
   }
 }
 
+/**
+ * The organization enforces SAML single sign-on and the caller authorized
+ * Kortix without an active SSO session for it, so GitHub refuses the user
+ * token for that organization. The caller resolves it: sign in to the
+ * organization through its SSO in the same browser, then verify again.
+ */
+export class GitHubSamlSsoError extends Error {
+  constructor(readonly organization: string) {
+    super(
+      `${organization} enforces SAML single sign-on. Open https://github.com/orgs/${organization}/sso ` +
+        'in this browser, sign in, then verify again.',
+    );
+    this.name = 'GitHubSamlSsoError';
+  }
+}
+
 /** GitHub's 403 body for a request an organization IP allow list refused. */
 export function isGitHubIpAllowListRefusal(error: unknown): boolean {
   return error instanceof GitHubApiError && error.status === 403 && /IP allow list/i.test(error.message);
@@ -743,6 +759,9 @@ export async function verifyGitHubInstallationAdmin(
     );
   } catch (error) {
     if (isGitHubIpAllowListRefusal(error)) throw new GitHubIpAllowListError(ownerLogin);
+    if (error instanceof GitHubApiError && error.status === 403 && /SAML/i.test(error.message)) {
+      throw new GitHubSamlSsoError(ownerLogin);
+    }
     if (
       error instanceof GitHubApiError &&
       error.status === 403 &&

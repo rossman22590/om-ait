@@ -9,6 +9,7 @@ import {
   getFileSha,
   GitHubAppPermissionError,
   GitHubIpAllowListError,
+  GitHubSamlSsoError,
   getGitHubAppInstallation,
   listLinkableGitHubAppInstallations,
   resetGitHubAppSlugCache,
@@ -395,6 +396,30 @@ describe('GitHub App project repository auth', () => {
     });
     await expect(attempt).rejects.toBeInstanceOf(GitHubIpAllowListError);
     await expect(attempt).rejects.toThrow('IP allow list');
+    resetGitHubAppSlugCache();
+  });
+
+  // A SAML-enforced organization refuses a user token that was authorized
+  // without an active single sign-on session for that organization.
+  test('names SAML single sign-on instead of blaming the caller', async () => {
+    resetGitHubAppSlugCache();
+    globalThis.fetch = mock(async (url: string | URL | Request) => {
+      const href = typeof url === 'string' || url instanceof URL ? String(url) : url.url;
+      if (href.endsWith('/user')) return json({ login: 'markokraemer' });
+      if (href.endsWith('/app')) return json({ slug: 'kortix-managed', permissions: { members: 'read' } });
+      return json(
+        { message: 'Resource protected by organization SAML enforcement. You must grant your OAuth token access to this organization.' },
+        403,
+      );
+    }) as unknown as typeof fetch;
+
+    const attempt = verifyGitHubInstallationAdmin('user-token', {
+      id: 42,
+      account: { login: 'libremax', type: 'Organization' },
+      permissions: { members: 'read' },
+    });
+    await expect(attempt).rejects.toBeInstanceOf(GitHubSamlSsoError);
+    await expect(attempt).rejects.toThrow('single sign-on');
     resetGitHubAppSlugCache();
   });
 
