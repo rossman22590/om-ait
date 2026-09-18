@@ -77,11 +77,7 @@ describe('local test runner contract', () => {
     expect(source).toContain("await runWorkspaceTests(['@kortix/cli'], 1)");
     expect(source).toContain("await runWorkspaceTests(['kortixd'], 1)");
     expect(source).not.toContain("['@kortix/cli', 'kortixd']");
-    // Still its own group at workspace-concurrency 1 — now wrapped in the
-    // one-shot retry that contains the Bun 1.3.14 epoll_ctl flake
-    // (oven-sh/bun#37968). See tests/unit/package-quality-db-retry.test.ts,
-    // which deletes the wrapper once the pinned Bun reaches 1.4.2.
-    expect(source).toContain("withDbFlakeRetry(() => runWorkspaceTests(['@kortix/db'], 1))");
+    expect(source).toContain("await runWorkspaceTests(['@kortix/db'], 1)");
     expect(source).toContain('Promise.allSettled(tasks)');
     expect(source.match(/await runAll\(\[/g)).toHaveLength(5);
     expect(source).toContain("'!kortix-api'");
