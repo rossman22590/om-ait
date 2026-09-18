@@ -21,6 +21,15 @@ linked, not inlined.
 
 ## Register
 
+### Group attachment must grant the selected agents (2026-09-18)
+
+**Rule:** when attaching an IAM group to a project, load that project's agents
+and save the selected object assignments with the project role. Block submission
+while inventory is unavailable. **Incident:** real Azure SCIM sync succeeded on
+dev, but the attached member could not send messages because no agent grants
+existed. **Enforcer:** `22-resource-grant-multiselect.spec.ts` checks attachment,
+agent assignment persistence, partial-save retry, and the member composer.
+
 ### Preview completion belongs to one workflow attempt; daemons must release the deploy lock (2026-09-18)
 
 **Rule:** give each preview workflow run and attempt its own exit file. Close

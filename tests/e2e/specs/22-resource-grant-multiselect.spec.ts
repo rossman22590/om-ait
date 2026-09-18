@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
+import { loadEnv } from '../../src/core/env';
+import { setDatabaseEnterpriseDemo } from '../../src/fixtures/database-project';
 
 import { createApiJsonClient } from '../helpers/http';
-import { type ManifestProject, createManifestProject } from '../helpers/manifest-project';
+import { type ManifestProject, createManifestProject, fundAccount } from '../helpers/manifest-project';
 import {
   createAuthUser,
   deleteAuthUser,
@@ -211,4 +213,72 @@ test.describe('22 — Resource-grant multi-select', () => {
       await deleteAuthUser(owner.id, authOptions).catch(() => {});
     }
   });
+});
+
+test('group attachment grants selected agents and retries an incomplete save', async ({ page }) => {
+  test.setTimeout(180_000);
+  const runId = Date.now().toString(36);
+  const ownerEmail = `e2e-group-agents-${runId}@example.test`;
+  const memberEmail = `e2e-group-member-${runId}@example.test`;
+  const owner = await createAuthUser(ownerEmail, authOptions);
+  const member = await createAuthUser(memberEmail, authOptions);
+  const session = await signIn(ownerEmail, authOptions);
+  let project: ManifestProject | undefined;
+  try {
+    const accounts = await api<AccountSummary[]>(session.access_token, 'GET', '/accounts');
+    const accountId = accounts.find((item) => item.account_role === 'owner')!.account_id;
+    await api(session.access_token, 'POST', `/accounts/${accountId}/members`, { email: memberEmail, role: 'member' }, 201);
+    await fundAccount(databaseUrl!, accountId);
+    await setDatabaseEnterpriseDemo(loadEnv(), accountId, true);
+    const group = await api<{ group_id: string }>(session.access_token, 'POST', `/accounts/${accountId}/iam/groups`, { name: `SSO verification ${runId}` }, 201);
+    await api(session.access_token, 'POST', `/accounts/${accountId}/iam/groups/${group.group_id}/members`, { userIds: [member.id] }, [200, 201]);
+    const projectName = `Group agent access ${runId}`;
+    project = await createManifestProject({ api, accessToken: session.access_token, accountId, userId: owner.id, name: projectName, databaseUrl: databaseUrl! });
+    const projectId = project.id;
+    const path = `/projects/${projectId}?accountId=${accountId}&accountTab=groups&accountGroup=${group.group_id}`;
+    await installBrowserSessionDirect(page, session, path, authOptions);
+    await selectAccountForUi(page, accountId);
+    await page.goto(path);
+    await dismissOnboarding(page);
+    await page.getByRole('button', { name: 'Attach to project', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Grant access', exact: true });
+    await dialog.getByRole('combobox', { name: 'Project', exact: true }).click();
+    await page.getByRole('option', { name: projectName, exact: true }).click();
+    await expect(dialog.getByRole('tab', { name: 'All agents', exact: true })).toBeVisible();
+    await dialog.getByRole('tab', { name: 'Only these…', exact: true }).click();
+    await dialog.getByRole('checkbox', { name: 'kortix', exact: true }).click();
+    const assignmentPath = `/accounts/${accountId}/iam/assignments`;
+    let rejectAgentGrant = true;
+    await page.route(`**/v1${assignmentPath}`, async (route) => {
+      const body = route.request().postDataJSON();
+      if (route.request().method() === 'POST' && body.object_type === 'agent' && rejectAgentGrant) {
+        await route.fulfill({ status: 503, json: { error: 'Temporary agent grant failure' } });
+      } else {
+        await route.continue();
+      }
+    });
+    const failed = page.waitForResponse((response) => response.url().endsWith(assignmentPath) && response.status() === 503);
+    await dialog.getByRole('button', { name: 'Attach', exact: true }).click();
+    await failed;
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Attach', exact: true })).toBeEnabled();
+    rejectAgentGrant = false;
+    const saved = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().endsWith(assignmentPath) && response.status() === 201);
+    await dialog.getByRole('button', { name: 'Attach', exact: true }).click();
+    expect((await saved).request().postDataJSON()).toMatchObject({ principal_type: 'group', principal_id: group.group_id, scope_id: projectId, object_type: 'agent', object_id: 'kortix' });
+    await expect(dialog).toHaveCount(0);
+    const after = await api<ResourceGrantsResponse>(session.access_token, 'GET', `/projects/${projectId}/resource-grants`);
+    expect(after.grants.filter((grant) => grant.principal_id === group.group_id && grant.resource_id === 'kortix')).toHaveLength(1);
+    const memberSession = await signIn(memberEmail, authOptions);
+    await installBrowserSessionDirect(page, memberSession, `/projects/${projectId}`, authOptions);
+    await page.goto(`/projects/${projectId}`);
+    await expect(page.getByRole('button', { name: 'No agents available to you — ask a manager for access' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Select agent', exact: true })).toBeEnabled();
+    await page.getByRole('textbox', { name: 'Message input' }).fill('Verify group access');
+    await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
+  } finally {
+    await project?.dispose();
+    await deleteAuthUser(member.id, authOptions);
+    await deleteAuthUser(owner.id, authOptions);
+  }
 });
