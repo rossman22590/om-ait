@@ -21,6 +21,35 @@ linked, not inlined.
 
 ## Register
 
+### 2026-09-18 — A `bun build --define` substitutes one literal token; a read through an injected `env` object ships `undefined`
+
+**Incident.** The first published `kortix tui` (dev-latest `0.13.25-dev.4589893d`,
+merge `4589893d40`) could not install its own TUI binary: `kortix tui --install`
+from a clean HOME answered `This kortix reports version "dev", which has no
+published release` while `kortix --version` on the same binary printed
+`v0.13.25-dev.4589893d`. CI bakes the version with
+`--define="process.env.KORTIX_CLI_VERSION=\"${CLI_VERSION}\""`. `src/index.ts`
+reads the literal `process.env.KORTIX_CLI_VERSION` and is substituted;
+`tui-bin.ts` read `env.KORTIX_CLI_VERSION` through an injected
+`env: NodeJS.ProcessEnv = process.env` parameter (a test seam), which the define
+does not touch, so the compiled binary read the real environment — unset — and
+fell to `'dev'`. Every unit test passed: none ran through the define. Found only
+by running the PUBLISHED binary against the PUBLISHED assets from a directory
+with no cache (the `~/.kortix/tui/dev/` cache on the dev machine had masked it
+in the first check).
+
+**Rule.** Read a build-time define through its literal token, once, at module
+scope (`const BAKED = process.env.KORTIX_CLI_VERSION`), and let an injected
+`env` matter only when nothing is baked. Any new `--define` gets a test that
+builds a real bundle with `bun build --define …` and runs it with the variable
+UNSET. And the post-deploy proof for a launcher is the published binary + the
+published asset from a clean HOME, never the dev binary beside its dev cache.
+
+**Enforcement.** `apps/cli/src/tui-bin.test.ts` "cliVersion inside a compiled
+binary" builds through the define and asserts both `cliVersion({})` and
+`cliVersion()` answer the baked value (verified red on the old line).
+
+
 ### A UI assertion on a server-side DELETE must wait for the id to exist, and an element budget must fit the round trips behind it (2026-09-18)
 
 **When:** writing a browser assertion about an action that identifies a server
@@ -72,6 +101,58 @@ aborts before a byte is sent and deletes the row exactly once.
 initiation deletes the row the server already created", and the never-yields-a-
 handle case). Nothing yet rejects an element `{ timeout: N }` smaller than the
 deployed profile's own budget — that lint is the TODO.
+
+### Dispatching the release gate at `--ref main` tests the deployment with code it has never contained (2026-09-18)
+
+**When:** running `tests-release.yml` by `workflow_dispatch`. The ref decides
+whose TEST CODE runs; `RELEASE_SOURCE_SHA` only decides which deployment is
+asserted. At `--ref main` those two are different trees, and every test added
+after the deployed SHA runs against a deployment that lacks its feature. The
+failures are indistinguishable from product defects and each one costs a full
+triage: the verdict is a git question, not a debugging question.
+
+**Incident:** run `35369184776`, dispatched `--ref main` (`8ea1ec99e8`) against
+staging/prod `fa68c114d7` — **142 commits apart**. All 8 failures were
+measurement artifacts. `886afa4016`, which added `SESS-32` and its browser
+spec, is not even an ancestor of the deployed SHA. Proof the deployment
+answered for itself: `PATCH /v1/projects/:id/features` returned
+`400 {"error":"Unknown feature flag 'session_transcript_history'"}`, and the
+`Git repo` accessibility snapshot carried no `Change` button at all.
+
+**Rule:** dispatch the gate at the ref that is deployed, or assert nothing from
+a mismatch. Before triaging any deployed-gate failure, run
+`git log -p <deployed-sha>..<test-ref> -- <failing file>` and check the SERVER
+or WEB code too — a test present at both SHAs is the only one worth debugging.
+The positive control that settles it: run the same test against local code that
+has the feature. Here 3 of 4 passed locally unchanged.
+
+**Enforcement:** none. Candidate: `tests-release.yml` fails fast when its own
+checked-out SHA is not an ancestor of `RELEASE_SOURCE_SHA`.
+
+### A popover asserted across a viewport or theme change needs the whole group retried (2026-09-18)
+
+**When:** a Playwright journey holds a Radix popover, dropdown, or select open
+while it changes `setViewportSize` or the theme class. Those layout changes
+dismiss it, asynchronously — so a single `isVisible()` guard reads `true` while
+the close is in flight, the reopen is skipped, and ANY later assertion lands on
+a closed panel. Guarding one assertion only moves the failure.
+
+**Near-miss:** `30-pooled-provider-secrets.spec.ts:99` failed locally on main at
+two different assertions on two runs — `Save changes` at the 1440 -> 390 shrink
+on the first dark iteration (all three light sizes passed), then `Unsaved key
+changes` one assertion later under two workers. Found while proving the staging
+failure of the same test was an artifact; it would have failed the next gate on
+a correctly deployed staging.
+
+**Rule:** re-establish the panel by its OWN control, never by the container's
+visibility, and wrap the per-size assertion group in `expect(...).toPass()` so a
+dismissal costs a retry. Weaken no assertion inside it. A scan or screenshot
+that targets the panel by selector must separately require it to be open, or an
+empty result reads as a pass. Extends the 2026-09-14 entry "Assert settled
+dialog geometry before capturing a responsive screenshot".
+
+**Enforcement:** the retried group in that spec; verified `4 passed` on two
+consecutive two-worker runs, failing on both runs before it.
 
 ### An account-scoped read on an always-mounted surface toasts 403 at every member (2026-09-18)
 
@@ -6830,3 +6911,108 @@ that a timed-out waiter is dropped rather than woken later. The release-gate
 journey above is the end-to-end enforcer — it is deployed-only, because the
 behaviour needs an API slow enough to keep the composer interactive while its
 queries run.
+
+### 2026-09-18 — A 409 that names a replacement endpoint moves the whole handshake
+
+**When:** a route refuses a call and names a different endpoint to use instead.
+Move the START and the POLL together, and carry the scope the replacement
+needs. Three traps, all present here.
+
+One handler can serve both verbs: `apps/api/src/projects/routes/r4.ts:930`
+builds `connect` and `connect/finalize` from a single loop, so the 409 at
+`r4.ts:1027` blocks finalize too — a fallback that keeps the old finalize is
+equally dead. The replacement can default a scope: the connector-scoped
+finalize reads `owner` from the body and `parseConnectorConnectOwner`
+(`projects/lib/connection-access.ts:94`) maps an absent value to `me`, so a
+`project` connect paired with an owner-less finalize polls the caller's member
+account and burns the full 10-minute Connect Link timeout. And only the refused
+case may be redirected: `owner: 'project'` resolves `ensureDefaultConnection`,
+so sending a labelled NON-default account there would re-authorize the default
+and leave the new row unauthorized. Let the 409 itself be the discriminator —
+the server stays the only authority on "effective default" and the client never
+replicates that rule. Match on the status, not the sentence, and read `.status`
+structurally, never `instanceof ApiError` (ESM build vs IIFE global).
+
+**Incident.** Both shared "Connect" CTAs in the connector detail modal
+(`connector-modal.tsx:329,341`) were dead for any connector with exactly one
+shared account — the state right after creation, because sync auto-creates that
+one project-owned row and `6b7e3c27c5` stopped pinning it. Zero test coverage:
+`git grep "shared connector connect endpoint"` hit only the API source.
+
+**Enforcement.** `apps/web/src/hooks/connectors/use-pipedream-connect-project.test.ts`
+(7 tests: the 409 fallback, finalize route+owner+connection agreement, the
+second labelled account staying on the connection-scoped route, a 403 that must
+not fall back). `packages/sdk/src/core/rest/projects-client/connectors.test.ts`
+pins that `connectorFinalize` sends `owner`/`connection_id` and still sends `{}`
+for the published two-argument callers.
+
+### 2026-09-18 — A shared waiter's fixed budget is a deadline every environment inherits, and "Max attempts exceeded" is not a diagnosis
+
+**Incident.** `deploy-dev.yml` job "Deploy frontend to dev (ECS Fargate)"
+(run `35388160843`, job `105741051220`, `main` SHA `ec6cbdb793`) failed on
+`aws ecs wait services-stable`. Its log ends
+`⏳ waiting for services-stable …` at 19:54:45Z and
+`Waiter ServicesStable failed: Max attempts exceeded` at 20:04:42Z — 9m57s,
+which is the AWS CLI v2 built-in waiter's fixed 40 attempts x 15s = 600s. The
+last SUCCESSFUL dev frontend deploy (run `35382033823`) took 7m53s
+(18:50:32Z → 18:58:25Z, measured from the GitHub API). Normal operation sat
+~2 minutes under a hard cap that no caller could raise. `ecs-deploy.sh` also
+rolls STAGING and PROD (`deploy-staging.yml`, `deploy-prod.yml`,
+`rollback-prod.yml`), so the same margin fails a production deploy for no
+product reason. The second defect cost more than the first: "Max attempts
+exceeded" cannot distinguish "the roll is slow" from "the new task
+crash-loops", so nobody could tell whether the built image was safe to
+promote.
+
+**Rules.**
+1. **A waiter with a vendor-fixed budget is not a budget you chose.** When one
+   script rolls dev, staging and prod, its stabilization budget is a
+   deployment policy — declare it once, in that script, overridable by env
+   (`ECS_STABILIZE_TIMEOUT_SECONDS`, default 900). Measure the real p100 of the
+   slowest surface before picking the number; a ~7m23s waiter under a 600s cap
+   is not headroom. Measure the WAITER, not the job: the 7m53s job wall-clock
+   first quoted for this incident included ~30s of register + update-service.
+2. **A timeout must hand back evidence, not a verdict.** Any wait that can
+   expire prints, before exiting non-zero: each deployment's `status`,
+   `rolloutState`, `rolloutStateReason` and counts; the service's last ~10
+   `events[].message` with timestamps; capped `stoppedReason` +
+   per-container `exitCode`/`reason` for STOPPED tasks; and the awslogs group
+   as a copy-pasteable `aws logs tail`; and the lastStatus breakdown of the
+   tasks ECS still wants RUNNING. Same class as "A negative is a claim: carry
+   its evidence" (2026-08-26).
+   **And the diagnostic itself must not draw the conclusion it forbids.** The
+   first version of this fix printed "stopped tasks: none — the roll is slow,
+   not crash-looping". That is false whenever a rollout is wedged with tasks
+   still in PENDING — an image pull, exhausted capacity or subnet IPs, or a
+   health check below its threshold — where nothing reaches STOPPED inside the
+   window, so the line tells the on-call the opposite of what is happening. An
+   ABSENCE of evidence is an observation, never a cause. Print the observation,
+   name what would discriminate, and print that too: `--desired-status RUNNING`
+   returns the PENDING tasks (their desired status is RUNNING while their last
+   status is not), and their container `reason` names the pull or placement
+   failure outright. Caught in review of PR #7420 before merge.
+3. **A real failure exits on the failure, not on the budget.** `rolloutState ==
+   FAILED` returns immediately; burning the remaining 15 minutes adds nothing
+   and delays every downstream job.
+4. **Diagnostics never mask the verdict.** Every diagnostic call soft-fails
+   (`|| true`, `// empty`), so a denied `list-tasks` cannot convert a timeout
+   into a different error.
+
+**Enforcement.** `tests/unit/ecs-stabilize-budget.test.ts` drives the real
+script with a stubbed `aws` earlier on PATH (there are no AWS credentials —
+`kortix-mfa-required` denies `ecs:DescribeServices` for the human IAM user):
+a COMPLETED rollout exits 0; a FAILED rollout exits non-zero in ~300ms against
+a 60s budget; a never-completing rollout exits non-zero at its configured
+budget and its output carries the event messages, both stopped-task reasons,
+the live-task lastStatus breakdown and the log-group hint. A fifth case pins
+the no-stopped-tasks wording: it must state the observation, must NOT contain
+"the roll is slow, not crash-looping", and must still surface the PENDING
+breakdown that names the real cause. A source tripwire fails if `aws ecs wait` returns or if a
+second budget is hardcoded. The stub answers `ecs wait services-stable` with
+the incident's verbatim `Max attempts exceeded` / exit 255, so a revert fails
+with the incident's own message: verified 4/4 red on `ec6cbdb793`, 4/4 green
+with the fix.
+
+**Unverified.** No real ECS rollout was exercised — no AWS credentials in this
+environment. The poll's behaviour against live ECS is proven only by the next
+real deploy of this script.
