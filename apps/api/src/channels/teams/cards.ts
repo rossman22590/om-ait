@@ -60,6 +60,15 @@ function stepElements(step: StreamTaskChunk): CardElement[] {
   if (step.output) {
     out.push({ type: 'TextBlock', text: step.output, wrap: true, isSubtle: true, spacing: 'none', size: 'small' });
   }
+  if (step.sources && step.sources.length > 0) {
+    // Citations as a footer of links — the Teams twin of the Slack step
+    // `sources`. TextBlock renders `[text](url)` markdown natively.
+    const links = step.sources
+      .slice(0, 8)
+      .map((sc) => `[${sc.text || sc.url}](${sc.url})`)
+      .join('  ·  ');
+    out.push({ type: 'TextBlock', text: links, wrap: true, isSubtle: true, size: 'small', spacing: 'none' });
+  }
   return out;
 }
 
@@ -99,7 +108,29 @@ export function buildFinalCard(opts: {
   return card(elements);
 }
 
-export function buildAnswerCard(body: string, sessionUrl?: string): Record<string, unknown> {
+export function buildAnswerCard(
+  body: string,
+  sessionUrl?: string,
+  customCard?: Record<string, unknown>,
+): Record<string, unknown> {
+  // The agent handed us a full Adaptive Card (`teams send --card-file`): use
+  // it verbatim, only appending the session link so the run stays openable.
+  if (customCard && customCard.type === 'AdaptiveCard') {
+    const out = { ...customCard };
+    if (sessionUrl) {
+      const bodyEls = Array.isArray(out.body) ? [...(out.body as CardElement[])] : [];
+      bodyEls.push({
+        type: 'TextBlock',
+        text: `[Open session in Kortix ↗](${sessionUrl})`,
+        wrap: true,
+        isSubtle: true,
+        size: 'small',
+        spacing: 'medium',
+      });
+      out.body = bodyEls;
+    }
+    return out;
+  }
   const elements: CardElement[] = markdownToCardElements(body);
   if (elements.length === 0) elements.push({ type: 'TextBlock', text: body, wrap: true });
   if (sessionUrl) {
@@ -258,6 +289,50 @@ export function buildReviewCard(opts: {
   ];
   if (opts.viewUrl) actions.push(openUrlAction('View in Kortix', opts.viewUrl));
   return card(body, actions);
+}
+
+export function buildJoinRequestCard(opts: {
+  requesterLabel: string;
+  projectId: string;
+  sessionId: string;
+  conversationId: string;
+  requesterUserId: string;
+  requesterTeamsUserId: string;
+}): Record<string, unknown> {
+  const data = {
+    projectId: opts.projectId,
+    sessionId: opts.sessionId,
+    conversationId: opts.conversationId,
+    requesterUserId: opts.requesterUserId,
+    requesterTeamsUserId: opts.requesterTeamsUserId,
+  };
+  return card(
+    headerBlock(
+      '🔒',
+      `${opts.requesterLabel} wants to join this Kortix session`,
+      'This conversation is private until you approve them. Only the session owner can decide.',
+    ),
+    [
+      { type: 'Action.Execute', title: 'Approve', verb: 'teams_thread_join', style: 'positive', data: { verb: 'teams_thread_join', decision: 'approved', ...data } },
+      { type: 'Action.Execute', title: 'Deny', verb: 'teams_thread_join', style: 'destructive', data: { verb: 'teams_thread_join', decision: 'denied', ...data } },
+    ],
+  );
+}
+
+export function buildProjectPickerCard(
+  projects: Array<{ projectId: string; name: string }>,
+  pendingId: string | null,
+): Record<string, unknown> {
+  return card(
+    headerBlock(
+      '📁',
+      'Which project should this conversation use?',
+      "Several Kortix projects are connected to this team. Pick one — I'll remember it here and run your message.",
+    ),
+    projects.slice(0, 8).map((p) =>
+      executeAction(p.name, 'teams_pick_project', { projectId: p.projectId, ...(pendingId ? { pendingId } : {}) }),
+    ),
+  );
 }
 
 export function buildWelcomeCard(opts: { projectUrl?: string }): Record<string, unknown> {
