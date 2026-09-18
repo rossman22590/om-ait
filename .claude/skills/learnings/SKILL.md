@@ -6650,3 +6650,71 @@ separate from browser freshness. Verify external writes while the page stays ope
 
 Enforcers: `packages/sdk/src/react/query-contracts.test.ts` and the external SCIM
 refresh journey in `tests/e2e/specs/22-resource-grant-multiselect.spec.ts`.
+
+## 2026-09-18 — "Not loaded yet" is not "none exist", and a committed action waits instead of being dropped
+
+`27-desktop-parity.spec.ts` › "Enter and Command+Enter keep distinct pending
+prompt placements" failed 4/4 on the v0.13.21 release gate (run 35242868705),
+again on .22/.23/.24, and was live in prod at v0.13.24. Production was rolled
+back for it once. Five hypotheses died on it first, all from reading code.
+
+The trace settled it. Project home paints a focusable composer ~1.1s after
+navigation. At the Enter keypress every input the send path reads was still in
+flight:
+
+    GET /projects/:id/model-picker    +414ms still to run
+    GET /projects/:id/detail         +4505ms
+    GET /billing/account-state       +5857ms
+    GET /projects/:id/model-defaults +6846ms
+
+The screencast frame 2ms after the keypress shows what the user saw: heading
+"Give it something real to work on.", agent "Agent", model "No model",
+skeleton sidebar. 636ms later an error toast: "No models available for this
+session yet." Zero network calls. The URL never left `/projects/<id>`.
+
+Three gates dropped the prompt, none retried: the composer's
+`modelUnavailable` toasted and returned; the page threw `Account access is
+still loading`, which the composer swallows into a draft restore;
+`startSession` read `billingLoading` from its render closure and called
+`onError()`.
+
+**The rule, two halves.**
+
+1. **A missing value means two different things and only one is a refusal.**
+   "The server says none is offered" refuses. "The answer has not arrived"
+   waits. `modelUnavailable` read the second as the first. Its sibling
+   `noModelsConnected`, six lines below in the same file, already gated itself
+   on `modelsLoading` and `entitlementsPending` — so the tray stayed correctly
+   silent while the send was refused. **Two predicates over the same question
+   that disagree about loading is the smell; write the loading inputs into
+   whichever one refuses.**
+2. **An action the user already committed to waits for its inputs; it is never
+   dropped over their absence.** Waiting must be BOUNDED (15s here) so a
+   wedged query refuses as before instead of wedging the UI, and whatever
+   resumes after an `await` must read the value that ARRIVED, not the closure
+   captured before it — otherwise waiting only trades one wrong answer for
+   another. That is what `usePendingSnapshot` / `lib/pending-gate.ts` exist for.
+
+**Why five hypotheses died:** the API responses said the product was healthy —
+`can_run: true`, `deepseek-v4-flash` present and `enabled: true`,
+`defaultModel` set, 3 agents resolved, `POST /sessions/warm` succeeded. Every
+one was read as a steady state. All of them were TIMING. And the a11y snapshot
+taken at the 60s timeout showed a resolved page with no toast, because by then
+everything had loaded and the toast had expired — **the artifact captured at
+failure describes the moment of the timeout, not the moment of the defect.**
+Read the screencast frame at the action's timestamp and diff the request
+completion times against it. `error-context.md` alone actively misleads here.
+
+**And it cannot reproduce locally.** The local API answers in tens of
+milliseconds, so the interactive-but-unresolved window is too narrow to hit. A
+green local run is not evidence about a race whose width is a network latency.
+Same trap as `emitUpdate: false` (3fb3aef4ca), which a dev server also could
+not show.
+
+*Enforcers:* `apps/web/src/features/session/model-availability.test.ts` pins
+that a send is refused only once `modelsLoading` and `entitlementsPending` are
+both false; `apps/web/src/lib/pending-gate.test.ts` pins the bounded wait and
+that a timed-out waiter is dropped rather than woken later. The release-gate
+journey above is the end-to-end enforcer — it is deployed-only, because the
+behaviour needs an API slow enough to keep the composer interactive while its
+queries run.
