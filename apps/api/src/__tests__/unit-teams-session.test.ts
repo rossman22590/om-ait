@@ -17,6 +17,13 @@ const calls: string[] = [];
 let actor: { userId: string } | { reason: 'unlinked' | 'not_member' } = { userId: 'user-1' };
 let existingThread: Array<{ sessionId: string }> = [];
 let claimWins = true;
+/** Per-call insert results: the thread-create claim first, then the error-notice claim. */
+let insertQueue: unknown[][] = [];
+let followUpOutcome: string = 'delivered';
+let inflightTurn: { finalized: boolean } | null = null;
+const finalized: Array<Record<string, unknown>> = [];
+const notices: string[] = [];
+const dbOps: string[] = [];
 const created: Array<Record<string, unknown>> = [];
 const continued: Array<Record<string, unknown>> = [];
 const prompts: Array<Record<string, unknown>> = [];
@@ -26,6 +33,7 @@ function chain(result: unknown[]): any {
   const c: any = {};
   for (const m of ['from', 'where', 'limit', 'values', 'onConflictDoNothing', 'returning', 'set']) c[m] = () => c;
   c.then = (resolve: (rows: unknown[]) => unknown) => Promise.resolve(resolve(result));
+  c.catch = () => Promise.resolve(result);
   return c;
 }
 
@@ -40,9 +48,19 @@ mock.module('../shared/db', () => ({
         ? chain([{ projectId: PROJECT_ID, accountId: 'acct-1', defaultBranch: 'main' }])
         : chain(existingThread);
     },
-    insert: () => chain(claimWins ? [{ eventId: 'claimed' }] : []),
-    delete: () => chain([]),
-    update: () => chain([]),
+    insert: () => {
+      dbOps.push('insert');
+      if (insertQueue.length) return chain(insertQueue.shift()!);
+      return chain(claimWins ? [{ eventId: 'claimed' }] : []);
+    },
+    delete: () => {
+      dbOps.push('delete');
+      return chain([]);
+    },
+    update: () => {
+      dbOps.push('update');
+      return chain([]);
+    },
   },
 }));
 
@@ -72,8 +90,17 @@ mock.module('../channels/teams/turn', () => ({
     calls.push('saveTurn');
     saved.push({ sessionId: h.sessionId, messageActivityId: h.messageActivityId });
   },
-  finalizeTurn: async () => {
+  finalizeTurn: async (_h: unknown, opts: Record<string, unknown>) => {
     calls.push('finalizeTurn');
+    finalized.push(opts);
+  },
+  loadTurn: async () => inflightTurn,
+  deleteTurn: async () => {
+    calls.push('deleteTurn');
+  },
+  noticeOnLiveCard: async (_h: unknown, text: string) => {
+    calls.push('noticeOnLiveCard');
+    notices.push(text);
   },
   persistServiceUrl: async () => {
     calls.push('persistServiceUrl');
@@ -125,6 +152,12 @@ beforeEach(() => {
   actor = { userId: 'user-1' };
   existingThread = [];
   claimWins = true;
+  insertQueue = [];
+  followUpOutcome = 'delivered';
+  inflightTurn = null;
+  finalized.length = 0;
+  notices.length = 0;
+  dbOps.length = 0;
   setTeamsSessionLifecycleForTest({
     createSession: async (input: Record<string, unknown>) => {
       calls.push('createSession');
@@ -134,7 +167,7 @@ beforeEach(() => {
     continueSession: async (input: Record<string, unknown>) => {
       calls.push('continueSession');
       continued.push(input);
-      return { ok: true } as never;
+      return followUpOutcome as never;
     },
     resolveProjectAutomationActor: async () => 'automation-user',
   } as never);
@@ -218,5 +251,66 @@ describe('mention markup never reaches the session', () => {
     const prompt = session.renderFollowUpPrompt({ ...mentioned, text: '<at>Kortix Dev</at> now count the lines' });
     expect(prompt).not.toContain('<at>');
     expect(prompt).toContain('\nnow count the lines\n');
+  });
+});
+
+describe('follow-up outcomes — the conversation is never left on "Working on it…"', () => {
+  beforeEach(() => {
+    existingThread = [{ sessionId: 'sess-existing' }];
+  });
+
+  test('delivered: the thread\'s lastMessageAt is bumped', async () => {
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+    expect(continued).toHaveLength(1);
+    expect(dbOps).toContain('update');
+    expect(finalized).toHaveLength(0);
+  });
+
+  test('pending (session still waking): the live card says so and the mapping is kept', async () => {
+    followUpOutcome = 'pending';
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+    expect(calls).toContain('deleteTurn');
+    expect(finalized).toHaveLength(1);
+    expect(String(finalized[0].error)).toMatch(/waking/i);
+    expect(created).toHaveLength(0);
+    expect(dbOps.filter((o) => o === 'delete')).toHaveLength(0);
+  });
+
+  test('failed: the error is surfaced once per conversation with the session link, then silently', async () => {
+    followUpOutcome = 'failed';
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+    expect(finalized).toHaveLength(1);
+    expect(String(finalized[0].error)).toContain('sess-existing');
+    expect(String(finalized[0].error)).toMatch(/error/i);
+    expect(created).toHaveLength(0);
+
+    // Second message on the same jammed thread: the notice claim loses → no repeat.
+    finalized.length = 0;
+    selectCount = 0;
+    insertQueue = [[]];
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+    expect(finalized).toHaveLength(1);
+    expect(finalized[0].error).toBeUndefined();
+  });
+
+  test('no-session (deleted): the stale mapping is dropped and a NEW session is created with a revived note', async () => {
+    followUpOutcome = 'no-session';
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+    expect(dbOps).toContain('delete');
+    expect(created).toHaveLength(1);
+    const body = created[0].body as { initial_prompt: string };
+    expect(body.initial_prompt).toMatch(/^NOTE: This Teams conversation had an earlier session/);
+    expect(body.initial_prompt).toContain("You're answering a message on Microsoft Teams as a teammate.");
+    // The same live card carries the new session — no second card.
+    expect(calls.filter((c) => c === 'startTurn')).toHaveLength(1);
+    expect(saved.at(-1)).toEqual({ sessionId: 'sess-new', messageActivityId: 'live-card-1' });
+  });
+
+  test('a turn already in flight: the new card becomes a short notice and never replaces the running stream', async () => {
+    inflightTurn = { finalized: false };
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+    expect(calls).toContain('noticeOnLiveCard');
+    expect(saved).toHaveLength(0);
+    expect(continued).toHaveLength(1);
   });
 });

@@ -7,7 +7,7 @@ import { sessionWebUrl } from '../slack/util';
 import type { StreamTaskChunk } from '../slack-api';
 import { sendCard, updateCard } from '../teams-api';
 import { saveTeamsServiceUrl } from '../install-store';
-import { buildAnswerCard, buildFinalCard, buildPlanCard } from './cards';
+import { buildAnswerCard, buildFinalCard, buildNoticeCard, buildPlanCard } from './cards';
 import { STREAM_TTL_MS, STALE_AFTER_MS } from './app';
 import type { TeamsActivity, TeamsChannelRef, TeamsConversationRef, TeamsLiveTurn } from './types';
 
@@ -147,6 +147,17 @@ export async function startTurn(
     sessionId: '',
     originatingActivity: activity,
   };
+}
+
+/**
+ * Turn a just-posted live card into a one-line notice. Used when a follow-up
+ * arrives while a turn is already streaming for the session: the running
+ * stream keeps its own card; this one must not become a second, competing
+ * "Working on it…".
+ */
+export async function noticeOnLiveCard(handle: TeamsLiveTurn, text: string): Promise<void> {
+  if (!handle.messageActivityId) return;
+  await updateCard(refOf(handle), handle.messageActivityId, buildNoticeCard(text));
 }
 
 async function repaintPlan(handle: TeamsLiveTurn): Promise<void> {

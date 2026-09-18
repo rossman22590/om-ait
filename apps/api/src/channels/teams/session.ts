@@ -11,7 +11,17 @@ import { currentChannelSelection } from '../slack/selection';
 import { EVENT_DEDUPE_TTL_MS } from './app';
 import { ensureTeamsConversationBinding, teamsChannelCtx } from './binding';
 import { postTeamsIdentityPrompt, resolveTeamsActor, teamsUserId } from './identity';
-import { buildTeamsTurnEnv, finalizeTurn, persistServiceUrl, saveTurn, startTurn } from './turn';
+import {
+  buildTeamsTurnEnv,
+  deleteTurn,
+  finalizeTurn,
+  loadTurn,
+  noticeOnLiveCard,
+  persistServiceUrl,
+  saveTurn,
+  startTurn,
+} from './turn';
+import { sessionWebUrl } from '../slack/util';
 import { extractTeamsAttachments, type TeamsActivity, type TeamsLiveTurn } from './types';
 import { stripTeamsMentions } from './util';
 
@@ -96,6 +106,124 @@ async function bindTurnToSession(handle: TeamsLiveTurn | null, sessionId: string
   await saveTurn(handle);
 }
 
+const ERROR_NOTICE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** One failure notice per conversation: a jammed thread must not repeat the same line on every message. */
+async function claimConversationErrorNotice(tenantId: string, conversationId: string): Promise<boolean> {
+  try {
+    const inserted = await db
+      .insert(chatEventDedup)
+      .values({
+        eventId: `teams:threaderror:${tenantId}:${conversationId}`,
+        expiresAt: new Date(Date.now() + ERROR_NOTICE_TTL_MS),
+      })
+      .onConflictDoNothing({ target: chatEventDedup.eventId })
+      .returning({ eventId: chatEventDedup.eventId });
+    return inserted.length > 0;
+  } catch (err) {
+    console.warn('[teams-webhook] error-notice claim failed (suppressing notice)', err);
+    return false;
+  }
+}
+
+async function clearConversationErrorNotice(tenantId: string, conversationId: string): Promise<void> {
+  await db
+    .delete(chatEventDedup)
+    .where(eq(chatEventDedup.eventId, `teams:threaderror:${tenantId}:${conversationId}`))
+    .catch(() => {});
+}
+
+/**
+ * Hand a follow-up to the session this conversation is bound to, and render
+ * the outcome on the live card. Returns `'revive'` when the session is gone
+ * for good and the caller should drop the mapping and create a new one —
+ * every other outcome ends here.
+ *
+ * Mirrors channels/slack/dispatch.ts: a known conversation maps PERMANENTLY
+ * to one session; `pending` and `failed` keep the mapping (recreating is how
+ * a real session gets orphaned), only a deleted session (`no-session`) is
+ * replaced.
+ */
+async function deliverFollowUp(input: {
+  projectId: string;
+  tenantId: string;
+  conversationId: string;
+  sessionId: string;
+  handle: TeamsLiveTurn | null;
+  activity: TeamsActivity;
+  userId: string;
+}): Promise<'done' | 'revive'> {
+  const { projectId, tenantId, conversationId, sessionId, activity, userId } = input;
+  let handle = input.handle;
+
+  // A turn is already streaming for this session: the running stream keeps
+  // its card; ours becomes a short notice and is not saved as the turn.
+  const inflight = await loadTurn(sessionId);
+  if (inflight && !inflight.finalized) {
+    if (handle) await noticeOnLiveCard(handle, 'Got it — I’ll take this after the current step.');
+    handle = null;
+  } else {
+    await bindTurnToSession(handle, sessionId);
+  }
+
+  const outcome = await deliverTeamsFollowUpToSession({ sessionId, text: renderFollowUpPrompt(activity), userId });
+
+  if (outcome === 'delivered') {
+    await db
+      .update(chatThreads)
+      .set({ lastMessageAt: new Date() })
+      .where(
+        and(
+          eq(chatThreads.platform, 'teams'),
+          eq(chatThreads.workspaceId, tenantId),
+          eq(chatThreads.threadId, conversationId),
+        ),
+      );
+    return 'done';
+  }
+
+  if (outcome === 'pending' || outcome === 'not-landed') {
+    if (handle) {
+      await deleteTurn(sessionId);
+      await finalizeTurn(handle, {
+        error: "Still waking this conversation's session back up — send that again in a moment.",
+      });
+    }
+    return 'done';
+  }
+
+  if (outcome === 'failed' || outcome === 'unreachable') {
+    if (handle) {
+      await deleteTurn(sessionId);
+      if (await claimConversationErrorNotice(tenantId, conversationId)) {
+        const url = sessionWebUrl(config.FRONTEND_URL, projectId, sessionId);
+        await finalizeTurn(handle, {
+          error: `This conversation's session hit an error and couldn't start. [Open it in Kortix](${url}) to see what happened.`,
+        });
+      } else {
+        await finalizeTurn(handle, {});
+      }
+    }
+    return 'done';
+  }
+
+  // outcome === 'no-session': the session row is gone (deleted). Drop the
+  // stale mapping so the caller creates a fresh session on the same card.
+  console.warn('[teams-webhook] conversation mapped to a deleted session — replacing', { tenantId, conversationId, sessionId });
+  if (handle) await deleteTurn(sessionId);
+  await db
+    .delete(chatThreads)
+    .where(
+      and(
+        eq(chatThreads.platform, 'teams'),
+        eq(chatThreads.workspaceId, tenantId),
+        eq(chatThreads.threadId, conversationId),
+      ),
+    );
+  await clearConversationErrorNotice(tenantId, conversationId);
+  return 'revive';
+}
+
 export async function createOrJoinTeamsConversationSession(input: {
   projectId: string;
   tenantId: string;
@@ -127,21 +255,7 @@ export async function createOrJoinTeamsConversationSession(input: {
   );
   if (!userId) return;
 
-  const claimKey = tenantId && conversationId ? `teams:threadcreate:${tenantId}:${conversationId}` : null;
-  if (claimKey && !(await claimThreadCreate(claimKey))) {
-    const sessionId = await waitForConversationSession(tenantId, conversationId);
-    if (sessionId) {
-      await bindTurnToSession(handle, sessionId);
-      await deliverTeamsFollowUpToSession({ sessionId, text: renderFollowUpPrompt(activity), userId });
-    } else {
-      console.warn('[teams-webhook] lost thread-create claim but winner never published a session', {
-        tenantId,
-        conversationId,
-      });
-    }
-    return;
-  }
-
+  let revived = false;
   if (tenantId && conversationId) {
     const [existing] = await db
       .select({ sessionId: chatThreads.sessionId })
@@ -155,14 +269,33 @@ export async function createOrJoinTeamsConversationSession(input: {
       )
       .limit(1);
     if (existing) {
-      await bindTurnToSession(handle, existing.sessionId);
-      await deliverTeamsFollowUpToSession({
+      const next = await deliverFollowUp({
+        projectId,
+        tenantId,
+        conversationId,
         sessionId: existing.sessionId,
-        text: renderFollowUpPrompt(activity),
+        handle,
+        activity,
         userId,
       });
-      return;
+      if (next === 'done') return;
+      revived = true;
     }
+  }
+
+  const claimKey = tenantId && conversationId ? `teams:threadcreate:${tenantId}:${conversationId}` : null;
+  if (claimKey && !(await claimThreadCreate(claimKey))) {
+    const sessionId = await waitForConversationSession(tenantId, conversationId);
+    if (sessionId) {
+      await deliverFollowUp({ projectId, tenantId, conversationId, sessionId, handle, activity, userId });
+    } else {
+      console.warn('[teams-webhook] lost thread-create claim but winner never published a session', {
+        tenantId,
+        conversationId,
+      });
+      if (handle) await finalizeTurn(handle, { error: startErrorMessage(undefined) });
+    }
+    return;
   }
 
   await ensureTeamsConversationBinding({ projectId, tenantId, conversationId });
@@ -177,7 +310,7 @@ export async function createOrJoinTeamsConversationSession(input: {
       base_ref: project.defaultBranch,
       agent_name: selection?.agentName || 'default',
       ...(selection?.opencodeModel ? { opencode_model: selection.opencodeModel } : {}),
-      initial_prompt: renderAgentPrompt(activity),
+      initial_prompt: renderAgentPrompt(activity, revived),
       // Title from the user's actual words — without the `<at>…</at>` mention
       // markup Teams wraps around the bot's name in channels.
       title_source: activity.text ? stripTeamsMentions(activity.text) || null : null,
@@ -304,12 +437,20 @@ export function renderFollowUpPrompt(activity: TeamsActivity): string {
   ].join('\n');
 }
 
-function renderAgentPrompt(activity: TeamsActivity): string {
+function renderAgentPrompt(activity: TeamsActivity, revived = false): string {
   const tenant = activity.conversation?.tenantId ?? activity.channelData?.tenant?.id ?? 'unknown';
   const conversation = activity.conversation?.id ?? '?';
   const user = activity.from?.name ?? activity.from?.id ?? 'unknown';
   const text = stripTeamsMentions(activity.text ?? '');
   return [
+    ...(revived
+      ? [
+          'NOTE: This Teams conversation had an earlier session, but that session',
+          'has ended — you do NOT have its history. Open your reply by briefly',
+          'saying you are picking the conversation back up without the earlier context.',
+          '',
+        ]
+      : []),
     "You're answering a message on Microsoft Teams as a teammate.",
     '',
     `Tenant:        ${tenant}`,
