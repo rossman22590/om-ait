@@ -50,6 +50,20 @@ describe('runtime managed model registry', () => {
       .toEqual([expect.objectContaining({ id: 'vision' })]);
   });
 
+  test('keeps only the named DeepSeek V4 text-only exception', () => {
+    const text = {
+      id: 'deepseek-v4-flash-0731', name: 'DeepSeek V4 Flash 0731',
+      upstreamModelId: 'deepseek/deepseek-v4-flash-0731', transport: 'openrouter',
+      pricingRef: 'openrouter/deepseek/deepseek-v4-flash-0731', tier: 'fast', vision: false,
+      limit: { context: 1_048_576, output: 16_384 },
+      openrouterProvider: {
+        only: ['deepinfra/fp8'], allow_fallbacks: false, zdr: true, data_collection: 'deny',
+      },
+    };
+    expect(parseManagedModels(JSON.stringify([text, { ...text, id: 'other-text' }])))
+      .toEqual([expect.objectContaining({ id: 'deepseek-v4-flash-0731', vision: false })]);
+  });
+
   test('rejects an unpinned or fallback-enabled operator route', () => {
     const model = {
       id: 'unsafe', name: 'Unsafe', upstreamModelId: 'z-ai/glm-5.3-flash',

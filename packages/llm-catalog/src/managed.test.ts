@@ -9,26 +9,25 @@ import {
 } from './index';
 
 const served = [
-  'kimi-k3',
-  'kimi-k3-fast',
   'deepseek-v4.1-flash',
   'glm-5.3-flash',
+  'deepseek-v4-flash-0731',
 ];
 
-// Every bundled route pins an image-capable ZDR endpoint.
+// Every bundled route pins a ZDR endpoint; V4 Flash 0731 is text-only.
 describe('managed catalog', () => {
-  test('serves only the selected image-capable agent models', () => {
+  test('serves the selected models, including the text-only DeepSeek V4 exception', () => {
     expect(DEFAULT_MANAGED_MODEL_IDS).toEqual(served);
     expect(PLATFORM_DEFAULT_MODEL_ID).toBe('deepseek-v4.1-flash');
-    expect(MANAGED_FLAGSHIP_MODEL_ID).toBe('kimi-k3');
+    expect(MANAGED_FLAGSHIP_MODEL_ID).toBe('deepseek-v4.1-flash');
   });
 
-  test('every managed model supports image input and has explicit credit pricing', () => {
+  test('every managed model has explicit credit pricing and a pinned ZDR route', () => {
     for (const model of MANAGED_MODELS) {
       expect(model.pricing?.inputPerMillion).toBeGreaterThan(0);
       expect(model.pricing?.outputPerMillion).toBeGreaterThan(0);
       expect(model.providerBrand).toBeUndefined();
-      expect(model.vision).toBe(true);
+      expect(model.vision).toBe(model.id !== 'deepseek-v4-flash-0731');
     }
     expect(getManagedModel('glm-5.3-flash')).toMatchObject({
       upstreamModelId: 'z-ai/glm-5.3-flash',
@@ -56,6 +55,7 @@ describe('managed catalog', () => {
   test('old Kortix managed IDs and BYOK refs do not resolve as managed', () => {
     for (const old of [
       'grok-4.6', 'deepseek-v4-flash', 'deepseek-v4-pro-0813', 'muse-spark-1.2',
+      'kimi-k3', 'kimi-k3-fast',
       'minimax-m3', 'gpt-5.6-luna', 'gpt-6-astra',
       'anthropic/claude-opus-4.8', 'nope',
     ]) {

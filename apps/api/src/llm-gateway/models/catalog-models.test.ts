@@ -9,16 +9,25 @@ import { catalogModelForWireModel, gatewayCodexModels, gatewayModelCatalog } fro
 describe('gatewayModelCatalog — served catalog', () => {
   const full = gatewayModelCatalog('proj');
 
-  test('serves managed Kimi K3 with vision, tools, and a context limit', () => {
-    expect(full['kimi-k3']).toMatchObject({
-      name: 'Kimi K3 2.8T',
+  test('serves managed DeepSeek V4.1 with vision, tools, and a context limit', () => {
+    expect(full['deepseek-v4.1-flash']).toMatchObject({
+      name: 'DeepSeek V4.1 Flash',
       provider: 'kortix',
       attachment: true,
       tool_call: true,
       temperature: true,
       limit: { context: 1_048_576, output: 16_384 },
-      cost: { input: 2.5, output: 10.95, cache_read: 0.25 },
+      cost: { input: 0.2, output: 0.6, cache_read: 0.006 },
     });
+  });
+
+  test('serves only DeepSeek V4 Flash 0731 as text-only managed', () => {
+    expect(full['deepseek-v4-flash-0731']).toMatchObject({
+      provider: 'kortix', attachment: false, tool_call: true,
+      cost: { input: 0.06, output: 0.18, cache_read: 0.015 },
+    });
+    expect(full['kimi-k3']).toBeUndefined();
+    expect(full['kimi-k3-fast']).toBeUndefined();
   });
 
   test('brands managed DeepSeek V4.1 Flash with the Kortix provider', () => {
@@ -34,7 +43,7 @@ describe('gatewayModelCatalog — served catalog', () => {
     expect(full['glm-5.3-flash']).toMatchObject({ provider: 'kortix', attachment: true });
   });
 
-  test('does not serve retired text-only managed models', () => {
+  test('does not serve other retired text-only managed models', () => {
     for (const id of ['deepseek-v4-flash', 'deepseek-v4-pro-0813', 'glm-5.3-flash-text']) {
       expect(full[id], id).toBeUndefined();
     }
@@ -164,7 +173,7 @@ describe('gatewayModelCatalog — free-tier visibility', () => {
 
   test('free tier sees no managed Kortix models', () => {
     expect(freeFull.auto).toBeUndefined();
-    for (const id of ['claude-opus-4.8', 'claude-sonnet-4.6', 'glm-5.3-flash', 'kimi-k3', 'deepseek-v4-flash', 'gpt-6-astra']) {
+    for (const id of ['claude-opus-4.8', 'claude-sonnet-4.6', 'glm-5.3-flash', 'deepseek-v4.1-flash', 'deepseek-v4-flash-0731', 'kimi-k3', 'gpt-6-astra']) {
       expect(freeFull[id], id).toBeUndefined();
     }
   });

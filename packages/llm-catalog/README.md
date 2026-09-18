@@ -8,18 +8,19 @@ The managed lineup uses OpenRouter routes pinned to named zero-data-retention en
 
 | Picker name | Gateway model ID | Input | USD per 1M input / cached input / output tokens |
 | --- | --- | --- | --- |
-| Kimi K3 2.8T | `kimi-k3` | Text, image | $2.50 / $0.25 / $10.95 |
-| Kimi K3 2.8T Fast | `kimi-k3-fast` | Text, image | $4.50 / $0.45 / $22.50 |
 | DeepSeek V4.1 Flash (default) | `deepseek-v4.1-flash` | Text, image | $0.20 / $0.006 / $0.60 |
 | GLM-5.3-Flash | `glm-5.3-flash` | Text, image | $0.15 / $0.05 / $0.50 |
+| DeepSeek V4 Flash 0731 | `deepseek-v4-flash-0731` | Text only | $0.06 / $0.015 / $0.18 |
 
 The prices match the pinned [OpenRouter endpoints](https://openrouter.ai/api/v1/endpoints/zdr) on 2026-09-18. All rates exclude Kortix credit markup.
 
 The OpenCode reference is `kortix/<gateway model ID>`. The bundled sandbox fallback uses the same IDs and capabilities. All entries require `OPENROUTER_API_KEY`.
 
-Every managed model declares text and image input. Pinned image requests returned HTTP 200 for Kimi and DeepSeek on 2026-09-18. Kimi K3 uses `wafer`; Kimi K3 Fast uses `fireworks/fast`; DeepSeek V4.1 Flash uses `deepinfra/fp8`. GLM-5.3-Flash is pinned to `coreweave/nvfp4` with `zdr: true`, `data_collection: deny`, and `allow_fallbacks: false`. On 2026-09-18, three requests to that endpoint returned HTTP 429 `rate_limit_exceeded` from CoreWeave's shared pool. Do not make it the platform default or publish it as available until a pinned text and image request succeeds with the deployment key. DeepSeek V4.1 Flash remains the default.
+DeepSeek V4.1 Flash uses `deepinfra/fp8` for text and image. DeepSeek V4 Flash 0731 uses `deepinfra/fp8` for text only; a pinned text request returned HTTP 200 on 2026-09-18. GLM-5.3-Flash uses `coreweave/nvfp4` for text and image. Every route sets `zdr: true`, `data_collection: deny`, and `allow_fallbacks: false`. On 2026-09-18, pinned GLM requests returned HTTP 429 `rate_limit_exceeded` from CoreWeave's shared pool. DeepSeek V4.1 Flash remains the default until a pinned GLM text and image request succeeds with the deployment key.
 
-The public Morph feed lists a different GLM-5.3-Flash endpoint (`morph-glm53flash`) at $0.10 / $0.02 / $0.35. On 2026-09-17, the supplied Morph key received HTTP 400 `invalid_request_error` for that ID. MiniMax M3 and Qwen 3.8 27B are absent from that feed and returned HTTP 400. GLM-5.3 744B and DeepSeek V4 Flash 0731 accept only text input, so they are excluded. Runtime managed-model overrides also remove entries with `vision: false`.
+The public Morph feed lists a different GLM-5.3-Flash endpoint (`morph-glm53flash`) at $0.10 / $0.02 / $0.35. On 2026-09-17, the supplied Morph key received HTTP 400 `invalid_request_error` for that ID. MiniMax M3 and Qwen 3.8 27B are absent from that feed and returned HTTP 400. GLM-5.3 744B accepts only text input and is excluded. Runtime managed-model overrides remove entries with `vision: false` except `deepseek-v4-flash-0731`.
+
+DeepSeek V4 Pro 0813 is also text only. OpenRouter's ZDR endpoint list quotes $0.70 input and $2.88 output per million tokens on Ionstream, versus $0.06 and $0.18 for the selected V4 Flash 0731 route. Pro is not part of this cost-focused lineup.
 
 ## Catalog
 

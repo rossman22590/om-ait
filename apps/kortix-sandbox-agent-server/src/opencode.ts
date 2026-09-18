@@ -1221,16 +1221,6 @@ type KortixGatewayModel = {
 }
 
 export const MINIMAL_FALLBACK_MODELS: Record<string, KortixGatewayModel> = {
-  'kimi-k3': {
-    name: 'Kimi K3 2.8T', provider: 'kortix', reasoning: true, tool_call: true,
-    attachment: true, temperature: true,
-    limit: { context: 1_048_576, output: 16_384 }, cost: { input: 2.5, output: 10.95, cache_read: 0.25 },
-  },
-  'kimi-k3-fast': {
-    name: 'Kimi K3 2.8T Fast', provider: 'kortix', reasoning: true, tool_call: true,
-    attachment: true, temperature: true,
-    limit: { context: 1_048_576, output: 16_384 }, cost: { input: 4.5, output: 22.5, cache_read: 0.45 },
-  },
   'deepseek-v4.1-flash': {
     name: 'DeepSeek V4.1 Flash', provider: 'kortix', reasoning: true, tool_call: true,
     attachment: true, temperature: true,
@@ -1240,6 +1230,11 @@ export const MINIMAL_FALLBACK_MODELS: Record<string, KortixGatewayModel> = {
     name: 'GLM-5.3-Flash', provider: 'kortix', reasoning: true, tool_call: true,
     attachment: true, temperature: true,
     limit: { context: 1_048_576, output: 16_384 }, cost: { input: 0.15, output: 0.5, cache_read: 0.05 },
+  },
+  'deepseek-v4-flash-0731': {
+    name: 'DeepSeek V4 Flash 0731', provider: 'kortix', reasoning: true, tool_call: true,
+    attachment: false, temperature: true,
+    limit: { context: 1_048_576, output: 16_384 }, cost: { input: 0.06, output: 0.18, cache_read: 0.015 },
   },
   'openai/gpt-5.5': {
     name: 'GPT-5.5',

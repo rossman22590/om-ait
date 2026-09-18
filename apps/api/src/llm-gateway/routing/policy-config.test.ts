@@ -51,7 +51,7 @@ describe('gateway fallback policy configuration', () => {
     expect(parseFallbackPolicies(DEFAULT_LLM_GATEWAY_FALLBACK_POLICIES)).toContainEqual({
       id: 'platform-default-resilience',
       models: ['deepseek-v4.1-flash'],
-      fallbackModels: ['kimi-k3'],
+      fallbackModels: ['glm-5.3-flash'],
       fallbackOn: 'transient',
     });
   });

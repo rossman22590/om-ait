@@ -44,7 +44,7 @@ export function parseManagedModels(
   raw: string | undefined,
   fallback: readonly ManagedModel[] = BUNDLED_MANAGED_MODELS,
 ): ManagedModel[] {
-  if (!raw) return fallback.filter((model) => model.vision);
+  if (!raw) return fallback.filter(isOfferedManagedModel);
 
   let parsed: unknown;
   try {
@@ -62,11 +62,15 @@ export function parseManagedModels(
     }
     ids.add(model.id);
   }
-  return models.filter((model) => model.vision);
+  return models.filter(isOfferedManagedModel);
+}
+
+function isOfferedManagedModel(model: ManagedModel): boolean {
+  return model.vision || model.id === 'deepseek-v4-flash-0731';
 }
 
 /**
- * Image-capable managed models available through Kortix credits. This registry is empty
+ * Kortix-credit managed models. V4 Flash 0731 is the only text-only exception. This registry is empty
  * when the cloud managed-provider flag is off. The picker, catalog, and gateway
  * all use this registry, so self-host users never receive the shared key.
  */
@@ -99,12 +103,15 @@ const RETIRED_MANAGED_MODEL_IDS = new Set([
   'muse-spark-1.2', 'minimax-m3', 'gpt-5.6-luna', 'gpt-6-astra',
   'morph-glm53-744b', 'morph-dsv4flash', 'morph-kimik3',
   'morph-kimik3-fast', 'morph-dsv41flash',
+  'kimi-k3', 'kimi-k3-fast',
 ]);
 
 const LEGACY_MANAGED_IDS: Record<string, string> = {
   'morph-kimik3': 'kimi-k3',
   'morph-kimik3-fast': 'kimi-k3-fast',
   'morph-dsv41flash': 'deepseek-v4.1-flash',
+  'morph-dsv4flash': 'deepseek-v4-flash-0731',
+  'deepseek-v4-flash': 'deepseek-v4-flash-0731',
 };
 
 export function canonicalManagedModelId(id: string): string {

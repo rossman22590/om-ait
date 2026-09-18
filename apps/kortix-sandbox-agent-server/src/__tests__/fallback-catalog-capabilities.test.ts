@@ -11,6 +11,11 @@ describe('MINIMAL_FALLBACK_MODELS capability metadata', () => {
   // gateway resolves as model_not_found would 400 every selection of it).
   test('retired Morph-prefixed Kimi id is absent from the fallback catalog', () => {
     expect(MINIMAL_FALLBACK_MODELS['morph-kimik3']).toBeUndefined()
+    expect(MINIMAL_FALLBACK_MODELS['kimi-k3']).toBeUndefined()
+    expect(MINIMAL_FALLBACK_MODELS['kimi-k3-fast']).toBeUndefined()
+    expect(MINIMAL_FALLBACK_MODELS['deepseek-v4-flash-0731']).toMatchObject({
+      provider: 'kortix', attachment: false,
+    })
   })
 
   test('no OpenAI reasoning model in the fallback catalog claims temperature support', () => {

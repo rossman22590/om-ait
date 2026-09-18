@@ -71,11 +71,13 @@ describe('toWireModel / toOpencodeModelRef', () => {
     expect(toWireModel('morph-dsv41flash')).toBe('deepseek-v4.1-flash');
     expect(toWireModel('kortix/morph-kimik3')).toBe('kimi-k3');
     expect(toOpencodeModelRef('kortix/morph-kimik3-fast')).toBe('kortix/kimi-k3-fast');
+    expect(toWireModel('morph-dsv4flash')).toBe('deepseek-v4-flash-0731');
+    expect(toWireModel('deepseek-v4-flash')).toBe('deepseek-v4-flash-0731');
   });
 
   test('puts every gateway model under the kortix OpenCode provider', () => {
     expect(toOpencodeModelRef('glm-5.3-flash')).toBe('kortix/glm-5.3-flash');
-    expect(toOpencodeModelRef('deepseek-v4-flash')).toBe('kortix/deepseek-v4-flash');
+    expect(toOpencodeModelRef('deepseek-v4-flash')).toBe('kortix/deepseek-v4-flash-0731');
     expect(toOpencodeModelRef('claude-opus-4.8')).toBe('kortix/claude-opus-4.8');
     expect(toOpencodeModelRef('kortix/glm-5.3-flash')).toBe('kortix/glm-5.3-flash');
     expect(toOpencodeModelRef('anthropic/claude-sonnet-4.6')).toBe(
