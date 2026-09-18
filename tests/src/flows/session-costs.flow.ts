@@ -224,10 +224,25 @@ flow(
     });
     await db.connect();
     try {
-      const project = await ctx.fixtures.sharedSeededProject();
+      // Its OWN account, not the shared funded fixture: that one is a legacy
+      // `pro` plan on the preview, which is exactly the exempt group. A fresh
+      // team account takes the `billing_model` column default, funded at tier
+      // `free` — the shape of every account the defect left unmetered.
+      const team = await ctx.fixtures.team();
+      await db.query(
+        `INSERT INTO kortix.credit_accounts
+         (account_id, balance, balance_precise, non_expiring_credits, non_expiring_credits_precise, tier)
+         VALUES ($1, 1000, 1000, 1000, 1000, 'free')
+         ON CONFLICT (account_id) DO UPDATE SET
+           balance = 1000, balance_precise = 1000,
+           non_expiring_credits = 1000, non_expiring_credits_precise = 1000,
+           tier = 'free'`,
+        [team.id],
+      );
+      const project = await team.project();
       const session = await ctx.fixtures.session(project);
 
-      await ctx.step('the session account is not a legacy paid plan, so it must meter', async () => {
+      await ctx.step('the session account carries the legacy default on the free tier', async () => {
         const account = await db.query(
           `SELECT ca.billing_model, ca.tier FROM kortix.project_sessions ps
            JOIN kortix.credit_accounts ca ON ca.account_id = ps.account_id
@@ -235,10 +250,8 @@ flow(
           [session.id],
         );
         const row = account.rows[0];
-        if (!row) throw new Error(`no credit account behind session ${session.id}`);
-        if (['tier_2_20', 'tier_6_50', 'tier_25_200', 'tier_200_1000', 'pro'].includes(row.tier) &&
-            !['per_seat', 'credit'].includes(row.billing_model)) {
-          throw new Error(`fixture account is an exempt legacy paid plan: ${JSON.stringify(row)}`);
+        if (row?.billing_model !== 'legacy' || row?.tier !== 'free') {
+          throw new Error(`fixture account is not legacy/free: ${JSON.stringify(row)}`);
         }
       });
 
