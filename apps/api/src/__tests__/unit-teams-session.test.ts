@@ -199,3 +199,24 @@ describe('createOrJoinTeamsConversationSession — the live card goes out first'
     expect(persist === -1 || persist > calls.indexOf('startTurn')).toBe(true);
   });
 });
+
+describe('mention markup never reaches the session', () => {
+  const mentioned = {
+    ...activity,
+    text: '<at>Kortix Dev</at>summarize the README in two sentences',
+  };
+
+  test('the session title source and the agent prompt carry the words, not <at> tags', async () => {
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity: mentioned });
+    const body = created[0].body as { title_source: string; initial_prompt: string };
+    expect(body.title_source).toBe('summarize the README in two sentences');
+    expect(body.initial_prompt).not.toContain('<at>');
+    expect(body.initial_prompt).toContain('\nsummarize the README in two sentences');
+  });
+
+  test('a follow-up prompt is stripped the same way', () => {
+    const prompt = session.renderFollowUpPrompt({ ...mentioned, text: '<at>Kortix Dev</at> now count the lines' });
+    expect(prompt).not.toContain('<at>');
+    expect(prompt).toContain('\nnow count the lines\n');
+  });
+});

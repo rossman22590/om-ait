@@ -13,6 +13,7 @@ import { ensureTeamsConversationBinding, teamsChannelCtx } from './binding';
 import { postTeamsIdentityPrompt, resolveTeamsActor, teamsUserId } from './identity';
 import { buildTeamsTurnEnv, finalizeTurn, persistServiceUrl, saveTurn, startTurn } from './turn';
 import { extractTeamsAttachments, type TeamsActivity, type TeamsLiveTurn } from './types';
+import { stripTeamsMentions } from './util';
 
 const defaultTeamsSessionLifecycle = {
   continueSession: continueLifecycleSession,
@@ -160,8 +161,9 @@ export async function createOrJoinTeamsConversationSession(input: {
       agent_name: selection?.agentName || 'default',
       ...(selection?.opencodeModel ? { opencode_model: selection.opencodeModel } : {}),
       initial_prompt: renderAgentPrompt(activity),
-      // Title from the user's actual words, not the scaffolded envelope.
-      title_source: activity.text ?? null,
+      // Title from the user's actual words — without the `<at>…</at>` mention
+      // markup Teams wraps around the bot's name in channels.
+      title_source: activity.text ? stripTeamsMentions(activity.text) || null : null,
     },
     enforceAccountCap: false,
     queuePolicy: 'on_backpressure',
@@ -274,7 +276,7 @@ function renderAttachments(activity: TeamsActivity): string[] {
 
 export function renderFollowUpPrompt(activity: TeamsActivity): string {
   const user = activity.from?.name ?? activity.from?.id ?? 'unknown';
-  const text = activity.text ?? '';
+  const text = stripTeamsMentions(activity.text ?? '');
   return [
     `New message from ${user} in the same Teams conversation:`,
     '',
@@ -289,7 +291,7 @@ function renderAgentPrompt(activity: TeamsActivity): string {
   const tenant = activity.conversation?.tenantId ?? activity.channelData?.tenant?.id ?? 'unknown';
   const conversation = activity.conversation?.id ?? '?';
   const user = activity.from?.name ?? activity.from?.id ?? 'unknown';
-  const text = activity.text ?? '';
+  const text = stripTeamsMentions(activity.text ?? '');
   return [
     "You're answering a message on Microsoft Teams as a teammate.",
     '',
