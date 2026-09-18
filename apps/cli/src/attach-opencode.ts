@@ -114,7 +114,7 @@ export class AttachOpenCodeError extends Error {
   /** Where the flow stopped. */
   readonly stage: AttachStage;
   /** The underlying error — a `SessionRuntimeError` for resolve/restart failures. */
-  readonly cause?: unknown;
+  override readonly cause?: unknown;
 
   constructor(stage: AttachStage, message: string, cause?: unknown) {
     super(message);

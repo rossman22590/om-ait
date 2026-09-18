@@ -36,7 +36,7 @@ export type SessionRuntimeFailure =
 
 export class SessionRuntimeError extends Error {
   readonly kind: SessionRuntimeFailure;
-  readonly cause?: unknown;
+  override readonly cause?: unknown;
 
   constructor(kind: SessionRuntimeFailure, message: string, cause?: unknown) {
     super(message);

@@ -4,7 +4,10 @@ import { assertOpenableUrl, openCommand, openUrl } from './open-url.ts';
 
 describe('openCommand', () => {
   test('macOS uses open', () => {
-    expect(openCommand('https://a.kortix.app/', 'darwin')).toEqual(['open', 'https://a.kortix.app/']);
+    expect(openCommand('https://a.kortix.app/', 'darwin')).toEqual([
+      'open',
+      'https://a.kortix.app/',
+    ]);
   });
 
   test('Linux uses xdg-open', () => {

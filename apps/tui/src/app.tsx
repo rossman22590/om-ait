@@ -460,7 +460,7 @@ export function App({
 function statusLeft(host: ResolvedHost, sessionCount: number, projectId: string | null): string {
   const parts = [host.source === 'env' ? 'env' : host.name];
   if (host.userEmail) parts.push(host.userEmail);
-  if (projectId) parts.push(`${sessionCount} sessions`);
+  if (projectId) parts.push(sessionCount === 1 ? '1 session' : `${sessionCount} sessions`);
   return parts.join(' · ');
 }
 

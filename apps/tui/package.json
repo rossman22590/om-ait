@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "bun run src/index.tsx",
     "typecheck": "tsc --noEmit",
+    "keymap": "bun run scripts/print-keymap.ts",
     "test": "bun test --timeout ${KORTIX_TUI_TEST_TIMEOUT_MS:-20000}"
   },
   "dependencies": {

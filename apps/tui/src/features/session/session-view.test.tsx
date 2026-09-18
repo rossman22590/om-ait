@@ -135,9 +135,9 @@ describe('SessionView', () => {
     const { useSessionImpl, renderer } = await mount('composer');
     // One call per render, never one per child: the transcript, the prompts,
     // the composer and the terminal panel all read the SAME object.
-    expect(useSessionImpl.mock.calls.every((call) => call[0] === 'p1' && call[1] === 's1')).toBe(
-      true,
-    );
+    const calls = useSessionImpl.mock.calls as unknown as [string, string][];
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every((call) => call[0] === 'p1' && call[1] === 's1')).toBe(true);
     renderer.destroy();
   });
 
