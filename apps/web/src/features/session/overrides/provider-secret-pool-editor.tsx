@@ -64,7 +64,9 @@ function PoolChoices({ projectId, providers, providerId, onProviderChange, keys,
     {selected.length >= 10 && <p className="text-muted-foreground text-xs" role="status">{t('selectionLimit')}</p>}
     <div className="flex flex-wrap items-center gap-2">
       {configured && !readOnly && <Button size="sm" variant="secondary" disabled={disabled} onClick={onReset}>{t(providerId === 'codex' ? 'resetPersonalChatGptDefault' : 'resetDefault')}</Button>}
-      <Button size="sm" variant="outline-ghost" disabled={disabled} asChild><Link href={`/projects/${projectId}/customize/models`}>{t('manageKeys')}</Link></Button>
+      {disabled
+        ? <Button size="sm" variant="outline-ghost" disabled>{t('manageKeys')}</Button>
+        : <Button size="sm" variant="outline-ghost" asChild><Link href={`/projects/${projectId}/customize/models`}>{t('manageKeys')}</Link></Button>}
     </div>
   </>;
 }

@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import messages from '../../../../translations/en.json';
 import { NewProviderSecretPoolEditor, ProviderSecretPoolEditor } from './provider-secret-pool-editor';
 
-function render(input: { resources?: unknown[]; failed?: boolean; selection?: Record<string, string[]>; canEdit?: boolean } = {}) {
+function render(input: { resources?: unknown[]; failed?: boolean; selection?: Record<string, string[]>; canEdit?: boolean; saving?: boolean } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
   client.setQueryData(['provider-pool-project', 'project'], { project: { account_id: 'account' } });
   client.setQueryData(['account-secret-resources', 'account', 'project'], { secrets: input.resources ?? [] });
@@ -24,7 +24,7 @@ function render(input: { resources?: unknown[]; failed?: boolean; selection?: Re
       <QueryClientProvider client={client}>
         {input.selection
           ? <NewProviderSecretPoolEditor projectId="project" selection={input.selection} onChange={() => {}} />
-          : <ProviderSecretPoolEditor projectId="project" sessionId="session" drafts={{}} onChange={() => {}} />}
+          : <ProviderSecretPoolEditor projectId="project" sessionId="session" drafts={{}} onChange={() => {}} saving={input.saving} />}
       </QueryClientProvider>
     </NextIntlClientProvider>,
   );
@@ -68,4 +68,10 @@ test('read-only viewers can switch providers while selection controls stay locke
   expect(html).toMatch(/role="checkbox"[^>]*disabled/);
   expect(html).toContain('Only the session owner or a project manager');
   expect(html).not.toContain('Reset to project default');
+});
+
+test('saving prevents navigation away from the pending selection', () => {
+  const html = render({ resources: [key('Primary')], saving: true });
+  expect(html).not.toContain('href="/projects/project/customize/models"');
+  expect(html).toMatch(/<button[^>]*disabled[^>]*>Manage provider keys<\/button>/);
 });

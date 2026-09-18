@@ -73,17 +73,17 @@ export function SessionOverridesComposer({
 
   return (
     <ProviderPoolDraftBoundary identity={`${projectId}/${sessionId ?? 'new'}`}>
-    <SessionOverridesToolbar
-      key={`${projectId}/${sessionId ?? 'new'}`}
-      projectId={projectId}
-      sessionId={sessionId}
-      agentName={selectedAgent ?? undefined}
-      onCommittedDraft={onCommittedDraft}
-      providerSecretPools={providerSecretPools}
-      onProviderSecretPoolsChange={onProviderSecretPoolsChange}
-      sandbox={sandbox}
-      sandboxSlot={sandboxSlot}
-    />
+      <SessionOverridesToolbar
+        key={`${projectId}/${sessionId ?? 'new'}`}
+        projectId={projectId}
+        sessionId={sessionId}
+        agentName={selectedAgent ?? undefined}
+        onCommittedDraft={onCommittedDraft}
+        providerSecretPools={providerSecretPools}
+        onProviderSecretPoolsChange={onProviderSecretPoolsChange}
+        sandbox={sandbox}
+        sandboxSlot={sandboxSlot}
+      />
     </ProviderPoolDraftBoundary>
   );
 }

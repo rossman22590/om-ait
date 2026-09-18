@@ -363,6 +363,8 @@ test.describe('30 — pooled provider secrets', () => {
       });
       await saveChanges.click();
       await expect(page.getByRole('button', { name: /^Saving/ })).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Manage provider keys', exact: true })).toBeDisabled();
+      await expect(page.getByRole('link', { name: 'Manage provider keys', exact: true })).toHaveCount(0);
       await page.keyboard.press('Escape');
       await expect(overrides).toBeVisible();
       releaseSave();
