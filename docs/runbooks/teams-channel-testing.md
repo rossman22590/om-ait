@@ -420,3 +420,88 @@ repeat the "dev" column on `https://dev.kortix.com` for the ones marked ★.
 7. `POST /identity/bind` returns `hasAccess` from account membership only, not project write, so the page can say "linked" to a user who will still get the Request-access card.
 8. `MICROSOFT_APP_TENANT` on dev is pinned to one tenant; if the dev app registration is single-tenant, no external customer tenant can use the dev bot.
 9. `ChannelMessage.Read.All` app-only needs Microsoft protected-API approval; three connector actions will 403 until then.
+
+
+## 5. Slack → Teams parity gaps (2026-09-18)
+
+**Update (later same day):** the batch below was worked through in priority
+order. Now CLOSED: the sandbox connector slug (E2), pasted-image attachments,
+follow-up outcomes + dead-session revive (C9, C10), the Teams bindings table
+(F1), join policies (A1), channel/group file delivery (D1), step source
+citations (C2), `teams send --card-file` (C3), the project picker (B1), and the
+docs + skill (F4, F5). Still open or platform-limited: identity/access DMs
+(A2/A3 — Teams has no ephemeral; the prompt replaces the live card instead),
+native streaming (C1), proactive send to arbitrary channels (E1),
+`slack edit/delete` twins (C4), App Home / `sessions` / `rebind`/`unbind`
+(B2–B4), and the platform limits (reactions, ephemeral, search).
+
+
+Everything Slack does that Teams does not, from `apps/api/src/channels/slack/*` (8.9k lines) vs `teams/*` (3.9k), the sandbox CLIs, the connector catalogs, the web, the CLI, tests and docs. **P1** = a user hits it in normal use; **P2** = noticeable; **P3** = nice-to-have; **PL** = Microsoft platform limit, not fixable 1:1.
+
+### Access, identity, and who may talk to a session
+
+| # | Slack | Teams today | Pri |
+|---|---|---|---|
+| A1 | **Conversation policies** per channel: `project_open` / `owner_only` / `owner_approval` (`slack/participants.ts`, `chat_channel_bindings.conversationPolicy`, `chat_thread_participants`). A second person replying in a thread is admitted, refused ("owner-only"), or held while the owner gets an ephemeral **Approve / Deny** card; requester gets an ephemeral "waiting" note. `/kortix policy` sets it. | None. Any linked member with `project.write` continues anyone's session; the policy column exists on Teams bindings but nothing reads it. | P1 |
+| A2 | Identity prompt is posted **both** in-thread (ephemeral) and as a **DM** (`postIdentityPrompt`). | Card replaces the live card in the conversation only. No DM. | P2 |
+| A3 | **Access request → admins are DM'd in Slack** with a "Review in Kortix" button (`notifyAdminsOfAccessRequest`, `slack_open_access_review`). | Managers get the Kortix in-app/email notification only; nothing in Teams. | P2 |
+| A4 | Requester sees "already pending" when re-requesting. | Same (`pending` outcome) ✓ | – |
+| A5 | `link-bot` command for BYO installs whose bot user id is unknown. | N/A (Teams knows the bot id from the manifest). | – |
+
+### Multiple projects / workspaces
+
+| # | Slack | Teams today | Pri |
+|---|---|---|---|
+| B1 | A workspace connected to **several projects** and a channel bound to none → a **project picker** is posted (`maybePostPicker`, `pendingPickers`, 10-min TTL). | `resolveConversationProject` silently takes the first `chat_installs` row. `/projects` and `/use` exist, but nothing tells the user a choice was made for them. | P1 |
+| B2 | `/kortix rebind` / `/kortix unbind` a channel. | `/use` rebinds; no unbind. | P3 |
+| B3 | `/kortix sessions` lists recent sessions for the channel; `session_open` button. | None. | P3 |
+| B4 | **App Home** tab (`home.ts`, `app_home_opened`) listing connected projects. | None. Teams equivalent would be a personal tab or the `/status` card. | P3 |
+
+### Delivery inside a turn
+
+| # | Slack | Teams today | Pri |
+|---|---|---|---|
+| C1 | Native **streaming** answer (`chat.startStream` / `appendStream` / `stopStream`): the reply text grows token by token. | Card updated per `teams step`; the answer lands whole at `teams send`. Teams has a bot streaming API (`channelData.streamType`, 2024) that could be used. | P2 |
+| C2 | Steps carry **`--source URL\|TITLE` citations** rendered as a footer. | `relayTurnStep` stores `sources` but `cards.ts stepElements` never renders them. | P2 |
+| C3 | `slack send --blocks-file` for Block Kit answers (cards, carousels). | `teams send --card-file` for a raw Adaptive Card exists in the skill text but `teams.ts` has no `--card-file` handling (only text and `--file`). | P2 |
+| C4 | `slack edit` / `slack delete` a posted message. | No `edit`/`delete` in the CLI; `updateActivity` exists in `teams-api.ts`, `deleteActivity` does not. | P3 |
+| C5 | `slack react --emoji` (👀 on receipt, ✅ on done). | Bots cannot add reactions in Teams. | PL |
+| C6 | `slack typing`. | `sendTyping` exists server-side; no CLI command (and the auto-indicator was removed on purpose). | P3 |
+| C7 | Ephemeral (only-you-can-see) messages. | Not available to bots in Teams. | PL |
+| C8 | Rich **start-error classification** (`slack/errors.ts`, 352 lines: balance parsing, abort patterns, provider errors, "revived thread" note). | `startErrorMessage` covers 402/429/404/other; turn errors reuse `classifyTurnError` ✓; no balance/provider detail in the copy. | P3 |
+| C9 | A thread whose session was **deleted** is **revived**: stale `chat_threads` row dropped, new session created with a NOTE that history is gone. | `continueSession` on a deleted session returns `unreachable`; nothing is posted and the row stays. | P1 |
+| C10 | Follow-up delivery failure → error rendered in the live message. | `deliverTeamsFollowUpToSession` result is ignored; a failed continue leaves "Working on it…" until the 30-min GC. | P1 |
+| C11 | Keep-alive rules documented (5-min idle timeout). | 15-min `STREAM_TTL` + 30-min GC ✓ | – |
+
+### Files and content
+
+| # | Slack | Teams today | Pri |
+|---|---|---|---|
+| D1 | Outbound file to any channel/thread (`slack send --file --channel`). | Consent-card upload works **in personal chats only** (Teams limitation for `file.consent`). In channels/group chats the bot must upload to the team's SharePoint via Graph (`/drives`) or send an inline image. Not implemented. | P1 |
+| D2 | Inbound files: `file_share` subtype, `file-info`, `download` through the proxy. | Inbound attachments listed in the prompt + `teams download` ✓; `--file-info` n/a. | – |
+| D3 | `history` / `thread` reads via bot token. | `list_messages` / `get_message` / `list_replies` need the protected `ChannelMessage.Read.All` app permission → 403 until Microsoft approves; with RSC `ChannelMessage.Read.Group` consented, Graph allows them for that team. | P2 |
+| D4 | `search` messages. | No Graph equivalent for app-only. | PL |
+
+### Connector catalog and the sandbox CLI
+
+| # | Slack | Teams today | Pri |
+|---|---|---|---|
+| E1 | 14 actions incl. **writes** (`send_message`, `update_message`, `delete_message`, `add_reaction`, `join_channel`). The agent can post to any channel proactively. | 9 **read** actions only. No proactive send (Bot Framework `createConversation` / proactive messaging not implemented). | P2 |
+| E2 | Sandbox CLI resolves the connector as `kortix_slack` with a `slack` fallback. | Sandbox CLI calls `teams.<action>`; the materialized slug is `kortix_teams` and the router has no alias → **every `teams team/channels/members/user` call from a sandbox most likely 404s.** Verify live, then fix the slug. | P1 |
+| E3 | `me` (`auth_test`), `channel-info`, `join`, `users`, `manifest`. | none / `channel` / – / `members` / – | P3 |
+| E4 | Group chats: un-mentioned messages need RSC `ChatMessage.Read.Chat`. | Only `ChannelMessage.Read.Group` requested → group-chat threads still need a mention. | P2 |
+| E5 | Inbound `message_changed` / `message_deleted` ignored on purpose. | `messageUpdate` / `messageDelete` / `messageReaction` activities arrive with RSC and are ignored ✓ (could drive "edit = resend"). | – |
+
+### Web, CLI, tests, docs
+
+| # | Slack | Teams today | Pri |
+|---|---|---|---|
+| F1 | **Bindings table** (agent / model / join policy per channel) on the Channels page, and `channel-bindings.ts` fills channel names for Slack. | Table renders only under the Slack install; Teams bindings are invisible in the UI and would show raw conversation ids (`…@thread.tacv2;messageid=…`). `kortix channels bindings/bind` works for both. | P1 |
+| F2 | Three-step **BYO wizard** (`slack-byo-wizard.tsx`), connect hero card with preview. | Manual/BYO panel is a form; no wizard, no preview. | P3 |
+| F3 | 28 REST flows (`CHN-1…28`) incl. dispatch, OAuth, interactivity, commands, thread bind, file download boundary. | 4 flows (`CHN-T1…T4`). Missing: OAuth callback statuses, interactivity invoke auth, identity bind, file proxy boundary, BYO endpoint, dispatch. | P2 |
+| F4 | `docs/connect/slack.mdx`. | No `teams.mdx`. | P2 |
+| F5 | `kortix-slack` skill: keep-alive rules, Block Kit cheat-sheet, carousel, question tool section, file section. | `kortix-teams` skill lacks the Adaptive Card cheat-sheet, the RSC/mention rules, the personal-chat-only file caveat, and still says disconnect is not in the CLI. | P2 |
+
+### Already at parity (for the record)
+
+Welcome card on install; `/login` + pending-message resume; `/whoami`, `/logout`; `/status`, `/models`, `/model`, `/agents`, `/agent`, `/projects`, `/use`; per-conversation agent+model selection; question tool (`relayTurnQuestion` → platform); Review Center approve/changes/deny cards; live step card; 5-min event dedup; identity/membership/`project.write` gate; OAuth-style one-click install; BYO bot; inbound attachments + download proxy; session badge/facet + incoming/outgoing cards in the web.

@@ -6488,6 +6488,19 @@ leaves a detached HEAD with no `refs/heads/main`.
 owns the template. Nothing lints for a test that shells out to `git` from inside
 the checkout — that check is the TODO.
 
+### Clear provider ingress after a confirmed resume (2026-09-18)
+
+A successful resume must invalidate cached sandbox ingress before turn recovery
+or runtime refresh. Reads during the stopped interval can cache credentials that
+the provider replaces on start. Invalidating only at stop leaves those credentials
+valid in the API cache for five minutes.
+
+The transcript-history preview queued an attachment prompt correctly, but stale
+Daytona ingress returned HTTP 401 after wake. Two browser runs recovered only
+after retry delays and took 263 and 270 seconds. The session API contract test
+now seeds stopped ingress, resumes the same sandbox, and requires the next
+resolution to return the provider's new credential. It failed before the fix.
+
 ### 2026-09-18 — An empty list is not a refusal: a LIST path must carry the denial its single-resource sibling does
 
 **Incident.** A member of an MFA-required account could not see any project,
@@ -6578,3 +6591,17 @@ must not have it, the condition is written once, and no listing denial returns
 without its reason. Verified falsifiable: re-adding the gate to the listing
 turns it red, so "restoring symmetry" between the two functions cannot land by
 accident.
+
+## 2026-09-18 — Directory stale time does not refresh an open page
+
+Entra removed a test group member on dev. The database contained zero members,
+but the open group panel still showed one until reload. `staleTime` only marks
+cached data stale; it does not schedule a fetch. The global query provider also
+disables focus refetches. External SCIM writes cannot invalidate that browser.
+
+Directory readers use the SDK's `contract('directory')`: ten-second foreground
+refreshes plus focus and reconnect refreshes. Keep Azure's provisioning cadence
+separate from browser freshness. Verify external writes while the page stays open.
+
+Enforcers: `packages/sdk/src/react/query-contracts.test.ts` and the external SCIM
+refresh journey in `tests/e2e/specs/22-resource-grant-multiselect.spec.ts`.
