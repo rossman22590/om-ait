@@ -122,8 +122,18 @@ export async function startTurn(
     tenantId,
     projectId,
   };
-  await sendTyping(ref);
-  const messageActivityId = (await sendCard(ref, buildPlanCard(LIVE_PLAN_TITLE, []))) ?? '';
+  // The typing indicator and the card are independent round trips to the
+  // Bot Framework; the card used to wait for the indicator's ack.
+  const t0 = Date.now();
+  const [, messageActivityId] = await Promise.all([
+    sendTyping(ref),
+    sendCard(ref, buildPlanCard(LIVE_PLAN_TITLE, [])).then((id) => id ?? ''),
+  ]);
+  console.info('[teams-webhook] live card posted', {
+    projectId,
+    ms: Date.now() - t0,
+    posted: Boolean(messageActivityId),
+  });
 
   return {
     conversationId,
@@ -279,8 +289,17 @@ export function buildTeamsTurnEnv(tenantId: string, activity: TeamsActivity): Re
   return env;
 }
 
+// The conversation serviceUrl is stable for a tenant; every inbound message
+// used to re-encrypt and re-upsert it. One write per distinct value per
+// process is enough — a restart simply writes it once more.
+const persistedServiceUrl = new Map<string, string>();
+
 export async function persistServiceUrl(projectId: string, serviceUrl?: string): Promise<void> {
-  if (serviceUrl) await saveTeamsServiceUrl(projectId, serviceUrl).catch(() => {});
+  if (!serviceUrl || persistedServiceUrl.get(projectId) === serviceUrl) return;
+  persistedServiceUrl.set(projectId, serviceUrl);
+  await saveTeamsServiceUrl(projectId, serviceUrl).catch(() => {
+    persistedServiceUrl.delete(projectId);
+  });
 }
 
 setInterval(() => {
