@@ -433,14 +433,14 @@ export const CATALOG = catalogJson as Catalog;
 export interface ManagedModel {
   id: string;
   name: string;
-  // Morph's OpenAI-compatible model ID.
+  // OpenAI-compatible upstream model ID.
   upstreamModelId: string;
-  transport: 'morph';
+  transport: 'morph' | 'openrouter';
   // Omit this to keep the model grouped under Kortix in the picker.
   providerBrand?: string;
   // Catalog lookup hint. Managed pricing below is the routing authority.
   pricingRef: string;
-  // Explicit Morph per-million-token prices for credit billing.
+  // Explicit upstream per-million-token prices for credit billing.
   pricing?: {
     inputPerMillion: number;
     outputPerMillion: number;
@@ -459,6 +459,8 @@ export interface ManagedModel {
   vision: boolean;
   // A conservative OpenCode output ceiling inside the upstream context window.
   limit: { context: number; output: number };
+  // OpenRouter endpoint pin and privacy constraints.
+  openrouterProvider?: Record<string, unknown>;
 }
 
 // A managed model's `pricingRef` is supposed to be the model's real
@@ -482,8 +484,8 @@ export function pricingRefLookupCandidates(pricingRef: string): string[] {
 }
 
 // Managed IDs are bare gateway model IDs. OpenCode uses `kortix/<id>` so the
-// picker shows Kortix while the gateway routes to Morph with Kortix credits.
-// Keep only IDs that the configured Morph key can invoke.
+// picker shows Kortix while the gateway routes with Kortix credits.
+// Every bundled model supports image input.
 export const MANAGED_MODELS: ManagedModel[] = [
   {
     id: 'morph-kimik3', name: 'Kimi K3 2.8T', upstreamModelId: 'morph-kimik3',
@@ -502,6 +504,15 @@ export const MANAGED_MODELS: ManagedModel[] = [
     transport: 'morph', pricingRef: 'morph/morph-dsv41flash',
     pricing: { inputPerMillion: 0.3, cachedInputPerMillion: 0.009, outputPerMillion: 1.2 },
     tier: 'balanced', vision: true, limit: { context: 1_048_576, output: 16_384 },
+  },
+  {
+    id: 'glm-5.3-flash', name: 'GLM-5.3-Flash', upstreamModelId: 'z-ai/glm-5.3-flash',
+    transport: 'openrouter', pricingRef: 'openrouter/z-ai/glm-5.3-flash',
+    pricing: { inputPerMillion: 0.15, cachedInputPerMillion: 0.05, outputPerMillion: 0.5 },
+    tier: 'fast', vision: true, limit: { context: 1_048_576, output: 16_384 },
+    openrouterProvider: {
+      only: ['coreweave/nvfp4'], allow_fallbacks: false, zdr: true, data_collection: 'deny',
+    },
   },
 ];
 

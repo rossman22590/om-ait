@@ -5,6 +5,8 @@ const config: Record<string, unknown> = {
   KORTIX_MANAGED_PROVIDER_ENABLED: true,
   MORPH_API_KEY: 'morph-test-key',
   MORPH_API_URL: 'https://api.morphllm.com/v1',
+  OPENROUTER_API_KEY: 'openrouter-test-key',
+  OPENROUTER_API_URL: 'https://openrouter.ai/api/v1',
 };
 mock.module('../../config', () => ({ config }));
 // Spread the real module — see the note in resolve-candidates.test.ts. Listing
@@ -214,4 +216,19 @@ describe('managed Morph descriptor', () => {
       }),
     })]);
   });
+});
+
+test('managed GLM pins CoreWeave and enforces ZDR without fallback', () => {
+  expect(managedCandidates({
+    id: 'glm-5.3-flash', name: 'GLM-5.3-Flash',
+    upstreamModelId: 'z-ai/glm-5.3-flash', transport: 'openrouter',
+    pricingRef: 'openrouter/z-ai/glm-5.3-flash',
+    pricing: { inputPerMillion: 0.15, cachedInputPerMillion: 0.05, outputPerMillion: 0.5 },
+    tier: 'fast', vision: true, limit: { context: 1_048_576, output: 16_384 },
+    openrouterProvider: { only: ['coreweave/nvfp4'], allow_fallbacks: false, zdr: true, data_collection: 'deny' },
+  })).toEqual([expect.objectContaining({
+    provider: 'openrouter', baseUrl: 'https://openrouter.ai/api/v1',
+    resolvedModel: 'z-ai/glm-5.3-flash', billingMode: 'credits',
+    bodyExtras: { provider: { only: ['coreweave/nvfp4'], allow_fallbacks: false, zdr: true, data_collection: 'deny' } },
+  })]);
 });

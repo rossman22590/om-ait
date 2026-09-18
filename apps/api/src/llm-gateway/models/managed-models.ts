@@ -6,7 +6,7 @@ const managedModelSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   upstreamModelId: z.string().min(1),
-  transport: z.literal('morph'),
+  transport: z.enum(['morph', 'openrouter']),
   providerBrand: z.string().min(1).optional(),
   pricingRef: z.string().min(1),
   pricing: z
@@ -39,7 +39,7 @@ export function parseManagedModels(
   raw: string | undefined,
   fallback: readonly ManagedModel[] = BUNDLED_MANAGED_MODELS,
 ): ManagedModel[] {
-  if (!raw) return [...fallback];
+  if (!raw) return fallback.filter((model) => model.vision);
 
   let parsed: unknown;
   try {
@@ -57,11 +57,11 @@ export function parseManagedModels(
     }
     ids.add(model.id);
   }
-  return models;
+  return models.filter((model) => model.vision);
 }
 
 /**
- * Managed Morph models available through Kortix credits. This registry is empty
+ * Image-capable managed models available through Kortix credits. This registry is empty
  * when the cloud managed-provider flag is off. The picker, catalog, and gateway
  * all use this registry, so self-host users never receive the shared key.
  */
@@ -91,7 +91,7 @@ export function isRuntimeManagedModelId(id: string): boolean {
 const BUNDLED_BY_ID = new Map(BUNDLED_MANAGED_MODELS.map((model) => [model.id, model] as const));
 const RETIRED_MANAGED_MODEL_IDS = new Set([
   'glm-5.2', 'grok-4.6', 'deepseek-v4-flash', 'deepseek-v4-pro-0813',
-  'muse-spark-1.2', 'minimax-m3', 'gpt-5.6-luna', 'gpt-6-astra', 'glm-5.3-flash',
+  'muse-spark-1.2', 'minimax-m3', 'gpt-5.6-luna', 'gpt-6-astra',
   'morph-glm53-744b', 'morph-dsv4flash',
 ]);
 

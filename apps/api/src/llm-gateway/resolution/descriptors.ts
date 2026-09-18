@@ -161,6 +161,27 @@ function morphManagedDescriptor(managed: ManagedModel): UpstreamDescriptor | nul
   };
 }
 
+function openRouterManagedDescriptor(managed: ManagedModel): UpstreamDescriptor | null {
+  if (!config.OPENROUTER_API_KEY) return null;
+  return {
+    provider: 'openrouter',
+    kind: 'openai-compat',
+    baseUrl: config.OPENROUTER_API_URL,
+    apiKey: config.OPENROUTER_API_KEY,
+    billingMode: 'credits',
+    markup: llmPriceMarkup(),
+    resolvedModel: managed.upstreamModelId,
+    pricing: managedPricing(managed),
+    bodyExtras: {
+      provider: {
+        ...managed.openrouterProvider,
+        zdr: true,
+        data_collection: 'deny',
+      },
+    },
+  };
+}
+
 export function managedCandidates(managed: ManagedModel): UpstreamDescriptor[] {
   // CLOUD-ONLY gate, defense-in-depth: RUNTIME_MANAGED_MODELS is already empty
   // on a deployment with KORTIX_MANAGED_PROVIDER_ENABLED off (managed-models.ts),
@@ -168,7 +189,9 @@ export function managedCandidates(managed: ManagedModel): UpstreamDescriptor[] {
   // guard here too so no managed credential is read if some future caller
   // reaches this directly.
   if (!config.KORTIX_MANAGED_PROVIDER_ENABLED) return [];
-  const d = morphManagedDescriptor(managed);
+  const d = managed.transport === 'morph'
+    ? morphManagedDescriptor(managed)
+    : openRouterManagedDescriptor(managed);
   return d ? [d] : [];
 }
 
@@ -178,7 +201,7 @@ export function managedDescriptor(managed: ManagedModel): UpstreamDescriptor | n
 
 /**
  * Whether THIS deployment can actually reach `managed` — i.e. its transport's
- * credential is configured (MORPH_API_KEY) and the
+ * credential is configured (MORPH_API_KEY or OPENROUTER_API_KEY) and the
  * managed provider is on.
  *
  * The served catalog reads this so a model that would fail resolution is never

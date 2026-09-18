@@ -38,7 +38,17 @@ describe('runtime managed model registry', () => {
     })]);
   });
 
-  test('rejects a non-Morph managed transport', () => {
+  test('deactivates text-only models from operator overlays', () => {
+    const vision = {
+      id: 'vision', name: 'Vision', upstreamModelId: 'z-ai/glm-5.3-flash',
+      transport: 'openrouter', pricingRef: 'openrouter/z-ai/glm-5.3-flash',
+      tier: 'fast', vision: true, limit: { context: 1_000, output: 100 },
+    };
+    expect(parseManagedModels(JSON.stringify([{ ...vision, id: 'text', vision: false }, vision])))
+      .toEqual([expect.objectContaining({ id: 'vision' })]);
+  });
+
+  test('rejects an unknown managed transport', () => {
     expect(() => parseManagedModels(JSON.stringify([{
       id: 'retired-model',
       name: 'Retired Model',

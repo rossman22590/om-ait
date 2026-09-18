@@ -1236,6 +1236,11 @@ export const MINIMAL_FALLBACK_MODELS: Record<string, KortixGatewayModel> = {
     attachment: true, temperature: true,
     limit: { context: 1_048_576, output: 16_384 }, cost: { input: 0.3, output: 1.2, cache_read: 0.009 },
   },
+  'glm-5.3-flash': {
+    name: 'GLM-5.3-Flash', provider: 'kortix', reasoning: true, tool_call: true,
+    attachment: true, temperature: true,
+    limit: { context: 1_048_576, output: 16_384 }, cost: { input: 0.15, output: 0.5, cache_read: 0.05 },
+  },
   'openai/gpt-5.5': {
     name: 'GPT-5.5',
     provider: 'openai',
