@@ -787,10 +787,11 @@ Scale: ~500 exported symbols / ~520 route handlers in `apps/api/src` — a tract
 `CONN-OAUTH2` connection-scoped native OAuth2 routes → save and read a redacted provider-independent application; start Authorization Code with PKCE S256; read status; reject SSRF discovery, unavailable Device Authorization, unknown device sessions, and callback state replay. Connection creation is no longer gated by a connector-level authorization strategy: `owner_type` is a free choice on `POST .../connections` (`project` or `member`), and `POST .../connections/me` reconciles the caller's own member connection on any connector, side by side with that same connector's project-owned account.
 
 **Connector access has three gates.** The agent's `connectors` grant selects
-connector slugs. The connector's `authorization_strategy` selects `project` or
-the acting member's `user` connections. Connector policies apply to every
-connection under that connector. `connectors_required` is a subset of
-`connectors`; missing active strategy-compatible connections return `409
+connector slugs. Each connection's `owner_type` selects who may reach it:
+`project` is shared with everyone the connector is granted to, `member` is
+private to that person. One connector holds both at the same time. Connector
+policies apply to every connection under that connector. `connectors_required`
+is a subset of `connectors`; missing active reachable connections return `409
 CONNECTOR_CONNECTION_REQUIRED` before sandbox startup. Session
 creation returns `409 REQUIRED_CONNECTOR_CONNECTION_UNAVAILABLE` when a required
 slug has no configured connector. Session
@@ -798,6 +799,22 @@ slug has no configured connector. Session
 values. `GET /projects/:id/sessions/:sessionId/scope` reads the effective
 secret allowlist and connection map. `PUT` on the same path replaces each
 supplied scope field without restarting the session.
+
+**A connector call names the account it runs as.** `POST
+/connectors/projects/:id/call` reads `account` (a connection label or id;
+`connection_id` is accepted for the same value); the CLI flag is `--account`.
+A successful call returns `account:{connection_id,label,owner_type}`. When more
+than one reachable account exists and the call names none and none is pinned,
+the call is denied `403 account_required`, and the body carries
+`available_accounts` plus `default_account:null` — the gateway never guesses an
+account. The effective project default is the pinned account, otherwise the
+connector's sole active project-owned account. Only `PUT
+/projects/:id/connections/:connectionId/default` pins one: `connect` and
+`connect/finalize` never mark the account they create as `is_default`.
+`connectors.authorization_strategy` is a read-only derived summary of a
+connector's accounts (`user` = member-owned accounts only); the `PUT
+…/authorization-strategy` route is a deprecation no-op (CONN-13) and no client
+sends the key on create.
 
 ---
 
