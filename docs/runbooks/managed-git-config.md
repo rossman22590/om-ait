@@ -45,15 +45,15 @@ curl -sS -H "Authorization: Bearer $JWT" \
 ## Required App permissions
 
 `REQUIRED_GITHUB_APP_PERMISSIONS` (`apps/api/src/projects/github.ts`) is the one
-list. The self-host manifest requests exactly this set. An App created by hand
-must match it.
+list. An App created by hand must hold it. The self-host manifest requests this
+set plus `pull_requests: write`, which is reserved: no flow uses it today, and
+no GitHub token reaches a sandbox.
 
 | Permission | Level | Flow that needs it |
 |---|---|---|
 | `metadata` | read | every App call |
 | `contents` | write | commits and pushes |
 | `administration` | write | `createRepo` under a connected organization |
-| `pull_requests` | write | the agent's own `gh` in the sandbox, through the installation token |
 | `members` (organization) | read | `verifyGitHubInstallationAdmin`, `listLinkableGitHubAppInstallations` |
 
 Without `members: read`, GitHub answers `403` on both membership reads. A

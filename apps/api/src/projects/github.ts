@@ -213,8 +213,11 @@ const permissionDriftLogged = new Set<string>();
  *
  * - `administration: write` — `createRepo` under a connected organization.
  * - `contents: write` — commits and pushes.
- * - `pull_requests: write` — no API route calls a pulls endpoint; the
- *   installation token carries it into the sandbox for the agent's own `gh`.
+ *
+ * `pull_requests` is NOT here: no API route calls a pulls endpoint and no GitHub
+ * token reaches a sandbox (git goes through the Kortix git proxy). The manifest
+ * still requests it (`GITHUB_APP_MANIFEST_PERMISSIONS`) so a future pulls flow
+ * needs no re-consent, but its absence breaks nothing and must not alarm.
  * - `members: read` — the account-linking identity proof
  *   (`verifyGitHubInstallationAdmin`, `listLinkableGitHubAppInstallations`).
  *   GitHub answers 403 on both membership reads without it.
@@ -222,9 +225,14 @@ const permissionDriftLogged = new Set<string>();
 export const REQUIRED_GITHUB_APP_PERMISSIONS = {
   administration: 'write',
   contents: 'write',
-  pull_requests: 'write',
   metadata: 'read',
   members: 'read',
+} as const satisfies Record<string, 'read' | 'write'>;
+
+/** What the self-host manifest requests: the required set plus reserved extras. */
+export const GITHUB_APP_MANIFEST_PERMISSIONS = {
+  ...REQUIRED_GITHUB_APP_PERMISSIONS,
+  pull_requests: 'write',
 } as const satisfies Record<string, 'read' | 'write'>;
 
 const PERMISSION_RANK: Record<string, number> = { read: 1, write: 2, admin: 3 };

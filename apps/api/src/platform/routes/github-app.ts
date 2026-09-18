@@ -41,8 +41,8 @@ import {
   githubAppStateSecret,
   isGithubAppConfigured,
   isGithubAppOAuthConfigured,
+  GITHUB_APP_MANIFEST_PERMISSIONS,
   normalizeGitHubFrontendOrigin,
-  REQUIRED_GITHUB_APP_PERMISSIONS,
   resolveGitHubAppSlug,
   signGitHubAppJwt,
   type GitHubAppInstallState,
@@ -116,10 +116,10 @@ export function buildGithubAppManifest(opts: {
     callback_urls: [`${base}/v1/platform/github-app/oauth/callback`],
     setup_on_update: true,
     public: false,
-    // One source: the same set `resolveGitHubAppPermissions()` audits a
-    // hand-made App against (projects/github.ts). `members: read` backs the
+    // One source: the set `resolveGitHubAppPermissions()` audits a hand-made
+    // App against (projects/github.ts), plus the reserved `pull_requests`. `members: read` backs the
     // account-linking identity proof (oauth/authorize + oauth/callback below).
-    default_permissions: { ...REQUIRED_GITHUB_APP_PERMISSIONS },
+    default_permissions: { ...GITHUB_APP_MANIFEST_PERMISSIONS },
     default_events: [],
     hook_attributes: { url: opts.homepageUrl, active: false },
   };

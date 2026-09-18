@@ -178,7 +178,7 @@ describe('resolveGitHubAppPermissions', () => {
     try {
       const first = await resolveGitHubAppPermissions();
       const second = await resolveGitHubAppPermissions();
-      expect(first.missing).toEqual(['administration', 'members', 'pull_requests']);
+      expect(first.missing).toEqual(['administration', 'members']);
       expect(second.missing).toEqual(first.missing);
     } finally {
       console.error = realError;
