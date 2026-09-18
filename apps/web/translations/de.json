@@ -1425,6 +1425,7 @@
         "chat": "Chat",
         "slack": "Slack",
         "telegram": "Telegram",
+        "teams": "Teams",
         "email": "E-Mail",
         "scheduled": "Geplant",
         "webhook": "Webhook",

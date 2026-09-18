@@ -1425,6 +1425,7 @@
         "chat": "聊天",
         "slack": "Slack",
         "telegram": "Telegram",
+        "teams": "Teams",
         "email": "电子邮件",
         "scheduled": "已计划",
         "webhook": "Webhook",

@@ -34,12 +34,19 @@ export function directSubsessions(session: ProjectSession): ProjectRuntimeSessio
 /**
  * Where a session came from, derived from the creation metadata stamped by
  * the API: channel sessions carry `metadata.source` ('slack' | 'telegram' |
- * 'email'),
+ * 'teams' | 'email'),
  * trigger fires carry `metadata.trigger_source` ('cron' | 'webhook' |
  * 'manual') + `trigger_type`/`trigger_slug`. Everything else is a regular
  * chat the user started.
  */
-export type SessionSourceKind = 'chat' | 'slack' | 'telegram' | 'email' | 'schedule' | 'webhook';
+export type SessionSourceKind =
+  | 'chat'
+  | 'slack'
+  | 'telegram'
+  | 'teams'
+  | 'email'
+  | 'schedule'
+  | 'webhook';
 
 export interface SessionSource {
   kind: SessionSourceKind;
@@ -79,6 +86,8 @@ export function sessionSource(session: ProjectSession, tI18nComplete: UiTranslat
     return { kind: 'slack', label: tI18nComplete.raw('textb27fb38ba323'), triggerSlug: null };
   if (source === 'telegram')
     return { kind: 'telegram', label: tI18nComplete.raw('textacdd1e734125'), triggerSlug: null };
+  if (source === 'teams')
+    return { kind: 'teams', label: tI18nComplete.raw('texta7b52b269a23'), triggerSlug: null };
   if (source === 'email')
     return { kind: 'email', label: tI18nComplete.raw('text969ccbd3cf63'), triggerSlug: null };
   if (typeof meta.trigger_source === 'string') {
@@ -193,7 +202,14 @@ export function sessionDisplayStatus(
  * alongside arrays would allow `['all', 'running']`, which has no meaning.
  */
 export type SessionSourceFilter =
-  'mine' | 'shared' | 'slack' | 'telegram' | 'email' | 'schedule' | 'webhook';
+  | 'mine'
+  | 'shared'
+  | 'slack'
+  | 'telegram'
+  | 'teams'
+  | 'email'
+  | 'schedule'
+  | 'webhook';
 export type SessionStatusFilter = 'running' | 'done' | 'stopped' | 'failed' | 'legacy';
 
 export const SESSION_SOURCE_FILTERS: Array<{ value: SessionSourceFilter; label: string }> = [
@@ -201,6 +217,7 @@ export const SESSION_SOURCE_FILTERS: Array<{ value: SessionSourceFilter; label: 
   { value: 'shared', label: 'Shared' },
   { value: 'slack', label: 'Slack' },
   { value: 'telegram', label: 'Telegram' },
+  { value: 'teams', label: 'Teams' },
   { value: 'email', label: 'Email' },
   { value: 'schedule', label: 'Scheduled' },
   { value: 'webhook', label: 'Webhook' },
