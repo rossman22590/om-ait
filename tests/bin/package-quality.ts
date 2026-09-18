@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { withDbFlakeRetry } from '../src/core/db-lane-retry';
 
 const root = resolve(import.meta.dir, '../..');
 const skipSdkTests = process.env.KORTIX_PACKAGE_SKIP_SDK_TESTS === '1';
@@ -174,7 +175,7 @@ await runAll([
 ]);
 await runAll([
   (async () => {
-    await runWorkspaceTests(['@kortix/db'], 1);
+    await withDbFlakeRetry(() => runWorkspaceTests(['@kortix/db'], 1));
     // These contracts apply the complete migration history to disposable
     // PostgreSQL containers. Keep them after the DB package to bound Docker IO.
     await run(['bun', 'test', '--max-concurrency', '2', 'tests/migration']);
