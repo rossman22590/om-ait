@@ -424,6 +424,18 @@ repeat the "dev" column on `https://dev.kortix.com` for the ones marked ★.
 
 ## 5. Slack → Teams parity gaps (2026-09-18)
 
+**Update (later same day):** the batch below was worked through in priority
+order. Now CLOSED: the sandbox connector slug (E2), pasted-image attachments,
+follow-up outcomes + dead-session revive (C9, C10), the Teams bindings table
+(F1), join policies (A1), channel/group file delivery (D1), step source
+citations (C2), `teams send --card-file` (C3), the project picker (B1), and the
+docs + skill (F4, F5). Still open or platform-limited: identity/access DMs
+(A2/A3 — Teams has no ephemeral; the prompt replaces the live card instead),
+native streaming (C1), proactive send to arbitrary channels (E1),
+`slack edit/delete` twins (C4), App Home / `sessions` / `rebind`/`unbind`
+(B2–B4), and the platform limits (reactions, ephemeral, search).
+
+
 Everything Slack does that Teams does not, from `apps/api/src/channels/slack/*` (8.9k lines) vs `teams/*` (3.9k), the sandbox CLIs, the connector catalogs, the web, the CLI, tests and docs. **P1** = a user hits it in normal use; **P2** = noticeable; **P3** = nice-to-have; **PL** = Microsoft platform limit, not fixable 1:1.
 
 ### Access, identity, and who may talk to a session
