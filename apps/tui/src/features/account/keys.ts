@@ -1,10 +1,9 @@
 /**
  * The account screen's key table.
  *
- * Same shape and the same caveat as `features/login/keys.ts`: `KeyScope` in
- * `src/keymap.ts` has no `'account'` member and `keymap.ts` is not this
- * agent's file, so the scope is declared locally. One widening edit there makes
- * `ACCOUNT_KEYS` assignable to `Binding[]` and the help overlay picks it up.
+ * Same shape and the same rule as `features/login/keys.ts`: scoped `'account'`
+ * (a member of `KeyScope`), declared structurally so this file keeps no runtime
+ * import of `keymap.ts`, and spliced into the help overlay by `keymap.ts`.
  */
 
 import type { Chord } from '../../keymap.ts';

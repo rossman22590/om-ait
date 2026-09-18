@@ -1,13 +1,12 @@
 /**
  * The login screen's key table.
  *
- * Same `Binding` shape as `src/keymap.ts`, with one difference the integrator
- * has to close: `KeyScope` in `keymap.ts` is a closed union that has no
- * `'login'` member, and `keymap.ts` is not this agent's file to edit. So the
- * scope is declared locally here. Widening `KeyScope` with `'login'` (and
- * `'account'`) is a one-line edit; after it, `LOGIN_KEYS` is assignable to
- * `Binding[]` and the help overlay (`?`) renders these rows with no other
- * change.
+ * Declared in the same shape as a `Binding` from `src/keymap.ts` and scoped
+ * `'login'`, which `KeyScope` now carries — so `LOGIN_KEYS` is assignable to
+ * `Binding[]` and `keymap.ts` splices it into the help overlay (`?`) directly.
+ * The interface stays declared here rather than imported so this file has no
+ * RUNTIME import of `keymap.ts` at all (see `match.ts` for the import cycle
+ * that costs).
  *
  * A binding that is not in this table does not exist: the login screen never
  * compares `key.name` inline.
