@@ -12,7 +12,8 @@ import { EVENT_DEDUPE_TTL_MS } from './app';
 import { ensureTeamsConversationBinding, teamsChannelCtx } from './binding';
 import { postTeamsIdentityPrompt, resolveTeamsActor, teamsUserId } from './identity';
 import { buildTeamsTurnEnv, finalizeTurn, persistServiceUrl, saveTurn, startTurn } from './turn';
-import { extractTeamsAttachments, type TeamsActivity } from './types';
+import { extractTeamsAttachments, type TeamsActivity, type TeamsLiveTurn } from './types';
+import { stripTeamsMentions } from './util';
 
 const defaultTeamsSessionLifecycle = {
   continueSession: continueLifecycleSession,
@@ -35,6 +36,7 @@ async function resolveTeamsTurnActor(
   projectId: string,
   tenantId: string,
   activity: TeamsActivity,
+  liveCardActivityId: string | undefined,
 ): Promise<string | null> {
   if (!config.TEAMS_REQUIRE_USER_IDENTITY) {
     const userId = await teamsSessionLifecycle.resolveProjectAutomationActor(accountId);
@@ -46,10 +48,33 @@ async function resolveTeamsTurnActor(
   const actor = await resolveTeamsActor(tenantId, senderId ?? '', accountId, projectId);
   if ('userId' in actor) return actor.userId;
 
-  await postTeamsIdentityPrompt({ projectId, tenantId, activity, reason: actor.reason }).catch((err) =>
-    console.warn('[teams-webhook] failed to post identity prompt', err),
-  );
+  // The live card is already on screen (it goes out before identity is
+  // known); the prompt takes its place instead of stacking underneath.
+  await postTeamsIdentityPrompt({
+    projectId,
+    tenantId,
+    activity,
+    reason: actor.reason,
+    ...(liveCardActivityId ? { replaceActivityId: liveCardActivityId } : {}),
+  }).catch((err) => console.warn('[teams-webhook] failed to post identity prompt', err));
   return null;
+}
+
+/** True when a session is already bound to this conversation (a thread the bot owns). */
+export async function hasConversationSession(tenantId: string, conversationId: string): Promise<boolean> {
+  if (!tenantId || !conversationId) return false;
+  const [row] = await db
+    .select({ sessionId: chatThreads.sessionId })
+    .from(chatThreads)
+    .where(
+      and(
+        eq(chatThreads.platform, 'teams'),
+        eq(chatThreads.workspaceId, tenantId),
+        eq(chatThreads.threadId, conversationId),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
 }
 
 export async function deliverTeamsFollowUpToSession(input: {
@@ -65,13 +90,7 @@ export async function deliverTeamsFollowUpToSession(input: {
   });
 }
 
-async function openFollowUpTurn(
-  projectId: string,
-  tenantId: string,
-  sessionId: string,
-  activity: TeamsActivity,
-): Promise<void> {
-  const handle = await startTurn(projectId, tenantId, activity);
+async function bindTurnToSession(handle: TeamsLiveTurn | null, sessionId: string): Promise<void> {
   if (!handle) return;
   handle.sessionId = sessionId;
   await saveTurn(handle);
@@ -92,16 +111,27 @@ export async function createOrJoinTeamsConversationSession(input: {
     .limit(1);
   if (!project) return;
 
-  await persistServiceUrl(projectId, activity.serviceUrl);
+  // Time-to-first-card: the "Working on it…" card depends on nothing below
+  // this line, so it is posted before the identity link, the membership
+  // check and the thread lookup. Everything that follows either binds this
+  // handle to a session or replaces the card in place.
+  const handle = await startTurn(projectId, tenantId, activity);
+  void persistServiceUrl(projectId, activity.serviceUrl);
 
-  const userId = await resolveTeamsTurnActor(project.accountId, projectId, tenantId, activity);
+  const userId = await resolveTeamsTurnActor(
+    project.accountId,
+    projectId,
+    tenantId,
+    activity,
+    handle?.messageActivityId || undefined,
+  );
   if (!userId) return;
 
   const claimKey = tenantId && conversationId ? `teams:threadcreate:${tenantId}:${conversationId}` : null;
   if (claimKey && !(await claimThreadCreate(claimKey))) {
     const sessionId = await waitForConversationSession(tenantId, conversationId);
     if (sessionId) {
-      await openFollowUpTurn(projectId, tenantId, sessionId, activity);
+      await bindTurnToSession(handle, sessionId);
       await deliverTeamsFollowUpToSession({ sessionId, text: renderFollowUpPrompt(activity), userId });
     } else {
       console.warn('[teams-webhook] lost thread-create claim but winner never published a session', {
@@ -125,7 +155,7 @@ export async function createOrJoinTeamsConversationSession(input: {
       )
       .limit(1);
     if (existing) {
-      await openFollowUpTurn(projectId, tenantId, existing.sessionId, activity);
+      await bindTurnToSession(handle, existing.sessionId);
       await deliverTeamsFollowUpToSession({
         sessionId: existing.sessionId,
         text: renderFollowUpPrompt(activity),
@@ -138,8 +168,6 @@ export async function createOrJoinTeamsConversationSession(input: {
   await ensureTeamsConversationBinding({ projectId, tenantId, conversationId });
   const selection = await currentChannelSelection(teamsChannelCtx(tenantId, conversationId));
 
-  const handle = await startTurn(projectId, tenantId, activity);
-
   const result = await teamsSessionLifecycle.createSession({
     source: 'teams',
     project,
@@ -150,8 +178,9 @@ export async function createOrJoinTeamsConversationSession(input: {
       agent_name: selection?.agentName || 'default',
       ...(selection?.opencodeModel ? { opencode_model: selection.opencodeModel } : {}),
       initial_prompt: renderAgentPrompt(activity),
-      // Title from the user's actual words, not the scaffolded envelope.
-      title_source: activity.text ?? null,
+      // Title from the user's actual words — without the `<at>…</at>` mention
+      // markup Teams wraps around the bot's name in channels.
+      title_source: activity.text ? stripTeamsMentions(activity.text) || null : null,
     },
     enforceAccountCap: false,
     queuePolicy: 'on_backpressure',
@@ -184,10 +213,7 @@ export async function createOrJoinTeamsConversationSession(input: {
     return;
   }
 
-  if (result.sessionId && handle) {
-    handle.sessionId = result.sessionId;
-    await saveTurn(handle);
-  }
+  if (result.sessionId) await bindTurnToSession(handle, result.sessionId);
 }
 
 function startErrorMessage(status: number | undefined): string {
@@ -267,7 +293,7 @@ function renderAttachments(activity: TeamsActivity): string[] {
 
 export function renderFollowUpPrompt(activity: TeamsActivity): string {
   const user = activity.from?.name ?? activity.from?.id ?? 'unknown';
-  const text = activity.text ?? '';
+  const text = stripTeamsMentions(activity.text ?? '');
   return [
     `New message from ${user} in the same Teams conversation:`,
     '',
@@ -282,7 +308,7 @@ function renderAgentPrompt(activity: TeamsActivity): string {
   const tenant = activity.conversation?.tenantId ?? activity.channelData?.tenant?.id ?? 'unknown';
   const conversation = activity.conversation?.id ?? '?';
   const user = activity.from?.name ?? activity.from?.id ?? 'unknown';
-  const text = activity.text ?? '';
+  const text = stripTeamsMentions(activity.text ?? '');
   return [
     "You're answering a message on Microsoft Teams as a teammate.",
     '',

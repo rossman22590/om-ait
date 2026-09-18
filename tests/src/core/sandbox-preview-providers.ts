@@ -34,8 +34,8 @@ import {
   PreviewInfrastructureError,
   type SandboxPreviewResult,
   buildPreviewBootstrapScript,
-  previewAttemptPaths,
   previewLockfileHash,
+  previewDeploymentStatusPath,
   previewSandboxIdentity,
   previewSandboxName,
   selectStalePreviewSandboxIds,
@@ -174,9 +174,9 @@ export function platinumPreviewIdempotencyKey(input: {
 export async function deployPlatinumPreview(
   input: SandboxPreviewDeploymentInput,
 ): Promise<SandboxPreviewResult> {
+  const statusPath = previewDeploymentStatusPath(input.runId, input.runAttempt);
   if (!input.platinum.apiKey) throw new PreviewInfrastructureError('PLATINUM_API_KEY is required');
   const api = new PlatinumApi(input.platinum.apiUrl, input.platinum.apiKey);
-  const attempt = previewAttemptPaths(input.runId, input.runAttempt);
   let sandboxId = '';
   let launched = false;
   // Set only when this run adopted an existing branch environment, so the
@@ -273,7 +273,7 @@ export async function deployPlatinumPreview(
     );
     await api.write(
       `${sandboxId}:/workspace/run-kortix-preview.sh`,
-      buildPreviewBootstrapScript({ ...input, origin }),
+      buildPreviewBootstrapScript({ ...input, origin, statusPath }),
       '0755',
     );
     const launch = await execPlatinum(api, sandboxId, [
@@ -289,11 +289,11 @@ export async function deployPlatinumPreview(
       startedAt: Date.now(),
       timeoutMs: PREVIEW_TIMEOUT_MS,
       checkExitCode: async () => {
-        const status = await statPlatinum(api, sandboxId, attempt.status, 1);
+        const status = await statPlatinum(api, sandboxId, statusPath, 1);
         if (!status) return null;
         const bytes = await api.read(
           sandboxId,
-          attempt.status,
+          statusPath,
           undefined,
           undefined,
           1,
@@ -302,11 +302,11 @@ export async function deployPlatinumPreview(
         if (!Number.isInteger(value)) throw new Error('Platinum preview wrote an invalid exit code');
         return value;
       },
-      statLog: () => statPlatinum(api, sandboxId, attempt.log, 1),
+      statLog: () => statPlatinum(api, sandboxId, '/workspace/kortix-preview/kortix-preview.log', 1),
       readLog: (offset, limit) =>
         api.read(
           sandboxId,
-          attempt.log,
+          '/workspace/kortix-preview/kortix-preview.log',
           offset,
           Math.min(limit, LOG_CHUNK_BYTES),
           1,
@@ -352,6 +352,7 @@ async function replaceExistingDaytonaPreview(
 export async function deployDaytonaPreview(
   input: SandboxPreviewDeploymentInput,
 ): Promise<SandboxPreviewResult> {
+  const statusPath = previewDeploymentStatusPath(input.runId, input.runAttempt);
   if (!input.daytona.apiKey) throw new PreviewInfrastructureError('DAYTONA_API_KEY is required');
   // Daytona is the fallback for a Platinum infrastructure failure, and it issues
   // its own preview URL. Falling back would therefore hand a branch environment
@@ -363,7 +364,6 @@ export async function deployDaytonaPreview(
     );
   }
   const api = new DaytonaApi(input.daytona.apiUrl, input.daytona.apiKey);
-  const attempt = previewAttemptPaths(input.runId, input.runAttempt);
   let sandbox: DaytonaSandbox | null = null;
   let launched = false;
   try {
@@ -427,7 +427,7 @@ export async function deployDaytonaPreview(
       sandbox,
       encodedFileCommand(
         '/workspace/run-kortix-preview.sh',
-        buildPreviewBootstrapScript({ ...input, origin }),
+        buildPreviewBootstrapScript({ ...input, origin, statusPath }),
         '0755',
       ),
       60,
@@ -448,16 +448,16 @@ export async function deployDaytonaPreview(
         readRemoteExitCode(
           api,
           sandbox!,
-          attempt.status,
+          statusPath,
           'preview',
         ),
       statLog: () =>
-        statRemoteLog(api, sandbox!, attempt.log, 'preview'),
+        statRemoteLog(api, sandbox!, '/workspace/kortix-preview/kortix-preview.log', 'preview'),
       readLog: (offset, limit) =>
         readRemoteLog(
           api,
           sandbox!,
-          attempt.log,
+          '/workspace/kortix-preview/kortix-preview.log',
           offset,
           Math.min(limit, LOG_CHUNK_BYTES),
           'preview',

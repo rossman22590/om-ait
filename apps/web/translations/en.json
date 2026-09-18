@@ -18,6 +18,8 @@
     "changing": "Changing…"
   },
   "pooledSecrets": {
+    "saveChanges": "Save changes",
+    "unsavedChanges": "Unsaved key changes",
     "providerDisabled": "This provider is disabled for this session.",
     "unavailableKeys": "{count, plural, one {# selected key is unavailable.} other {# selected keys are unavailable.}} Remove unavailable keys or restore access.",
     "removeUnavailable": "Remove unavailable keys",
@@ -927,6 +929,10 @@
           "name": "Network-Enforced Secrets",
           "description": "Control which tools and destinations can receive project secrets."
         },
+        "session_transcript_history": {
+          "name": "Session Transcript History",
+          "description": "Save chat history after each turn and show it while the session computer starts."
+        },
         "pooled_provider_secrets": {
           "name": "Pooled Provider Secrets",
           "description": "Share multiple provider keys with members and select a key pool for each session."
@@ -934,6 +940,10 @@
         "pi_worker": {
           "name": "Pi Worker Runtime (compiled)",
           "description": "Run sessions with the experimental Pi worker runtime."
+        },
+        "pi_harness": {
+          "name": "Pi Harness (in-sandbox)",
+          "description": "Run sessions on the pi harness inside the session sandbox instead of OpenCode. Off, `runtime: pi` in the manifest still selects pi."
         }
       }
     },
@@ -1449,6 +1459,7 @@
         "chat": "Chat",
         "slack": "Slack",
         "telegram": "Telegram",
+        "teams": "Teams",
         "email": "Email",
         "scheduled": "Scheduled",
         "webhook": "Webhook",
@@ -14541,6 +14552,9 @@
       "text922315177668": "All the launcher can see",
       "text9224d9e82502": "Back in \"Provisioning\" → \"Settings\", set \"Scope\" to \"Sync only assigned users and groups\" — it only appears here after credentials are saved. Then click \"Start provisioning\" at the top of the Provisioning overview page (or \"Provision on demand\" to push one assigned user instantly instead of waiting for the ~40-minute cycle).",
       "text9225e456b795": "Mention your agent in a Teams channel or chat.",
+      "text72b5b0c53de9": "Replied in Microsoft Teams",
+      "textfc73e9ad2dae": "Replied in Slack",
+      "text8faf56a14a8d": "Replied in Telegram",
       "text8ccfe10f2f2d": "Publish to your Teams catalog",
       "text36f6474748b3": "Publishing the app to your Teams catalog…",
       "text45b9df5730ac": "Waiting for a Teams admin to approve the app",

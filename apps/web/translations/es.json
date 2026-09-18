@@ -18,6 +18,8 @@
     "changing": "Cambiando…"
   },
   "pooledSecrets": {
+    "saveChanges": "Guardar cambios",
+    "unsavedChanges": "Cambios de claves sin guardar",
     "creationDescription": "El valor permanece cifrado. Elige quién puede usar esta conexión antes de guardarla.",
     "whoCanUse": "¿Quién puede usar esta conexión?",
     "everyoneInProject": "Todos en este proyecto",
@@ -1101,6 +1103,10 @@
           "name": "Secretos protegidos por la red",
           "description": "Controla qué herramientas y destinos pueden recibir los secretos del proyecto."
         },
+        "session_transcript_history": {
+          "name": "Historial de la sesión",
+          "description": "Guarda el historial del chat después de cada turno y muéstralo mientras se inicia el equipo de la sesión."
+        },
         "pooled_provider_secrets": {
           "name": "Secretos de proveedor compartidos",
           "description": "Comparte varias claves de proveedor con miembros y selecciona un grupo de claves para cada sesión."
@@ -1108,6 +1114,10 @@
         "pi_worker": {
           "name": "Entorno del worker Pi (compilado)",
           "description": "Ejecuta sesiones con el entorno experimental del worker Pi."
+        },
+        "pi_harness": {
+          "name": "Harness Pi (en el sandbox)",
+          "description": "Ejecuta las sesiones con el harness Pi dentro del sandbox de la sesión en lugar de OpenCode. Desactivado, `runtime: pi` en el manifiesto sigue seleccionando Pi."
         }
       }
     },
@@ -1449,6 +1459,7 @@
         "chat": "Chat",
         "slack": "Slack",
         "telegram": "Telegram",
+        "teams": "Teams",
         "email": "Correo electrónico",
         "scheduled": "Programado",
         "webhook": "Webhook",
@@ -14541,6 +14552,9 @@
       "text922315177668": "Todo lo que el lanzador puede ver",
       "text9224d9e82502": "De vuelta en «Provisioning» → «Settings», establece «Scope» en «Sync only assigned users and groups»; esta opción solo aparece aquí después de guardar las credenciales. Luego haz clic en «Start provisioning» en la parte superior de la página de resumen de Provisioning (o en «Provision on demand» para enviar al instante un usuario asignado, en lugar de esperar el ciclo de unos 40 minutos).",
       "text9225e456b795": "Menciona a tu agente en un canal o chat de Teams.",
+      "text72b5b0c53de9": "Respondió en Microsoft Teams",
+      "textfc73e9ad2dae": "Respondió en Slack",
+      "text8faf56a14a8d": "Respondió en Telegram",
       "text8ccfe10f2f2d": "Publicar en tu catálogo de Teams",
       "text36f6474748b3": "Publicando la app en tu catálogo de Teams…",
       "text45b9df5730ac": "Esperando que un administrador de Teams apruebe la app",

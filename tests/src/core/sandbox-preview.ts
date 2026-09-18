@@ -30,6 +30,13 @@ export function previewLockfileHash(value: string): string {
   return hash;
 }
 
+export function previewDeploymentStatusPath(runId: string, runAttempt: string): string {
+  if (![runId, runAttempt].every((value) => /^[a-z0-9_-]+$/i.test(value))) {
+    throw new Error('invalid preview workflow run identity');
+  }
+  return `/workspace/kortix-preview/run-${runId}-${runAttempt}.exit`;
+}
+
 export interface PreviewSandboxRecord {
   id: string;
   /** Present on Platinum records; teardown matches on it as well as ownership. */
@@ -49,23 +56,12 @@ function shellQuote(value: string): string {
 export const PREVIEW_DOCKER_CLI_IMAGE =
   'docker:29.6.1-cli@sha256:862099ada15c669000bef53aa4cb9d821262829f45b0dda2159ccb276443043b';
 
-/** A reused sandbox must never report a previous workflow attempt's result. */
-export function previewAttemptPaths(runId: string, runAttempt: string) {
-  if (!/^[a-z0-9_-]+$/i.test(runId) || !/^[a-z0-9_-]+$/i.test(runAttempt)) {
-    throw new Error('invalid preview run identity');
-  }
-  const prefix = `/workspace/kortix-preview/attempt-${runId}-${runAttempt}`;
-  return { log: `${prefix}.log`, status: `${prefix}.exit` };
-}
-
 export function buildPreviewBootstrapScript(input: {
   repository: string;
   ref: string;
   sha: string;
   prNumber: number;
   origin: string;
-  runId: string;
-  runAttempt: string;
   /**
    * Run the full suite inside the environment once it is up. Default true.
    *
@@ -75,6 +71,7 @@ export function buildPreviewBootstrapScript(input: {
    * has not already proved. Run it there on demand instead.
    */
   runTests?: boolean;
+  statusPath?: string;
 }): string {
   if (!/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/i.test(input.repository)) {
     throw new Error(`invalid GitHub repository: ${input.repository}`);
@@ -88,7 +85,6 @@ export function buildPreviewBootstrapScript(input: {
   }
   const instance = `pr-${input.prNumber}`;
   const state = '/workspace/kortix-preview';
-  const attempt = previewAttemptPaths(input.runId, input.runAttempt);
   const instanceDir = `${state}/self-host/${instance}`;
   const compose = `docker compose --project-name kortix-${instance} --env-file ${instanceDir}/.env -f ${instanceDir}/docker-compose.yml -f ${state}/docker-compose.preview.yml`;
   return `#!/usr/bin/env bash
@@ -96,9 +92,8 @@ set -euo pipefail
 
 ROOT=/workspace/suna
 STATE=${state}
-LOG=${attempt.log}
-STATUS=${attempt.status}
-GUARD_STATUS="$STATE/kortix-preview.exit"
+LOG="$STATE/kortix-preview.log"
+STATUS=${shellQuote(input.statusPath ?? `${state}/kortix-preview.exit`)}
 PHASE="$STATE/kortix-preview.phase"
 SECRETS="$STATE/runtime-secrets.json"
 export HOME=/root
@@ -111,7 +106,7 @@ mkdir -p "$STATE" "$ROOT/tests/test-results"
 # while the first run is still testing it.
 exec 9>"$STATE/deploy.lock"
 flock -x 9
-rm -f "$STATUS" "$PHASE" "$GUARD_STATUS"
+rm -f "$STATUS" "$PHASE"
 exec > >(tee -a "$LOG") 2>&1
 
 finish() {
@@ -119,7 +114,6 @@ finish() {
   set +e
   tar -czf /workspace/kortix-test-results.tar.gz -C "$ROOT" tests/test-results
   printf '%s\n' "$code" > "$STATUS"
-  printf '%s\n' "$code" > "$GUARD_STATUS"
 }
 trap 'code=$?; finish "$code"' EXIT
 
@@ -160,7 +154,7 @@ for module in overlay bridge br_netfilter veth nf_tables ip_tables iptable_nat; 
 done
 if ! docker info >/dev/null 2>&1; then
   rm -f /var/run/docker.pid /var/run/docker.sock
-  nohup dockerd --host=unix:///var/run/docker.sock > "$STATE/dockerd.log" 2>&1 &
+  nohup dockerd --host=unix:///var/run/docker.sock 9>&- > "$STATE/dockerd.log" 2>&1 &
   timeout 180 sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done'
 fi
 docker info >/dev/null
