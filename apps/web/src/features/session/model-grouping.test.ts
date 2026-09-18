@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { isPickerGroupOpen, modelItemValue, pickerGroupId, pickerGroupLabel, splitModelLabel } from './model-grouping';
+import { buildPickerSections, isPickerGroupOpen, modelItemValue, pickerGroupId, pickerGroupLabel, splitModelLabel } from './model-grouping';
 import type { FlatModel } from './session-chat-input';
 
 // Regression coverage for the "every provider shows as Kortix" picker bug.
@@ -241,5 +241,84 @@ describe('isPickerGroupOpen', () => {
     expect(
       isPickerGroupOpen({ ...base, groupProviderID: 'anthropic', expanded: new Set(['codex']) }),
     ).toBe(false);
+  });
+});
+
+describe('buildPickerSections', () => {
+  const group = {
+    providerID: 'codex',
+    providerName: 'ChatGPT subscription',
+    models: [{ modelID: 'codex/gpt-6-astra' }, { modelID: 'codex/gpt-5.5' }] as never[],
+  };
+  const account = (secret_id: string, label: string, provider_id = 'codex') => ({
+    secret_id,
+    label,
+    provider_id,
+  });
+
+  test('the models are listed ONCE however many accounts exist', () => {
+    const [section] = buildPickerSections([group], [account('s1', 'A'), account('s2', 'B')]);
+    // The account is a credential, not a model set. Two accounts must not
+    // double the rows — that was the ten-rows-for-five-models shape.
+    expect(section!.models).toHaveLength(2);
+    expect(section!.accounts.map((a) => a.label)).toEqual(['A', 'B']);
+  });
+
+  test('another provider\u2019s credentials do not attach to this section', () => {
+    const [section] = buildPickerSections([group], [account('s1', 'Anthropic key', 'anthropic')]);
+    expect(section!.accounts).toEqual([]);
+  });
+
+  test('the active credential is carried through', () => {
+    const [section] = buildPickerSections(
+      [group],
+      [account('s1', 'A'), account('s2', 'B')],
+      { codex: 's2' },
+    );
+    expect(section!.activeSecretId).toBe('s2');
+  });
+
+  test('a pin naming a deleted credential falls back to the project default', () => {
+    const [section] = buildPickerSections([group], [account('s1', 'A')], { codex: 'gone' });
+    expect(section!.activeSecretId).toBeNull();
+  });
+
+  test('no pin means the project default', () => {
+    const [section] = buildPickerSections([group], [account('s1', 'A')]);
+    expect(section!.activeSecretId).toBeNull();
+  });
+
+  test('a credential this viewer holds no grant on is not offered', () => {
+    // `PUT .../provider-secret-pools` answers 403 for a secret the caller
+    // cannot use. Listing it would be a row that fails on click.
+    const [section] = buildPickerSections(
+      [group],
+      [account('s1', 'A'), { ...account('s2', 'Someone else\u2019s'), can_use: false }],
+    );
+    expect(section!.accounts.map((a) => a.secret_id)).toEqual(['s1']);
+  });
+
+  test('a retired credential is not offered', () => {
+    const [section] = buildPickerSections(
+      [group],
+      [account('s1', 'A'), { ...account('s2', 'Rotated out'), active: false }],
+    );
+    expect(section!.accounts.map((a) => a.secret_id)).toEqual(['s1']);
+  });
+
+  test('a pin naming a credential the viewer lost access to falls back to the default', () => {
+    const [section] = buildPickerSections(
+      [group],
+      [account('s1', 'A'), { ...account('s2', 'B'), can_use: false }],
+      { codex: 's2' },
+    );
+    // Not "still on B": the session cannot bill to it, and saying it does is
+    // the kind of quiet lie the picker is supposed to end.
+    expect(section!.activeSecretId).toBeNull();
+  });
+
+  test('the section keeps the RESOLVED provider for its row logos', () => {
+    const [section] = buildPickerSections([group], []);
+    expect(section!.providerID).toBe('codex');
   });
 });
