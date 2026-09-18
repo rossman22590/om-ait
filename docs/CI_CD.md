@@ -21,33 +21,60 @@ uses that lifecycle instead of creating a second worktree abstraction.
 
 See `tests/README.md` for flow authoring and result files.
 
-## Warm sandbox execution
+## Where the test suite runs
 
-`.github/workflows/tests.yml` is the only warm-sandbox test implementation.
-`tests-pr.yml` calls it once for pull requests into `main` or `staging`.
-The three parallel lanes equal one `pnpm test -- --full` run.
+`.github/workflows/tests.yml` is the only local-profile test implementation. It
+runs four lanes in parallel — `core`, `browser-1`, `browser-2`, `packages` —
+each natively on one Blacksmith runner (`CI_RUNNER_L`, 8 vCPU / 32 GB). The four
+lanes equal one `pnpm test -- --full` run, and the slowest lane defines the
+duration. Measured on 2026-09-18: `core` 2m18s, `packages` 6m34s, `browser-1`
+8m11s, `browser-2` 10m19s.
 
-The workflow starts three workers in parallel. They run core, browser, and
-package modes. The slowest worker defines the gate duration.
+Until 2026-08-26 each lane ran inside a Platinum or Daytona cloud sandbox with a
+warm template, and the runner was a thin orchestrator. That path was deleted
+after the provider chain failed on its own on about every third lane. Only
+`deploy-preview.yml` still uses a cloud sandbox, because a preview needs a
+long-lived public HTTPS origin.
 
-Each worker performs this sequence:
+### Two callers, neither of them a gate on `main`
 
-1. Resolve `kortix-ci-v*-<lock-hash>`.
-2. Build the template only when the lockfile hash is new.
-3. Create a persistent 8 vCPU, 16 GiB RAM, 50 GiB disk sandbox. This type uses
-   Platinum's stateful-restore path. The worker remains disposable.
-4. Fetch the requested public Git ref inside the sandbox.
-5. Verify the full Git SHA.
-6. Run its unchanged root test mode.
-7. Upload `tests/test-results` to the GitHub workflow.
-8. Delete the sandbox in unconditional runner and workflow cleanup paths.
+Changed 2026-09-18. Before that every pull request into `main` waited for the
+full suite: ~11 min median and 68 min worst case, against ~3-6 min for every
+other pull-request check. It gated nothing — the `main-push-protection` ruleset
+requires a pull request with 0 approvals and **no required status checks**, so a
+red suite never blocked a merge. It only made people wait.
 
-The template contains pinned Node, Bun, pnpm, Docker, Chromium, and a warm pnpm
-store. Product flows that test sandbox lifecycle create separate sandboxes.
+| Caller | Trigger | Purpose |
+| --- | --- | --- |
+| `tests-pr.yml` | pull request into `staging`; pull request into `main` carrying `test` or `preview`; manual dispatch | gate the release candidate, and opt in per pull request |
+| `tests-main.yml` | every push to `main` (and manual dispatch) | answer "is the dev trunk green at its latest commit" |
 
-Set the provider to `auto`, `platinum`, or `daytona`. Auto tries Platinum first.
-It falls back to Daytona only for a Platinum infrastructure error. It does not
-hide a non-zero test result.
+`tests-pr.yml`'s `test verdict` job always runs and always passes. It names the
+rule that applied and, when the suite is skipped, how to ask for it, so an empty
+check list is a stated decision rather than a broken workflow. Adding `test` or
+`preview` to an already-open pull request re-triggers the workflow, so the opt-in
+needs no push.
+
+`tests-main.yml` cannot block anything: the code has merged, and
+`deploy-dev.yml` deploys the same push without waiting for it.
+`cancel-in-progress: true` matches `deploy-dev.yml`, so the trunk answer is
+always about the newest commit and a cancelled run is normal. A red run posts a
+comment on the offending commit naming the failing lanes, and the fix is an
+ordinary pull request — `main` is allowed to be broken while work is shaken out.
+
+Because a `main` pull request no longer runs the suite for you, run it locally
+before merging: the narrowest relevant command first, then `pnpm test`.
+
+### Deployed targets
+
+Two workflows test a deployed origin instead of the local profile:
+
+- `deploy-preview.yml` — `pnpm test -- --target-full` against a full self-host
+  preview origin, on the `preview` label.
+- `tests-release.yml` — sharded `--target-api-full` / `--target-browser-full`
+  against deployed staging on a pull request into `prod`. Its aggregator job
+  `full suite + quality gates` is the **only** required status check in the
+  repository.
 
 ## Release path
 

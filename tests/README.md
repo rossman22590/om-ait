@@ -59,15 +59,32 @@ Run the same journey in native Electron with `E2E_DESKTOP_NATIVE=1` and
 `E2E_GREP='27 — desktop parity'`. See
 [`desktop-verification.md`](../docs/runbooks/desktop-verification.md).
 
-GitHub Actions uses `.github/workflows/tests.yml` for local-profile PR tests.
-`tests-pr.yml` calls it once for pull requests into `main` or `staging`. Full
-mode runs four lanes in parallel, each natively on one Blacksmith runner
+GitHub Actions uses `.github/workflows/tests.yml` for every local-profile run.
+Two workflows call it, and neither runs on an ordinary pull request into `main`
+(changed 2026-09-18):
+
+| Caller | Runs when | Blocks a merge |
+| --- | --- | --- |
+| `tests-pr.yml` | a pull request into `staging`, or a pull request carrying the `test` or `preview` label, or manual dispatch | no — `main` and `staging` require no status check |
+| `tests-main.yml` | every push to `main`, on that commit | no — the code already merged |
+
+`tests-pr.yml`'s `test verdict` job always runs and always passes. It prints the
+rule that applied and, when the suite is skipped, how to ask for it. An empty
+check list on a pull request is therefore a stated decision, not a broken
+workflow. `tests-main.yml` cancels a superseded run so the answer is always
+about `main`'s latest commit; a red run comments on the offending commit with
+the failing lane names. Deployed-target runs are separate: `deploy-preview.yml`
+(`--target-full` against a preview origin) and `tests-release.yml` (sharded
+`--target-*-full` against deployed staging, the only required check on `prod`).
+
+Full mode runs four lanes in parallel, each natively on one Blacksmith runner
 (`CI_RUNNER_L`, 8 vCPU / 32 GB — see `docs/runbooks/ci-runners.md`). Core and
 package lanes run `pnpm test` and `pnpm test -- --packages-only`. Two browser
 lanes run shards `1/2` and `2/2` through
 `pnpm test -- --browser-only --browser-shard=CURRENT/TOTAL`. The four lanes are
 the parallel equivalent of `pnpm test -- --full`. Each lane checks out the exact
-pull-request head SHA, runs `pnpm install --frozen-lockfile`, and invokes the
+requested SHA (a pull request's head, or the pushed `main` commit), runs
+`pnpm install --frozen-lockfile`, and invokes the
 unchanged root command; browser lanes also install Chromium and prestart
 Supabase so the root runner reuses it. Blacksmith caches the pnpm store, the
 Chromium download, and every pulled Docker image (the Supabase images) across

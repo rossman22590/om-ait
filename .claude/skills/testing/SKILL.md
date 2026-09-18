@@ -73,6 +73,25 @@ work.
 Each root run writes a benchmark to
 `tests/test-results/local/benchmark-<timestamp>.json`.
 
+## Know where CI runs the suite, and run it yourself when CI will not
+
+Changed 2026-09-18. A pull request into `main` does NOT run the local suite.
+Two workflows call `.github/workflows/tests.yml`:
+
+- `tests-pr.yml` — a pull request into `staging`, or a pull request carrying the
+  `test` or `preview` label, or manual dispatch. Its `test verdict` job always
+  runs and always passes; it names the rule that applied.
+- `tests-main.yml` — every push to `main`, on that commit. It blocks nothing and
+  comments on a red commit with the failing lane names.
+
+Neither is a merge gate: `main` and `staging` require no status check. The only
+required check in the repository is `tests-release.yml`'s `full suite + quality
+gates`, on a pull request into `prod`, and it tests DEPLOYED staging.
+
+So the local run is the real gate before a `main` merge. Run the narrowest
+relevant command first, then `pnpm test`, and add the `test` label when you want
+CI's four lanes on the pull request as well.
+
 ## Run CI lanes natively on Blacksmith
 
 Keep the test commands unchanged. `.github/workflows/tests.yml` runs four lanes
@@ -82,7 +101,7 @@ browser lanes run shards `1/2` and `2/2` through
 `pnpm test -- --browser-only --browser-shard=CURRENT/TOTAL` at the exact
 requested SHA.
 
-- Check out the pull-request head SHA with `fetch-depth: 1`.
+- Check out the requested SHA with `fetch-depth: 1` — a pull request's head, or the pushed `main` commit.
 - Run `pnpm install --frozen-lockfile`; Blacksmith serves the pnpm store from
   its cache transparently.
 - Browser lanes: `pnpm --dir tests exec playwright install --with-deps chromium`
