@@ -5,9 +5,10 @@ mock.module('../../repositories/project-model-access', () => ({ getProjectModelA
 
 const configuredModels = [
   {
-    id: 'morph-dsv41flash', name: 'DeepSeek V4.1 Flash',
-    upstreamModelId: 'morph-dsv41flash', transport: 'morph',
-    pricingRef: 'morph/morph-dsv41flash', tier: 'balanced', vision: true,
+    id: 'deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash',
+    upstreamModelId: 'deepseek/deepseek-v4.1-flash', transport: 'openrouter',
+    pricingRef: 'openrouter/deepseek/deepseek-v4.1-flash', tier: 'balanced', vision: true,
+    openrouterProvider: { only: ['test-endpoint'], allow_fallbacks: false, zdr: true, data_collection: 'deny' },
     limit: { context: 1_048_576, output: 16_384 },
   },
 ];
@@ -26,7 +27,7 @@ mock.module('../../config', () => ({
         if (key === 'LLM_GATEWAY_MANAGED_MODELS') return JSON.stringify(configuredModels);
         if (key === 'TUNNEL_ENABLED') return false;
         if (key === 'LLM_GATEWAY_BYOK_FALLBACK_MODEL') return '';
-        if (key === 'LLM_GATEWAY_DEFAULT_MODEL') return 'morph-dsv41flash';
+        if (key === 'LLM_GATEWAY_DEFAULT_MODEL') return 'deepseek-v4.1-flash';
         if (key === 'LLM_GATEWAY_VISION_MODEL') return undefined;
         if (key === 'LLM_GATEWAY_FALLBACK_POLICIES') return [];
         if (key === 'AWS_BEDROCK_REGION') return 'us-west-2';
@@ -80,18 +81,18 @@ const { gatewayModelCatalog, managedModels } = await import('./catalog-models');
 const { managedPickerModels } = await import('./picker-catalog');
 const { resolveCandidates } = await import('../resolution/resolve-candidates');
 
-describe('a Morph model without a credential is not offered', () => {
+describe('an OpenRouter model without a credential is not offered', () => {
   test('removes the model from every served catalog', () => {
-    expect(RUNTIME_MANAGED_MODELS.map((model) => model.id)).toContain('morph-dsv41flash');
+    expect(RUNTIME_MANAGED_MODELS.map((model) => model.id)).toContain('deepseek-v4.1-flash');
     expect(SERVED_MANAGED_MODELS).toEqual([]);
-    expect(managedModels()['morph-dsv41flash']).toBeUndefined();
-    expect(gatewayModelCatalog('proj')['morph-dsv41flash']).toBeUndefined();
-    expect(managedPickerModels().map((model) => model.id)).not.toContain('kortix/morph-dsv41flash');
+    expect(managedModels()['deepseek-v4.1-flash']).toBeUndefined();
+    expect(gatewayModelCatalog('proj')['deepseek-v4.1-flash']).toBeUndefined();
+    expect(managedPickerModels().map((model) => model.id)).not.toContain('kortix/deepseek-v4.1-flash');
   });
 
   test('refuses an explicit request for the uncredentialed model', async () => {
     await expect(
-      resolveCandidates({ userId: 'u', accountId: 'a', projectId: 'p' }, 'morph-dsv41flash'),
+      resolveCandidates({ userId: 'u', accountId: 'a', projectId: 'p' }, 'deepseek-v4.1-flash'),
     ).rejects.toMatchObject({ name: 'GatewayResolutionError' });
   });
 });

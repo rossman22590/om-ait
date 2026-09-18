@@ -6,7 +6,7 @@ const managedModelSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   upstreamModelId: z.string().min(1),
-  transport: z.enum(['morph', 'openrouter']),
+  transport: z.literal('openrouter'),
   providerBrand: z.string().min(1).optional(),
   pricingRef: z.string().min(1),
   pricing: z
@@ -32,7 +32,12 @@ const managedModelSchema = z.object({
     context: z.number().int().positive(),
     output: z.number().int().positive(),
   }),
-  openrouterProvider: z.record(z.unknown()).optional(),
+  openrouterProvider: z.object({
+    only: z.tuple([z.string().min(1)]),
+    allow_fallbacks: z.literal(false),
+    zdr: z.literal(true),
+    data_collection: z.literal('deny'),
+  }),
 });
 
 export function parseManagedModels(
@@ -92,8 +97,19 @@ const BUNDLED_BY_ID = new Map(BUNDLED_MANAGED_MODELS.map((model) => [model.id, m
 const RETIRED_MANAGED_MODEL_IDS = new Set([
   'glm-5.2', 'grok-4.6', 'deepseek-v4-flash', 'deepseek-v4-pro-0813',
   'muse-spark-1.2', 'minimax-m3', 'gpt-5.6-luna', 'gpt-6-astra',
-  'morph-glm53-744b', 'morph-dsv4flash',
+  'morph-glm53-744b', 'morph-dsv4flash', 'morph-kimik3',
+  'morph-kimik3-fast', 'morph-dsv41flash',
 ]);
+
+const LEGACY_MANAGED_IDS: Record<string, string> = {
+  'morph-kimik3': 'kimi-k3',
+  'morph-kimik3-fast': 'kimi-k3-fast',
+  'morph-dsv41flash': 'deepseek-v4.1-flash',
+};
+
+export function canonicalManagedModelId(id: string): string {
+  return LEGACY_MANAGED_IDS[id] ?? id;
+}
 
 export function isKnownManagedModelId(id: string): boolean {
   return BUNDLED_BY_ID.has(id) || RETIRED_MANAGED_MODEL_IDS.has(id);
@@ -141,6 +157,8 @@ export function resolvePlatformDefaultModelId(
   const trimmed = configured.trim();
   if (!trimmed) return trimmed;
   const bare = bareManagedId(trimmed);
+  const alias = canonicalManagedModelId(bare);
+  if (alias !== bare && served.some((model) => model.id === alias)) return alias;
   // Not a managed id at all → a BYOK ref; leave it alone.
   if (!isKnownManagedModelId(bare)) return trimmed;
   if (served.some((model) => model.id === bare)) return trimmed;

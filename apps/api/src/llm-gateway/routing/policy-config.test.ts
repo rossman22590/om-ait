@@ -50,8 +50,8 @@ describe('gateway fallback policy configuration', () => {
   test('routes the platform default to an independent managed fallback', () => {
     expect(parseFallbackPolicies(DEFAULT_LLM_GATEWAY_FALLBACK_POLICIES)).toContainEqual({
       id: 'platform-default-resilience',
-      models: ['morph-dsv41flash'],
-      fallbackModels: ['morph-kimik3'],
+      models: ['deepseek-v4.1-flash'],
+      fallbackModels: ['kimi-k3'],
       fallbackOn: 'transient',
     });
   });

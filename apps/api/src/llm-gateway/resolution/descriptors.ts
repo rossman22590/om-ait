@@ -147,20 +147,6 @@ function managedPricing(managed: ManagedModel): UpstreamDescriptor['pricing'] | 
   return livePricing(managed.pricingRef.slice(0, slash), managed.pricingRef.slice(slash + 1));
 }
 
-function morphManagedDescriptor(managed: ManagedModel): UpstreamDescriptor | null {
-  if (!config.MORPH_API_KEY) return null;
-  return {
-    provider: 'morph',
-    kind: 'openai-compat',
-    baseUrl: config.MORPH_API_URL,
-    apiKey: config.MORPH_API_KEY,
-    billingMode: 'credits',
-    markup: llmPriceMarkup(),
-    resolvedModel: managed.upstreamModelId,
-    pricing: managedPricing(managed),
-  };
-}
-
 function openRouterManagedDescriptor(managed: ManagedModel): UpstreamDescriptor | null {
   if (!config.OPENROUTER_API_KEY) return null;
   return {
@@ -175,6 +161,7 @@ function openRouterManagedDescriptor(managed: ManagedModel): UpstreamDescriptor 
     bodyExtras: {
       provider: {
         ...managed.openrouterProvider,
+        allow_fallbacks: false,
         zdr: true,
         data_collection: 'deny',
       },
@@ -189,9 +176,7 @@ export function managedCandidates(managed: ManagedModel): UpstreamDescriptor[] {
   // guard here too so no managed credential is read if some future caller
   // reaches this directly.
   if (!config.KORTIX_MANAGED_PROVIDER_ENABLED) return [];
-  const d = managed.transport === 'morph'
-    ? morphManagedDescriptor(managed)
-    : openRouterManagedDescriptor(managed);
+  const d = openRouterManagedDescriptor(managed);
   return d ? [d] : [];
 }
 
@@ -201,7 +186,7 @@ export function managedDescriptor(managed: ManagedModel): UpstreamDescriptor | n
 
 /**
  * Whether THIS deployment can actually reach `managed` — i.e. its transport's
- * credential is configured (MORPH_API_KEY or OPENROUTER_API_KEY) and the
+ * credential is configured (OPENROUTER_API_KEY) and the
  * managed provider is on.
  *
  * The served catalog reads this so a model that would fail resolution is never

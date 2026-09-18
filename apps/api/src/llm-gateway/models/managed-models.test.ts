@@ -24,8 +24,9 @@ describe('runtime managed model registry', () => {
       id: 'operator-model',
       name: 'Operator Model',
       upstreamModelId: 'morph-model-v2',
-      transport: 'morph',
-      pricingRef: 'morph/morph-model-v2',
+      transport: 'openrouter',
+      pricingRef: 'openrouter/morph-model-v2',
+      openrouterProvider: { only: ['test-endpoint'], allow_fallbacks: false, zdr: true, data_collection: 'deny' },
       tier: 'balanced',
       vision: true,
       limit: { context: 64_000, output: 8_000 },
@@ -42,10 +43,26 @@ describe('runtime managed model registry', () => {
     const vision = {
       id: 'vision', name: 'Vision', upstreamModelId: 'z-ai/glm-5.3-flash',
       transport: 'openrouter', pricingRef: 'openrouter/z-ai/glm-5.3-flash',
+      openrouterProvider: { only: ['test-endpoint'], allow_fallbacks: false, zdr: true, data_collection: 'deny' },
       tier: 'fast', vision: true, limit: { context: 1_000, output: 100 },
     };
     expect(parseManagedModels(JSON.stringify([{ ...vision, id: 'text', vision: false }, vision])))
       .toEqual([expect.objectContaining({ id: 'vision' })]);
+  });
+
+  test('rejects an unpinned or fallback-enabled operator route', () => {
+    const model = {
+      id: 'unsafe', name: 'Unsafe', upstreamModelId: 'z-ai/glm-5.3-flash',
+      transport: 'openrouter', pricingRef: 'openrouter/z-ai/glm-5.3-flash',
+      tier: 'fast', vision: true, limit: { context: 1_000, output: 100 },
+    };
+    expect(() => parseManagedModels(JSON.stringify([model]))).toThrow();
+    expect(() => parseManagedModels(JSON.stringify([{
+      ...model,
+      openrouterProvider: {
+        only: ['coreweave/nvfp4'], allow_fallbacks: true, zdr: true, data_collection: 'deny',
+      },
+    }]))).toThrow();
   });
 
   test('rejects an unknown managed transport', () => {
@@ -67,8 +84,9 @@ describe('runtime managed model registry', () => {
       id: 'same',
       name: 'Same',
       upstreamModelId: 'morph-same',
-      transport: 'morph',
-      pricingRef: 'morph/morph-same',
+      transport: 'openrouter',
+      pricingRef: 'openrouter/morph-same',
+      openrouterProvider: { only: ['test-endpoint'], allow_fallbacks: false, zdr: true, data_collection: 'deny' },
       tier: 'fast',
       vision: false,
       limit: { context: 1, output: 1 },
@@ -94,19 +112,19 @@ const managed = (
 
 describe('servedManagedModels — never offer a managed model with no upstream credential', () => {
   const lineup = [
-    managed('morph-kimik3', 'morph', 'flagship'),
-    managed('morph-glm53-744b', 'morph'),
-    managed('morph-dsv4flash', 'morph', 'fast'),
+    managed('kimi-k3', 'openrouter', 'flagship'),
+    managed('morph-glm53-744b', 'openrouter'),
+    managed('morph-dsv4flash', 'openrouter', 'fast'),
   ];
 
   test('drops every model whose transport has no configured credential', () => {
     const served = servedManagedModels(lineup, (m) => m.id !== 'morph-glm53-744b');
-    expect(served.map((m) => m.id)).toEqual(['morph-kimik3', 'morph-dsv4flash']);
+    expect(served.map((m) => m.id)).toEqual(['kimi-k3', 'morph-dsv4flash']);
   });
 
   test('keeps the whole lineup when every transport is credentialed', () => {
     expect(servedManagedModels(lineup, () => true).map((m) => m.id)).toEqual([
-      'morph-kimik3',
+      'kimi-k3',
       'morph-glm53-744b',
       'morph-dsv4flash',
     ]);
@@ -119,27 +137,33 @@ describe('servedManagedModels — never offer a managed model with no upstream c
 
 describe('resolvePlatformDefaultModelId — the platform default must always be reachable', () => {
   const lineup = [
-    managed('morph-kimik3', 'morph', 'flagship'),
-    managed('morph-dsv4flash', 'morph', 'fast'),
+    managed('kimi-k3', 'openrouter', 'flagship'),
+    managed('morph-dsv4flash', 'openrouter', 'fast'),
   ];
 
   test('keeps the configured default when it is actually served', () => {
-    const served = [managed('morph-glm53-744b', 'morph'), ...lineup];
+    const served = [managed('morph-glm53-744b', 'openrouter'), ...lineup];
     expect(resolvePlatformDefaultModelId('morph-glm53-744b', served)).toBe('morph-glm53-744b');
   });
 
+  test('maps an old Morph default to the equivalent served model', () => {
+    expect(resolvePlatformDefaultModelId('morph-kimik3', lineup)).toBe('kimi-k3');
+    const deepseek = managed('deepseek-v4.1-flash', 'openrouter');
+    expect(resolvePlatformDefaultModelId('kortix/morph-dsv41flash', [deepseek])).toBe('deepseek-v4.1-flash');
+  });
+
   test('falls back to the served flagship when the configured default is unreachable', () => {
-    expect(resolvePlatformDefaultModelId('morph-glm53-744b', lineup)).toBe('morph-kimik3');
+    expect(resolvePlatformDefaultModelId('morph-glm53-744b', lineup)).toBe('kimi-k3');
   });
 
   test('accepts and preserves the opencode `kortix/<id>` ref form', () => {
-    expect(resolvePlatformDefaultModelId('kortix/morph-glm53-744b', lineup)).toBe('morph-kimik3');
-    const served = [managed('morph-glm53-744b', 'morph'), ...lineup];
+    expect(resolvePlatformDefaultModelId('kortix/morph-glm53-744b', lineup)).toBe('kimi-k3');
+    const served = [managed('morph-glm53-744b', 'openrouter'), ...lineup];
     expect(resolvePlatformDefaultModelId('kortix/morph-glm53-744b', served)).toBe('kortix/morph-glm53-744b');
   });
 
   test('falls back to the first served model when no flagship is served', () => {
-    const noFlagship = [managed('morph-dsv4flash', 'morph', 'fast')];
+    const noFlagship = [managed('morph-dsv4flash', 'openrouter', 'fast')];
     expect(resolvePlatformDefaultModelId('morph-glm53-744b', noFlagship)).toBe('morph-dsv4flash');
   });
 

@@ -9,18 +9,18 @@ import {
 } from './index';
 
 const served = [
-  'morph-kimik3',
-  'morph-kimik3-fast',
-  'morph-dsv41flash',
+  'kimi-k3',
+  'kimi-k3-fast',
+  'deepseek-v4.1-flash',
   'glm-5.3-flash',
 ];
 
-// The bundled lineup includes Morph models and a CoreWeave-pinned OpenRouter model.
+// Every bundled route pins an image-capable ZDR endpoint.
 describe('managed catalog', () => {
   test('serves only the selected image-capable agent models', () => {
     expect(DEFAULT_MANAGED_MODEL_IDS).toEqual(served);
-    expect(PLATFORM_DEFAULT_MODEL_ID).toBe('morph-dsv41flash');
-    expect(MANAGED_FLAGSHIP_MODEL_ID).toBe('morph-kimik3');
+    expect(PLATFORM_DEFAULT_MODEL_ID).toBe('deepseek-v4.1-flash');
+    expect(MANAGED_FLAGSHIP_MODEL_ID).toBe('kimi-k3');
   });
 
   test('every managed model supports image input and has explicit credit pricing', () => {
@@ -40,14 +40,16 @@ describe('managed catalog', () => {
         data_collection: 'deny',
       },
     });
-    for (const model of MANAGED_MODELS.filter((entry) => entry.transport === 'morph')) {
-      expect(model.upstreamModelId).toBe(model.id);
-      expect(model.pricingRef).toBe(`morph/${model.id}`);
+    for (const model of MANAGED_MODELS) {
+      expect(model.transport).toBe('openrouter');
+      expect(model.openrouterProvider).toMatchObject({
+        only: [expect.any(String)], allow_fallbacks: false, zdr: true, data_collection: 'deny',
+      });
     }
   });
 
-  test('DeepSeek cache-read rates match the Morph model feed', () => {
-    expect(getManagedModel('morph-dsv41flash')?.pricing?.cachedInputPerMillion).toBe(0.009);
+  test('DeepSeek cache-read rate matches its pinned OpenRouter endpoint', () => {
+    expect(getManagedModel('deepseek-v4.1-flash')?.pricing?.cachedInputPerMillion).toBe(0.006);
     expect(getManagedModel('morph-dsv4flash')).toBeUndefined();
   });
 
@@ -60,6 +62,6 @@ describe('managed catalog', () => {
       expect(getManagedModel(old)).toBeUndefined();
       expect(isManagedModelId(old)).toBe(false);
     }
-    expect(getManagedModel('morph-dsv41flash')?.name).toBe('DeepSeek V4.1 Flash');
+    expect(getManagedModel('deepseek-v4.1-flash')?.name).toBe('DeepSeek V4.1 Flash');
   });
 });

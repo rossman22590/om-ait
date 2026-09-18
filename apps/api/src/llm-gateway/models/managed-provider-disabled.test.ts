@@ -97,11 +97,11 @@ const { gatewayModelCatalog, managedModels } = await import('./catalog-models');
 const { managedPickerModels } = await import('./picker-catalog');
 
 const FAKE_MANAGED_MODEL = {
-  id: 'morph-dsv41flash',
+  id: 'deepseek-v4.1-flash',
   name: 'DeepSeek V4.1 Flash',
-  upstreamModelId: 'morph-dsv41flash',
-  transport: 'morph' as const,
-  pricingRef: 'morph/morph-dsv41flash',
+  upstreamModelId: 'deepseek/deepseek-v4.1-flash',
+  transport: 'openrouter' as const,
+  pricingRef: 'openrouter/deepseek/deepseek-v4.1-flash',
   tier: 'flagship' as const,
   vision: true,
   limit: { context: 200_000, output: 32_000 },

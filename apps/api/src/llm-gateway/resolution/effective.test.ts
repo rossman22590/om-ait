@@ -67,6 +67,12 @@ describe('toWireModel / toOpencodeModelRef', () => {
     expect(toWireModel('glm-5.3-flash')).toBe('glm-5.3-flash');
   });
 
+  test('maps stored Morph-prefixed managed ids to the new Kortix ids', () => {
+    expect(toWireModel('morph-dsv41flash')).toBe('deepseek-v4.1-flash');
+    expect(toWireModel('kortix/morph-kimik3')).toBe('kimi-k3');
+    expect(toOpencodeModelRef('kortix/morph-kimik3-fast')).toBe('kortix/kimi-k3-fast');
+  });
+
   test('puts every gateway model under the kortix OpenCode provider', () => {
     expect(toOpencodeModelRef('glm-5.3-flash')).toBe('kortix/glm-5.3-flash');
     expect(toOpencodeModelRef('deepseek-v4-flash')).toBe('kortix/deepseek-v4-flash');
@@ -122,8 +128,8 @@ describe('degradeUnservableDefault — stale default guard', () => {
       'glm-5.3-flash',
     );
     expect(
-      await degradeUnservableDefault('kortix/deepseek-v4-flash', { hasProject: true }, neverProbe),
-    ).toBe('kortix/deepseek-v4-flash');
+      await degradeUnservableDefault('kortix/deepseek-v4.1-flash', { hasProject: true }, neverProbe),
+    ).toBe('kortix/deepseek-v4.1-flash');
   });
 
   test('BYOK default with no project context degrades to platform, no probe', async () => {

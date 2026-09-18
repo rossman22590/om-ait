@@ -3,8 +3,6 @@ import * as realTiers from '../../billing/services/tiers';
 
 const config: Record<string, unknown> = {
   KORTIX_MANAGED_PROVIDER_ENABLED: true,
-  MORPH_API_KEY: 'morph-test-key',
-  MORPH_API_URL: 'https://api.morphllm.com/v1',
   OPENROUTER_API_KEY: 'openrouter-test-key',
   OPENROUTER_API_URL: 'https://openrouter.ai/api/v1',
 };
@@ -189,31 +187,33 @@ describe('livePricing + stripBedrockInferenceProfilePrefix — the actual $0 bug
   });
 });
 
-describe('managed Morph descriptor', () => {
-  test('routes through Morph with Kortix credits and declared prices', () => {
+describe('managed OpenRouter descriptor', () => {
+  test('routes DeepSeek through its pinned ZDR endpoint with Kortix credits', () => {
     expect(managedCandidates({
-      id: 'morph-dsv41flash',
+      id: 'deepseek-v4.1-flash',
       name: 'DeepSeek V4.1 Flash',
-      upstreamModelId: 'morph-dsv41flash',
-      transport: 'morph',
-      pricingRef: 'morph/morph-dsv41flash',
-      pricing: { inputPerMillion: 0.3, cachedInputPerMillion: 0.009, outputPerMillion: 1.2 },
+      upstreamModelId: 'deepseek/deepseek-v4.1-flash',
+      transport: 'openrouter',
+      pricingRef: 'openrouter/deepseek/deepseek-v4.1-flash',
+      pricing: { inputPerMillion: 0.2, cachedInputPerMillion: 0.006, outputPerMillion: 0.6 },
       tier: 'balanced',
       vision: true,
       limit: { context: 1_048_576, output: 16_384 },
+      openrouterProvider: { only: ['deepinfra/fp8'], allow_fallbacks: false, zdr: true, data_collection: 'deny' },
     })).toEqual([expect.objectContaining({
-      provider: 'morph',
+      provider: 'openrouter',
       kind: 'openai-compat',
-      baseUrl: 'https://api.morphllm.com/v1',
-      apiKey: 'morph-test-key',
-      resolvedModel: 'morph-dsv41flash',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      apiKey: 'openrouter-test-key',
+      resolvedModel: 'deepseek/deepseek-v4.1-flash',
       billingMode: 'credits',
       markup: 2,
       pricing: expect.objectContaining({
-        inputPerMillion: 0.3,
-        cachedInputPerMillion: 0.009,
-        outputPerMillion: 1.2,
+        inputPerMillion: 0.2,
+        cachedInputPerMillion: 0.006,
+        outputPerMillion: 0.6,
       }),
+      bodyExtras: { provider: { only: ['deepinfra/fp8'], allow_fallbacks: false, zdr: true, data_collection: 'deny' } },
     })]);
   });
 });

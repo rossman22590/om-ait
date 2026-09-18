@@ -10,19 +10,19 @@ describe('gatewayModelCatalog — served catalog', () => {
   const full = gatewayModelCatalog('proj');
 
   test('serves managed Kimi K3 with vision, tools, and a context limit', () => {
-    expect(full['morph-kimik3']).toMatchObject({
+    expect(full['kimi-k3']).toMatchObject({
       name: 'Kimi K3 2.8T',
       provider: 'kortix',
       attachment: true,
       tool_call: true,
       temperature: true,
       limit: { context: 1_048_576, output: 16_384 },
-      cost: { input: 2.5, output: 14, cache_read: 0.29 },
+      cost: { input: 2.5, output: 10.95, cache_read: 0.25 },
     });
   });
 
   test('brands managed DeepSeek V4.1 Flash with the Kortix provider', () => {
-    expect(full['morph-dsv41flash']?.provider).toBe('kortix');
+    expect(full['deepseek-v4.1-flash']?.provider).toBe('kortix');
   });
 
   test('serves the CoreWeave GLM 5.3 Flash price and vision capability', () => {
@@ -49,7 +49,7 @@ describe('gatewayModelCatalog — served catalog', () => {
 
   test('synthetic auto is absent; anonymous callers get managed-only', () => {
     expect(full.auto).toBeUndefined();
-    expect(full['morph-dsv41flash']).toBeDefined();
+    expect(full['deepseek-v4.1-flash']).toBeDefined();
     expect(full['glm-5.3-flash']).toBeDefined();
 
     const managedOnly = gatewayModelCatalog(undefined);
@@ -100,7 +100,7 @@ describe('gatewayModelCatalog — served catalog', () => {
     // BYOK catalog entries brand as their real upstream provider.
     expect(full['anthropic/claude-opus-4-8']?.provider).toBe('anthropic');
     // Managed models brand as `kortix`.
-    expect(full['morph-dsv41flash']?.provider).toBe('kortix');
+    expect(full['deepseek-v4.1-flash']?.provider).toBe('kortix');
     expect(full['glm-5.3-flash']?.provider).toBe('kortix');
     // Codex (ChatGPT subscription) models brand as their own `codex` provider,
     // distinct from the raw `openai` BYOK provider.

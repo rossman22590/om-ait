@@ -435,7 +435,7 @@ export interface ManagedModel {
   name: string;
   // OpenAI-compatible upstream model ID.
   upstreamModelId: string;
-  transport: 'morph' | 'openrouter';
+  transport: 'openrouter';
   // Omit this to keep the model grouped under Kortix in the picker.
   providerBrand?: string;
   // Catalog lookup hint. Managed pricing below is the routing authority.
@@ -484,26 +484,29 @@ export function pricingRefLookupCandidates(pricingRef: string): string[] {
 }
 
 // Managed IDs are bare gateway model IDs. OpenCode uses `kortix/<id>` so the
-// picker shows Kortix while the gateway routes with Kortix credits.
+// picker shows Kortix while the gateway routes through ZDR OpenRouter endpoints.
 // Every bundled model supports image input.
 export const MANAGED_MODELS: ManagedModel[] = [
   {
-    id: 'morph-kimik3', name: 'Kimi K3 2.8T', upstreamModelId: 'morph-kimik3',
-    transport: 'morph', pricingRef: 'morph/morph-kimik3',
-    pricing: { inputPerMillion: 2.5, cachedInputPerMillion: 0.29, outputPerMillion: 14 },
+    id: 'kimi-k3', name: 'Kimi K3 2.8T', upstreamModelId: 'moonshotai/kimi-k3',
+    transport: 'openrouter', pricingRef: 'openrouter/moonshotai/kimi-k3',
+    pricing: { inputPerMillion: 2.5, cachedInputPerMillion: 0.25, outputPerMillion: 10.95 },
     tier: 'flagship', vision: true, limit: { context: 1_048_576, output: 16_384 },
+    openrouterProvider: { only: ['wafer'], allow_fallbacks: false, zdr: true, data_collection: 'deny' },
   },
   {
-    id: 'morph-kimik3-fast', name: 'Kimi K3 2.8T Fast', upstreamModelId: 'morph-kimik3-fast',
-    transport: 'morph', pricingRef: 'morph/morph-kimik3-fast',
-    pricing: { inputPerMillion: 6, cachedInputPerMillion: 0.6, outputPerMillion: 22.5 },
+    id: 'kimi-k3-fast', name: 'Kimi K3 2.8T Fast', upstreamModelId: 'moonshotai/kimi-k3',
+    transport: 'openrouter', pricingRef: 'openrouter/moonshotai/kimi-k3',
+    pricing: { inputPerMillion: 4.5, cachedInputPerMillion: 0.45, outputPerMillion: 22.5 },
     tier: 'flagship', vision: true, limit: { context: 1_048_576, output: 16_384 },
+    openrouterProvider: { only: ['fireworks/fast'], allow_fallbacks: false, zdr: true, data_collection: 'deny' },
   },
   {
-    id: 'morph-dsv41flash', name: 'DeepSeek V4.1 Flash', upstreamModelId: 'morph-dsv41flash',
-    transport: 'morph', pricingRef: 'morph/morph-dsv41flash',
-    pricing: { inputPerMillion: 0.3, cachedInputPerMillion: 0.009, outputPerMillion: 1.2 },
+    id: 'deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', upstreamModelId: 'deepseek/deepseek-v4.1-flash',
+    transport: 'openrouter', pricingRef: 'openrouter/deepseek/deepseek-v4.1-flash',
+    pricing: { inputPerMillion: 0.2, cachedInputPerMillion: 0.006, outputPerMillion: 0.6 },
     tier: 'balanced', vision: true, limit: { context: 1_048_576, output: 16_384 },
+    openrouterProvider: { only: ['deepinfra/fp8'], allow_fallbacks: false, zdr: true, data_collection: 'deny' },
   },
   {
     id: 'glm-5.3-flash', name: 'GLM-5.3-Flash', upstreamModelId: 'z-ai/glm-5.3-flash',
@@ -533,7 +536,7 @@ export const MANAGED_FLAGSHIP_MODEL_ID = (
 ).id;
 
 /** Concrete Kortix-managed default used when no account or project default exists. */
-export const PLATFORM_DEFAULT_MODEL_ID = 'morph-dsv41flash';
+export const PLATFORM_DEFAULT_MODEL_ID = 'deepseek-v4.1-flash';
 
 function modelsByWireId(catalog: Catalog): Map<string, CatalogModel> {
   const byId = new Map<string, CatalogModel>();
