@@ -77,11 +77,13 @@ gated on `os`/`cpu`, so pnpm installs only the current machine's. `bun build
 and keeps exactly the matching `await import("@opentui/core-<os>-<arch>")`
 branch, which then has to RESOLVE at build time — otherwise every cross-target
 CLI bundle dies on `Could not resolve: "@opentui/core-linux-x64"`. Declaring
-all six here (both libc variants for Linux, because `OPENTUI_LIBC` is read at
-runtime and neither branch is eliminated) puts them in pnpm's hoisted store
-next to `@opentui/core`, where Bun finds them for every target. `pnpm
-cli:bundle:all` and the release workflows — which cross-compile all four
-targets on one linux-x64 runner — depend on this.
+all six here puts them in pnpm's hoisted store next to `@opentui/core`, where
+Bun finds them for every target. `pnpm tui:bundle:all` and the release
+workflows — which cross-compile all four targets on one linux-x64 runner —
+depend on this. Both libc variants stay declared even though each build bakes
+`--define process.env.OPENTUI_LIBC="glibc"` (which drops the unused one from
+the output, -6.3 MB on `linux-x64`): a musl build is one `OPENTUI_LIBC=musl`
+away and the package must still resolve.
 
 ## 3. Architecture
 
@@ -370,16 +372,35 @@ never patch around it in the TUI.
   `apps/web/content/docs/` (follow the timestamp-manifest rule from memory
   `new-docs-page-needs-timestamp-manifest`).
 - Experimental surface: the CLI gets `kortix tui`
-  (`apps/cli/src/commands/tui.ts`). It resolves auth exactly like every other
-  subcommand (`--host` → `loadAuthForHost`, else `loadAuth()`), builds the
-  `ResolvedHost` from that `Auth`, and calls `runTui()` through a dynamic
-  import. `kortix --help` lists it with the same `Experimental:` blurb prefix
-  `apps` uses; `kortix tui --help` prints the usage, the key summary and the
-  docs URL; and one stderr line names it experimental before the renderer
-  takes the screen, so it survives in scrollback after the alternate screen
-  exits. No env gate. `@kortix/tui` is a workspace dependency of
-  `@kortix/cli`, so the four release binaries carry it. README and
-  `/docs/tui` lead with `kortix tui`, then the repo `dev` command.
+  (`apps/cli/src/commands/tui.ts`). `kortix --help` lists it with the same
+  `Experimental:` blurb prefix `apps` uses; `kortix tui --help` prints the
+  usage, the key summary, the docs URL, the separate install and
+  `KORTIX_TUI_BIN`; and one stderr line names it experimental before the
+  renderer takes the screen, so it survives in scrollback after the alternate
+  screen exits. No env gate. README and `/docs/tui` lead with `kortix tui`,
+  then the repo `dev` command.
+- **The TUI is NOT in the `kortix` binary.** `@opentui/core` dlopen's an ~19 MB
+  native library per platform and pulls React in with it — 14–21 MB of every
+  `kortix` download for a command most people never run. `apps/tui/bundle/`
+  (mirroring `apps/cli/bundle/`) compiles `src/index.tsx` into
+  `kortix-tui-{darwin-arm64,darwin-x64,linux-x64,linux-arm64}`, and the same
+  `build-cli` job in `deploy-dev.yml` / `deploy-prod.yml` publishes them, plus
+  a `.sha256` per asset, to the same release as the `kortix` binaries.
+  `@kortix/tui` is no longer a dependency of `@kortix/cli`.
+- `kortix tui` is a launcher (`apps/cli/src/tui-bin.ts`, modeled on
+  `src/opencode-bin.ts`). Resolution: `KORTIX_TUI_BIN` →
+  `~/.kortix/tui/<version>/kortix-tui` → download
+  `<release base>/<tag>/kortix-tui-<os>-<arch>` for exactly this CLI's version
+  (`v<version>`, or `dev-latest` for a `-dev.<sha>` build), checksum-verify it
+  against the `.sha256` asset, `chmod 755`, then `spawn(bin, [], { stdio:
+  'inherit' })` and exit with the child's code. `--host` / `--project` /
+  `--session` reach the child as `KORTIX_TUI_HOST` / `KORTIX_PROJECT_ID` /
+  `KORTIX_SESSION_ID`. The first run on a tty asks; off a tty it exits `2`
+  with `kortix tui --install`. `--install` installs without asking,
+  `--uninstall` removes `~/.kortix/tui`, and `kortix uninstall` takes it with
+  the rest of `~/.kortix`. A `dev` build has no release to match and exits `1`
+  naming `pnpm --filter @kortix/tui bundle`; a binary copied to
+  `~/.kortix/tui/dev/kortix-tui` is found with no env var.
 
 ## 10. Waves (orchestration plan)
 

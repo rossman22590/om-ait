@@ -5,24 +5,67 @@ A full terminal client for Kortix. It renders with
 Kortix data through `@kortix/sdk`. `apps/tui/SPEC.md` is the plan; this file is
 how to run it.
 
-**Status: experimental.** It ships inside the `kortix` binary as
-`kortix tui`; keys, screens and flags can change without a deprecation. The
-public page is [`/docs/tui`](https://kortix.com/docs/tui)
-(`apps/web/content/docs/tui.mdx`); this file is the longer operator's guide.
+**Status: experimental.** `kortix tui` installs it on first run and keys,
+screens and flags can change without a deprecation. The public page is
+[`/docs/tui`](https://kortix.com/docs/tui) (`apps/web/content/docs/tui.mdx`);
+this file is the longer operator's guide.
 
 ## Run
 
 ```bash
 kortix login            # writes ~/.config/kortix/config.json
-kortix tui              # the installed CLI — experimental
+kortix tui              # first run: "Install now? [Y/n]" — experimental
 ```
 
-`kortix tui` takes `--host <name>`, `--project <id>` and `--session <id>`.
-It resolves auth exactly like every other `kortix` command
-(`apps/cli/src/commands/tui.ts`), builds the `ResolvedHost` from that `Auth`,
-and calls `runTui()` in `src/main.tsx` through a dynamic import — so no other
-subcommand loads React or the OpenTUI native library. With no host logged in it
-opens the login screen rather than failing.
+`kortix tui` is a **launcher**, not the app. The `kortix` binary does not carry
+the TUI: `@opentui/core` dlopen's an ~19 MB native library per platform and
+pulls React in with it, which is 14–21 MB of every `kortix` download for a
+command most people never run. So the TUI ships as its own release asset,
+`kortix-tui`, built by the same job.
+
+On the first run the launcher asks, downloads the `kortix-tui` matching this
+CLI's version from the same GitHub release, verifies it against the release's
+`.sha256`, writes it to `~/.kortix/tui/<version>/kortix-tui`, and execs it with
+`stdio: 'inherit'` so the child owns the real tty. Later runs exec the cached
+copy directly. `apps/cli/src/tui-bin.ts` holds the resolution; it is the same
+managed-binary shape as `src/opencode-bin.ts`.
+
+Resolution order, highest first:
+
+1. `KORTIX_TUI_BIN` — an explicit path, used as-is. Nothing is downloaded.
+2. `~/.kortix/tui/<version>/kortix-tui` — the managed cache for this CLI's
+   version. A source build reports version `dev` and reads
+   `~/.kortix/tui/dev/kortix-tui`, so a locally built binary dropped there
+   works with no environment variable.
+3. Download `kortix-tui-<os>-<arch>` +  its `.sha256` from
+   `https://github.com/kortix-ai/suna/releases/download/<tag>/`, where `<tag>`
+   is `v<version>` for a release and `dev-latest` for a `-dev.<sha>` build.
+
+| Flag | Effect |
+| --- | --- |
+| `--host <name>` | Open this configured host. Reaches the child as `KORTIX_TUI_HOST`, which outranks a stale `KORTIX_TOKEN`. |
+| `--project <id>` | Reaches the child as `KORTIX_PROJECT_ID`. |
+| `--session <id>` | Reaches the child as `KORTIX_SESSION_ID`. |
+| `--install` | Install and exit. No prompt — the form for a script or CI. |
+| `--uninstall` | `rm -rf ~/.kortix/tui` and exit. |
+
+Off a terminal the launcher never starts an 80 MB download by itself: it exits
+`2` and prints `kortix tui --install`. A `dev` build with no cached binary
+exits `1` and prints the `pnpm --filter @kortix/tui bundle` remedy. With no
+host logged in the TUI opens its login screen rather than failing.
+
+### Building the binary
+
+```bash
+pnpm --filter @kortix/tui bundle       # host target → apps/tui/bundle/kortix-tui
+pnpm --filter @kortix/tui bundle:all   # all four release targets
+KORTIX_TUI_BIN=$PWD/apps/tui/bundle/kortix-tui kortix tui
+```
+
+`apps/tui/bundle/` mirrors `apps/cli/bundle/`. Each build bakes
+`process.env.OPENTUI_LIBC="glibc"` so a Linux target embeds one libc variant
+instead of both (−6.3 MB on `linux-x64`); an Alpine/musl user builds their own
+with `OPENTUI_LIBC=musl` and points `KORTIX_TUI_BIN` at it.
 
 From a clone of the repo, which is what you want while changing the TUI:
 
@@ -303,8 +346,8 @@ pnpm --filter @kortix/tui test        # bun test
 pnpm --filter @kortix/tui typecheck   # tsc --noEmit
 npx biome check apps/tui
 
-# the `kortix tui` command itself lives in the CLI's suite
-pnpm --filter @kortix/cli test        # includes src/commands/tui.test.ts
+# the `kortix tui` launcher lives in the CLI's suite
+pnpm --filter @kortix/cli test        # src/commands/tui.test.ts + src/tui-bin.test.ts
 ```
 
 ### What it depends on
@@ -316,13 +359,13 @@ config.ts` and `src/api/sdk.ts` for hosts and tokens, `src/web-url.ts` for the
 web links the account screen prints, and `src/attach-opencode.ts` +
 `src/api/auth.ts` for `Alt+O`.
 
-The dependency also runs the other way: `@kortix/cli` depends on `@kortix/tui`
-so the four release binaries carry `kortix tui`. The six
-`@opentui/core-<platform>` packages are direct dependencies for that reason —
-`@opentui/core` declares them as `os`/`cpu`-gated `optionalDependencies`, so
-pnpm would install only this machine's, and `bun build --compile
---target=bun-linux-x64` would then die on `Could not resolve:
-"@opentui/core-linux-x64"`. `SPEC.md` §2 has the full note.
+`@kortix/cli` does NOT depend on `@kortix/tui` — that edge was removed when the
+TUI became its own binary, so the dependency runs one way only. The six
+`@opentui/core-<platform>` packages are still direct dependencies of this
+package: `@opentui/core` declares them as `os`/`cpu`-gated
+`optionalDependencies`, so pnpm would install only this machine's, and
+`bun build --compile --target=bun-linux-x64` would then die on
+`Could not resolve: "@opentui/core-linux-x64"`. `SPEC.md` §2 has the full note.
 
 Tests sit next to the file they cover (`src/**/*.test.ts[x]`) — the repo
 `.gitignore` ignores every `test/` directory, so the layout in `SPEC.md` §3

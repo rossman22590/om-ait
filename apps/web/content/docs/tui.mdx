@@ -3,8 +3,8 @@ title: TUI
 description: The experimental Kortix terminal client — run it, drive it with the keyboard, and hand a session to opencode.
 ---
 
-> **Experimental.** `kortix tui` ships in the CLI binary, but its keys, screens
-> and flags can change without a deprecation.
+> **Experimental.** `kortix tui` installs a separate binary on first run, and
+> its keys, screens and flags can change without a deprecation.
 
 `@kortix/tui` is a full terminal client for Kortix. It renders with
 [OpenTUI](https://github.com/anomalyco/opentui) on [Bun](https://bun.sh) and
@@ -21,18 +21,32 @@ Files, Review, Apps, Customize and Account screens.
 
 ```sh
 kortix login          # writes ~/.config/kortix/config.json
-kortix tui
+kortix tui            # first run: "Install now? [Y/n]"
 ```
 
-That is the whole setup. `kortix tui` is part of the [CLI](/docs/cli) binary and
-signs in with the host you are already on, so there is nothing else to install —
-the renderer and its native library are compiled into the binary.
+`kortix tui` signs in with the host you are already on, so there is nothing to
+configure. It is a **launcher**: the TUI itself is a second binary,
+`kortix-tui`, because the renderer's native library adds ~19 MB per platform and
+`kortix` should not carry it for a command most people never run.
+
+The first `kortix tui` asks before downloading. It fetches the `kortix-tui`
+build that matches this CLI's version from the same GitHub release the `kortix`
+binary came from, checks it against the release's `.sha256`, and stores it in
+`~/.kortix/tui/<version>/`. That takes a few seconds once per CLI version; every
+later run execs the cached copy. A `kortix` that cannot reach GitHub, or a
+platform with no published build, is the one case where you build your own —
+see `KORTIX_TUI_BIN` below.
 
 | Flag | Effect |
 | --- | --- |
 | `--host <name>` | Use this configured host instead of the active one. A host that is not logged in is an error. |
 | `--project <id>` | List this project's sessions. Defaults to the host's default project, else its first project. |
 | `--session <id>` | Open this session at boot. |
+| `--install` | Install `kortix-tui` now and exit. No prompt — this is the form for a script, a Dockerfile or a machine with no terminal. |
+| `--uninstall` | Delete `~/.kortix/tui/` and exit. `kortix uninstall` removes it too, with the rest of `~/.kortix`. |
+
+Off a terminal — a pipe, CI, a non-interactive shell — `kortix tui` never starts
+the download on its own. It exits `2` and prints `kortix tui --install`.
 
 With no host logged in at all, the TUI opens its own login screen instead of
 failing: pick a configured host, or press `n` to add one (name, API URL, token —
@@ -70,11 +84,31 @@ and a stale one left exported in a shell outranks `kortix login` for both.
 | `KORTIX_SESSION_ID` | Open this session at boot. |
 | `KORTIX_CONFIG_FILE` | Read hosts from this file instead of `~/.config/kortix/config.json`. |
 | `KORTIX_TUI_THEME` | `dark` or `light`. Otherwise `COLORFGBG` decides, defaulting to dark. |
+| `KORTIX_TUI_BIN` | Run this `kortix-tui` binary instead of a managed one. Nothing is downloaded and no version is checked. |
+| `KORTIX_TUI_HOST` | The configured host to open, by name. `kortix tui --host <name>` sets it, and it outranks `KORTIX_API_KEY` / `KORTIX_TOKEN`. |
 
 ```sh
 KORTIX_API_URL=http://localhost:8008 KORTIX_API_KEY="$TOKEN" \
   pnpm --filter @kortix/tui dev
 ```
+
+## Building the TUI binary yourself
+
+A source checkout, an unpublished platform, or an offline machine:
+
+```sh
+pnpm --filter @kortix/tui bundle       # → apps/tui/bundle/kortix-tui
+KORTIX_TUI_BIN=$PWD/apps/tui/bundle/kortix-tui kortix tui
+```
+
+`pnpm --filter @kortix/tui bundle:all` builds all four release targets
+(`kortix-tui-darwin-arm64`, `kortix-tui-darwin-x64`, `kortix-tui-linux-x64`,
+`kortix-tui-linux-arm64`) — the same command the release workflow runs.
+
+A `kortix` built from source reports version `dev` and has no release to match,
+so it refuses to invent a download. Copy your build to
+`~/.kortix/tui/dev/kortix-tui` and `kortix tui` finds it with no environment
+variable at all.
 
 ## Screens
 
@@ -160,8 +194,9 @@ ignores. The Kortix TUI repaints as soon as opencode exits.
 
 ## Source
 
-`apps/tui` in the [Kortix repo](https://github.com/kortix-ai/suna), wired into
-the CLI by `apps/cli/src/commands/tui.ts`. `SPEC.md`
+`apps/tui` in the [Kortix repo](https://github.com/kortix-ai/suna). The
+launcher is `apps/cli/src/commands/tui.ts`, and `apps/cli/src/tui-bin.ts`
+resolves, downloads and verifies the binary. `SPEC.md`
 there is the plan, `README.md` is the operator's guide (every key, every
 troubleshooting path), and `docs/opentui-notes.md` records the OpenTUI
 behaviors the app had to work around.
