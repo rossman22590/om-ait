@@ -42,6 +42,7 @@ import {
   isGithubAppConfigured,
   isGithubAppOAuthConfigured,
   normalizeGitHubFrontendOrigin,
+  REQUIRED_GITHUB_APP_PERMISSIONS,
   resolveGitHubAppSlug,
   signGitHubAppJwt,
   type GitHubAppInstallState,
@@ -115,19 +116,10 @@ export function buildGithubAppManifest(opts: {
     callback_urls: [`${base}/v1/platform/github-app/oauth/callback`],
     setup_on_update: true,
     public: false,
-    default_permissions: {
-      administration: 'write',
-      contents: 'write',
-      pull_requests: 'write',
-      metadata: 'read',
-      // Backs the account-linking identity proof (oauth/authorize +
-      // oauth/callback below): GET /orgs/{org}/memberships/{user} and
-      // GET /user/memberships/orgs both require "Members: read" on a GitHub
-      // App user-to-server token — without it, verifyGitHubInstallationAdmin
-      // / listLinkableGitHubAppInstallations (projects/github.ts) 403 for
-      // every organization installation.
-      members: 'read',
-    },
+    // One source: the same set `resolveGitHubAppPermissions()` audits a
+    // hand-made App against (projects/github.ts). `members: read` backs the
+    // account-linking identity proof (oauth/authorize + oauth/callback below).
+    default_permissions: { ...REQUIRED_GITHUB_APP_PERMISSIONS },
     default_events: [],
     hook_attributes: { url: opts.homepageUrl, active: false },
   };

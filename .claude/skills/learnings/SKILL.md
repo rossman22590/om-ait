@@ -6227,3 +6227,27 @@ to permit a single provisioning check before starting another full run.
 **Enforcement.** The pending queue fixture is verified with the local browser
 runner, which uses local Git. The preview gate stays explicitly blocked until
 GitHub provisioning recovers; a local pass does not replace that gate.
+
+### 2026-09-18 — A hand-made GitHub App must be audited against the permission list
+
+**Incident.** Production App `kortix-managed` held `contents` + `metadata` only.
+`kortix-dev` and `kortix-staging` came from the manifest and held `members:
+read`. `verifyGitHubInstallationAdmin` reads `GET /orgs/{org}/memberships/{user}`
+with the App user token; GitHub answers `403` without `members: read`. A bare
+`catch` rewrote that to "GitHub organization admin access is required". Every
+organization link failed on production, for organization owners too, while
+`User` installations linked. Dev and staging could not reproduce it.
+
+**Rule.** A `catch` around a provider call must not convert an unknown failure
+into a statement about the caller. Branch on the provider status, and keep
+"the instance is misconfigured" apart from "the caller lacks access". A
+resource created by hand in one environment and by manifest in the others is
+drift until a check proves otherwise.
+
+**Enforcement.** `REQUIRED_GITHUB_APP_PERMISSIONS` is the one list: the manifest
+spreads it and `resolveGitHubAppPermissions()` compares `GET /app` against it,
+logging `missing required permissions` once per process. The verification
+prechecks `installation.permissions.members` and throws
+`GitHubAppPermissionError`. Tests: `unit-github-app-slug.test.ts`,
+`e2e-github-app-projects.test.ts`. Manual check: `gh api /apps/<slug> --jq
+.permissions`. Runbook: `docs/runbooks/managed-git-config.md`.

@@ -42,6 +42,39 @@ curl -sS -H "Authorization: Bearer $JWT" \
   https://dev-api.kortix.com/v1/projects/git/backend | jq
 ```
 
+## Required App permissions
+
+`REQUIRED_GITHUB_APP_PERMISSIONS` (`apps/api/src/projects/github.ts`) is the one
+list. The self-host manifest requests exactly this set. An App created by hand
+must match it.
+
+| Permission | Level | Flow that needs it |
+|---|---|---|
+| `metadata` | read | every App call |
+| `contents` | write | commits and pushes |
+| `administration` | write | `createRepo` under a connected organization |
+| `pull_requests` | write | the agent's own `gh` in the sandbox, through the installation token |
+| `members` (organization) | read | `verifyGitHubInstallationAdmin`, `listLinkableGitHubAppInstallations` |
+
+Without `members: read`, GitHub answers `403` on both membership reads. A
+personal (`User`) installation still links. Every organization installation
+fails verification, including for an organization owner.
+
+Check any App without credentials:
+
+```bash
+gh api /apps/<slug> --jq .permissions
+```
+
+The API logs the drift once per process on the first `GET /app`:
+`[github-app] App "<slug>" is missing required permissions: ...`. The link
+routes answer with `GitHubAppPermissionError`: status `502` (`503` on the wire)
+when the App lacks the permission, `403` when only one installation lacks it.
+
+Adding a permission to an App does not change existing installations. Each
+installed organization must accept the request in its GitHub App settings, or
+reinstall.
+
 ## The pending contract migration
 
 `20260916184801110_split_managed_github_app_into_identity_and_backend.sql`
