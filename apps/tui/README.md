@@ -6,6 +6,8 @@ Kortix data through `@kortix/sdk`. `apps/tui/SPEC.md` is the plan; this file is
 how to run it.
 
 **Status: experimental.** Not in the release CLI bundle. Run it from the repo.
+The public page is [`/docs/tui`](https://kortix.com/docs/tui)
+(`apps/web/content/docs/tui.mdx`); this file is the longer operator's guide.
 
 ## Run
 
@@ -88,7 +90,7 @@ Regenerate this section with `pnpm --filter @kortix/tui keymap`.
 | `Alt+c` | Open the customize screen. |
 | `Alt+u` | Open the account screen: members, invites, billing. |
 | `Alt+o` | Hand this session to the stock opencode TUI. Returning repaints the app. |
-| `Ctrl+h` | Switch host. |
+| `Alt+h / Ctrl+h` | Switch host. Ctrl+H needs the kitty keyboard protocol: the byte it sends is Backspace. |
 | `Esc` | Close the overlay, leave the screen, or move focus back to the composer. |
 
 ### Sidebar
@@ -313,10 +315,30 @@ KORTIX_PROJECT_ID="$PID" KORTIX_SESSION_ID="$SID" \
   bun run scripts/live-app.tsx
 ```
 
-It asserts the sidebar lists real sessions grouped by day, the session reaches
-`ready` on the real runtime, a typed prompt streams a reply back, `Ctrl+P`
-opens the switcher, `?` opens the help overlay, and `Alt+F` routes to files.
-It is not part of `bun test`: it needs credentials and provisions nothing.
+It asserts, in order: the sidebar lists real sessions grouped by day; the
+session reaches `ready` on the real runtime; a typed prompt streams a reply
+back; `Ctrl+P` opens the switcher and its filter finds the project rows; `?`
+opens the help overlay; `Alt+F` routes to files; `Alt+R` lists the project's
+change requests and `Enter` opens a real diff; `Alt+A` lists its Apps; `Alt+C`
+walks all five Customize tabs by their number keys; `Alt+U` opens Members;
+`Alt+H` asks the host to switch; and `Ctrl+N` creates a REAL session that the
+sidebar's `d` then deletes — with the session id set asserted identical before
+and after, so a delete that took the wrong row fails the run.
+
+It is not part of `bun test`: it needs credentials. It DOES provision one real
+sandbox (the `Ctrl+N` step) and deletes it again in the same run. Point it at a
+warm session and it finishes in about two minutes.
+
+`LIVE_SKIP_STREAM=1` drops the three runtime steps for a project whose sessions
+are all stopped — mounting `useSession` on one would boot a cold sandbox this
+run has no use for. The skip is printed, never silent, and `KORTIX_SESSION_ID`
+becomes optional:
+
+```bash
+KORTIX_API_URL=http://localhost:8008 KORTIX_API_KEY="$JWT" \
+KORTIX_PROJECT_ID="$PID" LIVE_SKIP_STREAM=1 \
+  bun run scripts/live-app.tsx
+```
 
 ### Driving it headlessly
 
@@ -345,10 +367,10 @@ os.close(slave)
   shaped, so a path is not uploaded yet.
 - **Effort options depend on the model's catalog variants.** A model with no
   variants shows `Auto` alone; that is the catalog's answer, not a bug.
-- **`clientSource` reports `cli`.** `KortixPlatformConfig.clientSource` is
-  `'api' | 'cli' | 'mobile' | 'web'` — it has no `'tui'` member, and widening a
-  published SDK type is an SDK change with its own gates. Audit events from the
-  TUI therefore read as CLI events.
+- **A session has no name until the server gives it one.** `useSession`
+  exposes no name field, so the header and the sidebar read the session list
+  instead, and a session created seconds ago is `Untitled` until the first turn
+  names it.
 - **The account and customize screens are read-mostly.** They expose the small
   writes the web app exposes and print the web URL for anything else.
 - **No OAuth from the terminal.** Connectors print the page to open.
