@@ -1,5 +1,7 @@
 {
   "pooledSecrets": {
+    "saveChanges": "Sačuvaj izmene",
+    "unsavedChanges": "Nesačuvane izmene ključeva",
     "creationDescription": "Вредност остаје шифрована. Изаберите ко може да користи ову везу пре чувања.",
     "whoCanUse": "Ко може да користи ову везу?",
     "everyoneInProject": "Сви у овом пројекту",

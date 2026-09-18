@@ -1,5 +1,7 @@
 {
   "pooledSecrets": {
+    "saveChanges": "変更を保存",
+    "unsavedChanges": "キーの変更は未保存です",
     "creationDescription": "値は暗号化されます。保存する前に、この接続を使用できる人を選んでください。",
     "whoCanUse": "この接続を使用できる人",
     "everyoneInProject": "このプロジェクトの全員",
