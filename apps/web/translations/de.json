@@ -1,5 +1,7 @@
 {
   "pooledSecrets": {
+    "saveChanges": "Änderungen speichern",
+    "unsavedChanges": "Nicht gespeicherte Schlüsseländerungen",
     "creationDescription": "Der Wert bleibt verschlüsselt. Wählen Sie vor dem Speichern, wer diese Verbindung nutzen darf.",
     "whoCanUse": "Wer darf diese Verbindung nutzen?",
     "everyoneInProject": "Alle in diesem Projekt",

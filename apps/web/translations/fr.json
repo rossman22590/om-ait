@@ -1,5 +1,7 @@
 {
   "pooledSecrets": {
+    "saveChanges": "Enregistrer les modifications",
+    "unsavedChanges": "Modifications de clés non enregistrées",
     "creationDescription": "La valeur reste chiffrée. Choisissez qui peut utiliser cette connexion avant de l’enregistrer.",
     "whoCanUse": "Qui peut utiliser cette connexion ?",
     "everyoneInProject": "Tous les membres de ce projet",

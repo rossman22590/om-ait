@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import type { SessionScopeCommit } from '@/features/session/scope/session-scope-model';
 import { useProjectSession } from '@kortix/sdk/react';
 
+import { ProviderPoolDraftBoundary } from './provider-pool-draft-context';
 import { SessionOverridesToolbar, type SessionOverrideSlot } from './session-overrides-toolbar';
 
 export interface SessionOverridesComposerProps {
@@ -71,7 +72,9 @@ export function SessionOverridesComposer({
   );
 
   return (
+    <ProviderPoolDraftBoundary identity={`${projectId}/${sessionId ?? 'new'}`}>
     <SessionOverridesToolbar
+      key={`${projectId}/${sessionId ?? 'new'}`}
       projectId={projectId}
       sessionId={sessionId}
       agentName={selectedAgent ?? undefined}
@@ -81,5 +84,6 @@ export function SessionOverridesComposer({
       sandbox={sandbox}
       sandboxSlot={sandboxSlot}
     />
+    </ProviderPoolDraftBoundary>
   );
 }

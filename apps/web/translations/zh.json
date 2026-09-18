@@ -1,5 +1,7 @@
 {
   "pooledSecrets": {
+    "saveChanges": "保存更改",
+    "unsavedChanges": "密钥更改尚未保存",
     "creationDescription": "值会保持加密。保存前请选择谁可以使用此连接。",
     "whoCanUse": "谁可以使用此连接？",
     "everyoneInProject": "此项目中的所有成员",

@@ -150,7 +150,7 @@ its access and session selections. Deleting it removes access for everyone.
 ### Choose keys for a session
 
 Open the composer's **Session overrides → Provider keys**. Choose a provider,
-then select up to ten keys. For an existing session, choose **Save key selection**.
+then select up to ten keys. Choose **Save changes** in the panel footer.
 For a new session, the selection is sent with the first prompt.
 
 - Without an explicit selection, the existing project key remains available.
@@ -185,3 +185,11 @@ on. Native OpenCode mode continues to use project secrets.
 Models hidden by older picker preferences show **Hidden from picker**. Direct requests remain allowed. Open that model’s menu and choose **Disable model** to block inference too.
 
 Provider model-count links open the **Models** tab. All provider groups appear together in the same list used to enable or disable models and set defaults. Search narrows the list. Connect a provider before managing its models.
+
+Provider selections stay as drafts until you click **Save changes** in the
+session overrides footer. This saves changes for every provider, including a
+reset to the default. You can switch sections or close and reopen the panel
+without losing these drafts. Reloading the page discards unsaved changes.
+If a save fails, the panel stays open and shows the error. Correct the selection
+or retry. Providers already saved remain saved; unfinished changes stay in the
+panel.

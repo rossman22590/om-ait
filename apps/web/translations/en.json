@@ -1,5 +1,7 @@
 {
   "pooledSecrets": {
+    "saveChanges": "Save changes",
+    "unsavedChanges": "Unsaved key changes",
     "providerDisabled": "This provider is disabled for this session.",
     "unavailableKeys": "{count, plural, one {# selected key is unavailable.} other {# selected keys are unavailable.}} Remove unavailable keys or restore access.",
     "removeUnavailable": "Remove unavailable keys",
