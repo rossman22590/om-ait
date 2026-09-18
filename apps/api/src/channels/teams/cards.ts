@@ -60,6 +60,15 @@ function stepElements(step: StreamTaskChunk): CardElement[] {
   if (step.output) {
     out.push({ type: 'TextBlock', text: step.output, wrap: true, isSubtle: true, spacing: 'none', size: 'small' });
   }
+  if (step.sources && step.sources.length > 0) {
+    // Citations as a footer of links — the Teams twin of the Slack step
+    // `sources`. TextBlock renders `[text](url)` markdown natively.
+    const links = step.sources
+      .slice(0, 8)
+      .map((sc) => `[${sc.text || sc.url}](${sc.url})`)
+      .join('  ·  ');
+    out.push({ type: 'TextBlock', text: links, wrap: true, isSubtle: true, size: 'small', spacing: 'none' });
+  }
   return out;
 }
 
@@ -99,7 +108,29 @@ export function buildFinalCard(opts: {
   return card(elements);
 }
 
-export function buildAnswerCard(body: string, sessionUrl?: string): Record<string, unknown> {
+export function buildAnswerCard(
+  body: string,
+  sessionUrl?: string,
+  customCard?: Record<string, unknown>,
+): Record<string, unknown> {
+  // The agent handed us a full Adaptive Card (`teams send --card-file`): use
+  // it verbatim, only appending the session link so the run stays openable.
+  if (customCard && customCard.type === 'AdaptiveCard') {
+    const out = { ...customCard };
+    if (sessionUrl) {
+      const bodyEls = Array.isArray(out.body) ? [...(out.body as CardElement[])] : [];
+      bodyEls.push({
+        type: 'TextBlock',
+        text: `[Open session in Kortix ↗](${sessionUrl})`,
+        wrap: true,
+        isSubtle: true,
+        size: 'small',
+        spacing: 'medium',
+      });
+      out.body = bodyEls;
+    }
+    return out;
+  }
   const elements: CardElement[] = markdownToCardElements(body);
   if (elements.length === 0) elements.push({ type: 'TextBlock', text: body, wrap: true });
   if (sessionUrl) {

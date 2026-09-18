@@ -2465,6 +2465,7 @@ projectsApp.openapi(
       output?: string;
       sources?: Array<{ url?: string; text?: string }>;
       blocks?: unknown[];
+      card?: Record<string, unknown>;
       status?: string;
       opencode_session_id?: string;
       turn_message_id?: string;
@@ -2887,6 +2888,11 @@ projectsApp.openapi(
           .map((s) => ({ url: s.url, text: s.text }))
       : undefined;
     const blocks = Array.isArray(body.blocks) && body.blocks.length > 0 ? body.blocks : undefined;
+    // A full Adaptive Card for the Teams answer (`teams send --card-file`).
+    const card =
+      body.card && typeof body.card === 'object' && !Array.isArray(body.card)
+        ? (body.card as Record<string, unknown>)
+        : undefined;
 
     // `reason` is what makes `ok: false` actionable in the sandbox: `slack
     // step` and `slack send` print it, so an agent can tell "no Slack turn is
@@ -2894,7 +2900,7 @@ projectsApp.openapi(
     // of assuming its progress was delivered.
     const relayed =
       body.kind === 'answer'
-        ? await relayTurnAnswerDetailed(sessionId, text, blocks)
+        ? await relayTurnAnswerDetailed(sessionId, text, blocks, card)
         : await relayTurnStepDetailed(sessionId, text, {
             detail,
             outputForPrev,

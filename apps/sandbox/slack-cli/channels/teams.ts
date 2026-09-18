@@ -123,7 +123,7 @@ async function connectorCall(action: string, args: Record<string, unknown>): Pro
 async function relayTurnStream(
   kind: 'step' | 'answer',
   text: string,
-  extras: { detail?: string; output?: string; sources?: Array<{ url: string; text: string }> } = {},
+  extras: { detail?: string; output?: string; sources?: Array<{ url: string; text: string }>; card?: Record<string, unknown> } = {},
 ): Promise<boolean> {
   const projectId = kortixProjectId();
   const sessionId = kortixSessionId();
@@ -136,6 +136,7 @@ async function relayTurnStream(
       ...(extras.detail ? { detail: extras.detail } : {}),
       ...(extras.output ? { output: extras.output } : {}),
       ...(extras.sources && extras.sources.length > 0 ? { sources: extras.sources } : {}),
+      ...(extras.card ? { card: extras.card } : {}),
     });
     return r?.ok === true;
   } catch {
@@ -187,12 +188,23 @@ async function main(): Promise<void> {
         out(await sendFile(flags.file, readTextFlag(flags) ?? args[0]));
         break;
       }
+      let card: Record<string, unknown> | undefined;
+      if (flags['card-file']) {
+        try {
+          card = JSON.parse(readFileSync(flags['card-file'], 'utf-8')) as Record<string, unknown>;
+        } catch {
+          throw new CliError(`Cannot read/parse --card-file: ${flags['card-file']}`);
+        }
+        if (card.type !== 'AdaptiveCard') {
+          throw new CliError('--card-file must be an Adaptive Card JSON object (type: "AdaptiveCard")');
+        }
+      }
       const text = readTextFlag(flags) ?? args[0];
-      if (!text)
+      if (!text && !card)
         throw new CliError('message text required, e.g. teams send "Done — here is the summary"');
-      const relayed = await relayTurnStream('answer', text.slice(0, 11000));
+      const relayed = await relayTurnStream('answer', (text ?? 'Done.').slice(0, 11000), { card });
       if (relayed) {
-        out({ ok: true, delivered: 'stream' });
+        out({ ok: true, delivered: card ? 'card' : 'stream' });
         break;
       }
       throw new CliError('No active Teams turn to answer.');
@@ -233,6 +245,7 @@ reads run through the Kortix Connector (Graph token resolved server-side).
 Turn commands (use these when answering a Teams message):
   step  "<checkpoint>"   [--detail "<subtitle>"] [--output "<prev result>"] [--source URL|TITLE]
   send  "<answer>"       # deliver your reply — finalizes the live Adaptive Card
+  send  --card-file <path>   # deliver a full Adaptive Card JSON as the reply
 
 Files:
   send     --file <path> [--text "<description>"]   # personal chat: consent card; channel: inline image or team-drive link

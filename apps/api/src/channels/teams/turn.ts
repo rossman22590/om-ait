@@ -229,11 +229,15 @@ export async function relayTurnStep(
   return true;
 }
 
-export async function relayTurnAnswer(sessionId: string, text: string): Promise<boolean> {
+export async function relayTurnAnswer(
+  sessionId: string,
+  text: string,
+  card?: Record<string, unknown>,
+): Promise<boolean> {
   const handle = await loadTurn(sessionId);
   if (!handle || handle.finalized) return false;
   if (!(await claimFinalize(sessionId))) return false;
-  await finalizeTurn(handle, { answer: text });
+  await finalizeTurn(handle, { answer: text, card });
   await deleteTurn(sessionId);
   return true;
 }
@@ -258,10 +262,10 @@ export async function relayTurnEnd(
 
 export async function finalizeTurn(
   handle: TeamsLiveTurn,
-  opts: { answer?: string; error?: string; title?: string },
+  opts: { answer?: string; error?: string; title?: string; card?: Record<string, unknown> },
 ): Promise<void> {
-  if (handle.finalized && handle.messageActivityId === '' && !opts.answer && !opts.error) return;
-  const hasContent = Boolean(opts.answer || opts.error);
+  if (handle.finalized && handle.messageActivityId === '' && !opts.answer && !opts.error && !opts.card) return;
+  const hasContent = Boolean(opts.answer || opts.error || opts.card);
   const body = (opts.answer ?? opts.error ?? '').slice(0, 11000);
   const title = opts.title ?? (opts.error ? 'Run failed' : 'Task complete');
   const sessionUrl =
@@ -270,7 +274,11 @@ export async function finalizeTurn(
       : undefined;
 
   try {
-    if (handle.messageActivityId) {
+    if (opts.card) {
+      const answer = buildAnswerCard(body, sessionUrl, opts.card);
+      if (handle.messageActivityId) await updateCard(refOf(handle), handle.messageActivityId, answer);
+      else await sendCard(refOf(handle), answer);
+    } else if (handle.messageActivityId) {
       const last = handle.steps[handle.steps.length - 1];
       if (last && last.status === 'in_progress') last.status = opts.error ? 'error' : 'complete';
       await updateCard(
