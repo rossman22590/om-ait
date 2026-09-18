@@ -26,7 +26,6 @@ import { dockerAvailable } from './docker-available';
  * gate pattern as runtime-identity-migration.integration.test.ts).
  */
 
-
 const container = `kortix-invite-accept-${crypto.randomUUID().slice(0, 8)}`;
 
 function dockerPsql(sql: string, allowFailure = false) {
