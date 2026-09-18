@@ -10,6 +10,14 @@
  * `KORTIX_API_URL` + `KORTIX_API_KEY` (or `KORTIX_TOKEN`, the name the CLI
  * already honors inside a sandbox) override the config for scripts, tests, and
  * CI. The override never writes to disk.
+ *
+ * CLI parity cuts both ways: `kortix` itself resolves a synthetic `sandbox`
+ * host whenever `KORTIX_TOKEN` is in the environment (`activeHost()` in
+ * `apps/cli/src/api/config.ts`), so a stale sandbox token left exported in a
+ * developer shell silently outranks `kortix login` for the CLI AND the TUI.
+ * The TUI cannot change that precedence without diverging from the CLI, so it
+ * names the source (`envVar`) and `src/index.tsx` validates the token at boot
+ * and says exactly which variable to unset when it is rejected.
  */
 
 import {
@@ -37,6 +45,8 @@ export interface ResolvedHost {
   userEmail: string;
   /** Which source won. */
   source: 'env' | 'config';
+  /** For `source: 'env'`: the variable the token came from. */
+  envVar?: 'KORTIX_API_KEY' | 'KORTIX_TOKEN';
 }
 
 export interface HostEntry {
@@ -49,9 +59,33 @@ export interface HostEntry {
 
 type Env = Record<string, string | undefined>;
 
-function envToken(env: Env): string | undefined {
-  const token = env.KORTIX_API_KEY?.trim() || env.KORTIX_TOKEN?.trim();
-  return token || undefined;
+function envToken(
+  env: Env,
+): { token: string; envVar: 'KORTIX_API_KEY' | 'KORTIX_TOKEN' } | undefined {
+  const apiKey = env.KORTIX_API_KEY?.trim();
+  if (apiKey) return { token: apiKey, envVar: 'KORTIX_API_KEY' };
+  const sandboxToken = env.KORTIX_TOKEN?.trim();
+  if (sandboxToken) return { token: sandboxToken, envVar: 'KORTIX_TOKEN' };
+  return undefined;
+}
+
+/**
+ * The line the login screen shows when the boot-time `validateToken` fails.
+ * Names the variable to unset when the token came from the environment, and
+ * the `kortix login` remedy when it came from the config file.
+ */
+export function tokenRejectionNotice(
+  host: Pick<ResolvedHost, 'name' | 'source' | 'envVar' | 'backendUrl'>,
+  status: number,
+  message: string,
+): string {
+  const where = `${host.backendUrl} (host ${host.name})`;
+  const reason = status ? `${status}: ${message}` : message;
+  if (host.source === 'env') {
+    const variable = host.envVar ?? 'KORTIX_API_KEY';
+    return `Token rejected by ${where} — ${reason}. ${variable} is set in this shell and outranks kortix login; unset it or pick a host below.`;
+  }
+  return `Token rejected by ${where} — ${reason}. Run kortix login, or pick another host below.`;
 }
 
 function envBackendUrl(env: Env): string | undefined {
@@ -71,17 +105,19 @@ function envBackendUrl(env: Env): string | undefined {
  * user is listed in `listHostEntries()` but has to log in.
  */
 export function resolveHost(env: Env = process.env): ResolvedHost | null {
-  const token = envToken(env);
+  const fromEnv = envToken(env);
   const url = envBackendUrl(env);
-  if (token) {
+  if (fromEnv) {
     return {
-      name: 'env',
+      // The CLI's `activeHostEntry()` names a KORTIX_TOKEN host `sandbox`.
+      name: fromEnv.envVar === 'KORTIX_TOKEN' ? 'sandbox' : 'env',
       backendUrl: sdkBackendUrl(url ?? 'https://api.kortix.com'),
-      token,
+      token: fromEnv.token,
       accountId: env.KORTIX_ACCOUNT_ID?.trim() ?? '',
       defaultProjectId: env.KORTIX_PROJECT_ID?.trim() || undefined,
       userEmail: '',
       source: 'env',
+      envVar: fromEnv.envVar,
     };
   }
 

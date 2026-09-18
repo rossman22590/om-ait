@@ -43,6 +43,8 @@ export interface LoginScreenProps {
   onQuit(): void;
   /** The footer's word for `onQuit`. Default `Esc quit`. */
   cancelLabel?: string;
+  /** A boot-time failure to show above the host list (a rejected token). */
+  notice?: string | null;
   onToast?(message: string, kind?: 'info' | 'error'): void;
   /** The host set changed on disk — the caller re-reads `listHostEntries()`. */
   onHostsChanged?(): void;
@@ -66,6 +68,7 @@ export function LoginScreen({
   onLoggedIn,
   onQuit,
   cancelLabel = 'Esc quit',
+  notice = null,
   onToast,
   onHostsChanged,
   deps,
@@ -149,6 +152,9 @@ export function LoginScreen({
   }, [current, deps, onHostsChanged, onToast]);
 
   useKeyboard((key) => {
+    // The app's "Ctrl+C twice" belongs to a running session. Here there is
+    // nothing to protect, and a screen that ignores Ctrl+C reads as hung.
+    if (matchesLoginBinding(key, 'login.quit')) return onQuit();
     if (mode === 'confirm-delete') {
       if (matchesLoginBinding(key, 'login.cancel')) return setMode('list');
       if (matchesLoginBinding(key, 'login.deny')) return setMode('list');
@@ -214,6 +220,7 @@ export function LoginScreen({
     <box flexDirection="column" width={width} height={height} padding={1}>
       <text fg={theme.fg}>Kortix — pick a host</text>
       <text fg={theme.faint}>{'─'.repeat(bodyWidth)}</text>
+      {notice ? <text fg={theme.danger}>{notice}</text> : null}
 
       {hosts.length === 0 ? (
         <text fg={theme.faint}>No hosts configured. Press n to add one.</text>
@@ -247,7 +254,9 @@ export function LoginScreen({
       {error ? <text fg={theme.danger}>{error}</text> : null}
 
       <box flexGrow={1} />
-      <text fg={theme.faint}>{`Enter use · n add · e token · d remove · ${cancelLabel}`}</text>
+      <text
+        fg={theme.faint}
+      >{`Enter use · n add · e token · d remove · ${cancelLabel} · Ctrl+C quit`}</text>
     </box>
   );
 }

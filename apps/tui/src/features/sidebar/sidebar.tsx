@@ -120,9 +120,21 @@ export function Sidebar({
     if (resolved) onAccountResolved(resolved);
   }, [accountId, effectiveAccountId, accounts[0]?.account_id, onAccountResolved]);
 
+  // An account or project list that failed is an auth/host problem, not an
+  // empty workspace. Say so on the account row and in the error line instead
+  // of rendering "No account" over a picker with nothing in it.
+  const authError = accountsQuery.isError
+    ? `Accounts: ${errorText(accountsQuery.error)}`
+    : projectsQuery.isError
+      ? `Projects: ${errorText(projectsQuery.error)}`
+      : null;
   const accountName =
     accounts.find((account) => account.account_id === effectiveAccountId)?.name ??
-    (accountsQuery.isLoading ? 'loading…' : (accounts[0]?.name ?? 'No account'));
+    (accountsQuery.isError
+      ? 'account list failed'
+      : accountsQuery.isLoading
+        ? 'loading…'
+        : (accounts[0]?.name ?? 'No account'));
   const projectName =
     projects.find((project) => project.project_id === projectId)?.name ??
     (projectId ? projectId.slice(0, 8) : 'No project');
@@ -211,7 +223,7 @@ export function Sidebar({
     return [];
   }, [picker, accounts, projects, projectId]);
 
-  const listError = sessionsQuery.isError ? errorText(sessionsQuery.error) : null;
+  const listError = sessionsQuery.isError ? errorText(sessionsQuery.error) : authError;
   const busyMessage = busy ?? (sessionsQuery.isFetchingNextPage ? 'loading more…' : null);
 
   if (picker !== 'none') {
@@ -250,8 +262,12 @@ export function Sidebar({
       errorMessage={listError}
       busyMessage={busyMessage}
       onOpenSession={onOpenSession}
-      onOpenAccountPicker={() => setPicker('account')}
-      onOpenProjectPicker={() => setPicker('project')}
+      onOpenAccountPicker={() =>
+        authError && accounts.length === 0 ? onToast?.(authError, 'error') : setPicker('account')
+      }
+      onOpenProjectPicker={() =>
+        authError && projects.length === 0 ? onToast?.(authError, 'error') : setPicker('project')
+      }
       onNewSession={() => void createSession()}
       onNavigate={(screen: SidebarScreen) => onNavigate(screen)}
       onRename={(sessionId, name) => void renameSession(sessionId, name)}

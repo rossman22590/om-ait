@@ -25,7 +25,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
 import { App } from './app.tsx';
-import { type ResolvedHost, listHostEntries, resolveHost } from './auth/hosts.ts';
+import {
+  type ResolvedHost,
+  listHostEntries,
+  resolveHost,
+  tokenRejectionNotice,
+} from './auth/hosts.ts';
 import { LoginScreen } from './features/login/index.ts';
 import { registerEmbeddedTerminal } from './features/terminal/register.ts';
 import { initKortix, kortix } from './kortix.ts';
@@ -47,6 +52,8 @@ async function resolveProjectId(fallback?: string): Promise<string | null> {
 
 interface RootProps {
   initialHost: ResolvedHost | null;
+  /** Why boot fell through to the login screen, when it did. */
+  initialNotice: string | null;
   initialProjectId: string | null;
   initialSessionId: string | null;
   onQuit: () => void;
@@ -60,14 +67,22 @@ interface RootProps {
  * rebuilds the one client, and the app remounts with a fresh `key` so every
  * query and every SSE stream is torn down with the old host.
  */
-function Root({ initialHost, initialProjectId, initialSessionId, onQuit }: RootProps) {
+function Root({
+  initialHost,
+  initialNotice,
+  initialProjectId,
+  initialSessionId,
+  onQuit,
+}: RootProps) {
   const [host, setHost] = useState<ResolvedHost | null>(initialHost);
+  const [notice, setNotice] = useState<string | null>(initialNotice);
   /** The host `Alt+H` left behind, so Esc can put it back. Null at boot. */
   const [previousHost, setPreviousHost] = useState<ResolvedHost | null>(null);
   const [projectId, setProjectId] = useState<string | null>(initialProjectId);
   const [generation, setGeneration] = useState(0);
 
   const onLoggedIn = useCallback((resolved: ResolvedHost) => {
+    setNotice(null);
     initKortix(resolved);
     setHost(resolved);
     setPreviousHost(null);
@@ -95,6 +110,7 @@ function Root({ initialHost, initialProjectId, initialSessionId, onQuit }: RootP
         onLoggedIn={onLoggedIn}
         onQuit={onCancel}
         cancelLabel={previousHost ? 'Esc back' : 'Esc quit'}
+        notice={notice}
       />
     );
   }
@@ -115,9 +131,33 @@ function Root({ initialHost, initialProjectId, initialSessionId, onQuit }: RootP
   );
 }
 
+/**
+ * Boot preflight: prove the resolved token before the first hook renders.
+ *
+ * Without this a rejected token — most often a stale `KORTIX_TOKEN` a sandbox
+ * session left exported in the shell, which outranks `kortix login` for the
+ * CLI and the TUI alike — boots an app whose every list is empty and whose
+ * account picker has nothing to pick. The login screen with the reason is the
+ * honest state. `validateToken` never throws.
+ */
+async function preflight(host: ResolvedHost): Promise<string | null> {
+  const result = await kortix().validateToken();
+  if (result.valid) return null;
+  return tokenRejectionNotice(
+    host,
+    result.error?.status ?? 0,
+    result.error?.message ?? 'token rejected',
+  );
+}
+
 async function main(): Promise<void> {
-  const host = resolveHost();
-  if (host) initKortix(host);
+  let host = resolveHost();
+  let notice: string | null = null;
+  if (host) {
+    initKortix(host);
+    notice = await preflight(host);
+    if (notice) host = null;
+  }
   const projectId = host ? await resolveProjectId(host.defaultProjectId) : null;
 
   const queryClient = new QueryClient({
@@ -162,6 +202,7 @@ async function main(): Promise<void> {
     <QueryClientProvider client={queryClient}>
       <Root
         initialHost={host}
+        initialNotice={notice}
         initialProjectId={projectId}
         initialSessionId={process.env.KORTIX_SESSION_ID?.trim() || null}
         onQuit={() => shutdown(0)}

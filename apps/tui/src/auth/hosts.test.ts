@@ -5,7 +5,7 @@ import { join } from 'node:path';
 
 import type { Host } from '@kortix/cli/src/api/config.ts';
 
-import { hostToResolved, resolveHost, resolvedFromHost } from './hosts.ts';
+import { hostToResolved, resolveHost, resolvedFromHost, tokenRejectionNotice } from './hosts.ts';
 
 /**
  * `@kortix/cli`'s config module reads `KORTIX_CONFIG_FILE` on every call and
@@ -152,5 +152,59 @@ describe('hostToResolved', () => {
     expect(resolvedFromHost('x', { ...host, url: 'http://localhost:17408/v1' }).backendUrl).toBe(
       'http://localhost:17408/v1',
     );
+  });
+});
+
+describe('env token provenance', () => {
+  test('KORTIX_TOKEN resolves to the synthetic sandbox host, like the CLI', () => {
+    writeConfig(CONFIG);
+    const host = resolveHost({ KORTIX_TOKEN: 'kortix_sb_stale' });
+    expect(host?.source).toBe('env');
+    expect(host?.name).toBe('sandbox');
+    expect(host?.envVar).toBe('KORTIX_TOKEN');
+    // A stale sandbox token still outranks the config host (CLI parity).
+    expect(host?.token).toBe('kortix_sb_stale');
+  });
+
+  test('KORTIX_API_KEY wins over KORTIX_TOKEN and is named env', () => {
+    writeConfig(CONFIG);
+    const host = resolveHost({ KORTIX_TOKEN: 'kortix_sb_stale', KORTIX_API_KEY: 'kortix_pat_x' });
+    expect(host?.name).toBe('env');
+    expect(host?.envVar).toBe('KORTIX_API_KEY');
+    expect(host?.token).toBe('kortix_pat_x');
+  });
+
+  test('a config host carries no envVar', () => {
+    writeConfig(CONFIG);
+    expect(resolveHost({})?.envVar).toBeUndefined();
+  });
+});
+
+describe('tokenRejectionNotice', () => {
+  const base = { backendUrl: 'https://api.kortix.com/v1' };
+  test('names the shell variable when the token came from the environment', () => {
+    const line = tokenRejectionNotice(
+      { ...base, name: 'sandbox', source: 'env', envVar: 'KORTIX_TOKEN' },
+      401,
+      'Invalid or expired token',
+    );
+    expect(line).toContain('401: Invalid or expired token');
+    expect(line).toContain('KORTIX_TOKEN is set in this shell');
+    expect(line).toContain('host sandbox');
+    expect(line).not.toContain('kortix_sb_');
+  });
+  test('points a config host at kortix login', () => {
+    const line = tokenRejectionNotice(
+      { ...base, name: 'cloud', source: 'config' },
+      401,
+      'PAT revoked',
+    );
+    expect(line).toContain('Run kortix login');
+    expect(line).not.toContain('is set in this shell');
+  });
+  test('a transport failure has no status prefix', () => {
+    expect(
+      tokenRejectionNotice({ ...base, name: 'cloud', source: 'config' }, 0, 'fetch failed'),
+    ).toContain('— fetch failed.');
   });
 });

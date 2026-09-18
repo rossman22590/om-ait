@@ -377,6 +377,17 @@ os.close(slave)
 
 ## Troubleshooting
 
+### "Token rejected … KORTIX_TOKEN is set in this shell"
+
+A sandbox session exports `KORTIX_TOKEN=kortix_sb_…` for the CLI inside the
+sandbox. When that variable is still exported in a developer shell it outranks
+`kortix login` for the CLI **and** the TUI (`kortix whoami` prints `host
+sandbox … Token rejected` in the same shell). The TUI validates the token at
+boot and drops to the login screen with this line; the fix is
+`unset KORTIX_TOKEN` (or a fresh terminal), or pick a stored host with
+`Enter`. `KORTIX_API_KEY` is the explicit override and wins over both.
+
+
 - **`ERR_PNPM_UNSUPPORTED_ENGINE` on install.** `@opentui/core` declares
   `engines.node: >=26.4.0`. The repo `.npmrc` documents why `engine-strict` is
   off; re-enabling it breaks this app's install.

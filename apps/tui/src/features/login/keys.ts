@@ -97,4 +97,13 @@ export const LOGIN_KEYS: readonly LoginBinding[] = [
     chords: [{ key: 'escape' }],
     description: 'Leave the form, the confirm, or the screen.',
   },
+  {
+    id: 'login.quit',
+    scope: 'login',
+    chords: [
+      { key: 'c', ctrl: true },
+      { key: 'q', ctrl: true },
+    ],
+    description: 'Quit from the login screen at once. There is no app behind it to arm.',
+  },
 ] as const;
