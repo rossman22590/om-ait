@@ -6251,3 +6251,26 @@ prechecks `installation.permissions.members` and throws
 `GitHubAppPermissionError`. Tests: `unit-github-app-slug.test.ts`,
 `e2e-github-app-projects.test.ts`. Manual check: `gh api /apps/<slug> --jq
 .permissions`. Runbook: `docs/runbooks/managed-git-config.md`.
+
+### 2026-09-18 — Blanking a settings row deletes every fix stored in it
+
+**Incident.** Prod project creation failed 100% from 2026-09-16 18:12Z for 45+
+hours: 1,023 `POST /v1/projects/provision` → `502`, zero `201`. The prod env PAT
+(`agent-kortix`, fine-grained) has no `Administration: write`. The 2026-09-07
+fix for that was a classic PAT stored in
+`platform_settings.managed_github_app`. The 2026-09-16 App-overwrite repair ran
+`set value='{}'` on that row and erased the PAT. Prod fell back to the env PAT.
+`POST /git/collaborators` failed with the same `403 Resource not accessible by
+personal access token`. Nobody saw it: no alert covers the provision route, and
+`provision-stream` answers `200` with an `error` frame.
+
+**Rule.** Before blanking or overwriting a shared settings row, list every
+field it holds and who depends on each. A hotfix stored in a mutable row is
+not a fix: move it to the owning source (the env secret) in the same incident.
+After any credential repair, run the WRITE the credential exists for (create +
+delete a probe repo), not a read.
+
+**Enforcement.** None automated yet. Owed: an alert on `POST
+/v1/projects/provision` 5xx ratio and on `provision create_repo failed` log
+count. Manual probe: `POST /orgs/managed-kortix/repos` with the runtime token
+must return `201`.
