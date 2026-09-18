@@ -924,3 +924,12 @@ Queue acceptance and runtime execution are separate states. Each distinct submis
 appears immediately, including while a previous POST is pending. The working hook
 updates `pendingDelivery` when the same turn becomes active, without waiting for
 a different turn ID or timestamp.
+
+
+### External directory freshness
+
+`contract('directory')` from `@kortix/sdk/react` refreshes mounted group and
+member queries every 10 seconds while the tab is visible. It also refreshes on
+focus and reconnect, including data still inside the stale-time window. It does
+not poll background tabs or change the identity provider's provisioning schedule.
+Other freshness tiers keep their existing behavior.

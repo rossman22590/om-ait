@@ -14552,6 +14552,8 @@
       "text922315177668": "Tudo o que o inicializador pode ver",
       "text9224d9e82502": "De volta a \"Provisioning\" → \"Settings\", defina \"Scope\" como \"Sync only assigned users and groups\" — essa opção só aparece aqui depois que as credenciais são salvas. Depois clique em \"Start provisioning\" no topo da página de visão geral de Provisioning (ou em \"Provision on demand\" para enviar instantaneamente um usuário atribuído, sem esperar o ciclo de ~40 minutos).",
       "text9225e456b795": "Mencione seu agente em um canal ou chat do Teams.",
+      "text895ce927db2e": "Chat pessoal",
+      "text28c7d3f8b75d": "Chat em grupo",
       "text72b5b0c53de9": "Respondeu no Microsoft Teams",
       "textfc73e9ad2dae": "Respondeu no Slack",
       "text8faf56a14a8d": "Respondeu no Telegram",
