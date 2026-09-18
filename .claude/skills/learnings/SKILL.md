@@ -21,6 +21,58 @@ linked, not inlined.
 
 ## Register
 
+### Dispatching the release gate at `--ref main` tests the deployment with code it has never contained (2026-09-18)
+
+**When:** running `tests-release.yml` by `workflow_dispatch`. The ref decides
+whose TEST CODE runs; `RELEASE_SOURCE_SHA` only decides which deployment is
+asserted. At `--ref main` those two are different trees, and every test added
+after the deployed SHA runs against a deployment that lacks its feature. The
+failures are indistinguishable from product defects and each one costs a full
+triage: the verdict is a git question, not a debugging question.
+
+**Incident:** run `35369184776`, dispatched `--ref main` (`8ea1ec99e8`) against
+staging/prod `fa68c114d7` — **142 commits apart**. All 8 failures were
+measurement artifacts. `886afa4016`, which added `SESS-32` and its browser
+spec, is not even an ancestor of the deployed SHA. Proof the deployment
+answered for itself: `PATCH /v1/projects/:id/features` returned
+`400 {"error":"Unknown feature flag 'session_transcript_history'"}`, and the
+`Git repo` accessibility snapshot carried no `Change` button at all.
+
+**Rule:** dispatch the gate at the ref that is deployed, or assert nothing from
+a mismatch. Before triaging any deployed-gate failure, run
+`git log -p <deployed-sha>..<test-ref> -- <failing file>` and check the SERVER
+or WEB code too — a test present at both SHAs is the only one worth debugging.
+The positive control that settles it: run the same test against local code that
+has the feature. Here 3 of 4 passed locally unchanged.
+
+**Enforcement:** none. Candidate: `tests-release.yml` fails fast when its own
+checked-out SHA is not an ancestor of `RELEASE_SOURCE_SHA`.
+
+### A popover asserted across a viewport or theme change needs the whole group retried (2026-09-18)
+
+**When:** a Playwright journey holds a Radix popover, dropdown, or select open
+while it changes `setViewportSize` or the theme class. Those layout changes
+dismiss it, asynchronously — so a single `isVisible()` guard reads `true` while
+the close is in flight, the reopen is skipped, and ANY later assertion lands on
+a closed panel. Guarding one assertion only moves the failure.
+
+**Near-miss:** `30-pooled-provider-secrets.spec.ts:99` failed locally on main at
+two different assertions on two runs — `Save changes` at the 1440 -> 390 shrink
+on the first dark iteration (all three light sizes passed), then `Unsaved key
+changes` one assertion later under two workers. Found while proving the staging
+failure of the same test was an artifact; it would have failed the next gate on
+a correctly deployed staging.
+
+**Rule:** re-establish the panel by its OWN control, never by the container's
+visibility, and wrap the per-size assertion group in `expect(...).toPass()` so a
+dismissal costs a retry. Weaken no assertion inside it. A scan or screenshot
+that targets the panel by selector must separately require it to be open, or an
+empty result reads as a pass. Extends the 2026-09-14 entry "Assert settled
+dialog geometry before capturing a responsive screenshot".
+
+**Enforcement:** the retried group in that spec; verified `4 passed` on two
+consecutive two-worker runs, failing on both runs before it.
+
 ### An account-scoped read on an always-mounted surface toasts 403 at every member (2026-09-18)
 
 **Rule:** before adding a query to a component that renders on every project
