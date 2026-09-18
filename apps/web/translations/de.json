@@ -1587,6 +1587,7 @@
   "modelSelector": {
     "search": "Modelle suchen",
     "free": "Kostenlos",
+    "included": "Inklusive",
     "addProvider": "Anbieter hinzufügen",
     "connectProvider": "Anbieter verbinden",
     "manageModels": "Modelle verwalten",

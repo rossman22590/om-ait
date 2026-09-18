@@ -1587,6 +1587,7 @@
   "modelSelector": {
     "search": "搜索模型",
     "free": "免费",
+    "included": "已包含",
     "addProvider": "添加提供商",
     "connectProvider": "连接提供商",
     "manageModels": "管理模型",

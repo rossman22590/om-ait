@@ -1587,6 +1587,7 @@
   "modelSelector": {
     "search": "Cerca modelli",
     "free": "Gratis",
+    "included": "Incluso",
     "addProvider": "Aggiungi provider",
     "connectProvider": "Connetti provider",
     "manageModels": "Gestisci modelli",

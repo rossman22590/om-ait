@@ -35,7 +35,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { resolveAvailableSelectedModel } from './model-availability';
 import { modelItemValue, pickerGroupId, pickerGroupLabel, splitModelLabel } from './model-grouping';
 import { modelInDefaultView } from './model-picker-default-view';
-import { shouldShowFreeTag } from './model-tags';
+import { isSubscriptionModel, pickerModelName, shouldShowFreeTag } from './model-tags';
 import type { FlatModel } from './session-chat-input';
 import { useModelConnectionGate } from './use-model-connection-gate';
 
@@ -132,7 +132,10 @@ function ModelRow({
 }) {
   const t = useTranslations('modelSelector');
   const isFree = shouldShowFreeTag(model);
-  const { lead, trail } = splitModelLabel(model.modelName);
+  const isSubscription = isSubscriptionModel(model);
+  // Display name only — `model.modelName` still carries " (ChatGPT)" for search
+  // and for the aria labels below, where there is no group heading to lean on.
+  const { lead, trail } = splitModelLabel(pickerModelName(model));
 
   return (
     <CommandItem
@@ -179,7 +182,18 @@ function ModelRow({
         {trail ? <span className="text-muted-foreground font-normal"> {trail}</span> : null}
       </span>
 
-      {isFree && <Tag variant="free">{t('free')}</Tag>}
+      {/*
+        ONE tag per row. A subscription model is billed to the connected ChatGPT
+        account instead of metered per token, and that is the only thing the two
+        copies of e.g. "GPT-6 Astra" do not share — so it is what the tag says.
+        Neutral on purpose: this is metadata, not status, and the seven
+        `kortix-*` accents are reserved for state.
+      */}
+      {isFree ? (
+        <Tag variant="free">{t('free')}</Tag>
+      ) : isSubscription ? (
+        <Tag>{t('included')}</Tag>
+      ) : null}
 
       {/*
         ONE trailing slot, always the same 24px wide, so swapping what sits in

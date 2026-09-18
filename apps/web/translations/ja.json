@@ -1587,6 +1587,7 @@
   "modelSelector": {
     "search": "モデルを検索",
     "free": "無料",
+    "included": "プラン内",
     "addProvider": "プロバイダーを追加",
     "connectProvider": "プロバイダーに接続",
     "manageModels": "モデルを管理",
