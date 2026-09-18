@@ -182,6 +182,35 @@ key NAME; space is `pressKey('space')`. A literal `' '` produces no match.
 captures the next frame immediately after `pressEscape()` reads the frame
 before the key landed.
 
+**Trap — `<code>` conceals markdown markers by default.** `conceal` defaults to
+TRUE (`@opentui/core/renderables/Code.d.ts`), and for `filetype="markdown"` that
+means the syntax is eaten: `# Heading` renders as `Heading`, `**bold**` as
+`bold`, `` `code` `` as `code`. A file viewer showing a `.md` file is then
+showing a rendering of it, not the file. Pass `conceal={false}` wherever the
+point is the SOURCE. Verified at 46x12: the same content renders `Heading` /
+`bold and code` with the default and `# Heading` / `**bold** and `code`` with
+`conceal={false}`.
+
+**Trap — an explicit `width`/`height` on `<scrollbox>` or `<diff>` paints
+outside the viewport.** Sizing one to its parent's OUTER box makes it paint over
+the parent's border: measured inside a 46x10 single-bordered box, a
+`<scrollbox width={46} height={10}>` printed `row 8` INTO the bottom border
+line (`└row 8──────┘`). The renderable takes the size; its clip rectangle does
+not follow. Give it no explicit size, let flex measure it (`flexGrow={1}`), and
+put `overflow="hidden"` on the container — the same box then draws a clean
+`└──────┘` and shows the scrollbar glyph inside its own rectangle. That is why
+`transcript.tsx` wraps its scrollbox in an `overflow="hidden"` column and passes
+no width.
+
+**Trap — a one-row `<text>` beside a `flexGrow` child collapses without
+`flexShrink={0}`.** In a fixed-height column, flexbox shrinks every item to make
+the growing one fit, and a `<text>` has no minimum. Measured in a 6-row column
+of `<text>HEADER-ROW</text>` + `<box flexGrow={1}>` + `<text>FOOTER-ROW</text>`:
+the header row rendered as `bodyE0-ROW` — the body's first line painted through
+the collapsed header, leaving the two interleaved. With `flexShrink={0}` on both
+texts the same column renders `HEADER-ROW`, four body rows, `FOOTER-ROW`. Every
+fixed chrome row next to a growing region needs it.
+
 **Trap — `overflow: hidden` clips absolutely positioned children.** A `<box
 overflow="hidden">` — which `src/ui/panel.tsx` is — scissors every descendant
 to its own rectangle, including `position="absolute"` ones anchored at the
