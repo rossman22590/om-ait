@@ -1676,7 +1676,7 @@ export function UserMessage({
             </svg>
             )}
             <span className="text-xs font-medium" style={{ color: brandColor }}>
-              {isTeams ? 'Microsoft Teams' : channelMessageInfo.platform}
+              {isTeams ? tI18nComplete.raw('texta7b52b269a23') : channelMessageInfo.platform}
             </span>
             <span className="text-muted-foreground text-xs">·</span>
             <span className="text-foreground text-sm font-medium">
