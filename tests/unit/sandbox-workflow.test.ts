@@ -19,8 +19,16 @@ describe('native test-lane workflow', () => {
     expect(testWorkflow).toContain('- lane: browser-1');
     expect(testWorkflow).toContain('- lane: browser-2');
     expect(testWorkflow).toContain('- lane: packages');
-    expect(testWorkflow).toContain('args: --browser-only --browser-shard=1/2');
-    expect(testWorkflow).toContain('args: --browser-only --browser-shard=2/2');
+    // Four browser shards since 2026-09-18. The browser lane's fixed cost is
+    // ~134s and its journeys ~837s, so wall clock is 134 + 837/N; N=4 puts the
+    // browser lanes at ~5.7 min, just under `packages` (6m34s), which is where
+    // more shards stop paying.
+    expect(testWorkflow).toContain('- lane: browser-3');
+    expect(testWorkflow).toContain('- lane: browser-4');
+    for (const n of [1, 2, 3, 4]) {
+      expect(testWorkflow).toContain(`args: --browser-only --browser-shard=${n}/4`);
+    }
+    expect(testWorkflow).not.toContain('--browser-shard=1/2');
     expect(testWorkflow).toContain('args: --packages-only');
     // The unchanged root command is the whole lane.
     expect(testWorkflow).toContain('if [[ -n "$TEST_ARGS" ]]; then pnpm test -- $TEST_ARGS; else pnpm test; fi');

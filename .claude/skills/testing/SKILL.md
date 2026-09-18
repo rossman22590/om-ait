@@ -42,7 +42,7 @@ pnpm test -- --id ACC-4        # One flow
 pnpm test -- --domain access   # One domain
 pnpm test -- --sdk-only        # SDK only
 pnpm test -- --browser-only    # Browser only; owns the deterministic local stack
-pnpm test -- --browser-only --browser-shard=1/2 # One browser shard
+pnpm test -- --browser-only --browser-shard=1/4 # One browser shard
 pnpm test -- --packages-only   # Every app/package test and publish contract
 pnpm test -- --full            # Browser plus all app/package tests
 pnpm test -- --target-smoke    # Deployed staging API SHA and Playwright smoke
@@ -90,14 +90,14 @@ gates`, on a pull request into `prod`, and it tests DEPLOYED staging.
 
 So the local run is the real gate before a `main` merge. Run the narrowest
 relevant command first, then `pnpm test`, and add the `test` label when you want
-CI's four lanes on the pull request as well.
+CI's lanes on the pull request as well.
 
 ## Run CI lanes natively on Blacksmith
 
-Keep the test commands unchanged. `.github/workflows/tests.yml` runs four lanes
+Keep the test commands unchanged. `.github/workflows/tests.yml` runs six lanes
 in parallel, each on one Blacksmith runner (`CI_RUNNER_L`, 8 vCPU / 32 GB).
-Core and package lanes run `pnpm test` and `pnpm test -- --packages-only`. Two
-browser lanes run shards `1/2` and `2/2` through
+Core and package lanes run `pnpm test` and `pnpm test -- --packages-only`. Four
+browser lanes run shards `1/4` through `4/4` via
 `pnpm test -- --browser-only --browser-shard=CURRENT/TOTAL` at the exact
 requested SHA.
 

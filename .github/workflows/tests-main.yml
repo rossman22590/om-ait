@@ -80,7 +80,7 @@ jobs:
           {
             echo "## \`main\` @ \`${SHA:0:8}\`: $RESULT"
             echo
-            echo "Full local suite (\`core\`, \`browser-1\`, \`browser-2\`, \`packages\`)."
+            echo "Full local suite (\`core\`, \`browser-1..4\`, \`packages\`)."
             if [ -n "$failed" ]; then
               echo
               echo "Failing lanes: \`$failed\`"
@@ -108,8 +108,10 @@ jobs:
             echo '```'
             echo "pnpm test                                        # core"
             echo "pnpm test -- --packages-only                     # packages"
-            echo "pnpm test -- --browser-only --browser-shard=1/2  # browser-1"
-            echo "pnpm test -- --browser-only --browser-shard=2/2  # browser-2"
+            echo "pnpm test -- --browser-only --browser-shard=1/4  # browser-1"
+            echo "pnpm test -- --browser-only --browser-shard=2/4  # browser-2"
+            echo "pnpm test -- --browser-only --browser-shard=3/4  # browser-3"
+            echo "pnpm test -- --browser-only --browser-shard=4/4  # browser-4"
             echo '```'
           } > /tmp/trunk-verdict.md
 

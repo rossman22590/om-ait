@@ -45,12 +45,28 @@ jobs:
           - lane: core
             mode: core
             args: ""
+          # Four browser shards, not two (2026-09-18). Measured on run
+          # 35384964452: the browser lane's fixed cost is ~134s (81s runner
+          # setup + 53s in-lane stack boot) and the journeys are ~837s of work
+          # across ~44 tests. Wall clock is therefore 134 + 837/N:
+          # N=2 -> ~9.2 min (observed 10m19s on the heavier shard), N=3 ->
+          # ~6.9 min, N=4 -> ~5.7 min. Past N=4 the browser lanes stop being
+          # the long pole — `packages` (6m34s) is — so four is where the
+          # sharding stops paying. `--browser-shard` maps straight to
+          # Playwright's native `--shard`, so the denominator needs no
+          # partition code (unlike the API shards in `src/core/shard.ts`).
           - lane: browser-1
             mode: browser
-            args: --browser-only --browser-shard=1/2
+            args: --browser-only --browser-shard=1/4
           - lane: browser-2
             mode: browser
-            args: --browser-only --browser-shard=2/2
+            args: --browser-only --browser-shard=2/4
+          - lane: browser-3
+            mode: browser
+            args: --browser-only --browser-shard=3/4
+          - lane: browser-4
+            mode: browser
+            args: --browser-only --browser-shard=4/4
           - lane: packages
             mode: packages
             args: --packages-only

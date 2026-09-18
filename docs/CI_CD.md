@@ -24,11 +24,29 @@ See `tests/README.md` for flow authoring and result files.
 ## Where the test suite runs
 
 `.github/workflows/tests.yml` is the only local-profile test implementation. It
-runs four lanes in parallel — `core`, `browser-1`, `browser-2`, `packages` —
-each natively on one Blacksmith runner (`CI_RUNNER_L`, 8 vCPU / 32 GB). The four
+runs six lanes in parallel — `core`, `browser-1` … `browser-4`, `packages` —
+each natively on one Blacksmith runner (`CI_RUNNER_L`, 8 vCPU / 32 GB). The six
 lanes equal one `pnpm test -- --full` run, and the slowest lane defines the
-duration. Measured on 2026-09-18: `core` 2m18s, `packages` 6m34s, `browser-1`
-8m11s, `browser-2` 10m19s.
+duration.
+
+Measured on run `35384964452` with two browser shards: `core` 2m18s, `packages`
+6m34s, `browser-1` 8m11s, `browser-2` **10m19s**. Decomposing the 10m19s lane:
+81s runner setup, 53s in-lane stack boot, **480s of Playwright journeys**. Fixed
+cost is ~134s and the journeys total ~837s across ~44 tests, so a browser lane's
+wall clock is `134 + 837/N`:
+
+| browser shards | projected browser lane | suite wall clock |
+| --- | --- | --- |
+| 2 | ~9.2 min (10m19s observed) | ~10.3 min |
+| 3 | ~6.9 min | ~6.9 min |
+| **4** | **~5.7 min** | **~6.6 min (bounded by `packages`)** |
+| 6 | ~4.6 min | ~6.6 min — no change |
+
+The browser lanes went 2 → 4 on 2026-09-18. Past 4, `packages` (6m34s) is the
+long pole and another browser shard buys nothing, so that is where the sharding
+stops. `--browser-shard` maps straight to Playwright's native `--shard`, so the
+denominator needs no partition code — unlike the API shards, which are computed
+by `src/core/shard.ts`.
 
 Until 2026-08-26 each lane ran inside a Platinum or Daytona cloud sandbox with a
 warm template, and the runner was a thin orchestrator. That path was deleted

@@ -383,21 +383,25 @@ See `tests/e2e/helpers/session-auth.ts` for the exact calls.
 - Every Linux CI job runs on Blacksmith through `runs-on: ${{ vars.CI_RUNNER_<tier>
   || '<label>' }}`. Tiers, the kill switch back to GitHub-hosted runners, and
   the Docker layer cache: `docs/runbooks/ci-runners.md`.
-- GitHub Actions runs four lanes — `core`, `browser-1`, `browser-2`, `packages` —
-  natively, one Blacksmith runner each (`CI_RUNNER_L`), through
-  `.github/workflows/tests.yml`. The two browser lanes are halves of one sharded
-  run (`--browser-shard=1/2` and `2/2`). The slowest lane defines the run
-  duration. Each lane is the unchanged root command at the exact requested SHA;
+- GitHub Actions runs six lanes — `core`, `browser-1` … `browser-4`, `packages`
+  — natively, one Blacksmith runner each (`CI_RUNNER_L`), through
+  `.github/workflows/tests.yml`. The four browser lanes are quarters of one
+  sharded run (`--browser-shard=N/4`, Playwright's native `--shard`). The
+  slowest lane defines the run duration, and since 2026-09-18 that is
+  `packages` (~6m34s), not a browser lane. The browser lanes went 2 → 4 the
+  same day: fixed cost ~134s, journeys ~837s, so wall clock is 134 + 837/N and
+  N=4 lands at ~5.7 min. Do not add a fifth browser shard until `packages` is
+  faster — it would not change the total. Each lane is the unchanged root command at the exact requested SHA;
   browser lanes install Chromium and prestart Supabase first. Do not add
   CI-only test logic. (The Platinum/Daytona sandbox-worker path was removed on
   2026-08-26; only `deploy-preview.yml` still uses a cloud sandbox.)
-- **Where those four lanes actually run (changed 2026-09-18):** the suite gates
+- **Where those lanes actually run (changed 2026-09-18):** the suite gates
   promotes, not ordinary pull requests.
   1. **A pull request into `main` does not run it.** `Tests - PR`
      (`tests-pr.yml`) posts a `test verdict` check naming the rule that applied
      and stops. That check is always green — it is a statement, not a gate.
-  2. **Add the `test` label** to run all four lanes on that pull request
-     (~11 min). The `preview` label also runs them, on top of the preview
+  2. **Add the `test` label** to run every lane on that pull request
+     (~6.5 min). The `preview` label also runs them, on top of the preview
      origin's deployed `--target-full`. Adding either label to an already-open
      pull request re-triggers the workflow; no push needed.
   3. **A pull request into `staging` always runs it.** `staging` is the release
