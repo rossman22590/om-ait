@@ -37,6 +37,35 @@ session and loud across a team. Until one exists, grep a new `use*Query` in an
 always-mounted component for its route's authorization, and check
 `provider-connect.tsx`'s gate shape as the precedent.
 
+### Restart a persistent preview after an old deployment retains its lock (2026-09-18)
+
+**Rule:** When a preview waits at `flock`, inspect `/proc/locks` before retrying.
+If the holder is stale and outside the sandbox's process namespace, stop and
+start that preview sandbox, then rerun the exact SHA. Do not remove the lock
+file: a new inode would let two deployments run at once. **Near-miss:** PR
+#7358 had six waiters, one older than 17 hours; a sandbox restart cleared the
+holder without deleting its disk. **Enforcer:** `sandbox-preview.test.ts` pins
+daemon FD closure; a stale-lock watchdog remains a follow-up.
+
+### Scope preview result files to the workflow attempt (2026-09-17)
+
+**Rule:** a persistent preview must write its completion status to a
+workflow-attempt-specific path. Its observer must read that same path. A fixed
+status file can report a previous run before the new bootstrap acquires its lock.
+**When:** changing preview deployment or result polling. *Near-miss:* a PR
+preview reported an older SHA and replayed stale test failures after a new push.
+*Enforcer:* `tests/unit/sandbox-preview.test.ts` checks distinct status paths.
+
+### Use generic fixtures before publishing a public branch (2026-09-17)
+
+**Rule:** before pushing a public branch, inspect the complete commit diff,
+commit message, and PR body for customer names, repository URLs, account IDs,
+and project IDs. Use generic fixtures such as `example-org` and `example.test`.
+**When:** adding tests or documentation from a customer cutover. *Incident:*
+a public PR included a private customer name in a test fixture; deleting the
+branch did not make its commit unreachable. *Enforcer:* manual pre-push diff
+sweep; an automated fixture privacy gate remains to be built.
+
 ### Group attachment must grant the selected agents (2026-09-18)
 
 **Rule:** when attaching an IAM group to a project, load that project's agents
