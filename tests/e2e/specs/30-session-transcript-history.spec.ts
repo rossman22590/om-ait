@@ -180,9 +180,10 @@ test('30 — saved session history paints while sandbox start and the open bundl
       type: 'text',
       text: 'Continue while the computer starts.',
     });
-    for (const part of promptParts.slice(1))
+    for (const part of promptParts.slice(1)) {
       expect(part.attachment_id).toMatch(/^[0-9a-f-]{36}$/);
-      expect(promptParts.slice(1).every((part: { url?: string }) => !part.url)).toBe(true);
+    }
+    expect(promptParts.slice(1).every((part: { url?: string }) => !part.url)).toBe(true);
     const preview = page.getByRole('img', {
       name: 'wake-image.png',
       exact: true,
