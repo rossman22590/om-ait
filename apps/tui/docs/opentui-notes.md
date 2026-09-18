@@ -130,6 +130,47 @@ one chord matches both, and so `G` does not also match `g`.
 `shift` set on some terminals and clear on others, so the matcher ignores
 shift for single non-alphanumeric keys.
 
+**Trap — Alt is `meta`, not `option`, in a raw terminal.** `Alt+T` outside the
+kitty keyboard protocol is the two bytes `ESC t`, which `parseKeypress` reports
+as `{ name: 't', meta: true, option: false }`
+(`core/chunk-bun-37s3zwb6.js:5447`, the `metaKeyCodeRe` branch). Kitty reports
+the same press as `{ option: true, meta: true }` (`:5019`). A matcher that
+tests `option` alone leaves every `Alt` chord dead in Terminal.app and iTerm2,
+which is exactly what happened through wave 1. `src/keymap.ts`'s `altPressed()`
+accepts either flag.
+
+**Trap — `Shift+Enter` is not a distinct key without kitty.** Raw mode sends a
+bare `\r` for both, so a legacy terminal cannot tell them apart. `Ctrl+J`
+arrives as the linefeed byte (`{ name: 'linefeed', ctrl: false }` — no `ctrl`
+chord can match it) and the textarea's own default binding already turns it
+into a newline. Bind that, and stand down rather than consuming it.
+
+**Trap — `<markdown>` paints nothing on its first frame.** Its parse and
+highlight pass is async, so `flush()` alone captures an empty content area.
+Every assertion on rendered markdown has to settle first — 600 ms is what the
+transcript's own tests use. Verified: the same content renders blank at 0 ms
+and correctly at 600 ms.
+
+**Trap — `scrollbarOptions={{ visible: true }}` blanks the viewport.** Forcing
+both bars on in 0.5.11 renders the content rows empty and paints only the bar
+glyphs. Let the bars auto-show.
+
+**Trap — `pressKey(' ')` is not the space key.** `mockInput.pressKey` wants the
+key NAME; space is `pressKey('space')`. A literal `' '` produces no match.
+
+**Trap — Escape needs ~120 ms in a test.** The parser waits to see whether an
+`ESC` is a lone Escape or the prefix of a sequence, so an assertion that
+captures the next frame immediately after `pressEscape()` reads the frame
+before the key landed.
+
+**Trap — `overflow: hidden` clips absolutely positioned children.** A `<box
+overflow="hidden">` — which `src/ui/panel.tsx` is — scissors every descendant
+to its own rectangle, including `position="absolute"` ones anchored at the
+terminal origin. A `<Modal>`/`<Picker>` mounted inside a panel renders as a
+sliver (measured: a 10-column `┌─Switch a` where a 60-column dialog belonged).
+Overlays are mounted at the ROOT of the tree; `app.tsx` owns one overlay slot
+and features ask for it through a callback.
+
 ## Focus
 
 `focused` is a prop on `box`, `input`, `textarea`, `select`, `scrollbox`,
@@ -177,5 +218,6 @@ The test renderer proves component behavior. To prove the real process boots,
 paints, answers keys and restores the terminal, run it under a pseudo-terminal
 (macOS `script` cannot: it needs a controlling tty on stdin). `python3 -c` with
 `pty.openpty()` + `TIOCSWINSZ` works, and SIGWINCH to the process group
-exercises resize. `apps/tui/scripts/live-probe.tsx` is the in-process equivalent
-for API behavior.
+exercises resize. `apps/tui/scripts/live-app.tsx` is the in-process equivalent
+for API behavior: it mounts the whole app in the test renderer against a live
+API and asserts each route instead of printing frames.

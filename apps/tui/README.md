@@ -3,28 +3,42 @@
 A full terminal client for Kortix. It renders with
 [OpenTUI](https://github.com/anomalyco/opentui) on Bun and reads every byte of
 Kortix data through `@kortix/sdk`. `apps/tui/SPEC.md` is the plan; this file is
-how to run what exists today.
+how to run it.
 
-**Status: wave 0.** The shell, the keymap, the UI primitives, and a feasibility
-probe are in. The real sidebar, transcript, composer, terminal panel, and the
-secondary screens are not — see [What works today](#what-works-today).
+**Status: experimental.** Not in the release CLI bundle. Run it from the repo.
 
 ## Run
 
 ```bash
 # from the repo root, once
 pnpm install
+kortix login            # writes ~/.config/kortix/config.json
 
-# then
 pnpm --filter @kortix/tui dev
 ```
 
-Authentication comes from the CLI's own host config
-(`~/.config/kortix/config.json`), so `kortix login` is the setup step. The TUI
-only reads that file.
+Authentication comes from the CLI's own host config, so `kortix login` is the
+setup step — the TUI only reads that file. For a script, a test, or a second
+host, the environment beats the config and touches no file on disk:
 
-Minimum terminal size is 80×24. Below 100 columns the terminal panel replaces
-the split instead of sharing it; below 60 columns the sidebar is hidden.
+```bash
+KORTIX_API_URL=http://localhost:8008 KORTIX_API_KEY="$JWT" \
+  pnpm --filter @kortix/tui dev
+```
+
+With no usable host the app opens its login screen: pick a configured host, or
+press `n` to add one (URL + personal access token, validated before it is
+saved). `Ctrl+H` reopens it later to switch hosts.
+
+## Terminal requirements
+
+| Requirement | Why |
+| --- | --- |
+| Bun ≥ 1.3 | `@opentui/core` ships a Bun-FFI native renderer. |
+| 80 × 24 minimum | Below 100 columns the terminal panel replaces the split instead of sharing it; below 60 columns the sidebar is hidden and `Ctrl+P` is the way around. |
+| Kitty keyboard protocol for `Shift+Enter` | A legacy terminal sends a bare `\r` for both `Enter` and `Shift+Enter` and cannot tell them apart. `Ctrl+J` is the portable newline and always works. |
+| `Alt` = `Option` on macOS | Terminal.app and iTerm2 send `Alt+T` as the two bytes `ESC t`, which arrive as `meta`, not `option`. The keymap matches either, so `Alt+T`, `Alt+F`, `Alt+O` work in both. In Terminal.app, turn on *Use Option as Meta key*. |
+| A real tty | `script` on macOS gives the child no controlling tty; use a pty (see [Driving it headlessly](#driving-it-headlessly)). |
 
 ## Environment variables
 
@@ -38,44 +52,229 @@ the split instead of sharing it; below 60 columns the sidebar is hidden.
 | `KORTIX_CONFIG_FILE` | Read hosts from this file instead of `~/.config/kortix/config.json`. |
 | `KORTIX_TUI_THEME` | `dark` or `light`. Otherwise `COLORFGBG` decides, defaulting to dark. |
 
-Scripted run against a local stack, touching no file on disk:
+## Screens
 
-```bash
-KORTIX_API_URL=http://localhost:8008 KORTIX_API_KEY="$JWT" \
-  pnpm --filter @kortix/tui dev
-```
+| Screen | Key | What it is |
+| --- | --- | --- |
+| Session | default | The transcript, the prompts, and the composer. The terminal panel opens beside it. |
+| Files | `Alt+F` | The session sandbox's workspace tree and a syntax-highlighted viewer. |
+| Review | `Alt+R` | Open change requests and their diffs. |
+| Apps | `Alt+A` | The project's deployed apps, their status and URLs. |
+| Customize | `Alt+C` | Agents · Skills · Secrets · Triggers · Connectors. |
+| Account | `Alt+U` | Members, invites, roles, and the billing readout. |
+| Help | `?` | Every binding below, generated from the keymap. |
+| Switcher | `Ctrl+P` | Filter over every session and project. |
 
 ## Keys
 
-`?` prints the live table — it is generated from `src/keymap.ts`, so it is
-never out of date. The global set:
+The `?` overlay prints this table live: it is generated from `src/keymap.ts`
+plus every feature's `keys.ts`, so a binding that is not here does not exist.
+Regenerate this section with `pnpm --filter @kortix/tui keymap`.
+
+### Anywhere
 
 | Keys | Action |
 | --- | --- |
-| `Ctrl+C` twice, or `Ctrl+Q` | Quit. The first `Ctrl+C` asks. |
-| `?` | Help overlay. |
-| `Tab` / `Shift+Tab` | Cycle focus: sidebar → main → terminal. |
-| `Alt+T` | Toggle the terminal panel. |
-| `Esc` | Close the overlay. |
-| `j` `k` `↑` `↓` `g` `G` `PgUp` `PgDn` | Move in a list. |
-| `Enter` | Open the selected row; in the composer, send. |
+| `Ctrl+c / Ctrl+q` | Quit. Ctrl+C asks once, then quits on the second press. Inside the terminal panel Ctrl+C belongs to the shell and only Ctrl+Q quits. |
+| `?` | Show this help. Not while a text input or the terminal has focus. |
+| `Tab` | Focus the next region: sidebar → transcript → composer → terminal. |
+| `Shift+Tab` | Focus the previous region. |
+| `Ctrl+p` | Open the session switcher. |
+| `Ctrl+n` | Create a session in this project and open it. |
+| `Alt+t` | Toggle the terminal panel. |
+| `Alt+f` | Open the files screen. |
+| `Alt+r` | Open the review screen. |
+| `Alt+a` | Open the apps screen. |
+| `Alt+c` | Open the customize screen. |
+| `Alt+u` | Open the account screen: members, invites, billing. |
+| `Alt+o` | Hand this session to the stock opencode TUI. Returning repaints the app. |
+| `Ctrl+h` | Switch host. |
+| `Esc` | Close the overlay, leave the screen, or move focus back to the composer. |
 
-`Ctrl+P`, `Ctrl+N`, `Ctrl+H`, `Alt+F`, `Alt+R`, `Alt+A`, `Alt+C` are in the
-table and reserved. They land with the screens they open.
+### Sidebar
 
-## What works today
+| Keys | Action |
+| --- | --- |
+| `j / ↓` | Move down. |
+| `k / ↑` | Move up. |
+| `g` | Go to the first row. |
+| `G` | Go to the last row. |
+| `Enter` | Open the row: the session, the picker, or the screen. |
+| `/` | Filter the session list. Esc clears it. |
+| `r` | Rename the selected session. |
+| `d` | Delete the selected session (asks first). |
+| `a` | Attach the selected session in the stock opencode TUI. |
+| `n` | Create a session in this project. |
+| `y / Enter` | Confirm the delete. |
+| `n` | Decline the delete. |
+| `Esc` | Cancel the input, the confirm, or the filter. |
 
-- Host resolution from the CLI config, with the env override.
-- One `createKortix` client, one `QueryClient`.
-- Layout frame: sidebar, session region, terminal panel placeholder, status
-  bar, help overlay, quit confirmation, resize breakpoints.
-- Session list from `useProjectSessions`.
-- A session mounted with `useSession`: lifecycle phase, message count, the
-  transcript tail, and a one-line composer that really sends.
+### Transcript
 
-Not yet: the grouped sidebar, the full transcript with tool cards, the
-pickers, prompts, the PTY panel, files, review, apps, customize, account, and
-the login screen (a missing host prints instructions and exits 2).
+| Keys | Action |
+| --- | --- |
+| `j / ↓` | Scroll down one line. |
+| `k / ↑` | Scroll up one line. |
+| `PgDn` | Scroll down one screen. |
+| `PgUp` | Scroll up one screen. At the top, load older turns. |
+| `g` | Jump to the oldest turn. |
+| `G` | Jump to the newest turn and re-lock autoscroll. |
+| `J` | Move the cursor to the next collapsible row. |
+| `K` | Move the cursor to the previous collapsible row. |
+| `Enter / Space` | Expand or collapse the row under the cursor. |
+
+### Composer
+
+| Keys | Action |
+| --- | --- |
+| `Enter` | Send the draft. While the agent works, queue it instead. |
+| `Ctrl+j / Alt+Enter / Shift+Enter` | Insert a newline. Shift+Enter needs the kitty keyboard protocol. |
+| `Esc` | Clear the draft, or (empty and busy) stop the agent on a second press. |
+| `/` | Open the command picker. Only at column 0. |
+| `Alt+m` | Pick the model. |
+| `Alt+e` | Pick the thinking effort. |
+| `Alt+g` | Pick the agent. |
+
+### Terminal panel
+
+| Keys | Action |
+| --- | --- |
+| `Alt+y` | Copy `kortix sessions connect <id>` to the clipboard. |
+| `Alt+x` | Close the terminal panel. |
+| `Alt+Enter` | Reconnect the terminal now. |
+| `any other key` | Every other key goes to the remote shell, Ctrl+C included. Quit the TUI with Ctrl+Q; Tab and Alt+T still move focus and toggle the panel. |
+
+### Files
+
+| Keys | Action |
+| --- | --- |
+| `j / ↓` | Move down the tree. |
+| `k / ↑` | Move up the tree. |
+| `g` | Go to the first row. |
+| `G` | Go to the last row. |
+| `Enter` | Open the file, or expand/collapse the directory. |
+| `h / ←` | Collapse the directory, or jump to its parent. |
+| `l / →` | Expand the directory. |
+| `/` | Filter the loaded rows by name. Esc clears it. |
+| `.` | Show or hide dot-prefixed entries (.kortix and .opencode always show). |
+| `r` | Re-read every open directory from the sandbox. |
+| `y` | Copy the selected row's path to the clipboard. |
+| `J / PgDn` | Scroll the viewer down. |
+| `K / PgUp` | Scroll the viewer up. |
+| `Esc` | Clear the filter, or leave the Files screen. |
+
+### Review
+
+| Keys | Action |
+| --- | --- |
+| `j / ↓` | Move down the list. |
+| `k / ↑` | Move up the list. |
+| `g` | Go to the first change request. |
+| `G` | Go to the last change request. |
+| `Enter` | Open the diff. |
+| `s` | Switch the diff between unified and split. |
+| `n` | Next file in the diff. |
+| `p` | Previous file in the diff. |
+| `J / PgDn` | Scroll the diff down. |
+| `K / PgUp` | Scroll the diff up. |
+| `a` | Approve. Not a separate Kortix action — approving a change request is merging it. |
+| `m` | Merge the change request into its base (asks first). |
+| `x` | Close the change request without merging (asks first). |
+| `o` | Open the session this change request came from. |
+| `r` | Re-read the change requests. |
+| `y` | Confirm the merge or the close. |
+| `Esc` | Cancel the confirm, close the diff, or leave the Review screen. |
+
+### Apps
+
+| Keys | Action |
+| --- | --- |
+| `j / ↓` | Move down. |
+| `k / ↑` | Move up. |
+| `g` | Go to the first App. |
+| `G` | Go to the last App. |
+| `Enter` | Show the deploy details of the selected App. |
+| `o` | Open the App's URL in the browser. |
+| `y` | Copy the App's URL. |
+| `r` | Reload the App list. |
+| `d` | Start or stop the selected App (asks first). |
+| `v` | Change who may open the selected App. |
+| `y / Enter` | Confirm. |
+| `n` | Decline. |
+| `Esc` | Leave the details, the picker, or the screen. |
+
+### Customize
+
+| Keys | Action |
+| --- | --- |
+| `1 / 2 / 3 / 4 / 5` | Jump to the Nth tab. |
+| `]` | Next tab. |
+| `[` | Previous tab. |
+| `j / ↓` | Move down. |
+| `k / ↑` | Move up. |
+| `g` | Go to the first row. |
+| `G` | Go to the last row. |
+| `Enter` | Show the details of the selected row. |
+| `n` | Add a secret (Secrets tab). |
+| `d` | Delete the selected secret (asks first). |
+| `Space /   / t` | Pause or resume the selected trigger. |
+| `r` | Reload the active tab. |
+| `y` | Confirm. |
+| `n` | Decline. |
+| `Enter` | Submit the input. |
+| `Esc` | Close the input, the details, or the screen. |
+
+### Account
+
+| Keys | Action |
+| --- | --- |
+| `l / →` | Next tab. |
+| `h / ←` | Previous tab. |
+| `1` | Go to Members. |
+| `2` | Go to Invites. |
+| `3` | Go to Roles. |
+| `4` | Go to Billing. |
+| `j / ↓` | Move down the rows. |
+| `k / ↑` | Move up the rows. |
+| `i` | Invite a member by email (Invites tab). |
+| `x` | Cancel the selected invite (asks first). |
+| `r` | Cycle the role on the invite form: member → admin → owner. |
+| `u` | Print the web billing URL. The TUI never runs checkout. |
+| `R` | Re-read every tab from the API. |
+| `y` | Confirm the cancellation. |
+| `n` | Decline the cancellation. |
+| `Esc` | Close the form, the confirm, or the screen. |
+
+### Login
+
+| Keys | Action |
+| --- | --- |
+| `j / ↓` | Move down the host list. |
+| `k / ↑` | Move up the host list. |
+| `Enter` | Use the selected host. A host with no token opens the token form. |
+| `n` | Add a host: name, API URL, and a token. |
+| `e` | Replace the selected host's token. |
+| `d` | Remove the selected host (asks first). |
+| `y` | Confirm the removal. |
+| `n` | Decline the removal. |
+| `Tab` | Next form field. |
+| `Shift+Tab` | Previous form field. |
+| `Enter` | Submit the form. |
+| `Esc` | Leave the form, the confirm, or the screen. |
+
+### Lists, pickers and dialogs
+
+| Keys | Action |
+| --- | --- |
+| `j / ↓` | Move down. |
+| `k / ↑` | Move up. |
+| `g` | Go to the first row. |
+| `G` | Go to the last row. |
+| `PgDn` | Page down. |
+| `PgUp` | Page up. |
+| `Enter` | Open the row. |
+
+_143 bindings._
 
 ## Tests
 
@@ -88,33 +287,87 @@ npx biome check apps/tui
 Tests sit next to the file they cover (`src/**/*.test.ts[x]`) — the repo
 `.gitignore` ignores every `test/` directory, so the layout in `SPEC.md` §3
 would not be tracked. Component tests render through OpenTUI's headless test
-renderer and assert on captured frame text. `apps/tui/docs/opentui-notes.md` has the API cheat sheet
-and the traps, including why key presses must be wrapped in React's `act`.
+renderer and assert on captured frame text, never on ANSI.
+`docs/opentui-notes.md` has the API cheat sheet and the traps, including why
+key presses must be wrapped in React's `act` and why `<markdown>` needs a
+settle before its text can be read back.
 
-### Live probe
+### Live proof
 
-`scripts/live-probe.tsx` mounts the real app against a real API and a real
-sandbox, sends a prompt, and exits non-zero unless the reply streams back:
+`scripts/live-app.tsx` mounts the whole app against a real API, a real project
+and a real cloud sandbox, and exits non-zero unless every route answers:
 
 ```bash
 cd apps/tui
 KORTIX_API_URL=http://localhost:8008 KORTIX_API_KEY="$JWT" \
 KORTIX_PROJECT_ID="$PID" KORTIX_SESSION_ID="$SID" \
-PROBE_EXPECT="MARKER-123" \
-  bun run scripts/live-probe.tsx "Reply with exactly: MARKER-123"
+  bun run scripts/live-app.tsx
 ```
 
-It prints the captured frame at each milestone. It is not part of `bun test`:
-it needs credentials and provisions nothing itself.
+It asserts the sidebar lists real sessions grouped by day, the session reaches
+`ready` on the real runtime, a typed prompt streams a reply back, `Ctrl+P`
+opens the switcher, `?` opens the help overlay, and `Alt+F` routes to files.
+It is not part of `bun test`: it needs credentials and provisions nothing.
+
+### Driving it headlessly
+
+The test renderer proves component behavior. To prove the real process boots,
+paints, answers keys and restores the terminal, run it under a pseudo-terminal
+— macOS `script` cannot stand in, because it gives the child no controlling
+tty on stdin:
+
+```python
+import fcntl, os, pty, select, struct, subprocess, sys, termios, time
+master, slave = pty.openpty()
+fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 40, 120, 0, 0))
+proc = subprocess.Popen(['bun', 'run', 'src/index.tsx'], stdin=slave,
+                        stdout=slave, stderr=slave, close_fds=True,
+                        preexec_fn=os.setsid,
+                        env={**os.environ, 'TERM': 'xterm-256color'})
+os.close(slave)
+# drain `master` into a buffer; write keys into it (Alt+T is b'\x1bt');
+# a clean exit ends the stream with ESC[?1049l.
+```
+
+## Known gaps
+
+- **`@path` attachments are parsed but not sent.** The composer counts
+  mentions and shows `@n`, and the SDK's attachment surface is browser-`File`
+  shaped, so a path is not uploaded yet.
+- **Effort options depend on the model's catalog variants.** A model with no
+  variants shows `Auto` alone; that is the catalog's answer, not a bug.
+- **`clientSource` reports `cli`.** `KortixPlatformConfig.clientSource` is
+  `'api' | 'cli' | 'mobile' | 'web'` — it has no `'tui'` member, and widening a
+  published SDK type is an SDK change with its own gates. Audit events from the
+  TUI therefore read as CLI events.
+- **The account and customize screens are read-mostly.** They expose the small
+  writes the web app exposes and print the web URL for anything else.
+- **No OAuth from the terminal.** Connectors print the page to open.
 
 ## Troubleshooting
 
 - **`ERR_PNPM_UNSUPPORTED_ENGINE` on install.** `@opentui/core` declares
   `engines.node: >=26.4.0`. The repo `.npmrc` documents why `engine-strict` is
   off; re-enabling it breaks this app's install.
+- **The native library fails to load.** `@opentui/core-<platform>` is an
+  optional dependency resolved per platform and has no build step. If it is
+  missing, `pnpm install --force` inside `apps/tui` re-resolves it; a mismatched
+  `arm64`/`x64` Bun is the usual cause.
+- **`Ctrl+C` does nothing inside the terminal panel.** That is deliberate: the
+  shell owns `Ctrl+C`, and a shell without it is not a shell. Leave the TUI with
+  `Ctrl+Q`, or `Alt+X` to close the panel first. `Tab`, `Shift+Tab`, `Alt+T` and
+  `Ctrl+Q` are the only four chords the app keeps while the shell has focus.
+- **A session sits on `provisioning` for minutes.** A cold sandbox boot is
+  minutes, not seconds. The header prints the live `/start` stage; the terminal
+  panel and the files screen wait for `ready` rather than failing.
+- **The first attach is slow.** `Alt+O` downloads the exact `opencode` build the
+  sandbox runs into `~/.kortix/opencode/<version>/` once, then reuses it. While
+  opencode has the terminal the TUI is suspended and paints nothing; on exit it
+  repaints on the same session.
 - **The terminal is left in a broken state.** Every exit path calls
-  `renderer.destroy()`. If a crash ever escapes it, `reset` restores the
-  shell; report the stack trace, because that path is a bug.
+  `renderer.destroy()`, and attach resumes in a `finally`. If a crash ever
+  escapes it, `reset` restores the shell; report the stack trace, because that
+  path is a bug.
 - **Nothing renders, or the frame is blank.** The screen needs at least 80×24.
-- **`No Kortix host is configured.`** Run `kortix login`, or set
-  `KORTIX_API_URL` and `KORTIX_API_KEY`.
+- **`No Kortix host is configured.`** Only when the login screen itself cannot
+  start. Run `kortix login`, or set `KORTIX_API_URL` and `KORTIX_API_KEY`.

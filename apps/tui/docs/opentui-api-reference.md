@@ -615,6 +615,38 @@ EventEmitter`). Separately, `CliRenderer` emits renderer-wide
 (`core/renderer.d.ts:398`), `focusRenderable(renderable)` /
 `blurRenderable(renderable)` (`:402-403`).
 
+**Trap — `renderer.focusRenderable(r)` does NOT give `r` the keyboard.**
+The two entry points are not interchangeable, and only one of them routes keys:
+
+| | `Renderable.focus()` | `renderer.focusRenderable(r)` |
+| --- | --- | --- |
+| sets `r._focused` | yes | no |
+| records `currentFocusedRenderable` | yes (it calls `focusRenderable` itself) | yes |
+| emits `focused_renderable` | yes | yes |
+| **installs the keypress handler** | **yes** | **no** |
+| blurs the previous renderable | yes | yes |
+
+`Renderable.focus()` (implementation, `core/chunk-bun-bwjmgnxw.js:523-552`)
+sets `_focused`, calls `this._ctx.focusRenderable(this)`, **then** registers the
+handler that is the entire key path:
+
+```js
+this.ctx._internalKeyInput.onInternal("keypress", this.keypressHandler);
+this.ctx._internalKeyInput.onInternal("paste", this.pasteHandler);
+```
+
+`blur()` (`:565-580`) is the mirror image and calls `offInternal`.
+`focusRenderable` on its own (`:7630-7647`) only swaps the pointer and emits
+the events — no `onInternal`, so the renderable's `onKeyDown` and
+`handleKeyPress` are never called.
+
+Measured in wave 1D: the embedded terminal focused with `focusRenderable`
+painted a live shell prompt and swallowed every keystroke. **Always call
+`renderable.focus()` on the element's own ref.** Attach it with a ref
+*callback*, not a plain ref read in an effect: the element can mount after the
+effect that would focus it, and the panel then opens focused with a dead
+keyboard.
+
 ### `focusable`/`focused` on JSX elements
 
 At the React layer, `focused?: boolean` is a **controlled, one-way prop** on
