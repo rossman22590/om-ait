@@ -6696,3 +6696,37 @@ delete a probe repo), not a read.
 /v1/projects/provision` 5xx ratio and on `provision create_repo failed` log
 count. Manual probe: `POST /orgs/managed-kortix/repos` with the runtime token
 must return `201`.
+
+### 2026-09-18 — A 409 that names a replacement endpoint moves the whole handshake
+
+**When:** a route refuses a call and names a different endpoint to use instead.
+Move the START and the POLL together, and carry the scope the replacement
+needs. Three traps, all present here.
+
+One handler can serve both verbs: `apps/api/src/projects/routes/r4.ts:930`
+builds `connect` and `connect/finalize` from a single loop, so the 409 at
+`r4.ts:1027` blocks finalize too — a fallback that keeps the old finalize is
+equally dead. The replacement can default a scope: the connector-scoped
+finalize reads `owner` from the body and `parseConnectorConnectOwner`
+(`projects/lib/connection-access.ts:94`) maps an absent value to `me`, so a
+`project` connect paired with an owner-less finalize polls the caller's member
+account and burns the full 10-minute Connect Link timeout. And only the refused
+case may be redirected: `owner: 'project'` resolves `ensureDefaultConnection`,
+so sending a labelled NON-default account there would re-authorize the default
+and leave the new row unauthorized. Let the 409 itself be the discriminator —
+the server stays the only authority on "effective default" and the client never
+replicates that rule. Match on the status, not the sentence, and read `.status`
+structurally, never `instanceof ApiError` (ESM build vs IIFE global).
+
+**Incident.** Both shared "Connect" CTAs in the connector detail modal
+(`connector-modal.tsx:329,341`) were dead for any connector with exactly one
+shared account — the state right after creation, because sync auto-creates that
+one project-owned row and `6b7e3c27c5` stopped pinning it. Zero test coverage:
+`git grep "shared connector connect endpoint"` hit only the API source.
+
+**Enforcement.** `apps/web/src/hooks/connectors/use-pipedream-connect-project.test.ts`
+(7 tests: the 409 fallback, finalize route+owner+connection agreement, the
+second labelled account staying on the connection-scoped route, a 403 that must
+not fall back). `packages/sdk/src/core/rest/projects-client/connectors.test.ts`
+pins that `connectorFinalize` sends `owner`/`connection_id` and still sends `{}`
+for the published two-argument callers.
