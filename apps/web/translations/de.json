@@ -1085,6 +1085,10 @@
           "name": "Netzwerkerzwungene Geheimnisse",
           "description": "Steuern Sie, welche Werkzeuge und Ziele Projektgeheimnisse empfangen dürfen."
         },
+        "session_transcript_history": {
+          "name": "Chatverlauf der Sitzung",
+          "description": "Speichere den Chatverlauf nach jedem Durchlauf und zeige ihn an, während der Sitzungscomputer startet."
+        },
         "pooled_provider_secrets": {
           "name": "Gemeinsam genutzte Anbieter-Schlüssel",
           "description": "Teilen Sie mehrere Anbieter-Schlüssel mit Mitgliedern und wählen Sie einen Schlüsselpool pro Sitzung."
