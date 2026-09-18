@@ -32,7 +32,8 @@
  *
  * Do not "optimise" this back to `false` without redoing both probes above.
  */
-export type FreshnessTier = 'live' | 'config' | 'inventory' | 'volatile' | 'directory';
+export type FreshnessTier =
+  "live" | "config" | "inventory" | "volatile" | "directory";
 
 const GC_TIME = 30 * 60 * 1000;
 
@@ -63,12 +64,12 @@ export function contract(tier: FreshnessTier) {
     staleTime: TIERS[tier].staleTime,
     gcTime: GC_TIME,
     refetchOnMount: true as const,
-    ...(tier === 'directory'
+    ...(tier === "directory"
       ? {
           refetchInterval: 10_000,
           refetchIntervalInBackground: false,
-          refetchOnWindowFocus: 'always' as const,
-          refetchOnReconnect: 'always' as const,
+          refetchOnWindowFocus: "always" as const,
+          refetchOnReconnect: "always" as const,
         }
       : {}),
   };
@@ -79,30 +80,30 @@ export function contract(tier: FreshnessTier) {
  * is the point: a new query cannot quietly inherit the global default.
  */
 export const FRESHNESS = {
-  projectsList: 'inventory',
-  projectSummary: 'config',
-  projectDetail: 'config',
-  projectConfig: 'config',
-  session: 'inventory',
-  sessions: 'inventory',
-  messages: 'live',
-  connectors: 'config',
-  connectorConfig: 'config',
+  projectsList: "inventory",
+  projectSummary: "config",
+  projectDetail: "config",
+  projectConfig: "config",
+  session: "inventory",
+  sessions: "inventory",
+  messages: "live",
+  connectors: "config",
+  connectorConfig: "config",
   /** A provider metadata probe; it changes on the provider's schedule, not ours. */
-  connectorOAuth2Discovery: 'config',
-  secrets: 'config',
-  apps: 'inventory',
-  appDeployments: 'inventory',
-  policies: 'config',
-  executorPolicies: 'config',
-  access: 'inventory',
-  accessRequests: 'inventory',
-  pendingInvites: 'inventory',
-  groupGrants: 'inventory',
-  resourceGrants: 'inventory',
-  files: 'config',
-  fileSource: 'config',
-  branches: 'config',
+  connectorOAuth2Discovery: "config",
+  secrets: "config",
+  apps: "inventory",
+  appDeployments: "inventory",
+  policies: "config",
+  executorPolicies: "config",
+  access: "inventory",
+  accessRequests: "inventory",
+  pendingInvites: "inventory",
+  groupGrants: "inventory",
+  resourceGrants: "inventory",
+  files: "config",
+  fileSource: "config",
+  branches: "config",
   /**
    * NOT live sandbox health — the sandbox TEMPLATE catalog.
    * `listProjectSandboxes` is `GET /projects/:id/sandboxes` returning
@@ -121,10 +122,10 @@ export const FRESHNESS = {
    * original window and matches the twin below, which reads the same
    * response.
    */
-  sandboxes: 'config',
-  sandboxTemplates: 'config',
-  snapshots: 'config',
-  modelPicker: 'config',
+  sandboxes: "config",
+  sandboxTemplates: "config",
+  snapshots: "config",
+  modelPicker: "config",
   /**
    * Analytics aggregates over a `days` window — overview, series, breakdown,
    * sessions, errors — plus budgets and keys.
@@ -144,6 +145,6 @@ export const FRESHNESS = {
    * `refetchInterval: 10_000` and no contract, because a log tail genuinely
    * is a tail.
    */
-  gateway: 'inventory',
-  triggers: 'config',
+  gateway: "inventory",
+  triggers: "config",
 } as const satisfies Record<string, FreshnessTier>;

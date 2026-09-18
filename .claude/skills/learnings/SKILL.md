@@ -6555,3 +6555,18 @@ it for connectors; this is the authorization-listing instance of it. Four more
 were found in one sweep on 2026-09-18 (the model picker's `enabled` boolean
 carries no reason, and a member cannot clear a manager-tier model gate) — those
 remain open.
+
+
+## 2026-09-18 — Directory stale time does not refresh an open page
+
+Entra removed a test group member on dev. The database contained zero members,
+but the open group panel still showed one until reload. `staleTime` only marks
+cached data stale; it does not schedule a fetch. The global query provider also
+disables focus refetches. External SCIM writes cannot invalidate that browser.
+
+Directory readers use the SDK's `contract('directory')`: ten-second foreground
+refreshes plus focus and reconnect refreshes. Keep Azure's provisioning cadence
+separate from browser freshness. Verify external writes while the page stays open.
+
+Enforcers: `packages/sdk/src/react/query-contracts.test.ts` and the external SCIM
+refresh journey in `tests/e2e/specs/22-resource-grant-multiselect.spec.ts`.

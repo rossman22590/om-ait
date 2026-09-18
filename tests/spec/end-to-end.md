@@ -1122,3 +1122,11 @@ ChatGPT usage regression: `GW-5` asserts published model rates remain visible in
 On deployed targets, browser journey 30 also provisions a real cloud session. A completed streamed reply appears in the database before manual stop. Reopening the stopped session paints that reply while wake is pending. A prompt sent during wake reaches the durable inbox and executes once after startup. Each delivery record matches one stored user message and one completed reply. A fresh page retains both replies without duplicates. The deterministic local profile excludes this cloud-provider scenario.
 
 `SESS-31` Private session attachments use `POST /projects/:projectId/sessions/:sessionId/attachments` (multipart file and attachment_id UUID) and authenticated `GET /projects/:projectId/sessions/:sessionId/attachments/:attachmentId`. Uploads require `session_transcript_history`; existing downloads remain available after disabling it. A stopped session accepts files without creating a sandbox. Retrying an identical attachment_id returns the same reference; different bytes return 409. Files above 50 MiB return 413. Anonymous, nonmember, and sibling session reads are denied. Prompts cannot reference another session's attachment. Deleting the session removes its private objects and subsequent reads return 404. With the flag enabled, staged first-message files are saved before runtime delivery. Capture recovers older inline images and readable workspace attachment files into private storage. Saved references survive later capture and flag rollback. Missing originals preserve the message and are retried on the next capture. Browser journey 30 proves first-message and recovered legacy previews and exact downloads after stop/reload.
+
+
+`SCIM-UI-1` Account directory pages show external SCIM changes without reloading.
+Create a group after opening the list and assert the next successful GET and
+visible row. Remove and restore its member while its detail is open. Rename the
+group and assert the new heading. Deactivate and reactivate a user while Members
+is open. Delete a group while the list is open. Each visible update arrives on
+the next ten-second foreground refresh after the SCIM response.
