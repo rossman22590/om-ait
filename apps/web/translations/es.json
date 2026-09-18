@@ -1085,6 +1085,10 @@
           "name": "Secretos protegidos por la red",
           "description": "Controla qué herramientas y destinos pueden recibir los secretos del proyecto."
         },
+        "session_transcript_history": {
+          "name": "Historial de la sesión",
+          "description": "Guarda el historial del chat después de cada turno y muéstralo mientras se inicia el equipo de la sesión."
+        },
         "pooled_provider_secrets": {
           "name": "Secretos de proveedor compartidos",
           "description": "Comparte varias claves de proveedor con miembros y selecciona un grupo de claves para cada sesión."
