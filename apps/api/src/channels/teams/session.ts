@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { chatEventDedup, chatThreads, projects } from '@kortix/db';
+import { chatEventDedup, chatThreads, projectSessions, projects } from '@kortix/db';
 import { db } from '../../shared/db';
 import { config } from '../../config';
 import {
@@ -24,6 +24,7 @@ import {
 import { sessionWebUrl } from '../slack/util';
 import { extractTeamsAttachments, type TeamsActivity, type TeamsLiveTurn } from './types';
 import { describeTeamsConversation, stripTeamsMentions } from './util';
+import { ensureTeamsThreadParticipant, normalizeConversationPolicy, rememberTeamsThreadOwner } from './participants';
 
 const defaultTeamsSessionLifecycle = {
   continueSession: continueLifecycleSession,
@@ -149,12 +150,45 @@ async function deliverFollowUp(input: {
   tenantId: string;
   conversationId: string;
   sessionId: string;
+  sessionOwnerId: string | null;
+  sessionMetadata: Record<string, unknown> | null;
   handle: TeamsLiveTurn | null;
   activity: TeamsActivity;
   userId: string;
 }): Promise<'done' | 'revive'> {
   const { projectId, tenantId, conversationId, sessionId, activity, userId } = input;
   let handle = input.handle;
+
+  // Who may continue this session (owner-only / owner-approval / open). The
+  // verdict's notice replaces the requester's own live card; nothing reaches
+  // the session until they are allowed in.
+  if (config.TEAMS_REQUIRE_USER_IDENTITY && activity.serviceUrl) {
+    const selection = await currentChannelSelection(teamsChannelCtx(tenantId, conversationId));
+    const verdict = await ensureTeamsThreadParticipant({
+      projectId,
+      tenantId,
+      conversationId,
+      sessionId,
+      sessionOwnerId: input.sessionOwnerId,
+      sessionMetadata: input.sessionMetadata,
+      channelPolicy: selection?.conversationPolicy,
+      teamsUserId: teamsUserId(activity) ?? '',
+      requesterName: activity.from?.name ?? 'Someone',
+      actorUserId: userId,
+      ref: {
+        serviceUrl: activity.serviceUrl,
+        conversationId,
+        botId: activity.recipient?.id,
+        fromId: activity.from?.id,
+        tenantId,
+        projectId,
+      },
+    });
+    if (!verdict.allowed) {
+      if (handle) await noticeOnLiveCard(handle, verdict.notice);
+      return 'done';
+    }
+  }
 
   // A turn is already streaming for this session: the running stream keeps
   // its card; ours becomes a short notice and is not saved as the turn.
@@ -258,8 +292,13 @@ export async function createOrJoinTeamsConversationSession(input: {
   let revived = false;
   if (tenantId && conversationId) {
     const [existing] = await db
-      .select({ sessionId: chatThreads.sessionId })
+      .select({
+        sessionId: chatThreads.sessionId,
+        createdBy: projectSessions.createdBy,
+        metadata: projectSessions.metadata,
+      })
       .from(chatThreads)
+      .innerJoin(projectSessions, eq(projectSessions.sessionId, chatThreads.sessionId))
       .where(
         and(
           eq(chatThreads.platform, 'teams'),
@@ -274,6 +313,8 @@ export async function createOrJoinTeamsConversationSession(input: {
         tenantId,
         conversationId,
         sessionId: existing.sessionId,
+        sessionOwnerId: existing.createdBy ?? null,
+        sessionMetadata: (existing.metadata as Record<string, unknown> | null) ?? null,
         handle,
         activity,
         userId,
@@ -287,7 +328,22 @@ export async function createOrJoinTeamsConversationSession(input: {
   if (claimKey && !(await claimThreadCreate(claimKey))) {
     const sessionId = await waitForConversationSession(tenantId, conversationId);
     if (sessionId) {
-      await deliverFollowUp({ projectId, tenantId, conversationId, sessionId, handle, activity, userId });
+      const [row] = await db
+        .select({ createdBy: projectSessions.createdBy, metadata: projectSessions.metadata })
+        .from(projectSessions)
+        .where(eq(projectSessions.sessionId, sessionId))
+        .limit(1);
+      await deliverFollowUp({
+        projectId,
+        tenantId,
+        conversationId,
+        sessionId,
+        sessionOwnerId: row?.createdBy ?? null,
+        sessionMetadata: (row?.metadata as Record<string, unknown> | null) ?? null,
+        handle,
+        activity,
+        userId,
+      });
     } else {
       console.warn('[teams-webhook] lost thread-create claim but winner never published a session', {
         tenantId,
@@ -330,6 +386,8 @@ export async function createOrJoinTeamsConversationSession(input: {
         conversation_id: conversationId,
         user: activity.from?.id,
         activity_id: activity.id,
+        // Frozen at start: a later `/policy` change applies to NEW sessions only.
+        conversation_policy: normalizeConversationPolicy(selection?.conversationPolicy),
       },
     },
     extraEnvVars: buildTeamsTurnEnv(tenantId, activity),
@@ -346,7 +404,19 @@ export async function createOrJoinTeamsConversationSession(input: {
     return;
   }
 
-  if (result.sessionId) await bindTurnToSession(handle, result.sessionId);
+  if (result.sessionId) {
+    await bindTurnToSession(handle, result.sessionId);
+    const ownerTeamsId = teamsUserId(activity);
+    if (ownerTeamsId && tenantId && conversationId) {
+      await rememberTeamsThreadOwner({
+        tenantId,
+        conversationId,
+        sessionId: result.sessionId,
+        teamsUserId: ownerTeamsId,
+        userId,
+      }).catch((err) => console.warn('[teams-webhook] remember owner failed', err));
+    }
+  }
 }
 
 function startErrorMessage(status: number | undefined): string {

@@ -260,6 +260,34 @@ export function buildReviewCard(opts: {
   return card(body, actions);
 }
 
+export function buildJoinRequestCard(opts: {
+  requesterLabel: string;
+  projectId: string;
+  sessionId: string;
+  conversationId: string;
+  requesterUserId: string;
+  requesterTeamsUserId: string;
+}): Record<string, unknown> {
+  const data = {
+    projectId: opts.projectId,
+    sessionId: opts.sessionId,
+    conversationId: opts.conversationId,
+    requesterUserId: opts.requesterUserId,
+    requesterTeamsUserId: opts.requesterTeamsUserId,
+  };
+  return card(
+    headerBlock(
+      '🔒',
+      `${opts.requesterLabel} wants to join this Kortix session`,
+      'This conversation is private until you approve them. Only the session owner can decide.',
+    ),
+    [
+      { type: 'Action.Execute', title: 'Approve', verb: 'teams_thread_join', style: 'positive', data: { verb: 'teams_thread_join', decision: 'approved', ...data } },
+      { type: 'Action.Execute', title: 'Deny', verb: 'teams_thread_join', style: 'destructive', data: { verb: 'teams_thread_join', decision: 'denied', ...data } },
+    ],
+  );
+}
+
 export function buildWelcomeCard(opts: { projectUrl?: string }): Record<string, unknown> {
   const body = headerBlock(
     '👋',

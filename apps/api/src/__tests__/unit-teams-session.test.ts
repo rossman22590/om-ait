@@ -15,7 +15,7 @@ const CONVERSATION_ID = 'a:1FQyR2jW1pEUK';
 
 const calls: string[] = [];
 let actor: { userId: string } | { reason: 'unlinked' | 'not_member' } = { userId: 'user-1' };
-let existingThread: Array<{ sessionId: string }> = [];
+let existingThread: Array<{ sessionId: string; createdBy?: string | null; metadata?: Record<string, unknown> | null }> = [];
 let claimWins = true;
 /** Per-call insert results: the thread-create claim first, then the error-notice claim. */
 let insertQueue: unknown[][] = [];
@@ -31,7 +31,7 @@ const saved: Array<{ sessionId: string; messageActivityId: string }> = [];
 
 function chain(result: unknown[]): any {
   const c: any = {};
-  for (const m of ['from', 'where', 'limit', 'values', 'onConflictDoNothing', 'returning', 'set']) c[m] = () => c;
+  for (const m of ['from', 'innerJoin', 'where', 'limit', 'values', 'onConflictDoNothing', 'onConflictDoUpdate', 'returning', 'set']) c[m] = () => c;
   c.then = (resolve: (rows: unknown[]) => unknown) => Promise.resolve(resolve(result));
   c.catch = () => Promise.resolve(result);
   return c;
@@ -133,6 +133,20 @@ mock.module('../channels/slack/selection', () => ({
   currentChannelSelection: async () => null,
 }));
 
+let participantVerdict: { allowed: true } | { allowed: false; notice: string } = { allowed: true };
+const owners: Array<Record<string, unknown>> = [];
+const gateCalls: Array<Record<string, unknown>> = [];
+mock.module('../channels/teams/participants', () => ({
+  ensureTeamsThreadParticipant: async (input: Record<string, unknown>) => {
+    gateCalls.push(input);
+    return participantVerdict;
+  },
+  rememberTeamsThreadOwner: async (input: Record<string, unknown>) => {
+    owners.push(input);
+  },
+  normalizeConversationPolicy: (v: unknown) => (typeof v === 'string' ? v : 'project_open'),
+}));
+
 const session = await import('../channels/teams/session');
 const { createOrJoinTeamsConversationSession, setTeamsSessionLifecycleForTest, resetTeamsSessionLifecycleForTest } = session;
 
@@ -163,6 +177,9 @@ beforeEach(() => {
   notices.length = 0;
   dbOps.length = 0;
   bindings.length = 0;
+  participantVerdict = { allowed: true };
+  owners.length = 0;
+  gateCalls.length = 0;
   setTeamsSessionLifecycleForTest({
     createSession: async (input: Record<string, unknown>) => {
       calls.push('createSession');
@@ -329,5 +346,43 @@ describe('binding names', () => {
       activity: { ...activity, conversation: { ...activity.conversation, conversationType: 'personal' } },
     });
     expect(bindings[0]).toMatchObject({ channelName: 'Ivan Bagaric', channelType: 'personal' });
+  });
+});
+
+describe('join policy on a follow-up', () => {
+  beforeEach(() => {
+    existingThread = [{ sessionId: 'sess-existing', createdBy: 'owner-1', metadata: { teams: { conversation_policy: 'owner_approval' } } }];
+  });
+
+  test('the gate runs with the session owner and its frozen policy before anything is delivered', async () => {
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+    expect(gateCalls).toHaveLength(1);
+    expect(gateCalls[0]).toMatchObject({
+      sessionId: 'sess-existing',
+      sessionOwnerId: 'owner-1',
+      sessionMetadata: { teams: { conversation_policy: 'owner_approval' } },
+      teamsUserId: 'aad-user-1',
+      actorUserId: 'user-1',
+    });
+    expect(calls.indexOf('resolveTeamsActor')).toBeLessThan(calls.indexOf('continueSession'));
+  });
+
+  test('not allowed: the requester\'s live card becomes the notice, nothing is delivered, the session is untouched', async () => {
+    participantVerdict = { allowed: false, notice: 'This Kortix session is owner-only.' };
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+    expect(notices).toEqual(['This Kortix session is owner-only.']);
+    expect(continued).toHaveLength(0);
+    expect(saved).toHaveLength(0);
+    expect(created).toHaveLength(0);
+  });
+
+  test('a new session remembers its owner as the first approved participant and freezes the policy', async () => {
+    existingThread = [];
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+    expect(owners).toEqual([
+      { tenantId: TENANT_ID, conversationId: CONVERSATION_ID, sessionId: 'sess-new', teamsUserId: 'aad-user-1', userId: 'user-1' },
+    ]);
+    const meta = created[0].metadata as { teams: { conversation_policy: string } };
+    expect(meta.teams.conversation_policy).toBe('project_open');
   });
 });

@@ -20,6 +20,11 @@ describe('buildTeamsManifest', () => {
     // A manifest that changes shape must bump so the catalog takes the upgrade.
     expect(m.version).not.toBe('1.0.0');
   });
+
+  test('the command menu offers /policy', () => {
+    const m = buildTeamsManifest({ appId: 'app-123', baseUrl: 'https://api.kortix.com' });
+    expect(m.bots[0]!.commandLists![0]!.commands.map((c) => c.title)).toContain('/policy');
+  });
 });
 
 mock.module('../config', () => ({ config: { MICROSOFT_APP_ID: 'app-123', MICROSOFT_APP_PASSWORD: 'secret' } }));

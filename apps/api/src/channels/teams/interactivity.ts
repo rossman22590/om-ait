@@ -10,8 +10,9 @@ import {
   notifyAdminsOfTeamsAccessRequest,
   teamsUserId,
 } from './identity';
+import { decideTeamsThreadJoin } from './participants';
 import { createOrJoinTeamsConversationSession } from './session';
-import type { TeamsActivity } from './types';
+import type { TeamsActivity, TeamsConversationRef } from './types';
 
 export interface TeamsInvokeResponse {
   statusCode: number;
@@ -41,6 +42,8 @@ export async function handleAdaptiveCardAction(activity: TeamsActivity): Promise
   switch (action.verb) {
     case 'teams_request_access':
       return handleRequestAccess(activity, action.data);
+    case 'teams_thread_join':
+      return handleThreadJoin(activity, action.data);
     case 'teams_set_model':
       return handleSetModel(activity, action.data);
     case 'teams_set_agent':
@@ -189,6 +192,42 @@ async function handleReview(
   const ack =
     verdict === 'approve' ? `Approved "${item.title}" — resuming the agent.` : verdict === 'reject' ? `Rejected "${item.title}".` : `Requested changes on "${item.title}".`;
   return cardResponse(buildNoticeCard(ack));
+}
+
+async function handleThreadJoin(
+  activity: TeamsActivity,
+  data: Record<string, unknown>,
+): Promise<TeamsInvokeResponse> {
+  const convo = convoOf(activity);
+  const decider = teamsUserId(activity);
+  const decision = data.decision === 'approved' ? 'approved' : data.decision === 'denied' ? 'denied' : null;
+  const sessionId = typeof data.sessionId === 'string' ? data.sessionId : null;
+  const projectId = typeof data.projectId === 'string' ? data.projectId : null;
+  const requesterUserId = typeof data.requesterUserId === 'string' ? data.requesterUserId : null;
+  const requesterTeamsUserId = typeof data.requesterTeamsUserId === 'string' ? data.requesterTeamsUserId : null;
+  if (!convo || !decider || !decision || !sessionId || !projectId || !requesterUserId || !requesterTeamsUserId || !activity.serviceUrl) {
+    return cardResponse(buildNoticeCard("I couldn't apply that decision."));
+  }
+  const ref: TeamsConversationRef = {
+    serviceUrl: activity.serviceUrl,
+    conversationId: convo.conversationId,
+    botId: activity.recipient?.id,
+    fromId: activity.from?.id,
+    tenantId: convo.tenantId,
+    projectId,
+  };
+  const result = await decideTeamsThreadJoin({
+    tenantId: convo.tenantId,
+    conversationId: convo.conversationId,
+    deciderTeamsUserId: decider,
+    projectId,
+    sessionId,
+    requesterUserId,
+    requesterTeamsUserId,
+    decision,
+    ref,
+  });
+  return cardResponse(buildNoticeCard(result.text, result.ok ? (decision === 'approved' ? '✅' : '🚫') : '⚠️'));
 }
 
 async function handleRequestAccess(

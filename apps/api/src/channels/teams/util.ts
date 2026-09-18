@@ -29,6 +29,7 @@ const COMMAND_VERBS = new Set([
   'projects',
   'use',
   'switch',
+  'policy',
 ]);
 
 export function parseTeamsCommand(text: string | undefined): TeamsCommand | null {
