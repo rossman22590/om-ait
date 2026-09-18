@@ -80,7 +80,7 @@ import { useProjectConfig } from './use-project-config';
 import { useProjectModels } from './use-project-models';
 import { useQuestionSelfHeal } from './use-question-self-heal';
 import { useRuntimePhase } from './use-runtime-phase';
-import { useSessionPicks } from './use-session-picks';
+import { useSessionPicks, type SessionPicks } from './use-session-picks';
 import { derivePhase } from './use-session-phase';
 import { useSessionSync } from './use-session-sync';
 import { useSessionStartGiveUp } from './use-session-start-give-up';
@@ -159,6 +159,48 @@ export function resolveSessionRuntimeUrl(
   if (!path) return null;
   if (/^https?:\/\//i.test(path)) return path;
   return `${getBackendUrl()}${path.startsWith('/') ? '' : '/'}${path}`;
+}
+
+/** What a send may carry beyond the parts themselves. */
+export interface SendOptions {
+  model?: ModelKey;
+  agent?: string;
+  variant?: string;
+  directory?: string;
+}
+
+/**
+ * Fold the session's picks and this call's override into the options a send
+ * actually carries.
+ *
+ * Each field is OMITTED when neither source supplies one — `{ variant:
+ * undefined }` is not `{}` to a body builder that iterates keys, and the
+ * runtime reads an absent field as "use the default". `variant` (reasoning
+ * effort) now falls back to `picks.variant` exactly as `model` and `agent`
+ * already fell back to theirs; before `SessionPicks` carried it, every host
+ * kept it in a store of its own and passed it on every call.
+ *
+ * `directory` is deliberately per-send only: it scopes one prompt, not a
+ * session.
+ */
+export function resolveSendOptions(
+  picks: Pick<SessionPicks, 'model' | 'agent' | 'variant'>,
+  override?: {
+    model?: ModelKey | null;
+    agent?: string | null;
+    variant?: string | null;
+    directory?: string | null;
+  },
+): SendOptions {
+  const model = override?.model ?? picks.model;
+  const agent = override?.agent ?? picks.agent;
+  const variant = override?.variant ?? picks.variant;
+  return {
+    ...(model ? { model } : {}),
+    ...(agent ? { agent } : {}),
+    ...(variant ? { variant } : {}),
+    ...(override?.directory ? { directory: override.directory } : {}),
+  };
 }
 
 /**
@@ -1250,15 +1292,7 @@ export function useSession(projectId: string, sessionId: string, options: UseSes
     },
   ): Promise<void> => {
     if (!runtimeActionReady) throw new RuntimeNotReadyError();
-    const model = override?.model ?? picks.model;
-    const agent = override?.agent ?? picks.agent;
-    const variant = override?.variant;
-    const opts = {
-      ...(model ? { model } : {}),
-      ...(agent ? { agent } : {}),
-      ...(variant ? { variant } : {}),
-      ...(override?.directory ? { directory: override.directory } : {}),
-    };
+    const opts = resolveSendOptions(picks, override);
     // The prompt is going out, so the optimistic message stops being `pending`.
     // Hosts own the optimistic add (they build the message id themselves), so
     // this resolves it the same way `hydrate` correlates an echo: by the

@@ -54,6 +54,7 @@ import { BillingError } from '../core/http/api/errors';
 import { clearSessionFresh, markSessionFresh } from '../core/http/fresh-sessions';
 import { SessionStartError, type SessionStartResult } from '../core/rest/projects-client';
 import { setCurrentRuntime } from '../core/session/current-runtime';
+import type { ModelKey } from './use-model-store';
 import { promptOpenCodeMessage } from './use-opencode-sessions/messages';
 import {
   SESSION_START_FRESH_MS,
@@ -71,6 +72,7 @@ import {
   markDispatchedForPartIds,
   nextInconclusiveSince,
   rejectQuestion,
+  resolveSendOptions,
   resolveSessionRuntimeUrl,
   sendReceiptId,
   sendStateOnError,
@@ -1125,5 +1127,63 @@ describe('resolveSessionRuntimeUrl', () => {
     expect(
       resolveSessionRuntimeUrl({ stage: 'ready', sandbox: sandbox(null), runtime_url: null }),
     ).toBeNull();
+  });
+});
+
+// ── resolveSendOptions — picks vs per-send override ─────────────────────────
+//
+// `variant` (reasoning effort) is new in `SessionPicks`. Every host kept it in
+// a store of its own and passed it on every call, so the ONE thing that must
+// not change is the payload for a caller that never sets a variant: the key
+// has to stay absent, not become `undefined` or `null`.
+
+describe('resolveSendOptions', () => {
+  const none = { model: null, agent: null, variant: null };
+  const M: ModelKey = { providerID: 'anthropic', modelID: 'claude' };
+  const M2: ModelKey = { providerID: 'openai', modelID: 'gpt' };
+
+  test('no selection and no override sends no options at all', () => {
+    expect(resolveSendOptions(none)).toEqual({});
+    expect(resolveSendOptions(none, {})).toEqual({});
+  });
+
+  test('an unset variant never reaches the wire as a key', () => {
+    // The regression this guards: `{ variant: undefined }` is not `{}` to a
+    // JSON body builder that iterates keys.
+    const opts = resolveSendOptions({ model: M, agent: 'a', variant: null });
+    expect('variant' in opts).toBe(false);
+    expect(opts).toEqual({ model: M, agent: 'a' });
+  });
+
+  test('picks are applied when the call carries no override', () => {
+    expect(resolveSendOptions({ model: M, agent: 'a', variant: 'high' })).toEqual({
+      model: M,
+      agent: 'a',
+      variant: 'high',
+    });
+  });
+
+  test('a per-send override wins over the session pick, for all three', () => {
+    expect(
+      resolveSendOptions(
+        { model: M, agent: 'a', variant: 'high' },
+        { model: M2, agent: 'a2', variant: 'low' },
+      ),
+    ).toEqual({ model: M2, agent: 'a2', variant: 'low' });
+  });
+
+  test('variant falls back to the pick exactly like model and agent do', () => {
+    expect(resolveSendOptions({ model: null, agent: null, variant: 'high' }, {})).toEqual({
+      variant: 'high',
+    });
+    expect(
+      resolveSendOptions({ model: null, agent: null, variant: 'high' }, { variant: null }),
+    ).toEqual({ variant: 'high' });
+  });
+
+  test('directory is a per-send concern only — never a session pick', () => {
+    expect(resolveSendOptions(none, { directory: '/workspace/x' })).toEqual({
+      directory: '/workspace/x',
+    });
   });
 });
