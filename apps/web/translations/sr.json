@@ -1437,6 +1437,7 @@
         "chat": "Ћаскање",
         "slack": "Slack",
         "telegram": "Telegram",
+        "teams": "Teams",
         "email": "Е-пошта",
         "scheduled": "Заказано",
         "webhook": "Webhook",

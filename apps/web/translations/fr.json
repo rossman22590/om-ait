@@ -1437,6 +1437,7 @@
         "chat": "Discussion",
         "slack": "Slack",
         "telegram": "Telegram",
+        "teams": "Teams",
         "email": "Courriel",
         "scheduled": "Programmée",
         "webhook": "Webhook",

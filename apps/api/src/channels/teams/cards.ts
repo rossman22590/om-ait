@@ -1,4 +1,5 @@
 import type { StreamTaskChunk } from '../slack-api';
+import { markdownToCardElements } from './markdown';
 
 const ADAPTIVE_CARD_VERSION = '1.5';
 
@@ -82,7 +83,8 @@ export function buildFinalCard(opts: {
 }): Record<string, unknown> {
   const elements: CardElement[] = planContainer(opts.title, opts.steps);
   if (opts.body) {
-    elements.push({ type: 'TextBlock', text: opts.body, wrap: true, spacing: 'medium' });
+    const [first, ...rest] = markdownToCardElements(opts.body);
+    if (first) elements.push({ ...first, spacing: 'medium' }, ...rest);
   }
   if (opts.sessionUrl) {
     elements.push({
@@ -98,7 +100,8 @@ export function buildFinalCard(opts: {
 }
 
 export function buildAnswerCard(body: string, sessionUrl?: string): Record<string, unknown> {
-  const elements: CardElement[] = [{ type: 'TextBlock', text: body, wrap: true }];
+  const elements: CardElement[] = markdownToCardElements(body);
+  if (elements.length === 0) elements.push({ type: 'TextBlock', text: body, wrap: true });
   if (sessionUrl) {
     elements.push({
       type: 'TextBlock',
