@@ -27,7 +27,7 @@ describe('extractTeamsAttachments', () => {
     const refs = extractTeamsAttachments({
       type: 'message',
       attachments: [
-        { contentType: 'text/html', content: '<p>what do you see</p>' },
+        { contentType: 'text/html' },
         {
           contentType: 'image/png',
           contentUrl: 'https://smba.trafficmanager.net/emea/36009a52/v3/attachments/0-abc/views/original',
