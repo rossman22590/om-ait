@@ -62,15 +62,29 @@ interface RootProps {
  */
 function Root({ initialHost, initialProjectId, initialSessionId, onQuit }: RootProps) {
   const [host, setHost] = useState<ResolvedHost | null>(initialHost);
+  /** The host `Alt+H` left behind, so Esc can put it back. Null at boot. */
+  const [previousHost, setPreviousHost] = useState<ResolvedHost | null>(null);
   const [projectId, setProjectId] = useState<string | null>(initialProjectId);
   const [generation, setGeneration] = useState(0);
 
   const onLoggedIn = useCallback((resolved: ResolvedHost) => {
     initKortix(resolved);
     setHost(resolved);
+    setPreviousHost(null);
     setProjectId(resolved.defaultProjectId ?? null);
     setGeneration((value) => value + 1);
   }, []);
+
+  // Esc on the host list. With a host behind it this is "never mind" and the
+  // app comes back on the SAME host — `initKortix` again because the login
+  // screen's own validation may have re-pointed the process-global config.
+  // At boot there is nothing behind it, so it quits.
+  const onCancel = useCallback(() => {
+    if (!previousHost) return onQuit();
+    initKortix(previousHost);
+    setHost(previousHost);
+    setPreviousHost(null);
+  }, [previousHost, onQuit]);
 
   if (!host) {
     return (
@@ -79,7 +93,8 @@ function Root({ initialHost, initialProjectId, initialSessionId, onQuit }: RootP
         width={process.stdout.columns ?? 80}
         height={process.stdout.rows ?? 24}
         onLoggedIn={onLoggedIn}
-        onQuit={onQuit}
+        onQuit={onCancel}
+        cancelLabel={previousHost ? 'Esc back' : 'Esc quit'}
       />
     );
   }
@@ -92,7 +107,10 @@ function Root({ initialHost, initialProjectId, initialSessionId, onQuit }: RootP
       accountId={host.accountId || null}
       initialSessionId={initialSessionId}
       onQuit={onQuit}
-      onSwitchHost={() => setHost(null)}
+      onSwitchHost={() => {
+        setPreviousHost(host);
+        setHost(null);
+      }}
     />
   );
 }

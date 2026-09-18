@@ -199,10 +199,16 @@ export const KEYMAP: readonly Binding[] = [
     description: 'Hand this session to the stock opencode TUI. Returning repaints the app.',
   },
   {
+    // `Alt+H` is FIRST because `Ctrl+H` is the ASCII backspace byte (0x08).
+    // A legacy terminal cannot tell the two apart, and OpenTUI's parser reports
+    // the byte as `{ name: 'backspace', ctrl: false }` — measured — so the
+    // Ctrl chord can never match there. It is kept for the kitty keyboard
+    // protocol, which does report `{ name: 'h', ctrl: true }`.
     id: 'hosts',
     scope: 'global',
-    chords: [chord('h', { ctrl: true })],
-    description: 'Switch host.',
+    chords: [chord('h', { alt: true }), chord('h', { ctrl: true })],
+    description:
+      'Switch host. Ctrl+H needs the kitty keyboard protocol: the byte it sends is Backspace.',
   },
   {
     id: 'back',

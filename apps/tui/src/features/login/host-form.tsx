@@ -92,7 +92,7 @@ function Field({
 export function HostForm({
   mode,
   initialName = '',
-  initialUrl = DEFAULT_API_URL,
+  initialUrl = '',
   width,
   busy = false,
   error = null,
@@ -110,8 +110,14 @@ export function HostForm({
     [locked],
   );
 
+  // An EMPTY url means the default, and the field shows it as a placeholder
+  // rather than as a value. Pre-filling `https://api.kortix.com` looked the
+  // same and was not: an `<input>` cursor sits at the END of its value, so a
+  // person typing their own host got `https://api.kortix.comhttp://localhost:
+  // 17408` and an "Unable to connect" they could not explain — measured in a
+  // real pty run. There is no clear-the-field key to tell them about either.
   const submit = useCallback(() => {
-    onSubmit({ name: name.trim(), url: url.trim(), token });
+    onSubmit({ name: name.trim(), url: url.trim() || DEFAULT_API_URL, token });
   }, [name, url, token, onSubmit]);
 
   const step = useCallback(

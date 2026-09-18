@@ -337,6 +337,11 @@ export function App({
                 setSessionId(null);
                 setRoute('session');
               }}
+              // Only fills a blank (an env host with no KORTIX_ACCOUNT_ID);
+              // it keeps the open project and session, unlike a real pick.
+              onAccountResolved={(resolved) => {
+                setAccountId((current) => current ?? resolved);
+              }}
               onAccountChange={(nextAccount) => {
                 setAccountId(nextAccount);
                 setProjectId(null);

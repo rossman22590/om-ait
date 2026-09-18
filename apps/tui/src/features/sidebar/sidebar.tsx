@@ -29,6 +29,17 @@ export interface SidebarProps {
   onNavigate(screen: 'customize' | 'apps' | 'review' | 'files'): void;
   onProjectChange(projectId: string, accountId: string): void;
   onAccountChange(accountId: string): void;
+  /**
+   * The account this host actually resolved to, when the caller had none.
+   *
+   * Distinct from `onAccountChange`, which is a person PICKING another account
+   * and therefore drops the open project and session. This one only fills a
+   * blank: an env-token host (`KORTIX_API_KEY` with no `KORTIX_ACCOUNT_ID`)
+   * boots with `accountId === null`, and without it every account-scoped screen
+   * reads "No account on this host." while the sidebar header shows the account
+   * by name.
+   */
+  onAccountResolved?(accountId: string): void;
   onAttach?(sessionId: string): void;
   onToast?(message: string, kind?: 'info' | 'error'): void;
 }
@@ -59,6 +70,7 @@ export function Sidebar({
   onNavigate,
   onProjectChange,
   onAccountChange,
+  onAccountResolved,
   onAttach,
   onToast,
 }: SidebarProps) {
@@ -99,6 +111,14 @@ export function Sidebar({
 
   const accounts = accountsQuery.data ?? [];
   const projects = projectsQuery.data ?? [];
+
+  // Fill a blank account id once the list answers. Only when there is none:
+  // a resolved account must never overwrite a picked one.
+  useEffect(() => {
+    if (accountId || !onAccountResolved) return;
+    const resolved = effectiveAccountId || accounts[0]?.account_id;
+    if (resolved) onAccountResolved(resolved);
+  }, [accountId, effectiveAccountId, accounts[0]?.account_id, onAccountResolved]);
 
   const accountName =
     accounts.find((account) => account.account_id === effectiveAccountId)?.name ??

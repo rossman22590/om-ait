@@ -31,8 +31,18 @@ export interface LoginScreenProps {
   height: number;
   /** A host with a token was selected, or a fresh login succeeded. */
   onLoggedIn(resolved: ResolvedHost): void;
-  /** Leave the app. Esc on the list and Ctrl+C both land here. */
+  /**
+   * Esc on the list, and Ctrl+C.
+   *
+   * What it MEANS depends on the caller. At boot there is no app behind this
+   * screen, so it quits. Reached with `Alt+H` from a running app there is, and
+   * the caller puts the previous host back — a host switcher you can only leave
+   * by killing the process is not a switcher. `cancelLabel` is what the footer
+   * then says.
+   */
   onQuit(): void;
+  /** The footer's word for `onQuit`. Default `Esc quit`. */
+  cancelLabel?: string;
   onToast?(message: string, kind?: 'info' | 'error'): void;
   /** The host set changed on disk — the caller re-reads `listHostEntries()`. */
   onHostsChanged?(): void;
@@ -55,6 +65,7 @@ export function LoginScreen({
   height,
   onLoggedIn,
   onQuit,
+  cancelLabel = 'Esc quit',
   onToast,
   onHostsChanged,
   deps,
@@ -177,11 +188,10 @@ export function LoginScreen({
         <HostForm
           mode={mode}
           initialName={mode === 'edit-token' ? (current?.name ?? '') : ''}
-          initialUrl={
-            mode === 'edit-token'
-              ? (current?.backendUrl.replace(/\/v1$/, '') ?? DEFAULT_API_URL)
-              : DEFAULT_API_URL
-          }
+          // Empty for a NEW host: the form shows `DEFAULT_API_URL` as the
+          // placeholder and submits it when nothing is typed. Only the
+          // edit-token flow pre-fills, and it pre-fills the host's OWN url.
+          initialUrl={mode === 'edit-token' ? current?.backendUrl.replace(/\/v1$/, '') : undefined}
           width={bodyWidth}
           busy={busy}
           error={error}
@@ -237,7 +247,7 @@ export function LoginScreen({
       {error ? <text fg={theme.danger}>{error}</text> : null}
 
       <box flexGrow={1} />
-      <text fg={theme.faint}>Enter use · n add · e token · d remove · Esc quit</text>
+      <text fg={theme.faint}>{`Enter use · n add · e token · d remove · ${cancelLabel}`}</text>
     </box>
   );
 }

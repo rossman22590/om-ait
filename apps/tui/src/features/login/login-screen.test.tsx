@@ -6,7 +6,7 @@ import { testRender } from '@opentui/react/test-utils';
 import type { Host } from '@kortix/cli/src/api/config.ts';
 
 import type { HostEntry, ResolvedHost } from '../../auth/hosts.ts';
-import { HostForm, maskToken } from './host-form.tsx';
+import { DEFAULT_API_URL, HostForm, maskToken } from './host-form.tsx';
 import { type LoginFlowDeps, hostRow } from './index.ts';
 import { LoginScreen } from './login-screen.tsx';
 
@@ -443,6 +443,67 @@ describe('<HostForm/>', () => {
     const frame = captureCharFrame();
     expect(frame).not.toContain('abc');
     expect(frame).toContain('3 chars');
+    renderer.destroy();
+  });
+
+  test('an add form starts with an EMPTY url and submits the default for it', async () => {
+    const submitted: Array<{ name: string; url: string; token: string }> = [];
+    const { captureCharFrame, flush, mockInput, renderer } = await testRender(
+      <HostForm
+        mode="add"
+        width={60}
+        onSubmit={(values) => submitted.push(values)}
+        onCancel={() => {}}
+      />,
+      { width: 62, height: 12 },
+    );
+    await flush();
+    // The default is the PLACEHOLDER, never the value. Pre-filling it looked
+    // identical and appended to whatever the user typed, because an `<input>`
+    // cursor starts at the end of its value — measured in a real pty run as
+    // `https://api.kortix.comhttp://localhost:17408`.
+    await act(async () => mockInput.typeText('scratch'));
+    await flush();
+    await act(async () => mockInput.pressTab());
+    await flush();
+    await act(async () => mockInput.typeText('http://localhost:17408'));
+    await flush();
+    expect(captureCharFrame()).not.toContain('api.kortix.comhttp');
+    await act(async () => mockInput.pressTab());
+    await flush();
+    await act(async () => mockInput.typeText('tok123'));
+    await flush();
+    await act(async () => mockInput.pressEnter());
+    await flush();
+    expect(submitted).toEqual([
+      { name: 'scratch', url: 'http://localhost:17408', token: 'tok123' },
+    ]);
+    renderer.destroy();
+  });
+
+  test('an empty url field submits DEFAULT_API_URL', async () => {
+    const submitted: Array<{ name: string; url: string; token: string }> = [];
+    const { flush, mockInput, renderer } = await testRender(
+      <HostForm
+        mode="add"
+        width={60}
+        onSubmit={(values) => submitted.push(values)}
+        onCancel={() => {}}
+      />,
+      { width: 62, height: 12 },
+    );
+    await flush();
+    await act(async () => mockInput.typeText('cloud'));
+    await flush();
+    await act(async () => mockInput.pressTab());
+    await flush();
+    await act(async () => mockInput.pressTab());
+    await flush();
+    await act(async () => mockInput.typeText('tok123'));
+    await flush();
+    await act(async () => mockInput.pressEnter());
+    await flush();
+    expect(submitted).toEqual([{ name: 'cloud', url: DEFAULT_API_URL, token: 'tok123' }]);
     renderer.destroy();
   });
 
