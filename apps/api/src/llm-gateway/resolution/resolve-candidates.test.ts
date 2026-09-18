@@ -169,7 +169,9 @@ mock.module('../routing', () => ({
 
 let runtimeManagedModel: { id: string } | undefined;
 let knownManagedModelId: string | null = null;
+const managedModels = await import('../models/managed-models');
 mock.module('../models/managed-models', () => ({
+  ...managedModels,
   RUNTIME_MANAGED_MODELS: [],
   getRuntimeManagedModel: (id: string) =>
     runtimeManagedModel?.id === id ? runtimeManagedModel : undefined,
