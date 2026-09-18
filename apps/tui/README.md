@@ -284,6 +284,15 @@ pnpm --filter @kortix/tui typecheck   # tsc --noEmit
 npx biome check apps/tui
 ```
 
+### What it depends on
+
+Every byte of Kortix data comes through `@kortix/sdk`. The one other workspace
+dependency is `@kortix/cli`, which publishes no barrel, so the TUI deep-imports
+five of its modules and nothing else (`SPEC.md` §2 has the table): `src/api/
+config.ts` and `src/api/sdk.ts` for hosts and tokens, `src/web-url.ts` for the
+web links the account screen prints, and `src/attach-opencode.ts` +
+`src/api/auth.ts` for `Alt+O`.
+
 Tests sit next to the file they cover (`src/**/*.test.ts[x]`) — the repo
 `.gitignore` ignores every `test/` directory, so the layout in `SPEC.md` §3
 would not be tracked. Component tests render through OpenTUI's headless test

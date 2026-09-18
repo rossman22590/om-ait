@@ -49,6 +49,7 @@ import { focusHints } from './features/session/session-view.tsx';
 import { Sidebar } from './features/sidebar/index.ts';
 import { Switcher } from './features/switcher/index.ts';
 import { kortix } from './kortix.ts';
+import { copyToClipboard } from './lib/clipboard.ts';
 import { sessionTitle } from './lib/session-groups.ts';
 import { theme } from './theme.ts';
 import { Panel, StatusBar, Toast, type ToastKind } from './ui/index.ts';
@@ -537,6 +538,15 @@ function Screen({
         height={height}
         onBack={onBack}
         onToast={onToast}
+        // `y` on an App row. The screen spawns no process itself; the host
+        // injects the copy. `copyToClipboard` answers instead of throwing, so
+        // the failure is re-thrown here — that is the screen's "Copy failed"
+        // path, and a silent success toast on a box with no clipboard tool
+        // would be a lie.
+        onCopy={async (text: string) => {
+          const result = await copyToClipboard(text);
+          if (!result.ok) throw new Error(result.error ?? 'no clipboard tool');
+        }}
       />
     );
   }

@@ -42,12 +42,25 @@ Status: **experimental**. Not in the release CLI bundle. Run from the repo.
 | Key routing | `@opentui/keymap` if it fits; otherwise a small `src/keymap.ts` | One keymap table; help overlay renders from it. |
 
 Package: `@kortix/tui`, `private: true`, `apps/tui`. Entry: `src/index.tsx`.
-Scripts: `dev` (`bun run src/index.tsx`), `typecheck`, `test` (`bun test`).
-Dependencies: `@kortix/sdk` (workspace), `@kortix/cli` (workspace, deep import
-of `src/api/config.ts` + `src/api/sdk.ts` helpers only), `@opentui/core`,
+Scripts: `dev` (`bun run src/index.tsx`), `typecheck`, `keymap`, `test`
+(`bun test`). Dependencies: `@kortix/sdk` (workspace), `@kortix/cli`
+(workspace, deep imports — the allowlist below), `@opentui/core`,
 `@opentui/react`, `react`, `@tanstack/react-query`. `tsconfig.json`:
 `"jsx": "react-jsx"`, `"jsxImportSource": "@opentui/react"`, extends
 `@tsconfig/bun`.
+
+**`@kortix/cli` deep-import allowlist.** `@kortix/cli` publishes no barrel for
+these, so the TUI reaches into its source. That is allowed for exactly five
+modules and nothing else — anything not on this list is either SDK work or a
+new entry here, decided deliberately:
+
+| Module | What the TUI takes | Used by |
+| --- | --- | --- |
+| `src/api/config.ts` | `Host`, `loadConfig`, `activeHostName`, `listHosts`, `getHost`, `upsertHost`, `removeHost`, `useHost`, `validateHostName`, `secureRemoteBase` | `auth/hosts.ts`, `features/login` |
+| `src/api/sdk.ts` | `sdkBackendUrl` — the one rule for when `http` is legitimate | `auth/hosts.ts`, `features/login` |
+| `src/web-url.ts` | `webDashboardUrl` — the billing/settings link the TUI prints instead of running checkout | `features/account/account-screen.tsx` |
+| `src/attach-opencode.ts` | `attachOpenCodeSession`, `AttachOpenCodeError` — SPEC §5.11's seam | `features/attach` |
+| `src/api/auth.ts` | `Auth`, the type that seam takes | `features/attach` |
 
 pnpm note: `minimumReleaseAge` is 72 h; `@opentui/*` 0.5.11 was published
 2026-09-07 and resolves. Add nothing to `onlyBuiltDependencies` unless install

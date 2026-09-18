@@ -15,6 +15,7 @@
 import {
   type Host,
   activeHostName,
+  getHost,
   listHosts,
   loadConfig,
   secureRemoteBase,
@@ -116,4 +117,37 @@ export function listHostEntries(): HostEntry[] {
 /** The origin without the `/v1` mount — for display and for PTY URLs. */
 export function hostOrigin(backendUrl: string): string {
   return secureRemoteBase(backendUrl).replace(/\/v1$/, '');
+}
+
+/** The `ResolvedHost` a stored CLI host record resolves to. */
+export function resolvedFromHost(name: string, host: Host): ResolvedHost {
+  return {
+    name,
+    backendUrl: sdkBackendUrl(host.url),
+    token: host.token,
+    accountId: host.account_id ?? '',
+    defaultProjectId: host.default_project?.project_id,
+    userEmail: host.user_email ?? '',
+    source: 'config',
+  };
+}
+
+/**
+ * A row from the host list → the host this process would run against.
+ *
+ * `resolveHost()` only ever answers for the ACTIVE host, and `listHostEntries()`
+ * deliberately drops the token. Selecting a row means resolving THAT row, so
+ * the token is read back here by name. Returns null when the host is gone or
+ * carries no token.
+ *
+ * `read` is injected so a test never touches a real
+ * `~/.config/kortix/config.json`.
+ */
+export function hostToResolved(
+  entry: Pick<HostEntry, 'name'>,
+  deps: { read: (name: string) => Host | null } = { read: getHost },
+): ResolvedHost | null {
+  const host = deps.read(entry.name);
+  if (!host || !host.token) return null;
+  return resolvedFromHost(entry.name, host);
 }

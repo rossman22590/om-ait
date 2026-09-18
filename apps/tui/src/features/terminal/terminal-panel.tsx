@@ -37,9 +37,9 @@ import type { EmbeddedTerminalRenderable } from '@opentui/core';
 import { useKeyboard } from '@opentui/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { copyToClipboard } from '../../lib/clipboard.ts';
 import { theme } from '../../theme.ts';
 import { Panel, type ToastKind } from '../../ui/index.ts';
-import { copyToClipboard } from './clipboard.ts';
 import { ConnectHint, connectCommand } from './connect-hint.tsx';
 import { isReservedWhileTerminalFocused, matchesTerminalBinding } from './keys.ts';
 import { openPtyWebSocket } from './open-socket.ts';

@@ -25,12 +25,9 @@ import { useKeyboard } from '@opentui/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { kortix } from '../../kortix.ts';
+import { copyToClipboard } from '../../lib/clipboard.ts';
 import { glyph as GLYPH, theme } from '../../theme.ts';
 import { Spinner, layoutRow, windowStart } from '../../ui/index.ts';
-// `y` copies with the same four-tool fallback the terminal panel uses. This is
-// a pure utility with no feature state; it belongs in `src/lib/clipboard.ts`,
-// which is the integrator's file to create — flagged rather than duplicated.
-import { copyToClipboard } from '../terminal/clipboard.ts';
 import {
   type FileTree,
   type TreeNode,

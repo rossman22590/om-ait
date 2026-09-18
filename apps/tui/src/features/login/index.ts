@@ -14,13 +14,11 @@ export {
   type LoginResult,
   defaultLoginDeps,
   hostBaseFromBackendUrl,
-  hostToResolved,
   loginToHost,
   normalizeBackendUrl,
   pickAccount,
   redactSecret,
   removeLoginHost,
-  resolvedFromHost,
 } from './login-flow.ts';
 export { LOGIN_KEYS, type LoginBinding, type LoginScope } from './keys.ts';
 export { matchesLoginBinding } from './match.ts';

@@ -55,10 +55,10 @@ export interface AppsScreenProps {
   onBack(): void;
   onToast?(message: string, kind?: 'info' | 'error'): void;
   /**
-   * Copy to the system clipboard. `features/terminal/clipboard.ts` holds the
-   * implementation and SPEC §3 forbids one feature importing another's
-   * internals, so the host injects it. Without it `y` toasts the URL, which
-   * still leaves it selectable with the mouse.
+   * Copy to the system clipboard. `src/lib/clipboard.ts` holds the
+   * implementation; the host injects it so this screen stays free of process
+   * spawning. Without it `y` toasts the URL, which still leaves it selectable
+   * with the mouse.
    */
   onCopy?(text: string): void | Promise<void>;
   /** Test seam for `o`. Defaults to `lib/open-url.ts`. */

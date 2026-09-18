@@ -34,7 +34,7 @@ import { sdkBackendUrl } from '@kortix/cli/src/api/sdk.ts';
 import type { ValidateTokenResult } from '@kortix/sdk';
 import { createScopedKortix } from '@kortix/sdk/server';
 
-import type { HostEntry, ResolvedHost } from '../../auth/hosts.ts';
+import { type ResolvedHost, resolvedFromHost } from '../../auth/hosts.ts';
 
 /** Why a login did not happen. `status` is 0 when no HTTP response arrived. */
 export interface LoginFailure {
@@ -112,36 +112,6 @@ export function normalizeBackendUrl(raw: string): string | null {
 /** The bare origin the CLI stores in `Host.url` (no `/v1` mount). */
 export function hostBaseFromBackendUrl(backendUrl: string): string {
   return backendUrl.replace(/\/v1$/, '');
-}
-
-/** The `ResolvedHost` a stored record resolves to. */
-export function resolvedFromHost(name: string, host: Host): ResolvedHost {
-  return {
-    name,
-    backendUrl: sdkBackendUrl(host.url),
-    token: host.token,
-    accountId: host.account_id ?? '',
-    defaultProjectId: host.default_project?.project_id,
-    userEmail: host.user_email ?? '',
-    source: 'config',
-  };
-}
-
-/**
- * A row from the login list → the host this process would run against.
- *
- * `auth/hosts.ts` has no equivalent: `resolveHost()` only ever answers for the
- * ACTIVE host, and `listHostEntries()` deliberately drops the token. Selecting
- * a row means resolving THAT row, so the token is read back here by name.
- * Returns null when the host is gone or carries no token.
- */
-export function hostToResolved(
-  entry: Pick<HostEntry, 'name'>,
-  deps: Pick<LoginFlowDeps, 'read'> = { read: getHost },
-): ResolvedHost | null {
-  const host = deps.read(entry.name);
-  if (!host || !host.token) return null;
-  return resolvedFromHost(entry.name, host);
 }
 
 /** Message for a failed `validateToken`, with the status the API answered. */

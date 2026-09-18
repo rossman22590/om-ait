@@ -6,13 +6,11 @@ import type { ValidateTokenResult } from '@kortix/sdk';
 import {
   type LoginFlowDeps,
   hostBaseFromBackendUrl,
-  hostToResolved,
   loginToHost,
   normalizeBackendUrl,
   pickAccount,
   redactSecret,
   removeLoginHost,
-  resolvedFromHost,
 } from './login-flow.ts';
 
 const TOKEN = 'kortix_pat_super_secret_value_0123456789';
@@ -359,42 +357,6 @@ describe('the token never reaches a message', () => {
       if (result.ok) throw new Error('expected a failure');
       expect(result.error.message).not.toContain(TOKEN);
     }
-  });
-});
-
-describe('hostToResolved', () => {
-  const host: Host = {
-    url: 'http://localhost:17408',
-    token: TOKEN,
-    user_id: 'user-1',
-    user_email: 'agent-g@kortix.test',
-    account_id: 'acc-1',
-    default_project: { project_id: 'p1', account_id: 'acc-1' },
-    logged_in_at: '2026-09-17T12:00:00.000Z',
-  };
-
-  test('resolves a stored host with a token', () => {
-    const resolved = hostToResolved({ name: 'local-dev' }, { read: () => host });
-    expect(resolved).toEqual({
-      name: 'local-dev',
-      backendUrl: 'http://localhost:17408/v1',
-      token: TOKEN,
-      accountId: 'acc-1',
-      defaultProjectId: 'p1',
-      userEmail: 'agent-g@kortix.test',
-      source: 'config',
-    });
-  });
-
-  test('a host with no token does not resolve', () => {
-    expect(hostToResolved({ name: 'cloud' }, { read: () => ({ ...host, token: '' }) })).toBeNull();
-    expect(hostToResolved({ name: 'gone' }, { read: () => null })).toBeNull();
-  });
-
-  test('resolvedFromHost adds the /v1 mount the SDK requires', () => {
-    expect(resolvedFromHost('x', { ...host, url: 'http://localhost:17408/v1' }).backendUrl).toBe(
-      'http://localhost:17408/v1',
-    );
   });
 });
 
