@@ -22,6 +22,7 @@ import { useTranslations } from '@/i18n/use-translations';
 
 import { Button } from '@/components/ui/button';
 import Hint from '@/components/ui/hint';
+import { InfoBanner } from '@/components/ui/info-banner';
 import { InlineMeta } from '@/components/ui/inline-meta';
 import { Switch } from '@/components/ui/switch';
 import { Tag } from '@/components/ui/tag';
@@ -40,6 +41,7 @@ import {
   CheckIcon as Check,
   FolderSimpleIcon as Folder,
   DotsThreeIcon as MoreHorizontal,
+  ShieldCheckIcon as ShieldCheck,
   StarIcon as Star,
 } from '@phosphor-icons/react';
 import { useMemo, useState } from 'react';
@@ -207,12 +209,6 @@ export function ModelsTab({
                 <span className="text-muted-foreground text-xs font-medium">
                   {group.providerName}
                 </span>
-                {group.providerID === 'kortix' &&
-                  group.rows.every(({ model }) => isManagedModelId(model.modelID)) && (
-                    <Hint label={tAccess('zdrHint')}>
-                      <Tag>{tAccess('zdrInference')}</Tag>
-                    </Hint>
-                  )}
                 <span className="text-muted-foreground/40 ml-auto text-xs tabular-nums">
                   {group.rows.length}
                 </span>
@@ -223,6 +219,17 @@ export function ModelsTab({
                   canWrite={canWrite}
                 />
               </div>
+              {group.providerID === 'kortix' &&
+                group.rows.every(({ model }) => isManagedModelId(model.modelID)) && (
+                  <InfoBanner
+                    tone="success"
+                    icon={ShieldCheck}
+                    title={tAccess('zdrTitle')}
+                    className="text-xs"
+                  >
+                    {tAccess('zdrDescription')}
+                  </InfoBanner>
+                )}
               <div className="bg-popover overflow-hidden rounded-md border">
                 {group.rows.map(({ model, wireId, isRollingAlias }, i) => {
                   const isManaged =
