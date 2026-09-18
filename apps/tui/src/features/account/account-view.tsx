@@ -21,7 +21,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { relativeAge } from '../../lib/relative-time.ts';
 import { theme } from '../../theme.ts';
 import { Spinner, layoutRow, windowStart } from '../../ui/index.ts';
-import { matchesAccountBinding } from './keys.ts';
+import { matchesAccountBinding } from './match.ts';
 
 export type AccountTab = 'members' | 'invites' | 'roles' | 'billing';
 

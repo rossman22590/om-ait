@@ -22,7 +22,7 @@ import { useKeyboard, usePaste } from '@opentui/react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 
 import { theme } from '../../theme.ts';
-import { matchesLoginBinding } from './keys.ts';
+import { matchesLoginBinding } from './match.ts';
 
 /** Which field the keyboard belongs to. */
 export type HostFormField = 'name' | 'url' | 'token';

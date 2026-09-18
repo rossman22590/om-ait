@@ -13,9 +13,7 @@
  * compares `key.name` inline.
  */
 
-import type { KeyEvent } from '@opentui/core';
-
-import { type Chord, matchesChord } from '../../keymap.ts';
+import type { Chord } from '../../keymap.ts';
 
 /** The scope these bindings live in. Local until `keymap.ts` widens `KeyScope`. */
 export type LoginScope = 'login';
@@ -101,10 +99,3 @@ export const LOGIN_KEYS: readonly LoginBinding[] = [
     description: 'Leave the form, the confirm, or the screen.',
   },
 ] as const;
-
-/** True when `event` matches any chord of the login binding with this id. */
-export function matchesLoginBinding(event: KeyEvent, id: string): boolean {
-  const binding = LOGIN_KEYS.find((entry) => entry.id === id);
-  if (!binding) return false;
-  return binding.chords.some((chord) => matchesChord(event, chord));
-}

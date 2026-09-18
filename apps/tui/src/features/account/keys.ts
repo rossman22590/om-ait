@@ -7,9 +7,7 @@
  * `ACCOUNT_KEYS` assignable to `Binding[]` and the help overlay picks it up.
  */
 
-import type { KeyEvent } from '@opentui/core';
-
-import { type Chord, matchesChord } from '../../keymap.ts';
+import type { Chord } from '../../keymap.ts';
 
 export type AccountScope = 'account';
 
@@ -118,10 +116,3 @@ export const ACCOUNT_KEYS: readonly AccountBinding[] = [
     description: 'Close the form, the confirm, or the screen.',
   },
 ] as const;
-
-/** True when `event` matches any chord of the account binding with this id. */
-export function matchesAccountBinding(event: KeyEvent, id: string): boolean {
-  const binding = ACCOUNT_KEYS.find((entry) => entry.id === id);
-  if (!binding) return false;
-  return binding.chords.some((chord) => matchesChord(event, chord));
-}

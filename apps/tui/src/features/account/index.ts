@@ -19,9 +19,5 @@ export {
   memberRows,
   roleRows,
 } from './account-view.tsx';
-export {
-  ACCOUNT_KEYS,
-  type AccountBinding,
-  type AccountScope,
-  matchesAccountBinding,
-} from './keys.ts';
+export { ACCOUNT_KEYS, type AccountBinding, type AccountScope } from './keys.ts';
+export { matchesAccountBinding } from './match.ts';

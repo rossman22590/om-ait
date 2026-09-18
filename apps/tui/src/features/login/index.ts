@@ -22,4 +22,5 @@ export {
   removeLoginHost,
   resolvedFromHost,
 } from './login-flow.ts';
-export { LOGIN_KEYS, type LoginBinding, type LoginScope, matchesLoginBinding } from './keys.ts';
+export { LOGIN_KEYS, type LoginBinding, type LoginScope } from './keys.ts';
+export { matchesLoginBinding } from './match.ts';

@@ -470,6 +470,35 @@ describe('<HostForm/>', () => {
     renderer.destroy();
   });
 
+  test('a bracketed paste fills the token field — the way a PAT actually arrives', async () => {
+    const jwt = `eyJ.${'p'.repeat(700)}.${'s'.repeat(60)}`;
+    const submitted: Array<{ token: string }> = [];
+    const { captureCharFrame, flush, mockInput, renderer } = await testRender(
+      <HostForm
+        mode="edit-token"
+        initialName="local-dev"
+        initialUrl="http://localhost:17408"
+        width={60}
+        onSubmit={(values) => submitted.push({ token: values.token })}
+        onCancel={() => {}}
+      />,
+      { width: 62, height: 10 },
+    );
+    await flush();
+    await act(async () => {
+      await mockInput.pasteBracketedText(jwt);
+    });
+    await flush();
+
+    const frame = captureCharFrame();
+    expect(frame).not.toContain('eyJ');
+    expect(frame).toContain(`${jwt.length} chars`);
+    await act(async () => mockInput.pressEnter());
+    await flush();
+    expect(submitted).toEqual([{ token: jwt }]);
+    renderer.destroy();
+  });
+
   test('backspace deletes one character of the token', async () => {
     const submitted: Array<{ token: string }> = [];
     const { flush, mockInput, renderer } = await testRender(
