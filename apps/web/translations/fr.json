@@ -1609,6 +1609,9 @@
   "modelSelector": {
     "search": "Rechercher des modèles",
     "free": "Gratuit",
+    "included": "Inclus",
+    "projectDefaultAccount": "Par défaut du projet",
+    "useAccount": "Utiliser le compte",
     "addProvider": "Ajouter un fournisseur",
     "connectProvider": "Connecter un fournisseur",
     "manageModels": "Gérer les modèles",

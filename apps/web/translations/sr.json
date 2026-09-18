@@ -1609,6 +1609,9 @@
   "modelSelector": {
     "search": "Претражи моделе",
     "free": "Бесплатно",
+    "included": "Укључено",
+    "projectDefaultAccount": "Подразумевано за пројекат",
+    "useAccount": "Koristi nalog",
     "addProvider": "Додај добављача",
     "connectProvider": "Повежи добављача",
     "manageModels": "Управљај моделима",

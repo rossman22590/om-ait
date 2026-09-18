@@ -21,6 +21,22 @@ linked, not inlined.
 
 ## Register
 
+### An account-scoped read on an always-mounted surface toasts 403 at every member (2026-09-18)
+
+**Rule:** before adding a query to a component that renders on every project
+page, ask who gets a 403 from it. `GET /accounts/:id/secret-resources` answers
+403 to anyone who is not a member of the ACCOUNT — a project member need not be
+— and the SDK toasts a 403 by default (`showErrors` defaults true,
+`apps/web/src/lib/error-handler.tsx`). Gate such a read on the feature flag its
+routes require AND on a user action (popover open), so the request is
+user-initiated like the provider modal's. **Near-miss:** the model picker's new
+credential read ran on every project page load; the 403 appeared in a real dev
+log on the branch, not in review. Same class as Marko's member 403-toast storm.
+**Enforcer:** none — the toast is 30 s-deduped, so it is quiet in a single
+session and loud across a team. Until one exists, grep a new `use*Query` in an
+always-mounted component for its route's authorization, and check
+`provider-connect.tsx`'s gate shape as the precedent.
+
 ### Restart a persistent preview after an old deployment retains its lock (2026-09-18)
 
 **Rule:** When a preview waits at `flock`, inspect `/proc/locks` before retrying.
@@ -6585,6 +6601,41 @@ were found in one sweep on 2026-09-18 (the model picker's `enabled` boolean
 carries no reason, and a member cannot clear a manager-tier model gate) — those
 remain open.
 
+### 2026-09-18 — Follow-up to the entry above: enumerating is not using, so the gate belongs to the action
+
+The fix recorded above (carry the reason, surface `account_mfa_required` from
+`GET /projects`) shipped and worked end to end on dev: the member got the
+step-up dialog, completed TOTP, and all five projects appeared. It was also
+**the wrong place for the gate**, which only became obvious once it was live —
+opening the project SWITCHER threw a modal auth challenge.
+
+Three behaviours were seen on the real product, in this order:
+
+| gate the list, drop the reason | account renders EMPTY, with a "Create a project" link. No way to discover 2FA was the blocker. |
+| gate the list, surface the reason | correct, and obnoxious: a menu becomes an auth prompt. |
+| **gate on open** | the switcher lists the projects; the challenge arrives when you open one. |
+
+**The rule: an authorization gate belongs to the ACTION, not to the
+enumeration.** Listing a resource is not using it. Every per-project action
+still goes through `authorize`, which still denies `account_mfa_required` and
+returns the coded 403 the step-up dialog keys on — so the remedy is unchanged
+and the protection is unchanged; only the moment it is demanded moved.
+
+The entry above's rule still stands where it applies — **a listing must never
+swallow a reason the caller could act on** — but the better answer for a gate a
+LIST would otherwise trip is usually to not gate the list at all.
+
+**Accepted trade, stated:** a session that has not cleared MFA can now see
+project NAMES (and today the full project row, including `repo_url` and
+`metadata.git`) in an MFA-required account. Reducing the gated row to
+id/name/icon is open follow-up work.
+
+*Enforcer:* `apps/api/src/iam/list-denial-parity.test.ts` now pins the
+ASYMMETRY in both directions — `authorize` keeps `mfaGateBlocks`, the listing
+must not have it, the condition is written once, and no listing denial returns
+without its reason. Verified falsifiable: re-adding the gate to the listing
+turns it red, so "restoring symmetry" between the two functions cannot land by
+accident.
 
 ## 2026-09-18 — Directory stale time does not refresh an open page
 
