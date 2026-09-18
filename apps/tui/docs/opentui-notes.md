@@ -151,6 +151,25 @@ Every assertion on rendered markdown has to settle first — 600 ms is what the
 transcript's own tests use. Verified: the same content renders blank at 0 ms
 and correctly at 600 ms.
 
+**Not a trap — an ordered list keeps its item text.** A live transcript frame
+showed `1`, `2`, … `17` on rows of their own and was reported as `<markdown>`
+dropping an ordered list's item text. It was not: the turn above it asked the
+agent to "Count slowly from 1 to 40, one number per line", and the reply was
+the 41 characters `1\n2\n…\n17`, cut short because the turn was aborted. Bare
+numbers rendered as bare numbers. `scripts/repro-markdown-list.tsx` is the
+standing proof — a 15-item ordered list at the transcript's own nesting
+(`scrollbox` → per-turn column `box` → `markdown` with an explicit width),
+streaming on and off, at three scroll offsets, asserting that no marker row is
+ever text-less. It exits non-zero if one is.
+
+**Trap — `<markdown>` keeps a hard line break where CommonMark folds one.**
+`1\n2\n3` is ONE paragraph (`1 2 3`) to a CommonMark renderer; 0.5.11 gives it
+three rows. Verified by the same script: 17 bare numbered lines produce 17 rows.
+This is the behavior a transcript wants — an agent that writes one item per line
+means one row per line — but it means a rendered frame has more rows than a
+CommonMark preview of the same text, and a height calculation that assumes
+paragraph folding will be wrong.
+
 **Trap — `scrollbarOptions={{ visible: true }}` blanks the viewport.** Forcing
 both bars on in 0.5.11 renders the content rows empty and paints only the bar
 glyphs. Let the bars auto-show.
