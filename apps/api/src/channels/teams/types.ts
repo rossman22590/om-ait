@@ -11,7 +11,7 @@ export interface TeamsActivity {
   conversation?: { id?: string; conversationType?: string; tenantId?: string; name?: string };
   channelData?: {
     tenant?: { id?: string };
-    team?: { id?: string; name?: string };
+    team?: { id?: string; name?: string; aadGroupId?: string };
     channel?: { id?: string; name?: string };
   };
   replyToId?: string;

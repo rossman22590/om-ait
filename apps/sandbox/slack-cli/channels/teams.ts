@@ -75,7 +75,11 @@ async function sendFile(filePath: string, description?: string) {
   }
   const data = readFileSync(filePath);
   const filename = filePath.split('/').pop() || 'file';
-  const r = await kortixPost<{ ok?: boolean; uploadId?: string }>(
+  // Personal chats take a consent card; channels/group chats get an inline
+  // image or a team-drive link. The server decides from the scope + team.
+  const conversationType = getEnv('MS_TEAMS_CONVERSATION_TYPE');
+  const teamGroupId = getEnv('MS_TEAMS_TEAM_GROUP_ID');
+  const r = await kortixPost<{ ok?: boolean; delivered?: string; uploadId?: string; url?: string }>(
     `/projects/${projectId}/channels/teams/file/upload`,
     {
       service_url: serviceUrl,
@@ -83,9 +87,16 @@ async function sendFile(filePath: string, description?: string) {
       filename,
       content_base64: data.toString('base64'),
       ...(description ? { description } : {}),
+      ...(conversationType ? { conversation_type: conversationType } : {}),
+      ...(teamGroupId ? { team_group_id: teamGroupId } : {}),
     },
   );
-  return { ok: true, delivered: 'consent_card', uploadId: r?.uploadId };
+  return {
+    ok: true,
+    delivered: r?.delivered ?? 'consent_card',
+    ...(r?.uploadId ? { uploadId: r.uploadId } : {}),
+    ...(r?.url ? { url: r.url } : {}),
+  };
 }
 
 async function connectorCall(action: string, args: Record<string, unknown>): Promise<unknown> {
@@ -224,7 +235,7 @@ Turn commands (use these when answering a Teams message):
   send  "<answer>"       # deliver your reply — finalizes the live Adaptive Card
 
 Files:
-  send     --file <path> [--text "<description>"]   # offer a file (consent card; user accepts to receive)
+  send     --file <path> [--text "<description>"]   # personal chat: consent card; channel: inline image or team-drive link
   download --url <url> --out <path>                 # download a file shared in the conversation
 
 Read commands (Microsoft Graph, via the Connector):

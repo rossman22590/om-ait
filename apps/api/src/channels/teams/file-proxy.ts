@@ -3,7 +3,8 @@ import { teamsPendingUploads } from '@kortix/db';
 import { eq, lt } from 'drizzle-orm';
 import { db } from '../../shared/db';
 import { loadTeamsBotCredentials, loadTeamsTenantForProject } from '../install-store';
-import { sendActivity } from '../teams-api';
+import { sendActivity, sendCard } from '../teams-api';
+import { buildNoticeCard } from './cards';
 import { assertValidTeamsServiceUrl } from '../teams-service-url';
 import { botConnectorToken, graphToken } from '../teams-auth';
 import type { TeamsActivity, TeamsConversationRef } from './types';
@@ -66,12 +67,44 @@ export interface TeamsUploadArgs {
   filename: string;
   contentBase64: string;
   description?: string;
+  /** Where the file goes. Absent = personal (the pre-existing consent-card path). */
+  conversationType?: 'personal' | 'groupChat' | 'channel';
+  /** The team's Microsoft 365 group id (channels only) — the drive the file is uploaded to. */
+  teamGroupId?: string;
 }
 
+export type TeamsUploadResult =
+  | { ok: true; delivered: 'consent_card'; uploadId: string }
+  | { ok: true; delivered: 'inline' }
+  | { ok: true; delivered: 'drive_link'; url: string };
+
+const IMAGE_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+};
+
+function imageContentType(filename: string): string | null {
+  const ext = filename.toLowerCase().split('.').pop() ?? '';
+  return IMAGE_TYPES[ext] ?? null;
+}
+
+/**
+ * Deliver a file from the sandbox into the conversation.
+ *
+ * - personal chat → the file-consent card (Teams stores the file in the
+ *   recipient's OneDrive once they accept; `handleFileConsentInvoke` finishes).
+ * - channel / group chat, image → inline attachment (base64 data URI).
+ * - channel with a known team → upload to the team's SharePoint drive under
+ *   `/Kortix/` and post an organization-scoped link.
+ * Anything else is refused with a reason the agent can relay.
+ */
 export async function initiateTeamsUpload(
   projectId: string,
   args: TeamsUploadArgs,
-): Promise<{ ok: true; uploadId: string } | FileProxyError> {
+): Promise<TeamsUploadResult | FileProxyError> {
   if (!args.serviceUrl || !args.conversationId || !args.filename || !args.contentBase64) {
     return {
       ok: false,
@@ -99,6 +132,37 @@ export async function initiateTeamsUpload(
     };
   }
 
+  const ref: TeamsConversationRef = {
+    serviceUrl: args.serviceUrl,
+    conversationId: args.conversationId,
+    botId: args.botId,
+    projectId,
+  };
+  const scope = args.conversationType ?? 'personal';
+  if (scope !== 'personal') {
+    const image = imageContentType(args.filename);
+    if (image) {
+      const posted = await sendActivity(ref, {
+        ...(args.description ? { text: args.description } : {}),
+        attachments: [
+          { contentType: image, contentUrl: `data:${image};base64,${args.contentBase64}`, name: args.filename },
+        ],
+        type: 'message',
+      });
+      if (!posted) return { ok: false, error: 'failed to post the image', status: 502 };
+      return { ok: true, delivered: 'inline' };
+    }
+    if (!args.teamGroupId) {
+      return {
+        ok: false,
+        error:
+          'Teams only accepts file transfers in a personal chat; in a group chat send images inline, or share a link. In a team channel the file can be uploaded to the team drive when the team is known.',
+        status: 400,
+      };
+    }
+    return uploadToTeamDrive(projectId, ref, { ...args, teamGroupId: args.teamGroupId });
+  }
+
   await db
     .delete(teamsPendingUploads)
     .where(lt(teamsPendingUploads.expiresAt, new Date()))
@@ -118,12 +182,6 @@ export async function initiateTeamsUpload(
     expiresAt: new Date(Date.now() + UPLOAD_TTL_MS),
   });
 
-  const ref: TeamsConversationRef = {
-    serviceUrl: args.serviceUrl,
-    conversationId: args.conversationId,
-    botId: args.botId,
-    projectId,
-  };
   const posted = await sendActivity(ref, {
     type: 'message',
     attachments: [
@@ -146,7 +204,73 @@ export async function initiateTeamsUpload(
       .catch(() => {});
     return { ok: false, error: 'failed to post the file consent card', status: 502 };
   }
-  return { ok: true, uploadId };
+  return { ok: true, delivered: 'consent_card', uploadId };
+}
+
+const GRAPH = 'https://graph.microsoft.com/v1.0';
+const DRIVE_FOLDER = 'Kortix';
+
+/** Upload to the team's SharePoint drive and post an org-wide view link. Needs `Files.ReadWrite.All` (application) on the bot app. */
+async function uploadToTeamDrive(
+  projectId: string,
+  ref: TeamsConversationRef,
+  args: TeamsUploadArgs & { teamGroupId: string },
+): Promise<TeamsUploadResult | FileProxyError> {
+  const tenant = await loadTeamsTenantForProject(projectId);
+  if (!tenant) return { ok: false, error: 'Teams not connected for this project', status: 404 };
+  const creds = await loadTeamsBotCredentials(projectId);
+  const token = await graphToken(tenant, creds).catch(() => null);
+  if (!token) return { ok: false, error: 'could not mint a Graph token', status: 502 };
+
+  const bytes = Buffer.from(args.contentBase64, 'base64');
+  const path = `${DRIVE_FOLDER}/${args.filename.replace(/[\\/:*?"<>|]/g, '_')}`;
+  const put = await fetch(
+    `${GRAPH}/groups/${encodeURIComponent(args.teamGroupId)}/drive/root:/${path}:/content`,
+    {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/octet-stream' },
+      body: bytes,
+      signal: AbortSignal.timeout(60_000),
+    },
+  ).catch(() => null);
+  if (!put) return { ok: false, error: 'team drive upload failed: network', status: 502 };
+  if (!put.ok) {
+    const detail = (await put.text().catch(() => '')).slice(0, 200);
+    const hint =
+      put.status === 403 || put.status === 401
+        ? ' The bot app needs the Files.ReadWrite.All application permission (admin consent) to write to team drives.'
+        : '';
+    return { ok: false, error: `team drive upload failed: HTTP ${put.status}${hint} ${detail}`.trim(), status: 502 };
+  }
+  const item = (await put.json().catch(() => ({}))) as {
+    id?: string;
+    webUrl?: string;
+    parentReference?: { driveId?: string };
+  };
+  let url = item.webUrl ?? '';
+  if (item.id && item.parentReference?.driveId) {
+    const link = await fetch(
+      `${GRAPH}/drives/${encodeURIComponent(item.parentReference.driveId)}/items/${encodeURIComponent(item.id)}/createLink`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'view', scope: 'organization' }),
+        signal: AbortSignal.timeout(30_000),
+      },
+    ).catch(() => null);
+    if (link?.ok) {
+      const body = (await link.json().catch(() => ({}))) as { link?: { webUrl?: string } };
+      if (body.link?.webUrl) url = body.link.webUrl;
+    }
+  }
+  if (!url) return { ok: false, error: 'team drive upload succeeded but no link came back', status: 502 };
+
+  const posted = await sendCard(
+    ref,
+    buildNoticeCard(`${args.description ? `${args.description}\n\n` : ''}📎 [${args.filename}](${url})`),
+  );
+  if (!posted) return { ok: false, error: 'failed to post the file link', status: 502 };
+  return { ok: true, delivered: 'drive_link', url };
 }
 
 interface FileConsentValue {

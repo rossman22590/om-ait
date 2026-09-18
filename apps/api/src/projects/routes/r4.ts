@@ -1987,8 +1987,10 @@ projectsApp.openapi(
     },
     responses: {
       200: json(
-        z.object({ ok: z.boolean(), uploadId: z.string() }).passthrough(),
-        'Consent card sent',
+        z
+          .object({ ok: z.boolean(), delivered: z.string(), uploadId: z.string().optional(), url: z.string().optional() })
+          .passthrough(),
+        'File delivered (consent card, inline image, or team-drive link)',
       ),
       ...errors(400, 403, 404),
     },
@@ -2019,9 +2021,14 @@ projectsApp.openapi(
       filename: String(body.filename ?? ''),
       contentBase64: String(body.content_base64 ?? body.contentBase64 ?? ''),
       description: typeof body.description === 'string' ? body.description : undefined,
+      conversationType:
+        body.conversation_type === 'channel' || body.conversation_type === 'groupChat' || body.conversation_type === 'personal'
+          ? body.conversation_type
+          : undefined,
+      teamGroupId: typeof body.team_group_id === 'string' && body.team_group_id ? body.team_group_id : undefined,
     });
     if (!result.ok) return c.json({ error: result.error }, result.status as 400 | 404);
-    return c.json({ ok: true, uploadId: result.uploadId });
+    return c.json(result);
   },
 );
 

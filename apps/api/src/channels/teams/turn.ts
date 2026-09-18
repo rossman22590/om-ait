@@ -10,6 +10,7 @@ import { saveTeamsServiceUrl } from '../install-store';
 import { buildAnswerCard, buildFinalCard, buildNoticeCard, buildPlanCard } from './cards';
 import { STREAM_TTL_MS, STALE_AFTER_MS } from './app';
 import type { TeamsActivity, TeamsChannelRef, TeamsConversationRef, TeamsLiveTurn } from './types';
+import { conversationScope } from './util';
 
 const LIVE_PLAN_TITLE = 'Working on it…';
 
@@ -294,6 +295,10 @@ export function buildTeamsTurnEnv(tenantId: string, activity: TeamsActivity): Re
   if (activity.conversation?.id) env.MS_TEAMS_CONVERSATION_ID = activity.conversation.id;
   if (activity.serviceUrl) env.MS_TEAMS_SERVICE_URL = activity.serviceUrl;
   if (activity.from?.id) env.MS_TEAMS_USER_ID = activity.from.id;
+  // Scope decides how `teams send --file` delivers: a consent card only works
+  // in personal chats; a channel needs an inline image or a team-drive link.
+  env.MS_TEAMS_CONVERSATION_TYPE = conversationScope(activity);
+  if (activity.channelData?.team?.aadGroupId) env.MS_TEAMS_TEAM_GROUP_ID = activity.channelData.team.aadGroupId;
   return env;
 }
 
