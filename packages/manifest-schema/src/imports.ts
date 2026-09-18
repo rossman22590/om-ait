@@ -375,8 +375,8 @@ function deepEqual(a: unknown, b: unknown): boolean {
  *
  *   - An entry stays in the file that declared it (matched by slug / map key).
  *   - A new entry goes to the root file.
- *   - A removed entry disappears from its own file; a collection left empty in
- *     an imported file is dropped from that file.
+ *   - A removed entry disappears from its own file; a collection left empty
+ *     keeps its key (`triggers: []`).
  *   - Every non-collection key goes to the root; an imported file keeps its own
  *     `imports:` untouched.
  *
@@ -414,7 +414,7 @@ export function splitManifestByOrigin(
   const collectionFor = (path: string, key: ImportableKey): unknown =>
     listsByFile.get(path)?.[key] ?? mapsByFile.get(path)?.[key];
 
-  const rebuild = (file: ManifestSourceFile, base: Record<string, unknown>, isRoot: boolean) => {
+  const rebuild = (file: ManifestSourceFile, base: Record<string, unknown>) => {
     const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(base)) {
       if (!(ALL_IMPORTABLE_KEYS as readonly string[]).includes(key)) {
@@ -423,9 +423,10 @@ export function splitManifestByOrigin(
       }
       const mine = collectionFor(file.path, key as ImportableKey);
       if (mine !== undefined) out[key] = mine;
-      // The root keeps a collection key the editor deliberately left empty
-      // (`triggers: []`) unless imports are the only thing that filled it.
-      else if (isRoot && key in file.raw && isEmptyCollection(nextRaw[key])) out[key] = nextRaw[key];
+      // A file that declared this collection keeps the key when its last entry
+      // is removed (`triggers: []`), rather than collapsing to `{}`: the file
+      // stays readable, and a single-file import still resolves.
+      else if (key in file.raw) out[key] = Array.isArray(file.raw[key]) ? [] : {};
     }
     for (const key of ALL_IMPORTABLE_KEYS) {
       if (key in out) continue;
@@ -436,14 +437,9 @@ export function splitManifestByOrigin(
   };
 
   return [
-    toSplit(root, rebuild(root, nextRaw, true)),
-    ...imported.map((file) => toSplit(file, rebuild(file, file.raw, false))),
+    toSplit(root, rebuild(root, nextRaw)),
+    ...imported.map((file) => toSplit(file, rebuild(file, file.raw))),
   ];
-}
-
-function isEmptyCollection(value: unknown): boolean {
-  if (Array.isArray(value)) return value.length === 0;
-  return isPlainObject(value) && Object.keys(value).length === 0;
 }
 
 function toSplit(file: ManifestSourceFile, raw: Record<string, unknown>): SplitManifestFile {

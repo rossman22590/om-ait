@@ -192,6 +192,8 @@ describe('kortix.yaml imports over a real git repository', () => {
       'brand-new',
     ]);
     expect(root.imports).toEqual(['.kortix/triggers/', '.kortix/agents.yaml']);
+    // The emptied imported file keeps its key rather than collapsing to `{}`.
+    expect(await remoteFile('.kortix/triggers/dockets.yaml')).toBe('triggers: []\n');
     expect(root.agents).toEqual({ kortix: { connectors: 'all' } });
 
     const reread = await loadProjectTriggers(project, { forceRefresh: true });

@@ -265,7 +265,8 @@ describe('splitManifestByOrigin', () => {
     ]);
     expect(root?.raw.imports).toEqual(['.kortix/triggers/', '.kortix/agents.yaml']);
     const dockets = split.find((f) => f.path === '.kortix/triggers/dockets.yml');
-    expect(dockets?.raw.triggers).toBeUndefined();
+    // The emptied file keeps its key instead of collapsing to `{}`.
+    expect(dockets?.raw).toEqual({ triggers: [] });
   });
 
   test('the root never absorbs imported entries when serialized', async () => {
