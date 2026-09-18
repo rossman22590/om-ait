@@ -687,15 +687,14 @@ function TeamsChannelRow({ projectId, canWrite }: { projectId: string; canWrite:
   const connected = Boolean(install);
   const installUrl = mode?.orgConsentUrl ?? null;
   const deepLinkUrl = install?.orgInstalled ? (mode?.deepLinkUrl ?? null) : null;
-  // The consent URL doubles as the retry: consenting again re-runs the
-  // publish against the tenant that is already bound. Offered for a failed
-  // publish and for a managed install that never reached the catalog (an
-  // install from before the outcome was recorded, or a manual tenant bind);
-  // a BYO install has no consent URL, so it never shows.
-  const publishSettled =
+  // The consent URL doubles as the retry AND the upgrade: consenting again
+  // re-runs the publish against the tenant that is already bound, and for an
+  // app already in the catalog the API submits this manifest version as a new
+  // app definition. Hidden only while a publish is in flight or awaiting
+  // review; a BYO install has no consent URL, so it never shows.
+  const publishInFlight =
     install?.publishState === 'publishing' || install?.publishState === 'review';
-  const retryUrl =
-    install && !install.orgInstalled && !publishSettled ? installUrl : null;
+  const retryUrl = install && !publishInFlight ? installUrl : null;
   const retryLabel =
     install?.publishState === 'failed'
       ? tI18nComplete.raw('text942087cc2d41')

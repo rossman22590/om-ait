@@ -60,6 +60,23 @@ async function resolveTeamsTurnActor(
   return null;
 }
 
+/** True when a session is already bound to this conversation (a thread the bot owns). */
+export async function hasConversationSession(tenantId: string, conversationId: string): Promise<boolean> {
+  if (!tenantId || !conversationId) return false;
+  const [row] = await db
+    .select({ sessionId: chatThreads.sessionId })
+    .from(chatThreads)
+    .where(
+      and(
+        eq(chatThreads.platform, 'teams'),
+        eq(chatThreads.workspaceId, tenantId),
+        eq(chatThreads.threadId, conversationId),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 export async function deliverTeamsFollowUpToSession(input: {
   sessionId: string;
   text: string;
