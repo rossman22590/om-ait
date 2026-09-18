@@ -23,7 +23,7 @@ import {
 } from './turn';
 import { sessionWebUrl } from '../slack/util';
 import { extractTeamsAttachments, type TeamsActivity, type TeamsLiveTurn } from './types';
-import { stripTeamsMentions } from './util';
+import { describeTeamsConversation, stripTeamsMentions } from './util';
 
 const defaultTeamsSessionLifecycle = {
   continueSession: continueLifecycleSession,
@@ -298,7 +298,7 @@ export async function createOrJoinTeamsConversationSession(input: {
     return;
   }
 
-  await ensureTeamsConversationBinding({ projectId, tenantId, conversationId });
+  await ensureTeamsConversationBinding({ projectId, tenantId, conversationId, ...describeTeamsConversation(activity) });
   const selection = await currentChannelSelection(teamsChannelCtx(tenantId, conversationId));
 
   const result = await teamsSessionLifecycle.createSession({

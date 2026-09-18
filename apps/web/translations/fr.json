@@ -14530,6 +14530,8 @@
       "text922315177668": "Tout ce que le lanceur peut voir",
       "text9224d9e82502": "De retour dans « Provisioning » → « Settings », définissez « Scope » sur « Sync only assigned users and groups » — cette option n’apparaît ici qu’après l’enregistrement des identifiants. Cliquez ensuite sur « Start provisioning » en haut de la page d’aperçu Provisioning (ou sur « Provision on demand » pour transmettre immédiatement un utilisateur affecté au lieu d’attendre le cycle d’environ 40 minutes).",
       "text9225e456b795": "Mentionnez votre agent dans un canal ou une conversation Teams.",
+      "text895ce927db2e": "Conversation personnelle",
+      "text28c7d3f8b75d": "Conversation de groupe",
       "text72b5b0c53de9": "A répondu dans Microsoft Teams",
       "textfc73e9ad2dae": "A répondu dans Slack",
       "text8faf56a14a8d": "A répondu dans Telegram",

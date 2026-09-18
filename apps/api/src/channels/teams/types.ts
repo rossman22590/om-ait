@@ -12,7 +12,7 @@ export interface TeamsActivity {
   channelData?: {
     tenant?: { id?: string };
     team?: { id?: string; name?: string };
-    channel?: { id?: string };
+    channel?: { id?: string; name?: string };
   };
   replyToId?: string;
   entities?: Array<Record<string, unknown>>;

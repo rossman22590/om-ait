@@ -29,7 +29,7 @@ import {
 } from './binding';
 import { lookupTeamsIdentity, revokeTeamsIdentity, teamsUserId } from './identity';
 import { buildTeamsLoginUrl } from './login';
-import { type TeamsCommand } from './util';
+import { describeTeamsConversation, type TeamsCommand } from './util';
 import type { TeamsActivity, TeamsConversationRef } from './types';
 
 export { parseTeamsCommand } from './util';
@@ -93,19 +93,19 @@ export async function handleTeamsCommand(input: {
         await post(await buildStatusCard(ctx, input.tenantId, conversationId, input.projectId));
         return true;
       case 'models':
-        await ensureBinding(input.tenantId, conversationId, input.projectId);
+        await ensureBinding(input.tenantId, conversationId, input.projectId, input.activity);
         await post(await buildModelsCard(ctx));
         return true;
       case 'model':
-        await ensureBinding(input.tenantId, conversationId, input.projectId);
+        await ensureBinding(input.tenantId, conversationId, input.projectId, input.activity);
         await post(await setModel(ctx, arg));
         return true;
       case 'agents':
-        await ensureBinding(input.tenantId, conversationId, input.projectId);
+        await ensureBinding(input.tenantId, conversationId, input.projectId, input.activity);
         await post(await buildAgentsCard(ctx, input.projectId));
         return true;
       case 'agent':
-        await ensureBinding(input.tenantId, conversationId, input.projectId);
+        await ensureBinding(input.tenantId, conversationId, input.projectId, input.activity);
         await post(await setAgent(ctx, arg));
         return true;
       case 'projects':
@@ -125,8 +125,18 @@ export async function handleTeamsCommand(input: {
   }
 }
 
-async function ensureBinding(tenantId: string, conversationId: string, projectId: string): Promise<void> {
-  await ensureTeamsConversationBinding({ tenantId, conversationId, projectId });
+async function ensureBinding(
+  tenantId: string,
+  conversationId: string,
+  projectId: string,
+  activity?: TeamsActivity,
+): Promise<void> {
+  await ensureTeamsConversationBinding({
+    tenantId,
+    conversationId,
+    projectId,
+    ...(activity ? describeTeamsConversation(activity) : {}),
+  });
 }
 
 function helpCard() {

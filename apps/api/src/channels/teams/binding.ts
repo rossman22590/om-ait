@@ -101,7 +101,11 @@ export async function ensureTeamsConversationBinding(input: {
         chatChannelBindings.workspaceId,
         chatChannelBindings.channelId,
       ],
-      set: { projectId: input.projectId },
+      set: {
+        projectId: input.projectId,
+        ...(input.channelName ? { channelName: input.channelName } : {}),
+        ...(input.channelType ? { channelType: input.channelType } : {}),
+      },
     });
   return true;
 }

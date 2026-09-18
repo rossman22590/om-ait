@@ -120,8 +120,12 @@ mock.module('../channels/teams/identity', () => ({
   },
 }));
 
+const bindings: Array<Record<string, unknown>> = [];
 mock.module('../channels/teams/binding', () => ({
-  ensureTeamsConversationBinding: async () => true,
+  ensureTeamsConversationBinding: async (input: Record<string, unknown>) => {
+    bindings.push(input);
+    return true;
+  },
   teamsChannelCtx: () => ({ platform: 'teams', teamId: TENANT_ID, channelId: CONVERSATION_ID }),
 }));
 
@@ -158,6 +162,7 @@ beforeEach(() => {
   finalized.length = 0;
   notices.length = 0;
   dbOps.length = 0;
+  bindings.length = 0;
   setTeamsSessionLifecycleForTest({
     createSession: async (input: Record<string, unknown>) => {
       calls.push('createSession');
@@ -312,5 +317,17 @@ describe('follow-up outcomes — the conversation is never left on "Working on i
     expect(calls).toContain('noticeOnLiveCard');
     expect(saved).toHaveLength(0);
     expect(continued).toHaveLength(1);
+  });
+});
+
+describe('binding names', () => {
+  test('a new conversation is bound with a human-readable name and its scope', async () => {
+    await createOrJoinTeamsConversationSession({
+      projectId: PROJECT_ID,
+      tenantId: TENANT_ID,
+      conversationId: CONVERSATION_ID,
+      activity: { ...activity, conversation: { ...activity.conversation, conversationType: 'personal' } },
+    });
+    expect(bindings[0]).toMatchObject({ channelName: 'Ivan Bagaric', channelType: 'personal' });
   });
 });
