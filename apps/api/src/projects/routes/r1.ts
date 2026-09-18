@@ -1,6 +1,5 @@
 import { projectRoleGrants } from '../../iam/read-models';
 import { ACCOUNT_ACTIONS, PROJECT_ACTIONS, assertAuthorized, authorize, listAccessible } from '../../iam';
-import { buildDenialError } from '../../iam/denial-message';
 import { actorOf } from '../../iam/actor';
 import { setContextField } from '../../lib/request-context';
 import { supabaseAuth } from '../../middleware/auth';
@@ -220,19 +219,12 @@ projectsApp.openapi(
     'project',
   );
 
-  // An empty list is not a refusal. `account_mfa_required` is the one denial
-  // the caller can clear themselves, and the remedy is already built: this 403
-  // carries a machine-readable `code`, the SDK turns it into a
-  // `kortix:mfa-required` event, and the MfaStepUpProvider in the web app's
-  // root layout opens the step-up dialog. Returning [] here left a member of an
-  // MFA-required account staring at what looked like an empty account, with a
-  // "Create a project" affordance and no way to find out why.
-  if (accessible.mode === 'none') {
-    if (accessible.reason === 'account_mfa_required') {
-      throw buildDenialError('project.read', accessible.reason);
-    }
-    return c.json([]);
-  }
+  // Empty, whatever the reason. `account_mfa_required` cannot reach here: the
+  // listing is deliberately not MFA-gated, because challenging someone for
+  // opening the project switcher is worse than showing the names and
+  // challenging them when they open one. `authorize` still denies every
+  // per-project action with the coded 403 the step-up dialog keys on.
+  if (accessible.mode === 'none') return c.json([]);
 
   // Build the project rows + the per-row role label the UI renders. The engine
   // answers yes/no, not "at what tier", so the caller's own direct project
