@@ -9,7 +9,9 @@ import {
   SESSION_DISPLAY_STATUS_LABELS,
   sessionDisplayStatus,
   sessionIsShared,
+  sessionDisplayLabel,
   sessionSource,
+  stripChatMentionMarkup,
   type SessionDisplayStatus,
 } from './session-label';
 
@@ -227,5 +229,17 @@ describe('matchesSourceFilters', () => {
     expect(matchesSourceFilters(teams, ['teams'], testUiTranslator)).toBe(true);
     expect(matchesSourceFilters(teams, ['slack'], testUiTranslator)).toBe(false);
     expect(matchesSourceFilters(teams, ['mine'], testUiTranslator)).toBe(false);
+  });
+});
+
+describe('mention markup in titles', () => {
+  test('a Teams channel mention leaves no <at> tag in the display label', () => {
+    const s = makeSession({ name: '<at>Kortix Dev</at>summarize the README in two sentences' });
+    expect(sessionDisplayLabel(s)).toBe('summarize the README in two sentences');
+  });
+
+  test('stripChatMentionMarkup collapses the whitespace the tag leaves behind', () => {
+    expect(stripChatMentionMarkup('<at>Kortix Dev</at>&nbsp; now count   the lines')).toBe('now count the lines');
+    expect(stripChatMentionMarkup('plain')).toBe('plain');
   });
 });

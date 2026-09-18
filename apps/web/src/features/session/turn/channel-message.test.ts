@@ -181,6 +181,16 @@ describe('parseChannelMessage — Telegram', () => {
   });
 });
 
+describe('parseChannelMessage — channel mentions', () => {
+  test('the <at> markup Teams wraps around the bot name is not part of the message', () => {
+    const md = TEAMS_FIRST.replace(
+      'List the files in this repo and summarize the README',
+      '<at>Kortix Dev</at>summarize the README in two sentences',
+    );
+    expect(parseChannelMessage(md)?.messageText).toBe('summarize the README in two sentences');
+  });
+});
+
 describe('parseChannelMessage — legacy header and non-channel text', () => {
   test('the pre-2026 bracket header is still understood', () => {
     const legacy = '[Slack · #general · message from ivan]\nhello there\n\n── Slack instructions\nreply with slack send';

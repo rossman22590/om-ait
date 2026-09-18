@@ -42,13 +42,18 @@ const TAIL_MARKERS = [
   /^Chat ID:/m,
 ];
 
+/** Teams wraps a channel @-mention of the bot in `<at>…</at>`; a person never typed that. */
+function stripMentionMarkup(value: string): string {
+  return value.replace(/<at[^>]*>.*?<\/at>/gi, ' ').replace(/&nbsp;/gi, ' ').replace(/[ \t]+/g, ' ').trim();
+}
+
 function cutAtTail(text: string): string {
   let end = text.length;
   for (const marker of TAIL_MARKERS) {
     const m = marker.exec(text);
     if (m && m.index < end) end = m.index;
   }
-  return text.slice(0, end).trim();
+  return stripMentionMarkup(text.slice(0, end));
 }
 
 function field(block: string, label: string): string {
