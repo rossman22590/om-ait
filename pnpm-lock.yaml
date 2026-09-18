@@ -300,9 +300,6 @@ importers:
       '@kortix/starter':
         specifier: workspace:*
         version: link:../../packages/starter
-      '@kortix/tui':
-        specifier: workspace:*
-        version: link:../tui
       ignore:
         specifier: 7.0.5
         version: 7.0.5

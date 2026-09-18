@@ -1,86 +1,79 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { Auth } from '../api/auth.ts';
-import type { DefaultProjectRef, Host } from '../api/config.ts';
 import { stripAnsi } from '../style.ts';
-import {
-  EXPERIMENTAL_NOTICE,
-  type TuiDeps,
-  parseTuiFlags,
-  resolvedHostFromAuth,
-  runTui,
-} from './tui.ts';
+import { EXPERIMENTAL_NOTICE, type TuiDeps, parseTuiFlags, runTui, tuiChildEnv } from './tui.ts';
 
-const AUTH: Auth = {
-  api_base: 'https://api.kortix.com',
-  token: 'kortix_pat_live',
-  user_id: 'user_1',
-  user_email: 'ada@kortix.com',
-  account_id: 'acc_1',
-  logged_in_at: '2026-09-18T00:00:00.000Z',
-};
-
-const HOST_RECORD: Host = {
-  url: 'https://api.kortix.com',
-  token: 'kortix_pat_live',
-  user_id: 'user_1',
-  user_email: 'ada@kortix.com',
-  account_id: 'acc_1',
-  default_project: { project_id: 'proj_config', account_id: 'acc_1' },
-  logged_in_at: '2026-09-18T00:00:00.000Z',
-};
+const CACHED = { bin: '/home/ada/.kortix/tui/1.2.3/kortix-tui', source: 'cache' as const };
 
 interface Harness {
   deps: Partial<TuiDeps>;
   out: string[];
   err: string[];
-  /** Every `runTui(...)` the renderer was asked for. Empty = never imported. */
-  rendered: unknown[];
-  /** Every code the command tried to leave the process with. */
-  exits: number[];
-  importCount: () => number;
+  /** Every `(bin, env)` the launcher spawned. Empty = the TUI never ran. */
+  ran: { bin: string; env: NodeJS.ProcessEnv }[];
+  /** Every version it tried to download. */
+  downloads: string[];
+  /** Every question it asked. */
+  asked: string[];
+  uninstalls: number;
 }
 
-function harness(overrides: Partial<TuiDeps> & { exitCode?: number } = {}): Harness {
+function harness(
+  overrides: Partial<TuiDeps> & { exitCode?: number; answer?: boolean } = {},
+): Harness {
   const out: string[] = [];
   const err: string[] = [];
-  const rendered: unknown[] = [];
-  const exits: number[] = [];
-  let imports = 0;
-  const { exitCode = 0, ...rest } = overrides;
+  const ran: { bin: string; env: NodeJS.ProcessEnv }[] = [];
+  const downloads: string[] = [];
+  const asked: string[] = [];
+  let uninstalls = 0;
+  const { exitCode = 0, answer = true, ...rest } = overrides;
   const deps: Partial<TuiDeps> = {
-    loadAuth: () => AUTH,
-    loadAuthForHost: (name) => (name === 'cloud' ? AUTH : null),
-    activeHostName: () => 'cloud',
-    getHost: (name) => (name === 'cloud' ? HOST_RECORD : null),
-    defaultProject: (): DefaultProjectRef | null => ({
-      project_id: 'proj_active',
-      account_id: 'acc_1',
-    }),
-    hasEnvTokenHost: () => false,
-    importTui: async () => {
-      imports += 1;
-      return {
-        runTui: async (options) => {
-          rendered.push(options);
-          return exitCode;
-        },
-      };
+    loadAuthForHost: (name) => (name === 'cloud' ? { token: 'kortix_pat_live' } : null),
+    findBin: () => CACHED,
+    download: async (version) => {
+      downloads.push(version);
+      return `/home/ada/.kortix/tui/${version}/kortix-tui`;
     },
-    // The real dep is `process.exit`. A test that let that run would take the
-    // whole test process with it.
-    exit: (code) => exits.push(code),
+    uninstall: () => {
+      uninstalls += 1;
+      return '/home/ada/.kortix/tui';
+    },
+    version: () => '1.2.3',
+    isInteractive: () => true,
+    ask: async (question) => {
+      asked.push(question);
+      return answer;
+    },
+    run: async (bin, env) => {
+      ran.push({ bin, env });
+      return exitCode;
+    },
     stdout: (text) => out.push(text),
     stderr: (text) => err.push(text),
     ...rest,
   };
-  return { deps, out, err, rendered, exits, importCount: () => imports };
+  return {
+    deps,
+    out,
+    err,
+    ran,
+    downloads,
+    asked,
+    get uninstalls() {
+      return uninstalls;
+    },
+  };
 }
 
 describe('kortix tui — flags', () => {
   test('parses every flag and leaves nothing behind', () => {
-    expect(parseTuiFlags(['--host', 'cloud', '--project', 'p1', '--session', 's1'])).toEqual({
+    expect(
+      parseTuiFlags(['--host', 'cloud', '--project', 'p1', '--session', 's1', '--install']),
+    ).toEqual({
       help: false,
+      install: true,
+      uninstall: false,
       host: 'cloud',
       project: 'p1',
       session: 's1',
@@ -90,14 +83,17 @@ describe('kortix tui — flags', () => {
   test('accepts the --flag=value form', () => {
     expect(parseTuiFlags(['--project=p2', '--session=s2'])).toEqual({
       help: false,
+      install: false,
+      uninstall: false,
       project: 'p2',
       session: 's2',
     });
   });
 
-  test('-h and --help both ask for help', () => {
+  test('-h and --help both ask for help; --uninstall is its own verb', () => {
     expect(parseTuiFlags(['-h']).help).toBe(true);
     expect(parseTuiFlags(['--help']).help).toBe(true);
+    expect(parseTuiFlags(['--uninstall']).uninstall).toBe(true);
   });
 
   test('a flag with no value is an error, not a silent undefined', () => {
@@ -110,64 +106,91 @@ describe('kortix tui — flags', () => {
   });
 });
 
-describe('kortix tui — Auth → ResolvedHost', () => {
-  test('mounts the backend URL on /v1 and carries the host identity', () => {
+describe('kortix tui — the child environment', () => {
+  test('the three flags travel as env, because the child is a separate process', () => {
     expect(
-      resolvedHostFromAuth({
-        name: 'cloud',
-        auth: AUTH,
-        defaultProjectId: 'proj_config',
-        fromEnvToken: false,
-      }),
+      tuiChildEnv({ host: 'cloud', project: 'p1', session: 's1' }, { PATH: '/usr/bin' }),
     ).toEqual({
-      name: 'cloud',
-      backendUrl: 'https://api.kortix.com/v1',
-      token: 'kortix_pat_live',
-      accountId: 'acc_1',
-      defaultProjectId: 'proj_config',
-      userEmail: 'ada@kortix.com',
-      source: 'config',
+      PATH: '/usr/bin',
+      KORTIX_TUI_HOST: 'cloud',
+      KORTIX_PROJECT_ID: 'p1',
+      KORTIX_SESSION_ID: 's1',
     });
   });
 
-  test('never doubles an api_base that already ends in /v1', () => {
-    const resolved = resolvedHostFromAuth({
-      name: 'local-dev',
-      auth: { ...AUTH, api_base: 'http://localhost:8008/v1' },
-      fromEnvToken: false,
+  test('an unset flag never shadows what the shell already exported', () => {
+    expect(tuiChildEnv({}, { KORTIX_PROJECT_ID: 'from-shell' })).toEqual({
+      KORTIX_PROJECT_ID: 'from-shell',
     });
-    expect(resolved.backendUrl).toBe('http://localhost:8008/v1');
-    expect(resolved.defaultProjectId).toBeUndefined();
-  });
-
-  test('a KORTIX_TOKEN shell is named as the env source, so a rejection can say so', () => {
-    expect(resolvedHostFromAuth({ name: 'sandbox', auth: AUTH, fromEnvToken: true })).toMatchObject(
-      { source: 'env', envVar: 'KORTIX_TOKEN' },
-    );
   });
 });
 
-describe('kortix tui — run', () => {
-  test('--help prints usage and never loads the renderer', async () => {
+describe('kortix tui — help and argument errors', () => {
+  test('--help prints usage and never runs or downloads anything', async () => {
     const h = harness();
     expect(await runTui(['--help'], h.deps)).toBe(0);
     const text = stripAnsi(h.out.join(''));
     expect(text).toContain('Usage: kortix tui [options]');
     expect(text).toContain('--host <name>');
-    expect(text).toContain('--project <id>');
-    expect(text).toContain('--session <id>');
+    expect(text).toContain('--install');
+    expect(text).toContain('--uninstall');
+    expect(text).toContain('KORTIX_TUI_BIN');
+    // The separate install is the first thing a reader has to learn.
+    expect(text).toContain('SEPARATE binary');
+    expect(text).toContain('~/.kortix/tui/<version>/');
     expect(text).toContain('Experimental');
     expect(text).toContain('https://kortix.com/docs/tui');
-    expect(h.importCount()).toBe(0);
-    expect(h.err.join('')).toBe('');
+    expect(h.ran).toEqual([]);
+    expect(h.downloads).toEqual([]);
   });
 
-  test('a bad flag exits 2 with the help on stderr and no renderer', async () => {
+  test('a bad flag exits 2 with the help on stderr and nothing spawned', async () => {
     const h = harness();
     expect(await runTui(['--wat'], h.deps)).toBe(2);
     expect(stripAnsi(h.err.join(''))).toContain('unknown option "--wat"');
     expect(stripAnsi(h.err.join(''))).toContain('Usage: kortix tui');
-    expect(h.importCount()).toBe(0);
+    expect(h.ran).toEqual([]);
+  });
+});
+
+describe('kortix tui — launching the installed binary', () => {
+  test('the cached binary runs with the flags in its environment', async () => {
+    const h = harness();
+    expect(await runTui(['--project', 'p9', '--session', 's9'], h.deps)).toBe(0);
+    expect(h.ran).toHaveLength(1);
+    expect(h.ran[0]?.bin).toBe(CACHED.bin);
+    expect(h.ran[0]?.env.KORTIX_PROJECT_ID).toBe('p9');
+    expect(h.ran[0]?.env.KORTIX_SESSION_ID).toBe('s9');
+    expect(h.downloads).toEqual([]);
+  });
+
+  test('the experimental notice reaches stderr before the TUI takes the screen', async () => {
+    const seen: string[] = [];
+    const h = harness();
+    const deps: Partial<TuiDeps> = {
+      ...h.deps,
+      stderr: (text) => seen.push(`stderr:${text.trim()}`),
+      run: async () => {
+        seen.push('run');
+        return 0;
+      },
+    };
+    expect(await runTui([], deps)).toBe(0);
+    expect(seen).toEqual([`stderr:${EXPERIMENTAL_NOTICE}`, 'run']);
+    expect(EXPERIMENTAL_NOTICE).toBe(
+      'kortix tui is experimental — keys: ? · docs: https://kortix.com/docs/tui',
+    );
+  });
+
+  test("the command's exit code is the child's exit code", async () => {
+    const h = harness({ exitCode: 7 });
+    expect(await runTui([], h.deps)).toBe(7);
+  });
+
+  test('--host is validated by the CLI and passed on by name', async () => {
+    const h = harness();
+    expect(await runTui(['--host', 'cloud'], h.deps)).toBe(0);
+    expect(h.ran[0]?.env.KORTIX_TUI_HOST).toBe('cloud');
   });
 
   test("--host names an unknown host → exit 1 with the CLI's standard message", async () => {
@@ -175,94 +198,102 @@ describe('kortix tui — run', () => {
     expect(await runTui(['--host', 'ghost'], h.deps)).toBe(1);
     expect(stripAnsi(h.err.join(''))).toContain('Host "ghost" is not logged in.');
     expect(stripAnsi(h.err.join(''))).toContain('kortix hosts login ghost');
-    expect(h.importCount()).toBe(0);
+    expect(h.ran).toEqual([]);
+    expect(h.downloads).toEqual([]);
   });
+});
 
-  test("--host reads THAT host's record, not the active default project", async () => {
-    const h = harness();
-    expect(await runTui(['--host', 'cloud'], h.deps)).toBe(0);
-    expect(h.rendered).toEqual([
-      {
-        host: {
-          name: 'cloud',
-          backendUrl: 'https://api.kortix.com/v1',
-          token: 'kortix_pat_live',
-          accountId: 'acc_1',
-          defaultProjectId: 'proj_config',
-          userEmail: 'ada@kortix.com',
-          source: 'config',
-        },
-        projectId: null,
-        sessionId: null,
-      },
+describe('kortix tui — first run installs the binary', () => {
+  test('on a terminal it asks, then downloads and runs', async () => {
+    const h = harness({ findBin: () => null });
+    expect(await runTui([], h.deps)).toBe(0);
+    expect(h.asked).toEqual([
+      expect.stringContaining('kortix tui is experimental and installs separately'),
     ]);
+    expect(h.asked[0]).toContain('1.2.3');
+    expect(h.downloads).toEqual(['1.2.3']);
+    expect(h.ran[0]?.bin).toBe('/home/ada/.kortix/tui/1.2.3/kortix-tui');
   });
 
-  test('with no --host it uses the active host and ITS default project', async () => {
-    const h = harness();
+  test('answering no installs nothing, runs nothing, and exits 0', async () => {
+    const h = harness({ findBin: () => null, answer: false });
     expect(await runTui([], h.deps)).toBe(0);
-    expect(h.rendered).toHaveLength(1);
-    expect(h.rendered[0]).toMatchObject({
-      host: { name: 'cloud', defaultProjectId: 'proj_active', source: 'config' },
-    });
+    expect(h.downloads).toEqual([]);
+    expect(h.ran).toEqual([]);
+    expect(stripAnsi(h.out.join(''))).toContain('kortix tui --install');
   });
 
-  test('--project and --session become the initial project and session', async () => {
+  test('off a terminal it never starts an 80 MB download — exit 2 with the remedy', async () => {
+    const h = harness({ findBin: () => null, isInteractive: () => false });
+    expect(await runTui([], h.deps)).toBe(2);
+    const text = stripAnsi(h.err.join(''));
+    expect(text).toContain('which is not installed');
+    expect(text).toContain('kortix tui --install');
+    expect(h.asked).toEqual([]);
+    expect(h.downloads).toEqual([]);
+    expect(h.ran).toEqual([]);
+  });
+
+  test('--install downloads without asking and does NOT take the terminal', async () => {
+    const h = harness({ findBin: () => null, isInteractive: () => false });
+    expect(await runTui(['--install'], h.deps)).toBe(0);
+    expect(h.asked).toEqual([]);
+    expect(h.downloads).toEqual(['1.2.3']);
+    expect(h.ran).toEqual([]);
+    expect(stripAnsi(h.out.join(''))).toContain('installed kortix-tui v1.2.3');
+  });
+
+  test('--install with the binary already there reports it and downloads nothing', async () => {
     const h = harness();
-    expect(await runTui(['--project', 'p9', '--session', 's9'], h.deps)).toBe(0);
-    expect(h.rendered[0]).toMatchObject({ projectId: 'p9', sessionId: 's9' });
+    expect(await runTui(['--install'], h.deps)).toBe(0);
+    expect(h.downloads).toEqual([]);
+    expect(stripAnsi(h.out.join(''))).toContain('already installed');
+    expect(stripAnsi(h.out.join(''))).toContain(CACHED.bin);
   });
 
-  test('a KORTIX_TOKEN shell resolves the synthetic sandbox host', async () => {
-    const h = harness({ activeHostName: () => 'sandbox', hasEnvTokenHost: () => true });
-    expect(await runTui([], h.deps)).toBe(0);
-    expect(h.rendered[0]).toMatchObject({
-      host: { name: 'sandbox', source: 'env', envVar: 'KORTIX_TOKEN' },
-    });
-  });
-
-  test('not logged in opens the TUI login screen instead of failing', async () => {
-    const h = harness({ loadAuth: () => null, defaultProject: () => null });
-    expect(await runTui([], h.deps)).toBe(0);
-    expect(h.rendered[0]).toMatchObject({ host: null });
-    expect(h.importCount()).toBe(1);
-  });
-
-  test('the experimental notice reaches stderr before the renderer starts', async () => {
-    const seen: string[] = [];
-    const h = harness();
-    const deps: Partial<TuiDeps> = {
-      ...h.deps,
-      stderr: (text) => seen.push(`stderr:${text.trim()}`),
-      importTui: async () => {
-        seen.push('import');
-        return { runTui: async () => 0 };
+  test('a failed download exits 1 and says how to build one instead', async () => {
+    const h = harness({
+      findBin: () => null,
+      download: async () => {
+        throw new Error('checksum mismatch for kortix-tui-darwin-arm64');
       },
-      exit: (code) => seen.push(`exit:${code}`),
-    };
-    expect(await runTui([], deps)).toBe(0);
-    expect(seen).toEqual([`stderr:${EXPERIMENTAL_NOTICE}`, 'import', 'exit:0']);
-    expect(EXPERIMENTAL_NOTICE).toBe(
-      'kortix tui is experimental — keys: ? · docs: https://kortix.com/docs/tui',
-    );
+    });
+    expect(await runTui(['--install'], h.deps)).toBe(1);
+    const text = stripAnsi(h.err.join(''));
+    expect(text).toContain('Could not install kortix-tui v1.2.3: checksum mismatch');
+    expect(text).toContain('pnpm --filter @kortix/tui bundle');
+    expect(text).toContain('KORTIX_TUI_BIN');
+    expect(h.ran).toEqual([]);
   });
 
-  test("the command's exit code is whatever the TUI resolved", async () => {
-    const h = harness({ exitCode: 7 });
-    expect(await runTui([], h.deps)).toBe(7);
-    // And it leaves the process itself: the renderer's live queries keep Bun's
-    // event loop alive, so a drain would hang the shell after the terminal is
-    // already restored.
-    expect(h.exits).toEqual([7]);
+  test('a source build says "dev", never "vdev"', async () => {
+    const h = harness({ version: () => 'dev' });
+    expect(await runTui(['--install'], h.deps)).toBe(0);
+    const text = stripAnsi(h.out.join(''));
+    expect(text).toContain('kortix-tui dev is already installed');
+    expect(text).not.toContain('vdev');
   });
 
-  test('a path that never starts the renderer never exits the process', async () => {
-    const help = harness();
-    expect(await runTui(['--help'], help.deps)).toBe(0);
-    expect(help.exits).toEqual([]);
+  test('a source build (version "dev") never invents a release URL', async () => {
+    const h = harness({ findBin: () => null, version: () => 'dev' });
+    expect(await runTui([], h.deps)).toBe(1);
+    const text = stripAnsi(h.err.join(''));
+    expect(text).toContain('No kortix-tui binary for this build.');
+    expect(text).toContain('pnpm --filter @kortix/tui bundle');
+    expect(text).toContain('KORTIX_TUI_BIN=');
+    // And it says where to drop one so `kortix tui` works with no env var.
+    expect(text).toContain('/.kortix/tui/dev/kortix-tui');
+    expect(h.downloads).toEqual([]);
+    expect(h.asked).toEqual([]);
+  });
+});
 
-    const bad = harness();
-    expect(await runTui(['--host', 'ghost'], bad.deps)).toBe(1);
-    expect(bad.exits).toEqual([]);
+describe('kortix tui — uninstall', () => {
+  test('--uninstall removes the managed directory and runs nothing', async () => {
+    const h = harness();
+    expect(await runTui(['--uninstall'], h.deps)).toBe(0);
+    expect(h.uninstalls).toBe(1);
+    expect(stripAnsi(h.out.join(''))).toContain('removed /home/ada/.kortix/tui');
+    expect(h.ran).toEqual([]);
   });
 });

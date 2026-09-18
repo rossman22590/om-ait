@@ -1,23 +1,24 @@
-import type { ResolvedHost } from '@kortix/tui/src/auth/hosts.ts';
-import type { RunTuiOptions } from '@kortix/tui/src/main.tsx';
+import { spawn } from 'node:child_process';
 
-import { type Auth, loadAuth, loadAuthForHost } from '../api/auth.ts';
-import {
-  type DefaultProjectRef,
-  type Host,
-  activeHostEntry,
-  defaultProject,
-  getHost,
-  hasEnvTokenHost,
-} from '../api/config.ts';
-import { sdkBackendUrl } from '../api/sdk.ts';
+import { loadAuthForHost } from '../api/auth.ts';
 import { takeFlagValue } from '../command-helpers.ts';
+import { confirm } from '../prompts.ts';
 import { C, help, status } from '../style.ts';
+import {
+  type TuiBinResolution,
+  cliVersion,
+  downloadTuiBin,
+  findTuiBin,
+  isValidTuiVersion,
+  managedTuiPath,
+  removeTuiCache,
+  tuiCacheRoot,
+} from '../tui-bin.ts';
 
 const DOCS_URL = 'https://kortix.com/docs/tui';
 
 /**
- * The one line the renderer prints before it takes the screen.
+ * The one line the launcher prints before the TUI takes the screen.
  *
  * It goes to STDERR on purpose. The TUI runs on the alternate screen; when it
  * exits, everything it painted is gone and only what was written before it
@@ -32,6 +33,11 @@ Experimental. Open the Kortix terminal client: the sidebar of sessions, the
 transcript and composer, a real shell inside the session sandbox, and the
 Files, Review, Apps, Customize and Account screens — all in your terminal.
 
+The TUI is a SEPARATE binary (\`kortix-tui\`, ~80 MB). \`kortix\` does not carry
+it. The first \`kortix tui\` asks to install the copy that matches this CLI's
+version into ~/.kortix/tui/<version>/, then runs it. Every later run execs the
+cached one.
+
 Authentication is this CLI's. It runs against the active host, or the one
 \`--host\` names. With no host logged in, the TUI opens its own login screen
 instead of failing.
@@ -41,7 +47,14 @@ Options:
   --project <id>    List this project's sessions (default: the host's default
                     project, else its first project).
   --session <id>    Open this session at boot.
+  --install         Install the TUI binary now and exit. No prompt.
+  --uninstall       Remove ~/.kortix/tui/ and exit.
   -h, --help        Show this help.
+
+Environment:
+  KORTIX_TUI_BIN    Run this binary instead of a managed one — a local build
+                    (pnpm --filter @kortix/tui bundle) or a packaged copy.
+                    Nothing is downloaded and no version is checked.
 
 Keys:
   ?                 Every binding, generated from the app's own keymap.
@@ -59,26 +72,41 @@ keys and flags can change without a deprecation.
 
 Examples:
   kortix tui
+  kortix tui --install
   kortix tui --host cloud
   kortix tui --project <project-id> --session <session-id>
 
 Docs: ${DOCS_URL}
 `;
 
+/** `v1.2.3` for a release, plain `dev` for a source build — never `vdev`. */
+function label(version: string): string {
+  return isValidTuiVersion(version) ? `v${version}` : version;
+}
+
 export interface TuiFlags {
   host?: string;
   project?: string;
   session?: string;
+  install: boolean;
+  uninstall: boolean;
   help: boolean;
 }
 
 /** `kortix tui` takes flags only — a bare positional is a typo, not an id. */
 export function parseTuiFlags(argv: string[]): TuiFlags {
   const rest = [...argv];
-  const flags: TuiFlags = { help: false };
+  const flags: TuiFlags = { help: false, install: false, uninstall: false };
   for (let i = rest.length - 1; i >= 0; i -= 1) {
-    if (rest[i] === '-h' || rest[i] === '--help') {
+    const arg = rest[i];
+    if (arg === '-h' || arg === '--help') {
       flags.help = true;
+      rest.splice(i, 1);
+    } else if (arg === '--install') {
+      flags.install = true;
+      rest.splice(i, 1);
+    } else if (arg === '--uninstall') {
+      flags.uninstall = true;
       rest.splice(i, 1);
     }
   }
@@ -97,67 +125,93 @@ export function parseTuiFlags(argv: string[]): TuiFlags {
 }
 
 /**
- * One CLI `Auth` → the `ResolvedHost` the TUI runs against.
+ * The boot environment the child TUI reads.
  *
- * The TUI normally reads `~/.config/kortix/config.json` itself
- * (`apps/tui/src/auth/hosts.ts`). Under `kortix tui` it must not: `--host` has
- * already picked the host, and the CLI is the one place that knows which token
- * won. So the CLI resolves auth exactly as every other subcommand does and
- * hands the answer down.
- *
- * `api_base` is the bare origin the config stores; `sdkBackendUrl` is the one
- * rule for turning it into the `/v1` mount the SDK needs.
+ * The launcher does NOT resolve auth any more — `kortix-tui` reads the same
+ * `~/.config/kortix/config.json` through the same `@kortix/cli` config module,
+ * so resolving it twice could only introduce a disagreement. What the launcher
+ * DOES own is the three things the flags say, and they travel as env because
+ * the child is a standalone process whose only input is the environment
+ * (apps/tui/src/index.tsx).
  */
-export function resolvedHostFromAuth(input: {
-  name: string;
-  auth: Auth;
-  defaultProjectId?: string;
-  /** True when `KORTIX_TOKEN` supplied the token, so a rejection can name it. */
-  fromEnvToken: boolean;
-}): ResolvedHost {
+export function tuiChildEnv(
+  flags: Pick<TuiFlags, 'host' | 'project' | 'session'>,
+  base: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
   return {
-    name: input.name,
-    backendUrl: sdkBackendUrl(input.auth.api_base),
-    token: input.auth.token,
-    accountId: input.auth.account_id ?? '',
-    ...(input.defaultProjectId ? { defaultProjectId: input.defaultProjectId } : {}),
-    userEmail: input.auth.user_email ?? '',
-    source: input.fromEnvToken ? 'env' : 'config',
-    ...(input.fromEnvToken ? { envVar: 'KORTIX_TOKEN' as const } : {}),
+    ...base,
+    ...(flags.host ? { KORTIX_TUI_HOST: flags.host } : {}),
+    ...(flags.project ? { KORTIX_PROJECT_ID: flags.project } : {}),
+    ...(flags.session ? { KORTIX_SESSION_ID: flags.session } : {}),
   };
 }
 
 export interface TuiDeps {
-  loadAuth: () => Auth | null;
-  loadAuthForHost: (name: string) => Auth | null;
-  /** The active host's name — `sandbox` for a `KORTIX_TOKEN` shell. */
-  activeHostName: () => string;
-  getHost: (name: string) => Host | null;
-  defaultProject: () => DefaultProjectRef | null;
-  hasEnvTokenHost: () => boolean;
-  /** Loads the renderer. Dynamic so no other subcommand pays for React. */
-  importTui: () => Promise<{ runTui: (options: RunTuiOptions) => Promise<number> }>;
-  /** Leaves the process once the renderer has given the terminal back. */
-  exit: (code: number) => void;
+  /** `null` when the host has no usable token — `--host` then fails loudly. */
+  loadAuthForHost: (name: string) => { token?: string } | null;
+  /** Already-present binary, or null when one has to be downloaded. */
+  findBin: () => TuiBinResolution | null;
+  /** Fetches + checksum-verifies the release asset. Resolves to its path. */
+  download: (version: string) => Promise<string>;
+  /** Removes ~/.kortix/tui/. Resolves to the path it removed. */
+  uninstall: () => string;
+  /** This CLI's version — the TUI is matched to it exactly. */
+  version: () => string;
+  /** True only on a real terminal, where a question can be answered. */
+  isInteractive: () => boolean;
+  ask: (question: string, defaultValue: boolean) => Promise<boolean>;
+  /** Runs the TUI and resolves its exit code. */
+  run: (bin: string, env: NodeJS.ProcessEnv) => Promise<number>;
   stdout: (text: string) => void;
   stderr: (text: string) => void;
 }
 
 const DEFAULT_DEPS: TuiDeps = {
-  loadAuth,
   loadAuthForHost,
-  activeHostName: () => activeHostEntry().name,
-  getHost,
-  defaultProject,
-  hasEnvTokenHost,
-  // The ONE import of the TUI, and it is lazy on purpose: `@opentui/core`
-  // dlopen's a 5.5 MB native library and pulls React in with it. Every other
-  // `kortix` subcommand must keep starting without either.
-  importTui: () => import('@kortix/tui/src/main.tsx'),
-  exit: (code) => process.exit(code),
+  findBin: () => findTuiBin(),
+  download: (version) => downloadTuiBin({ version }),
+  uninstall: () => removeTuiCache(),
+  version: () => cliVersion(),
+  isInteractive: () => process.stdin.isTTY === true && process.stdout.isTTY === true,
+  ask: (question, defaultValue) => confirm(question, defaultValue, { onEndOfInput: false }),
+  run: spawnTui,
   stdout: (text) => process.stdout.write(text),
   stderr: (text) => process.stderr.write(text),
 };
+
+/**
+ * Hand the terminal to `kortix-tui` and resolve its exit code.
+ *
+ * `stdio: 'inherit'` is the whole point: the child owns the real tty — raw
+ * mode, the alternate screen, the resize signals — exactly as if the user had
+ * typed `kortix-tui`. A pipe here would break every one of those.
+ */
+function spawnTui(bin: string, env: NodeJS.ProcessEnv): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(bin, [], { stdio: 'inherit', env });
+    // Ctrl+C reaches the whole foreground process group, so the launcher gets
+    // the SIGINT too — and Node's default handler would kill it, returning the
+    // shell prompt while the child still owns the alternate screen. The TUI
+    // owns Ctrl+C (press twice); ignore the signals here and exit only when
+    // the child does. The window matters: before the TUI turns raw mode on,
+    // Ctrl+C really is a signal.
+    const ignore = () => {};
+    process.on('SIGINT', ignore);
+    process.on('SIGTERM', ignore);
+    const done = (value: number | Error) => {
+      process.off('SIGINT', ignore);
+      process.off('SIGTERM', ignore);
+      if (value instanceof Error) reject(value);
+      else resolve(value);
+    };
+    child.on('error', done);
+    // A signal death has no exit code. Report it the way a shell does
+    // (128 + signo) so `kortix tui` and a bare `kortix-tui` agree.
+    child.on('exit', (code, signal) => done(code ?? (signal ? 128 + (SIGNALS[signal] ?? 0) : 1)));
+  });
+}
+
+const SIGNALS: Record<string, number> = { SIGINT: 2, SIGQUIT: 3, SIGKILL: 9, SIGTERM: 15 };
 
 export async function runTui(argv: string[], overrides: Partial<TuiDeps> = {}): Promise<number> {
   const deps: TuiDeps = { ...DEFAULT_DEPS, ...overrides };
@@ -174,10 +228,16 @@ export async function runTui(argv: string[], overrides: Partial<TuiDeps> = {}): 
     return 0;
   }
 
-  let host: ResolvedHost | null = null;
+  if (flags.uninstall) {
+    const removed = deps.uninstall();
+    deps.stdout(`${status.ok(`removed ${removed}`)}\n`);
+    return 0;
+  }
+
   if (flags.host) {
     // An explicit `--host` is a claim about WHICH instance. A missing or
-    // token-less one is an error, not an invitation to log into another.
+    // token-less one is an error, not an invitation to log into another. The
+    // check lives here rather than in the TUI so the message is the CLI's.
     const auth = deps.loadAuthForHost(flags.host);
     if (!auth?.token) {
       deps.stderr(
@@ -186,44 +246,93 @@ export async function runTui(argv: string[], overrides: Partial<TuiDeps> = {}): 
       );
       return 1;
     }
-    host = resolvedHostFromAuth({
-      name: flags.host,
-      auth,
-      defaultProjectId: deps.getHost(flags.host)?.default_project?.project_id,
-      fromEnvToken: false,
-    });
-  } else {
-    const auth = deps.loadAuth();
-    // No host is NOT an error here. The TUI owns a login screen that lists the
-    // configured hosts and can add one, which beats printing `kortix login`
-    // and quitting — the user asked for the app, so give them the app.
-    if (auth?.token) {
-      host = resolvedHostFromAuth({
-        name: deps.activeHostName(),
-        auth,
-        defaultProjectId: deps.defaultProject()?.project_id,
-        fromEnvToken: deps.hasEnvTokenHost(),
-      });
+  }
+
+  const version = deps.version();
+  let resolution = deps.findBin();
+
+  // `--install` is the non-interactive front door: it installs (or reports
+  // what is already there) and never takes the terminal.
+  if (flags.install) {
+    if (resolution) {
+      deps.stdout(
+        `${status.ok(`kortix-tui ${label(version)} is already installed`)}  ${C.dim}${resolution.bin}${C.reset}\n`,
+      );
+      return 0;
     }
+    const installed = await install(version, true, deps);
+    if (typeof installed === 'number') return installed;
+    deps.stdout(
+      `${status.ok(`installed kortix-tui ${label(version)}`)}  ${C.dim}${installed}${C.reset}\n`,
+    );
+    return 0;
+  }
+
+  if (!resolution) {
+    const installed = await install(version, false, deps);
+    if (typeof installed === 'number') return installed;
+    resolution = { bin: installed, source: 'downloaded' };
   }
 
   deps.stderr(`${EXPERIMENTAL_NOTICE}\n`);
-  const { runTui: render } = await deps.importTui();
-  const code = await render({
-    host,
-    projectId: flags.project ?? null,
-    sessionId: flags.session ?? null,
-  });
+  return deps.run(resolution.bin, tuiChildEnv(flags, process.env));
+}
 
-  // Leave the process HERE instead of through the CLI's usual `process.exitCode`
-  // drain. Measured on the compiled binary against a real host: the app's live
-  // queries and streams keep Bun's event loop alive after `renderer.destroy()`
-  // has already restored the terminal — the `ESC[?1049l` is in the stream and
-  // the shell is back, but the command never returns. Draining is the right
-  // default for a command whose stdout may be a pipe; a full-screen renderer
-  // writes straight to the tty and this command's only other output is the one
-  // stderr line above, so there is nothing to truncate. `apps/tui/src/index.tsx`
-  // exits the same way, for the same reason.
-  deps.exit(code);
-  return code;
+/**
+ * Get a binary on disk, or return the exit code that explains why we can't.
+ *
+ * Three ways this ends without a download:
+ *   - a source build (`dev`) has no published release to match — the remedy is
+ *     to build one, and saying so beats inventing a URL for a version that was
+ *     never released;
+ *   - nobody is at the keyboard (a script, CI, a pipe) — an 80 MB download is
+ *     not something to start on someone's behalf with no way to say no;
+ *   - the user says no.
+ */
+async function install(
+  version: string,
+  skipPrompt: boolean,
+  deps: TuiDeps,
+): Promise<string | number> {
+  if (!isValidTuiVersion(version)) {
+    // The `dev` case: a local `bun run src/index.ts` or an unversioned build.
+    deps.stderr(
+      `${status.err('No kortix-tui binary for this build.')}\n` +
+        `  ${C.dim}This \`kortix\` reports version "${version}", which has no published release.${C.reset}\n` +
+        `  Build one:  ${C.cyan}pnpm --filter @kortix/tui bundle${C.reset}\n` +
+        `  Then:       ${C.cyan}KORTIX_TUI_BIN=<path to the built kortix-tui> kortix tui${C.reset}\n` +
+        `  ${C.dim}Or copy it to ${managedTuiPath(version)} and run \`kortix tui\` as usual.${C.reset}\n`,
+    );
+    return 1;
+  }
+
+  if (!skipPrompt) {
+    if (!deps.isInteractive()) {
+      deps.stderr(
+        `${status.err('kortix tui needs the kortix-tui binary, which is not installed.')}\n` +
+          `  Run:  ${C.cyan}kortix tui --install${C.reset}\n`,
+      );
+      return 2;
+    }
+    const yes = await deps.ask(
+      `kortix tui is experimental and installs separately (~80 MB, ${tuiCacheRoot()}/${version}/). Install now?`,
+      true,
+    );
+    if (!yes) {
+      deps.stdout(
+        `${C.dim}Not installed. Run \`kortix tui --install\` when you want it.${C.reset}\n`,
+      );
+      return 0;
+    }
+  }
+
+  try {
+    return await deps.download(version);
+  } catch (err) {
+    deps.stderr(
+      `${status.err(`Could not install kortix-tui ${label(version)}: ${(err as Error).message}`)}\n` +
+        `  ${C.dim}Build one yourself (pnpm --filter @kortix/tui bundle) and set KORTIX_TUI_BIN.${C.reset}\n`,
+    );
+    return 1;
+  }
 }

@@ -98,13 +98,28 @@ function envBackendUrl(env: Env): string | undefined {
  * (the caller then shows the login screen).
  *
  * Precedence, highest first:
- *   1. `KORTIX_API_KEY` (or `KORTIX_TOKEN`) + `KORTIX_API_URL`
- *   2. the active host in the CLI config
+ *   1. `KORTIX_TUI_HOST` — a configured host named BY NAME
+ *   2. `KORTIX_API_KEY` (or `KORTIX_TOKEN`) + `KORTIX_API_URL`
+ *   3. the active host in the CLI config
+ *
+ * `KORTIX_TUI_HOST` outranks the env token on purpose. It is how `kortix tui
+ * --host <name>` reaches this process (apps/cli/src/commands/tui.ts), and
+ * `--host` is an explicit claim about WHICH instance to open. A stale
+ * `KORTIX_TOKEN` exported in the shell would otherwise silently win and the
+ * flag would do nothing. A name that is gone or has no token falls through to
+ * the normal order rather than dead-ending — the CLI already refused that case
+ * with `kortix hosts login <name>` before it spawned us.
  *
  * A config host with an empty token is not usable and resolves to null — the
  * user is listed in `listHostEntries()` but has to log in.
  */
 export function resolveHost(env: Env = process.env): ResolvedHost | null {
+  const named = env.KORTIX_TUI_HOST?.trim();
+  if (named) {
+    const host = getHost(named);
+    if (host?.token) return resolvedFromHost(named, host);
+  }
+
   const fromEnv = envToken(env);
   const url = envBackendUrl(env);
   if (fromEnv) {

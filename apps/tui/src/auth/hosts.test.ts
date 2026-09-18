@@ -118,6 +118,49 @@ describe('resolveHost', () => {
   });
 });
 
+describe('resolveHost — KORTIX_TUI_HOST', () => {
+  const TWO_HOSTS = {
+    active: 'local-dev',
+    hosts: {
+      ...CONFIG.hosts,
+      cloud: {
+        url: 'https://api.kortix.com',
+        token: 'cloud-token',
+        user_id: 'u2',
+        user_email: 'ada@kortix.com',
+        account_id: 'acct-cloud',
+        logged_in_at: '2026-09-17T00:00:00.000Z',
+      },
+    },
+  };
+
+  test('a named host beats the active one — that is what `kortix tui --host` sends', () => {
+    writeConfig(TWO_HOSTS);
+    const host = resolveHost({ KORTIX_TUI_HOST: 'cloud' });
+    expect(host).toMatchObject({
+      name: 'cloud',
+      backendUrl: 'https://api.kortix.com/v1',
+      token: 'cloud-token',
+      source: 'config',
+    });
+  });
+
+  test('it also beats a stale KORTIX_TOKEN exported in the shell', () => {
+    // Without this, `kortix tui --host cloud` would silently open the sandbox
+    // host instead and the flag would do nothing.
+    writeConfig(TWO_HOSTS);
+    expect(
+      resolveHost({ KORTIX_TUI_HOST: 'cloud', KORTIX_TOKEN: 'kortix_sb_stale' }),
+    ).toMatchObject({ name: 'cloud', token: 'cloud-token', source: 'config' });
+  });
+
+  test('an unknown or token-less name falls through to the normal order', () => {
+    writeConfig(TWO_HOSTS);
+    expect(resolveHost({ KORTIX_TUI_HOST: 'ghost' })).toMatchObject({ name: 'local-dev' });
+    expect(resolveHost({ KORTIX_TUI_HOST: '   ' })).toMatchObject({ name: 'local-dev' });
+  });
+});
+
 describe('hostToResolved', () => {
   const TOKEN = 'kortix_pat_super_secret_value_0123456789';
   const host: Host = {
