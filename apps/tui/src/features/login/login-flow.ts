@@ -187,9 +187,10 @@ export const defaultLoginDeps: LoginFlowDeps = {
     createScopedKortix({
       backendUrl,
       getToken: async () => token,
-      // The SDK's `clientSource` union has no `'tui'` member (see
-      // `src/kortix.ts` for the same note); `'cli'` is the closest surface.
-      clientSource: 'cli',
+      // Same surface the running client reports (`src/kortix.ts`), so a
+      // token validation and the session it unlocks are one source in the
+      // backend's audit events.
+      clientSource: 'tui',
     }).validateToken(),
   // `upsertHost`'s third argument IS the set-active seam — the CLI config
   // module has no `setActiveHost`; its rename is `useHost`. Both are called so

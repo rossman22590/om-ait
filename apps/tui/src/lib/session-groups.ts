@@ -13,6 +13,8 @@
  * clock instead of racing it.
  */
 
+import { type ProjectSessionMetadata, sessionParentId } from '@kortix/sdk';
+
 /** The fields of `ProjectSession` this module reads. A real `ProjectSession`
  *  satisfies it structurally; a test fixture can be three lines. */
 export interface SessionLike {
@@ -23,7 +25,7 @@ export interface SessionLike {
   custom_name?: string | null;
   branch_name?: string;
   status?: string;
-  metadata?: Record<string, unknown> | null;
+  metadata?: ProjectSessionMetadata | null;
   opencode_sessions?: readonly { updated_at?: number | null }[] | null;
   updated_at?: string;
   created_at?: string;
@@ -134,17 +136,19 @@ export function dayLabel(ms: number, nowMs: number): string {
 /**
  * The session that spawned this one, when that session is on screen too.
  *
- * The link is `metadata.spawned_by_session` — the SDK's `ProjectSession` has
- * no `parent_session_id` field (checked against
- * `packages/sdk/src/core/rest/projects-client/sessions.ts`), and `apps/web`
- * reads the same metadata key in `groupSessionsByCoordinator`. A parent that
- * is not in `present` (an older page, or filtered out) leaves the child a root,
- * so no row is ever orphaned off-screen.
+ * The link itself is the SDK's `sessionParentId` (it reads
+ * `metadata.spawned_by_session`, and rejects a non-string and a self-reference
+ * — `metadata` is jsonb, so a malformed row must not escape as a session id).
+ * The ON-SCREEN half is the sidebar's own rule: a parent that is not in
+ * `present` (an older page, or filtered out) leaves the child a root, so no row
+ * is ever orphaned off-screen.
  */
 export function parentSessionId(session: SessionLike, present: ReadonlySet<string>): string | null {
-  const parent = session.metadata?.spawned_by_session;
-  if (typeof parent !== 'string' || !parent) return null;
-  if (parent === session.session_id || !present.has(parent)) return null;
+  const parent = sessionParentId({
+    session_id: session.session_id,
+    ...(session.metadata ? { metadata: session.metadata } : {}),
+  });
+  if (!parent || !present.has(parent)) return null;
   return parent;
 }
 

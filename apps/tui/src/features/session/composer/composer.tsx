@@ -134,6 +134,11 @@ export function Composer({
 
   // ── sending ───────────────────────────────────────────────────────────────
 
+  // A QUEUED prompt pins what was selected when it was queued: the inbox row is
+  // durable and may be sent minutes later, after the pickers have moved on.
+  // A prompt sent NOW carries no overrides — `sendParts` reads `picks` itself
+  // (model, agent and, since `SessionPicks` gained it, variant), so repeating
+  // them here would be a second copy of the same three values.
   const overrides = useCallback((): SessionPromptOverrides => {
     const picked = session.picks.model;
     return {
@@ -167,7 +172,7 @@ export function Composer({
       setQueueError(null);
       const queued = session.isBusy || inbox.prompts.length > 0;
       if (!queued) {
-        session.send(text, selection.variant ? { variant: selection.variant } : undefined);
+        session.send(text);
         return;
       }
       void enqueue(text).catch((error: unknown) => {
@@ -179,7 +184,7 @@ export function Composer({
         onToast?.(`Could not queue: ${message}`, 'error');
       });
     },
-    [session, inbox.prompts.length, selection.variant, enqueue, onToast, setText],
+    [session, inbox.prompts.length, enqueue, onToast, setText],
   );
 
   const runAppCommand = useCallback(

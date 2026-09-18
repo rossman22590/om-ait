@@ -7,8 +7,7 @@
  * keys and knows nothing about the SDK.
  */
 
-import { useChangeRequests, useProjectSessions } from '@kortix/sdk/react';
-import { useQuery } from '@tanstack/react-query';
+import { useAccounts, useChangeRequests, useProjectSessions, useProjects } from '@kortix/sdk/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { ResolvedHost } from '../../auth/hosts.ts';
@@ -83,18 +82,15 @@ export function Sidebar({
       sessions.some((session) => LIVE_STATUSES.has(session.status)) ? LIVE_POLL_MS : false,
   });
 
-  const accountsQuery = useQuery({
-    queryKey: ['tui', 'accounts', host.name, host.backendUrl],
-    queryFn: () => kortix().accounts.list(),
-  });
-
-  const projectsQuery = useQuery({
-    queryKey: ['tui', 'projects', host.name, host.backendUrl, effectiveAccountId],
-    queryFn: () =>
-      effectiveAccountId
-        ? kortix().projects.listForAccount(effectiveAccountId)
-        : kortix().projects.list(),
-  });
+  // The SDK owns both lists (`useAccounts` / `useProjects`, keyed by
+  // `qk.accounts.list` / `qk.projects.list`), so the sidebar, the switcher and
+  // every other reader share ONE cache entry and one in-flight request. A
+  // hand-rolled key of this app's own invention did not: `staleTime` is
+  // per-observer in React Query, so a copied fetcher silently becomes N
+  // requests. `userId` is omitted on purpose — a TUI process holds one token
+  // for its whole lifetime, so there is no second identity to bleed into.
+  const accountsQuery = useAccounts();
+  const projectsQuery = useProjects(effectiveAccountId ?? undefined);
 
   // `useChangeRequests` defaults to open change requests, which is exactly the
   // count the Review row wants. One bounded GET per project, cached.

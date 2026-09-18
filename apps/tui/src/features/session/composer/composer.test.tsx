@@ -86,8 +86,10 @@ function fakeSession(spies: Spies, overrides: Partial<SessionState> = {}): Sessi
     picks: {
       model: null,
       agent: null,
+      variant: null,
       setModel: spies.setModel,
       setAgent: spies.setAgent,
+      setVariant: spies.setVariant,
     },
     isBusy: false,
     isSending: false,
@@ -499,6 +501,55 @@ describe('the pickers', () => {
     expect(text).toContain('Auto');
     expect(text).toContain('Low');
     expect(text).toContain('High');
+  });
+
+  test('picking an effort writes it to the session picks, not a model store', async () => {
+    const spies = newSpies();
+    const session = fakeSession(spies, {
+      picks: {
+        model: { providerID: 'kortix', modelID: 'anthropic/claude-sonnet-5' },
+        agent: null,
+        variant: null,
+        setModel: spies.setModel,
+        setAgent: spies.setAgent,
+        setVariant: spies.setVariant,
+      },
+    } as Partial<SessionState>);
+    const setup = await mountComposer(session, spies);
+    await act(async () => {
+      setup.mockInput.pressKey('e', { meta: true });
+    });
+    await act(async () => {
+      setup.mockInput.pressArrow('down');
+    });
+    await act(async () => {
+      setup.mockInput.pressEnter();
+    });
+    // `SessionPicks.setVariant` IS the send path: `sendParts` falls back to
+    // `picks.variant`, so a pick applies to the next prompt with no override.
+    expect(spies.setVariant).toHaveBeenCalledWith('low');
+  });
+
+  test('a prompt sent now carries no overrides — sendParts reads the picks', async () => {
+    const spies = newSpies();
+    const session = fakeSession(spies, {
+      picks: {
+        model: { providerID: 'kortix', modelID: 'anthropic/claude-sonnet-5' },
+        agent: 'galileo',
+        variant: 'high',
+        setModel: spies.setModel,
+        setAgent: spies.setAgent,
+        setVariant: spies.setVariant,
+      },
+    } as Partial<SessionState>);
+    const setup = await mountComposer(session, spies);
+    await act(async () => {
+      await setup.mockInput.typeText('hello', 1);
+    });
+    await act(async () => {
+      setup.mockInput.pressEnter();
+    });
+    expect(spies.send).toHaveBeenCalledWith('hello');
   });
 
   test('/model opens the model picker instead of leaving the palette open', async () => {

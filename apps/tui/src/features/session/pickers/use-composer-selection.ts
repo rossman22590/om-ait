@@ -10,10 +10,16 @@
  *    `useSession.sendParts` reads `picks.model` when the call gives no override
  *    (`use-session.ts:1218`), so this IS the send path.
  *  - **agent** → `session.picks.setAgent(name)` (same store, `:1219`).
- *  - **effort** → `useModelStore().setVariant(modelKey, value)`. The store is
- *    keyed by model, exactly as `useOpenCodeLocal`'s `model.variant` is, so the
- *    effort follows the model rather than the session. `picks` has no variant
- *    field, so the composer passes it as the `variant` override on `send`.
+ *  - **effort** → `session.picks.setVariant(value)`. `SessionPicks` carries the
+ *    variant, and `sendParts` falls back to `picks.variant` exactly as it
+ *    already did for model and agent, so the composer no longer passes an
+ *    override on every send and no longer keeps the effort in a store of its
+ *    own. The effort is now per SESSION, not per model: a variant the newly
+ *    picked model does not publish reads as `Auto` (see `variant` below) and
+ *    the next explicit choice replaces it.
+ *
+ * `useModelStore` survives for ONE thing — `pushRecent`, which orders the model
+ * picker. It is no longer consulted for the effort.
  *
  * Under Bun neither store reaches a disk: `useSessionPicks` catches the
  * `localStorage is not defined` ReferenceError and `useModelStore` guards on
@@ -36,8 +42,11 @@ export interface ComposerSelectionSession {
   picks: {
     model: ModelKey | null;
     agent: string | null;
+    /** Reasoning effort, persisted per session by `useSessionPicks`. */
+    variant: string | null;
     setModel: (model: ModelKey | null) => void;
     setAgent: (agent: string | null) => void;
+    setVariant: (variant: string | null) => void;
   };
 }
 
@@ -112,9 +121,12 @@ export function useComposerSelection(
   );
 
   const variants = useMemo(() => effortChoices(model), [model]);
-  const storedVariant = activeKey ? (store.getVariant(activeKey) ?? null) : null;
-  // A variant the current model no longer publishes reads as Auto rather than
-  // an unlabelled value; the next explicit choice replaces it.
+  const storedVariant = session.picks.variant;
+  // A variant the current model does not publish reads as Auto rather than an
+  // unlabelled value; the next explicit choice replaces it. The send path
+  // applies `picks.variant` verbatim, so this is a DISPLAY rule — switching to
+  // a model without that variant shows Auto, and picking any effort rewrites
+  // the pick.
   const variant = storedVariant && variants.includes(storedVariant) ? storedVariant : null;
 
   const setModel = useCallback(
@@ -125,13 +137,7 @@ export function useComposerSelection(
     [session.picks, store],
   );
 
-  const setVariant = useCallback(
-    (value: string | null) => {
-      if (!activeKey) return;
-      store.setVariant(activeKey, value ?? undefined);
-    },
-    [activeKey, store],
-  );
+  const setVariant = session.picks.setVariant;
 
   const agents = useMemo<ComposerAgent[]>(
     () =>

@@ -7,17 +7,16 @@
  * panel rectangle if a feature mounted it (see the note on `ui/Modal`).
  * `app.tsx` mounts it in its overlay slot.
  *
- * Data is the same two reads the sidebar already makes, so react-query serves
- * both from one cache entry: `useProjectSessions(projectId)` and
- * `projects.listForAccount(accountId)`. Opening the switcher costs no extra
- * request on a warm cache.
+ * Data is the same two reads the sidebar already makes, through the same two
+ * SDK hooks and therefore the same two cache entries: `useProjectSessions`
+ * and `useProjects`. Opening the switcher costs no extra request on a warm
+ * cache — which is only true because both readers share the SDK's key, not a
+ * key of their own.
  */
 
-import { useProjectSessions } from '@kortix/sdk/react';
-import { useQuery } from '@tanstack/react-query';
+import { useProjectSessions, useProjects } from '@kortix/sdk/react';
 import { useMemo } from 'react';
 
-import { kortix } from '../../kortix.ts';
 import { relativeAge } from '../../lib/relative-time.ts';
 import { type SessionLike, sessionActivityMs, sessionTitle } from '../../lib/session-groups.ts';
 import { glyph } from '../../theme.ts';
@@ -87,11 +86,7 @@ export interface SwitcherProps {
 
 export function Switcher({ projectId, accountId, onPick, onClose }: SwitcherProps) {
   const sessionsQuery = useProjectSessions(projectId ?? '', { enabled: Boolean(projectId) });
-  const projectsQuery = useQuery({
-    queryKey: ['tui', 'switcher', 'projects', accountId],
-    queryFn: () =>
-      accountId ? kortix().projects.listForAccount(accountId) : kortix().projects.list(),
-  });
+  const projectsQuery = useProjects(accountId ?? undefined);
 
   const items = useMemo(
     () =>

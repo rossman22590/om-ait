@@ -9,13 +9,15 @@
  *   the size, and `getPtyWebSocketUrl` mints the token-bearing socket URL.
  *   None of them is given a URL by hand.
  *
- * SDK gap (reported, not worked around): nothing public exposes the resolved
- * runtime URL — `getCurrentRuntimeUrl`, `getActiveOpenCodeUrl`,
- * `getSandboxUrlForExternalId` and `useCurrentRuntime` are all internal, and
- * `useSession` returns `sandbox` but not `runtimeUrl` (the `/start` payload
- * already carries `runtime_url`). So this panel cannot run the web terminal's
- * `listKortixPty(serverUrl)` failure probe, which is what tells a parked box
- * apart from a broken one. It reconnects with backoff instead.
+ * The parked-box probe: a refused WebSocket upgrade reaches a client as a bare
+ * close, and the `503 sandbox not ready` behind it is invisible — so a
+ * background reconnect loop dials a box nothing will ever wake. `useSession`
+ * now returns `runtimeUrl` (the resolved `/p/<external_id>/8000` origin), so
+ * after a drop this panel asks `GET /kortix/pty` against THAT origin, exactly
+ * as `apps/web/src/features/session/pty-connection.ts` does. A readiness 503
+ * parks the panel (`asleep`) instead of retrying; `Alt+Enter` is the
+ * user-initiated attach that carries `wake=1` and is the only thing allowed to
+ * resume the box.
  *
  * Bytes: the socket carries raw bytes both ways. Output goes into
  * `EmbeddedTerminalRenderable.write`, a headless VT emulator; its `onData`
@@ -23,6 +25,7 @@
  * and both must reach the shell. Resize is an HTTP PATCH, never a frame.
  */
 
+import { isSandboxNotReadyError, listKortixPty } from '@kortix/sdk';
 import {
   getPtyWebSocketUrl,
   useCreatePty,
@@ -67,8 +70,12 @@ const IDLE_STATE: PtySessionState = {
 export interface TerminalPanelProps {
   projectId: string;
   sessionId: string;
-  /** The `useSession(projectId, sessionId)` return. `switched` gates the attach. */
-  session: Pick<ReturnType<typeof useSession>, 'switched' | 'phase'>;
+  /**
+   * The `useSession(projectId, sessionId)` return. `switched` gates the attach
+   * and `runtimeUrl` is the origin the parked-box probe reads (null until the
+   * runtime is ready).
+   */
+  session: Pick<ReturnType<typeof useSession>, 'switched' | 'phase' | 'runtimeUrl'>;
   focused: boolean;
   /** Outer width in cells, border included. */
   width: number;
@@ -108,8 +115,13 @@ export function TerminalPanel({
   const [state, setState] = useState<PtySessionState>(IDLE_STATE);
   const [ptyId, setPtyId] = useState<string | null>(null);
   const [ensureError, setEnsureError] = useState<string | null>(null);
+  /** The probe answered "sandbox not ready". Only Alt+Enter dials again. */
+  const [asleep, setAsleep] = useState(false);
+  /** Bumped by Alt+Enter after a park: a new attach, with the wake armed. */
+  const [attachEpoch, setAttachEpoch] = useState(0);
 
   const ready = session.switched;
+  const runtimeUrl = session.runtimeUrl;
   const cols = Math.max(width - 4, 20);
   const rows = Math.max(height - 2 - HINT_ROWS, 3);
 
@@ -140,6 +152,7 @@ export function TerminalPanel({
 
   // 2. One socket per pty id. A new id (or an unmount) closes the old machine
   //    first, so a stale generation can never write into the new screen.
+  // biome-ignore lint/correctness/useExhaustiveDependencies(attachEpoch): not read in the body on purpose — it is the re-mount trigger. `PtySession.close()` disposes the machine for good, so waking a parked box is a NEW instance, not a `reconnectNow`.
   useEffect(() => {
     if (!ptyId) return;
     const ptySession = new PtySession({
@@ -154,9 +167,28 @@ export function TerminalPanel({
       ptySession.close();
       if (ptySessionRef.current === ptySession) ptySessionRef.current = null;
     };
-  }, [ptyId, openSocket]);
+  }, [ptyId, openSocket, attachEpoch]);
 
-  // 3. The daemon no longer owns this id. Reconnecting can never work; mint a
+  // 3. The box may be parked, not broken. A socket close cannot say which, so
+  //    ask the runtime over HTTP: `GET /kortix/pty` passes the same
+  //    control-plane gate, returns a readable body, and never wakes anything.
+  //    A readiness 503 parks the panel and stops the retry loop outright — a
+  //    background retry that resurrects a sandbox nobody asked for is the bug
+  //    `wake=1` exists to prevent.
+  useEffect(() => {
+    if (state.phase !== 'reconnecting' || asleep || !runtimeUrl) return;
+    let cancelled = false;
+    void listKortixPty(runtimeUrl).catch((error: unknown) => {
+      if (cancelled || !isSandboxNotReadyError(error)) return;
+      setAsleep(true);
+      ptySessionRef.current?.close();
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [state.phase, asleep, runtimeUrl]);
+
+  // 4. The daemon no longer owns this id. Reconnecting can never work; mint a
   //    new terminal once, then stop.
   useEffect(() => {
     if (!state.needsReplacement || replacedRef.current) return;
@@ -183,7 +215,7 @@ export function TerminalPanel({
     [ptyId, updatePty],
   );
 
-  // 4. The shell needs its size before it draws a prompt. The emulator reports
+  // 5. The shell needs its size before it draws a prompt. The emulator reports
   //    a resize only when the box CHANGES, so a fresh attach to an existing
   //    shell would otherwise never send one.
   // biome-ignore lint/correctness/useExhaustiveDependencies(cols): read as the fallback size only; a width change already reaches the PTY through `onTerminalResize`.
@@ -202,7 +234,7 @@ export function TerminalPanel({
     [],
   );
 
-  // 5. Focus routes keys to the emulator AND makes it paint the shell's
+  // 6. Focus routes keys to the emulator AND makes it paint the shell's
   //    cursor. Both follow the `focused` prop.
   //
   //    It must be `terminal.focus()`, NOT `renderer.focusRenderable(terminal)`.
@@ -248,6 +280,13 @@ export function TerminalPanel({
     }
     if (matchesTerminalBinding(key, 'terminal.reconnect')) {
       key.preventDefault();
+      // A parked box has no machine left to reconnect: waking it is a fresh
+      // attach, and `attachEpoch` is what mounts one.
+      if (asleep) {
+        setAsleep(false);
+        setAttachEpoch((epoch) => epoch + 1);
+        return;
+      }
       ptySessionRef.current?.reconnectNow();
       return;
     }
@@ -258,7 +297,7 @@ export function TerminalPanel({
     if (isReservedWhileTerminalFocused(key)) key.preventDefault();
   });
 
-  const detail = ensureError ?? statusDetail(state, ready, session.phase);
+  const detail = ensureError ?? statusDetail(state, ready, session.phase, asleep);
 
   return (
     <Panel
@@ -290,8 +329,14 @@ export function TerminalPanel({
 }
 
 /** The one line under the shell: what the panel is waiting on, or why it stopped. */
-function statusDetail(state: PtySessionState, ready: boolean, phase: string): string {
+function statusDetail(
+  state: PtySessionState,
+  ready: boolean,
+  phase: string,
+  asleep: boolean,
+): string {
   if (!ready) return `Waiting for the sandbox (${phase})…`;
+  if (asleep) return 'Sandbox is parked · Alt+Enter wakes it';
   if (state.phase === 'reconnecting') {
     return `Reconnecting (${state.attempt})${state.reason ? ` — ${state.reason}` : ''}`;
   }

@@ -8,9 +8,7 @@ import {
   type PtySocket,
   type PtyTimers,
   ptyBackoffMs,
-  ptyCloseAction,
   ptyPanelTitle,
-  sanitizePtyChunk,
 } from './pty-session.ts';
 
 /** A clock the test advances by hand. Nothing here waits on wall time. */
@@ -172,29 +170,10 @@ describe('panel title', () => {
   });
 });
 
-describe('close classification', () => {
-  test('a clean shell exit ends, transport loss reconnects, a lost id replaces', () => {
-    expect(ptyCloseAction({ code: 1000, reason: 'pty exited', hadError: false })).toBe('ended');
-    expect(ptyCloseAction({ code: 1000, reason: 'pty not found', hadError: false })).toBe(
-      'replace',
-    );
-    expect(ptyCloseAction({ code: 1006, reason: '', hadError: false })).toBe('reconnect');
-    expect(ptyCloseAction({ code: 1000, reason: 'idle timeout', hadError: false })).toBe(
-      'reconnect',
-    );
-    expect(ptyCloseAction({ code: 1000, reason: '', hadError: true })).toBe('reconnect');
-    expect(ptyCloseAction({ code: 1000, reason: '', hadError: false })).toBe('ended');
-  });
-});
-
-describe('sanitize', () => {
-  test('drops the shell-integration payloads a VT emulator would print', () => {
-    expect(sanitizePtyChunk('a\x1b]697;Foo=1\x07b')).toBe('ab');
-    expect(sanitizePtyChunk('x{"cursor":12}y')).toBe('xy');
-    expect(sanitizePtyChunk('p\x1b[24;1Rq')).toBe('pq');
-    expect(sanitizePtyChunk('kortix@sandbox:/workspace$ ')).toBe('kortix@sandbox:/workspace$ ');
-  });
-});
+// The close classifier and the output sanitizer are the SDK's
+// (`classifyPtyClose` / `sanitizePtyChunk`, `packages/sdk/src/core/runtime/pty.ts`,
+// covered by `pty.test.ts` there). `PtySession` below exercises them through
+// the close handler rather than re-asserting their table here.
 
 describe('PtySession', () => {
   test('open → connected, and the first dial arms the sandbox wake', async () => {
