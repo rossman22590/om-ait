@@ -66,6 +66,12 @@ export interface ComposerProps {
   onCommand(command: 'new' | 'terminal' | 'files' | 'help' | 'quit' | 'attach' | 'stop'): void;
   onToast?(message: string, kind?: 'info' | 'error'): void;
   onRequestFocus?(): void;
+  /**
+   * How many rows the composer needs right now, so the host can size the
+   * transcript above it (wave 3: `features/session/session-view.tsx`). Called
+   * on mount and whenever the count changes; the host must memoize it.
+   */
+  onMetrics?(metrics: { rows: number; overlayOpen: boolean }): void;
 }
 
 type Overlay = 'commands' | 'model' | 'effort' | 'agent' | null;
@@ -82,6 +88,7 @@ export function Composer({
   onCommand,
   onToast,
   onRequestFocus,
+  onMetrics,
 }: ComposerProps) {
   const textareaRef = useRef<TextareaRenderable>(null);
   const [draft, setDraft] = useState('');
@@ -112,6 +119,13 @@ export function Composer({
     const timer = setTimeout(() => setStopArmed(false), ESC_STOP_WINDOW_MS);
     return () => clearTimeout(timer);
   }, [stopArmed]);
+
+  // The host sizes the transcript from this. `rows` is the textarea's own row
+  // count; `overlayOpen` tells the host to reserve room for the palette that
+  // grows upward out of the input.
+  useEffect(() => {
+    onMetrics?.({ rows, overlayOpen: overlay !== null });
+  }, [rows, overlay, onMetrics]);
 
   const closeOverlay = useCallback(() => {
     setOverlay(null);

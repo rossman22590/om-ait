@@ -7,7 +7,14 @@ export {
   layoutRow,
   windowStart,
 } from './list.tsx';
-export { Modal, type ModalProps } from './modal.tsx';
+export {
+  MODAL_CHROME_COLUMNS,
+  MODAL_CHROME_ROWS,
+  Modal,
+  type ModalBox,
+  type ModalProps,
+  modalBox,
+} from './modal.tsx';
 export { Picker, type PickerProps, filterItems } from './picker.tsx';
 export { StatusBar, type StatusBarProps } from './status-bar.tsx';
 export { Spinner, type SpinnerProps } from './spinner.tsx';

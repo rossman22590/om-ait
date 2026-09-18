@@ -1,31 +1,36 @@
 /**
  * Boot.
  *
- *   host config → Kortix client → QueryClient → CLI renderer → <App/>
+ *   register elements → host config → Kortix client → QueryClient
+ *   → CLI renderer → <Root/>
  *
- * The order matters. `createKortix` installs the process-global platform
- * config that every `@kortix/sdk/react` hook reads, so it runs before the
- * first render. The renderer is created with `exitOnCtrlC: false`: the app
- * owns Ctrl+C (press twice), and every exit path goes through `shutdown()` so
- * the terminal is restored — an alternate-screen renderer that dies without
- * `destroy()` leaves the user with a broken shell.
+ * The order matters.
+ *
+ *  1. `registerEmbeddedTerminal()` runs before the first render.
+ *     `<embedded-terminal>` is not a built-in JSX tag; `extend()` has to have
+ *     run before the element is ever created (`features/terminal/register.ts`).
+ *  2. `createKortix` installs the process-global platform config that every
+ *     `@kortix/sdk/react` hook reads, so it runs before the first hook renders.
+ *     When no host is configured yet the login screen runs FIRST and calls
+ *     `initKortix` itself once a host is picked.
+ *  3. The renderer is created with `exitOnCtrlC: false`: the app owns Ctrl+C
+ *     (press twice), and every exit path goes through `shutdown()` so the
+ *     terminal is restored — an alternate-screen renderer that dies without
+ *     `destroy()` leaves the user with a broken shell.
  */
 
 import { createCliRenderer } from '@opentui/core';
 import { createRoot } from '@opentui/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useCallback, useState } from 'react';
 
 import { App } from './app.tsx';
-import { resolveHost } from './auth/hosts.ts';
+import { type ResolvedHost, listHostEntries, resolveHost } from './auth/hosts.ts';
+import { LoginScreen } from './features/login/index.ts';
+import { registerEmbeddedTerminal } from './features/terminal/register.ts';
 import { initKortix, kortix } from './kortix.ts';
 
-const LOGIN_HINT = [
-  'No Kortix host is configured.',
-  '',
-  'Run `kortix login`, or set both:',
-  '  KORTIX_API_URL=http://localhost:8008',
-  '  KORTIX_API_KEY=<pat-or-jwt>',
-].join('\n');
+registerEmbeddedTerminal();
 
 /** The project whose sessions the sidebar lists. */
 async function resolveProjectId(fallback?: string): Promise<string | null> {
@@ -40,16 +45,62 @@ async function resolveProjectId(fallback?: string): Promise<string | null> {
   }
 }
 
-async function main(): Promise<void> {
-  const host = resolveHost();
+interface RootProps {
+  initialHost: ResolvedHost | null;
+  initialProjectId: string | null;
+  initialSessionId: string | null;
+  onQuit: () => void;
+}
+
+/**
+ * Login or app.
+ *
+ * The host is state, so `Ctrl+H` is a state change and not a process restart:
+ * the login screen comes back, the user picks another host, `initKortix`
+ * rebuilds the one client, and the app remounts with a fresh `key` so every
+ * query and every SSE stream is torn down with the old host.
+ */
+function Root({ initialHost, initialProjectId, initialSessionId, onQuit }: RootProps) {
+  const [host, setHost] = useState<ResolvedHost | null>(initialHost);
+  const [projectId, setProjectId] = useState<string | null>(initialProjectId);
+  const [generation, setGeneration] = useState(0);
+
+  const onLoggedIn = useCallback((resolved: ResolvedHost) => {
+    initKortix(resolved);
+    setHost(resolved);
+    setProjectId(resolved.defaultProjectId ?? null);
+    setGeneration((value) => value + 1);
+  }, []);
+
   if (!host) {
-    process.stderr.write(`${LOGIN_HINT}\n`);
-    process.exitCode = 2;
-    return;
+    return (
+      <LoginScreen
+        hosts={listHostEntries()}
+        width={process.stdout.columns ?? 80}
+        height={process.stdout.rows ?? 24}
+        onLoggedIn={onLoggedIn}
+        onQuit={onQuit}
+      />
+    );
   }
 
-  initKortix(host);
-  const projectId = await resolveProjectId(host.defaultProjectId);
+  return (
+    <App
+      key={`${host.name}:${host.backendUrl}:${generation}`}
+      host={host}
+      projectId={projectId}
+      accountId={host.accountId || null}
+      initialSessionId={initialSessionId}
+      onQuit={onQuit}
+      onSwitchHost={() => setHost(null)}
+    />
+  );
+}
+
+async function main(): Promise<void> {
+  const host = resolveHost();
+  if (host) initKortix(host);
+  const projectId = host ? await resolveProjectId(host.defaultProjectId) : null;
 
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -91,9 +142,9 @@ async function main(): Promise<void> {
 
   root.render(
     <QueryClientProvider client={queryClient}>
-      <App
-        host={host}
-        projectId={projectId}
+      <Root
+        initialHost={host}
+        initialProjectId={projectId}
         initialSessionId={process.env.KORTIX_SESSION_ID?.trim() || null}
         onQuit={() => shutdown(0)}
       />

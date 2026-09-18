@@ -1,20 +1,95 @@
-import { useKeyboard, useTerminalDimensions } from '@opentui/react';
+/**
+ * The layout frame, the route state, and the global keymap.
+ *
+ * Everything visible is a child: the sidebar, the session column (which brings
+ * the terminal panel with it), the secondary screens, the status bar, and the
+ * one overlay slot. Route state lives here and nowhere else (SPEC §3).
+ *
+ * ── Why the overlays are here and not in the features ──
+ * `ui/Panel` sets `overflow: 'hidden'`, and an absolutely positioned child is
+ * scissored to its containing panel's rectangle. A `<Modal>`/`<Picker>` mounted
+ * from inside a panel therefore renders as a sliver (wave 1 measured a
+ * 10-column `┌─Switch a` where a 60-column dialog belonged). So the app owns
+ * ONE overlay slot at the root of the tree and features ask for it through a
+ * callback. The two in-flow pickers that stay inside their column on purpose —
+ * `sidebar/column-picker.tsx` and `session/pickers/inline-picker.tsx` — are not
+ * modals and are unaffected.
+ *
+ * ── Why the global handler gates on focus ──
+ * `useKeyboard` subscribes at the GLOBAL level, which OpenTUI dispatches BEFORE
+ * the focused renderable (`docs/opentui-api-reference.md` §2.4). A bare-letter
+ * global binding is therefore a keystroke stolen from whatever text field has
+ * focus. `?` is global only when no text input and no terminal has focus, and
+ * while the terminal is focused only `TERMINAL_RESERVED_CHORDS` are the app's —
+ * `Ctrl+C` belongs to the shell, so quitting there is `Ctrl+Q`.
+ */
+
+import { useProjectSessions } from '@kortix/sdk/react';
+import { useKeyboard, useRenderer, useTerminalDimensions } from '@opentui/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import type { ResolvedHost } from './auth/hosts.ts';
-import { SessionProbe, SessionSidebarProbe } from './features/session/session-probe.tsx';
-import { KEYMAP, formatBinding, matchesBinding } from './keymap.ts';
+import { type ResolvedHost, hostOrigin } from './auth/hosts.ts';
+import { AccountScreen } from './features/account/index.ts';
+import { AppsScreen } from './features/apps/index.ts';
+import { attachResultToast } from './features/attach/attach-status.tsx';
+import { type AttachStatus, type RunAttachResult, runAttach } from './features/attach/attach.ts';
+import { CustomizeScreen } from './features/customize/index.ts';
+import { FilesScreen } from './features/files/index.ts';
+import { HelpOverlay } from './features/help/index.ts';
+import { ReviewScreen } from './features/review/index.ts';
+import { SessionView } from './features/session/index.ts';
+import { focusHints } from './features/session/session-view.tsx';
+import { Sidebar } from './features/sidebar/index.ts';
+import { Switcher } from './features/switcher/index.ts';
+import { isReservedWhileTerminalFocused } from './features/terminal/keys.ts';
+import { matchesBinding } from './keymap.ts';
+import { kortix } from './kortix.ts';
+import { sessionTitle } from './lib/session-groups.ts';
 import { theme } from './theme.ts';
-import { Kbd, Modal, Panel, StatusBar, Toast } from './ui/index.ts';
+import { Panel, StatusBar, Toast, type ToastKind } from './ui/index.ts';
 
-/** The regions Tab cycles through. The terminal joins only when it is open. */
-export type Focus = 'sidebar' | 'main' | 'terminal';
+/** The screens the app routes between. Overlays are separate state. */
+export type Route = 'session' | 'files' | 'review' | 'apps' | 'customize' | 'account';
+
+/** The regions Tab cycles through. */
+export type Focus = 'sidebar' | 'transcript' | 'composer' | 'terminal' | 'screen';
+
+/** The one overlay slot's contents. */
+export type Overlay = 'help' | 'switcher' | null;
 
 const SIDEBAR_WIDTH = 28;
 /** Below this width the terminal panel takes the whole main area. */
 export const SPLIT_MIN_COLUMNS = 100;
 /** Below this width the sidebar is a picker (Ctrl+P), not a column. */
 export const SIDEBAR_MIN_COLUMNS = 60;
+/** Ctrl+C arms the quit; a second press inside this window leaves. */
+const QUIT_ARM_MS = 2000;
+
+/** Route chords, in the order the handler tests them. */
+const SCREEN_BINDINGS: readonly (readonly [string, Route])[] = [
+  ['screen.files', 'files'],
+  ['screen.review', 'review'],
+  ['screen.apps', 'apps'],
+  ['screen.customize', 'customize'],
+  ['screen.account', 'account'],
+] as const;
+
+/**
+ * The Tab ring for a route.
+ *
+ * SPEC §6 order: sidebar → transcript → composer → terminal. The terminal
+ * joins only while its panel is open, and only the session route has one.
+ */
+export function focusOrder(route: Route, showSidebar: boolean, terminalOpen: boolean): Focus[] {
+  const order: Focus[] = showSidebar ? ['sidebar'] : [];
+  if (route === 'session') {
+    order.push('transcript', 'composer');
+    if (terminalOpen) order.push('terminal');
+  } else {
+    order.push('screen');
+  }
+  return order;
+}
 
 export function nextFocus(current: Focus, order: Focus[], step: 1 | -1): Focus {
   const index = order.indexOf(current);
@@ -23,84 +98,279 @@ export function nextFocus(current: Focus, order: Focus[], step: 1 | -1): Focus {
   return order[next] as Focus;
 }
 
+/** Is this key one the app must not steal from the region that has focus? */
+export function globalKeyBlocked(focus: Focus, id: 'help' | 'back'): boolean {
+  if (focus === 'terminal') return true;
+  // The composer is a text field: `?` is a character and Esc clears the draft.
+  if (focus === 'composer') return true;
+  // A screen may have its own filter input; Esc is how it goes back, so only
+  // `?` is at risk there — and the screens bind `?` to nothing.
+  return false;
+}
+
 export interface AppProps {
   host: ResolvedHost;
   /** The project the session list reads. Resolved at boot. */
   projectId: string | null;
+  /** The account that project belongs to. */
+  accountId?: string | null;
   /** Pre-selected session, from `KORTIX_SESSION_ID`. */
   initialSessionId?: string | null;
   /** Tear the renderer down and leave. `src/index.tsx` owns the real exit. */
   onQuit: () => void;
+  /** `Ctrl+H`. `src/index.tsx` remounts the app on the new host. */
+  onSwitchHost?: () => void;
+  /** Test seam for attach mode. Production uses the real `runAttach`. */
+  attachImpl?: typeof runAttach;
 }
 
-/**
- * The layout frame and the global keymap. Everything visible is a child:
- * the sidebar, the main region, the terminal panel, the status bar, and the
- * overlays. Route state lives here and nowhere else (SPEC §3).
- */
-export function App({ host, projectId, initialSessionId = null, onQuit }: AppProps) {
+export function App({
+  host,
+  projectId: initialProjectId,
+  accountId: initialAccountId = null,
+  initialSessionId = null,
+  onQuit,
+  onSwitchHost,
+  attachImpl = runAttach,
+}: AppProps) {
   // A SIGWINCH re-renders through this hook, and the re-render is what
   // repaints: every region's width/height is derived from it.
   const dimensions = useTerminalDimensions();
-  const [focus, setFocus] = useState<Focus>('sidebar');
+  const renderer = useRenderer();
+
+  const [route, setRoute] = useState<Route>('session');
+  const [overlay, setOverlay] = useState<Overlay>(null);
+  const [focus, setFocus] = useState<Focus>(initialSessionId ? 'composer' : 'sidebar');
   const [terminalOpen, setTerminalOpen] = useState(false);
-  const [helpOpen, setHelpOpen] = useState(false);
   const [quitArmed, setQuitArmed] = useState(false);
+  const [projectId, setProjectId] = useState<string | null>(initialProjectId);
+  const [accountId, setAccountId] = useState<string | null>(
+    initialAccountId || host.accountId || null,
+  );
   const [sessionId, setSessionId] = useState<string | null>(initialSessionId);
+  const [toast, setToast] = useState<{ message: string; kind: ToastKind; seq: number } | null>(
+    null,
+  );
+  const [attachStatus, setAttachStatus] = useState<AttachStatus | null>(null);
+  const [attaching, setAttaching] = useState(false);
 
   const wide = dimensions.width >= SPLIT_MIN_COLUMNS;
   const showSidebar = dimensions.width >= SIDEBAR_MIN_COLUMNS;
-  const focusOrder = useMemo<Focus[]>(() => {
-    const order: Focus[] = showSidebar ? ['sidebar', 'main'] : ['main'];
-    if (terminalOpen) order.push('terminal');
-    return order;
-  }, [showSidebar, terminalOpen]);
+  const order = useMemo(
+    () => focusOrder(route, showSidebar, terminalOpen),
+    [route, showSidebar, terminalOpen],
+  );
 
   useEffect(() => {
-    if (!focusOrder.includes(focus)) setFocus(focusOrder[0] as Focus);
-  }, [focusOrder, focus]);
+    if (!order.includes(focus)) setFocus(order[0] as Focus);
+  }, [order, focus]);
 
-  // Ctrl+C arms, a second press within 2s quits. The renderer is created with
-  // `exitOnCtrlC: false` so this is the only path out.
   useEffect(() => {
     if (!quitArmed) return;
-    const timer = setTimeout(() => setQuitArmed(false), 2000);
+    const timer = setTimeout(() => setQuitArmed(false), QUIT_ARM_MS);
     return () => clearTimeout(timer);
   }, [quitArmed]);
 
+  const pushToast = useCallback((message: string, kind: ToastKind = 'info') => {
+    setToast((current) => ({ message, kind, seq: (current?.seq ?? 0) + 1 }));
+  }, []);
+
+  // The session list is already in the query cache for the sidebar; reading it
+  // here for the header title and the switcher costs no extra request.
+  const sessions = useProjectSessions(projectId ?? '', { enabled: Boolean(projectId) });
+  const title = useMemo(() => {
+    const row = sessions.sessions.find((entry) => entry.session_id === sessionId);
+    return row ? sessionTitle(row) : sessionId ? sessionId.slice(0, 8) : undefined;
+  }, [sessions.sessions, sessionId]);
+
+  const openSession = useCallback((id: string) => {
+    setSessionId(id);
+    setRoute('session');
+    setOverlay(null);
+    setFocus('composer');
+  }, []);
+
   const toggleTerminal = useCallback(() => {
     setTerminalOpen((open) => {
-      if (open && focus === 'terminal') setFocus('main');
-      return !open;
+      if (open) {
+        setFocus((current) => (current === 'terminal' ? 'composer' : current));
+        return false;
+      }
+      setRoute('session');
+      setFocus('terminal');
+      return true;
     });
-  }, [focus]);
+  }, []);
 
-  useKeyboard((key) => {
-    if (helpOpen) {
-      if (matchesBinding(key, 'help') || matchesBinding(key, 'back')) setHelpOpen(false);
+  const createSession = useCallback(async () => {
+    if (!projectId) {
+      pushToast('No project selected.', 'error');
       return;
     }
+    try {
+      // No title: session titles are server-owned (memory
+      // `session-titles-kortix-owned`), so the create body stays empty.
+      const created = await kortix().projects.createSession(projectId);
+      await sessions.refetch();
+      openSession(created.session_id);
+      pushToast('Session created.');
+    } catch (error) {
+      pushToast(`Create failed: ${errorText(error)}`, 'error');
+    }
+  }, [projectId, sessions.refetch, openSession, pushToast]);
+
+  /**
+   * Hand the terminal to the stock opencode TUI and take it back on exit.
+   *
+   * `renderer.suspend()`/`resume()` are the two methods `runAttach` needs
+   * (`@opentui/core/renderer.d.ts:588-589`); `suspend()` leaves the alternate
+   * screen before the child starts and `resume()` re-enters and repaints.
+   * Nothing else renders while it is suspended, which is why `attaching` gates
+   * the key handler too.
+   */
+  const attach = useCallback(
+    async (targetSessionId: string) => {
+      if (!projectId) {
+        pushToast('No project selected.', 'error');
+        return;
+      }
+      if (attaching) return;
+      setAttaching(true);
+      setOverlay(null);
+      try {
+        const result: RunAttachResult = await attachImpl({
+          renderer: {
+            suspend: () => renderer.suspend(),
+            resume: () => renderer.resume(),
+          },
+          host,
+          projectId,
+          sessionId: targetSessionId,
+          onStatus: setAttachStatus,
+        });
+        const { message, kind } = attachResultToast(result);
+        pushToast(message, kind);
+      } catch (error) {
+        pushToast(`Attach failed: ${errorText(error)}`, 'error');
+      } finally {
+        setAttachStatus(null);
+        setAttaching(false);
+      }
+    },
+    [projectId, attaching, attachImpl, renderer, host, pushToast],
+  );
+
+  const runCommand = useCallback(
+    (command: 'new' | 'terminal' | 'files' | 'help' | 'quit' | 'attach' | 'stop') => {
+      if (command === 'new') return void createSession();
+      if (command === 'terminal') return toggleTerminal();
+      if (command === 'files') return setRoute('files');
+      if (command === 'help') return setOverlay('help');
+      if (command === 'quit') return onQuit();
+      if (command === 'attach') {
+        if (sessionId) void attach(sessionId);
+        else pushToast('Open a session first.', 'error');
+        return;
+      }
+      // `stop` is handled inside the composer, which already called `cancel`.
+      pushToast('Stopping the current turn…');
+    },
+    [createSession, toggleTerminal, onQuit, sessionId, attach, pushToast],
+  );
+
+  useKeyboard((key) => {
+    // An overlay owns the keyboard outright; so does a suspended renderer.
+    if (overlay || attaching) return;
+
+    const terminalFocused = focus === 'terminal';
+    // While the shell has focus the app keeps four chords and nothing else.
+    if (terminalFocused && !isReservedWhileTerminalFocused(key)) return;
+
     if (matchesBinding(key, 'quit')) {
+      // Ctrl+Q leaves at once. Ctrl+C asks first — and inside the terminal it
+      // is not ours at all, so it never arms.
       if (key.name === 'q' || quitArmed) {
         onQuit();
         return;
       }
+      if (terminalFocused) return;
       setQuitArmed(true);
       return;
     }
     if (quitArmed) setQuitArmed(false);
-    if (matchesBinding(key, 'help')) return setHelpOpen(true);
-    if (matchesBinding(key, 'focus.prev')) return setFocus((f) => nextFocus(f, focusOrder, -1));
-    if (matchesBinding(key, 'focus.next')) return setFocus((f) => nextFocus(f, focusOrder, 1));
-    if (matchesBinding(key, 'panel.terminal')) return toggleTerminal();
+
+    if (matchesBinding(key, 'focus.next')) {
+      key.preventDefault();
+      setFocus((current) => nextFocus(current, order, 1));
+      return;
+    }
+    if (matchesBinding(key, 'focus.prev')) {
+      key.preventDefault();
+      setFocus((current) => nextFocus(current, order, -1));
+      return;
+    }
+    if (matchesBinding(key, 'panel.terminal')) {
+      key.preventDefault();
+      toggleTerminal();
+      return;
+    }
+    if (terminalFocused) return;
+
+    if (matchesBinding(key, 'help')) {
+      if (globalKeyBlocked(focus, 'help')) return;
+      key.preventDefault();
+      setOverlay('help');
+      return;
+    }
+    if (matchesBinding(key, 'switcher')) {
+      key.preventDefault();
+      setOverlay('switcher');
+      return;
+    }
+    if (matchesBinding(key, 'session.new')) {
+      key.preventDefault();
+      void createSession();
+      return;
+    }
+    if (matchesBinding(key, 'attach')) {
+      key.preventDefault();
+      if (sessionId) void attach(sessionId);
+      else pushToast('Open a session first.', 'error');
+      return;
+    }
+    if (matchesBinding(key, 'hosts')) {
+      key.preventDefault();
+      if (onSwitchHost) onSwitchHost();
+      else pushToast('Host switching needs the login screen.', 'error');
+      return;
+    }
+    const screen = SCREEN_BINDINGS.find(([id]) => matchesBinding(key, id));
+    if (screen) {
+      key.preventDefault();
+      setRoute(screen[1]);
+      setFocus('screen');
+      return;
+    }
+
+    if (matchesBinding(key, 'back')) {
+      if (route !== 'session') {
+        setRoute('session');
+        setFocus('composer');
+        return;
+      }
+      if (globalKeyBlocked(focus, 'back')) return;
+      // Esc in the transcript hands the keyboard back to the composer.
+      if (focus === 'transcript') setFocus('composer');
+    }
   });
 
-  const hints = [
-    '? help',
-    'Tab focus',
-    'Alt+T terminal',
-    quitArmed ? 'Ctrl+C again to quit' : 'Ctrl+C quit',
-  ].join(' · ');
+  const sidebarHeight = Math.max(dimensions.height - 1, 3);
+  const mainWidth = Math.max(dimensions.width - (showSidebar ? SIDEBAR_WIDTH : 0), 20);
+  const hints = attaching
+    ? 'opencode has the terminal…'
+    : quitArmed
+      ? 'Press Ctrl+C again to quit'
+      : `${focusHints(focus)} · ? help`;
 
   return (
     <box
@@ -112,95 +382,262 @@ export function App({ host, projectId, initialSessionId = null, onQuit }: AppPro
       <box flexDirection="row" flexGrow={1} overflow="hidden">
         {showSidebar ? (
           <Panel
-            title={host.name}
-            footer={projectId ? projectId.slice(0, 8) : 'no project'}
+            title={host.source === 'env' ? 'kortix' : host.name}
             focused={focus === 'sidebar'}
             width={SIDEBAR_WIDTH}
             flexShrink={0}
           >
-            <SessionSidebarProbe
+            <Sidebar
+              host={host}
+              accountId={accountId}
               projectId={projectId}
-              focused={focus === 'sidebar'}
               selectedSessionId={sessionId}
-              onOpenSession={(id) => {
-                setSessionId(id);
-                setFocus('main');
+              focused={focus === 'sidebar'}
+              width={SIDEBAR_WIDTH - 2}
+              height={sidebarHeight - 2}
+              onOpenSession={openSession}
+              onNewSession={openSession}
+              onNavigate={(screen) => {
+                setRoute(screen);
+                setFocus('screen');
               }}
-              maxRows={Math.max(dimensions.height - 5, 1)}
+              onProjectChange={(nextProject, nextAccount) => {
+                setProjectId(nextProject);
+                if (nextAccount) setAccountId(nextAccount);
+                setSessionId(null);
+                setRoute('session');
+              }}
+              onAccountChange={(nextAccount) => {
+                setAccountId(nextAccount);
+                setProjectId(null);
+                setSessionId(null);
+                setRoute('session');
+              }}
+              onAttach={(id) => void attach(id)}
+              onToast={pushToast}
             />
           </Panel>
         ) : null}
 
-        {!terminalOpen || wide ? (
-          <Panel
-            title={sessionId ? `session ${sessionId.slice(0, 8)}` : 'no session'}
-            focused={focus === 'main'}
-            flexGrow={1}
-            minWidth={20}
-            padding={1}
-          >
-            {projectId && sessionId ? (
-              <SessionProbe
-                projectId={projectId}
-                sessionId={sessionId}
-                focused={focus === 'main'}
-                height={Math.max(dimensions.height - 6, 3)}
-              />
-            ) : (
-              <text fg={theme.faint}>
-                {projectId
-                  ? 'Pick a session on the left, or press Ctrl+N.'
-                  : 'No project on this host.'}
-              </text>
-            )}
+        {route === 'session' && projectId && sessionId ? (
+          <SessionView
+            projectId={projectId}
+            sessionId={sessionId}
+            title={title}
+            focus={
+              focus === 'transcript' || focus === 'composer' || focus === 'terminal' ? focus : null
+            }
+            width={mainWidth}
+            height={sidebarHeight}
+            terminalOpen={terminalOpen}
+            wide={wide}
+            onFocus={setFocus}
+            onCloseTerminal={() => {
+              setTerminalOpen(false);
+              setFocus('composer');
+            }}
+            onCommand={runCommand}
+            onToast={pushToast}
+          />
+        ) : null}
+
+        {route === 'session' && !(projectId && sessionId) ? (
+          <Panel focused={focus !== 'sidebar'} flexGrow={1} minWidth={20} padding={1}>
+            <text fg={theme.faint}>
+              {projectId
+                ? 'Pick a session on the left, or press Ctrl+N for a new one.'
+                : 'No project on this host. Press Ctrl+P to pick one.'}
+            </text>
           </Panel>
         ) : null}
 
-        {terminalOpen ? (
+        {route !== 'session' ? (
           <Panel
-            title="Terminal"
-            focused={focus === 'terminal'}
-            width={wide ? '40%' : undefined}
-            flexGrow={wide ? 0 : 1}
-            padding={1}
+            title={route}
+            footer="Esc back"
+            focused={focus === 'screen'}
+            flexGrow={1}
+            minWidth={20}
           >
-            <text fg={theme.faint}>The PTY panel arrives in wave 1 (features/terminal).</text>
+            <Screen
+              route={route}
+              projectId={projectId}
+              accountId={accountId}
+              sessionId={sessionId}
+              focused={focus === 'screen'}
+              width={mainWidth - 2}
+              height={sidebarHeight - 2}
+              webBaseUrl={hostOrigin(host.backendUrl)}
+              onBack={() => {
+                setRoute('session');
+                setFocus('composer');
+              }}
+              onOpenSession={openSession}
+              onToast={pushToast}
+            />
           </Panel>
         ) : null}
       </box>
 
       <StatusBar
         left={
-          <text fg={theme.dim}>
-            {host.source === 'env' ? 'env' : host.name}
-            {host.userEmail ? ` · ${host.userEmail}` : ''}
+          <text fg={theme.dim} wrapMode="none">
+            {statusLeft(host, sessions.sessions.length, projectId)}
           </text>
         }
         right={hints}
       />
 
-      {quitArmed ? (
-        <Toast message="Press Ctrl+C again to quit." onDismiss={() => setQuitArmed(false)} />
+      {attachStatus ? (
+        <Toast
+          key={`attach:${attachStatus.stage}`}
+          message={`${attachStatus.stage} — ${attachStatus.detail}`}
+          timeoutMs={0}
+        />
       ) : null}
 
-      {helpOpen ? (
-        <Modal
-          title="Keys"
-          hint="Esc close"
-          onClose={() => setHelpOpen(false)}
-          width={Math.min(72, dimensions.width - 4)}
-          height={Math.min(KEYMAP.length + 4, dimensions.height - 2)}
-        >
-          {KEYMAP.map((binding) => (
-            <box key={binding.id} flexDirection="row">
-              <box width={22} flexShrink={0}>
-                <Kbd keys={formatBinding(binding)} />
-              </box>
-              <text fg={theme.dim}>{binding.description}</text>
-            </box>
-          ))}
-        </Modal>
+      {toast ? (
+        <Toast
+          key={`toast:${toast.seq}`}
+          message={toast.message}
+          kind={toast.kind}
+          onDismiss={() => setToast(null)}
+        />
+      ) : null}
+
+      {overlay === 'help' ? <HelpOverlay onClose={() => setOverlay(null)} /> : null}
+
+      {overlay === 'switcher' ? (
+        <Switcher
+          projectId={projectId}
+          accountId={accountId}
+          onPick={(pick) => {
+            setOverlay(null);
+            if (pick.kind === 'session') openSession(pick.sessionId);
+            else {
+              setProjectId(pick.projectId);
+              setSessionId(null);
+              setRoute('session');
+              setFocus('sidebar');
+            }
+          }}
+          onClose={() => setOverlay(null)}
+        />
       ) : null}
     </box>
   );
+}
+
+function statusLeft(host: ResolvedHost, sessionCount: number, projectId: string | null): string {
+  const parts = [host.source === 'env' ? 'env' : host.name];
+  if (host.userEmail) parts.push(host.userEmail);
+  if (projectId) parts.push(`${sessionCount} sessions`);
+  return parts.join(' · ');
+}
+
+function errorText(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'string' && error) return error;
+  return 'Unknown error';
+}
+
+interface ScreenProps {
+  route: Route;
+  projectId: string | null;
+  accountId: string | null;
+  sessionId: string | null;
+  focused: boolean;
+  width: number;
+  height: number;
+  /** The Kortix web origin, for screens that print a link the TUI cannot open. */
+  webBaseUrl: string;
+  onBack(): void;
+  onOpenSession(sessionId: string): void;
+  onToast(message: string, kind?: ToastKind): void;
+}
+
+/** The secondary screens. Each one owns its own keys while it has focus. */
+function Screen({
+  route,
+  projectId,
+  accountId,
+  sessionId,
+  focused,
+  width,
+  height,
+  webBaseUrl,
+  onBack,
+  onOpenSession,
+  onToast,
+}: ScreenProps) {
+  if (route === 'files') {
+    if (!projectId || !sessionId) return <Missing text="Open a session to browse its files." />;
+    return (
+      <FilesScreen
+        projectId={projectId}
+        sessionId={sessionId}
+        focused={focused}
+        width={width}
+        height={height}
+        onBack={onBack}
+        onToast={onToast}
+      />
+    );
+  }
+  if (route === 'review') {
+    if (!projectId) return <Missing text="No project selected." />;
+    return (
+      <ReviewScreen
+        projectId={projectId}
+        focused={focused}
+        width={width}
+        height={height}
+        onBack={onBack}
+        onOpenSession={onOpenSession}
+        onToast={onToast}
+      />
+    );
+  }
+  if (route === 'apps') {
+    return (
+      <AppsScreen
+        projectId={projectId}
+        accountId={accountId}
+        focused={focused}
+        width={width}
+        height={height}
+        onBack={onBack}
+        onToast={onToast}
+      />
+    );
+  }
+  if (route === 'customize') {
+    return (
+      <CustomizeScreen
+        projectId={projectId}
+        accountId={accountId}
+        focused={focused}
+        width={width}
+        height={height}
+        webBaseUrl={webBaseUrl}
+        onBack={onBack}
+        onToast={onToast}
+      />
+    );
+  }
+  if (!accountId) return <Missing text="No account on this host." />;
+  return (
+    <AccountScreen
+      accountId={accountId}
+      focused={focused}
+      width={width}
+      height={height}
+      onBack={onBack}
+      onToast={onToast}
+    />
+  );
+}
+
+function Missing({ text }: { text: string }) {
+  return <text fg={theme.faint}>{text}</text>;
 }

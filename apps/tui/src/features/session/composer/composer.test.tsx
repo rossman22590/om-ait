@@ -67,6 +67,7 @@ interface Spies {
   runCommand: ReturnType<typeof mock>;
   setModel: ReturnType<typeof mock>;
   setAgent: ReturnType<typeof mock>;
+  setVariant: ReturnType<typeof mock>;
   onCommand: ReturnType<typeof mock>;
 }
 
@@ -105,6 +106,7 @@ function newSpies(): Spies {
     runCommand: mock(() => Promise.resolve()),
     setModel: mock(() => {}),
     setAgent: mock(() => {}),
+    setVariant: mock(() => {}),
     onCommand: mock(() => {}),
   };
 }
@@ -479,8 +481,12 @@ describe('the pickers', () => {
       picks: {
         model: { providerID: 'kortix', modelID: 'anthropic/claude-sonnet-5' },
         agent: null,
+        // `SessionPicks` carries the variant too; a partial mock that omits it
+        // is not assignable (TS2352) and breaks `tsc --noEmit`.
+        variant: null,
         setModel: spies.setModel,
         setAgent: spies.setAgent,
+        setVariant: spies.setVariant,
       },
     } as Partial<SessionState>);
     const setup = await mountComposer(session, spies);
