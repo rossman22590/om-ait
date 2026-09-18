@@ -74,6 +74,12 @@ export interface ManifestImportReader {
   read(path: string): Promise<string>;
 }
 
+/** The same contract over a synchronous store (the CLI's working tree). */
+export interface ManifestImportReaderSync {
+  list(path: string): Array<{ path: string; revision?: string | null }>;
+  read(path: string): string;
+}
+
 export interface ManifestSourceFile {
   path: string;
   raw: Record<string, unknown>;
@@ -183,10 +189,10 @@ const ALL_IMPORTABLE_KEYS: readonly ImportableKey[] = [
  * returns immediately and never calls the reader, so projects that do not use
  * the feature pay nothing.
  */
-export async function resolveManifestImports(
+export function resolveManifestImportsSync(
   root: ManifestSourceFile,
-  reader: ManifestImportReader,
-): Promise<ResolvedManifest> {
+  reader: ManifestImportReaderSync,
+): ResolvedManifest {
   const files: ManifestSourceFile[] = [root];
   const origins = emptyOrigins();
   if (!hasManifestImports(root.raw)) {
@@ -223,10 +229,11 @@ export async function resolveManifestImports(
     }
   };
 
-  const visit = async (file: ManifestSourceFile, stack: string[]): Promise<void> => {
+  const visit = (file: ManifestSourceFile, stack: string[]): void => {
     mergeFile(file);
     for (const importPath of declaredImports(file.path, file.raw)) {
-      const listed = (await reader.list(importPath))
+      const listed = reader
+        .list(importPath)
         .filter((entry) => YAML_FILE_RE.test(entry.path))
         .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
       if (listed.length === 0) {
@@ -253,8 +260,9 @@ export async function resolveManifestImports(
         }
         let raw: Record<string, unknown>;
         try {
-          raw = parseManifestText(await reader.read(entry.path), 'yaml');
+          raw = parseManifestText(reader.read(entry.path), 'yaml');
         } catch (error) {
+          if (error instanceof ImportReadPending) throw error;
           throw new ManifestImportError(
             `${entry.path}: ${error instanceof Error ? error.message : String(error)}`,
           );
@@ -268,12 +276,12 @@ export async function resolveManifestImports(
         }
         const imported: ManifestSourceFile = { path: entry.path, raw, revision: entry.revision };
         files.push(imported);
-        await visit(imported, [...stack, entry.path]);
+        visit(imported, [...stack, entry.path]);
       }
     }
   };
 
-  await visit(root, [root.path]);
+  visit(root, [root.path]);
 
   // Rebuild the root's key order, swapping each collection for its merged form
   // and appending collections only imported files declared.
@@ -289,6 +297,52 @@ export async function resolveManifestImports(
     else if (maps[key]) merged[key] = maps[key];
   }
   return { raw: merged, files, origins };
+}
+
+/** Thrown by the caching reader below to suspend a synchronous resolve until
+ *  one more `list`/`read` result has been fetched. Never escapes this module. */
+class ImportReadPending extends Error {
+  constructor(
+    readonly kind: 'list' | 'read',
+    readonly path: string,
+  ) {
+    super(`pending ${kind} ${path}`);
+  }
+}
+
+/**
+ * `resolveManifestImportsSync` over an asynchronous store (git in the API).
+ * ONE implementation of the merge rules: the synchronous resolver runs against
+ * a cache, suspends on the first miss, the miss is fetched, and it runs again.
+ * Each pass is an in-memory merge of at most `MAX_IMPORT_FILES` small documents.
+ */
+export async function resolveManifestImports(
+  root: ManifestSourceFile,
+  reader: ManifestImportReader,
+): Promise<ResolvedManifest> {
+  const lists = new Map<string, Array<{ path: string; revision?: string | null }>>();
+  const texts = new Map<string, string>();
+  const cached: ManifestImportReaderSync = {
+    list(path) {
+      const hit = lists.get(path);
+      if (!hit) throw new ImportReadPending('list', path);
+      return hit;
+    },
+    read(path) {
+      const hit = texts.get(path);
+      if (hit === undefined) throw new ImportReadPending('read', path);
+      return hit;
+    },
+  };
+  for (;;) {
+    try {
+      return resolveManifestImportsSync(root, cached);
+    } catch (error) {
+      if (!(error instanceof ImportReadPending)) throw error;
+      if (error.kind === 'list') lists.set(error.path, await reader.list(error.path));
+      else texts.set(error.path, await reader.read(error.path));
+    }
+  }
 }
 
 /** `collectionEntries` for the no-imports fast path: a malformed collection is

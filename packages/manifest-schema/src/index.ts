@@ -72,6 +72,7 @@ export {
 export {
   type ImportableKey,
   type ManifestImportReader,
+  type ManifestImportReaderSync,
   type ManifestOrigins,
   type ManifestSourceFile,
   type ResolvedManifest,
@@ -87,6 +88,7 @@ export {
   hasManifestImports,
   normalizeImportPath,
   resolveManifestImports,
+  resolveManifestImportsSync,
   splitManifestByOrigin,
 } from './imports';
 

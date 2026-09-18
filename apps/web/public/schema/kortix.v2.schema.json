@@ -6,9 +6,20 @@
   "type": "object",
   "required": [
     "kortix_version",
-    "default_agent",
-    "agents"
+    "default_agent"
   ],
+  "if": {
+    "not": {
+      "required": [
+        "imports"
+      ]
+    }
+  },
+  "then": {
+    "required": [
+      "agents"
+    ]
+  },
   "properties": {
     "kortix_version": {
       "const": 2

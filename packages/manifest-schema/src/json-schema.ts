@@ -719,7 +719,12 @@ export function buildManifestV2Schema(): JsonSchemaFragment {
       'here is a hard error. `[[channels]]` is removed outright. See ' +
       'docs/specs/2026-07-05-agent-first-config-unification.md §2.1/§2.2/§2.5.',
     type: 'object',
-    required: ['kortix_version', 'default_agent', 'agents'],
+    required: ['kortix_version', 'default_agent'],
+    // `agents` is required in the file itself unless `imports` can supply it:
+    // this schema sees ONE file, and a split manifest may declare every agent
+    // in an imported one. The imperative validator checks the merged document.
+    if: { not: { required: ['imports'] } },
+    then: { required: ['agents'] },
     properties: {
       kortix_version: { const: 2 },
       // Other YAML files (or directories of them) whose `triggers`,
