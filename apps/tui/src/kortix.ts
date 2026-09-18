@@ -4,7 +4,7 @@
  * CLAUDE.md: "One client per host. Create it once via `createKortix({
  * backendUrl, getToken })`." `createKortix` also installs the process-global
  * platform config every `@kortix/sdk/react` hook reads, so this module must be
- * initialized before the first hook renders — `src/index.tsx` does that at
+ * initialized before the first hook renders — `src/main.tsx` does that at
  * boot, before `createRoot(...).render(<App/>)`.
  */
 

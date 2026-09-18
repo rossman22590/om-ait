@@ -94,9 +94,9 @@ export interface AppProps {
   accountId?: string | null;
   /** Pre-selected session, from `KORTIX_SESSION_ID`. */
   initialSessionId?: string | null;
-  /** Tear the renderer down and leave. `src/index.tsx` owns the real exit. */
+  /** Tear the renderer down and leave. `src/main.tsx` owns the real exit. */
   onQuit: () => void;
-  /** `Ctrl+H`. `src/index.tsx` remounts the app on the new host. */
+  /** `Ctrl+H`. `src/main.tsx` remounts the app on the new host. */
   onSwitchHost?: () => void;
   /** Test seam for attach mode. Production uses the real `runAttach`. */
   attachImpl?: typeof runAttach;

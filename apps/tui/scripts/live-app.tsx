@@ -78,7 +78,7 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 2 } },
 });
 
-/** `Ctrl+H` asks the HOST to remount on another host; `src/index.tsx` owns that
+/** `Ctrl+H` asks the HOST to remount on another host; `src/main.tsx` owns that
  *  in the real process, so here it is recorded and asserted. */
 let switchHostCalls = 0;
 

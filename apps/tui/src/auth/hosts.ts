@@ -16,7 +16,7 @@
  * `apps/cli/src/api/config.ts`), so a stale sandbox token left exported in a
  * developer shell silently outranks `kortix login` for the CLI AND the TUI.
  * The TUI cannot change that precedence without diverging from the CLI, so it
- * names the source (`envVar`) and `src/index.tsx` validates the token at boot
+ * names the source (`envVar`) and `src/main.tsx` validates the token at boot
  * and says exactly which variable to unset when it is rejected.
  */
 
