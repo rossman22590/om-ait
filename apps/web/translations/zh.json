@@ -1,5 +1,15 @@
 {
   "pooledSecrets": {
+    "saveChanges": "保存更改",
+    "unsavedChanges": "密钥更改尚未保存",
+    "creationDescription": "值会保持加密。保存前请选择谁可以使用此连接。",
+    "whoCanUse": "谁可以使用此连接？",
+    "everyoneInProject": "此项目中的所有成员",
+    "everyoneDescription": "任何项目成员都可以在会话中选择此连接。",
+    "specificMembers": "指定成员",
+    "specificDescription": "只有指定的项目成员和连接所有者可以使用。",
+    "accessDescription": "选择整个项目均可访问，或仅允许指定成员访问。",
+    "selectedMembersCount": "{count, plural, one {# member} other {# members}}",
     "providerDisabled": "此提供商已在当前会话中禁用。",
     "unavailableKeys": "{count, plural, other {有#个所选密钥不可用。}} 请移除不可用的密钥或恢复访问权限。",
     "removeUnavailable": "移除不可用的密钥",
@@ -7,7 +17,7 @@
     "manageKeys": "管理提供商密钥",
     "readOnlyPool": "只有会话所有者或项目管理员可以更改此池。",
     "legacyChatGptLogin": "现有项目登录",
-    "legacyChatGptDescription": "此旧连接与整个项目共享。上方的新 ChatGPT 账户在您共享前仅供本人使用。",
+    "legacyChatGptDescription": "此旧连接与整个项目共享。请分别管理上方新账户的访问权限。",
     "chatGptAccounts": "ChatGPT 账户",
     "accountCount": "{count, plural, other {# 个账户}}",
     "addAccount": "添加账户",
@@ -15,7 +25,7 @@
     "connectAccount": "连接账户",
     "oauthWaiting": "等待授权…",
     "oauthExpired": "授权已超时，请重试。",
-    "oauthPrivateDescription": "您的 ChatGPT 登录仅供本人使用，除非您向其他成员授予访问权限。在会话设置中选择账户。",
+    "oauthPrivateDescription": "新的 ChatGPT 账户默认可供此项目的所有成员使用。您可以将每个账户限制为指定成员使用。",
     "accountLabelPlaceholder": "例如：我的 ChatGPT 账户",
     "chooseProvider": "请选择提供商。",
     "saved": "密钥已保存",
@@ -23,8 +33,8 @@
     "deleted": "秘密已删除",
     "deleteError": "无法删除密钥",
     "accessError": "无法更改访问权限",
-    "sharedTitle": "共享提供商密钥",
-    "sharedDescription": "添加多个提供商密钥和 ChatGPT 账户。与成员共享每个连接，并在每个会话中选择。",
+    "sharedTitle": "提供商连接",
+    "sharedDescription": "添加多个 API 密钥和 ChatGPT 账户。默认情况下，此项目的所有成员都可以使用。您可以按连接限制访问权限，并为每个会话选择密钥。",
     "legacyProjectKey": "现有项目密钥 · 本会话未选择密钥时使用",
     "keyCount": "{count, plural, one {# 个密钥} other {# 个密钥}}",
     "providerKeysFor": "{provider} API 密钥",
@@ -152,15 +162,14 @@
     "actions": {
       "create": "创建项目",
       "tryAgain": "重试",
+      "upgrade": "升级方案",
       "logOut": "退出登录",
-      "signingOut": "正在退出"
+      "signingOut": "正在退出",
+      "back": "返回项目"
     },
     "repository": {
       "label": "代码仓库",
       "defaultBranch": "默认分支",
-      "noGitHubAccount": "此项目的账户尚未连接 GitHub 账户。",
-      "connectGitHub": "连接 GitHub 账户",
-      "connectGitHubSuffix": "以使用此选项。",
       "loadGitHubAccountsError": "无法加载 GitHub 账户。请重试。",
       "createsPath": "创建 <path>{path}</path>",
       "loadRepositoriesError": "无法加载仓库。请重试。",
@@ -170,24 +179,23 @@
           "description": "Kortix 为此项目创建并管理私有代码仓库。"
         },
         "githubCreate": {
-          "label": "在 GitHub 中创建",
           "description": "Kortix 在您的 GitHub 账户中创建私有代码仓库。"
-        },
-        "githubImport": {
-          "label": "从 GitHub 导入",
-          "description": "从您的 GitHub 账户中选择现有代码仓库。"
         }
       },
       "repositoryLabel": "仓库",
-      "createInOwner": "在 {owner} 中创建仓库",
-      "importFromOwner": "从 {owner} 导入仓库",
-      "selectOption": "选择仓库选项",
       "loadingOptions": "正在加载仓库选项…",
       "managedUnavailable": "此实例无法使用由 Kortix 托管的仓库。平台管理员可在管理控制台中完成设置。",
       "installationUnreachable": "此 GitHub 连接已失效。请重新连接以列出仓库。",
       "reconnect": "在 Git 设置中重新连接",
       "managedImportLabel": "导入现有的托管仓库",
-      "managedImportHint": "仅限自托管运维人员。列出托管 git 所有者已持有的仓库。"
+      "managedImportHint": "仅限自托管运维人员。列出托管 git 所有者已持有的仓库。",
+      "gitAccountLabel": "Git 账户",
+      "selectGitAccount": "选择 Git 账户",
+      "addGitHubAccount": "添加 GitHub 账户…",
+      "actionCreate": "创建新仓库",
+      "actionImport": "导入现有仓库",
+      "ownerTypePersonal": "个人账户",
+      "ownerTypeOrg": "组织"
     }
   },
   "projectHome": {
@@ -1084,6 +1092,10 @@
         "pi_worker": {
           "name": "Pi 工作器运行时（已编译）",
           "description": "使用实验性 Pi 工作器运行时来运行会话。"
+        },
+        "pi_harness": {
+          "name": "Pi 运行框架（沙箱内）",
+          "description": "在会话沙箱内使用 Pi 运行框架而不是 OpenCode 来运行会话。关闭时，清单中的 `runtime: pi` 仍会选择 Pi。"
         }
       }
     },
@@ -18512,7 +18524,13 @@
       "text7f59f014cd7b": "已经安装在你想要的所有者上了吗？",
       "text9180f7df8906": "关联你已管理的安装",
       "text0b0e4c425624": "已关联到 {value0, plural, other {# 个其他 Kortix 账户}}。",
-      "text7dac2ca010fe": "正在准备完整记录…"
+      "text7dac2ca010fe": "正在准备完整记录…",
+      "textc6309c452031": "连接共享账户",
+      "textded4b88e52f7": "尚无共享账户",
+      "textc3bafa5156b4": "你还没有自己的账户",
+      "textea5d0ffa0962": "共享账户由项目管理员连接。",
+      "text3d6627454174": "设置凭据",
+      "text929505ef815a": "尚未连接任何账户。在下方添加你自己的账户，或请项目管理员连接一个共享账户。"
     }
   },
   "projectOnboarding": {

@@ -1,5 +1,15 @@
 {
   "pooledSecrets": {
+    "saveChanges": "Änderungen speichern",
+    "unsavedChanges": "Nicht gespeicherte Schlüsseländerungen",
+    "creationDescription": "Der Wert bleibt verschlüsselt. Wählen Sie vor dem Speichern, wer diese Verbindung nutzen darf.",
+    "whoCanUse": "Wer darf diese Verbindung nutzen?",
+    "everyoneInProject": "Alle in diesem Projekt",
+    "everyoneDescription": "Jedes Projektmitglied kann sie in einer Sitzung auswählen.",
+    "specificMembers": "Ausgewählte Mitglieder",
+    "specificDescription": "Nur ausgewählte Projektmitglieder und der Eigentümer können sie nutzen.",
+    "accessDescription": "Wählen Sie Zugriff für das ganze Projekt oder nur für ausgewählte Mitglieder.",
+    "selectedMembersCount": "{count, plural, one {# member} other {# members}}",
     "providerDisabled": "Dieser Anbieter ist für diese Sitzung deaktiviert.",
     "unavailableKeys": "{count, plural, one {# ausgewählter Schlüssel ist nicht verfügbar.} other {# ausgewählte Schlüssel sind nicht verfügbar.}} Entferne diese Schlüssel oder stelle den Zugriff wieder her.",
     "removeUnavailable": "Nicht verfügbare Schlüssel entfernen",
@@ -7,7 +17,7 @@
     "manageKeys": "Anbieterschlüssel verwalten",
     "readOnlyPool": "Nur der Sitzungsinhaber oder ein Projektmanager kann diesen Pool ändern.",
     "legacyChatGptLogin": "Bestehende Projektanmeldung",
-    "legacyChatGptDescription": "Diese ältere Verbindung wird im Projekt geteilt. Neue ChatGPT-Konten oben bleiben privat, bis Sie sie freigeben.",
+    "legacyChatGptDescription": "Diese ältere Verbindung wird im Projekt geteilt. Verwalten Sie den Zugriff auf neue Konten oben einzeln.",
     "chatGptAccounts": "ChatGPT-Konten",
     "accountCount": "{count, plural, one {# Konto} other {# Konten}}",
     "addAccount": "Konto hinzufügen",
@@ -15,7 +25,7 @@
     "connectAccount": "Konto verbinden",
     "oauthWaiting": "Warte auf Autorisierung…",
     "oauthExpired": "Autorisierung abgelaufen. Versuchen Sie es erneut.",
-    "oauthPrivateDescription": "Ihre ChatGPT-Anmeldung ist privat, bis Sie einem anderen Mitglied Zugriff gewähren. Wählen Sie Konten in den Sitzungseinstellungen aus.",
+    "oauthPrivateDescription": "Neue ChatGPT-Konten sind standardmäßig für dieses Projekt verfügbar. Sie können jedes Konto auf ausgewählte Mitglieder beschränken.",
     "accountLabelPlaceholder": "z. B. Mein ChatGPT-Konto",
     "chooseProvider": "Anbieter auswählen.",
     "saved": "Geheimnis gespeichert",
@@ -23,8 +33,8 @@
     "deleted": "Geheimnis gelöscht",
     "deleteError": "Geheimnis konnte nicht gelöscht werden",
     "accessError": "Zugriff konnte nicht geändert werden",
-    "sharedTitle": "Freigegebene Anbietergeheimnisse",
-    "sharedDescription": "Fügen Sie mehrere Anbieterschlüssel und ChatGPT-Konten hinzu. Teilen Sie jede Verbindung mit Mitgliedern und wählen Sie sie pro Sitzung aus.",
+    "sharedTitle": "Anbieter-Verbindungen",
+    "sharedDescription": "Fügen Sie mehrere API-Schlüssel und ChatGPT-Konten hinzu. Standardmäßig kann jeder in diesem Projekt sie nutzen. Beschränken Sie den Zugriff pro Verbindung und wählen Sie Schlüssel pro Sitzung.",
     "legacyProjectKey": "Bestehender Projektschlüssel · Wird verwendet, wenn für diese Sitzung keine Schlüssel ausgewählt sind",
     "keyCount": "{count, plural, one {# Schlüssel} other {# Schlüssel}}",
     "providerKeysFor": "API-Schlüssel für {provider}",
@@ -152,15 +162,14 @@
     "actions": {
       "create": "Projekt erstellen",
       "tryAgain": "Erneut versuchen",
+      "upgrade": "Tarif upgraden",
       "logOut": "Abmelden",
-      "signingOut": "Abmeldung läuft"
+      "signingOut": "Abmeldung läuft",
+      "back": "Zurück zu den Projekten"
     },
     "repository": {
       "label": "Repository",
       "defaultBranch": "Standard-Branch",
-      "noGitHubAccount": "Mit dem Konto dieses Projekts ist noch kein GitHub-Konto verbunden.",
-      "connectGitHub": "GitHub-Konto verbinden",
-      "connectGitHubSuffix": "um diese Option zu verwenden.",
       "loadGitHubAccountsError": "GitHub-Konten konnten nicht geladen werden. Versuchen Sie es erneut.",
       "createsPath": "Erstellt <path>{path}</path>",
       "loadRepositoriesError": "Repositories konnten nicht geladen werden. Versuchen Sie es erneut.",
@@ -170,24 +179,23 @@
           "description": "Kortix erstellt und verwaltet ein privates Repository für diesen Projekt."
         },
         "githubCreate": {
-          "label": "In GitHub erstellen",
           "description": "Kortix erstellt ein privates Repository in deinem GitHub-Konto."
-        },
-        "githubImport": {
-          "label": "Aus GitHub importieren",
-          "description": "Wähle ein vorhandenes Repository aus deinem GitHub-Konto aus."
         }
       },
       "repositoryLabel": "Repository",
-      "createInOwner": "Ein Repository in {owner} erstellen",
-      "importFromOwner": "Ein Repository aus {owner} importieren",
-      "selectOption": "Repository-Option auswählen",
       "loadingOptions": "Repository-Optionen werden geladen …",
       "managedUnavailable": "Von Kortix verwaltete Repositories sind auf dieser Instanz nicht verfügbar. Ein Plattform-Administrator richtet das in der Admin-Konsole ein.",
       "installationUnreachable": "Diese GitHub-Verbindung funktioniert nicht mehr. Stellen Sie sie wieder her, um Repositories aufzulisten.",
       "reconnect": "In den Git-Einstellungen neu verbinden",
       "managedImportLabel": "Ein vorhandenes verwaltetes Repository importieren",
-      "managedImportHint": "Nur für Self-Host-Betreiber. Listet Repositories auf, die der verwaltete Git-Inhaber bereits besitzt."
+      "managedImportHint": "Nur für Self-Host-Betreiber. Listet Repositories auf, die der verwaltete Git-Inhaber bereits besitzt.",
+      "gitAccountLabel": "Git-Konto",
+      "selectGitAccount": "Git-Konto auswählen",
+      "addGitHubAccount": "GitHub-Konto hinzufügen…",
+      "actionCreate": "Neues Repository erstellen",
+      "actionImport": "Bestehendes Repository importieren",
+      "ownerTypePersonal": "Persönliches Konto",
+      "ownerTypeOrg": "Organisation"
     }
   },
   "projectHome": {
@@ -1084,6 +1092,10 @@
         "pi_worker": {
           "name": "Pi-Worker-Laufzeit (kompiliert)",
           "description": "Führen Sie Sitzungen mit der experimentellen Pi-Worker-Laufzeit aus."
+        },
+        "pi_harness": {
+          "name": "Pi-Harness (in der Sandbox)",
+          "description": "Sitzungen mit dem Pi-Harness in der Sitzungs-Sandbox statt mit OpenCode ausführen. Bei Aus wählt `runtime: pi` im Manifest weiterhin Pi."
         }
       }
     },
@@ -18512,7 +18524,13 @@
       "text7f59f014cd7b": "Beim gewünschten Inhaber bereits installiert?",
       "text9180f7df8906": "Eine bereits von Ihnen verwaltete Installation verknüpfen",
       "text0b0e4c425624": "Bereits mit {value0, plural, one {# anderen Kortix-Konto} other {# anderen Kortix-Konten}} verknüpft.",
-      "text7dac2ca010fe": "Vollständiges Transkript wird vorbereitet…"
+      "text7dac2ca010fe": "Vollständiges Transkript wird vorbereitet…",
+      "textc6309c452031": "Gemeinsames Konto verbinden",
+      "textded4b88e52f7": "Noch kein gemeinsames Konto",
+      "textc3bafa5156b4": "Noch kein eigenes Konto",
+      "textea5d0ffa0962": "Ein Projektmanager verbindet das gemeinsame Konto.",
+      "text3d6627454174": "Anmeldedaten festlegen",
+      "text929505ef815a": "Es ist noch kein Konto verbunden. Fügen Sie unten Ihr eigenes hinzu, oder bitten Sie einen Projektmanager, ein gemeinsames Konto zu verbinden."
     }
   },
   "projectOnboarding": {

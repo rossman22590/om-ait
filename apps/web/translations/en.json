@@ -1,5 +1,7 @@
 {
   "pooledSecrets": {
+    "saveChanges": "Save changes",
+    "unsavedChanges": "Unsaved key changes",
     "providerDisabled": "This provider is disabled for this session.",
     "unavailableKeys": "{count, plural, one {# selected key is unavailable.} other {# selected keys are unavailable.}} Remove unavailable keys or restore access.",
     "removeUnavailable": "Remove unavailable keys",
@@ -7,7 +9,7 @@
     "manageKeys": "Manage provider keys",
     "readOnlyPool": "Only the session owner or a project manager can change this pool.",
     "legacyChatGptLogin": "Existing project login",
-    "legacyChatGptDescription": "This older connection is shared with the project. New ChatGPT accounts above are private until you share them.",
+    "legacyChatGptDescription": "This older connection is shared with the project. Manage access to new accounts above individually.",
     "chatGptAccounts": "ChatGPT accounts",
     "accountCount": "{count, plural, one {# account} other {# accounts}}",
     "addAccount": "Add account",
@@ -15,7 +17,15 @@
     "connectAccount": "Connect account",
     "oauthWaiting": "Waiting for authorization…",
     "oauthExpired": "Authorization timed out. Try again.",
-    "oauthPrivateDescription": "Your ChatGPT login is private until you grant another member access. Select one or more accounts in session settings.",
+    "oauthPrivateDescription": "New ChatGPT accounts are available to this project by default. You can restrict each account to selected members.",
+    "creationDescription": "The value stays encrypted. Choose who can use this connection before saving it.",
+    "whoCanUse": "Who can use this connection?",
+    "everyoneInProject": "Everyone in this project",
+    "everyoneDescription": "Any project member can select it in a session.",
+    "specificMembers": "Specific members",
+    "specificDescription": "Only selected project members and the connection owner can use it.",
+    "selectedMembersCount": "{count, plural, one {# member} other {# members}}",
+    "accessDescription": "Choose project-wide access or limit this connection to selected members.",
     "accountLabelPlaceholder": "e.g. My ChatGPT account",
     "chooseProvider": "Choose a provider.",
     "saved": "Secret saved",
@@ -23,8 +33,8 @@
     "deleted": "Secret deleted",
     "deleteError": "Secret could not be deleted",
     "accessError": "Access could not be changed",
-    "sharedTitle": "Shared provider secrets",
-    "sharedDescription": "Add multiple provider keys and ChatGPT accounts. Share each connection with members and select it per session.",
+    "sharedTitle": "Provider connections",
+    "sharedDescription": "Add multiple API keys and ChatGPT accounts. Everyone in this project can use each by default. Restrict access per connection and choose keys per session.",
     "legacyProjectKey": "Existing project key · Used when this session has no key selection",
     "keyCount": "{count, plural, one {# key} other {# keys}}",
     "providerKeysFor": "{provider} API keys",
@@ -44,7 +54,7 @@
     "empty": "No shared provider keys yet.",
     "rotateLabel": "Rotate {label}",
     "addProviderKey": "Add provider key",
-    "valueNeverShown": "Only members you grant access to can select this key. The value is never shown again.",
+    "valueNeverShown": "Choose who can use this key. Its value is never shown again.",
     "label": "Label",
     "primaryKey": "Primary key",
     "apiKey": "API key",
@@ -52,8 +62,8 @@
     "saving": "Saving…",
     "saveKey": "Save key",
     "accessTo": "Access to {label}",
-    "grantedMembers": "Granted members can use this key in their sessions across this account.",
-    "oauthGrantedMembers": "Granted members can use this ChatGPT account in their sessions.",
+    "grantedMembers": "Choose project-wide access or selected project members.",
+    "oauthGrantedMembers": "Choose project-wide access or selected project members.",
     "done": "Done",
     "deleteConfirmTitle": "Delete this key for everyone?",
     "deleteAccountConfirmTitle": "Delete this ChatGPT account for everyone?",
@@ -152,15 +162,14 @@
     "actions": {
       "create": "Create project",
       "tryAgain": "Try again",
+      "upgrade": "Upgrade plan",
       "logOut": "Log out",
-      "signingOut": "Signing out"
+      "signingOut": "Signing out",
+      "back": "Back to projects"
     },
     "repository": {
       "label": "Repository",
       "defaultBranch": "Default branch",
-      "noGitHubAccount": "No GitHub account is connected to this project's account yet.",
-      "connectGitHub": "Connect a GitHub account",
-      "connectGitHubSuffix": "to use this option.",
       "loadGitHubAccountsError": "Could not load GitHub accounts. Try again.",
       "createsPath": "Creates <path>{path}</path>",
       "loadRepositoriesError": "Could not load repositories. Try again.",
@@ -170,24 +179,23 @@
           "description": "Kortix creates and manages a private repository for this project."
         },
         "githubCreate": {
-          "label": "Create in GitHub",
           "description": "Kortix creates a private repository in your GitHub account."
-        },
-        "githubImport": {
-          "label": "Import from GitHub",
-          "description": "Select an existing repository from your GitHub account."
         }
       },
       "repositoryLabel": "Repository",
-      "createInOwner": "Create a repository in {owner}",
-      "importFromOwner": "Import a repository from {owner}",
-      "selectOption": "Select a repository option",
       "loadingOptions": "Loading repository options…",
       "managedUnavailable": "Kortix-managed repositories are not available on this instance. A platform admin sets this up in the admin console.",
       "installationUnreachable": "This GitHub connection no longer works. Reconnect it to list repositories.",
       "reconnect": "Reconnect in Git settings",
       "managedImportLabel": "Import an existing managed repository",
-      "managedImportHint": "Self-host operators only. Lists repositories the managed git owner already holds."
+      "managedImportHint": "Self-host operators only. Lists repositories the managed git owner already holds.",
+      "gitAccountLabel": "Git account",
+      "selectGitAccount": "Select a git account",
+      "addGitHubAccount": "Add a GitHub account…",
+      "actionCreate": "Create a new repository",
+      "actionImport": "Import an existing repository",
+      "ownerTypePersonal": "Personal account",
+      "ownerTypeOrg": "Organization"
     }
   },
   "projectHome": {
@@ -910,6 +918,10 @@
         "pi_worker": {
           "name": "Pi Worker Runtime (compiled)",
           "description": "Run sessions with the experimental Pi worker runtime."
+        },
+        "pi_harness": {
+          "name": "Pi Harness (in-sandbox)",
+          "description": "Run sessions on the pi harness inside the session sandbox instead of OpenCode. Off, `runtime: pi` in the manifest still selects pi."
         }
       }
     },
@@ -18512,7 +18524,13 @@
       "text7f59f014cd7b": "Already installed on the owner you want?",
       "text9180f7df8906": "Link an installation you already administer",
       "text0b0e4c425624": "Already linked to {value0, plural, one {# other Kortix account} other {# other Kortix accounts}}.",
-      "text7dac2ca010fe": "Preparing the full transcript…"
+      "text7dac2ca010fe": "Preparing the full transcript…",
+      "textc6309c452031": "Connect shared account",
+      "textded4b88e52f7": "No shared account yet",
+      "textc3bafa5156b4": "No account of your own yet",
+      "textea5d0ffa0962": "A project manager connects the shared account.",
+      "text3d6627454174": "Set credential",
+      "text929505ef815a": "No account is connected yet. Add your own below, or ask a project manager to connect a shared one."
     }
   },
   "projectOnboarding": {

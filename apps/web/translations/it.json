@@ -1,5 +1,15 @@
 {
   "pooledSecrets": {
+    "saveChanges": "Salva modifiche",
+    "unsavedChanges": "Modifiche alle chiavi non salvate",
+    "creationDescription": "Il valore resta crittografato. Scegli chi può usare questa connessione prima di salvarla.",
+    "whoCanUse": "Chi può usare questa connessione?",
+    "everyoneInProject": "Tutti in questo progetto",
+    "everyoneDescription": "Ogni membro del progetto può selezionarla in una sessione.",
+    "specificMembers": "Membri specifici",
+    "specificDescription": "Solo i membri selezionati e il proprietario possono usarla.",
+    "accessDescription": "Scegli l’accesso per tutto il progetto oppure limitalo ai membri selezionati.",
+    "selectedMembersCount": "{count, plural, one {# member} other {# members}}",
     "providerDisabled": "Questo provider è disabilitato per questa sessione.",
     "unavailableKeys": "{count, plural, one {# chiave selezionata non è disponibile.} other {# chiavi selezionate non sono disponibili.}} Rimuovi queste chiavi o ripristina l’accesso.",
     "removeUnavailable": "Rimuovi chiavi non disponibili",
@@ -7,7 +17,7 @@
     "manageKeys": "Gestisci le chiavi dei provider",
     "readOnlyPool": "Solo il proprietario della sessione o un responsabile del progetto può modificare questo gruppo.",
     "legacyChatGptLogin": "Accesso al progetto esistente",
-    "legacyChatGptDescription": "Questa vecchia connessione è condivisa con il progetto. I nuovi account ChatGPT sopra restano privati finché non li condividi.",
+    "legacyChatGptDescription": "Questa vecchia connessione è condivisa con il progetto. Gestisci separatamente l’accesso ai nuovi account qui sopra.",
     "chatGptAccounts": "Account ChatGPT",
     "accountCount": "{count, plural, one {# account} other {# account}}",
     "addAccount": "Aggiungi account",
@@ -15,7 +25,7 @@
     "connectAccount": "Connetti account",
     "oauthWaiting": "In attesa di autorizzazione…",
     "oauthExpired": "Autorizzazione scaduta. Riprova.",
-    "oauthPrivateDescription": "Il tuo accesso ChatGPT è privato finché non concedi l’accesso a un altro membro. Seleziona gli account nelle impostazioni della sessione.",
+    "oauthPrivateDescription": "I nuovi account ChatGPT sono disponibili per questo progetto per impostazione predefinita. Puoi limitare ogni account ai membri selezionati.",
     "accountLabelPlaceholder": "es. Il mio account ChatGPT",
     "chooseProvider": "Scegli un fornitore.",
     "saved": "Segreto salvato",
@@ -23,8 +33,8 @@
     "deleted": "Segreto eliminato",
     "deleteError": "Impossibile eliminare il segreto",
     "accessError": "Impossibile modificare l’accesso",
-    "sharedTitle": "Segreti fornitore condivisi",
-    "sharedDescription": "Aggiungi più chiavi provider e account ChatGPT. Condividi ogni connessione con i membri e selezionala per sessione.",
+    "sharedTitle": "Connessioni ai provider",
+    "sharedDescription": "Aggiungi più chiavi API e account ChatGPT. Per impostazione predefinita, tutti nel progetto possono usarli. Limita l’accesso per ogni connessione e scegli le chiavi per sessione.",
     "legacyProjectKey": "Chiave del progetto esistente · Usata quando la sessione non ha una selezione di chiavi",
     "keyCount": "{count, plural, one {# chiave} other {# chiavi}}",
     "providerKeysFor": "Chiavi API di {provider}",
@@ -152,15 +162,14 @@
     "actions": {
       "create": "Crea progetto",
       "tryAgain": "Riprova",
+      "upgrade": "Aggiorna il piano",
       "logOut": "Esci",
-      "signingOut": "Disconnessione"
+      "signingOut": "Disconnessione",
+      "back": "Torna ai progetti"
     },
     "repository": {
       "label": "Repository",
       "defaultBranch": "Branch predefinito",
-      "noGitHubAccount": "Nessun account GitHub è ancora collegato all'account di questo progetto.",
-      "connectGitHub": "Collega un account GitHub",
-      "connectGitHubSuffix": "per usare questa opzione.",
       "loadGitHubAccountsError": "Impossibile caricare gli account GitHub. Riprova.",
       "createsPath": "Crea <path>{path}</path>",
       "loadRepositoriesError": "Impossibile caricare i repository. Riprova.",
@@ -170,24 +179,23 @@
           "description": "Kortix crea e gestisce un repository privato per questo progetto."
         },
         "githubCreate": {
-          "label": "Crea in GitHub",
           "description": "Kortix crea un repository privato nel tuo account GitHub."
-        },
-        "githubImport": {
-          "label": "Importa da GitHub",
-          "description": "Seleziona un repository esistente dal tuo account GitHub."
         }
       },
       "repositoryLabel": "Repository",
-      "createInOwner": "Crea un repository in {owner}",
-      "importFromOwner": "Importa un repository da {owner}",
-      "selectOption": "Seleziona un'opzione per il repository",
       "loadingOptions": "Caricamento delle opzioni del repository…",
       "managedUnavailable": "I repository gestiti da Kortix non sono disponibili in questa istanza. Un amministratore della piattaforma lo configura nella console di amministrazione.",
       "installationUnreachable": "Questa connessione GitHub non funziona più. Ricollegala per elencare i repository.",
       "reconnect": "Ricollega nelle impostazioni Git",
       "managedImportLabel": "Importa un repository gestito esistente",
-      "managedImportHint": "Solo per operatori self-hosted. Elenca i repository già posseduti dal proprietario git gestito."
+      "managedImportHint": "Solo per operatori self-hosted. Elenca i repository già posseduti dal proprietario git gestito.",
+      "gitAccountLabel": "Account Git",
+      "selectGitAccount": "Seleziona un account Git",
+      "addGitHubAccount": "Aggiungi un account GitHub…",
+      "actionCreate": "Crea un nuovo repository",
+      "actionImport": "Importa un repository esistente",
+      "ownerTypePersonal": "Account personale",
+      "ownerTypeOrg": "Organizzazione"
     }
   },
   "projectHome": {
@@ -1084,6 +1092,10 @@
         "pi_worker": {
           "name": "Runtime worker Pi (compilato)",
           "description": "Esegui sessioni con il runtime sperimentale del worker Pi."
+        },
+        "pi_harness": {
+          "name": "Harness Pi (nella sandbox)",
+          "description": "Esegue le sessioni con l'harness Pi all'interno della sandbox della sessione invece di OpenCode. Disattivato, `runtime: pi` nel manifest seleziona comunque Pi."
         }
       }
     },
@@ -18512,7 +18524,13 @@
       "text7f59f014cd7b": "È già installata sul proprietario che ti serve?",
       "text9180f7df8906": "Collega un'installazione che amministri già",
       "text0b0e4c425624": "Già collegata a {value0, plural, one {# altro account Kortix} other {# altri account Kortix}}.",
-      "text7dac2ca010fe": "Preparazione della trascrizione completa…"
+      "text7dac2ca010fe": "Preparazione della trascrizione completa…",
+      "textc6309c452031": "Collega account condiviso",
+      "textded4b88e52f7": "Nessun account condiviso finora",
+      "textc3bafa5156b4": "Non hai ancora un account personale",
+      "textea5d0ffa0962": "Un responsabile del progetto collega l’account condiviso.",
+      "text3d6627454174": "Imposta credenziale",
+      "text929505ef815a": "Nessun account è ancora collegato. Aggiungi il tuo qui sotto, oppure chiedi a un responsabile del progetto di collegare un account condiviso."
     }
   },
   "projectOnboarding": {

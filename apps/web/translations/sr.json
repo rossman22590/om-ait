@@ -1,5 +1,15 @@
 {
   "pooledSecrets": {
+    "saveChanges": "Sačuvaj izmene",
+    "unsavedChanges": "Nesačuvane izmene ključeva",
+    "creationDescription": "Вредност остаје шифрована. Изаберите ко може да користи ову везу пре чувања.",
+    "whoCanUse": "Ко може да користи ову везу?",
+    "everyoneInProject": "Сви у овом пројекту",
+    "everyoneDescription": "Сваки члан пројекта може да је изабере у сесији.",
+    "specificMembers": "Одређени чланови",
+    "specificDescription": "Само изабрани чланови пројекта и власник могу да је користе.",
+    "accessDescription": "Изаберите приступ за цео пројекат или га ограничите на изабране чланове.",
+    "selectedMembersCount": "{count, plural, one {# member} other {# members}}",
     "providerDisabled": "Ovaj provajder je isključen za ovu sesiju.",
     "unavailableKeys": "{count, plural, one {# izabrani ključ nije dostupan.} few {# izabrana ključa nisu dostupna.} other {# izabranih ključeva nije dostupno.}} Uklonite ove ključeve ili vratite pristup.",
     "removeUnavailable": "Ukloni nedostupne ključeve",
@@ -7,7 +17,7 @@
     "manageKeys": "Upravljaj ključevima provajdera",
     "readOnlyPool": "Samo vlasnik sesije ili menadžer projekta može da promeni ovaj skup.",
     "legacyChatGptLogin": "Постојећа пријава за пројекат",
-    "legacyChatGptDescription": "Ова старија веза се дели са пројектом. Нови ChatGPT налози изнад остају приватни док их не поделите.",
+    "legacyChatGptDescription": "Ова старија веза се дели са пројектом. Приступ новим налозима изнад подесите засебно.",
     "chatGptAccounts": "ChatGPT налози",
     "accountCount": "{count, plural, one {# налог} other {# налога}}",
     "addAccount": "Додај налог",
@@ -15,7 +25,7 @@
     "connectAccount": "Повежи налог",
     "oauthWaiting": "Чека се овлашћење…",
     "oauthExpired": "Време за овлашћење је истекло. Покушајте поново.",
-    "oauthPrivateDescription": "Ваша ChatGPT пријава је приватна док не одобрите приступ другом члану. Изаберите налоге у подешавањима сесије.",
+    "oauthPrivateDescription": "Нови ChatGPT налози су подразумевано доступни овом пројекту. Сваки налог можете ограничити на изабране чланове.",
     "accountLabelPlaceholder": "нпр. Мој ChatGPT налог",
     "chooseProvider": "Изаберите провајдера.",
     "saved": "Тајна је сачувана",
@@ -23,8 +33,8 @@
     "deleted": "Тајна избрисана",
     "deleteError": "Тајна није обрисана",
     "accessError": "Приступ није промењен",
-    "sharedTitle": "Дељене тајне провајдера",
-    "sharedDescription": "Додајте више кључева провајдера и ChatGPT налога. Делите сваку везу са члановима и бирајте је по сесији.",
+    "sharedTitle": "Везе са добављачима",
+    "sharedDescription": "Додајте више API кључева и ChatGPT налога. Подразумевано их могу користити сви у овом пројекту. Ограничите приступ по вези и изаберите кључеве по сесији.",
     "legacyProjectKey": "Постојећи кључ пројекта · Користи се када за ову сесију нису изабрани кључеви",
     "keyCount": "{count, plural, one {# кључ} few {# кључа} other {# кључева}}",
     "providerKeysFor": "API кључеви за {provider}",
@@ -152,15 +162,14 @@
     "actions": {
       "create": "Направи пројекат",
       "tryAgain": "Покушај поново",
+      "upgrade": "Надогради план",
       "logOut": "Одјави се",
-      "signingOut": "Одјављивање"
+      "signingOut": "Одјављивање",
+      "back": "Назад на пројекте"
     },
     "repository": {
       "label": "Репозиторијум",
       "defaultBranch": "Подразумевана грана",
-      "noGitHubAccount": "Ниједан GitHub налог још није повезан са налогом овог пројекта.",
-      "connectGitHub": "Повежи GitHub налог",
-      "connectGitHubSuffix": "да бисте користили ову опцију.",
       "loadGitHubAccountsError": "Učitavanje GitHub naloga nije uspelo. Pokušajte ponovo.",
       "createsPath": "Прави <path>{path}</path>",
       "loadRepositoriesError": "Učitavanje repozitorijuma nije uspelo. Pokušajte ponovo.",
@@ -170,24 +179,23 @@
           "description": "Kortix прави и управља приватним репозиторијумом за овај пројекат."
         },
         "githubCreate": {
-          "label": "Направи на GitHub-у",
           "description": "Kortix прави приватни репозиторијум на вашем GitHub налогу."
-        },
-        "githubImport": {
-          "label": "Увези са GitHub-а",
-          "description": "Изаберите постојећи репозиторијум са свог GitHub налога."
         }
       },
       "repositoryLabel": "Repozitorijum",
-      "createInOwner": "Napravi repozitorijum u {owner}",
-      "importFromOwner": "Uvezi repozitorijum iz {owner}",
-      "selectOption": "Izaberite opciju repozitorijuma",
       "loadingOptions": "Učitavanje opcija repozitorijuma…",
       "managedUnavailable": "Repozitorijumi kojima upravlja Kortix nisu dostupni na ovoj instanci. Administrator platforme to podešava u administratorskoj konzoli.",
       "installationUnreachable": "Ova GitHub veza više ne radi. Povežite je ponovo da biste izlistali repozitorijume.",
       "reconnect": "Ponovo poveži u Git podešavanjima",
       "managedImportLabel": "Uvezi postojeći upravljani repozitorijum",
-      "managedImportHint": "Samo za self-host operatere. Izlistava repozitorijume koje vlasnik upravljanog git-a već poseduje."
+      "managedImportHint": "Samo za self-host operatere. Izlistava repozitorijume koje vlasnik upravljanog git-a već poseduje.",
+      "gitAccountLabel": "Git налог",
+      "selectGitAccount": "Изаберите Git налог",
+      "addGitHubAccount": "Додај GitHub налог…",
+      "actionCreate": "Направи нови репозиторијум",
+      "actionImport": "Увези постојећи репозиторијум",
+      "ownerTypePersonal": "Лични налог",
+      "ownerTypeOrg": "Организација"
     }
   },
   "projectHome": {
@@ -1084,6 +1092,10 @@
         "pi_worker": {
           "name": "Pi окружење за извршавање (компајлирано)",
           "description": "Покрећите сесије помоћу експерименталног Pi окружења за извршавање."
+        },
+        "pi_harness": {
+          "name": "Pi окружење (у сандбоксу)",
+          "description": "Покрећите сесије помоћу Pi окружења унутар сандбокса сесије уместо OpenCode-а. Када је искључено, `runtime: pi` у манифесту и даље бира Pi."
         }
       }
     },
@@ -18512,7 +18524,13 @@
       "text7f59f014cd7b": "Već je instalirana kod željenog vlasnika?",
       "text9180f7df8906": "Poveži instalaciju kojom već administrirate",
       "text0b0e4c425624": "Već je povezana sa {value0, plural, one {# drugim Kortix nalogom} few {# druga Kortix naloga} other {# drugih Kortix naloga}}.",
-      "text7dac2ca010fe": "Припрема целог транскрипта…"
+      "text7dac2ca010fe": "Припрема целог транскрипта…",
+      "textc6309c452031": "Повежи заједнички налог",
+      "textded4b88e52f7": "Још нема заједничког налога",
+      "textc3bafa5156b4": "Још немате сопствени налог",
+      "textea5d0ffa0962": "Заједнички налог повезује менаџер пројекта.",
+      "text3d6627454174": "Постави акредитив",
+      "text929505ef815a": "Још ниједан налог није повезан. Додајте сопствени испод, или замолите менаџера пројекта да повеже заједнички налог."
     }
   },
   "projectOnboarding": {

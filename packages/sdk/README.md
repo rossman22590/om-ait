@@ -35,7 +35,7 @@ await kortix.projects.list();
 
 ### Call external systems through Connectors
 
-Use one six-method data plane for every Connector provider. A user token binds
+Use one data plane for every Connector provider. A user token binds
 the project explicitly. An agent-minted session token already carries its
 project scope, so it can use the top-level fallback.
 
@@ -49,6 +49,7 @@ await connectors.tools();
 await connectors.search('send email');
 await connectors.describe('gmail.send_email');
 await connectors.call('gmail.send_email', { to, subject, body });
+await connectors.accounts('gmail');
 await connectors.uploadAttachment(bytes, {
   filename: 'invoice.pdf',
   contentType: 'application/pdf',
@@ -57,6 +58,45 @@ await connectors.uploadAttachment(bytes, {
 
 A Connector defines callable tools. A Connection stores one authorization for
 that Connector. Credentials remain server-side and never enter the sandbox.
+
+#### Choose which account a call runs as
+
+One Connector can hold the project's shared account and each member's own. List
+the accounts a caller may use, then name one on the call:
+
+```ts
+const accounts = await connectors.accounts('gmail');
+// [{ connection_id, label, owner_type: 'project' | 'member', is_default }]
+
+const result = await connectors.call('gmail.send_email', { to, subject, body }, {
+  account: 'Support inbox',   // a label, a connection id, `me`, or `project`
+});
+result.account; // { connection_id, label, owner_type } — the identity that ran
+```
+
+`account` takes a connection label (case-insensitive), a connection id, or one
+of two selector words: `me` (the caller's own default private account) and
+`project` (the default account shared with the whole project). Omit it and
+resolution takes the caller's own default first, then the project's.
+
+A named account is never silently substituted. If it does not match one this
+caller is entitled to, the call is denied with `connector_not_connected` and the
+denial lists the accounts that were available. Every successful call echoes
+`account`, so a transcript can always show which identity acted.
+
+Nothing connected yet? Start a hosted authorization and say who the new account
+belongs to:
+
+```ts
+await project.connectors.pipedream.connect('gmail', { owner: 'me' });      // my own
+await project.connectors.pipedream.connect('gmail', { owner: 'project' }); // shared
+
+// Or hand a human a link instead of authorizing inline:
+await project.setupLinks.requestConnector({ slug: 'gmail', owner: 'project' });
+```
+
+`owner` defaults to `me`. Creating a `project`-owned account requires
+`project.connector.write`.
 
 ### Upload prompt attachments before Send
 
@@ -232,8 +272,9 @@ await kortix.project(pid).secrets.upsert({
   consumer: "llm_gateway",
 });
 // When pooled_provider_secrets and llm_gateway are enabled for the project,
-// an account secret can be shared with members and selected per session.
+// a new account secret is available to this project's members by default.
 const shared = await kortix.accounts.secretResources.create(accountId, {
+  project_id: pid,
   label: "Anthropic backup",
   provider_id: "anthropic",
   name: "ANTHROPIC_API_KEY",
@@ -241,7 +282,8 @@ const shared = await kortix.accounts.secretResources.create(accountId, {
   consumer: "llm_gateway",
   strategy: "broker",
 });
-await kortix.accounts.secretResources.grant(accountId, shared.secret_id, memberUserId);
+// Restrict it to selected members when needed. The creator keeps access.
+await kortix.accounts.secretResources.setAccess(accountId, shared.secret_id, "members", [memberUserId]);
 await kortix.session(pid, sid).providerSecretPool.set("anthropic", [shared.secret_id]);
 const { pools, can_edit } = await kortix.session(pid, sid).providerSecretPool.list();
 // Passing null to set() resets the session to the project default.
@@ -339,13 +381,13 @@ exhaustive — see `API-MAP.md` for the full per-domain surface:
 | namespace | what |
 |---|---|
 | `kortix.projects` | list · get · detail · create · provision · update · archive · llmCatalog · modelPicker · sandboxTemplates · sessions (+ more: `listForAccount`, `sandboxHealth`, `createSession`) |
-| `kortix.accounts` | list · get · create · members · invites · `secretResources.{list,create,rotate,delete,grant,revoke}` · `tokens.{list,create,revoke}` (account-scoped CLI PATs, `kortix_pat_…`) · `audit.{log,export,webhooks.*}` (filterable project/session reconstruction log) · `branding.{get,update,uploadAsset,removeAsset,reset}` (Enterprise organization branding: logo / icon / favicon, light + dark, product name) (+ more: `updateName`, `leave`, `invite`, `removeMember`, `updateMemberRole`) |
+| `kortix.accounts` | list · get · create · members · invites · `secretResources.{list,create,rotate,delete,grant,revoke,setAccess}` · `tokens.{list,create,revoke}` (account-scoped CLI PATs, `kortix_pat_…`) · `audit.{log,export,webhooks.*}` (filterable project/session reconstruction log) · `branding.{get,update,uploadAsset,removeAsset,reset}` (Enterprise organization branding: logo / icon / favicon, light + dark, product name) (+ more: `updateName`, `leave`, `invite`, `removeMember`, `updateMemberRole`) |
 | `kortix.billing` | entitlement/usage reads: `accountState` · `accountStateMinimal` · `transactions` · `transactionsSummary` · `creditBreakdown` · `usageHistory` · `usageRollup` · `sessionCosts.{list,get}` · `tierConfigurations` — plus a curated mutation surface: `checkout.{createSession,confirmSession}` · `subscription.{createPortalSession,cancel,reactivate,scheduleDowngrade,cancelScheduledChange,prorationPreview}` · `credits.{purchase,autoTopupSettings,configureAutoTopup}` |
 | `kortix.marketplace` | public marketplace catalog browse + sources (not project-scoped): `items` · `item` · `itemFile` · `marketplaces` · `featured` · `sources.{list,add,remove}` — distinct from the install-scoped `project(id).marketplace` |
 | `kortix.github` | account-scoped GitHub App installs and repo linking: `getInstallation` · `listInstallations` · `listLinkableInstallations` (each entry carries `linked_to_other_accounts`, a count and never a tenant name) · `listRepositories` · `listRepositoryBranches` · `linkInstallation` · `saveInstallation` · `deleteInstallation` · `linkRepository` (`source: 'managed'` imports a repository the instance backend holds — self-host operator only, and mutually exclusive with `installation_id`) |
 | `kortix.gitBackend` | the instance git backend ("Kortix managed", one per deployment, never an account connection): `get()` → `{configured, kind: 'app'|'pat'|null, owner}` (any authenticated user) · `repositories({search?, limit?})` (self-host operator only; 403 otherwise) |
 | `kortix.validateToken()` | pasted-API-key validation helper — `GET /accounts/me`, never throws, resolves `{valid, identity?, error?}` |
-| `kortix.connectors` | Connector data plane for an agent-minted session token: `catalog` · `tools` · `search` · `describe` · `call` · `uploadAttachment` |
+| `kortix.connectors` | Connector data plane for an agent-minted session token: `catalog` · `tools` · `search` · `describe` · `call` (`{ account }`) · `accounts` · `uploadAttachment` |
 | `kortix.project(id)` | id-bound handle: `.apps` (stable serverless App URLs, access, artifacts, deployments, logs, rollback, start/stop) · `.secrets` · `.access` · `.connectors` (data plane + configuration + Connections) · `.policies` · `.triggers` · `.files` · `.git` · `.changeRequests` (incl. `requestChanges`) · `.sessions` · `.tokens` (project-scoped CLI PATs — the `KORTIX_TOKEN` shape) · `.marketplace` / `.registry` (install/update/remove catalog items) · `.setupLinks.{requestSecret,requestConnector}` (agent-minted secret-entry / connector links) · `.validateManifest` · `.gitToken` · `.setDefaultAgent(name)` · `.session(sid)` (+ more namespaces: `.review`, `.approvals`, `.gateway` (incl. `.routing` and `.playground`), `.channels`, `.modelDefaults`, `.sandbox`) |
 | `kortix.session(pid, sid)` | id-bound handle: lifecycle (`get`/`update`/`delete`/`start`/`restart`/`stop`/`reloadConfig`/`reloadConfigStream`/`setSharing`/`previews`/`commit`/`publicShares`/`ensureReady`) · `providerSecretPool.{list,get,set}` · finalized `cost()` · `send`/`abort`/`rewind`/`restoreRewind`/`setModel`/`setAgent` · `transcript()` · `.files` · runtime URL helpers (`health`/`previewUrl`/`proxyUrl`) · OpenCode REST compatibility escape hatches: `stream()` and `.runtime` |
 | `kortix.runtime()` | the OpenCode v2 compatibility client for the active sandbox; use a session-scoped handle in multi-tenant code |
@@ -417,8 +459,9 @@ await project.sessions.create({
 ```
 
 Member connections are owner-only even for project managers, and sessions using
-one must remain private. Project defaults remain shared; external/agent/subject
-connections remain operator-managed. Every connection is project/connector scoped
+one must remain private. A service account — an agent or a trigger — never
+reaches a member connection, only the shared project one. Project defaults
+remain shared; external/agent/subject connections remain operator-managed. Every connection is project/connector scoped
 and resolved on every Connector request, so revocation takes effect without a
 restart. Credentials are encrypted server-side and are never returned, placed
 in `KORTIX_SESSION_CONTEXT`, or injected into the sandbox environment. Raw env
@@ -811,9 +854,10 @@ const result = await kortix.project(projectId).secrets.pollProviderOAuth('openai
 ```
 
 Poll until `result.status` is `success`, `failed`, or `expired`. A successful
-named flow returns `credential.secret_id`. It creates a separate private
-account resource; reconnecting does not replace another account. The owner can
-grant members access to that resource. A session can select one or more granted
+named flow returns `credential.secret_id`. It creates a separate project-scoped
+account resource; reconnecting does not replace another account. Every project
+member can use it by default. The owner can restrict access to selected members.
+A session can select one or more available
 ChatGPT resources through its provider secret pool (`providerId: 'codex'`).
 Without an explicit session selection, the caller's newest personal ChatGPT
 resource is used. The legacy project login remains the fallback when that
