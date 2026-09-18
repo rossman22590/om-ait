@@ -50,6 +50,19 @@ the rule AND the call site (no clause may name `secretsQuery.isPending`,
 `projectDetailQuery.isPending` or `accountStatePending` again). Nothing yet
 lints the general pattern repo-wide — a sweep found 4 conditionally-enabled
 queries read via `isPending`; this was the only live one.
+*Follow-up (2026-09-18):* that sweep covered `apps/web` only and under-counted.
+`packages/sdk/src/react/use-model-access.ts` carried a 5th instance —
+`isLoading: query.isPending` under `enabled: !!projectId`, so
+`useModelAccess(null)` (which `provider-connect.tsx:833` passes on purpose)
+loaded forever. Latent, not live: no consumer rendered off that flag. Fixed to
+`query.isLoading` and pinned by a rendered-hook test in
+`use-model-access.test.ts` that asserts both halves — disabled reports settled
+with zero fetches, enabled still reports its first fetch. A re-sweep of both
+packages on 2026-09-18 found no remaining live instance: every other
+`isPending` read in `packages/sdk/src/react/` is a `useMutation` (no `enabled`,
+so correct), and all 4 query-shaped reads in `apps/web` are guarded by an early
+return or an already-fixed helper. When the sweep is redone, sweep `packages/`
+too — this hook was reachable from `apps/web` and the sweep still missed it.
 
 ### A control-required alarm comes back with a threshold the workload cannot cross in steady state (2026-09-17)
 
