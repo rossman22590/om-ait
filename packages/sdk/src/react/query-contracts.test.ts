@@ -1,19 +1,13 @@
-import { describe, expect, test } from "bun:test";
-import { FRESHNESS, contract, type FreshnessTier } from "./query-contracts";
+import { describe, expect, test } from 'bun:test';
+import { FRESHNESS, contract, type FreshnessTier } from './query-contracts';
 
-const TIERS: FreshnessTier[] = [
-  "live",
-  "config",
-  "inventory",
-  "volatile",
-  "directory",
-];
+const TIERS: FreshnessTier[] = ['live', 'config', 'inventory', 'volatile', 'directory'];
 
-describe("freshness contracts", () => {
+describe('freshness contracts', () => {
   // The whole point of a tier is that a call site cannot disagree with it.
   // If gcTime ever falls to or below staleTime the tier reproduces the exact
   // provider-level bug this work exists to remove.
-  test("every tier keeps data alive longer than it keeps it fresh", () => {
+  test('every tier keeps data alive longer than it keeps it fresh', () => {
     for (const tier of TIERS) {
       const c = contract(tier);
       if (c.staleTime === Infinity) continue;
@@ -21,8 +15,8 @@ describe("freshness contracts", () => {
     }
   });
 
-  test("the live tier never expires on its own", () => {
-    expect(contract("live").staleTime).toBe(Infinity);
+  test('the live tier never expires on its own', () => {
+    expect(contract('live').staleTime).toBe(Infinity);
   });
 
   // Empirically verified against the real TanStack engine (see query-contracts.ts's
@@ -32,25 +26,19 @@ describe("freshness contracts", () => {
   // value for the rest of gcTime. refetchOnMount:true self-heals on the very next
   // mount, and — because it still respects staleTime — costs zero extra fetches
   // when the entry is fresh.
-  test("every tier refetches on mount, so an invalidated-but-unobserved entry self-heals", () => {
+  test('every tier refetches on mount, so an invalidated-but-unobserved entry self-heals', () => {
     for (const tier of TIERS) {
       expect(contract(tier).refetchOnMount).toBe(true);
     }
   });
 
-  test("tiers are ordered from most to least fresh", () => {
-    expect(contract("volatile").staleTime).toBeLessThan(
-      contract("inventory").staleTime,
-    );
-    expect(contract("inventory").staleTime).toBeLessThan(
-      contract("config").staleTime,
-    );
-    expect(contract("config").staleTime).toBeLessThan(
-      contract("live").staleTime,
-    );
+  test('tiers are ordered from most to least fresh', () => {
+    expect(contract('volatile').staleTime).toBeLessThan(contract('inventory').staleTime);
+    expect(contract('inventory').staleTime).toBeLessThan(contract('config').staleTime);
+    expect(contract('config').staleTime).toBeLessThan(contract('live').staleTime);
   });
 
-  test("every declared entity resolves to exactly one tier", () => {
+  test('every declared entity resolves to exactly one tier', () => {
     const entities = Object.keys(FRESHNESS);
     expect(entities.length).toBeGreaterThan(0);
     for (const entity of entities) {
@@ -58,58 +46,59 @@ describe("freshness contracts", () => {
     }
   });
 
-  test("project detail is config tier, sessions list is inventory", () => {
-    expect(FRESHNESS.projectDetail).toBe("config");
-    expect(FRESHNESS.sessions).toBe("inventory");
-    expect(FRESHNESS.messages).toBe("live");
+  test('project detail is config tier, sessions list is inventory', () => {
+    expect(FRESHNESS.projectDetail).toBe('config');
+    expect(FRESHNESS.sessions).toBe('inventory');
+    expect(FRESHNESS.messages).toBe('live');
   });
 
   // Both started on `volatile` (5s) purely because "sandbox" and "gateway"
   // SOUND time-sensitive. Neither is. Pinned here so a revert to `volatile`
   // fails a test instead of quietly multiplying refetches on every project
   // landing and every Customize -> Gateway open. Reasoning in the tier table.
-  test("sandboxes is the template catalog, not live health — config tier", () => {
+  test('sandboxes is the template catalog, not live health — config tier', () => {
     // `listProjectSandboxes` and `listProjectSandboxTemplates` are the same
     // GET /projects/:id/sandboxes returning the same SandboxTemplatesResponse.
     // Two keys, so they must at least agree on freshness.
-    expect(FRESHNESS.sandboxes).toBe("config");
+    expect(FRESHNESS.sandboxes).toBe('config');
     expect(FRESHNESS.sandboxTemplates).toBe(FRESHNESS.sandboxes);
   });
 
-  test("gateway analytics accumulate from traffic, not from our mutations — inventory tier", () => {
-    expect(FRESHNESS.gateway).toBe("inventory");
+  test('gateway analytics accumulate from traffic, not from our mutations — inventory tier', () => {
+    expect(FRESHNESS.gateway).toBe('inventory');
   });
 
   // `volatile` has no claimant today. Kept because `FreshnessTier` is a
   // published string-literal union and removing a member is breaking — but a
   // future entity has to earn it against this bar, not inherit it by vibe.
-  test("volatile is still the sharpest tier, for whatever earns it next", () => {
-    expect(contract("volatile").staleTime).toBe(5_000);
+  test('volatile is still the sharpest tier, for whatever earns it next', () => {
+    expect(contract('volatile').staleTime).toBe(5_000);
     // Widened deliberately: `FRESHNESS` is `as const`, so with no claimant its
     // value type no longer includes 'volatile' and the comparison below is a
     // TS2367 against the narrowed union. The runtime check still earns its
     // keep — add a `volatile` entity and this goes red.
     const tiers = Object.entries(FRESHNESS) as [string, FreshnessTier][];
-    expect(tiers.filter(([, tier]) => tier === "volatile")).toEqual([]);
+    expect(tiers.filter(([, tier]) => tier === 'volatile')).toEqual([]);
   });
 });
 
-describe("external directory updates", () => {
-  test("refreshes visible directory data every ten seconds and when focus returns", () => {
-    expect(contract("directory")).toMatchObject({
+
+describe('external directory updates', () => {
+  test('refreshes visible directory data every ten seconds and when focus returns', () => {
+    expect(contract('directory')).toMatchObject({
       staleTime: 10_000,
       refetchInterval: 10_000,
       refetchIntervalInBackground: false,
-      refetchOnWindowFocus: "always",
-      refetchOnReconnect: "always",
+      refetchOnWindowFocus: 'always',
+      refetchOnReconnect: 'always',
       refetchOnMount: true,
     });
   });
 
-  test("does not introduce polling for other freshness tiers", () => {
-    for (const tier of ["live", "config", "inventory", "volatile"] as const) {
-      expect(contract(tier)).not.toHaveProperty("refetchInterval");
-      expect(contract(tier)).not.toHaveProperty("refetchOnWindowFocus");
+  test('does not introduce polling for other freshness tiers', () => {
+    for (const tier of ['live', 'config', 'inventory', 'volatile'] as const) {
+      expect(contract(tier)).not.toHaveProperty('refetchInterval');
+      expect(contract(tier)).not.toHaveProperty('refetchOnWindowFocus');
     }
   });
 });
