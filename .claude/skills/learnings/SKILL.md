@@ -6408,7 +6408,6 @@ to permit a single provisioning check before starting another full run.
 **Enforcement.** The pending queue fixture is verified with the local browser
 runner, which uses local Git. The preview gate stays explicitly blocked until
 GitHub provisioning recovers; a local pass does not replace that gate.
-
 ### 2026-09-17 — A failed round trip is not the auth server's verdict
 
 **Incident.** "Verify with GitHub logs me out" on dev, twice, after the
@@ -6650,3 +6649,50 @@ separate from browser freshness. Verify external writes while the page stays ope
 
 Enforcers: `packages/sdk/src/react/query-contracts.test.ts` and the external SCIM
 refresh journey in `tests/e2e/specs/22-resource-grant-multiselect.spec.ts`.
+
+### 2026-09-18 — A hand-made GitHub App must be audited against the permission list
+
+**Incident.** Production App `kortix-managed` held `contents` + `metadata` only.
+`kortix-dev` and `kortix-staging` came from the manifest and held `members:
+read`. `verifyGitHubInstallationAdmin` reads `GET /orgs/{org}/memberships/{user}`
+with the App user token; GitHub answers `403` without `members: read`. A bare
+`catch` rewrote that to "GitHub organization admin access is required". Every
+organization link failed on production, for organization owners too, while
+`User` installations linked. Dev and staging could not reproduce it.
+
+**Rule.** A `catch` around a provider call must not convert an unknown failure
+into a statement about the caller. Branch on the provider status, and keep
+"the instance is misconfigured" apart from "the caller lacks access". A
+resource created by hand in one environment and by manifest in the others is
+drift until a check proves otherwise.
+
+**Enforcement.** `REQUIRED_GITHUB_APP_PERMISSIONS` is the one list: the manifest
+spreads it and `resolveGitHubAppPermissions()` compares `GET /app` against it,
+logging `missing required permissions` once per process. The verification
+prechecks `installation.permissions.members` and throws
+`GitHubAppPermissionError`. Tests: `unit-github-app-slug.test.ts`,
+`e2e-github-app-projects.test.ts`. Manual check: `gh api /apps/<slug> --jq
+.permissions`. Runbook: `docs/runbooks/managed-git-config.md`.
+
+### 2026-09-18 — Blanking a settings row deletes every fix stored in it
+
+**Incident.** Prod project creation failed 100% from 2026-09-16 18:12Z for 45+
+hours: 1,023 `POST /v1/projects/provision` → `502`, zero `201`. The prod env PAT
+(`agent-kortix`, fine-grained) has no `Administration: write`. The 2026-09-07
+fix for that was a classic PAT stored in
+`platform_settings.managed_github_app`. The 2026-09-16 App-overwrite repair ran
+`set value='{}'` on that row and erased the PAT. Prod fell back to the env PAT.
+`POST /git/collaborators` failed with the same `403 Resource not accessible by
+personal access token`. Nobody saw it: no alert covers the provision route, and
+`provision-stream` answers `200` with an `error` frame.
+
+**Rule.** Before blanking or overwriting a shared settings row, list every
+field it holds and who depends on each. A hotfix stored in a mutable row is
+not a fix: move it to the owning source (the env secret) in the same incident.
+After any credential repair, run the WRITE the credential exists for (create +
+delete a probe repo), not a read.
+
+**Enforcement.** None automated yet. Owed: an alert on `POST
+/v1/projects/provision` 5xx ratio and on `provision create_repo failed` log
+count. Manual probe: `POST /orgs/managed-kortix/repos` with the runtime token
+must return `201`.
