@@ -13,7 +13,11 @@ import {
   parseArgs,
 } from '../lib';
 
-const TEAMS_CONNECTOR = 'teams';
+// The Teams channel materializes under the reserved slug `kortix_teams`
+// (apps/api/src/connectors/channels.ts TEAMS_CHANNEL_CONNECTOR_SLUG). The bare
+// `teams` name is kept as a fallback for a user-declared connector of that
+// name and for older API deployments — same shape as the Slack CLI.
+const TEAMS_CONNECTORS = ['kortix_teams', 'teams'] as const;
 
 function resolveDownloadOutput(outPath: string): string {
   const trimmed = outPath.trim();
@@ -85,13 +89,24 @@ async function sendFile(filePath: string, description?: string) {
 }
 
 async function connectorCall(action: string, args: Record<string, unknown>): Promise<unknown> {
-  try {
-    const res = await kortixConnectorCall<{ data?: unknown }>(`${TEAMS_CONNECTOR}.${action}`, args);
-    return res.data ?? res;
-  } catch (err) {
-    if (err instanceof CliError) throw err;
-    throw err;
+  let lastErr: CliError | null = null;
+  for (const connector of TEAMS_CONNECTORS) {
+    try {
+      const res = await kortixConnectorCall<{ data?: unknown }>(`${connector}.${action}`, args);
+      return (res as { data?: unknown }).data ?? res;
+    } catch (err) {
+      if (!(err instanceof CliError)) throw err;
+      lastErr = err;
+      const reason = err.message || null;
+      // Fall back to the legacy namespace only when the reserved connector is
+      // absent; an upstream Graph error is a real answer from the right one.
+      if (connector === TEAMS_CONNECTORS[0] && (reason === 'connector_not_found' || reason === 'action_not_found')) {
+        continue;
+      }
+      throw err;
+    }
   }
+  throw lastErr ?? new CliError(`Teams connector action "${action}" was not found`);
 }
 
 async function relayTurnStream(
