@@ -29,24 +29,46 @@ each natively on one Blacksmith runner (`CI_RUNNER_L`, 8 vCPU / 32 GB). The six
 lanes equal one `pnpm test -- --full` run, and the slowest lane defines the
 duration.
 
-Measured on run `35384964452` with two browser shards: `core` 2m18s, `packages`
-6m34s, `browser-1` 8m11s, `browser-2` **10m19s**. Decomposing the 10m19s lane:
-81s runner setup, 53s in-lane stack boot, **480s of Playwright journeys**. Fixed
-cost is ~134s and the journeys total ~837s across ~44 tests, so a browser lane's
-wall clock is `134 + 837/N`:
+The browser lanes went 2 → 4 on 2026-09-18. Both configurations measured at
+full mode on L runners:
 
-| browser shards | projected browser lane | suite wall clock |
+| lane | run `35384964452` (2 shards) | run `35388565759` (4 shards) |
 | --- | --- | --- |
-| 2 | ~9.2 min (10m19s observed) | ~10.3 min |
-| 3 | ~6.9 min | ~6.9 min |
-| **4** | **~5.7 min** | **~6.6 min (bounded by `packages`)** |
-| 6 | ~4.6 min | ~6.6 min — no change |
+| `core` | 2m18s | 2m14s |
+| `browser-1` | 8m11s | 3m49s |
+| `browser-2` | **10m19s** | 5m17s |
+| `browser-3` | — | 6m56s |
+| `browser-4` | — | 4m59s |
+| `packages` | 6m34s | **8m01s** |
+| **suite wall clock** | **10m19s** | **8m17s** |
 
-The browser lanes went 2 → 4 on 2026-09-18. Past 4, `packages` (6m34s) is the
-long pole and another browser shard buys nothing, so that is where the sharding
-stops. `--browser-shard` maps straight to Playwright's native `--shard`, so the
+**19% faster, not the 36% the model predicted.** Two reasons, both worth
+knowing before touching this again:
+
+1. The browser long pole did drop as modelled: 619s → 416s (−33%). Decomposing
+   the old 10m19s lane gives 81s runner setup + 53s in-lane stack boot + 480s of
+   journeys, so fixed cost is ~134s and journeys ~837s — a lane is `134 + 837/N`,
+   and N=4 predicts ~5.7 min. Observed 6m56s, because Playwright `--shard`
+   partitions by **test count** (10/10/9/9 here), not by duration.
+2. `packages` (8m01s) is now the binding lane, and it absorbed most of the gain.
+
+So **do not add a fifth browser shard** — it cannot move a total that `packages`
+sets. Making the suite faster from here is the `packages` lane. Its 481s splits
+into ~23s setup, ~36s publish/pack/install-smoke, and **418s of workspace
+tests** that are already run as two bounded concurrent waves by
+`tests/bin/package-quality.ts`. The `--workspace-concurrency=1` values in there
+are deliberate load-class isolation, not an oversight — the file states
+"Concurrent isolated Bun workers can spin indefinitely" and sequences the
+migration containers to bound Docker IO. The plausible next step is splitting
+that lane into two CI jobs along its existing wave boundary, which buys
+parallelism from a second runner without changing any concurrency hazard. That
+is its own piece of work.
+
+`--browser-shard` maps straight to Playwright's native `--shard`, so the
 denominator needs no partition code — unlike the API shards, which are computed
-by `src/core/shard.ts`.
+by `src/core/shard.ts`. The 4-way split is verified total and disjoint: the
+sorted union of the four shard listings is byte-identical to the unsharded
+listing (38 tests).
 
 Until 2026-08-26 each lane ran inside a Platinum or Daytona cloud sandbox with a
 warm template, and the runner was a thin orchestrator. That path was deleted

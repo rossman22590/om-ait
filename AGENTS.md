@@ -388,10 +388,16 @@ See `tests/e2e/helpers/session-auth.ts` for the exact calls.
   `.github/workflows/tests.yml`. The four browser lanes are quarters of one
   sharded run (`--browser-shard=N/4`, Playwright's native `--shard`). The
   slowest lane defines the run duration, and since 2026-09-18 that is
-  `packages` (~6m34s), not a browser lane. The browser lanes went 2 → 4 the
-  same day: fixed cost ~134s, journeys ~837s, so wall clock is 134 + 837/N and
-  N=4 lands at ~5.7 min. Do not add a fifth browser shard until `packages` is
-  faster — it would not change the total. Each lane is the unchanged root command at the exact requested SHA;
+  `packages`, not a browser lane. Measured: run 35384964452 with 2 browser
+  shards = **10m19s** wall clock (browser-2 10m19s was the long pole); run
+  35388565759 with 4 = **8m17s** (browser long pole 6m56s, `packages` 8m01s).
+  That is 19% faster, not the 36% an even split would give — Playwright
+  `--shard` partitions by test count (10/10/9/9), not by duration. **Do not
+  add a fifth browser shard**: it cannot move a total that `packages` sets.
+  Making the suite faster from here means the `packages` lane, whose two-wave
+  parallelism in `tests/bin/package-quality.ts` is deliberate and
+  hazard-documented ("Concurrent isolated Bun workers can spin indefinitely").
+  Read it before changing anything there. Each lane is the unchanged root command at the exact requested SHA;
   browser lanes install Chromium and prestart Supabase first. Do not add
   CI-only test logic. (The Platinum/Daytona sandbox-worker path was removed on
   2026-08-26; only `deploy-preview.yml` still uses a cloud sandbox.)
@@ -401,7 +407,7 @@ See `tests/e2e/helpers/session-auth.ts` for the exact calls.
      (`tests-pr.yml`) posts a `test verdict` check naming the rule that applied
      and stops. That check is always green — it is a statement, not a gate.
   2. **Add the `test` label** to run every lane on that pull request
-     (~6.5 min). The `preview` label also runs them, on top of the preview
+     (~8.5 min, measured). The `preview` label also runs them, on top of the preview
      origin's deployed `--target-full`. Adding either label to an already-open
      pull request re-triggers the workflow; no push needed.
   3. **A pull request into `staging` always runs it.** `staging` is the release

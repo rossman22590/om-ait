@@ -19,10 +19,11 @@ describe('native test-lane workflow', () => {
     expect(testWorkflow).toContain('- lane: browser-1');
     expect(testWorkflow).toContain('- lane: browser-2');
     expect(testWorkflow).toContain('- lane: packages');
-    // Four browser shards since 2026-09-18. The browser lane's fixed cost is
-    // ~134s and its journeys ~837s, so wall clock is 134 + 837/N; N=4 puts the
-    // browser lanes at ~5.7 min, just under `packages` (6m34s), which is where
-    // more shards stop paying.
+    // Four browser shards since 2026-09-18. Measured: the suite went 10m19s
+    // (run 35384964452, N=2) -> 8m17s (run 35388565759, N=4). The browser long
+    // pole dropped 619s -> 416s, but `packages` (8m01s) is now the binding
+    // lane, so a fifth shard cannot move the total. See tests.yml's matrix
+    // comment for the full decomposition.
     expect(testWorkflow).toContain('- lane: browser-3');
     expect(testWorkflow).toContain('- lane: browser-4');
     for (const n of [1, 2, 3, 4]) {
