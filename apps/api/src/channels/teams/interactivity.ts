@@ -3,6 +3,7 @@ import { toOpencodeModelRef } from '../../llm-gateway/resolution/effective';
 import { applyVerdict, getReviewItemById } from '../../projects/review-items';
 import { setChannelAgent, setChannelModel } from '../slack/selection';
 import { resolveConversationProject, setConversationProject, teamsChannelCtx } from './binding';
+import { consumePendingTeamsPickerMessage } from './auth-resume';
 import { buildNoticeCard } from './cards';
 import {
   createTeamsAccessRequest,
@@ -111,6 +112,21 @@ async function handlePickProject(
   if (!convo || !projectId) return cardResponse(buildNoticeCard("I couldn't switch project."));
   const switched = await setConversationProject({ tenantId: convo.tenantId, conversationId: convo.conversationId, projectId });
   if (!switched) return cardResponse(buildNoticeCard("That project isn't connected to this Teams tenant."));
+
+  // If this pick answered a project picker, replay the message that triggered it.
+  const pendingId = typeof data.pendingId === 'string' ? data.pendingId : undefined;
+  if (pendingId) {
+    const parked = await consumePendingTeamsPickerMessage({ pendingId, tenantId: convo.tenantId });
+    if (parked) {
+      void createOrJoinTeamsConversationSession({
+        projectId,
+        tenantId: convo.tenantId,
+        conversationId: convo.conversationId,
+        activity: parked,
+      }).catch((err) => console.error('[teams-webhook] picker replay failed', err));
+      return cardResponse(buildNoticeCard('This conversation now runs the selected project — on it.', '✅'));
+    }
+  }
   return cardResponse(buildNoticeCard('This conversation now runs the selected project.', '✅'));
 }
 

@@ -319,6 +319,22 @@ export function buildJoinRequestCard(opts: {
   );
 }
 
+export function buildProjectPickerCard(
+  projects: Array<{ projectId: string; name: string }>,
+  pendingId: string | null,
+): Record<string, unknown> {
+  return card(
+    headerBlock(
+      '📁',
+      'Which project should this conversation use?',
+      "Several Kortix projects are connected to this team. Pick one — I'll remember it here and run your message.",
+    ),
+    projects.slice(0, 8).map((p) =>
+      executeAction(p.name, 'teams_pick_project', { projectId: p.projectId, ...(pendingId ? { pendingId } : {}) }),
+    ),
+  );
+}
+
 export function buildWelcomeCard(opts: { projectUrl?: string }): Record<string, unknown> {
   const body = headerBlock(
     '👋',
