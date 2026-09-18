@@ -21,12 +21,12 @@ describe('gatewayModelCatalog — served catalog', () => {
     });
   });
 
-  test('serves only DeepSeek V4 Flash 0731 as text-only managed', () => {
-    expect(full['deepseek-v4-flash-0731']).toMatchObject({
-      provider: 'kortix', attachment: false, tool_call: true,
-      cost: { input: 0.06, output: 0.18, cache_read: 0.015 },
+  test('serves Kimi K3 with image input', () => {
+    expect(full['kimi-k3']).toMatchObject({
+      provider: 'kortix', attachment: true, tool_call: true,
+      cost: { input: 2.5, output: 10.95, cache_read: 0.25 },
     });
-    expect(full['kimi-k3']).toBeUndefined();
+    expect(full['deepseek-v4-flash-0731']).toBeUndefined();
     expect(full['kimi-k3-fast']).toBeUndefined();
   });
 

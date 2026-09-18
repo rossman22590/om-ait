@@ -50,7 +50,7 @@ describe('runtime managed model registry', () => {
       .toEqual([expect.objectContaining({ id: 'vision' })]);
   });
 
-  test('keeps only the named DeepSeek V4 text-only exception', () => {
+  test('rejects the retired DeepSeek V4 text-only model from operator overlays', () => {
     const text = {
       id: 'deepseek-v4-flash-0731', name: 'DeepSeek V4 Flash 0731',
       upstreamModelId: 'deepseek/deepseek-v4-flash-0731', transport: 'openrouter',
@@ -61,7 +61,7 @@ describe('runtime managed model registry', () => {
       },
     };
     expect(parseManagedModels(JSON.stringify([text, { ...text, id: 'other-text' }])))
-      .toEqual([expect.objectContaining({ id: 'deepseek-v4-flash-0731', vision: false })]);
+      .toEqual([]);
   });
 
   test('rejects an unpinned or fallback-enabled operator route', () => {

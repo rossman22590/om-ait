@@ -485,7 +485,7 @@ export function pricingRefLookupCandidates(pricingRef: string): string[] {
 
 // Managed IDs are bare gateway model IDs. OpenCode uses `kortix/<id>` so the
 // picker shows Kortix while the gateway routes through ZDR OpenRouter endpoints.
-// DeepSeek V4 Flash 0731 is the sole text-only exception.
+// Every bundled model supports image input.
 export const MANAGED_MODELS: ManagedModel[] = [
   {
     id: 'deepseek-v4.1-flash', name: 'DeepSeek V4.1 Flash', upstreamModelId: 'deepseek/deepseek-v4.1-flash',
@@ -504,13 +504,11 @@ export const MANAGED_MODELS: ManagedModel[] = [
     },
   },
   {
-    id: 'deepseek-v4-flash-0731', name: 'DeepSeek V4 Flash 0731', upstreamModelId: 'deepseek/deepseek-v4-flash-0731',
-    transport: 'openrouter', pricingRef: 'openrouter/deepseek/deepseek-v4-flash-0731',
-    pricing: { inputPerMillion: 0.06, cachedInputPerMillion: 0.015, outputPerMillion: 0.18 },
-    tier: 'fast', vision: false, limit: { context: 1_048_576, output: 16_384 },
-    openrouterProvider: {
-      only: ['deepinfra/fp8'], allow_fallbacks: false, zdr: true, data_collection: 'deny',
-    },
+    id: 'kimi-k3', name: 'Kimi K3 2.8T', upstreamModelId: 'moonshotai/kimi-k3',
+    transport: 'openrouter', pricingRef: 'openrouter/moonshotai/kimi-k3',
+    pricing: { inputPerMillion: 2.5, cachedInputPerMillion: 0.25, outputPerMillion: 10.95 },
+    tier: 'flagship', vision: true, limit: { context: 1_048_576, output: 16_384 },
+    openrouterProvider: { only: ['wafer'], allow_fallbacks: false, zdr: true, data_collection: 'deny' },
   },
 ];
 

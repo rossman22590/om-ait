@@ -11,15 +11,15 @@ import {
 const served = [
   'deepseek-v4.1-flash',
   'glm-5.3-flash',
-  'deepseek-v4-flash-0731',
+  'kimi-k3',
 ];
 
-// Every bundled route pins a ZDR endpoint; V4 Flash 0731 is text-only.
+// Every bundled route pins a ZDR endpoint and supports image input.
 describe('managed catalog', () => {
-  test('serves the selected models, including the text-only DeepSeek V4 exception', () => {
+  test('serves the selected vision models', () => {
     expect(DEFAULT_MANAGED_MODEL_IDS).toEqual(served);
     expect(PLATFORM_DEFAULT_MODEL_ID).toBe('deepseek-v4.1-flash');
-    expect(MANAGED_FLAGSHIP_MODEL_ID).toBe('deepseek-v4.1-flash');
+    expect(MANAGED_FLAGSHIP_MODEL_ID).toBe('kimi-k3');
   });
 
   test('every managed model has explicit credit pricing and a pinned ZDR route', () => {
@@ -27,7 +27,7 @@ describe('managed catalog', () => {
       expect(model.pricing?.inputPerMillion).toBeGreaterThan(0);
       expect(model.pricing?.outputPerMillion).toBeGreaterThan(0);
       expect(model.providerBrand).toBeUndefined();
-      expect(model.vision).toBe(model.id !== 'deepseek-v4-flash-0731');
+      expect(model.vision).toBe(true);
     }
     expect(getManagedModel('glm-5.3-flash')).toMatchObject({
       upstreamModelId: 'z-ai/glm-5.3-flash',
@@ -49,13 +49,17 @@ describe('managed catalog', () => {
 
   test('DeepSeek cache-read rate matches its pinned OpenRouter endpoint', () => {
     expect(getManagedModel('deepseek-v4.1-flash')?.pricing?.cachedInputPerMillion).toBe(0.006);
+    expect(getManagedModel('kimi-k3')).toMatchObject({
+      upstreamModelId: 'moonshotai/kimi-k3',
+      openrouterProvider: { only: ['wafer'], allow_fallbacks: false, zdr: true, data_collection: 'deny' },
+    });
     expect(getManagedModel('morph-dsv4flash')).toBeUndefined();
   });
 
   test('old Kortix managed IDs and BYOK refs do not resolve as managed', () => {
     for (const old of [
       'grok-4.6', 'deepseek-v4-flash', 'deepseek-v4-pro-0813', 'muse-spark-1.2',
-      'kimi-k3', 'kimi-k3-fast',
+      'deepseek-v4-flash-0731', 'kimi-k3-fast',
       'minimax-m3', 'gpt-5.6-luna', 'gpt-6-astra',
       'anthropic/claude-opus-4.8', 'nope',
     ]) {
