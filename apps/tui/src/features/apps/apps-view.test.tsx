@@ -4,7 +4,13 @@ import { act } from 'react';
 import { testRender } from '@opentui/react/test-utils';
 
 import { openUrl } from '../../lib/open-url.ts';
-import { ACCESS_PHRASE, FIRST_DEPLOY_COMMAND, appStatus, durationText, toRow } from './apps-screen.tsx';
+import {
+  ACCESS_PHRASE,
+  FIRST_DEPLOY_COMMAND,
+  appStatus,
+  durationText,
+  toRow,
+} from './apps-screen.tsx';
 import { type AppRow, AppsView, type AppsViewProps, appRowText } from './apps-view.tsx';
 
 // React 19 needs this before `act`; without it a key press is asserted against
@@ -172,7 +178,9 @@ describe('<AppsView/> through the OpenTUI test renderer', () => {
   test('renders one row per App with its status and age', async () => {
     const { captureCharFrame, flush, renderer } = await testRender(<AppsView {...props()} />, SIZE);
     await flush();
-    const lines = captureCharFrame().split('\n').map((line) => line.trimEnd());
+    const lines = captureCharFrame()
+      .split('\n')
+      .map((line) => line.trimEnd());
     expect(lines[0]).toContain('Deal desk');
     expect(lines[0]).toContain('Running · 2m');
     expect(lines[1]).toContain('Claims viewer');

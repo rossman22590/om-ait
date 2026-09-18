@@ -91,6 +91,9 @@ export interface AppsViewProps {
   onBack(): void;
 }
 
+/** The detail pane's label column. Wide enough for `Who can open` + a gap. */
+const LABEL_WIDTH = 14;
+
 const TONE_COLOR: Record<AppStatus['tone'], string> = {
   ok: theme.ok,
   idle: theme.faint,
@@ -124,7 +127,7 @@ export function appRowText(row: AppRow, now: number, width: number): string {
 function Field({ label, value, fg }: { label: string; value: string; fg?: string }) {
   return (
     <text fg={fg ?? theme.fg}>
-      <span fg={theme.faint}>{label.padEnd(12, ' ')}</span>
+      <span fg={theme.faint}>{label.padEnd(LABEL_WIDTH, ' ')}</span>
       {value}
     </text>
   );
@@ -329,7 +332,7 @@ export function AppsView({
     'Enter details',
     'o open',
     'y copy',
-    canChangeState ? 'd start/stop' : null,
+    canChangeState ? 'd start/suspend' : null,
     visibilityOptions.length > 0 ? 'v visibility' : null,
     'r refresh',
     'Esc back',
