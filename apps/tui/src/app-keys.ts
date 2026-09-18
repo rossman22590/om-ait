@@ -16,8 +16,10 @@
  *  2. While the terminal panel has focus the app keeps exactly
  *     `TERMINAL_RESERVED_CHORDS` — Tab, Shift+Tab, Alt+T, Ctrl+Q — and nothing
  *     else. `Ctrl+C` is the shell's; a shell without `Ctrl+C` is not a shell.
- *  3. An open overlay owns the keyboard outright, and so does a suspended
- *     renderer (attach mode), because nothing of ours is on screen.
+ *  3. An open overlay owns the keyboard, except for quit: `?` must not be a
+ *     room with no door. A suspended renderer (attach mode) owns it outright,
+ *     because nothing of ours is on screen and `Ctrl+C` twice is how opencode
+ *     itself is left.
  */
 
 import type { KeyEvent } from '@opentui/core';
@@ -83,7 +85,14 @@ export function globalKeyBlocked(focus: Focus): boolean {
  * exception the caller applies: quitting does not need it.
  */
 export function globalKeyAction(key: KeyEvent, state: AppKeyState): AppKeyAction | null {
-  if (state.overlay || state.attaching) return null;
+  // Attach mode is opaque: opencode has the terminal, and `Ctrl+C` twice is
+  // how the user leaves IT. An overlay is not — it is ours, it is on screen,
+  // and a user who opens `?` and reaches for `Ctrl+C` must not be trapped.
+  if (state.attaching) return null;
+  if (state.overlay) {
+    if (!matchesBinding(key, 'quit')) return null;
+    return key.name === 'q' || state.quitArmed ? { kind: 'quit' } : { kind: 'arm-quit' };
+  }
 
   const terminalFocused = state.focus === 'terminal';
   if (terminalFocused && !isReservedWhileTerminalFocused(key)) return null;

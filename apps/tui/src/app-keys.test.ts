@@ -69,6 +69,25 @@ describe('help is global only when nothing is typing', () => {
     expect(globalKeyAction(key('?'), state({ overlay: 'help' }))).toBeNull();
     expect(globalKeyAction(key('?'), state({ overlay: 'switcher' }))).toBeNull();
   });
+
+  test('quit still works through an open overlay — `?` is not a trap', () => {
+    for (const overlay of ['help', 'switcher'] as const) {
+      expect(globalKeyAction(key('c', { ctrl: true }), state({ overlay }))).toEqual({
+        kind: 'arm-quit',
+      });
+      expect(
+        globalKeyAction(key('c', { ctrl: true }), state({ overlay, quitArmed: true })),
+      ).toEqual({ kind: 'quit' });
+      expect(globalKeyAction(key('q', { ctrl: true }), state({ overlay }))).toEqual({
+        kind: 'quit',
+      });
+    }
+  });
+
+  test('attach mode stays opaque — Ctrl+C there belongs to opencode', () => {
+    expect(globalKeyAction(key('c', { ctrl: true }), state({ attaching: true }))).toBeNull();
+    expect(globalKeyAction(key('q', { ctrl: true }), state({ attaching: true }))).toBeNull();
+  });
 });
 
 describe('quitting', () => {
