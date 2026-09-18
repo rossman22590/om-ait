@@ -395,6 +395,10 @@ os.close(slave)
   sandbox runs into `~/.kortix/opencode/<version>/` once, then reuses it. While
   opencode has the terminal the TUI is suspended and paints nothing; on exit it
   repaints on the same session.
+- **Leaving opencode is `Ctrl+C` twice WITHIN one second.** The interval is the
+  whole trick: measured, two presses 0.3 s apart exit it and the Kortix TUI
+  repaints, while the same two spaced three seconds apart are two separate
+  interrupts and opencode stays. `Esc` does not leave it either.
 - **The terminal is left in a broken state.** Every exit path calls
   `renderer.destroy()`, and attach resumes in a `finally`. If a crash ever
   escapes it, `reset` restores the shell; report the stack trace, because that
