@@ -100,6 +100,7 @@ export { useChatTurns, type TurnView, renderParts, type PartRenderers } from './
 // mutations a settings/workbench screen actually needs, with invalidation
 // wired so writes reflect without a manual refetch.
 export { useProjectSecrets, projectSecretsKey } from './use-project-secrets';
+export { useAccountSecretResources, useSessionProviderSecretPools } from './use-provider-secrets';
 export { useProjectTriggers, projectTriggersKey } from './use-project-triggers';
 export { useChangeRequests, changeRequestsKey } from './use-change-requests';
 export { useGatewayRoutingPolicy, gatewayRoutingPolicyKey } from './use-gateway-routing-policy';
@@ -159,6 +160,8 @@ export * from './query-keys';
 export * from './query-contracts';
 export * from './use-project-name';
 export * from './use-project-session';
+export * from './use-project-sessions';
+export * from './session-cache-write';
 export * from './invalidate-project';
 export * from './use-feature-flag';
 

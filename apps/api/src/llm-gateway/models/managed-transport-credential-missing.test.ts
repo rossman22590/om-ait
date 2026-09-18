@@ -85,6 +85,7 @@ mock.module('../credentials/codex', () => ({
   CODEX_USER_AGENT: 'test-agent',
   CodexRefreshError: class CodexRefreshError extends Error {},
   resolveCodexCredential: async () => null,
+  resolveCodexAccountCredential: async () => null,
 }));
 
 const { RUNTIME_MANAGED_MODELS } = await import('./managed-models');
@@ -117,5 +118,3 @@ describe('a managed model whose transport credential is missing is never offered
     ).rejects.toMatchObject({ name: 'GatewayResolutionError' });
   });
 });
-
-mock.module('../../provider-connections/store', () => ({ resolveUserProviderConnection: async () => null }));

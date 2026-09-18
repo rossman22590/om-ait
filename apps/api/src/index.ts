@@ -1,4 +1,3 @@
-import { providerConnectionsApp } from './provider-connections/routes';
 // Expand the aggregate ECS secret before any module reads process.env.
 import './environment-secret';
 
@@ -62,6 +61,7 @@ import {
   teamsIdentityApp,
   teamsOauthApp,
   teamsWebhookApp,
+  startTeamsBotTokenRefresh,
   telegramWebhookApp,
 } from './channels';
 import { connectorApp } from './connectors';
@@ -152,6 +152,7 @@ import { isPlatinumSandboxNotRunningError } from './shared/platinum';
 import { skillsApp } from './skills';
 import { kickStartupPreBuild } from './snapshots/builder';
 import { startTmpReaper, stopTmpReaper } from './snapshots/tmp-reaper';
+import { startSessionLifecycleWorker, stopSessionLifecycleWorker } from './projects/session-lifecycle/worker';
 import {
   startTunnelService,
   stopTunnelService,
@@ -941,7 +942,6 @@ app.use('/v1/platform/boot-timeline', supabaseAuth);
 app.use('/v1/platform/runtime-projection', supabaseAuth);
 app.route('/v1/platform', platformApp); // /v1/platform, /v1/platform/sandbox/version
 registerSunaMigrationRoutes(projectsApp); // /v1/projects/suna-migration/* (OG Suna → opencode, user-triggered)
-app.route('/v1/provider-connections', providerConnectionsApp);
 app.route('/v1/projects', projectsApp); // /v1/projects — Git-backed Kortix projects
 app.route('/v1/marketplace', marketplaceApp); // /v1/marketplace — browse the registry catalog
 
@@ -989,6 +989,9 @@ app.route('/v1/webhooks/slack/oauth', slackOauthApp); // /v1/webhooks/slack/oaut
 app.route('/v1/webhooks/slack', slackWebhookApp); // /v1/webhooks/slack/:projectId — raw Slack events (BYO mode)
 app.route('/v1/webhooks/teams/oauth', teamsOauthApp); // /v1/webhooks/teams/oauth/callback — admin-consent + catalog publish
 app.route('/v1/webhooks/teams', teamsWebhookApp); // /v1/webhooks/teams/messages — Bot Framework activities
+// Keep the shared Teams bot token warm so the first message after a deploy
+// does not wait on login.microsoftonline.com before its live card is posted.
+startTeamsBotTokenRefresh();
 app.route('/v1/channels/slack/identity', slackIdentityApp); // /v1/channels/slack/identity/bind — authed /login bind
 app.route('/v1/channels/teams/identity', teamsIdentityApp); // /v1/channels/teams/identity/bind — authed login bind
 app.route('/v1/webhooks/telegram', telegramWebhookApp); // /v1/webhooks/telegram/:projectId — Telegram updates
@@ -1496,16 +1499,21 @@ async function startReplicaServices() {
   await import('./platform/services/runtime-settings')
     .then((m) => m.refreshRuntimeSettings())
     .catch(() => {});
-  // Warm the managed-GitHub-App config cache too — so a self-host instance
-  // whose operator just ran the in-app GitHub App setup flow (rather than
-  // `.env`) gets its DB-stored creds from request #1, not after a 30s TTL.
-  await import('./platform/services/managed-github-app')
-    .then((m) => m.refreshManagedGithubAppConfig())
+  // Warm the instance GitHub identity + git backend caches too — so a
+  // self-host instance whose operator just ran the in-app setup flow (rather
+  // than `.env`) serves its stored configuration from request #1, not after a
+  // 30s TTL.
+  await import('./platform/services/github-app-identity')
+    .then((m) => m.refreshAppIdentity())
+    .catch(() => {});
+  await import('./platform/services/managed-git-backend')
+    .then((m) => m.refreshGitBackend())
     .catch(() => {});
   // Every replica stages snapshot/session-boot build contexts in tmpdir and can
   // leak them on error paths; sweep stale ones so they don't fill node disk and
   // trip DiskPressure evictions. Runs on all replicas (not leader-gated).
   startTmpReaper();
+  startSessionLifecycleWorker();
 }
 
 // Singleton background WORKERS — must run on EXACTLY ONE replica at a time
@@ -1628,6 +1636,7 @@ async function shutdown(signal: string) {
   stopTunnelService();
   stopAccessControlCache();
   stopTmpReaper();
+  stopSessionLifecycleWorker();
   // Flush observability data before exit. The audit queue is drained here
   // because audit rows are buffered off the request path — without this, the
   // last ~250 ms of events would be lost on every SIGTERM (i.e. every rollout).

@@ -170,6 +170,15 @@ export function createKortix(config: KortixPlatformConfig, opts?: { global?: boo
     list: P.listAccounts,
     get: P.getAccount,
     create: P.createAccount,
+    secretResources: {
+      list: P.listAccountSecretResources,
+      create: P.createAccountSecretResource,
+      rotate: P.rotateAccountSecretResource,
+      remove: P.deleteAccountSecretResource,
+      grant: P.grantAccountSecretResource,
+      revoke: P.revokeAccountSecretResourceGrant,
+      setAccess: P.setAccountSecretResourceAccess,
+    },
     updateName: P.updateAccountName,
     /** Organization branding (Enterprise): own logo / icon / favicon (light + dark) and product name. */
     branding: {
@@ -371,6 +380,16 @@ export function createKortix(config: KortixPlatformConfig, opts?: { global?: boo
     deleteInstallation: P.deleteGitHubInstallation,
   };
 
+  /**
+   * The instance git backend ("Kortix managed") — one deployment-wide owner
+   * plus credential, never an account connection. `backend()` is readable by
+   * any authenticated user; `backendRepositories()` is self-host-operator only.
+   */
+  const gitBackend = {
+    get: P.getManagedGitBackend,
+    repositories: P.listManagedGitRepositories,
+  };
+
   /** Public share links for a sandbox port (`/v1/p/share`) — sandbox-scoped, not project-scoped. */
   const sandboxShares = {
     list: P.listSandboxShares,
@@ -417,6 +436,9 @@ export function createKortix(config: KortixPlatformConfig, opts?: { global?: boo
       /** Call one `<connector>.<action>` tool. */
       call: <T = unknown>(...a: DropFirst<Parameters<typeof P.callConnector<T>>>) =>
         P.callConnector<T>(projectId, ...a),
+      /** The accounts a connector can be called as, default first. */
+      accounts: (...a: DropFirst<Parameters<typeof P.listConnectorAccounts>>) =>
+        P.listConnectorAccounts(projectId, ...a),
       /** Upload bytes for use by a later connector call. */
       uploadAttachment: (...a: DropFirst<Parameters<typeof P.uploadConnectorAttachment>>) =>
         P.uploadConnectorAttachment(projectId, ...a),
@@ -701,8 +723,14 @@ export function createKortix(config: KortixPlatformConfig, opts?: { global?: boo
       },
 
       sessions: {
+        /** One page of sessions as a bare array. See `listPage` for `next_cursor`. */
         list: (options?: Parameters<typeof P.listProjectSessions>[1]) =>
           P.listProjectSessions(projectId, options),
+        /** One keyset page plus its continuation token. The list is bounded —
+         *  walk it with `next_cursor`, and use `get(sessionId)` to resolve one
+         *  session rather than paging in search of it. */
+        listPage: (options?: Parameters<typeof P.listProjectSessionsPage>[1]) =>
+          P.listProjectSessionsPage(projectId, options),
         create: (input?: Parameters<typeof P.createProjectSession>[1]) =>
           P.createProjectSession(projectId, input),
         /** Pre-create the session a present user is about to start. Ordinary session; ignore failures. */
@@ -1194,6 +1222,12 @@ export function createKortix(config: KortixPlatformConfig, opts?: { global?: boo
       },
       /** Read the authoritative secret allowlist and connections. */
       scope: () => P.getProjectSessionScope(projectId, sessionId),
+      providerSecretPool: {
+        list: () => P.listSessionProviderSecretPools(projectId, sessionId),
+        get: (providerId: string) => P.getSessionProviderSecretPool(projectId, sessionId, providerId),
+        set: (providerId: string, secretIds: string[] | null) =>
+          P.setSessionProviderSecretPool(projectId, sessionId, providerId, secretIds),
+      },
       /** Re-scope a running session — set semantics; see setProjectSessionScope. */
       rescope: (scope: P.SessionScopeInput) =>
         P.setProjectSessionScope(projectId, sessionId, scope),
@@ -1344,15 +1378,6 @@ export function createKortix(config: KortixPlatformConfig, opts?: { global?: boo
     /** Headless regular auth — see `auth` above. */
     auth,
     accounts,
-    providerConnections: {
-      list: P.listUserProviderConnections,
-      saveApiKey: P.saveUserProviderApiKey,
-      remove: P.deleteUserProviderConnection,
-      startOAuth: P.startUserProviderOAuth,
-      pollOAuth: P.pollUserProviderOAuth,
-      listProject: P.listProjectPersonalProviders,
-      setProject: P.setProjectPersonalProvider,
-    },
     /** Identity and access — assignments, roles, permissions, groups, probes. */
     iam,
     /** Account-invite lifecycle reached by invite token alone (accept/decline/describe). */
@@ -1364,6 +1389,8 @@ export function createKortix(config: KortixPlatformConfig, opts?: { global?: boo
     session,
     /** GitHub App installation + repository linking (account-scoped). */
     github,
+    /** The instance git backend ("Kortix managed", deployment-scoped). */
+    gitBackend,
     /** Billing read surface, including unified session costs. */
     billing,
     /** Public share links for a sandbox port (`/v1/p/share`, sandbox-scoped). */

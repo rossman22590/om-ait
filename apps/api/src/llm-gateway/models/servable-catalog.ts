@@ -1,5 +1,3 @@
-import { listProjectUserProviderConnections } from '../../provider-connections/store';
-import { providerConnectionAdapter } from '../../provider-connections/adapters';
 import { getProjectModelAccess } from '../../repositories/project-model-access';
 import { modelAccessAllows } from '../model-access';
 import { accountMayUseManagedModels } from '../../billing/services/entitlements';
@@ -11,6 +9,8 @@ import { toWireModel } from '../resolution/effective';
 import { gatewayModelCatalog } from './catalog-models';
 import { projectPickerCatalog } from './picker-catalog';
 import { platformDefaultModelId } from './served-managed-models';
+import { projectFeatureFlagEnabled } from '../../feature-flags/for-project';
+import { listGrantedGatewaySecretNames } from '../../secrets/account-resource';
 
 type GatewayModel = ReturnType<typeof gatewayModelCatalog>[string];
 
@@ -47,7 +47,7 @@ export async function servableProjectCatalog(input: {
 }): Promise<ServableProjectCatalog> {
   const { projectId, accountId, principalUserId } = input;
   const freeManagedOnly = !(await accountMayUseManagedModels(accountId));
-  const [secrets, defaults, routing, access] = await Promise.all([
+  const [secrets, defaults, routing, access, pooledEnabled] = await Promise.all([
     listProjectSecretNamesForConsumer({
       projectId,
       principalUserId,
@@ -56,14 +56,11 @@ export async function servableProjectCatalog(input: {
     getAccountModelDefaults(accountId, projectId),
     getProjectRoutingPolicy(projectId),
     getProjectModelAccess(projectId),
+    projectFeatureFlagEnabled(projectId, 'pooled_provider_secrets'),
   ]);
-  if (principalUserId) {
-    const personal = await listProjectUserProviderConnections(projectId, principalUserId);
-    for (const binding of personal) {
-      const adapter = providerConnectionAdapter(binding.provider_id);
-      if (adapter) secrets.push(adapter.secretName);
-    }
-  }
+  const pooledNames = pooledEnabled && principalUserId
+    ? await listGrantedGatewaySecretNames(accountId, projectId, principalUserId).catch(() => [] as string[])
+    : [];
   const effectiveDefault = toWireModel(
     defaults.projects[projectId] ?? defaults.account ?? platformDefaultModelId() ?? '',
   );
@@ -77,7 +74,7 @@ export async function servableProjectCatalog(input: {
   ].filter((model): model is string => !!model);
   const models = projectPickerCatalog(
     gatewayModelCatalog(projectId, { freeManagedOnly }),
-    new Set(secrets),
+    new Set([...secrets, ...pooledNames]),
     requiredModels,
   );
   const enabled = resolveEnablement(models, routing?.modelOverrides ?? {}, requiredModels);

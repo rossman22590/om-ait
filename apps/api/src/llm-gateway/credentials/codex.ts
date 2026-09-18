@@ -1,12 +1,12 @@
-import { resolveUserProviderConnection, updateUserProviderConnection, withUserProviderConnectionLock } from '../../provider-connections/store';
-import { eq } from 'drizzle-orm';
-import { projectSecrets } from '@kortix/db';
+import { and, eq } from 'drizzle-orm';
+import { accountSecretResources, projectSecrets } from '@kortix/db';
 import { db } from '../../shared/db';
 import {
   encryptProjectSecret,
   resolveProjectSecretForConsumer,
 } from '../../projects/secrets';
 import { recordAuditEvent } from '../../shared/audit';
+import { encryptAccountSecret } from '../../secrets/account-resource';
 import {
   CodexRefreshError,
   OPENAI_AUTH_BASE,
@@ -27,8 +27,7 @@ const CODEX_AUTH_JSON_SECRET_NAME = 'CODEX_AUTH_JSON';
 type FetchImpl = (input: string, init: RequestInit) => Promise<Response>;
 
 interface SecretRow {
-  persistPersonal?: (value: string) => Promise<void>;
-  personalConnection?: NonNullable<Awaited<ReturnType<typeof resolveUserProviderConnection>>>;
+  storage: 'project' | 'account_resource';
   accountId: string;
   secretId: string;
   ownerUserId: string | null;
@@ -47,10 +46,6 @@ async function loadCodexRow(
   userId: string,
   context: CodexCredentialContext,
 ): Promise<SecretRow | null> {
-  const personal = context.accountId ? await resolveUserProviderConnection(projectId, userId, 'codex', context.sessionId) : null;
-  if (personal) return { personalConnection: personal, accountId: context.accountId!,
-    secretId: personal.connectionId, ownerUserId: userId, value: personal.value,
-    actorUserId: userId, sessionId: context.sessionId ?? null };
   const resolved = await resolveProjectSecretForConsumer({
     projectId,
     accountId: context.accountId,
@@ -63,6 +58,7 @@ async function loadCodexRow(
   return resolved
     ? {
         ...resolved,
+        storage: 'project',
         actorUserId: userId,
         sessionId: context.sessionId ?? null,
       }
@@ -83,7 +79,6 @@ async function refreshAndPersist(
   try {
     const response = await fetchImpl(`${OPENAI_AUTH_BASE}/oauth/token`, {
       method: 'POST',
-      signal: AbortSignal.timeout(15_000),
       headers: { 'content-type': 'application/json' },
       body: buildRefreshBody(current.refresh),
     });
@@ -96,17 +91,17 @@ async function refreshAndPersist(
     const next = applyRefresh(tokens, current, Date.now());
     if (!next) throw new CodexRefreshError('refresh response missing access token', response.status);
 
-    if (row.personalConnection) {
-      if (row.persistPersonal) await row.persistPersonal(JSON.stringify({ openai: next }));
-      const updated = row.persistPersonal ? true : await updateUserProviderConnection(row.personalConnection, JSON.stringify({ openai: next }));
-      if (!updated) throw new CodexRefreshError('connection changed during refresh');
-    } else await db
-      .update(projectSecrets)
-      .set({
+    if (row.storage === 'account_resource') {
+      await db.update(accountSecretResources).set({
+        valueEnc: encryptAccountSecret(row.accountId, JSON.stringify({ openai: next })),
+        updatedAt: new Date(),
+      }).where(and(eq(accountSecretResources.accountId, row.accountId), eq(accountSecretResources.secretId, row.secretId)));
+    } else {
+      await db.update(projectSecrets).set({
         valueEnc: encryptProjectSecret(projectId, JSON.stringify({ openai: next })),
         updatedAt: new Date(),
-      })
-      .where(eq(projectSecrets.secretId, row.secretId));
+      }).where(eq(projectSecrets.secretId, row.secretId));
+    }
 
     await recordAuditEvent({
       accountId: row.accountId,
@@ -116,12 +111,12 @@ async function refreshAndPersist(
       actorType: row.sessionId ? 'agent' : 'human',
       source: 'llm_gateway',
       action: 'secret.consumer.refreshed',
-      resourceType: row.personalConnection ? 'provider_connection' : 'project_secret',
+      resourceType: 'project_secret',
       resourceId: row.secretId,
       metadata: {
         identifier: CODEX_AUTH_JSON_SECRET_NAME,
         consumer: 'llm_gateway',
-        value_source: row.ownerUserId ? 'personal' : 'shared',
+        value_source: row.storage === 'account_resource' ? 'account_resource' : row.ownerUserId ? 'personal' : 'shared',
         upstream_status: response.status,
       },
     });
@@ -140,12 +135,12 @@ async function refreshAndPersist(
       source: 'llm_gateway',
       outcome: 'failure',
       action: 'secret.consumer.refresh_failed',
-      resourceType: row.personalConnection ? 'provider_connection' : 'project_secret',
+      resourceType: 'project_secret',
       resourceId: row.secretId,
       metadata: {
         identifier: CODEX_AUTH_JSON_SECRET_NAME,
         consumer: 'llm_gateway',
-        value_source: row.ownerUserId ? 'personal' : 'shared',
+        value_source: row.storage === 'account_resource' ? 'account_resource' : row.ownerUserId ? 'personal' : 'shared',
         ...(upstreamStatus === undefined ? {} : { upstream_status: upstreamStatus }),
       },
     });
@@ -161,16 +156,7 @@ function refreshSingleFlight(
 ): Promise<StoredCodexAuth | null> {
   const existing = inflightRefresh.get(row.secretId);
   if (existing) return existing;
-  const refresh = row.personalConnection
-    ? withUserProviderConnectionLock(row.secretId, async (latest, persist) => {
-        if (!latest) throw new CodexRefreshError('connection was removed');
-        const stored = parseCodexAuth(latest.value);
-        if (!stored?.access) throw new CodexRefreshError('invalid connection');
-        if (!needsRefresh(stored, Date.now())) return stored;
-        return refreshAndPersist(projectId, { ...row, personalConnection: latest, persistPersonal: persist }, stored, fetchImpl);
-      })
-    : refreshAndPersist(projectId, row, current, fetchImpl);
-  const pending = refresh.finally(() => inflightRefresh.delete(row.secretId));
+  const pending = refreshAndPersist(projectId, row, current, fetchImpl).finally(() => inflightRefresh.delete(row.secretId));
   inflightRefresh.set(row.secretId, pending);
   return pending;
 }
@@ -184,6 +170,25 @@ export async function resolveCodexCredential(
   const row = await loadCodexRow(projectId, userId, context);
   if (!row) return null;
 
+  return resolveCodexRowCredential(projectId, row, fetchImpl);
+}
+
+/** The caller already resolved the session pool with member and grant checks.
+ * Refresh writes back only the selected account resource, never a project row. */
+export async function resolveCodexAccountCredential(input: {
+  projectId: string; accountId: string; sessionId: string | null; userId: string;
+  secretId: string; value: string;
+}, fetchImpl: FetchImpl = (request, init) => fetch(request, init)): Promise<CodexCredential | null> {
+  return resolveCodexRowCredential(input.projectId, {
+    storage: 'account_resource', accountId: input.accountId, secretId: input.secretId,
+    ownerUserId: input.userId, value: input.value, actorUserId: input.userId,
+    sessionId: input.sessionId,
+  }, fetchImpl);
+}
+
+async function resolveCodexRowCredential(
+  projectId: string, row: SecretRow, fetchImpl: FetchImpl,
+): Promise<CodexCredential | null> {
   let stored = parseCodexAuth(row.value);
   if (!stored?.access) return null;
 

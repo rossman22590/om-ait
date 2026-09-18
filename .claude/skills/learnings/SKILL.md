@@ -21,6 +21,326 @@ linked, not inlined.
 
 ## Register
 
+### Decide gateway mode with one rule at boot and at prompt; a harness start failure is a `boot_error` (2026-09-18)
+
+**Rule:** decide a box's LLM-gateway mode only with `projectLlmGatewayEnabled`,
+at provision and at prompt-time env-sync alike. Enforce the plan per request in
+the gateway (`principal.freeModelsOnly`), never by withholding env at boot. A
+harness with no native fallback must report a failed start as `boot_error`.
+**Incident:** dev, 2026-09-17 23:14 → 2026-09-18: `session-sandbox.ts` still
+ANDed the 2026-06 plan gate, so pi-harness sessions of a free account booted
+without `KORTIX_LLM_BASE_URL`; pi never started, health said `boot_error: null`,
+the UI spun (96 boxes, 9 dead-lettered prompts). OpenCode hid the split by
+switching to the gateway on the first prompt. **Enforcer:**
+`session-sandbox.test.ts` (gateway env on any plan), `pi-harness.test.ts`
+(failed start → `boot_error`).
+
+### Preview completion belongs to one workflow attempt; daemons must release the deploy lock (2026-09-18)
+
+**Rule:** give each preview workflow run and attempt its own exit file. Close
+FD 9 before starting Docker so the daemon and its containers cannot retain the
+deployment lock after bootstrap exits. **Near-miss:** PR #7381's redeploy read
+its previous failure while waiting on a lock inherited by Docker and its shims;
+the preview stayed on the previous SHA. Recover an affected preview only after
+confirming no deployment owns the old lock. **Enforcer:**
+`tests/unit/sandbox-preview.test.ts` pins result identity and daemon FD closure.
+
+### A disabled react-query is `isPending` forever — never restate its `enabled` (2026-09-17)
+
+**When:** reading `.isPending` from any `useQuery` whose `enabled` is
+conditional, or adding a condition to an existing query's `enabled`.
+A disabled query never leaves `status: 'pending'` — there is no fetch to settle
+it — so any gate built on `isPending` must compensate. `useModelConnectionGate`
+compensated by hand-restating each query's `enabled` inline, and the copy went
+stale the first time someone changed one: `secretsQuery` gained
+`&& canReadSecrets`, the restatement did not. `project.secret.read` is
+manager-tier, so for every project MEMBER the query never ran, the clause was
+`true && true && true` forever, and the composer model picker spun with zero
+rows over a `/model-picker` catalog that had already returned 200. A third
+clause (`accountStatePending`) had no guard at all.
+**The rule:** do not restate `enabled` — ask what the query is DOING.
+`isPending && fetchStatus === 'fetching'` is enabled-aware by construction
+(exactly query-core's own `isLoading`): disabled reads `idle` and releases the
+gate, offline-`paused` releases it rather than spinning over data already in the
+browser, and a background refetch cannot re-open it.
+**Diagnostic:** a spinner that outlives a 200 whose body is already in the
+Network tab is a gate, not a fetch. Check `fetchStatus`, not `isPending`.
+*Incident:* dev.kortix.com project `441011b6`, members only; introduced
+`1c8b5434b8` (2026-08-19), found 2026-09-17, fixed in PR #7380. Reproduced and
+A/B-proven on the real UI: same member, same project — `main` gave
+`spinnerPresent:true, rowCount:0`, the fix gave `false, 8`.
+*Enforcer:* `apps/web/src/features/session/entitlements-pending.test.ts` pins
+the rule AND the call site (no clause may name `secretsQuery.isPending`,
+`projectDetailQuery.isPending` or `accountStatePending` again). Nothing yet
+lints the general pattern repo-wide — a sweep found 4 conditionally-enabled
+queries read via `isPending`; this was the only live one.
+*Follow-up (2026-09-18):* that sweep covered `apps/web` only and under-counted.
+`packages/sdk/src/react/use-model-access.ts` carried a 5th instance —
+`isLoading: query.isPending` under `enabled: !!projectId`, so
+`useModelAccess(null)` (which `provider-connect.tsx:833` passes on purpose)
+loaded forever. Latent, not live: no consumer rendered off that flag. Fixed to
+`query.isLoading` and pinned by a rendered-hook test in
+`use-model-access.test.ts` that asserts both halves — disabled reports settled
+with zero fetches, enabled still reports its first fetch. A re-sweep of both
+packages on 2026-09-18 found no remaining live instance: every other
+`isPending` read in `packages/sdk/src/react/` is a `useMutation` (no `enabled`,
+so correct), and all 4 query-shaped reads in `apps/web` are guarded by an early
+return or an already-fixed helper. When the sweep is redone, sweep `packages/`
+too — this hook was reachable from `apps/web` and the sweep still missed it.
+
+### A control-required alarm comes back with a threshold the workload cannot cross in steady state (2026-09-17)
+
+**When:** an external control (Drata DCF-86 / test 294) requires an alarm the
+team retired as noise. Drata checks existence + SNS delivery, not the
+threshold: restore `TargetResponseTime` at Average > 30 s for 3×5 min — above
+the worst 14-day sustained average (~25 s, dev API ALB; normal 5–11 s) — so
+the control passes without resurrecting the 2026-08-26 ~300-email flap
+(entry below). Terraform and the reconciler `ALARM_SPECS` must carry the
+identical spec, or the Lambda rewrites Terraform's alarms every tick.
+*Enforcer:* `infra/terraform/scripts/test_alb_target_response_time_alarms.py`
+pins metric/statistic/threshold/evaluations per region, the reconciler spec
+parity, and the us-east-2 alert-topic subscription.
+
+### A branch migration's timestamp is re-checked at MERGE time, not at write time (2026-09-17)
+
+**Rule:** before merging a branch that adds a migration, confirm its file sorts
+after every migration on `main` at that moment; if `main` grew a newer one,
+rename yours to a fresh timestamp. A persistent preview DB that already ran the
+old name will then refuse (`Not run migration … is preceding already run
+migration …`) — recycle the `preview` label so it rebuilds from scratch; do not
+hand-edit `pgmigrations`. **When:** a long-lived branch (days) with a migration,
+or any merge of `main` into it. *Near-miss:* `connector-creds` wrote
+`20260916182954570_…` on day 1; by merge day `main` had `20260916194914446_…`,
+and the PR's preview died in `kortix-migrate` on the first redeploy after the
+merge. *Enforcer:* none yet — `packages/db` has no "newest on branch > newest on
+main" check; until it exists, `ls packages/db/migrations | sort | tail` against
+`git ls-tree origin/main` is the check.
+
+### A gate the product cannot clear is a dead end (2026-09-16)
+
+**Rule:** every refusal must carry its remedy — a link, a button, a next
+command — and a refusal that can only be cleared from a surface that does not
+exist must not exist. **When:** adding a pre-flight check (create-time,
+admission-time) ahead of a real action. Before shipping it, name the exact UI
+control or CLI command that clears it, for every caller who can hit it
+(including a service account). If none exists, the gate is the bug, not the
+missing UI. *Incident:* a `user`-strategy connector had no connect flow
+anywhere — no shared account to offer, so the card rendered a button-less
+refusal and the composer spun on "Thinking" forever. *Enforcer:*
+`apps/api/src/projects/routes/r8-session-prompts.test.ts:377` ("queues the
+prompt even when the project has an unconnected connector"); the denial's
+`connect_url` remedy: `apps/api/src/connectors/principal-access.ts:110-114`.
+
+### Keep persistent preview migrations tolerant of branch ledger order (2026-09-17)
+
+**When:** redeploying a branch preview after merging `main`. The preview keeps
+its database. A new `main` migration can have an earlier filename than a branch
+migration already applied there. Use `preview-up` only in the preview compose
+overlay; keep the strict `bootstrap` command for self-host and releases.
+
+**Incident (PR #7319):** run `35171925192` failed before the preview API could
+start. Its DB had pooled migration `20260916194914446` before newly merged
+managed GitHub migration `20260916184801110`.
+
+**Enforcement:** `preview-up` requires the preview marker and `supabase-db` host.
+The preview compose test pins the command. Migration target tests pin its guard.
+
+### Use the loopback migration command when starting an isolated worktree (2026-09-17)
+
+**When:** an isolated worktree applies its branch migration before an earlier-dated
+`main` migration lands. Run `migrate:local` on its loopback database. The strict
+`migrate` command rejects the valid local ledger order before starting the app.
+
+**Near-miss (PR #7319):** the pooled worktree applied its migration first. After
+merging `main`, `worktree start` failed on the new managed GitHub migration.
+`local-up` applied it without deleting the local OAuth and key test data.
+
+**Enforcement:** `runMigrate` calls `migrate:local` for isolated worktrees.
+`scripts/worktree/__tests__/contract.test.ts` checks that command exists and is used.
+
+### Verify pre-create settings in the session create request (2026-09-16)
+
+**When:** adding a setting that the new-session composer must carry into
+`POST /sessions`. Keep the selection in composer-owned state. Assert the
+outgoing create body and session read-back after the visible control changes.
+
+**Near-miss (PR #7319):** the Provider keys panel showed two selected keys,
+but its local draft never reached the composer. A warm session was claimed
+without a pool. The preview browser caught this before merge.
+
+**Enforcement:** browser journey 30 checks selected IDs in the create request.
+The warm-session unit test rejects a create body with `provider_secret_pools`.
+
+### Bind change-request origin to the authenticated session (2026-09-16)
+
+**When:** opening a change request with a session credential. Derive the origin
+from the authenticated `sessionId`; reject a different body `session_id` and a
+missing session row. Never let a caller omit the origin that a later merge gate
+uses. *Near-miss:* CR open accepted an omitted or foreign `session_id`, so a
+session could make its own CR appear unrelated before the self-merge check.
+*Enforcer:* `GH-17` opens a CR without `session_id`, rejects a mismatch, and
+checks explicit-grant and null-grant self-merge outcomes through HTTP and Git.
+
+### Keep subscription picker prices distinct from session charges (2026-09-16)
+
+**When:** publishing ChatGPT/Codex models to the picker. Retain the published
+model price fields. Zeroing catalog rates makes the picker call a paid ChatGPT
+subscription “Free.” Keep subscription session cost at `$0.00` in SDK accounting;
+the picker rates are reference prices, not an extra per-token subscription bill.
+*Correction to the 2026-09-15 entry below:* zero catalog rates misstate the
+subscription price. *Enforcers:* catalog model tests, `GW-5`, and browser journey 26.
+
+### Ship the same change to `main` and `staging` ONCE, through the promote — never twice (2026-09-16)
+
+**When:** a fix is wanted on staging before the next promote. Land it on `main`,
+then promote. A second PR that re-implements it against `staging` gives git two
+unrelated edits to the same lines, and the next `main -> staging` PR goes DIRTY.
+*Incident:* "the project session list is a keyset page" shipped as #7308 (main,
+`6f52904b61`) AND #7314 (staging, `a5290753fa`). Promote #7292 blocked on a
+4-file conflict for hours. Worse, the two were NOT equivalent: #7314 also
+pinned the session cursor's GCM nonce and auth-tag lengths, so `main` ran for a
+day accepting a client-supplied 4-byte auth tag — ~2^32 to forge a cursor
+instead of ~2^128. Resolving such a conflict by `--ours`/`--theirs` reflex
+silently picks one; diff the two sides and take the superset.
+*Enforcer:* none for the duplicate itself — the conflict IS the signal. Read it
+as "two branches disagree", never as "git being annoying".
+
+### A committed conflict marker passes every lane — grep for it (2026-09-16)
+
+**When:** resolving any merge, especially in a file no build step reads.
+`a5290753fa` (#7314) committed `<<<<<<< HEAD` / `=======` / `>>>>>>> 6f52904b61`
+straight into `.claude/skills/learnings/SKILL.md` and shipped it to `staging`.
+Every CI lane stayed green: nothing compiles, lints or imports that file. It
+surfaced only when the next promote produced a NESTED conflict. Note the rule
+can only key on `<<<<<<< ` and `>>>>>>> ` at line start — a Setext heading
+underlines its title with exactly `=======`, so flagging the middle marker
+rejects ordinary markdown. *Enforcer:* `tests/unit/conflict-markers.test.ts`
+scans every `git ls-files` path and fails with `path:line`; proven against the
+real corruption replanted in the same file, and against the naive rule.
+
+
+
+### Bounding a list API strands every OLDER client that shipped before the paging UI (2026-09-16)
+
+**When:** adding a default `limit` to a collection endpoint an existing frontend
+already consumes, and choosing the deploy ORDER. v0.13.20 rolled the API before
+the web app. For that window `kortix.com` ran the 0.13.19 frontend — no
+`hasNextPage`, no Load more — against the 0.13.20 API, which answers 50 rows.
+The list was fast and **truncated with no control to reach the rest**: the old
+client cannot ask for page two because it does not know pages exist. Reported as
+"its working but there is no load more btn". The rule: a bound is a BREAKING
+change for any client that assumed "all", even though the response shape is
+byte-compatible. Ship the client that can page FIRST (it works against an
+unbounded API — it just never gets a cursor), then bound the server. Where the
+order cannot be controlled, keep the old default unbounded behind an explicit
+opt-in (`?limit=`) until the client rollout completes. *Incident:* prod
+v0.13.20, ~11 min of API-ahead-of-frontend skew, self-resolving.
+*Automation:* none — candidate: deploy-prod orders web before api when the
+release touches a list contract.
+
+### A prod merge does not guarantee a prod deploy — `deploy-prod` can silently not fire (2026-09-16)
+
+**When:** merging a release PR into `prod` and assuming the pipeline started.
+`deploy-prod.yml` declares `on: push: branches: [prod]`, and the v0.13.20
+release merge (`7e7f79b579`, 19:31:47Z) produced **no workflow run at all** —
+not deploy-prod, not CodeQL, nothing for that SHA. `prod` sat at VERSION
+0.13.20 with production still serving 0.13.19 and no run to watch. Recovered
+with `gh workflow run deploy-prod.yml --ref prod`, which deployed normally.
+The rule: after merging a release PR, ASSERT a run exists for the merge SHA
+(`gh run list --workflow=deploy-prod.yml --json headSha`) before you start
+watching one; an absent run looks exactly like a slow queue. Never infer the
+deploy from the merge. *Incident:* prod v0.13.20; caught within ~2 min because
+the run list was checked, not assumed. *Automation:* none — candidate: a
+scheduled reconcile that alerts when `prod` HEAD has no deploy-prod run.
+
+
+
+### A shared admission budget must charge what a request COSTS, and strict FIFO turns one mis-charged waiter into a fleet-wide outage (2026-09-16)
+
+**When:** writing or reviewing any admission/quota gate that reserves a
+resource before doing work — a memory budget, a connection semaphore, a rate
+limiter. Three defects, one incident, each sufficient alone:
+
+1. **`Number(req.headers.get('content-length'))` is `0` when the header is
+   absent, and `0` fails a `> 0` test.** Platinum's `budgetBytesFor` then fell
+   through to its fallback — `MAX_REQUEST_BODY_BYTES`, 128 MiB — so every body
+   with no declared length reserved the entire transport cap. Against a 1.25 GiB
+   pool that is TEN concurrent requests for the whole fleet.
+2. **Admission was strict FIFO** (`if (!waiters.length && inUse + want <= BUDGET)`),
+   so once one waiter existed a 32-byte request queued behind it regardless of
+   size. The mis-charge did not slow large uploads; it stopped everything.
+3. **A timed-out waiter spliced itself out and rejected without calling
+   `drain()`**, so the queue stayed stranded after the wait expired.
+
+GET and HEAD skip the budget by construction, which is exactly the shape prod
+showed and the fastest way to recognise this class: **same sandbox, same
+second, `GET /global/health` 200 in 0.84 s and `POST /file/mkdir` with a
+32-byte body 503 after 50.7 s — and the same route with NO body 400 in 0.83 s.**
+The only variable is whether a request body exists. That one probe rules out
+auth, connectors, token minting and agent resolution in three curls.
+
+*Incident:* prod 2026-09-15 18:00Z onward. Every POST to a Platinum sandbox
+failed while GETs served normally, so no prompt could reach the daemon: 9-13
+sessions/hour, ~48 queued prompts/hour dead-lettered, a paying customer
+mailing support "not getting any responses back". Defect (1) shipped in
+platinum#1007 at 20:42Z; defect (3) survived the first fix and caused a second
+episode at 08:00-09:59Z the next morning (37 undelivered, 12 dead-lettered)
+until platinum#5e8d99bc.
+
+*Enforcers:* platinum `bodyBudget.test.ts` — an undeclared body pre-charges a
+slice not the cap, `settle` returns the over-reservation and drains the waiters
+it unblocks, and 64 concurrent undeclared proxy bodies are admitted with 0
+refusals. Kortix-side, `deliver.test.ts` pins that a ready-stage runtime whose
+POSTs keep failing classifies `unreachable`, not `pending`.
+
+### A queued prompt must never spend the dead-letter budget on a path that is simply down (2026-09-16)
+
+**When:** classifying a failed delivery. `postPrompt` collapsed "nobody
+answered for the box" into the same `failed` as "the daemon answered and
+refused", so a spent deadline always reported `pending` — which
+`executeQueuedContinue` retries on `markCommandFailed`'s `attempts < 5` with a
+2 s ladder. Five attempts is about five minutes, after which the user's typed
+message is ABANDONED and their bubble reads `Not sent - delivery outcome
+pending`. The `unreachable` ladder already existed for exactly this case:
+attempts refunded, 30 s / 120 s / 480 s backoff, a fresh idempotency key, and
+instant re-arm when a wake confirms the runtime is back.
+
+**Rules.** (1) A retry class is a claim about the FAILURE, not about the call
+that returned it — 502/503/504 and a thrown fetch are the path being down, not
+the prompt being wrong. (2) `last_error` is customer-facing copy, not a log
+line: `delivery outcome: pending` told a paying customer nothing and they
+mailed support to ask what it meant. (3) The freshest verdict decides — a path
+that comes back and then refuses on its own terms is `pending` again.
+
+*Enforcer:* `deliver.test.ts` (4 cases), `DELIVERY_FAILURE_COPY` in
+`session-lifecycle/types.ts`.
+
+### A list endpoint with no bound is a latent outage, and a POLLED one is a scheduled one (2026-09-16)
+
+**When:** adding or reviewing any endpoint that returns "all the X for this Y",
+and any client that polls one. `GET /v1/projects/:projectId/sessions` returned
+every session row the viewer could see. It was correct at 60 rows and fine for a
+year. At 12,617 sessions it was ~11.1 MB of JSON, re-fetched **every 5 seconds**
+— because the sidebar's poll gate (`shouldPollProjectSessions`) asks whether ANY
+row is still `queued`/`branching`/`provisioning`, and over twelve thousand rows
+one always is. Unbounded list × unbounded poll predicate = the product becomes
+unusable with no code change and no alert. **Rules.** (1) A collection endpoint
+ships with a default `limit` and a hard ceiling from the first commit; "callers
+only have a few" is an assumption about data you have not verified, and the
+learning register exists because those assumptions expire. (2) Page by KEYSET on
+a unique tuple, never `OFFSET` — rows are written constantly, so an offset page
+skips and repeats between requests. (3) A poll interval derived from "does any
+row have state X" must be derived from a BOUNDED set, or it never backs off.
+(4) Bounding a list changes what every `.find()` on it can still see: seven
+surfaces here resolved the CURRENT session by scanning that list, and a session
+older than page one silently answered `null` — which read as "you may not share
+or stop this". When you bound a list, grep every consumer for `.find(` and move
+id lookups to the read-by-id route. *Incident:* prod, customer project, reported
+as "ITS GIGA LAGGING"; no alert fired — every request was a 200.
+*Enforcer:* `SESSION_PAGE_MAX_LIMIT` (route rejects `limit > 200` with 400) and
+the cursor/paging tests in `apps/api/src/projects/lib/session-inventory.test.ts`.
+
+
 ### An honest 404 catch-all changes every proxy that passed the old status through (2026-09-15)
 
 **When:** replacing a permissive fallback (SPA HTML 200) with a strict 404. Grep
@@ -227,6 +547,66 @@ Disable animations for the screenshot itself. In PR #7234, a capture during
 resize showed a 208px dialog; its settled mobile width was 390px. This nearly
 triggered an unnecessary layout change. *Enforcer:* browser journey 28 asserts
 mobile dialog width, awaits dialog removal, and disables capture animations.
+
+### Run browser SQL against the deployed target's test database (2026-09-15)
+
+**When:** a Playwright journey seeds or reads the database. Prefer `KE2E_DATABASE_URL` and `E2E_DATABASE_URL` over `DATABASE_URL` from local dotenv files. *Near-miss:* the v0.13.15 preview admin grant used a different database; the UI's role probe returned `200` without admin access. *Enforcer:* `tests/e2e/helpers/database.ts` selects the target database, and the admin journey reads `/v1/user-roles` after its grant.
+
+### Detect preview App domains through the custom target origin (2026-09-15)
+
+**When:** asserting App URLs in a preview Playwright journey. `loadEnv()` classifies sandbox HTTPS origins as `custom`, not `preview`; derive the App-domain suffix from that origin. *Near-miss:* the v0.13.15 preview browser gate expected `custom-…apps.kortix.com` for a valid `preview-…apps.eu-west.sbx.platinum.dev` URL. *Enforcer:* the Apps browser journey passed against the retained preview origin with the custom-target assertion.
+
+### Require the durable transcript before stopping a session in a mirror test (2026-09-15)
+
+**When:** testing stopped-session transcript read-back. A live transcript can contain a streaming marker before the turn-end mirror is captured; wait for `shape=sync` to report a complete mirror first. *Near-miss:* v0.13.15 preview `SESS-24` stopped session A after a live marker but before a mirror existed, then received `available:false` as the route specifies. *Enforcer:* `SESS-24` checks a complete mirror before stop and the same marker afterward.
+
+### Exclude unavailable Vercel instrumentation from self-host admin console errors (2026-09-15)
+
+**When:** asserting the admin console's own network and console errors on a self-host origin. Filter the two `/_vercel/.../script.js` 404s and their strict-MIME console messages together. *Near-miss:* v0.13.15 preview admin retry rendered Overview but failed on instrumentation served as `text/plain`. *Enforcer:* `09-admin-console.spec.ts` excludes only those exact script paths and MIME error.
+
+### Identify the project submenu by a row unique to that menu (2026-09-15)
+
+**When:** locating the open project picker in Playwright. Filter the menu by its `Account settings` row; accessible names for the trigger and nested menus can vary under Radix. *Near-miss:* the v0.13.15 local gate intermittently failed `20-workspace-switching` after clicking “Switch Project” because its named menu selector found no visible element. *Enforcer:* both `20-workspace-switching.spec.ts` and `24-no-hard-navigation.spec.ts` use the unique row.
+
+### Refuse an empty successful Git object lookup in the parallel package gate (2026-09-15)
+
+**When:** comparing a Git SHA captured by Bun `execFileSync` under parallel tests. A successful `git rev-parse` must print an object ID; retry an empty capture before using it as the expected SHA. *Near-miss:* two v0.13.15 local full runs compared a valid bundle SHA against `""` after `rev-parse HEAD` returned empty under load. *Enforcer:* the `git()` helper in `fast-boot-bundle.test.ts` retries and then fails explicitly.
+
+### Report the failed assistant turn before checking its expected file (2026-09-15)
+
+**When:** a real-agent flow waits for OpenCode messages and then reads a written file. If the assistant message contains `info.error`, raise its message before a file read. *Near-miss:* v0.13.15 preview `GOLD-1` reported only a file 404 after the turn had already failed with `ZstdDecompressionError`. *Enforcer:* `waitForAssistantOutput` in `tests/src/flows/run-session-backlog.flow.ts` surfaces the assistant error.
+
+### Request identity encoding on the sandbox model proxy's upstream hop (2026-09-15)
+
+**When:** forwarding model requests through Bun's localhost credential proxy. Set upstream `accept-encoding` to `identity`, since Bun fetch decodes the response before the proxy relays it. *Near-miss:* v0.13.15 preview `GOLD-1` failed its agent turn with `ZstdDecompressionError` at `127.0.0.1:4319`; the proxy forwarded `gzip, deflate, br, zstd` upstream. *Enforcer:* `llm-proxy.test.ts` checks the upstream header; `GOLD-1` must write the file on preview.
+
+### Budget a real cold image build before declaring session readiness broken (2026-09-15)
+
+**When:** setting deployed session flow deadlines. Include the provider's measured cold image-build duration and subsequent runtime steps. *Near-miss:* the v0.13.15 preview built four Daytona images in 400–439 seconds, while `SESS-25`, `RUN-9`, `SESS-24`, and `SESS-10` stopped after 240–310 seconds. *Enforcer:* the two session flow helpers allow 540 seconds for readiness, and those flows declare a larger total budget.
+
+### Make preview serve every public page required by its browser gate (2026-09-15)
+
+**When:** configuring a full preview stack. Keep marketing enabled if `target-full` probes `/pricing`; check the preview origin before interpreting a missing heading as a frontend defect. *Near-miss:* the v0.13.15 preview gate followed `/pricing` to `/auth` because `KORTIX_PUBLIC_DISABLE_LANDING_PAGE` was `true`. *Enforcer:* `tests/src/core/preview-stack.ts` sets the flag to `false`, and the target browser journey asserts pricing content.
+
+### Assert preview App domains against the preview namespace (2026-09-15)
+
+**When:** testing project App URLs on a preview origin. Use the preview App namespace instead of the production `apps.kortix.com` pattern. *Near-miss:* the v0.13.15 preview gate rejected a working `preview-…apps.eu-west.sbx.platinum.dev` URL. *Enforcer:* `tests/e2e/specs/18-apps-ui.spec.ts` uses a preview-specific host assertion.
+
+### Treat a same-origin auth redirect as a rejected sensitive-path probe (2026-09-15)
+
+**When:** probing encoded filesystem paths through an auth-gated frontend. Accept a `307` only if it points to relative `/auth` with the exact normalized path in `redirect`. Check the response body for secrets independently. *Near-miss:* the v0.13.15 preview gate failed `SEC-J` on an encoded `/etc/passwd` path that returned this redirect. *Enforcer:* `SEC-J` checks the redirect shape and secret body in `tests/src/flows/security-backlog.flow.ts`.
+
+### A webhook security gate must distinguish rejection from absent configuration (2026-09-15)
+
+**When:** testing forged requests against an optional webhook integration. Require no 2xx, and allow a service-unavailable response only when its body names the exact missing configuration. *Near-miss:* the v0.13.15 preview gate failed `SEC-F` because unsigned Slack ingress returned `503` with `OAuth mode not configured` on a preview without Slack OAuth. *Enforcer:* `SEC-F` checks the exact 503 response in `tests/src/flows/security-backlog.flow.ts`.
+
+### Count browser document loads only after the initial page reaches `load` (2026-09-15)
+
+**When:** counting loads in a Playwright journey after `page.goto` waits only for `domcontentloaded`. Wait for `page.waitForLoadState('load')` before recording the baseline. The initial page's late `load` otherwise counts as a navigation caused by the next click. *Near-miss:* the v0.13.15 local release gate reported a false hard reload while every per-click sentinel survived. *Enforcer:* `tests/e2e/specs/24-no-hard-navigation.spec.ts` waits at both count boundaries.
+
+### Match an actual PEM block before calling a 404 page a private-key leak (2026-09-15)
+
+**When:** checking web error pages for secret content. A bare `BEGIN PRIVATE KEY` phrase can occur in bundled parser code on a 404 page. Require PEM delimiters and encoded key material. *Near-miss:* the v0.13.15 preview gate marked `/.env` exposed although it returned 404; the 1.4 MB frontend error page contained only the phrase. *Enforcer:* `SEC-J` in `tests/src/flows/security-backlog.flow.ts` matches a complete key block.
 
 ### Stop proxy maintenance timers and isolate background writers in package tests (2026-09-14)
 
@@ -2088,9 +2468,7 @@ including a free-tier + `active` $0-subscription case modeled on the real prod
 row; `per-seat-pricing.test.ts` pins `resolveRenewalGrant` for per-seat,
 configured-grant and paid-by-amount branches.
 
-||||||| bd5aae39c4
 
-||||||| 0c247496b6
 
 ### A URL that carries a credential must never reach a log line (2026-08-20)
 
@@ -3879,7 +4257,6 @@ still blocked, and the own-session credential still allowed.
 
 *Incident:* essentia project `e7170bf8`, origin counts user 568 / backend 43.
 PR #6828.
-||||||| base
 
 ## Measure the amplification factor; never decode what you can forward
 
@@ -5406,6 +5783,173 @@ force. Use ordinary `docker image rm`, never forced removal or volume pruning.
 The local runner requires working Supabase and real HTTP assertions before it
 reports success; `SEC-30` passed after this recovery.
 
+### Do not submit editor-generated Enter events (2026-09-16)
+
+**Incident.** The session queue browser regression inserted multiline text. ProseMirror
+synthesized a plain Enter event during DOM reconciliation. The composer submitted it
+before the user's modified Enter, choosing transcript placement and consuming the draft.
+
+**Rule.** Submission requires an explicit keyboard modifier state (`shiftKey === false`).
+ProseMirror's plain events have no modifier fields. They must not invoke submission.
+Exercise modified Enter with real typed line breaks, not only callback unit tests.
+
+**Enforcer.** `composer-editor.test.ts` rejects the synthetic event. The queue journey
+in `27-desktop-parity.spec.ts` types code with Shift+Enter, submits with Control+Enter,
+and asserts the request, persisted text, reload, and visible composer placement.
+
+### Restore the startup composer from the durable first prompt (2026-09-16)
+
+**Incident.** Reloading a preview session during its first sandbox startup lost the
+tab's local handoff. The full-screen loader hid accepted prompts and queue editing.
+
+**Rule.** A durable first prompt is sufficient evidence to restore the startup
+composer. Existing transcript content still takes precedence. Local navigation
+hints cannot be the only source of startup presentation state.
+
+**Enforcer.** `session-surface.test.ts` covers durable-first-prompt restoration and
+the transcript veto. The queue journey in `27-desktop-parity.spec.ts` reloads a
+starting session and asserts that its accepted prompt and composer remain visible.
+
+### A lazy editor must acknowledge a restored queue entry (2026-09-16)
+
+**Incident.** The deployed queue journey selected Edit during startup handoff.
+SessionChat cleared the shared prefill in a parent effect before its lazy editor
+could apply it. The outgoing and incoming composers were also both accessible.
+
+**Rule.** Clear a prefill only after the editor reports application of that ID.
+An older acknowledgement must not clear a newer edit. Mark the inactive startup
+layer inert and hidden from assistive technology during the transition.
+
+**Enforcer.** `session-composer-prefill-store.test.ts` protects newer edits from
+stale acknowledgements. The deployed queue journey edits during startup and
+asserts the restored text through the one accessible Message input.
+
+### Waiting for prompt delivery is not model execution (2026-09-16)
+
+**Incident.** Waiting inbox rows and reserved delivery turns rendered Thinking before the runtime received a prompt. Two cancel consumers stamped timeouts as acknowledgements. Older failed rows still exposed internal delivery outcome labels.
+
+**Rule.** Preserve a separate pending-delivery projection while keeping Stop available. Only an active turn or runtime activity can claim an agent response. A timeout or skipped cancel cannot acknowledge Stop. Apply the abort acknowledgement boundary to stream activity, busy frames, and inbox reads as well as turn reads. Stopping queued work cannot mark an already completed answer interrupted. Render the actual failure cause, including legacy persisted rows.
+
+**Enforcement.** SDK working-projection and abort-receipt tests cover delivery, active turns, and timeout settlement. Prompt serializer tests cover legacy failures. Browser journey 27 checks no Thinking while queued or booting, persistent Stop holds, and reload.
+
+
+### 2026-09-16 — Queue recovery cannot depend on a live daemon subscription
+
+A local session subscribed to daemon events five minutes after boot. Thirteen
+prompts reached the runtime in order, but periodic reconciliation added up to
+16 seconds after each reply. The queue head must verify exact active-turn
+completion when the relay is missing. Clear only the observed token, only on
+`completed` or `failed` evidence. Unknown, active, and unanswered prompts keep
+authority. Never forward another prompt into the active turn.
+
+Client-minted wire IDs do not prove delivery. Group pending transcript entries
+after delivered turns using durable inbox order. Otherwise a re-minted active
+prompt jumps below older-looking waiting entries.
+
+Enforcement: `inbox-turn-recovery.test.ts`, `inbox-admission.test.ts`, and SDK
+`display-order.test.ts` cover terminal recovery, refusal, and display order.
+
+Prompt delivery retries must run independently of singleton cron leadership.
+With shared local databases, the elected API rejected another worktree's rows,
+while the owning API ran no retry worker. Filter ownership before claiming and
+keep the existing claim CAS. `worker.test.ts` covers retry startup without
+leadership, restart, shutdown, and explicitly disabled background work.
+
+
+### 2026-09-16 — Queue integration tests must claim only fixture rows
+
+The inbox integration suite used global ten-row claims against the shared local
+database. One assertion failed because unrelated rows filled the batch. Those
+claims were released by their exact test worker IDs. Every test claim now uses
+its fixture's idempotency key. Never claim, update, or delete an unscoped work
+queue in a test against a developer database.
+
+Enforcement: `integration-prompt-inbox.test.ts` targets each fixture claim and
+verifies peer-owned rows remain queued before claiming the owning instance.
+
+
+### Queue acceptance must not delay another prompt's first paint (2026-09-16)
+
+A submit latch cleared later drafts but postponed their dispatch until the first
+POST returned. Users saw an empty composer and no queue entry for several seconds.
+Dispatch each distinct draft immediately; guard only duplicate submits from a
+cleared editor. The inbox owns execution order. Track concurrent acceptances so
+an out-of-order response does not release duplicate protection prematurely.
+
+The working hook also omitted `pendingDelivery` from its memo identity. A turn
+could become active without changing its ID or start time, leaving the sending
+state cached. Include every visible projection field in the memo identity.
+
+Enforced by `composer/submit-latch.test.ts`, SDK
+`react/session-queue-transitions.test.ts`, and the held-acceptance browser case in
+`tests/e2e/specs/27-desktop-parity.spec.ts`.
+
+
+### Queue handoffs must preserve execution evidence (2026-09-17)
+
+A worker claim is not delivery. Mapping every running inbox row to Sending made
+waiting prompts flash Sending on each admission retry. Stamp delivery only after
+admission succeeds and clear that evidence on the next claim.
+
+A terminal relay can inspect the queue while its head is claimed. Recheck turn
+authority after an admission refusal is requeued; if the turn ended, promote and
+drain the head immediately. Completion wakes must skip the new-submission burst
+delay. Exact terminal recovery must also wake the queue after clearing authority;
+a read cooldown must not suppress the completion read. Never promote on accepted
+delivery while the previous response is active.
+
+Runtime activity must preserve the confirmed active message ID. An older inbox
+snapshot cannot keep that same turn pending after execution starts.
+
+Enforcement: `session-prompt-view.test.ts`, `queued-continue-inbox-delivery.test.ts`,
+`integration-prompt-inbox.test.ts`, SDK `working.test.ts`, and
+`session-chat-busy-row-fallback.test.ts`.
+
+### 2026-09-17 — A waiting prompt cannot be claimed by another user message
+
+An SSE update to a running user message arrived after its optimistic copy was
+confirmed. The sync store treated the sole remaining optimistic message as that
+update's echo. The waiting Quick Queue bubble vanished while its durable inbox
+row remained `waiting`, then returned after reload.
+
+Check whether a user message ID is already in the transcript before matching
+optimistic sends. An inbox-backed prompt can be superseded only by its own ID,
+part ID, or the inbox row's explicit re-mint alias. Do not use ordinal fallback
+for an inbox-backed prompt. `sync-store.test.ts` covers repeated updates,
+unrelated echoes, runtime reads, and delayed aliases.
+
+An active turn can finish one assistant step while it continues to work. A
+completed assistant message alone does not make that turn idle. Keep the busy
+indicator on the turn named by the working projection. Otherwise a trailing
+Thinking row appears below a waiting Quick Queue prompt. `working-turn.test.ts`
+covers that boundary.
+
+### 2026-09-17 — Queue placement controls when the active response ends
+
+The inbox treated Quick Queue and Queue List as presentation variants. Quick
+Queue could not stop a long response, while Queue List and Quick Queue both
+waited for natural completion. Keep both placements behind the same durable
+FIFO admission gate. Only the FIFO head with `placement: transcript` may arm a
+signed daemon interrupt. The daemon must identify the active root message and
+wait until its running tool finishes before aborting that response. Queue List
+must never arm this interrupt. A removed prompt or explicit Stop disarms it.
+
+Enforcement: `inbox-admission.test.ts`, `queued-continue-inbox-delivery.test.ts`,
+`quick-queue-control.test.ts`, and daemon `quick-queue-interrupt.test.ts` and
+`abort-after-tool.test.ts`.
+
+### 2026-09-17 — Reconstruct OpenCode identities from SQLite columns
+
+Live OpenCode 1.18 rows keep message and part IDs in SQLite columns and omit
+them from the JSON `data` payload. The daemon's transcript reader passed that
+JSON through unchanged. Quick Queue then mistook the active user message for a
+different turn and disarmed its interrupt. The same projection also omitted IDs
+from client transcript pages. Hydrate `id`, `sessionID`, and `messageID` from
+their authoritative columns before serving a page or checking a tool boundary.
+
+Enforcement: `opencode-db.test.ts` seeds live-shaped rows without JSON IDs and
+checks both message and part identities.
+
 ### Retain SCIM lifecycle state independently of account membership
 
 **Incident (2026-09-16, PR #7298):** SCIM deactivation deleted account membership.
@@ -5464,3 +6008,473 @@ those fields were populated, rejecting the entire provisioning request.
 Validate the provider's actual mappings with populated values before declaring synchronization
 healthy. Keep discovery schemas, create payloads, filtered PATCH paths, removals, and read-back
 responses consistent. SCIM-15 and user-profile.test.ts enforce this contract.
+
+### Name new foreign keys below PostgreSQL's identifier limit
+
+**Near-miss (2026-09-16, PR #7319):** Drizzle generated a 70-byte foreign key
+name for `session_provider_secret_pools`. PostgreSQL truncates identifiers at
+63 bytes. The PR Squawk job rejected the migration before deploy.
+
+**Rule:** give foreign keys on long table names an explicit short name in the
+Drizzle schema. Keep the generated SQL and snapshot names identical. Run
+`pnpm --filter @kortix/db lint:squawk` before pushing the migration.
+
+**Enforcement:** the Squawk CI job rejects identifiers over 63 bytes. The
+schema-sync job regenerates from `kortix.ts` and rejects snapshot drift.
+
+### Bind timestamps as text in raw Drizzle SQL fragments
+
+**Near-miss (2026-09-16, PR #7319):** the pooled key cooldown update passed
+TypeScript and gateway unit tests. The first real PostgreSQL call failed
+because the `postgres` driver received a JavaScript `Date` from a raw `sql`
+fragment.
+
+**Rule:** convert a timestamp to ISO text and cast it to `timestamptz` when
+binding it inside raw Drizzle SQL. Exercise the database write with a real row
+before claiming the API behavior works.
+
+**Enforcement:** `coolDownAccountSecret` uses an ISO timestamp with an explicit
+cast. The direct local PostgreSQL call completed after this change.
+
+### Never render an instance-global config surface inside an account-scoped page
+
+**Incident (2026-09-16, prod, ~6 min):** the `Managed GitHub` card sits on
+`Settings → <any account> → Git`, directly under the account-scoped
+`GitHub connections` card. It edits ONE global row,
+`kortix.platform_settings.managed_github_app`. A platform admin ran its
+manifest flow while looking at one customer account's settings. GitHub created
+App `kortix-self-host-05804762` (appId `4968692`) and the callback wrote that
+row at `17:52:48Z`.
+
+Every managed-git accessor reads DB-first, env-fallback
+(`apps/api/src/projects/git-backends/github.ts:28-72`,
+`apps/api/src/projects/github.ts:135-192`). One row therefore shadowed the whole
+production GitHub identity at once: appId `3812697` → `4968692`, slug
+`kortix-private-repo-access` → `kortix-self-host-05804762`, managed owner
+`managed-kortix` → `kortix-ai`, plus clientId, clientSecret and stateSecret.
+
+Blast radius: all 39 accounts in `kortix.account_github_installations` 404ed on
+`/app/installations/<id>/access_tokens`, because their installations belong to
+App `3812697`. Managed repo creation failed too — owner resolved to `kortix-ai`
+while the auth token stayed the env PAT (`GET /orgs/kortix-ai` → 403,
+`GET /orgs/managed-kortix` → 200). Recovery: `update kortix.platform_settings
+set value='{}' where key='managed_github_app'`, which restores the env fallback
+within the 30s config cache TTL.
+
+**Rule:** a surface that writes instance-global state never renders inside a
+page scoped to one account. Put it on an explicit platform/admin route. When a
+global write would shadow working env configuration, the UI must name the
+current effective value, name what will replace it, and require typed
+confirmation. DB-first/env-fallback resolution must refuse to go partial: a
+stored owner must not combine with an env token from a different owner.
+
+**Enforcement (branch `git-connection-path`):** the config is resolved whole
+from one source by `resolveAppIdentity()` and `resolveGitBackend()`
+(`apps/api/src/platform/services/{github-app-identity,managed-git-backend}.ts`);
+`instance-git-config.test.ts` rejects a mixed DB-owner/env-token row. Every
+`/v1/platform/github-app/*` mutation answers `409 instance_identity_is_env_managed`
+when env owns a half (`github-app-instance-gate.test.ts`; flow `GHA-1` asserts
+it live against `GET /status.mutable`). The card renders only at `/admin/git`
+(journey `09`); the account Git tab never calls the platform status route and
+never renders "Managed GitHub" (journey `30`). The instance backend has its own
+namespace, `GET /v1/projects/git/backend[/repositories]`, and is no longer a
+synthetic entry in the account connection list (flow `GH-18`).
+### 2026-09-17 — Quick Queue must not wait behind Queue List to interrupt
+
+A local session had an older Queue List entry and a newer Quick Queue entry
+waiting on one active response. Admission armed the tool-boundary interrupt
+only for the FIFO head, and the head was the Queue List entry. The Quick Queue
+entry recorded 72 `turn_active` refusals while the response kept working.
+
+Quick Queue is a lane ahead of Queue List. The inbox order key is
+`(lane, clientSentAtMs, wireMessageId, commandId)`, with lane 1 only for an
+explicit `placement: 'composer'`. A first prompt, an automation row, or an older
+producer has no placement and keeps its send-order place ahead of Queue List.
+Every listing, admission, batch, strand repair, promotion, and claim uses this key.
+
+Enforcement: `inbox-order.test.ts` covers lane order and rows without placement.
+`integration-prompt-inbox.test.ts` proves listing, interrupt arming, refusal of
+the older Queue List row, and terminal promotion against real PostgreSQL.
+
+### 2026-09-17 — A live runtime's handoff is visible work
+
+A Quick Queue interrupt ended one turn. The next prompt's five attachments took
+9.6s to reach the running runtime. Stop showed and the tinted bubble waited, but
+Thinking was hidden because the projection reported pending delivery.
+
+Pending delivery hides Thinking only while a queued status is visible and no
+runtime is ready (boot, parked, unreachable). With `runtimeReady` true, a busy
+session always shows Thinking, placed above the queued bubbles.
+
+Enforcement: `working-turn.test.ts` covers the live-runtime handoff and keeps the
+boot and no-runtime cases hidden.
+
+### 2026-09-17 — A redelivery must not re-send when its answered check cannot read
+
+A local session settled a running turn `runtime_gone` at 23:08:58 and redelivered
+its prompt. The daemon was still running that turn and interrupted it 12s later.
+OpenCode's transcript held two replies to the first delivery, so the drain's
+already-answered guard would have dropped the redelivery. The guard read the
+full transcript with a 5s timeout and failed open, so the prompt ran twice.
+
+A prompt already POSTed once (`deliveryAttempt` or `redeliveries` above zero)
+never re-sends on an unreadable transcript. It waits 5s, 10s, then 20s and
+counts `answer_check_failures`; after three failures it sends, so an unreadable
+box cannot strand it. First deliveries keep the fail-open read. The full read
+gets 15s. The daemon's turn-end relay was also failing on a stale tunnel URL,
+which leaves the API to infer turn ends by polling.
+
+Enforcement: `queued-continue-inbox-delivery.test.ts` covers the blocked blind
+re-send and the bound; `integration-prompt-inbox.test.ts` covers the requeue SQL.
+
+### 2026-09-17 — Stop visible means exactly one Thinking row
+
+Three reports in one day showed Stop with no Thinking row. Each gate added to the
+row reopened the gap: pending delivery with a visible queued bubble, and a working
+turn chosen from an aborted reply. With a stalled live stream the tab held a Quick
+Queue interrupt's aborted reply without its completion stamp, so the working-turn
+fallback picked that turn, and a turn with an error never draws Thinking.
+
+The row reads the same `isBusy` value as Stop, with no extra gate. An errored reply
+finishes its turn when choosing the working turn. When the working turn cannot draw
+its row (no id, suppressed, or an unretried error), the fallback row draws above
+any queued bubbles. The boot shell's first prompt draws the row while it is busy.
+
+Enforcement: `working-turn.test.ts` (aborted reply, fallback hand-off),
+`session-chat-busy-row-fallback.test.ts` (one busy value), and journey 27's
+`expectThinkingMatchesStop` at every queue checkpoint.
+
+### 2026-09-17 — Thinking follows the prompt being delivered
+
+With the previous answer finished and the next Quick Queue prompt mid-delivery
+(`delivery_started_at` set, 9 attachments, no turn yet), Thinking sat under the
+finished answer, above the prompt the agent was about to run. A prompt whose inbox
+state is `delivering` is the work in progress: the fallback row renders directly
+under its bubble, and a finished answer above it yields its own row.
+
+Enforcement: `working-turn.test.ts` covers the delivering anchor and the yield.
+
+
+### 2026-09-16 — A retry policy that names error classes must include the timeout class
+
+**Incident.** Release-gate flow `GW-ACCESS-1` failed against deployed staging with
+`expected [400], got 503` on a request the project's model-access policy must
+reject. Measured on staging: 2 of 30 identical
+`POST https://gateway-staging.kortix.com/v1/llm/chat/completions` calls answered
+`503 {"code":"gateway_error","message":"Gateway unavailable"}` at 5.14 s and
+5.15 s; the other 28 answered `400 provider_disabled` in 2.0-3.2 s. The 5 s is the
+gateway api-client's per-attempt budget. `withRetry` settles an overrun attempt
+with a `TimeoutError`, and `isRetryable` accepted only `ApiUnavailableError`, so
+`maxAttempts: 3` was dead code for the one failure mode retries exist for. The
+un-retried throw escaped `authorize()` in `simple-handler.ts` — the only
+un-guarded hook call in the pipeline — and was served by the standalone gateway's
+catch-all. `requested_model: ""` in the body proves it threw before the request
+body was parsed. Run 35012251397 and run 35036053187 carry the same body.
+
+**Rule.** A retry predicate that names error CLASSES must include the class the
+retry wrapper produces on timeout, or it silently excludes slow dependencies.
+Decide retryability per CALL, not per client: a read or an admission check that
+someone is waiting on may be repeated; a settlement WRITE with nobody waiting
+may not, because a timed-out attempt the server committed would be charged twice.
+Every hook call in a request pipeline classifies its own failure — one un-guarded
+call turns a named dependency failure into the catch-all's opaque 5xx.
+Never widen a deployed-target assertion to accept a 5xx without reading the
+response BODY from the run's artifact; commit `ed9327c4ff` widened this flow to
+`[400, 503]` on the reading that "the managed upstream answers 503", and that
+run's `results.json` shows the body was this defect.
+
+**Enforcement.** `apps/llm-gateway/src/clients/api-client.test.ts` pins the retry
+on a timed-out admission call, the `maxAttempts` stop, and that a settlement
+write is NOT retried on timeout. `packages/llm-gateway/src/pipeline/simple-handler.test.ts`
+pins the classified `503 admission_unavailable`. Verified over real HTTP against
+the real gateway process with a control plane whose first
+`/internal/gateway/authorize` takes 6 s: `main` answered `503 gateway_error` in
+5017 ms with one authorize call; the fix answered `400 provider_disabled` in
+5104 ms with two.
+
+### A resolved merge has four marker kinds, not three (2026-09-17)
+
+**Incident (main core lane red 2026-09-17 00:29–~01:10Z):** the #7321 merge
+`549ea2ac01` resolved a conflict in this file by deleting the `<<<<<<<`,
+`=======` and `>>>>>>>` lines and left the diff3 base line
+`||||||| 709fbc4681` behind. `tests/unit/conflict-markers.test.ts` (added the
+same day by #7318) failed on `main` until #7324 removed the line.
+
+**Rule:** a conflict resolved by hand is checked for all four markers —
+`<<<<<<<`, `|||||||`, `=======` alone on a line, `>>>>>>>` — and the merge
+commit is not pushed until `cd tests && npx vitest run
+unit/conflict-markers.test.ts` passes. A resolver script that asserts must
+never be followed by an unconditional `git commit`.
+
+**Enforcement:** `tests/unit/conflict-markers.test.ts` in the core lane; this
+entry names the fourth marker so the next hand-resolution looks for it.
+
+### 2026-09-17 — A cancelled preview workflow can leave its remote tests running
+
+**Incident.** PR #7319's persistent Platinum preview kept running `target-full`
+after GitHub cancelled its workflow. A later workflow redeployed the same sandbox
+while the first test process still used it. The first process then recorded 502
+and 503 responses across unrelated IAM, billing, gateway, and session flows.
+The later workflow also collected output from both processes, so its report could
+not prove the new commit. GitHub concurrency only serialized Actions jobs; it
+did not stop or serialize remote work in the persistent sandbox.
+
+**Rule.** Serialize checkout, compose redeploy, and tests on the remote sandbox.
+Hold a sandbox-local lock before changing test status files or the running stack.
+Use an isolated preview sandbox when a previous remote run may still be active.
+
+**Enforcement.** `buildPreviewBootstrapScript` holds `$STATE/deploy.lock` with
+`flock` across the full remote run. `tests/unit/sandbox-preview.test.ts` asserts
+that the lock precedes checkout and status reset.
+
+### 2026-09-17 — Provider pools must preserve the credential's principal
+
+**Near miss.** The review of draft PR #7319 found two authorization gaps before
+release. Pool routes passed null session bindings to `loadVisibleSession`, so a
+session credential could address a sibling pool. Pool updates checked the
+manager's secret grants but omitted the session owner's grants. Gateway
+resolution also used a shared project's gateway-key creator as the principal
+for a personal ChatGPT default.
+
+**Rule.** Narrow every pool route to the credential's bound session. A manager
+can select a resource only when both the manager and session owner can use it.
+A shared gateway key never inherits its creator's personal connection. Empty
+configured pools remain explicit and recoverable after resource deletion.
+
+**Enforcement.** `provider-secret-pools.test.ts` drives the routes through Hono
+and asserts sibling rejection, owner grants, machine-owner rejection, and empty
+pool discovery. `SEC-POOL-2` verifies owner grants and deletion through HTTP and
+Postgres. `resolve-candidates.test.ts` verifies that a shared gateway key uses the
+legacy project credential even when its creator has a personal connection.
+
+
+### 2026-09-17 — Validate a model against the session's selected credential resources
+
+**Near miss.** The #7331 preview offered an OpenRouter model backed by account
+resources. Creating its session returned `400 INVALID_SESSION_MODEL` because
+preflight resolved only legacy project credentials. Existing-session model
+changes also omitted the session's saved pool.
+
+**Rule.** Preflight uses the prospective pool during creation and the saved pool
+for an existing session. It uses the same membership, grant, provider, and
+active-state checks as generation. Passive checks never advance the pool cursor.
+An empty explicit selection cannot fall back to a legacy credential.
+
+**Enforcement.** `SEC-POOL-2` exercises explicit model creation and model changes
+through HTTP. `default-model.test.ts` and `resolve-candidates.test.ts` verify the
+selection context. `account-resource-pool.test.ts` rejects a cursor update from
+a passive check. Preview verification must name an account-backed model and
+assert actual assistant output, not only a submitted selection.
+
+### 2026-09-17 — Prompt-admission fixtures need a readable agent manifest
+
+**Near miss.** The #7331 preview repeatedly failed `SESS-30` with
+`503 CONNECTOR_REQUIREMENTS_UNRESOLVED`. Its database-only project pointed to
+`https://ke2e.invalid/...git`. Attachment storage passed, but prompt admission
+could not read that repository's connector requirements.
+
+**Rule.** A flow that enqueues prompts uses a seeded repository fixture, even
+when the session itself is a database fixture. Do not bypass manifest checks
+or treat their failure as an accepted prompt.
+
+**Enforcement.** `SESS-30` uses `ctx.fixtures.project({ seed: true })`. The fixture
+creates a local repository for the local profile and a managed repository for
+the preview. The flow still requires `202` and durable attachment read-back.
+Its credential-binding helper preserves a sandbox row already created by the
+live worker. A duplicate fixture insert must not fail or overwrite runtime state.
+
+### 2026-09-17 — Deferred composer focus must respect open overlays
+
+**Near miss.** The #7331 preview closed Provider keys while the new-session page
+finished loading. The composer focus hook could focus the editor after the
+user opened session overrides. Radix then dismissed the popover.
+
+**Rule.** Mount, visibility, and deferred focus requests leave an open popover,
+dialog, menu, or listbox in control of focus.
+
+**Enforcement.** The pooled-provider browser journey opens session overrides,
+dispatches `focus-session-textarea`, and asserts that Provider keys stays open.
+The assertion fails before the guard in `use-composer-focus.ts` and passes after it.
+
+TipTap also requires an explicit `autofocus: false`. Passing `undefined`
+overrides its default and schedules focus when the lazy editor mounts. The
+browser journey keeps settings open through editor initialization. Start a
+paint deadline after the input action completes, not while `fill()` and
+`press()` are still pending.
+
+### 2026-09-17 — Queue placement needs an active-session fixture
+
+**Near miss.** The #7331 preview queue test filled the startup composer while
+it handed off to the active session. Its input disappeared before Enter. The
+URL had changed, but the startup shell still owned the disabled Stop control.
+
+**Rule.** Establish an active session before timing active-session queue
+placement. A route change alone does not prove the composer handoff finished.
+
+**Enforcement.** The deployed queue fixture waits for the enabled Stop control.
+Both one-second paint assertions and real API acceptance/read-back remain.
+The startup draft handoff has its own ownership guard. The hidden replacement
+composer waits to restore until it becomes active. The old composer flushes
+pending text in a layout effect before the replacement's restore effect runs.
+Late changes or send completion from the old composer cannot erase that draft.
+A Chromium check with both composers mounted fails on the original hook and
+passes after this change. The draft gate and shell forwarding have unit coverage.
+
+The queue fixture also keeps one test-owned delivery lease in flight. A live
+model can finish before queue editing and reload assertions complete. New
+prompts must stay pending for those assertions; a timer-based model prompt
+is not a durable fixture. Cleanup removes the lease by its exact command ID.
+
+### 2026-09-17 — Admin browser assertions wait for the role probe
+
+**Near miss.** The #7331 preview admin journey reported a missing grant while
+its trace contained five successful `GET /v1/user-roles` responses with
+`isAdmin: true`. Its helper treated the initial refusal view as a settled
+result and navigated again before the role response reached the UI.
+
+**Rule.** Wait for the authenticated role probe before interpreting the admin
+guard. A temporary refusal view during authentication is not proof of a
+missing database grant.
+
+**Enforcement.** `openAdminOverview` observes the real role response, then
+asserts the overview heading for an admin. It still retries denied or failed
+probes and fails if the granted user never reaches the overview.
+
+### 2026-09-17 — Stop preview provisioning after a GitHub secondary limit
+
+**Near miss.** Repeated full #7331 previews each created 32 managed repositories
+in the HTTP lane, plus browser fixtures. GitHub then returned `403` with a
+secondary content-creation limit. The API propagated that as provisioning
+`503`; the feature's HTTP, native, and real-generation checks had passed.
+
+**Rule.** After a provider rate limit, stop full preview retries. Fix failures
+locally, reuse completed evidence for unchanged code, and wait for the provider
+to permit a single provisioning check before starting another full run.
+
+**Enforcement.** The pending queue fixture is verified with the local browser
+runner, which uses local Git. The preview gate stays explicitly blocked until
+GitHub provisioning recovers; a local pass does not replace that gate.
+
+### 2026-09-17 — A failed round trip is not the auth server's verdict
+
+**Incident.** "Verify with GitHub logs me out" on dev, twice, after the
+`#access_token` → `#github_token` rename had already shipped. The GitHub
+identity-proof popup (`/auth/github-connect`) posts its token to the opener
+and closes itself 200 ms later. It runs the same `AuthProvider` as every
+page, whose bootstrap validates the session with `getUser()`. On a slow
+network that request was still in flight when the popup closed; the abort
+came back as `AuthRetryableFetchError` (status 0), the provider treated any
+`getUser()` error as a stale session and called `signOut()`, which cleared
+the cookie every tab shares and broadcast `SIGNED_OUT` over the
+`BroadcastChannel` to the opener. The opener's own guard then bounced it to
+`/auth?returnUrl=%2Fgithub%2Fsetup…`. No server audit row: the `/logout`
+call died with the window. Reproduced deterministically with Slow 3G
+throttling on the popup; three fake-token, real-token and install-path
+reruns without throttling had all stayed signed in.
+
+**Rule.** Sign a session out only on the auth server's verdict — 401, 403, or
+no session to validate. A fetch that never completed, a 5xx, or a 429 says
+nothing about the session; keep it and validate again on the next load. Any
+page that closes or navigates itself during bootstrap (popups, hand-off
+pages) will abort that request on every slow network, and a shared cookie
+plus a cross-tab broadcast turns one page's mistake into a browser-wide
+logout.
+
+**Enforcement.** `lib/auth/session-rejection.ts` (`isDefinitiveSessionRejection`)
+is the only predicate the provider consults, tested against supabase-js's
+real error classes; `auth-provider-stale-session.test.ts` pins that the
+provider asks it before `signOut()`; journey 30 forces the race with a
+delayed `/auth/v1/user` route and asserts the opener stays signed in.
+
+### 2026-09-18 — `bun test --isolate` leaks a stdio sink per file; on Linux the next file's `process.stderr` dies EEXIST
+
+**Incident.** The `packages` lane failed deterministically on `@kortix/db` —
+run 35331083850, attempts 1 and 2 at the same SHA, and it was not the PR's code
+(`packages/db` was byte-identical to `main`):
+
+```
+error: EEXIST: file already exists, epoll_ctl
+      at new WriteStream (internal:fs/streams:244:58)
+error: Cannot call describe.skip() after the test run has completed
+259 pass, 17 skip, 1 fail, 2 errors   ("1 tests failed:" list EMPTY)
+```
+
+`--parallel=2` implies `--isolate`. Under isolation Bun 1.3.14 (`0d9b296a`)
+re-creates `process.stdout` / `process.stderr` for every test file. Each one
+dups the stdio fd and registers it with epoll, and the isolate swap never ends
+the outgoing sinks, so the dups accumulate. When a stale registration's fd
+number is reused, `EPOLL_CTL_ADD` fails `EEXIST`. Upstream is
+oven-sh/bun#37968; the fix, oven-sh/bun#38008, is still OPEN, so no Bun release
+carries it. `epoll_ctl` is Linux-only — macOS `kqueue` tolerates the duplicate
+`EV_ADD`, which is why it never reproduced on a laptop. The reporter's own
+repro needed a CPU-constrained container and an import graph that reaches
+`node:assert` → `internal:util/colors`; `migration-ledger-repair.integration.test.ts`
+is one of the 3 db files that import `node-pg-migrate`.
+
+**Rules.**
+1. **A phantom failure is a diagnosis, not a flake.** `N fail` with an EMPTY
+   `N tests failed:` list means an unhandled throw between tests — read the
+   `Unhandled error` block, never the counts. Same reading as the 2026-08-27
+   `mock.module` entry.
+2. **`--isolate` / `--parallel` is a cost, not a free speedup.** Pay it only
+   where the file count earns it. `packages/db` is 28 files: measured in a Linux
+   container against real disposable-PostgreSQL containers, `--parallel=2` is
+   11 s and serial is 34 s — 23 s on a ~5 min lane, in exchange for a lane that
+   cannot die on a Bun-internal stdio leak. `apps/cli` (107 files) and
+   `apps/web` (762 files) keep `--isolate --parallel=4` and stay exposed until
+   oven-sh/bun#38008 ships; the documented workaround if they start failing is
+   to hand `bun test` REGULAR FILES for stdout/stderr instead of pipes and pump
+   them back from a parent (upstream measured 20/20 clean vs 8/8 failing).
+3. **A module-scope `Bun.spawnSync` produces the same signature locally.** It
+   THROWS `ENOENT` when the binary is absent, and a throw during module
+   evaluation is reported exactly the same way. Nine copies of
+   `Bun.spawnSync(['docker','version'])` turned a Docker-less machine red with
+   nine unnamed failures; reproduced in a container, 9 errors / 9 phantom fails.
+   A probe at module scope never throws.
+
+*Enforcer:* `tests/unit/test-runner-contract.test.ts` — "keeps bun test
+isolation opt-in, with a stated reason per package" fails on any `apps/*` or
+`packages/*` test script that adds `--isolate`/`--parallel` outside the
+allowlist, and the sibling case pins `packages/db` serial (both verified
+falsifiable by restoring `--parallel=2`).
+`packages/db/scripts/docker-available.ts` is the one non-throwing probe.
+
+### 2026-09-18 — A 30 s hook timeout let a CLI test push to the real repository
+
+**Incident.** In the same lane (run 35322311770, PR #7381), `@kortix/cli` failed
+two tests in `apps/cli/src/__tests__/sessions.e2e.test.ts`:
+
+```
+(fail) ... creates the session branch with local git credentials ... [30065.84ms]
+       ^ this test timed out after 30000ms.
+(fail) ... --agent forces the session onto an explicit agent ...    [30000.10ms]
+       ^ a beforeEach/afterEach hook timed out for this test.
+  ✗  Could not create the remote session branch with local git credentials.
+  error: src refspec refs/heads/main does not match any
+  error: failed to push some refs to 'https://github.com/kortix-ai/suna'
+```
+
+Read the remote: the CLI under test pushed against **the runner's own checkout
+of this repository**, not the test's bare fixture. `beforeEach` ended with
+`process.chdir(repo)`; when the hook timed out Bun still ran the test body, with
+the cwd left where the worker started — `apps/cli`, which `git rev-parse
+--show-toplevel` resolves to the suna worktree with remote
+`git@github.com:kortix-ai/suna.git`. It failed only because `actions/checkout`
+leaves a detached HEAD with no `refs/heads/main`.
+
+**Rules.**
+1. **A test that runs a real `git push` parks the process OUTSIDE every git
+   repository for the whole file.** The package directory is inside the repo, so
+   it is never a safe default cwd. From a non-repo directory the same code path
+   can only produce an immediate local git error.
+2. **A timed-out `beforeEach` does not stop the test body.** Any setup the body
+   depends on for SAFETY must be established where a timeout cannot skip it, or
+   asserted by the body itself.
+3. **Build an expensive fixture once per file.** Six `git` processes per test
+   × 7 tests is what met the 30 s budget on a loaded runner. `beforeAll` builds
+   one template repository + bare origin; each test copies it and runs a single
+   `git remote add`. Measured locally: 1150 ms → 548 ms for the file.
+
+*Enforcer:* the `beforeAll` / `afterAll` pair in that file parks the cwd and
+owns the template. Nothing lints for a test that shells out to `git` from inside
+the checkout — that check is the TODO.

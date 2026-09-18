@@ -83,6 +83,7 @@ mock.module('../credentials/codex', () => ({
   CODEX_USER_AGENT: 'test-agent',
   CodexRefreshError: class CodexRefreshError extends Error {},
   resolveCodexCredential: async () => null,
+  resolveCodexAccountCredential: async () => null,
 }));
 
 const { RUNTIME_MANAGED_MODELS, getRuntimeManagedModel, isRuntimeManagedModelId } =
@@ -157,5 +158,3 @@ describe('managed provider disabled (KORTIX_MANAGED_PROVIDER_ENABLED=false, the 
     expect(openrouterKeyReads).toBe(0);
   });
 });
-
-mock.module('../../provider-connections/store', () => ({ resolveUserProviderConnection: async () => null }));

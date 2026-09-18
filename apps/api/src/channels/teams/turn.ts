@@ -5,7 +5,7 @@ import { config } from '../../config';
 import { classifyTurnError, type TurnErrorInfo } from '../slack/errors';
 import { sessionWebUrl } from '../slack/util';
 import type { StreamTaskChunk } from '../slack-api';
-import { sendCard, sendTyping, updateCard } from '../teams-api';
+import { sendCard, updateCard } from '../teams-api';
 import { saveTeamsServiceUrl } from '../install-store';
 import { buildAnswerCard, buildFinalCard, buildPlanCard } from './cards';
 import { STREAM_TTL_MS, STALE_AFTER_MS } from './app';
@@ -122,8 +122,15 @@ export async function startTurn(
     tenantId,
     projectId,
   };
-  await sendTyping(ref);
+  // No typing indicator: the live card is the acknowledgement, and an
+  // indicator sent alongside it renders as stray dots under the card.
+  const t0 = Date.now();
   const messageActivityId = (await sendCard(ref, buildPlanCard(LIVE_PLAN_TITLE, []))) ?? '';
+  console.info('[teams-webhook] live card posted', {
+    projectId,
+    ms: Date.now() - t0,
+    posted: Boolean(messageActivityId),
+  });
 
   return {
     conversationId,
@@ -279,8 +286,17 @@ export function buildTeamsTurnEnv(tenantId: string, activity: TeamsActivity): Re
   return env;
 }
 
+// The conversation serviceUrl is stable for a tenant; every inbound message
+// used to re-encrypt and re-upsert it. One write per distinct value per
+// process is enough — a restart simply writes it once more.
+const persistedServiceUrl = new Map<string, string>();
+
 export async function persistServiceUrl(projectId: string, serviceUrl?: string): Promise<void> {
-  if (serviceUrl) await saveTeamsServiceUrl(projectId, serviceUrl).catch(() => {});
+  if (!serviceUrl || persistedServiceUrl.get(projectId) === serviceUrl) return;
+  persistedServiceUrl.set(projectId, serviceUrl);
+  await saveTeamsServiceUrl(projectId, serviceUrl).catch(() => {
+    persistedServiceUrl.delete(projectId);
+  });
 }
 
 setInterval(() => {

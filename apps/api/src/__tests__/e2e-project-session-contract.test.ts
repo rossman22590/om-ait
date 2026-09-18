@@ -560,7 +560,6 @@ mock.module('../shared/account-limits', () => ({
   }),
   sessionLlmPolicyForTier: () => ({ limit: 60, windowMs: 60_000 }),
   maxProjectsForAccount: async () => 100,
-  accountEntitledToLlmGateway: async () => true,
   FREE_TIER_PROJECT_LIMIT: 1,
   clearAccountLimitCache: () => undefined,
 }));
@@ -635,7 +634,17 @@ mock.module('../shared/db', () => ({
               // asserting on the response alone would pass even if the filter
               // were never applied.
               lastSessionListWhere = predicate ?? null;
-              return Promise.resolve(sessionRow ? [sessionRow] : []);
+              const rows = sessionRow ? [sessionRow] : [];
+              // Thenable AND `.limit()`-able: the session list reads a bounded
+              // keyset PAGE (`.where().orderBy().limit()`), while other callers
+              // still await the ordered read directly.
+              return {
+                limit: async () => rows,
+                then: (
+                  resolve: (value: unknown[]) => unknown,
+                  reject?: (reason: unknown) => unknown,
+                ) => Promise.resolve(rows).then(resolve, reject),
+              };
             }
             return Promise.resolve([]);
           },

@@ -9,6 +9,8 @@ import { attemptKeyFor, clearAttemptKey } from '@/features/workspace/new/create-
 import {
   buildCreateRepoPayload,
   buildLinkRepositoryPayload,
+  buildManagedImportPayload,
+  isManagedImport,
 } from '@/features/workspace/new/github-source';
 import {
   buildProvisionPayload,
@@ -201,6 +203,19 @@ export function buildGitHubImportPayload(
 }
 
 /**
+ * The `POST /projects/link-repository` body for an existing MANAGED repository
+ * — the operator-only import path. Same account resolution; the installation
+ * is the managed-git backend rather than an account's GitHub App installation.
+ */
+export function buildManagedImportRequest(
+  state: NewWorkspaceFormState,
+  creatableAccounts: KortixAccount[],
+  userId: string | null,
+): LinkRepositoryInput {
+  return buildManagedImportPayload(state, resolveTargetAccountId(state, creatableAccounts, userId));
+}
+
+/**
  * A user-facing message for a failed create.
  *
  * `ApiError` field names verified at
@@ -256,7 +271,7 @@ export function messageFor(error: unknown): string {
   }
   if (status === 400) return message || 'Check the workspace name and try again.';
   if (isManagedGitUnavailableError(error)) {
-    return "Managed git isn't set up on this server. An admin needs to connect GitHub in Git settings before workspaces can be created.";
+    return "Managed git isn't set up on this server. A platform admin connects GitHub in the admin console before workspaces can be created.";
   }
   if (status === 409) {
     // Two different 409s reach here now, and they must not share a message.
@@ -328,6 +343,11 @@ export function isRetryableError(error: unknown): boolean {
   const status = (error as { status?: number } | null | undefined)?.status;
 
   if (status === 400) return false;
+  // The plan cap is a 403 too, but nothing about a retry changes it — only a
+  // plan change does, and the page offers that instead (`limitReached`).
+  // Before the generic 403 fallthrough, which IS retryable (wrong account,
+  // role granted meanwhile).
+  if (isProjectLimitError(error)) return false;
   if (isManagedGitUnavailableError(error)) return false;
   if (status === 409) return true;
 
@@ -579,6 +599,15 @@ async function runSourceAttempt(
       buildGitHubImportPayload(state, creatableAccounts, userId),
     );
   }
+  // `managed` + a chosen repository is an IMPORT of a repository the managed
+  // owner already holds, not a provision of a new one. `/projects/provision`
+  // cannot adopt an existing repository, so it would create a second, empty
+  // one and ignore the choice.
+  if (isManagedImport(state)) {
+    return client.importGitHubRepoProject(
+      buildManagedImportRequest(state, creatableAccounts, userId),
+    );
+  }
   if (!idempotencyKey) {
     throw new Error('runCreate: the managed source requires an idempotency key');
   }
@@ -636,7 +665,7 @@ export async function runCreate(
   // for a GitHub source would persist a key that is never sent and never
   // cleared, so `usesIdempotencyKey` gates BOTH the mint and the clear rather
   // than only the field in the payload.
-  const usesIdempotencyKey = state.source === 'managed';
+  const usesIdempotencyKey = state.source === 'managed' && !isManagedImport(state);
   const idempotencyKey = usesIdempotencyKey
     ? client.attemptKeyFor(fingerprint, client.now())
     : null;
@@ -682,6 +711,12 @@ export function useCreateWorkspace(): {
   retry: () => void;
   /** Whether `retry` can plausibly succeed for the CURRENT error; see `isRetryableError`. */
   canRetry: boolean;
+  /**
+   * The account is at its plan's project cap (403 `project_limit_reached`,
+   * `enforceProjectQuota` in `apps/api/src/projects/lib/access.ts`). Retrying
+   * cannot fix it; the page offers the upgrade dialog instead.
+   */
+  limitReached: boolean;
 } {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -772,5 +807,6 @@ export function useCreateWorkspace(): {
   // create is `'creating'` or has already succeeded.
   const canRetry = status === 'error' && isRetryableError(lastError);
 
-  return { create, status, error, retry, canRetry };
+  const limitReached = status === 'error' && isProjectLimitError(lastError);
+  return { create, status, error, retry, canRetry, limitReached };
 }

@@ -1,0 +1,222 @@
+import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+
+/**
+ * Time-to-first-card. On dev (2026-09-18) the "Working on it…" card showed a
+ * few seconds after the message, because the live card was posted only after
+ * the project row, a secret upsert, the identity link, the account membership
+ * and the authorization verdict had all been resolved. The card carries no
+ * information from any of those, so it goes out first; the identity outcome
+ * then REPLACES it in place instead of stacking a second card underneath.
+ */
+
+const PROJECT_ID = '40c2e222-c4c2-47f6-ba40-05e8f40098b3';
+const TENANT_ID = '36009a52-46d2-44bc-ba56-57a87e485e0a';
+const CONVERSATION_ID = 'a:1FQyR2jW1pEUK';
+
+const calls: string[] = [];
+let actor: { userId: string } | { reason: 'unlinked' | 'not_member' } = { userId: 'user-1' };
+let existingThread: Array<{ sessionId: string }> = [];
+let claimWins = true;
+const created: Array<Record<string, unknown>> = [];
+const continued: Array<Record<string, unknown>> = [];
+const prompts: Array<Record<string, unknown>> = [];
+const saved: Array<{ sessionId: string; messageActivityId: string }> = [];
+
+function chain(result: unknown[]): any {
+  const c: any = {};
+  for (const m of ['from', 'where', 'limit', 'values', 'onConflictDoNothing', 'returning', 'set']) c[m] = () => c;
+  c.then = (resolve: (rows: unknown[]) => unknown) => Promise.resolve(resolve(result));
+  return c;
+}
+
+let selectCount = 0;
+mock.module('../shared/db', () => ({
+  hasDatabase: true,
+  db: {
+    select: () => {
+      selectCount += 1;
+      // 1st select: the project row; later selects: chat_threads lookup.
+      return selectCount === 1
+        ? chain([{ projectId: PROJECT_ID, accountId: 'acct-1', defaultBranch: 'main' }])
+        : chain(existingThread);
+    },
+    insert: () => chain(claimWins ? [{ eventId: 'claimed' }] : []),
+    delete: () => chain([]),
+    update: () => chain([]),
+  },
+}));
+
+mock.module('../config', () => ({
+  SANDBOX_VERSION: 'test',
+  config: { TEAMS_REQUIRE_USER_IDENTITY: true, FRONTEND_URL: 'https://dev.kortix.com' },
+}));
+
+mock.module('../channels/teams/turn', () => ({
+  startTurn: async () => {
+    calls.push('startTurn');
+    return {
+      conversationId: CONVERSATION_ID,
+      tenantId: TENANT_ID,
+      serviceUrl: 'https://smba.trafficmanager.net/emea/',
+      triggerActivityId: 'act-1',
+      messageActivityId: 'live-card-1',
+      steps: [],
+      expiry: Date.now() + 60_000,
+      finalized: false,
+      projectId: PROJECT_ID,
+      sessionId: '',
+      originatingActivity: {},
+    };
+  },
+  saveTurn: async (h: { sessionId: string; messageActivityId: string }) => {
+    calls.push('saveTurn');
+    saved.push({ sessionId: h.sessionId, messageActivityId: h.messageActivityId });
+  },
+  finalizeTurn: async () => {
+    calls.push('finalizeTurn');
+  },
+  persistServiceUrl: async () => {
+    calls.push('persistServiceUrl');
+  },
+  buildTeamsTurnEnv: () => ({}),
+}));
+
+mock.module('../channels/teams/identity', () => ({
+  teamsUserId: () => 'aad-user-1',
+  resolveTeamsActor: async () => {
+    calls.push('resolveTeamsActor');
+    return actor;
+  },
+  postTeamsIdentityPrompt: async (input: Record<string, unknown>) => {
+    calls.push('postTeamsIdentityPrompt');
+    prompts.push(input);
+  },
+}));
+
+mock.module('../channels/teams/binding', () => ({
+  ensureTeamsConversationBinding: async () => true,
+  teamsChannelCtx: () => ({ platform: 'teams', teamId: TENANT_ID, channelId: CONVERSATION_ID }),
+}));
+
+mock.module('../channels/slack/selection', () => ({
+  currentChannelSelection: async () => null,
+}));
+
+const session = await import('../channels/teams/session');
+const { createOrJoinTeamsConversationSession, setTeamsSessionLifecycleForTest, resetTeamsSessionLifecycleForTest } = session;
+
+const activity = {
+  type: 'message',
+  id: 'act-1',
+  text: 'List the files in this repo',
+  serviceUrl: 'https://smba.trafficmanager.net/emea/',
+  conversation: { id: CONVERSATION_ID, tenantId: TENANT_ID },
+  from: { id: '29:abc', name: 'Ivan Bagaric', aadObjectId: 'aad-user-1' },
+  recipient: { id: '28:bot' },
+};
+
+beforeEach(() => {
+  calls.length = 0;
+  created.length = 0;
+  continued.length = 0;
+  prompts.length = 0;
+  saved.length = 0;
+  selectCount = 0;
+  actor = { userId: 'user-1' };
+  existingThread = [];
+  claimWins = true;
+  setTeamsSessionLifecycleForTest({
+    createSession: async (input: Record<string, unknown>) => {
+      calls.push('createSession');
+      created.push(input);
+      return { status: 'running', sessionId: 'sess-new' } as never;
+    },
+    continueSession: async (input: Record<string, unknown>) => {
+      calls.push('continueSession');
+      continued.push(input);
+      return { ok: true } as never;
+    },
+    resolveProjectAutomationActor: async () => 'automation-user',
+  } as never);
+});
+
+afterAll(() => {
+  resetTeamsSessionLifecycleForTest();
+  mock.restore();
+});
+
+describe('createOrJoinTeamsConversationSession — the live card goes out first', () => {
+  test('new conversation: the card is posted before identity is resolved, then the session is created once', async () => {
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+
+    expect(calls.indexOf('startTurn')).toBeGreaterThanOrEqual(0);
+    expect(calls.indexOf('startTurn')).toBeLessThan(calls.indexOf('resolveTeamsActor'));
+    expect(calls.filter((c) => c === 'startTurn')).toHaveLength(1);
+    expect(created).toHaveLength(1);
+    expect(created[0].userId).toBe('user-1');
+    expect(saved).toEqual([{ sessionId: 'sess-new', messageActivityId: 'live-card-1' }]);
+    expect(prompts).toHaveLength(0);
+  });
+
+  test('follow-up in a bound conversation: the same live card is reused and the session is continued', async () => {
+    existingThread = [{ sessionId: 'sess-existing' }];
+
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+
+    expect(calls.filter((c) => c === 'startTurn')).toHaveLength(1);
+    expect(calls.indexOf('startTurn')).toBeLessThan(calls.indexOf('resolveTeamsActor'));
+    expect(continued).toHaveLength(1);
+    expect(continued[0].sessionId).toBe('sess-existing');
+    expect(created).toHaveLength(0);
+    expect(saved).toEqual([{ sessionId: 'sess-existing', messageActivityId: 'live-card-1' }]);
+  });
+
+  test('unlinked sender: the identity prompt REPLACES the live card instead of stacking under it', async () => {
+    actor = { reason: 'unlinked' };
+
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+
+    expect(calls.indexOf('startTurn')).toBeLessThan(calls.indexOf('resolveTeamsActor'));
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0]).toMatchObject({ reason: 'unlinked', replaceActivityId: 'live-card-1' });
+    expect(created).toHaveLength(0);
+    expect(continued).toHaveLength(0);
+    expect(saved).toHaveLength(0);
+  });
+
+  test('member without project access: same, with the request-access reason', async () => {
+    actor = { reason: 'not_member' };
+
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+
+    expect(prompts[0]).toMatchObject({ reason: 'not_member', replaceActivityId: 'live-card-1' });
+    expect(created).toHaveLength(0);
+  });
+
+  test('the service-url bookkeeping never sits in front of the card', async () => {
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+    const persist = calls.indexOf('persistServiceUrl');
+    expect(persist === -1 || persist > calls.indexOf('startTurn')).toBe(true);
+  });
+});
+
+describe('mention markup never reaches the session', () => {
+  const mentioned = {
+    ...activity,
+    text: '<at>Kortix Dev</at>summarize the README in two sentences',
+  };
+
+  test('the session title source and the agent prompt carry the words, not <at> tags', async () => {
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity: mentioned });
+    const body = created[0].body as { title_source: string; initial_prompt: string };
+    expect(body.title_source).toBe('summarize the README in two sentences');
+    expect(body.initial_prompt).not.toContain('<at>');
+    expect(body.initial_prompt).toContain('\nsummarize the README in two sentences');
+  });
+
+  test('a follow-up prompt is stripped the same way', () => {
+    const prompt = session.renderFollowUpPrompt({ ...mentioned, text: '<at>Kortix Dev</at> now count the lines' });
+    expect(prompt).not.toContain('<at>');
+    expect(prompt).toContain('\nnow count the lines\n');
+  });
+});

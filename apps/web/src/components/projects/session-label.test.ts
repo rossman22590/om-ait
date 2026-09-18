@@ -9,6 +9,9 @@ import {
   SESSION_DISPLAY_STATUS_LABELS,
   sessionDisplayStatus,
   sessionIsShared,
+  sessionDisplayLabel,
+  sessionSource,
+  stripChatMentionMarkup,
   type SessionDisplayStatus,
 } from './session-label';
 
@@ -212,5 +215,31 @@ describe('matchesSourceFilters', () => {
     const telegram = makeSession({ metadata: { source: 'telegram' } });
     expect(matchesSourceFilters(telegram, ['telegram'], testUiTranslator)).toBe(true);
     expect(matchesSourceFilters(telegram, ['slack'], testUiTranslator)).toBe(false);
+  });
+
+  // A Teams session (apps/api/src/channels/teams/session.ts stamps
+  // `metadata.source = 'teams'`) used to fall through to the plain `chat` kind:
+  // no glyph in the sidebar, no "Teams" facet, and it counted as "My chats".
+  test('teams is its own kind with its own label, like slack and telegram', () => {
+    const teams = makeSession({ metadata: { source: 'teams' } });
+    expect(sessionSource(teams, testUiTranslator)).toMatchObject({ kind: 'teams', triggerSlug: null });
+    expect(sessionSource(teams, testUiTranslator).label).not.toBe(
+      sessionSource(makeSession(), testUiTranslator).label,
+    );
+    expect(matchesSourceFilters(teams, ['teams'], testUiTranslator)).toBe(true);
+    expect(matchesSourceFilters(teams, ['slack'], testUiTranslator)).toBe(false);
+    expect(matchesSourceFilters(teams, ['mine'], testUiTranslator)).toBe(false);
+  });
+});
+
+describe('mention markup in titles', () => {
+  test('a Teams channel mention leaves no <at> tag in the display label', () => {
+    const s = makeSession({ name: '<at>Kortix Dev</at>summarize the README in two sentences' });
+    expect(sessionDisplayLabel(s)).toBe('summarize the README in two sentences');
+  });
+
+  test('stripChatMentionMarkup collapses the whitespace the tag leaves behind', () => {
+    expect(stripChatMentionMarkup('<at>Kortix Dev</at>&nbsp; now count   the lines')).toBe('now count the lines');
+    expect(stripChatMentionMarkup('plain')).toBe('plain');
   });
 });
