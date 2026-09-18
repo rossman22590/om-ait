@@ -61,6 +61,7 @@ import {
   teamsIdentityApp,
   teamsOauthApp,
   teamsWebhookApp,
+  startTeamsBotTokenRefresh,
   telegramWebhookApp,
 } from './channels';
 import { connectorApp } from './connectors';
@@ -120,6 +121,10 @@ import {
   stopAuditReconciliationWorker,
 } from './shared/audit-reconciliation-worker';
 import { startAuditWebhookWorker, stopAuditWebhookWorker } from './shared/audit-webhooks';
+import {
+  startProjectSnapshotWorker,
+  stopProjectSnapshotWorker,
+} from './git-proxy/project-snapshot-worker';
 import { inspectDatabaseError } from './shared/database-errors';
 import {
   isDaytonaRateLimitError,
@@ -147,6 +152,7 @@ import { isPlatinumSandboxNotRunningError } from './shared/platinum';
 import { skillsApp } from './skills';
 import { kickStartupPreBuild } from './snapshots/builder';
 import { startTmpReaper, stopTmpReaper } from './snapshots/tmp-reaper';
+import { startSessionLifecycleWorker, stopSessionLifecycleWorker } from './projects/session-lifecycle/worker';
 import {
   startTunnelService,
   stopTunnelService,
@@ -983,6 +989,9 @@ app.route('/v1/webhooks/slack/oauth', slackOauthApp); // /v1/webhooks/slack/oaut
 app.route('/v1/webhooks/slack', slackWebhookApp); // /v1/webhooks/slack/:projectId — raw Slack events (BYO mode)
 app.route('/v1/webhooks/teams/oauth', teamsOauthApp); // /v1/webhooks/teams/oauth/callback — admin-consent + catalog publish
 app.route('/v1/webhooks/teams', teamsWebhookApp); // /v1/webhooks/teams/messages — Bot Framework activities
+// Keep the shared Teams bot token warm so the first message after a deploy
+// does not wait on login.microsoftonline.com before its live card is posted.
+startTeamsBotTokenRefresh();
 app.route('/v1/channels/slack/identity', slackIdentityApp); // /v1/channels/slack/identity/bind — authed /login bind
 app.route('/v1/channels/teams/identity', teamsIdentityApp); // /v1/channels/teams/identity/bind — authed login bind
 app.route('/v1/webhooks/telegram', telegramWebhookApp); // /v1/webhooks/telegram/:projectId — Telegram updates
@@ -1243,7 +1252,22 @@ app.onError((err, c) => {
     // SESSION_BOUND_PLATFORM_SINKS in middleware/auth.ts). Bounded at 200 chars
     // so a long upstream message cannot shard the grouping without limit.
     const reason = (err.message ?? '').slice(0, 200);
-    appLogger.error(
+    // SEVERITY FOLLOWS THE CAUSE. A 4xx here is the gate working: an expired
+    // token, a project-scoped token refused a cross-project read, an agent
+    // without `project.session.start` in its kortix.yaml. The branch above
+    // already says so — only 5xx is captured to Sentry, "4xx are expected" —
+    // but every one of them was still written at ERROR level.
+    //
+    // PROD, 24h to 2026-09-13: 288 error-level lines, of which ~123 (43%) were
+    // 4xx denials of exactly that kind. Real faults were the minority of the
+    // error log, which is how a real fault gets missed.
+    //
+    // `warn` keeps every one of them queryable and grouped on the same message
+    // — the reason stays in the string, so the 403-shape work that motivated it
+    // is untouched — while `level = error` goes back to meaning the platform
+    // failed. Same line, same fields, same grouping; only the severity moves.
+    const level = err.status >= 500 ? 'error' : 'warn';
+    appLogger[level](
       `${method} ${path} -> ${err.status} [HTTPException]${reason ? ` ${reason}` : ''}`,
       {
         status: err.status,
@@ -1475,16 +1499,21 @@ async function startReplicaServices() {
   await import('./platform/services/runtime-settings')
     .then((m) => m.refreshRuntimeSettings())
     .catch(() => {});
-  // Warm the managed-GitHub-App config cache too — so a self-host instance
-  // whose operator just ran the in-app GitHub App setup flow (rather than
-  // `.env`) gets its DB-stored creds from request #1, not after a 30s TTL.
-  await import('./platform/services/managed-github-app')
-    .then((m) => m.refreshManagedGithubAppConfig())
+  // Warm the instance GitHub identity + git backend caches too — so a
+  // self-host instance whose operator just ran the in-app setup flow (rather
+  // than `.env`) serves its stored configuration from request #1, not after a
+  // 30s TTL.
+  await import('./platform/services/github-app-identity')
+    .then((m) => m.refreshAppIdentity())
+    .catch(() => {});
+  await import('./platform/services/managed-git-backend')
+    .then((m) => m.refreshGitBackend())
     .catch(() => {});
   // Every replica stages snapshot/session-boot build contexts in tmpdir and can
   // leak them on error paths; sweep stale ones so they don't fill node disk and
   // trip DiskPressure evictions. Runs on all replicas (not leader-gated).
   startTmpReaper();
+  startSessionLifecycleWorker();
 }
 
 // Singleton background WORKERS — must run on EXACTLY ONE replica at a time
@@ -1518,6 +1547,9 @@ async function startSingletonWorkers() {
   startPiWorkerPoolMaintenance();
   startAuditWebhookWorker();
   startAuditReconciliationWorker();
+  // Prebuilt project snapshot archives (S3 config provider). Idle unless
+  // KORTIX_PROJECT_SNAPSHOT_S3_BUCKET is set; see git-proxy/project-snapshot.ts.
+  startProjectSnapshotWorker();
   // IAM V2 time-bounded grants: tick every 60s, emit one audit event per row
   // that just transitioned to expired. Engine already filters expired rows out
   // of authorize() so correctness doesn't depend on this — it's the audit trail.
@@ -1537,6 +1569,7 @@ async function stopSingletonWorkers() {
   stopPiWorkerPoolMaintenance();
   await stopAuditWebhookWorker();
   await stopAuditReconciliationWorker();
+  await stopProjectSnapshotWorker();
   const { stopGrantExpirySweeper } = await import('./iam/expiry-sweeper');
   stopGrantExpirySweeper();
 }
@@ -1603,6 +1636,7 @@ async function shutdown(signal: string) {
   stopTunnelService();
   stopAccessControlCache();
   stopTmpReaper();
+  stopSessionLifecycleWorker();
   // Flush observability data before exit. The audit queue is drained here
   // because audit rows are buffered off the request path — without this, the
   // last ~250 ms of events would be lost on every SIGTERM (i.e. every rollout).

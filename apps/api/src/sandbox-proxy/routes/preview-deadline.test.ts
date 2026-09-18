@@ -67,16 +67,12 @@ mock.module('../../shared/preview-ownership', () => ({
   canAccessPreviewSandbox: async () => true,
   canAccessSandboxSession: async () => true,
 }));
-// The connector pre-flight now runs on every turn-start. This file is about a
-// different concern, so keep it satisfied — unstubbed it reaches a real DB.
-mock.module('../../projects/lib/prompt-connector-preflight', () => ({
-  PromptConnectorPreflightUnresolved: class PromptConnectorPreflightUnresolved extends Error {},
-  missingPromptConnectorConnections: async () => ({ ok: true }),
-}));
 mock.module('../../projects/lib/sandbox-env-sync', () => ({
   syncSandboxEnvForPrompt: async () => {},
 }));
 mock.module('../../projects/lib/session-token-grant', () => ({
+  // The proxy's declared-agent guard; these suites exercise other behavior.
+  agentLaunchableInProject: async () => true,
   remintGrantForAgentSwitch: async () => ({ action: 'skip' }),
   SessionGrantRemintError: class SessionGrantRemintError extends Error {},
 }));

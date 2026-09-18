@@ -5,9 +5,9 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
-import type { Config } from '../config'
-import type { Opencode } from '../opencode'
-import { buildOpencodeApp } from '../proxy'
+import type { OpenCodeConfig as Config } from '../harness/open-code/config'
+import type { Opencode } from '../harness/open-code/lifecycle'
+import { buildOpenCodeTestApp } from './helpers/open-code-harness'
 import { KORTIX_USER_CONTEXT_HEADER } from '../kortix-user-context'
 
 const TEST_TOKEN = 'files-test-kortix-token'
@@ -53,6 +53,7 @@ function fakeOpencode(): Opencode {
   return {
     getState: () => 'ok',
     getPid: () => 123,
+    getActivePort: () => 4096,
     getInternalUrl: () => 'http://127.0.0.1:1',
     restart: async () => {},
   } as unknown as Opencode
@@ -90,7 +91,7 @@ describe('daemon file write routes', () => {
 
   beforeAll(async () => {
     WORKSPACE = await fs.mkdtemp(path.join(os.tmpdir(), 'kortix-files-test-'))
-    const app = buildOpencodeApp(baseConfig(), fakeOpencode(), Date.now())
+    const app = buildOpenCodeTestApp(baseConfig(), fakeOpencode(), Date.now())
     server = Bun.serve({ port: 0, fetch: app.fetch })
     base = `http://127.0.0.1:${server.port}`
   })
@@ -98,6 +99,46 @@ describe('daemon file write routes', () => {
   afterAll(async () => {
     server?.stop(true)
     if (WORKSPACE) await fs.rm(WORKSPACE, { recursive: true, force: true })
+  })
+
+  for (const namespace of [
+    'file',
+    'kortix',
+    'kortix/refresh',
+    'kortix/pty',
+    'kortix/opencode',
+  ]) {
+    it(`unknown /${namespace} routes terminate before the OpenCode proxy`, async () => {
+      const upstream = Bun.serve({
+        port: 0,
+        fetch: () =>
+          new Response('<html>OpenCode</html>', { headers: { 'content-type': 'text/html' } }),
+      })
+      try {
+        const opencode = fakeOpencode()
+        opencode.getInternalUrl = () => `http://127.0.0.1:${upstream.port}`
+        const app = buildOpenCodeTestApp(baseConfig(), opencode, Date.now())
+        const response = await app.request(`http://daemon.test/${namespace}/missing/route`, {
+          method: 'POST',
+          headers: authHeaders(),
+        })
+        expect(response.status).toBe(404)
+        expect(response.headers.get('content-type')).toContain('application/json')
+        expect(await response.json()).toHaveProperty('error')
+      } finally {
+        upstream.stop(true)
+      }
+    })
+  }
+
+  it('health advertises file import and append while preserving existing health fields', async () => {
+    const response = await fetch(`${base}/kortix/health`)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      daemon: 'ok',
+      opencode: 'ok',
+      capabilities: ['file.import', 'file.append'],
+    })
   })
 
   it('rejects unauthenticated upload (no signed context)', async () => {
@@ -441,7 +482,7 @@ describe('daemon file read + list + status + find routes', () => {
     await fs.writeFile(`${WS}/ignored.txt`, 'do not track\n') // gitignored
 
     const cfg: Config = { ...baseConfig(), workspace: WS, projectTarget: WS }
-    const app = buildOpencodeApp(cfg, fakeOpencode(), Date.now())
+    const app = buildOpenCodeTestApp(cfg, fakeOpencode(), Date.now())
     server = Bun.serve({ port: 0, fetch: app.fetch })
     base = `http://127.0.0.1:${server.port}`
   })

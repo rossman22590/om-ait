@@ -46,12 +46,13 @@ import { AuditWebhooksCard } from '@/components/iam/audit-webhooks-card';
 import { BackToCustomizeOverlay } from '@/components/iam/back-to-customize-overlay';
 import { EnterpriseDemoCard } from '@/components/iam/enterprise-demo-card';
 import { EnterpriseUpsell } from '@/components/iam/enterprise-upsell';
-import { GitHubAppSetupCard } from '@/components/iam/github-app-setup-card';
+import { ManagedGitNotice } from '@/components/iam/managed-git-notice';
 import { GroupsTab } from '@/components/iam/groups-tab';
 import { IdentityIntro } from '@/components/iam/identity-intro';
 import { KeyRulesCard } from '@/components/iam/key-rules-card';
 import { MemberAccessPanel } from '@/components/iam/member-access-panel';
 import { MfaRequiredCard } from '@/components/iam/mfa-required-card';
+import { AddGitHubAccountDialog } from '@/components/iam/add-github-account-dialog';
 import { OAuthAppsCard } from '@/components/iam/oauth-apps-card';
 import { RolesTab } from '@/components/iam/roles-tab';
 import { ScimCard } from '@/components/iam/scim-card';
@@ -118,7 +119,6 @@ import {
 } from '@/features/workspace/shared/access';
 import { useAccountState } from '@/hooks/billing';
 import { useSignedOutRedirect } from '@/lib/auth/use-signed-out-redirect';
-import { isGitHubAppInstallationId } from '@/lib/github-installations';
 import { BillingAccountProvider } from '@/stores/billing-account-context';
 import {
   type AccountDetail,
@@ -170,21 +170,6 @@ async function copyInviteLink(url: string, copiedMessage: string, fallbackMessag
   }
 }
 
-/**
- * Where `/github/setup` sends you when the install finishes.
- *
- * The CURRENT URL, verbatim — which, while the hub is open, already carries
- * `?accountId=…&accountTab=git`. So the return trip reopens the modal on the
- * Git tab over the same page the person left, with no hard-coded path to drift
- * from the one the modal actually uses.
- */
-function rememberGitHubSetupReturn(path: string) {
-  try {
-    window.localStorage.setItem('kortix:github_setup_return', path);
-  } catch {
-    // Non-critical: the setup page falls back to the project import flow.
-  }
-}
 
 export function AccountHubContent() {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
@@ -485,10 +470,17 @@ export function AccountHubContent() {
             </div>
           ) : null}
 
+          {/* Account-scoped ONLY. The instance's managed-git identity used to
+              render here as `GitHubAppSetupCard`, one card below the
+              account's own connections — and on 2026-09-16 a platform admin
+              reconfigured production's GitHub App from inside one customer's
+              settings. That card lives at `/admin/git` now. What is left here
+              is the account's own App installations plus one read-only line
+              naming the instance's managed-git owner. */}
           {activeSection === 'git' && canWriteAccount ? (
             <div className="space-y-8">
               <GitHubConnectionCard account={account} canManage={canWriteAccount} />
-              <GitHubAppSetupCard canManage={canWriteAccount} />
+              <ManagedGitNotice />
             </div>
           ) : null}
 
@@ -647,7 +639,7 @@ function GitHubConnectionCard({
     installationId: string;
     ownerLogin: string | null;
   } | null>(null);
-  const [isConnecting, setIsConnecting] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
 
   const installationsQuery = useQuery({
     queryKey: ['github-installations', account.account_id],
@@ -671,17 +663,15 @@ function GitHubConnectionCard({
     onError: (err: Error) => errorToast(err.message || tI18nComplete.raw('text6e9715f4f2a9')),
   });
 
-  function handleConnect() {
-    if (!canManage) return;
-    setIsConnecting(true);
-    rememberGitHubSetupReturn(`${window.location.pathname}${window.location.search}`);
-    forgetPushedEntry();
-    router.replace(`/github/setup?account_id=${encodeURIComponent(account.account_id)}`);
-  }
-
-  const installations = (installationsQuery.data?.installations ?? []).filter((installation) =>
-    isGitHubAppInstallationId(installation.installation_id),
-  );
+  // Account connections only. The instance git backend used to be injected
+  // here as a synthetic entry, which made one instance-global credential look
+  // like this account's own GitHub connection; it has its own namespace now
+  // and is reported read-only by `ManagedGitNotice`.
+  const installations = installationsQuery.data?.installations ?? [];
+  // Where GitHub installs the Kortix App. `null` on an instance with no App
+  // configured at all — the action says so rather than opening a 404 on
+  // github.com, which is what a wrong slug used to produce.
+  const installUrl = installationsQuery.data?.install_url ?? null;
 
   return (
     <div className="space-y-4">
@@ -710,12 +700,12 @@ function GitHubConnectionCard({
           size="sm"
           variant="secondary"
           className="gap-1.5"
-          disabled={!canManage || isConnecting}
-          onClick={handleConnect}
+          disabled={!canManage}
+          onClick={() => setAddOpen(true)}
           title={canManage ? undefined : tI18nComplete.raw('text89a0e2d1b569')}
         >
-          {isConnecting ? <Loading className="size-4 shrink-0" /> : <Github className="size-4" />}
-          {isConnecting ? 'Connecting' : tI18nComplete.raw('textee7ee5830f09')}
+          <Github className="size-4" />
+          {tI18nComplete.raw('textee7ee5830f09')}
         </Button>
       </div>
 
@@ -803,6 +793,20 @@ function GitHubConnectionCard({
           })}
         </ul>
       )}
+
+      <AddGitHubAccountDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        accountId={account.account_id}
+        installUrl={installUrl}
+        // Back to this hub tab, over the page it is open on.
+        returnPath={
+          typeof window === 'undefined' ? '' : `${window.location.pathname}${window.location.search}`
+        }
+        // Drop the entry the hub modal pushed, so Back from GitHub returns to
+        // the page the hub was opened over.
+        onBeforeLeave={forgetPushedEntry}
+      />
 
       <ConfirmDialog
         open={Boolean(disconnectTarget)}

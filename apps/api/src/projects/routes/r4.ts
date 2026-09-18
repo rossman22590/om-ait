@@ -1,3 +1,5 @@
+import { readModelAccess } from '../../llm-gateway/model-access';
+import { changeProjectModelAccess } from '../../repositories/project-model-access';
 import { createRoute, z } from '@hono/zod-openapi';
 import {
   ConnectionMetadataSchema,
@@ -60,6 +62,7 @@ import {
 } from '../../channels/turn-relay';
 import { config } from '../../config';
 import {
+  connectionIsEffectiveProjectDefault,
   resolveConnectionCredentialValue,
   upsertConnectionCredential,
   upsertConnectionOAuth2Credential,
@@ -123,10 +126,9 @@ import { AnyObject, TriggerSchema, projectsApp } from '../lib/app';
 import { callerKortixSessionId } from '../lib/caller-session';
 import {
   type ConnectionOwnerType,
-  type ConnectorAuthorizationStrategy,
-  connectorAuthorizationMatchesStrategy,
+  connectionIsReachable,
   isTrustedManagedChannelAuthorization,
-} from '../lib/connector-authorization-strategy';
+} from '../lib/connection-access';
 import { sessionMayEnumerateConnection } from '../lib/connector-connection-visibility';
 import { withProjectGitAuth } from '../lib/git';
 import { metadataMerge } from '../lib/metadata-merge';
@@ -257,7 +259,6 @@ function mayReadConnection(
     ownerId: string | null;
     isDefault: boolean;
     metadata: Record<string, unknown>;
-    authorizationStrategy: ConnectorAuthorizationStrategy;
     providerType: string;
     connectorConfig: Record<string, unknown>;
   },
@@ -270,8 +271,7 @@ function mayReadConnection(
   sessionBoundConnectionIds: ReadonlySet<string> | null,
 ): boolean {
   if (!sessionMayEnumerateConnection(connection, sessionBoundConnectionIds)) return false;
-  return connectorAuthorizationMatchesStrategy({
-    strategy: connection.authorizationStrategy,
+  return connectionIsReachable({
     ownerType: connection.ownerType,
     ownerId: connection.ownerId,
     actingUserId: userId,
@@ -294,7 +294,6 @@ function mayMutateConnection(
     ownerType: ConnectionOwnerType;
     ownerId: string | null;
     metadata: Record<string, unknown>;
-    authorizationStrategy: ConnectorAuthorizationStrategy;
     providerType: string;
     connectorConfig: Record<string, unknown>;
   },
@@ -302,8 +301,7 @@ function mayMutateConnection(
   actingPrincipalIsServiceAccount: boolean,
   mayManageSystemConnections: boolean,
 ): boolean {
-  const strategyMatches = connectorAuthorizationMatchesStrategy({
-    strategy: connection.authorizationStrategy,
+  const reachable = connectionIsReachable({
     ownerType: connection.ownerType,
     ownerId: connection.ownerId,
     actingUserId: userId,
@@ -319,8 +317,11 @@ function mayMutateConnection(
       metadata: connection.metadata,
     }),
   });
-  if (!strategyMatches) return false;
-  return connection.authorizationStrategy === 'user' || mayManageSystemConnections;
+  if (!reachable) return false;
+  // Your own private account is yours to administer — reachability already
+  // proved the owner is the caller. Everything shared with the project is
+  // administration and needs the connections-manage capability.
+  return connection.ownerType === 'member' || mayManageSystemConnections;
 }
 
 async function reconcileConnectionRow(input: {
@@ -349,9 +350,21 @@ async function reconcileConnectionRow(input: {
   );
   const [existing] = await db.select().from(connectorConnections).where(identity).limit(1);
   if (existing) {
+    // Reconciling the label of a REVOKED row is a re-connect, not a metadata
+    // touch: the caller is adding "this account" back, and the credential they
+    // set next must land on a live row. Left `revoked`, the row kept its new
+    // credential but stayed invisible to every call and every list of usable
+    // accounts (found 2026-09-17: header "Add credential" on a connector whose
+    // only shared account had just been disconnected saved into a dead row).
+    // `error` is a live-state flag the next sync owns; it is not cleared here.
     const [connection] = await db
       .update(connectorConnections)
-      .set({ label: input.label, metadata: input.metadata, updatedAt: new Date() })
+      .set({
+        label: input.label,
+        metadata: input.metadata,
+        ...(existing.status === 'revoked' ? { status: 'active' as const } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(connectorConnections.connectionId, existing.connectionId))
       .returning();
     return { connection, created: false };
@@ -424,7 +437,6 @@ projectsApp.openapi(
         status: connectorConnections.status,
         isDefault: connectorConnections.isDefault,
         metadata: connectorConnections.metadata,
-        authorizationStrategy: connectors.authorizationStrategy,
         providerType: connectors.providerType,
         connectorConfig: connectors.config,
       })
@@ -566,7 +578,6 @@ projectsApp.openapi(
       .select({
         connectorId: connectors.connectorId,
         providerType: connectors.providerType,
-        authorizationStrategy: connectors.authorizationStrategy,
       })
       .from(connectors)
       .where(
@@ -584,15 +595,9 @@ projectsApp.openapi(
         409,
       );
     }
-    if (connector.authorizationStrategy !== 'user') {
-      return c.json(
-        {
-          error: 'This connector uses project-owned connections',
-          code: 'CONNECTOR_AUTHORIZATION_STRATEGY_MISMATCH',
-        },
-        409,
-      );
-    }
+    // No connector-level gate: every connector can hold both a shared project
+    // account and each member's own private one. Refusing here is what left a
+    // former `user`-strategy connector with no connect flow at all.
     const ownerType = 'member' as const;
     const ownerId = loaded.userId;
     const { connection, created } = await reconcileConnectionRow({
@@ -683,7 +688,6 @@ projectsApp.openapi(
       .select({
         connectorId: connectors.connectorId,
         providerType: connectors.providerType,
-        authorizationStrategy: connectors.authorizationStrategy,
       })
       .from(connectors)
       .where(
@@ -703,8 +707,7 @@ projectsApp.openapi(
     }
     const normalizedOwnerId = ownerType === 'project' ? null : ownerId;
     if (
-      !connectorAuthorizationMatchesStrategy({
-        strategy: connector.authorizationStrategy,
+      !connectionIsReachable({
         ownerType: ownerType as ConnectionOwnerType,
         ownerId: normalizedOwnerId,
         actingUserId: loaded.userId,
@@ -713,8 +716,8 @@ projectsApp.openapi(
     ) {
       return c.json(
         {
-          error: `This connector uses ${connector.authorizationStrategy}-owned connections`,
-          code: 'CONNECTOR_AUTHORIZATION_STRATEGY_MISMATCH',
+          error: `A ${ownerType}-owned connection is not reachable by this caller`,
+          code: 'CONNECTOR_CONNECTION_OWNER_NOT_REACHABLE',
         },
         409,
       );
@@ -781,8 +784,7 @@ for (const operation of ['credential', 'revoke', 'activate', 'default'] as const
           ownerId: connectorConnections.ownerId,
           isDefault: connectorConnections.isDefault,
           metadata: connectorConnections.metadata,
-          authorizationStrategy: connectors.authorizationStrategy,
-          providerType: connectors.providerType,
+            providerType: connectors.providerType,
           connectorConfig: connectors.config,
         })
         .from(connectorConnections)
@@ -849,17 +851,27 @@ for (const operation of ['credential', 'revoke', 'activate', 'default'] as const
         } catch (error) {
           return c.json({ error: (error as Error).message || 'credential validation failed' }, 400);
         }
+        // INVARIANT (2026-09-16, account_required rule): `connection.isDefault`
+        // is the raw (possibly unpinned) row flag; the project-wide catalog
+        // write below must key on the EFFECTIVE default — pinned, or the
+        // connector's sole active project-owned connection — so setting a
+        // credential on a never-pinned solo MCP connection still publishes
+        // exactly as it did before this rule existed.
+        const isEffectiveDefault =
+          connection.isDefault ||
+          (connection.ownerType === 'project' &&
+            (await connectionIsEffectiveProjectDefault(connection.connectorId, connectionId)));
         await rematerializeCatalogAfterCredentialUpdate({
           projectId,
           accountId: loaded.row.accountId,
           provider: connection.providerType,
           ownerType: connection.ownerType,
-          isDefault: connection.isDefault,
+          isDefault: isEffectiveDefault,
           connectorId: connection.connectorId,
           credential:
             connection.providerType === 'mcp' &&
             connection.ownerType === 'project' &&
-            connection.isDefault
+            isEffectiveDefault
               ? await resolveConnectionCredentialValue({
                   connectorId: connection.connectorId,
                   connectionId,
@@ -972,8 +984,7 @@ for (const operation of ['connect', 'connect/finalize'] as const) {
           connectorAlias: connectors.slug,
           providerType: connectors.providerType,
           connectorConfig: connectors.config,
-          authorizationStrategy: connectors.authorizationStrategy,
-        })
+          })
         .from(connectorConnections)
         .innerJoin(
           connectors,
@@ -1002,7 +1013,16 @@ for (const operation of ['connect', 'connect/finalize'] as const) {
       ) {
         return c.json({ error: 'Not found' }, 404);
       }
-      if (connection.isDefault) {
+      // INVARIANT (2026-09-16, account_required rule): a project-owned
+      // connection with nothing PINNED is still blocked here when it is the
+      // connector's sole active project-owned row — it is the connector's
+      // EFFECTIVE default even unpinned, and must still go through the shared
+      // connect endpoint. See `connectionIsEffectiveProjectDefault`.
+      const isEffectiveDefault =
+        connection.isDefault ||
+        (connection.ownerType === 'project' &&
+          (await connectionIsEffectiveProjectDefault(connection.connectorId, connectionId)));
+      if (isEffectiveDefault) {
         return c.json(
           { error: 'Use the shared connector connect endpoint for the default connection' },
           409,
@@ -2754,7 +2774,7 @@ projectsApp.openapi(
         if (turnCompletionAllowsQueuePromotion(turnCompletion)) {
           promotedPromptId = await promoteNextInboxRow(sessionId);
           if (promotedPromptId) {
-            void drainSessionLifecycleQueue({ idempotencyKey: promotedPromptId }).catch((error) =>
+            void drainSessionLifecycleQueue({ idempotencyKey: promotedPromptId, coalesce: false }).catch((error) =>
               console.warn('[turn-stream] targeted queue drain failed', {
                 sessionId,
                 promptId: promotedPromptId,
@@ -3191,6 +3211,64 @@ projectsApp.openapi(
     return c.json(catalog);
   },
 );
+
+// Explicit inference controls are separate from legacy picker visibility.
+const modelAccessChangeBody = z.object({
+  target: z.enum(['provider', 'model']),
+  id: z.string().trim().min(1).max(256),
+  enabled: z.boolean(),
+}).strict();
+
+projectsApp.openapi(createRoute({
+  method: 'get', path: '/{projectId}/model-access', tags: ['projects'],
+  summary: 'Read project provider and model access', ...auth,
+  request: { params: z.object({ projectId: z.string() }) },
+  responses: { 200: { description: 'OK', content: { 'application/json': { schema: z.any() } } }, ...errors(403, 404) },
+}), async (c: any) => {
+  const projectId = c.req.param('projectId');
+  const loaded = await loadProjectForUser(c, projectId, 'read');
+  if (!loaded) return c.json({ error: 'Not found' }, 404);
+  const defaults = await getAccountModelDefaults(loaded.row.accountId, projectId);
+  return c.json({
+    ...readModelAccess(loaded.row.metadata),
+    defaultModel: toWireModel(defaults.projects[projectId] ?? defaults.account ?? platformDefaultModelId() ?? '') || undefined,
+    enforced: projectLlmGatewayEnabled(loaded.row.metadata),
+  });
+});
+
+projectsApp.openapi(createRoute({
+  method: 'put', path: '/{projectId}/model-access', tags: ['projects'],
+  summary: 'Enable or disable a project provider or model', ...auth,
+  request: { params: z.object({ projectId: z.string() }),
+    body: { content: { 'application/json': { schema: modelAccessChangeBody } } } },
+  responses: { 200: { description: 'OK', content: { 'application/json': { schema: z.any() } } }, ...errors(400, 403, 404, 409) },
+}), async (c: any) => {
+  const projectId = c.req.param('projectId');
+  const loaded = await loadProjectForUser(c, projectId, 'read');
+  if (!loaded) return c.json({ error: 'Not found' }, 404);
+  await assertProjectCapability(c, loaded.userId, loaded.row.accountId, projectId, PROJECT_ACTIONS.PROJECT_CUSTOMIZE_WRITE);
+  const parsed = modelAccessChangeBody.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json({ error: 'Invalid body', code: 'invalid_body' }, 400);
+  const change = parsed.data;
+  if (change.target === 'provider' && !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(change.id)) {
+    return c.json({ error: 'Invalid provider id', code: 'invalid_body' }, 400);
+  }
+  if (change.target === 'model') {
+    change.id = toWireModel(change.id);
+    if (!change.id || change.id === 'auto' || /\s/.test(change.id)) {
+      return c.json({ error: 'Use a concrete model id', code: 'invalid_body' }, 400);
+    }
+  }
+  const defaults = await getAccountModelDefaults(loaded.row.accountId, projectId);
+  const defaultModel = toWireModel(defaults.projects[projectId] ?? defaults.account ?? platformDefaultModelId() ?? '') || undefined;
+  const result = await changeProjectModelAccess({ projectId, updatedBy: c.get('userId'), defaultModel, change });
+  if (result.conflict) return c.json({
+    error: 'Change the project default to another enabled provider or model first.',
+    code: 'cannot_disable_default', defaultModel,
+  }, 409);
+  invalidateAccountModelDefaults(loaded.row.accountId);
+  return c.json({ ...result.policy, defaultModel, enforced: projectLlmGatewayEnabled(loaded.row.metadata) });
+});
 
 // PUT /v1/projects/:projectId/model-enablement  { modelOverrides: {id: boolean} }
 // Replace the project's EXCEPTIONS to the default model set (the newest model

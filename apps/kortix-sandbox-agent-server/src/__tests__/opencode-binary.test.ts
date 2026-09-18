@@ -7,9 +7,9 @@ import {
   parsePnpmGlobalPackagePath,
   publishOpencodeNativeLink,
   resolveInstalledOpencodeNative,
-} from '../opencode-binary'
-import { detectOpencodeBinary } from '../opencode'
-import { installOpencodeVersion } from '../runtime-assets'
+} from '../harness/open-code/opencode-binary'
+import { detectOpencodeBinary } from '../harness/open-code/lifecycle'
+import { installOpencodeVersion } from '../harness/open-code/assets'
 
 const tempDirs: string[] = []
 
@@ -69,23 +69,15 @@ describe('pnpm OpenCode native binary resolution', () => {
 })
 
 describe('OpenCode launch binary detection', () => {
-  test('uses the PATH launcher without pnpm discovery when the experiment is disabled', async () => {
+  test('uses the PATH launcher without pnpm discovery', async () => {
     const events: string[] = []
 
     const resolved = await detectOpencodeBinary({
-      nativeBinaryFastPathEnabled: false,
       currentLink: '/test/opencode.current',
       systemLink: '/test/opencode-kortix',
       isExecutable: async (path) => {
         events.push(`executable:${path}`)
         return false
-      },
-      resolveInstalledNative: async () => {
-        events.push('resolve-native')
-        return '/test/opencode.exe'
-      },
-      publishNativeLink: async () => {
-        events.push('publish-native')
       },
       findOnPath: async (name) => {
         events.push(`path:${name}`)
@@ -103,7 +95,6 @@ describe('OpenCode launch binary detection', () => {
     // at once and the daemon respawns forever with "binary not found".
     const events: string[] = []
     const resolved = await detectOpencodeBinary({
-      nativeBinaryFastPathEnabled: false,
       currentLink: '/test/opencode.current',
       systemLink: '/test/opencode-kortix',
       isExecutable: async (path) => {
@@ -117,51 +108,15 @@ describe('OpenCode launch binary detection', () => {
     expect(events).toEqual(['executable:/test/opencode.current'])
   })
 
-  test('uses an existing stable link when the experiment is enabled', async () => {
+  test('falls back to an existing stable link when the PATH launcher is missing', async () => {
     const events: string[] = []
 
     const resolved = await detectOpencodeBinary({
-      nativeBinaryFastPathEnabled: true,
       currentLink: '/test/opencode.current',
       systemLink: '/test/opencode-kortix',
       isExecutable: async (path) => {
         events.push(`executable:${path}`)
         return path === '/test/opencode.current'
-      },
-      resolveInstalledNative: async () => {
-        events.push('resolve-native')
-        return '/test/opencode.exe'
-      },
-      publishNativeLink: async () => {
-        events.push('publish-native')
-      },
-      findOnPath: async (name) => {
-        events.push(`path:${name}`)
-        return '/test/opencode'
-      },
-    })
-
-    expect(resolved).toBe('/test/opencode.current')
-    expect(events).toEqual(['executable:/test/opencode.current'])
-  })
-
-  test('falls back to an existing stable link when the disabled PATH launcher is missing', async () => {
-    const events: string[] = []
-
-    const resolved = await detectOpencodeBinary({
-      nativeBinaryFastPathEnabled: false,
-      currentLink: '/test/opencode.current',
-      systemLink: '/test/opencode-kortix',
-      isExecutable: async (path) => {
-        events.push(`executable:${path}`)
-        return path === '/test/opencode.current'
-      },
-      resolveInstalledNative: async () => {
-        events.push('resolve-native')
-        return '/test/opencode.exe'
-      },
-      publishNativeLink: async () => {
-        events.push('publish-native')
       },
       findOnPath: async (name) => {
         events.push(`path:${name}`)
@@ -171,39 +126,6 @@ describe('OpenCode launch binary detection', () => {
 
     expect(resolved).toBe('/test/opencode.current')
     expect(events).toEqual(['path:opencode', 'executable:/test/opencode.current'])
-  })
-
-  test('repairs a legacy image through pnpm only when the experiment is enabled', async () => {
-    const events: string[] = []
-
-    const resolved = await detectOpencodeBinary({
-      nativeBinaryFastPathEnabled: true,
-      currentLink: '/test/opencode.current',
-      systemLink: '/test/opencode-kortix',
-      isExecutable: async (path) => {
-        events.push(`executable:${path}`)
-        return false
-      },
-      resolveInstalledNative: async () => {
-        events.push('resolve-native')
-        return '/test/opencode.exe'
-      },
-      publishNativeLink: async (nativePath, linkPath) => {
-        events.push(`publish-native:${nativePath}:${linkPath}`)
-      },
-      findOnPath: async (name) => {
-        events.push(`path:${name}`)
-        return '/test/opencode'
-      },
-    })
-
-    expect(resolved).toBe('/test/opencode.current')
-    expect(events).toEqual([
-      'executable:/test/opencode.current',
-      'executable:/test/opencode-kortix',
-      'resolve-native',
-      'publish-native:/test/opencode.exe:/test/opencode.current',
-    ])
   })
 })
 
@@ -318,7 +240,7 @@ describe('OpenCode runtime installation', () => {
 
 describe('isStubOpencodeLauncher', () => {
   test('recognises the pnpm postinstall stub behind a real cmd-shim and accepts a real launcher', async () => {
-    const { isStubOpencodeLauncher } = await import('../opencode')
+    const { isStubOpencodeLauncher } = await import('../harness/open-code/lifecycle')
     const dir = await mkdtemp(join(tmpdir(), 'kortix-stub-'))
     try {
       // Exactly what pnpm's shim looks like on a box (Essentia 2026-08-25).
