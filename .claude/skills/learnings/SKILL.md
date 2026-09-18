@@ -6478,3 +6478,16 @@ leaves a detached HEAD with no `refs/heads/main`.
 *Enforcer:* the `beforeAll` / `afterAll` pair in that file parks the cwd and
 owns the template. Nothing lints for a test that shells out to `git` from inside
 the checkout — that check is the TODO.
+
+### Clear provider ingress after a confirmed resume (2026-09-18)
+
+A successful resume must invalidate cached sandbox ingress before turn recovery
+or runtime refresh. Reads during the stopped interval can cache credentials that
+the provider replaces on start. Invalidating only at stop leaves those credentials
+valid in the API cache for five minutes.
+
+The transcript-history preview queued an attachment prompt correctly, but stale
+Daytona ingress returned HTTP 401 after wake. Two browser runs recovered only
+after retry delays and took 263 and 270 seconds. The session API contract test
+now seeds stopped ingress, resumes the same sandbox, and requires the next
+resolution to return the provider's new credential. It failed before the fix.
