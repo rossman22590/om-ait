@@ -68,7 +68,7 @@ is its own piece of work.
 denominator needs no partition code — unlike the API shards, which are computed
 by `src/core/shard.ts`. The 4-way split is verified total and disjoint: the
 sorted union of the four shard listings is byte-identical to the unsharded
-listing (38 tests).
+listing (44 tests as of the 2026-09-20 merge from main).
 
 Until 2026-08-26 each lane ran inside a Platinum or Daytona cloud sandbox with a
 warm template, and the runner was a thin orchestrator. That path was deleted

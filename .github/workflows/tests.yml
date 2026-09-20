@@ -74,7 +74,7 @@ jobs:
           # so the denominator needs no partition code (unlike the API shards
           # in `src/core/shard.ts`). Verified the 4-way split is total and
           # disjoint: the sorted union of the four shard listings is
-          # byte-identical to the unsharded listing (38 tests).
+          # byte-identical to the unsharded listing (44 tests).
           - lane: browser-1
             mode: browser
             args: --browser-only --browser-shard=1/4
