@@ -145,7 +145,7 @@ export async function resolveCandidates(
     const pooledEnabled = await projectFeatureFlagEnabled(principal.projectId, 'pooled_provider_secrets');
     const selectedPool = (prospectiveIds !== undefined || principal.sessionId) && principal.userId && pooledEnabled
       ? await resolveSessionProviderSecrets({
-          accountId: principal.accountId,
+          accountId: principal.accountId, projectId: principal.projectId,
           ...(prospectiveIds !== undefined ? { secretIds: prospectiveIds } : { sessionId: principal.sessionId! }),
           ...(options?.probe ? { advanceIndex: false } : {}),
           userId: principal.userId, providerId: 'codex', name: 'CODEX_AUTH_JSON',
@@ -189,7 +189,7 @@ export async function resolveCandidates(
         'Reconnect a selected ChatGPT account or select another granted connection.');
     }
     if (pooledEnabled && principal.userId && !principal.keyId) {
-      const personal = await resolveDefaultCodexAccountSecret(principal.accountId, principal.userId);
+      const personal = await resolveDefaultCodexAccountSecret(principal.accountId, principal.projectId, principal.userId);
       if (personal) {
         if (Array.isArray(principal.agentGrant?.env) &&
           !principal.agentGrant.env.some((name) => name.toUpperCase() === 'CODEX_AUTH_JSON')) {
@@ -263,6 +263,7 @@ export async function resolveCandidates(
       await projectFeatureFlagEnabled(principal.projectId, 'pooled_provider_secrets')
       ? await resolveSessionProviderSecrets({
           accountId: principal.accountId,
+          projectId: principal.projectId,
           ...(prospectiveIds !== undefined ? { secretIds: prospectiveIds } : { sessionId: principal.sessionId! }),
           ...(options?.probe ? { advanceIndex: false } : {}),
           userId: principal.userId,
@@ -429,8 +430,7 @@ export async function resolveCandidates(
     if (candidates.length) return candidates;
     // managed=true and every gate passed, but managedCandidates() itself found
     // no usable transport credential (an operator-side misconfiguration, e.g.
-    // KORTIX_MANAGED_PROVIDER_ENABLED on without AWS_BEDROCK_API_KEY/
-    // OPENROUTER_API_KEY set) — falls through to the deployment-disabled
+    // KORTIX_MANAGED_PROVIDER_ENABLED on without OPENROUTER_API_KEY set) — falls through to the deployment-disabled
     // message below, which is the closest accurate reason a caller can act on.
   }
 
