@@ -17,6 +17,8 @@ import {
   accountGroups,
   accountMemberships,
   accountScimUsers,
+  accountSecretGrants,
+  accountSecretResources,
   accountMembers,
   accountSsoGroupMappings,
   accountSsoProviders,
@@ -142,8 +144,25 @@ describe('Azure AD directory-sync → authorization', () => {
     const oldUser = crypto.randomUUID();
     const ssoUser = crypto.randomUUID();
     const sessionId = crypto.randomUUID();
+    const secretId = crypto.randomUUID();
     try {
       await db.insert(accountMemberships).values({ accountId: ACCOUNT, userId: oldUser });
+      await db.insert(accountSecretResources).values({
+        secretId,
+        accountId: ACCOUNT,
+        label: 'Migrated provider key',
+        name: 'PROVIDER_KEY',
+        valueEnc: 'encrypted-test-value',
+        consumer: 'sandbox',
+        strategy: 'runtime',
+        createdBy: oldUser,
+      });
+      await db.insert(accountSecretGrants).values({
+        secretId,
+        accountId: ACCOUNT,
+        userId: oldUser,
+        grantedBy: oldUser,
+      });
       await db.insert(accountGroupMembers).values({ groupId: MKT_GROUP, userId: oldUser });
       await db.insert(accountScimUsers).values({
         accountId: ACCOUNT,
@@ -169,6 +188,8 @@ describe('Azure AD directory-sync → authorization', () => {
       expect((await db.select().from(accountGroupMembers).where(and(eq(accountGroupMembers.groupId, MKT_GROUP), eq(accountGroupMembers.userId, ssoUser)))).length).toBe(1);
       expect((await db.select().from(accountScimUsers).where(and(eq(accountScimUsers.accountId, ACCOUNT), eq(accountScimUsers.userId, ssoUser)))).length).toBe(1);
       expect((await db.select().from(projectSessions).where(and(eq(projectSessions.sessionId, sessionId), eq(projectSessions.createdBy, ssoUser)))).length).toBe(1);
+      expect((await db.select().from(accountSecretGrants).where(and(eq(accountSecretGrants.secretId, secretId), eq(accountSecretGrants.userId, oldUser)))).length).toBe(0);
+      expect((await db.select().from(accountSecretGrants).where(and(eq(accountSecretGrants.secretId, secretId), eq(accountSecretGrants.userId, ssoUser)))).length).toBe(1);
     } finally {
       await db.update(accountSsoProviders).set({ autoCreateMembers: true }).where(eq(accountSsoProviders.accountId, ACCOUNT));
     }
@@ -272,6 +293,13 @@ describe('Azure AD directory-sync → authorization', () => {
           (${ssoUser}::uuid, ${email}, true, ${JSON.stringify({ provider: `sso:${SUPA_SSO}`, providers: [`sso:${SUPA_SSO}`] })}::jsonb)
       `);
       await db.insert(accountMemberships).values({ accountId: ACCOUNT, userId: manualUser });
+      await db.insert(accountScimUsers).values({
+        accountId: ACCOUNT,
+        scimId: crypto.randomUUID(),
+        userId: manualUser,
+        userName: email,
+        active: true,
+      });
 
       expect(await resolveAccountIdentityByEmail(ACCOUNT, email.toUpperCase())).toEqual({
         userId: ssoUser,
