@@ -20,6 +20,7 @@ import { db } from '../shared/db';
 import { withDirectoryTransaction } from './directory-transaction';
 import { assignRole, SYSTEM_ACTOR } from './assignments';
 import { invalidateIamCacheForUser } from './cache-invalidation';
+import { reconcileAccountIdentities } from './account-identity';
 import {
   ensureAutoProvisionedGroup,
   getSsoProviderBySupabaseId,
@@ -181,91 +182,6 @@ export function diffSsoGroups(args: {
 const GROUP_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Move one account-scoped person from a legacy Auth id to the Auth id emitted
- * by the account's SAML provider. The active SCIM row is the trusted link:
- * account + normalized email identify the person; the SAML subject supplies
- * the current login id. Historical audit actors remain unchanged.
- */
-async function reconcileDirectoryIdentity(
-  accountId: string,
-  oldUserId: string,
-  ssoUserId: string,
-): Promise<void> {
-  if (oldUserId === ssoUserId) return;
-
-  await db.execute(sql`
-    INSERT INTO kortix.account_memberships (user_id, account_id, joined_at, is_super_admin, scim_external_id)
-    SELECT ${ssoUserId}::uuid, account_id, joined_at, is_super_admin, scim_external_id
-    FROM kortix.account_memberships
-    WHERE account_id=${accountId}::uuid AND user_id=${oldUserId}::uuid
-    ON CONFLICT (user_id, account_id) DO UPDATE SET
-      joined_at=least(kortix.account_memberships.joined_at, excluded.joined_at),
-      is_super_admin=kortix.account_memberships.is_super_admin OR excluded.is_super_admin,
-      scim_external_id=coalesce(excluded.scim_external_id, kortix.account_memberships.scim_external_id)
-  `);
-  await db.execute(sql`
-    INSERT INTO kortix.group_members (group_id, user_id, added_by, added_at)
-    SELECT gm.group_id, ${ssoUserId}::uuid, gm.added_by, gm.added_at
-    FROM kortix.group_members gm
-    JOIN kortix.account_groups g ON g.group_id=gm.group_id
-    WHERE g.account_id=${accountId}::uuid AND gm.user_id=${oldUserId}::uuid
-    ON CONFLICT (group_id, user_id) DO NOTHING
-  `);
-  await db.execute(sql`
-    DELETE FROM kortix.role_assignments old USING kortix.role_assignments newer
-    WHERE old.account_id=${accountId}::uuid
-      AND old.principal_type='user' AND old.principal_id=${oldUserId}::uuid
-      AND newer.account_id=old.account_id AND newer.principal_type='user'
-      AND newer.principal_id=${ssoUserId}::uuid AND newer.role_id=old.role_id
-      AND newer.scope_type=old.scope_type AND newer.scope_id IS NOT DISTINCT FROM old.scope_id
-      AND newer.object_type IS NOT DISTINCT FROM old.object_type
-      AND newer.object_id IS NOT DISTINCT FROM old.object_id
-  `);
-  await db.execute(sql`
-    UPDATE kortix.role_assignments SET principal_id=${ssoUserId}::uuid, updated_at=now()
-    WHERE account_id=${accountId}::uuid AND principal_type='user' AND principal_id=${oldUserId}::uuid
-  `);
-  await db.execute(sql`
-    INSERT INTO kortix.project_session_grants (session_id, principal_type, principal_id, created_at)
-    SELECT g.session_id, g.principal_type, ${ssoUserId}::uuid, g.created_at
-    FROM kortix.project_session_grants g
-    JOIN kortix.project_sessions s ON s.session_id=g.session_id
-    WHERE s.account_id=${accountId}::uuid AND g.principal_type='member' AND g.principal_id=${oldUserId}::uuid
-    ON CONFLICT (session_id, principal_type, principal_id) DO NOTHING
-  `);
-  await db.execute(sql`
-    DELETE FROM kortix.project_session_grants g USING kortix.project_sessions s
-    WHERE s.session_id=g.session_id AND s.account_id=${accountId}::uuid
-      AND g.principal_type='member' AND g.principal_id=${oldUserId}::uuid
-  `);
-  await db.execute(sql`UPDATE kortix.project_sessions SET created_by=${ssoUserId}::uuid WHERE account_id=${accountId}::uuid AND created_by=${oldUserId}::uuid`);
-  // Session tokens belong to their sessions and follow the session owner. A
-  // standalone PAT is an old login credential; revoke it instead of silently
-  // rebinding it to the new SSO identity.
-  await db.execute(sql`
-    UPDATE kortix.account_tokens SET status='revoked', revoked_at=coalesce(revoked_at, now())
-    WHERE account_id=${accountId}::uuid AND user_id=${oldUserId}::uuid AND session_id IS NULL AND status='active'
-  `);
-  await db.execute(sql`
-    UPDATE kortix.account_tokens SET user_id=${ssoUserId}::uuid
-    WHERE account_id=${accountId}::uuid AND user_id=${oldUserId}::uuid AND session_id IS NOT NULL
-  `);
-  await db.execute(sql`UPDATE kortix.project_session_public_shares SET created_by=${ssoUserId}::uuid WHERE account_id=${accountId}::uuid AND created_by=${oldUserId}::uuid`);
-  await db.execute(sql`UPDATE kortix.account_github_installation_states SET user_id=${ssoUserId}::uuid WHERE account_id=${accountId}::uuid AND user_id=${oldUserId}::uuid`);
-  await db.execute(sql`
-    DELETE FROM kortix.group_members gm USING kortix.account_groups g
-    WHERE g.group_id=gm.group_id AND g.account_id=${accountId}::uuid AND gm.user_id=${oldUserId}::uuid
-  `);
-  await db.execute(sql`DELETE FROM kortix.account_memberships WHERE account_id=${accountId}::uuid AND user_id=${oldUserId}::uuid`);
-  await db.execute(sql`
-    UPDATE kortix.account_scim_users SET user_id=${ssoUserId}::uuid, updated_at=now()
-    WHERE account_id=${accountId}::uuid AND user_id=${oldUserId}::uuid
-  `);
-  invalidateIamCacheForUser(oldUserId);
-  invalidateIamCacheForUser(ssoUserId);
-}
-
-/**
  * Apply SCIM group memberships that were parked on a pending invite for this
  * email (see scim/groups.ts addGroupMembersOrDeferInvites). JIT auto-create
  * bypasses the invite-acceptance flow, so without this the parked entries
@@ -350,26 +266,50 @@ export async function syncSsoMembership(args: {
     if (directoryUser && (!directoryUser.active || directoryUser.deletedAt)) {
       return { skipped: false, memberCreated: false };
     }
-    const emailMembers = await db.execute(sql`
-      SELECT membership.user_id::text AS user_id
-      FROM kortix.account_memberships membership
-      JOIN auth.users auth_user ON auth_user.id=membership.user_id
-      WHERE membership.account_id=${provider.accountId}::uuid
-        AND lower(auth_user.email)=lower(${args.email.trim()})
-        AND membership.user_id<>${args.userId}::uuid
-      ORDER BY membership.joined_at, membership.user_id
+    const priorAccountIdentities = await db.execute(sql`
+      WITH account_user_ids AS (
+        SELECT membership.user_id
+        FROM kortix.account_memberships membership
+        WHERE membership.account_id=${provider.accountId}::uuid
+        UNION
+        SELECT session_row.created_by
+        FROM kortix.project_sessions session_row
+        WHERE session_row.account_id=${provider.accountId}::uuid
+        UNION
+        SELECT directory_row.user_id
+        FROM kortix.account_scim_users directory_row
+        WHERE directory_row.account_id=${provider.accountId}::uuid
+          AND directory_row.user_id IS NOT NULL
+      )
+      SELECT auth_user.id::text AS user_id
+      FROM account_user_ids account_user
+      JOIN auth.users auth_user ON auth_user.id=account_user.user_id
+      WHERE lower(trim(auth_user.email))=lower(trim(${args.email}))
+        AND auth_user.id<>${args.userId}::uuid
+      ORDER BY auth_user.id
     `) as unknown as Array<{ user_id: string }>;
+    const otherProviderIdentities = await db.execute(sql`
+      SELECT id::text AS user_id
+      FROM auth.users
+      WHERE lower(trim(email))=lower(${args.email.trim()})
+        AND id<>${args.userId}::uuid
+        AND (
+          raw_app_meta_data->>'provider'='sso:' || ${provider.supabaseSsoProviderId}::text
+          OR coalesce(raw_app_meta_data->'providers', '[]'::jsonb)
+            ? ('sso:' || ${provider.supabaseSsoProviderId}::text)
+        )
+    `) as unknown as Array<{ user_id: string }>;
+    if (otherProviderIdentities.length > 0) {
+      throw new Error(`Ambiguous SSO identity for ${args.email.trim().toLowerCase()}`);
+    }
     const candidateIds = new Set([
       ...(directoryUser?.userId && directoryUser.userId !== args.userId ? [directoryUser.userId] : []),
-      ...emailMembers.map(row => row.user_id),
+      ...priorAccountIdentities.map(row => row.user_id),
     ]);
-    if (candidateIds.size > 1) {
-      throw new Error(`Ambiguous account identity for ${args.email.trim().toLowerCase()}`);
-    }
-    const priorUserId = [...candidateIds][0];
-    const identityReconciled = Boolean(priorUserId);
-    if (priorUserId) {
-      await reconcileDirectoryIdentity(provider.accountId, priorUserId, args.userId);
+    const priorUserIds = [...candidateIds];
+    const identityReconciled = priorUserIds.length > 0;
+    if (identityReconciled) {
+      await reconcileAccountIdentities(provider.accountId, priorUserIds, args.userId);
     } else if (directoryUser && !directoryUser.userId) {
       await db.update(accountScimUsers).set({ userId: args.userId })
         .where(and(eq(accountScimUsers.accountId, provider.accountId), eq(accountScimUsers.scimId, directoryUser.scimId)));
@@ -390,7 +330,7 @@ export async function syncSsoMembership(args: {
 
     let memberCreated = identityReconciled;
     if (!existingMember) {
-      if (!provider.autoCreateMembers && !directoryUser?.active) {
+      if (!provider.autoCreateMembers && !directoryUser?.active && !identityReconciled) {
         return { skipped: false, memberCreated: false };
       }
       // IDENTITY, then the ROLE. Two stores since the cutover.

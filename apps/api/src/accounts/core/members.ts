@@ -13,6 +13,7 @@ import { onMemberAdded, onMemberRemoved } from '../../billing/services/seat-mana
 import { ACCOUNT_ACTIONS, assertAuthorized, authorize } from '../../iam';
 import { actorOf } from '../../iam/actor';
 import { invalidateIamCacheForUser } from '../../iam/cache-invalidation';
+import { resolveAccountIdentityByEmail } from '../../iam/account-identity';
 import { parseAssignableProjectRole, PROJECT_ROLE_INPUT_ERROR, type ProjectRole } from '../../iam/roles';
 import { auth, errors, json } from '../../openapi';
 import { grantProjectRole } from '../../projects/lib/access';
@@ -30,7 +31,6 @@ import {
 } from '../../iam/assignments';
 import { revokeAllAccountTokensForUser } from '../../repositories/account-tokens';
 import { db } from '../../shared/db';
-import { lookupUserIdByEmail } from '../../shared/users';
 import { buildInviteUrl, sendAccountInviteEmail } from '../email';
 import { canSeeSensitiveMemberColumns } from './member-visibility';
 import {
@@ -453,7 +453,11 @@ export function registerMemberRoutes(): void {
         .limit(1);
       if (!accountRow) return c.json({ error: 'Account not found' }, 404);
 
-      const targetUserId = await lookupUserIdByEmail(email);
+      const identity = await resolveAccountIdentityByEmail(accountId, email);
+      if (identity.ambiguous) {
+        return c.json({ error: 'Multiple account identities use this email', code: 'account_identity_ambiguous' }, 409);
+      }
+      const targetUserId = identity.userId;
 
       if (targetUserId) {
         const existing = await getMembership(targetUserId, accountId);
