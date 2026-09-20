@@ -73,24 +73,19 @@ work.
 Each root run writes a benchmark to
 `tests/test-results/local/benchmark-<timestamp>.json`.
 
-## Know where CI runs the suite, and run it yourself when CI will not
+## CI does not run the suite on a `main` pull request
 
-Changed 2026-09-18. A pull request into `main` does NOT run the local suite.
-Two workflows call `.github/workflows/tests.yml`:
-
-- `tests-pr.yml` — a pull request into `staging`, or a pull request carrying the
-  `test` or `preview` label, or manual dispatch. Its `test verdict` job always
-  runs and always passes; it names the rule that applied.
-- `tests-main.yml` — every push to `main`, on that commit. It blocks nothing and
-  comments on a red commit with the failing lane names.
-
-Neither is a merge gate: `main` and `staging` require no status check. The only
-required check in the repository is `tests-release.yml`'s `full suite + quality
-gates`, on a pull request into `prod`, and it tests DEPLOYED staging.
+`.github/workflows/tests.yml` runs on every push to `main`, on a pull request
+into `staging`, on a pull request labelled `test` or `preview`, and on manual
+dispatch. A plain pull request into `main` skips it. None of those runs is a
+merge gate: `main` and `staging` require no status check. The only required
+check in the repository is `tests-release.yml`'s `full suite + quality gates`,
+on a pull request into `prod`, and it tests DEPLOYED staging.
 
 So the local run is the real gate before a `main` merge. Run the narrowest
-relevant command first, then `pnpm test`, and add the `test` label when you want
-CI's lanes on the pull request as well.
+relevant command first, then `pnpm test`. Add the `test` label when you want
+CI's lanes on the pull request as well; the label re-triggers an open pull
+request without a push.
 
 ## Run CI lanes natively on Blacksmith
 
@@ -101,7 +96,8 @@ browser lanes run shards `1/4` through `4/4` via
 `pnpm test -- --browser-only --browser-shard=CURRENT/TOTAL` at the exact
 requested SHA.
 
-- Check out the requested SHA with `fetch-depth: 1` — a pull request's head, or the pushed `main` commit.
+- Check out the requested SHA with `fetch-depth: 1`: a pull request's head, or
+  the pushed `main` commit.
 - Run `pnpm install --frozen-lockfile`; Blacksmith serves the pnpm store from
   its cache transparently.
 - Browser lanes: `pnpm --dir tests exec playwright install --with-deps chromium`
@@ -110,8 +106,8 @@ requested SHA.
   `supabase stop --no-backup` in an `always()` step after it.
 - Use one Playwright worker for each local-stack browser shard in CI. Keep two
   workers for deployed staging runs, which set `E2E_BROWSER_WORKERS` explicitly.
-- Export `KORTIX_PACKAGE_SKIP_SDK_TESTS=1` for the packages lane in full mode;
-  the SDK tests run in the core lane.
+- Export `KORTIX_PACKAGE_SKIP_SDK_TESTS=1` for the packages lane; the SDK tests
+  run in the core lane.
 - Keep the guard step and the artifact upload `if: always()`.
 - Do not reintroduce a cloud-sandbox worker for these lanes. The
   Platinum/Daytona path (`tests/bin/sandbox-ci.ts`) was removed on 2026-08-26

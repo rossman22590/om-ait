@@ -6,11 +6,9 @@ const root = resolve(import.meta.dirname, '../..');
 const testWorkflow = readFileSync(resolve(root, '.github/workflows/tests.yml'), 'utf8');
 
 describe('native test-lane workflow', () => {
-  test('runs four root lanes natively on Blacksmith at the pull request head SHA', () => {
-    // Since 2026-08-26 the lanes run on the runner itself: Blacksmith has
-    // Docker, 8 vCPU / 32 GB and image caching, and the sandbox-worker path
-    // (Platinum restore timeouts -> Daytona overlay2 failures) failed on its
-    // own on ~every third lane the day before.
+  test('runs six root lanes natively on Blacksmith at the pull request head SHA', () => {
+    // Since 2026-08-26 the lanes run on the runner itself. The old
+    // sandbox-worker path failed on ~every third lane the day before.
     expect(testWorkflow).toContain(
       'TEST_SHA: ${{ github.event.pull_request.head.sha || github.sha }}',
     );
@@ -19,11 +17,8 @@ describe('native test-lane workflow', () => {
     expect(testWorkflow).toContain('- lane: browser-1');
     expect(testWorkflow).toContain('- lane: browser-2');
     expect(testWorkflow).toContain('- lane: packages');
-    // Four browser shards since 2026-09-18. Measured: the suite went 10m19s
-    // (run 35384964452, N=2) -> 8m17s (run 35388565759, N=4). The browser long
-    // pole dropped 619s -> 416s, but `packages` (8m01s) is now the binding
-    // lane, so a fifth shard cannot move the total. See tests.yml's matrix
-    // comment for the full decomposition.
+    // Four browser shards since 2026-09-18: 10m19s -> 8m17s. `packages`
+    // (8m01s) is now the binding lane, so a fifth shard buys nothing.
     expect(testWorkflow).toContain('- lane: browser-3');
     expect(testWorkflow).toContain('- lane: browser-4');
     for (const n of [1, 2, 3, 4]) {
@@ -33,7 +28,11 @@ describe('native test-lane workflow', () => {
     expect(testWorkflow).toContain('args: --packages-only');
     // The unchanged root command is the whole lane.
     expect(testWorkflow).toContain('if [[ -n "$TEST_ARGS" ]]; then pnpm test -- $TEST_ARGS; else pnpm test; fi');
+    // Every run is a full run now, so the packages guard keys off the lane
+    // alone. `TEST_MODE` went away with `workflow_call`.
+    expect(testWorkflow).toContain('if [[ "$TEST_LANE" == "packages" ]]; then');
     expect(testWorkflow).toContain('export KORTIX_PACKAGE_SKIP_SDK_TESTS=1');
+    expect(testWorkflow).not.toContain('TEST_MODE');
     expect(testWorkflow).toContain('pnpm install --frozen-lockfile');
     expect(testWorkflow).toContain('bun-version: 1.3.14');
     expect(testWorkflow).toContain('timeout-minutes: 60');
@@ -59,8 +58,6 @@ describe('native test-lane workflow', () => {
     for (const token of ['sandbox-ci', 'PLATINUM_API_KEY', 'DAYTONA_API_KEY', 'TEST_SANDBOX_PROVIDER']) {
       expect(testWorkflow, token).not.toContain(token);
     }
-    const testsPr = readFileSync(resolve(root, '.github/workflows/tests-pr.yml'), 'utf8');
-    expect(testsPr).not.toContain('provider');
   });
 
   test('uploads results after the worker returns', () => {
@@ -89,10 +86,9 @@ describe('native test-lane workflow', () => {
   test('release tests prove every deployed staging flow and browser journey', () => {
     const release = readFileSync(resolve(root, '.github/workflows/tests-release.yml'), 'utf8');
 
-    // The gate is sharded into parallel api/browser matrix jobs. Branch
-    // protection on `prod` requires exactly one context — this job name — so an
-    // aggregator job keeps it while the shards do the work. Renaming it breaks
-    // the required check silently.
+    // Branch protection on `prod` requires exactly this one context, so the
+    // aggregator job keeps the name while the shards do the work. Renaming it
+    // breaks the required check silently.
     expect(release).toContain('name: full suite + quality gates');
     expect(release).toContain('needs: [api, browser]');
     // Six API shards, and the workflow must ask for the same denominator that
@@ -111,9 +107,7 @@ describe('native test-lane workflow', () => {
     expect(release).toContain("KE2E_TIMEOUT_ATTEMPTS: '2'");
     // Dry run against staging without a release PR. `RELEASE_SOURCE_SHA` only
     // exists on a `release/*` branch, so without this input the gate could
-    // never be rehearsed — which is how it stayed un-green. The input is read
-    // through env, never interpolated into the shell, and both jobs still
-    // enforce the same 40-hex-character check.
+    // never be rehearsed — which is how it stayed un-green.
     expect(release).toContain('expected_sha:');
     expect(release).toContain('EXPECTED_SHA: ${{ inputs.expected_sha }}');
     // Every reference to the input is an `env:` binding. A dispatch input
@@ -129,11 +123,9 @@ describe('native test-lane workflow', () => {
     expect(release).toContain('bun tests/bin/ke2e.ts gc --older-than 2h');
     expect(release).toContain('bun tests/bin/ke2e.ts gc --run-id');
     // The pre-run sweep is a janitor, never a gate. On run 32226539107 its
-    // 15-minute JOB cap fired mid-delete, GitHub recorded the job as
-    // `cancelled` (which continue-on-error does not absorb), and every
-    // dependent shard was skipped. Two guards, both required: the gc STEP is
-    // bounded (a step timeout is a job *failure*), and the shard jobs run
-    // unless the whole workflow was cancelled.
+    // job cap fired mid-delete, the job went `cancelled`, and every shard was
+    // skipped. Two guards: a bounded gc STEP, and shards that run unless the
+    // whole workflow was cancelled.
     const sweepBefore = release.slice(release.indexOf('  sweep-before:'), release.indexOf('  api:'));
     expect(sweepBefore).toContain('continue-on-error: true');
     expect(sweepBefore).toMatch(/- name: Reclaim test accounts older than 2h\n\s+timeout-minutes: 12/);
@@ -144,13 +136,9 @@ describe('native test-lane workflow', () => {
     }
     expect(release).toContain('RELEASE_SOURCE_SHA');
     expect(release).toContain('WEB_PROTECTION_PASSWORD');
-    // Staging sits behind Vercel SSO deployment protection, which Basic-auth
-    // httpCredentials cannot satisfy — every authenticated page 302s to
-    // vercel.com/sso-api. The release job must therefore export the automation
-    // bypass secret that playwright.config turns into
-    // `x-vercel-protection-bypass`. It was missing when tests-release replaced
-    // the old qa-release gate, so the browser lane never reached the app and
-    // the "proves every browser journey" claim was hollow. Restored in #6415.
+    // Staging sits behind Vercel SSO: every authenticated page 302s to
+    // vercel.com/sso-api without this bypass secret, which playwright.config
+    // turns into `x-vercel-protection-bypass`. Restored in #6415.
     expect(release).toContain(
       'VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}',
     );
@@ -159,66 +147,49 @@ describe('native test-lane workflow', () => {
   });
 
   test('gates the local suite on promotes and on an opt-in label, never on every main PR', () => {
-    // 2026-09-18. Every PR into `main` used to wait ~11 min (68 min worst case)
-    // for a suite that gated nothing: `main-push-protection` requires a pull
-    // request with 0 approvals and NO required status checks. The suite now
-    // runs only where it changes an outcome. Keep this test and the workflow
-    // header in sync — they are the contract.
-    const testsPr = readFileSync(resolve(root, '.github/workflows/tests-pr.yml'), 'utf8');
-
-    expect(testsPr).toContain('branches: [main, staging]');
-    expect(testsPr).not.toContain('branches: [main, staging, prod]');
-    expect(testsPr).toContain('uses: ./.github/workflows/tests.yml');
-    expect(testsPr).toContain('mode: full');
-    expect(testsPr).toContain('secrets: inherit');
+    // 2026-09-18. Every PR into `main` used to wait ~11 min (68 min worst
+    // case) for a suite that gated nothing: `main` and `staging` have NO
+    // required status checks. Keep this test and the workflow header in sync.
+    expect(testWorkflow).toContain('branches: [main, staging]');
+    expect(testWorkflow).not.toContain('branches: [main, staging, prod]');
 
     // Adding the label to an already-open PR must re-trigger the workflow, or
     // the opt-in silently needs a push to take effect.
-    expect(testsPr).toContain(
+    expect(testWorkflow).toContain(
       'types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]',
     );
 
-    // One decision job owns the verdict; the suite is `needs:`-gated on it.
-    expect(testsPr).toContain('run: ${{ steps.verdict.outputs.run }}');
-    expect(testsPr).toContain("if: needs.decide.outputs.run == 'true'");
-
-    // The three rules that turn it on. `contains(<array>, 'test')` compares
-    // whole elements, so `no-tests-needed` and `latest` cannot match.
-    expect(testsPr).toContain(
-      "HAS_TEST: ${{ contains(github.event.pull_request.labels.*.name, 'test') }}",
+    // The four clauses of the `lane` gate. `contains(<array>, 'test')`
+    // compares whole elements, so `no-tests-needed` and `latest` cannot match.
+    expect(testWorkflow).toContain("github.event_name != 'pull_request'");
+    expect(testWorkflow).toContain("|| github.base_ref == 'staging'");
+    expect(testWorkflow).toContain(
+      "|| contains(github.event.pull_request.labels.*.name, 'test')",
     );
-    expect(testsPr).toContain(
-      "HAS_PREVIEW: ${{ contains(github.event.pull_request.labels.*.name, 'preview') }}",
+    expect(testWorkflow).toContain(
+      "|| contains(github.event.pull_request.labels.*.name, 'preview')",
     );
-    expect(testsPr).toMatch(/if \[ "\$BASE" = staging \]; then\n\s+run=true/);
-    expect(testsPr).toMatch(/if \[ "\$HAS_TEST" = true \]; then\n\s+run=true/);
-    expect(testsPr).toMatch(/if \[ "\$HAS_PREVIEW" = true \]; then\n\s+run=true/);
 
-    // A skipped suite must say so on the PR. An empty check list is otherwise
-    // indistinguishable from a broken workflow.
-    expect(testsPr).toContain('$GITHUB_STEP_SUMMARY');
-    expect(testsPr).toContain('## Local test suite: NOT RUN');
+    // One file, one gate. The reusable-workflow plumbing and its `decide` job
+    // are gone; a second dispatch path is how the gate drifts.
+    expect(testWorkflow).not.toContain('workflow_call');
+    expect(testWorkflow).not.toContain('inputs.mode');
+    expect(testWorkflow).not.toContain('decide');
   });
 
   test('the dev trunk tests its own latest commit, and cannot block anything', () => {
-    const testsMain = readFileSync(resolve(root, '.github/workflows/tests-main.yml'), 'utf8');
+    // A push-triggered run has nothing left to gate: the code merged, and
+    // deploy-dev.yml deploys the same push without waiting.
+    expect(testWorkflow).toContain('push:\n    branches: [main]');
 
-    // `push` only. A push-triggered run has nothing left to gate: the code
-    // merged, and deploy-dev.yml deploys the same push without waiting.
-    expect(testsMain).toContain('push:\n    branches: [main]');
-    expect(testsMain).not.toContain('pull_request');
-    expect(testsMain).toContain('uses: ./.github/workflows/tests.yml');
-    expect(testsMain).toContain('mode: full');
-    expect(testsMain).toContain('secrets: inherit');
-
-    // Converge on newest, like deploy-dev.yml. A superseded run is cancelled,
-    // and a cancelled run must not be reported as a break.
-    expect(testsMain).toContain('cancel-in-progress: true');
-    expect(testsMain).toContain("needs.full.result != 'cancelled'");
+    // Converge on newest, like deploy-dev.yml. `failure()` is false for a
+    // cancelled run, so a superseded commit never reports a break.
+    expect(testWorkflow).toContain('cancel-in-progress: true');
+    expect(testWorkflow).toContain("if: failure() && github.event_name == 'push'");
 
     // A red trunk has to reach its author, or nobody learns main is broken.
-    expect(testsMain).toContain('repos/$REPO/commits/$SHA/comments');
-    expect(testsMain).toContain('::error::main is red at $SHA');
+    expect(testWorkflow).toContain('repos/$REPO/commits/$SHA/comments');
+    expect(testWorkflow).toContain('::error::main is red at $SHA');
   });
 
   test('does not repeat local tests after staging merge or on the production PR', () => {
@@ -231,20 +202,22 @@ describe('native test-lane workflow', () => {
     expect(release).not.toContain('mode: full');
   });
 
-  test('has two automatic local-suite callers and two intentional deployed targets', () => {
+  test('has one local-suite workflow and two intentional deployed targets', () => {
     const workflowRoot = resolve(root, '.github/workflows');
     const workflows = readdirSync(workflowRoot)
       .filter((name) => /\.ya?ml$/.test(name))
       .map((name) => ({ name, source: readFileSync(resolve(workflowRoot, name), 'utf8') }));
 
-    // Exactly two: the label/promote-gated PR caller and the post-merge trunk
-    // caller. A third would mean the suite runs somewhere nobody decided on.
+    // `tests.yml` owns its own triggers since 2026-09-18. The two caller
+    // workflows are deleted; a new caller would run the suite somewhere
+    // nobody decided on.
+    expect(existsSync(resolve(workflowRoot, 'tests-pr.yml'))).toBe(false);
+    expect(existsSync(resolve(workflowRoot, 'tests-main.yml'))).toBe(false);
     expect(
       workflows
         .filter(({ source }) => source.includes('uses: ./.github/workflows/tests.yml'))
-        .map(({ name }) => name)
-        .sort(),
-    ).toEqual(['tests-main.yml', 'tests-pr.yml']);
+        .map(({ name }) => name),
+    ).toEqual([]);
     // deploy-preview drives ONE sandbox origin from one job, so it keeps the
     // combined `--target-full` command. The release gate splits the same two
     // lanes across parallel GitHub jobs, so it calls the per-lane commands.

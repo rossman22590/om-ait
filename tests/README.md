@@ -60,32 +60,25 @@ Run the same journey in native Electron with `E2E_DESKTOP_NATIVE=1` and
 [`desktop-verification.md`](../docs/runbooks/desktop-verification.md).
 
 GitHub Actions uses `.github/workflows/tests.yml` for every local-profile run.
-Two workflows call it, and neither runs on an ordinary pull request into `main`
-(changed 2026-09-18):
+It runs on every push to `main`, on a pull request into `staging`, on a pull
+request labelled `test` or `preview`, and on manual dispatch. The label
+re-triggers an open pull request without a push. A plain pull request into
+`main` does not run it; the `Tests` check shows as skipped. The push-to-`main`
+run blocks nothing — `main` and `staging` require no status check — and a red
+run comments on the offending commit with the failing lane names. A cancelled
+run means a newer commit superseded it. Deployed-target runs are separate:
+`deploy-preview.yml` (`--target-full` against a preview origin) and
+`tests-release.yml` (`--target-*-full` against deployed staging, whose
+`full suite + quality gates` job is the only required check in the repository).
 
-| Caller | Runs when | Blocks a merge |
-| --- | --- | --- |
-| `tests-pr.yml` | a pull request into `staging`, or a pull request carrying the `test` or `preview` label, or manual dispatch | no — `main` and `staging` require no status check |
-| `tests-main.yml` | every push to `main`, on that commit | no — the code already merged |
-
-`tests-pr.yml`'s `test verdict` job always runs and always passes. It prints the
-rule that applied and, when the suite is skipped, how to ask for it. An empty
-check list on a pull request is therefore a stated decision, not a broken
-workflow. `tests-main.yml` cancels a superseded run so the answer is always
-about `main`'s latest commit; a red run comments on the offending commit with
-the failing lane names. Deployed-target runs are separate: `deploy-preview.yml`
-(`--target-full` against a preview origin) and `tests-release.yml` (sharded
-`--target-*-full` against deployed staging, the only required check on `prod`).
-
-Full mode runs six lanes in parallel, each natively on one Blacksmith runner
+The run is six lanes in parallel, each natively on one Blacksmith runner
 (`CI_RUNNER_L`, 8 vCPU / 32 GB — see `docs/runbooks/ci-runners.md`). Core and
-package lanes run `pnpm test` and `pnpm test -- --packages-only`. Two browser
+package lanes run `pnpm test` and `pnpm test -- --packages-only`. Four browser
 lanes run shards `1/4` through `4/4` via
 `pnpm test -- --browser-only --browser-shard=CURRENT/TOTAL`, which maps straight
-to Playwright's native `--shard`. The six lanes are
-the parallel equivalent of `pnpm test -- --full`. Each lane checks out the exact
-requested SHA (a pull request's head, or the pushed `main` commit), runs
-`pnpm install --frozen-lockfile`, and invokes the
+to Playwright's native `--shard`. The six lanes are the parallel equivalent of
+`pnpm test -- --full` and measure 8m17s wall clock. Each lane checks out the
+exact requested SHA, runs `pnpm install --frozen-lockfile`, and invokes the
 unchanged root command; browser lanes also install Chromium and prestart
 Supabase so the root runner reuses it. Blacksmith caches the pnpm store, the
 Chromium download, and every pulled Docker image (the Supabase images) across
