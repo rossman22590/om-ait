@@ -66,6 +66,8 @@ export function slackMessageHasImage(event: SlackEvent): boolean {
  */
 async function visionModelForFollowUp(
   projectId: string,
+  accountId: string,
+  userId: string,
   sessionId: string,
   event: SlackEvent,
 ): Promise<string | null> {
@@ -76,10 +78,12 @@ async function visionModelForFollowUp(
     .where(eq(projectSessions.sessionId, sessionId))
     .limit(1);
   const pinned = (row?.metadata as Record<string, unknown> | null)?.opencode_model;
-  const model = await visionModelForProject(
+  const model = await visionModelForProject({
     projectId,
-    typeof pinned === 'string' && pinned.trim() ? pinned.trim() : null,
-  );
+    accountId,
+    userId,
+    currentModel: typeof pinned === 'string' && pinned.trim() ? pinned.trim() : null,
+  });
   if (model) {
     console.info('[slack-webhook] routing an image-bearing turn to the vision model', {
       sessionId,
@@ -131,7 +135,7 @@ export async function createOrJoinThreadSession(input: {
         sessionId,
         text: renderFollowUpPrompt(envelope, event),
         userId: actorUserId,
-        model: await visionModelForFollowUp(projectId, sessionId, event),
+        model: await visionModelForFollowUp(projectId, project.accountId, actorUserId, sessionId, event),
       });
     } else {
       console.warn('[slack-webhook] lost thread-create claim but winner never published a session', {
@@ -162,7 +166,7 @@ export async function createOrJoinThreadSession(input: {
         sessionId: existing.sessionId,
         text: renderFollowUpPrompt(envelope, event),
         userId: actorUserId,
-        model: await visionModelForFollowUp(projectId, existing.sessionId, event),
+        model: await visionModelForFollowUp(projectId, project.accountId, actorUserId, existing.sessionId, event),
       });
       return;
     }
@@ -214,7 +218,12 @@ export async function createOrJoinThreadSession(input: {
 
   // A thread that OPENS with an image has to start on a model that can read one.
   const createModel = slackMessageHasImage(event)
-    ? ((await visionModelForProject(projectId, selection?.opencodeModel)) ?? selection?.opencodeModel)
+    ? ((await visionModelForProject({
+        projectId,
+        accountId: project.accountId,
+        userId,
+        currentModel: selection?.opencodeModel,
+      })) ?? selection?.opencodeModel)
     : selection?.opencodeModel;
 
   const result = await slackSessionLifecycle.createSession({

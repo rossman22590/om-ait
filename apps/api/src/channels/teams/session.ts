@@ -186,6 +186,7 @@ function turnIsLive(turn: TeamsLiveTurn | null, sessionStatus: string | null): b
 
 async function deliverFollowUp(input: {
   projectId: string;
+  accountId: string;
   tenantId: string;
   conversationId: string;
   sessionId: string;
@@ -246,7 +247,12 @@ async function deliverFollowUp(input: {
   // An image is unreadable on a text-only model, so THIS turn runs on the
   // configured vision model. The session's own pin is untouched.
   const turnModel = teamsMessageHasImage(activity)
-    ? await visionModelForProject(projectId, sessionModelOf(input.sessionMetadata))
+    ? await visionModelForProject({
+        projectId,
+        accountId: input.accountId,
+        userId,
+        currentModel: sessionModelOf(input.sessionMetadata),
+      })
     : null;
   if (turnModel) {
     console.info('[teams-webhook] routing an image-bearing turn to the vision model', {
@@ -370,6 +376,7 @@ export async function createOrJoinTeamsConversationSession(input: {
     if (existing) {
       const next = await deliverFollowUp({
         projectId,
+        accountId: project.accountId,
         tenantId,
         conversationId,
         sessionId: existing.sessionId,
@@ -396,6 +403,7 @@ export async function createOrJoinTeamsConversationSession(input: {
         .limit(1);
       await deliverFollowUp({
         projectId,
+        accountId: project.accountId,
         tenantId,
         conversationId,
         sessionId,
@@ -422,8 +430,12 @@ export async function createOrJoinTeamsConversationSession(input: {
   // A conversation that OPENS with an image has to start on a model that can
   // read one — the session pin is what every later turn inherits.
   const createModel = teamsMessageHasImage(activity)
-    ? ((await visionModelForProject(projectId, selection?.opencodeModel)) ??
-      selection?.opencodeModel)
+    ? ((await visionModelForProject({
+        projectId,
+        accountId: project.accountId,
+        userId,
+        currentModel: selection?.opencodeModel,
+      })) ?? selection?.opencodeModel)
     : selection?.opencodeModel;
 
   const result = await teamsSessionLifecycle.createSession({
