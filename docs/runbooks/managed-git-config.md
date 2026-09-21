@@ -75,6 +75,54 @@ Adding a permission to an App does not change existing installations. Each
 installed organization must accept the request in its GitHub App settings, or
 reinstall.
 
+## Kortix cloud runs managed git on the App only
+
+The instance git backend has two forms: a GitHub App installation
+(`MANAGED_GIT_GITHUB_OWNER` + `MANAGED_GIT_GITHUB_INSTALL_ID`) or a token
+(`MANAGED_GIT_GITHUB_TOKEN`). The token form stays a supported self-host option.
+Kortix cloud uses the App: one credential model, and every git write gets a
+short-lived token scoped to one repository instead of a long-lived
+organization-wide token.
+
+**When both are set, the token wins and the App is never consulted.**
+Production ran that way from 2026-08-30. Its token could not create a
+repository, so every project creation failed while an App that could create
+one sat unused. The API now logs this once per process:
+`[managed-git-backend] MANAGED_GIT_GITHUB_TOKEN and MANAGED_GIT_GITHUB_INSTALL_ID are both set: ...`.
+
+To select the App on a deployed environment:
+
+1. Confirm the environment's App is installed on the managed organization with
+   `administration: write` and `contents: write`, and that
+   `MANAGED_GIT_GITHUB_INSTALL_ID` is an installation of THAT App. A stale id
+   answers `404` on token mint. Verified values, 2026-09-21: prod `140097279`,
+   dev `158197129`, staging `158197210`.
+2. Set `MANAGED_GIT_GITHUB_TOKEN` to an **empty value** in the
+   `kortix-<env>-env` Secrets Manager blob. **Do not delete the key.** Removing
+   exactly this key caused the 2026-07-18 production outage: a task definition
+   that references a key by name cannot start without it. The resolver treats an
+   empty value as unset.
+3. Set a read-only `GITHUB_TOKEN` if none exists. The marketplace catalog reads
+   `GITHUB_TOKEN || MANAGED_GIT_GITHUB_TOKEN`; without either it falls back to
+   unauthenticated GitHub at 60 requests per hour.
+4. Restart the API tasks (`aws ecs update-service --force-new-deployment`). The
+   blob is read at task start.
+5. Copy the blob back into the tracked file:
+   `python3 scripts/secrets-sm-parity.py pull <env>`.
+6. Prove it: `GET /v1/projects/git/backend` reports `"kind":"app"`, then create
+   a real project.
+
+Verified on the App path, real API against real GitHub (2026-09-21): provision
+`201` with starter commits, read, rename, clone and push through the git proxy,
+archive, and purge (`repo_deleted: true`, GitHub `404` afterwards).
+
+**Known gap: collaborator invitations.**
+`POST /v1/projects/:id/git/collaborators` answers `200` on the App path for an
+organization member. Inviting a non-member is unverified: the App got `403
+Resource not accessible by integration` for a username where an organization
+owner token got `404`. The git proxy covers the need without it: any holder of a
+Kortix token clones and pushes `/v1/git/<projectId>.git`.
+
 ## Organizations with an IP allow list
 
 A GitHub Enterprise Cloud organization can refuse every request from an
