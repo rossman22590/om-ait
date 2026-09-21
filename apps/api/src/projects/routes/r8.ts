@@ -321,8 +321,18 @@ const SessionTurnSchema = z.object({
 
 const SessionTurnLastEndedSchema = z.object({
   turn_token: z.string(),
+  message_id: z.string().optional(),
   end_reason: z.string().nullable(),
   ended_at: z.string().nullable(),
+  error: z
+    .object({ name: z.string().nullable(), message: z.string().nullable() })
+    .optional(),
+});
+
+const SessionTurnFailureSchema = z.object({
+  message_id: z.string(),
+  ended_at: z.string().nullable(),
+  error: z.object({ name: z.string().nullable(), message: z.string().nullable() }),
 });
 
 const SessionTurnResponseSchema = z.object({
@@ -334,6 +344,7 @@ const SessionTurnResponseSchema = z.object({
   // caller reconciling by `message_id`.
   turns: z.array(SessionTurnSchema),
   last_ended: SessionTurnLastEndedSchema.optional(),
+  recent_failures: z.array(SessionTurnFailureSchema).optional(),
 });
 
 // GET /v1/projects/:projectId/sessions/:sessionId/turn

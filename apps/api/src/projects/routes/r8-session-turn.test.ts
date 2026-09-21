@@ -566,13 +566,21 @@ describe('GET /v1/projects/:projectId/sessions/:sessionId/turn', () => {
   });
 
   test('does not run the terminal read while a turn is live', async () => {
-    // The settled row is irrelevant while a turn is running, and the response
-    // omits `last_ended` in that case — so paying for that index scan would buy
-    // nothing.
+    // `last_ended` is omitted while a turn is running, so its read — the one
+    // ordered by `ended_at` — would buy nothing and must not run.
+    //
+    // CHANGED 2026-09-19 (session ad02e053): this used to pin exactly two reads,
+    // on the premise that every settled row is irrelevant while a turn runs. A
+    // memory-guard abort disproved it: the queued prompt started 5 s later, and
+    // the reason the previous turn failed was unreadable from then on. One
+    // BOUNDED read of named failures (newest 50 turns, by `started_at`) now runs
+    // in both states. The original guard — no `ended_at` scan while live — stands.
     sandboxTable = [runningBox(authorityTurn({ token: 't-live' }))];
     await getTurn();
-    expect(queries.map((q) => q.table)).toEqual(['sandboxes', 'turns']);
+    expect(queries.map((q) => q.table)).toEqual(['sandboxes', 'turns', 'turns']);
     expect(queries[1].where).toContain('col:turn_token in');
+    expect(queries.some((q) => q.orderBy.some((term) => term.includes('ended_at')))).toBe(false);
+    expect(queries[2].orderBy.some((term) => term.includes('started_at'))).toBe(true);
   });
 
   test('returns the NEWEST settled turn as last_ended', async () => {
