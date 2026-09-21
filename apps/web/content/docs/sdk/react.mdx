@@ -145,6 +145,24 @@ its way to the runtime; the web app shows one working indicator whenever `state`
 is `working`, whatever that flag says. Active runtime turns and fresh runtime
 activity clear it. A timed-out cancel does not confirm that execution stopped.
 
+### Why a turn ended
+
+The transcript of an interrupted turn only carries `MessageAbortedError`. When the
+sandbox named the cause, for example `SandboxMemoryGuard`, the control plane keeps
+it. `useSessionTurnOutcome(projectId, sessionId)` returns `last_ended` and
+`recent_failures` from the cache `useSessionWorking()` keeps fresh. It makes no
+request. Pass the result to `turnEndCause(outcome, messageId)`:
+
+```tsx
+const outcome = useSessionTurnOutcome(projectId, sessionId);
+const cause = turnEndCause(outcome, turn.userMessage.info.id);
+// cause: { name: 'SandboxMemoryGuard', message: 'sandbox memory at 97% …' } | null
+```
+
+`turnEndCause` returns `null` for a plain Stop and for a turn with no recorded
+cause. `recent_failures` is present whether or not a turn is running, so a cause
+stays attached to its turn after the next turn starts.
+
 
 A worker claim only checks admission and keeps the prompt waiting. Delivery starts
 after admission succeeds. A confirmed active turn clears the pending presentation

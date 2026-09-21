@@ -906,6 +906,16 @@ active agent response. The web app still shows one working indicator whenever th
 session is `working`, so Stop is never the only sign of work.
 A timed-out or skipped cancel does not acknowledge an abort receipt.
 
+A turn that an abort ended can have a named cause. The transcript of such a turn
+only carries `MessageAbortedError`. The control plane records the cause the
+sandbox reported, for example `SandboxMemoryGuard` when box memory passed its
+guard threshold. `GET .../turn` returns it in `last_ended.error` and in
+`recent_failures`, a list keyed by `message_id` that is present whether or not a
+turn is running. `useSessionTurnOutcome(projectId, sessionId)` reads both from
+the cache `useSessionWorking()` keeps fresh and makes no request of its own.
+`turnEndCause(outcome, messageId)` returns the cause for one turn, or `null` for
+a plain Stop and for a turn with no recorded cause.
+
 A worker claim only checks admission and keeps the prompt waiting. Delivery starts
 after admission succeeds. A confirmed active turn clears the pending presentation
 even if the previous inbox snapshot still lists that prompt. Runtime activity

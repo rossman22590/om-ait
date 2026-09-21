@@ -712,10 +712,27 @@ export interface SessionTurn {
 /** How the most recent turn ended. Present only when no turn is running —
  *  it is what separates "this session has never run a turn" from "the last
  *  one just finished". */
+/** Why a `failed` turn ended, as the sandbox reported it to the control plane. */
+export interface SessionTurnEndError {
+  name: string | null;
+  message: string | null;
+}
+
+/** One recent turn that failed for a named cause, keyed by its user message. */
+export interface SessionTurnFailure {
+  message_id: string;
+  ended_at: string | null;
+  error: SessionTurnEndError;
+}
+
 export interface SessionTurnEnded {
   turn_token: string;
+  /** The user message the turn answered. Absent for a turn nobody named. */
+  message_id?: string;
   end_reason: string | null;
   ended_at: string | null;
+  /** Absent when nobody named the failure. */
+  error?: SessionTurnEndError;
 }
 
 export interface SessionTurnStatus {
@@ -724,6 +741,10 @@ export interface SessionTurnStatus {
    *  prompt, say), so this is a list and never a single turn. */
   turns: SessionTurn[];
   last_ended?: SessionTurnEnded;
+  /** Recent turns that failed for a named cause, newest first. Reported whether
+   *  or not a turn is running — `last_ended` is one row and vanishes when the
+   *  next turn starts. Absent when there are none. */
+  recent_failures?: SessionTurnFailure[];
 }
 
 /** Server truth about this session's running turns (`GET .../turn`), answered
