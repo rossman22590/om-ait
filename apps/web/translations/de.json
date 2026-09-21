@@ -18577,7 +18577,6 @@
       "textf68f19d4f41b": "Auf der Seite Configuration des Bots in Azure.",
       "text39eba5dfad95": "Der kopierte Geheimniswert, nicht dessen ID.",
       "texte9c014cbed45": "Deine Microsoft-Entra-Verzeichnis-ID auf der Seite Overview des Mandanten.",
-      "textbbd7abbcf01e": "Beide Werte sind verschlüsselt. Nur der Agent dieses Workspaces kann sie lesen.",
       "text408bab8e8be6": "Dein Manifest enthält jetzt die App-ID dieses Bots. Erstelle daraus ein App-Paket und lade es in Teams hoch.",
       "text843ed3b90b42": "Packe diese Datei zusammen mit einer 192×192 color.png und einer transparenten 32×32 outline.png in ein ZIP.",
       "text5c71673648a2": "Gehe in Teams zu Apps → Manage your apps → Upload an app und lade das ZIP hoch.",
@@ -18586,7 +18585,8 @@
       "text98722a5463cb": "Teams konnte nicht verbunden werden",
       "text53e5f96332d9": "Erteile die Administratorzustimmung, damit der Kortix-Bot in deinem Mandanten laufen darf.",
       "texte2f95a2e3a77": "Lade im Teams Admin Center (oder Teams → Apps → Manage your apps → Upload) ein App-Paket hoch, das aus diesem Manifest sowie den Symbolen color.png und outline.png besteht.",
-      "textd9692dea50e7": "Füge die App einem Chat oder Kanal hinzu und füge unten deine Mandanten-ID ein, um sie mit diesem Projekt zu verknüpfen."
+      "textd9692dea50e7": "Füge die App einem Chat oder Kanal hinzu und füge unten deine Mandanten-ID ein, um sie mit diesem Projekt zu verknüpfen.",
+      "text8dd795841572": "Das Clientgeheimnis ist verschlüsselt. Nur der Agent dieses Workspaces kann es lesen."
     }
   },
   "projectOnboarding": {

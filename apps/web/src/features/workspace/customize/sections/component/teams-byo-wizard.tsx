@@ -90,11 +90,6 @@ function SubStep({ children }: { children: React.ReactNode }) {
   return <li className="text-muted-foreground text-sm leading-relaxed">{children}</li>;
 }
 
-/** Azure's / Teams' own UI labels, so the eye can match screen to instruction. */
-function VendorUiLabel({ children }: { children: React.ReactNode }) {
-  return <span className="text-foreground font-medium">{children}</span>;
-}
-
 /**
  * The endpoint an Azure bot must post to for THIS project. See the note at the
  * top: the server's value is the managed one until a BYO app id exists.
@@ -385,7 +380,7 @@ function StepCredentials({
 
       <div className="text-muted-foreground flex items-start gap-2 text-xs leading-relaxed">
         <LockIcon className="mt-0.5 size-3.5 shrink-0" />
-        <span>{tI18nComplete.raw('textbbd7abbcf01e')}</span>
+        <span>{tI18nComplete.raw('text8dd795841572')}</span>
       </div>
 
       {error ? (
