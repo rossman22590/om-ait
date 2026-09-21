@@ -18586,7 +18586,9 @@
       "text53e5f96332d9": "授予管理员同意，使 Kortix 机器人可以在你的租户中运行。",
       "texte2f95a2e3a77": "在 Teams 管理中心（或 Teams → Apps → Manage your apps → Upload）中，上传由此清单和 color.png、outline.png 图标构建的应用包。",
       "textd9692dea50e7": "将应用添加到聊天或频道，然后在下方粘贴租户 ID，以将其绑定到此项目。",
-      "text8dd795841572": "客户端密码已加密。只有此工作区的智能体可以读取。"
+      "text8dd795841572": "客户端密码已加密。只有此工作区的智能体可以读取。",
+      "text5cb103d6008c": "频道会话",
+      "text31d248c44579": "未命名会话"
     }
   },
   "projectOnboarding": {

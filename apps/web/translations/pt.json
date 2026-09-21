@@ -18586,7 +18586,9 @@
       "text53e5f96332d9": "Conceda o consentimento de administrador para que o bot do Kortix possa funcionar no seu inquilino.",
       "texte2f95a2e3a77": "No centro de administração do Teams (ou Teams → Apps → Manage your apps → Upload), carregue um pacote da aplicação criado a partir deste manifesto, com os ícones color.png e outline.png.",
       "textd9692dea50e7": "Adicione a aplicação a um chat ou canal e cole abaixo o ID do seu inquilino para a associar a este projeto.",
-      "text8dd795841572": "O segredo de cliente é encriptado. Só o agente deste espaço de trabalho o pode ler."
+      "text8dd795841572": "O segredo de cliente é encriptado. Só o agente deste espaço de trabalho o pode ler.",
+      "text5cb103d6008c": "Tópico do canal",
+      "text31d248c44579": "Conversa sem título"
     }
   },
   "projectOnboarding": {

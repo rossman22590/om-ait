@@ -18586,7 +18586,9 @@
       "text53e5f96332d9": "Dodelite saglasnost administratora da Kortix bot može da radi u vašem zakupcu.",
       "texte2f95a2e3a77": "U Teams centru za administraciju (ili Teams → Apps → Manage your apps → Upload) otpremite paket aplikacije napravljen od ovog manifesta, zajedno sa ikonama color.png i outline.png.",
       "textd9692dea50e7": "Dodajte aplikaciju u ćaskanje ili kanal, pa ispod nalepite ID zakupca da biste je povezali sa ovim projektom.",
-      "text8dd795841572": "Tajna klijenta je šifrovana. Može je pročitati samo agent ovog radnog prostora."
+      "text8dd795841572": "Tajna klijenta je šifrovana. Može je pročitati samo agent ovog radnog prostora.",
+      "text5cb103d6008c": "Nit kanala",
+      "text31d248c44579": "Razgovor bez naslova"
     }
   },
   "projectOnboarding": {

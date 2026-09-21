@@ -18586,7 +18586,9 @@
       "text53e5f96332d9": "Concedi il consenso amministratore perché il bot Kortix possa funzionare nel tuo tenant.",
       "texte2f95a2e3a77": "Nell'interfaccia di amministrazione di Teams (o Teams → Apps → Manage your apps → Upload) carica un pacchetto dell'app creato da questo manifest, insieme alle icone color.png e outline.png.",
       "textd9692dea50e7": "Aggiungi l'app a una chat o a un canale, poi incolla qui sotto l'ID del tuo tenant per collegarla a questo progetto.",
-      "text8dd795841572": "Il segreto client è cifrato. Solo l'agente di questo spazio di lavoro può leggerlo."
+      "text8dd795841572": "Il segreto client è cifrato. Solo l'agente di questo spazio di lavoro può leggerlo.",
+      "text5cb103d6008c": "Thread del canale",
+      "text31d248c44579": "Conversazione senza titolo"
     }
   },
   "projectOnboarding": {

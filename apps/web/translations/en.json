@@ -18586,7 +18586,9 @@
       "text53e5f96332d9": "Grant admin consent so the Kortix bot can run in your tenant.",
       "texte2f95a2e3a77": "In Teams Admin Center (or Teams → Apps → Manage your apps → Upload), upload an app package built from this manifest, plus color.png and outline.png icons.",
       "textd9692dea50e7": "Add the app to a chat or channel, then paste your tenant ID below to bind it to this project.",
-      "text8dd795841572": "The client secret is encrypted. Only this workspace's agent can read it."
+      "text8dd795841572": "The client secret is encrypted. Only this workspace's agent can read it.",
+      "text5cb103d6008c": "Channel thread",
+      "text31d248c44579": "Untitled conversation"
     }
   },
   "projectOnboarding": {

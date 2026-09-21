@@ -18586,7 +18586,9 @@
       "text53e5f96332d9": "Erteile die Administratorzustimmung, damit der Kortix-Bot in deinem Mandanten laufen darf.",
       "texte2f95a2e3a77": "Lade im Teams Admin Center (oder Teams → Apps → Manage your apps → Upload) ein App-Paket hoch, das aus diesem Manifest sowie den Symbolen color.png und outline.png besteht.",
       "textd9692dea50e7": "Füge die App einem Chat oder Kanal hinzu und füge unten deine Mandanten-ID ein, um sie mit diesem Projekt zu verknüpfen.",
-      "text8dd795841572": "Das Clientgeheimnis ist verschlüsselt. Nur der Agent dieses Workspaces kann es lesen."
+      "text8dd795841572": "Das Clientgeheimnis ist verschlüsselt. Nur der Agent dieses Workspaces kann es lesen.",
+      "text5cb103d6008c": "Kanal-Thread",
+      "text31d248c44579": "Unbenannte Unterhaltung"
     }
   },
   "projectOnboarding": {
