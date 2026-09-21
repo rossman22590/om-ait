@@ -689,3 +689,53 @@ honest outcome until one of these is fixed:
 2. Enable Kortix's managed provider on dev, which brings back `gpt-5.6-luna`.
 3. Connect a BYOK vision model (many `qiniu-ai/*`, `modelis/*` and
    `greenpt/*` entries publish an image modality).
+
+### Resolved: images work once the agent may use a codex model
+
+On dev the fix was one line in the project's own manifest
+(`managed-kortix/kaab-demo-40c2e222…`, `kortix.yaml`):
+
+```yaml
+agents:
+  kortix:
+    secrets:
+      - APIFOX_TEST
+      - GITHUB_TEST
+      - BROKER_PROOF
+      - CODEX_AUTH_JSON   # <- lets the agent use the account's ChatGPT connection
+```
+
+The account already had two active `CODEX_AUTH_JSON` resources; only the agent
+grant was missing. Immediately after, a prompt pinned to `codex/gpt-6-astra`
+read `/workspace/attachment.png` and answered:
+
+> The image shows a dark Microsoft Teams notification from Ivan Bagaric with
+> the message "yo."
+
+which matches the screenshot. The whole chain — download proxy, modality-based
+model choice, explicit per-prompt pin, codex grant — is verified end to end.
+
+### The sandbox CLI is baked into the image
+
+`teams ask`, `teams post` and `teams send --card-file` live in
+`apps/sandbox/slack-cli`, which `packages/shared/src/sandbox/dockerfile-layer.ts`
+COPYs into the snapshot. The snapshot builder reads that tree from the API
+container, so a CLI change ships with the API image and reaches **only
+sandboxes created after that deploy**. An existing sandbox keeps its old CLI
+forever.
+
+Measured on 2026-09-21: a sandbox from 2026-09-18 printed a `teams` help with
+no `--card-file` and no `ask`; a session created after the deploy printed the
+new help. That is why "ask me again, but in the nice UI" produced a step called
+"Building an Adaptive Card" and then nothing.
+
+**Probe before testing any agent-facing CLI change:**
+
+```
+prompt: Run exactly: teams 2>&1 | head -40 ; then paste the raw output.
+read back: GET /v1/p/<ext>/4096/session/<ses_…>/message
+```
+
+To exercise a new CLI command in Teams, start a conversation that has no
+session yet (a new channel, or unbind the existing thread) so a fresh sandbox
+is built.
