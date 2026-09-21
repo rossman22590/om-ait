@@ -651,3 +651,41 @@ which is disabled on this deployment.
 
 The probe result is cached for 60 s per account+project+model, so a burst of
 chat messages probes once.
+
+### Round four: a codex model needs the AGENT's secret grant
+
+With the explicit pin in, the reroute did its job — and the turn still failed:
+
+```
+Run failed — The running agent cannot use ChatGPT connections.
+```
+
+`llm-gateway/resolution/resolve-candidates.ts` refuses a `codex/*` model unless
+`CODEX_AUTH_JSON` is on the RUNNING AGENT's grant. `isModelServableForAccount`
+probes with no agent grant, so `Array.isArray(principal.agentGrant?.env)` is
+false, the check is skipped and the probe answers yes. `PUT /sessions/:id/model`
+accepted `codex/gpt-6-astra` for the same reason.
+
+`channelTurnModel` now resolves the agent grant (lazily, only when a codex
+candidate is reached) and skips codex models the agent may not use. Rerouting
+onto a guaranteed failure is worse than not rerouting.
+
+**Where that leaves dev.** For project `40c2e222`, no model is both
+image-capable and runnable:
+
+| model | image input | why it fails |
+|---|---|---|
+| `gpt-5.6-luna` | yes | managed provider disabled on this deployment |
+| `glm-5.3-flash` | **no** | `attachment: true` but text-only modalities |
+| `deepseek-v4-flash` / `-pro-0813` / `v4.1-flash` | no | text-only |
+| `codex/*` (5 models) | yes | agent grant lacks `CODEX_AUTH_JSON` |
+
+So an image message now carries an explicit note telling the agent it cannot
+see the image, to say so plainly and to not go looking for OCR. That is the
+honest outcome until one of these is fixed:
+
+1. Add `CODEX_AUTH_JSON` to the agent's secret grant, and connect a ChatGPT
+   account for the project. The five codex models then work.
+2. Enable Kortix's managed provider on dev, which brings back `gpt-5.6-luna`.
+3. Connect a BYOK vision model (many `qiniu-ai/*`, `modelis/*` and
+   `greenpt/*` entries publish an image modality).
