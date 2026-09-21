@@ -22,6 +22,7 @@ import {
 } from '../core/session/working';
 import { claimOpenBundle, openBundleTurn } from '../core/session/open-bundle';
 import type { SessionTurnOutcome } from '../core/session/turn-end-cause';
+import { TURN_END_SETTLE_MS } from '../core/session/turn-end-settle';
 import { qk } from './query-keys';
 import { usePollOwner } from './use-poll-owner';
 
@@ -436,10 +437,16 @@ export function useSessionWorking(
 /**
  * Why this session's turns ended, read from the `/turn` cache entry
  * `useSessionWorking` keeps fresh. A cache reader: it never fetches, so mounting
- * it adds no request and no poll timer. Both fields are `undefined` until the
- * owner has read. Feed it to `turnEndCause`.
+ * it adds no request and no poll timer. Every field is `undefined` until the
+ * owner has read. Feed it to `turnEndNotice` or `turnEndCause`.
+ *
+ * One nudge: when the newest reading lists a failure with no cause that ended
+ * inside `TURN_END_SETTLE_MS`, the cause may be one frame behind. The hook then
+ * invalidates the entry once the window has passed, so the OWNER reads again —
+ * otherwise the turn stays silent until the next idle poll.
  */
 export function useSessionTurnOutcome(projectId: string, sessionId: string): SessionTurnOutcome {
+  const queryClient = useQueryClient();
   const query = useQuery<SessionTurnObservation>({
     queryKey: qk.project.sessionTurn(projectId, sessionId),
     queryFn: () => readSessionTurnObservation(projectId, sessionId, { bundle: false }),
@@ -447,8 +454,29 @@ export function useSessionTurnOutcome(projectId: string, sessionId: string): Ses
   });
   const lastEnded = query.data?.last_ended;
   const recentFailures = query.data?.recent_failures;
+  const atMs = query.data?.atMs;
+
+  const settleInMs = useMemo(() => {
+    if (typeof atMs !== 'number') return null;
+    let wait: number | null = null;
+    for (const failure of recentFailures ?? []) {
+      if (failure.error || !failure.ended_at) continue;
+      const remaining = TURN_END_SETTLE_MS - (atMs - Date.parse(failure.ended_at));
+      if (remaining > 0 && (wait === null || remaining > wait)) wait = remaining;
+    }
+    return wait;
+  }, [recentFailures, atMs]);
+
+  useEffect(() => {
+    if (settleInMs === null) return;
+    const timer = setTimeout(() => {
+      void queryClient.invalidateQueries({ queryKey: qk.project.sessionTurn(projectId, sessionId) });
+    }, settleInMs);
+    return () => clearTimeout(timer);
+  }, [settleInMs, queryClient, projectId, sessionId]);
+
   return useMemo(
-    () => ({ last_ended: lastEnded, recent_failures: recentFailures }),
-    [lastEnded, recentFailures],
+    () => ({ last_ended: lastEnded, recent_failures: recentFailures, atMs }),
+    [lastEnded, recentFailures, atMs],
   );
 }

@@ -906,23 +906,6 @@ active agent response. The web app still shows one working indicator whenever th
 session is `working`, so Stop is never the only sign of work.
 A timed-out or skipped cancel does not acknowledge an abort receipt.
 
-A turn that an abort ended can have a named cause. The transcript of such a turn
-only carries `MessageAbortedError`. The control plane records the cause the
-sandbox reported, for example `SandboxMemoryGuard` when box memory passed its
-guard threshold. `GET .../turn` returns it in `last_ended.error` and in
-`recent_failures`, a list keyed by `message_id` that is present whether or not a
-turn is running. `useSessionTurnOutcome(projectId, sessionId)` reads both from
-the cache `useSessionWorking()` keeps fresh and makes no request of its own.
-`turnEndCause(outcome, messageId)` returns the cause for one turn, or `null` for
-a plain Stop and for a turn with no recorded cause.
-
-`recent_failures` lists every failed turn. Its `error` is `null` when nobody
-named the cause. A turn the user stopped is never listed: the Stop reaches the
-control plane before the abort and marks the turn. `turnFailedWithoutCause(outcome,
-messageId)` is `true` for a listed turn with no named cause. Render a plain
-"stopped before it finished" row for it, because its transcript only carries an
-abort.
-
 A worker claim only checks admission and keeps the prompt waiting. Delivery starts
 after admission succeeds. A confirmed active turn clears the pending presentation
 even if the previous inbox snapshot still lists that prompt. Runtime activity
@@ -942,6 +925,25 @@ appears immediately, including while a previous POST is pending. The working hoo
 updates `pendingDelivery` when the same turn becomes active, without waiting for
 a different turn ID or timestamp.
 
+
+### Why a turn ended
+
+The transcript of an interrupted turn only carries `MessageAbortedError`. The
+control plane records the cause the sandbox reported, for example
+`SandboxMemoryGuard` when box memory passed its guard threshold, in
+`session_turns.end_error`. A stop somebody asked for is recorded there too, as a
+request (`UserStop` for a client abort, `QueueInterrupt` for a prompt sent into a
+busy session), and a request is never reported as a failure.
+
+`GET .../turn` returns the cause in `last_ended.error` and lists the turns that
+died in `recent_failures`, keyed by `message_id`, whether or not a turn is
+running: named causes, and failures with `error: null` when nobody named one.
+`useSessionTurnOutcome(projectId, sessionId)` reads both, plus the read time
+`atMs`, from the cache `useSessionWorking()` keeps fresh and makes no request of
+its own. `turnEndNotice(outcome, messageId, transcript)` turns that into one
+typed notice per turn — `sandbox-memory`, `cause`, `unexplained`, or `null` — so
+a host maps a kind to copy and never parses the sandbox's message.
+`turnEndCause(outcome, messageId)` returns the raw recorded cause.
 
 ### External directory freshness
 

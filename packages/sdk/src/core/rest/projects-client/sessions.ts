@@ -756,10 +756,8 @@ export interface SessionTurn {
   accepted_at: string | null;
 }
 
-/** How the most recent turn ended. Present only when no turn is running —
- *  it is what separates "this session has never run a turn" from "the last
- *  one just finished". */
-/** Why a `failed` turn ended, as the sandbox reported it to the control plane. */
+/** Why a `failed` turn ended: the name and message of the cause the sandbox
+ *  reported. A stop somebody asked for is never reported here. */
 export interface SessionTurnEndError {
   name: string | null;
   message: string | null;
@@ -774,6 +772,9 @@ export interface SessionTurnFailure {
   error: SessionTurnEndError | null;
 }
 
+/** How the most recent turn ended. Present only when no turn is running —
+ *  it is what separates "this session has never run a turn" from "the last
+ *  one just finished". */
 export interface SessionTurnEnded {
   turn_token: string;
   /** The user message the turn answered. Absent for a turn nobody named. */
