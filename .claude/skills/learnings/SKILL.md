@@ -21,6 +21,125 @@ linked, not inlined.
 
 ## Register
 
+### A repository replacement must not block an existing session (2026-09-21)
+
+**Rule:** Load an existing session and its preserved workspace through the ordinary lifecycle after a repository replacement. Keep its stable project Git proxy origin, resolve the current upstream repository and credentials server-side, and show only a compact warning that the workspace started from the previous repository. Never replace the transcript with a repository-generation gate. **Incident:** the first cutover guard made 16,000+ historical sessions inaccessible even though their proxy URL and session branch authority remained valid. **Enforcers:** `SESS-33`, browser journey 31, and Git proxy authorization tests.
+
+### A guard written on ONE route is not a ceiling; put it where every write path passes (2026-09-21)
+
+**When:** adding or reviewing an authorization rule for a role, especially
+`owner`. `PATCH /accounts/:id/members/:userId` refused a non-owner who assigns
+or changes `owner` (`member.super_admin.grant`). `POST/DELETE/PATCH
+/iam/assignments` reach the same `assignRole` / `revokeAssignment` /
+`updateAssignment` writes and asserted only `member.update`, which admins hold.
+Reproduced on a local API: an account admin `POST`ed `role_key: owner` for
+themselves and got `201`. An admin could also revoke an owner's row (after
+adding a second row, to pass the last-membership guard). A second hole was in
+the same function: an account-scope system role granted to a GROUP returned
+`201`. The engine (`resolvePrincipal`) gives every group member that tier, but
+`accountRoleFor` reads only user rows. A plain member in that group read
+`GET /iam/policies` (`200`, admin-only) while every list and badge still said
+"member". Found while building a UI, not by an alert. The code was live on
+`prod`, `staging`, and `main`.
+
+**Rules.** (1) A role ceiling lives in the one function that every grant,
+update, and revoke passes through (`assertWriterMayAssign`), never in a route
+handler. (2) Before adding a new write route, grep for route-level guards on
+the same resource and move them down. (3) Two read models of one fact (the
+engine versus `accountRoleFor`) must accept the same principals. Refuse writes
+that only one of them can see.
+
+*Enforcer:* `integration-iam-assignments-http.test.ts`, block "the account-role
+ceiling" (5 cases). Flows `IAM-35` and `IAM-36` fail on the unfixed code
+(`expected 403, got 201` and `got 409`) and pass on the fix.
+
+### 2026-09-21 — A turn that died must say why; a stop somebody asked for is the only silent ending, and it is recorded where it is asked for
+
+**Rule.** When a runtime reports why a turn ended, persist the reason on the
+turn's ledger row, return it from `GET .../turn`, and render it under the turn.
+Treat an abort as the EFFECT of a stop, never its cause: record every
+intentional stop at the one place the request passes through the control plane
+(the sandbox proxy for a client abort, the arm call for a queue interrupt), and
+let a named cause always replace a request or a bare abort. Never derive
+"the user pressed Stop" from a client-side tag or from a call that is merely
+adjacent to the abort (the inbox hold): the tag dies on the next
+`message.updated`, and the adjacent call can time out or be skipped.
+
+**Incident.** Session ad02e053, 2026-09-18: the daemon's memory guard aborted
+two turns at 97 % box memory and reported `SandboxMemoryGuard`. `apps/api`
+dropped the frame twice — no `turn_message_id` (`identity_mismatch`) and
+`error_retryable: true` (`non_terminal`) — and had no column for the reason.
+The user saw four failed sub-agent tasks and no error. Dev only. Two near
+misses on the fix: marking the stop on `POST /prompts/hold` would have shown a
+false "stopped before it finished" under every Quick Queue interrupt and every
+mobile/SDK/question-reject abort, and listing every `failed` row would have
+flagged every turn anyone had ever stopped before the deploy.
+
+**Enforcer.** `apps/api/src/__tests__/integration-sandbox-turn-lifecycle.test.ts`
+(real PostgreSQL) pins the ledger rule and was mutation-checked; `SESS-34` pins
+the `/turn` contract; `apps/kortix-sandbox-agent-server`
+`memory-guard-turn-end.test.ts` drives the real guard against a stubbed API and
+fails on a missing `turn_message_id` or a retryable frame. PR #7449.
+### Exercise expensive Git setup only in the test that owns its contract (2026-09-21)
+
+**Rule:** A shared CLI fixture must not repeat local Git pushes for cases that
+only test request fields. Model a managed repository outside the branch-specific
+case. **Incident:** `sessions.e2e.test.ts` repeated a local push in all 7 cases.
+The second push hung for 30 seconds under package-lane load and failed every PR.
+**Enforcer:** the fixture enables client-side branch creation only in the test
+that asserts its remote ref; the remaining cases use managed-repository metadata.
+
+### Workflow dependency changes must update every contract test (2026-09-21)
+
+**Rule:** Search the repository for every changed workflow dependency list and
+update all matching contract tests in the same commit. Run the full package lane,
+because workflow contracts can live under an application test suite instead of
+`tests/unit`. **Incident:** PR #7448 intentionally removed npm publish jobs from
+`github-release.needs` and added a stronger graph test, but left the older web
+test expecting those jobs. The core lane passed while the package lane failed on
+every PR. **Enforcer:** `apps/web/scripts/validate-production-supabase-env.test.mjs`
+pins the current release prerequisites. The package lane executes that test.
+
+### Runner-policy tests must name intentional GitHub-hosted jobs (2026-09-21)
+
+**Rule:** When a workflow job must use a GitHub-hosted runner, add a job-specific
+exception to the runner-policy test in the same change. Never allow a bare
+GitHub-hosted label for an entire workflow. **Incident:** PR #7448 moved four npm
+publish jobs to `ubuntu-latest` for npm provenance but left the Blacksmith
+kill-switch test unchanged. Every `main`-based PR then failed its core lane.
+**Enforcer:** `tests/unit/image-build-speed-workflow.test.ts` permits only the
+four named npm publish jobs and rejects every other bare Linux runner label.
+
+### A repository replacement retires Git authority, not session history (2026-09-21)
+
+**Rule:** When a repository generation changes, block Git and automatic session
+starts. Give the session owner an explicit action to resume only an existing
+preserved workspace. Never provision the current repository into that session,
+and never route the refusal through provider-failure recovery. **Incident:** a
+repository cutover rendered historical sessions as retryable sandbox failures.
+**Enforcers:** `SESS-33`, browser journey 31, and the SDK start-query test.
+
+### Verify scoped NAS identity with a fresh sandbox boot (2026-09-18)
+
+**Rule:** When copying NAS secrets across projects, select a project-specific
+SSH user and key before validating mounts. Check the remote account's allowed
+shares and read `/tmp/nas-mount.status` after a fresh sandbox boot. A present
+secret and a successful SSH login do not prove every selected share mounted.
+**Near-miss:** one of two requested mounts failed because the sandbox used the
+source project's default NAS account. **Enforcer:** none; add a boot check for
+every selected share to the project cutover procedure.
+
+### Preserve the session-bearing project during repository consolidation (2026-09-18)
+
+**Rule:** Before archiving a project during a repository cutover, count its
+sessions and dependent resources. Keep the project ID that owns the historical
+sessions as the canonical project. Copy Git refs before moving session rows,
+then verify session, connector, transcript, and sandbox reads through the
+canonical API. **Near-miss:** a project with over 16,000 historical sessions was
+archived while a new project with four sessions remained active; restoration
+required a guarded production transfer. **Enforcer:** none; a cutover preflight
+that reports project and session counts remains to be built.
+
 ### 2026-09-21 — A capability flag is not a capability: route on what the RUNTIME honours, and never pin a turn to a model you have not proven it can run
 
 **Rule.** When code picks a model on the user's behalf, decide from the field
@@ -73,7 +192,6 @@ published asset from a clean HOME, never the dev binary beside its dev cache.
 **Enforcement.** `apps/cli/src/tui-bin.test.ts` "cliVersion inside a compiled
 binary" builds through the define and asserts both `cliVersion({})` and
 `cliVersion()` answer the baked value (verified red on the old line).
-
 
 ### A UI assertion on a server-side DELETE must wait for the id to exist, and an element budget must fit the round trips behind it (2026-09-18)
 

@@ -216,30 +216,10 @@ describe('release wiring', () => {
     );
 
     assert.match(workflow, /frontend-auth-proof:\n/);
-    // The npm publishes are deliberately NOT preconditions any more (#7448):
-    // v0.13.25 deployed correctly and left no Release, because an expired
-    // NPM_TOKEN failed publish-llm-catalog, which skipped publish-sdk, which
-    // skipped github-release — and with it the tag, the CLI and desktop
-    // binaries, the /changelog entry and both VERSION syncs. The release's
-    // assets come from build-cli, not from the registry. What must still gate
-    // it are the genuine preconditions, so those are asserted by name rather
-    // than by pinning the whole list in order.
-    const releaseNeeds = workflow.match(/\n  github-release:[\s\S]*?\n    needs: \[([^\]]+)\]/);
-    assert.ok(releaseNeeds, 'github-release job declares needs');
-    const needs = releaseNeeds[1].split(',').map((n) => n.trim());
-    for (const required of [
-      'version',
-      'retag-images',
-      'build-cli',
-      'deploy-ecs',
-      'verify-live-version',
-      'frontend-auth-proof',
-    ]) {
-      assert.ok(needs.includes(required), `github-release still needs ${required}`);
-    }
-    for (const removed of ['publish-sdk', 'publish-agent-tunnel', 'publish-llm-catalog']) {
-      assert.ok(!needs.includes(removed), `github-release is not gated on ${removed}`);
-    }
+    assert.match(
+      workflow,
+      /needs: \[version, retag-images, build-cli, deploy-ecs, verify-live-version, frontend-auth-proof\]/,
+    );
     assert.match(
       workflow,
       /maintenance-banner-off:[\s\S]*?needs: \[verify-live-version, frontend-auth-proof\]/,
