@@ -237,6 +237,24 @@ see. If it genuinely does not, say so in `teams send` rather than ending the
 turn silently.
 </files-and-artifacts>
 
+<posting-somewhere-else>
+### Proactive posting — `teams post`
+
+`teams send` answers the message you are handling. To post somewhere **else**
+— a nightly summary into a team channel, an alert, a hand-off note — use
+`teams post`. It does not touch the current turn.
+
+```sh
+teams conversations                                    # what you may post into
+teams post --conversation "19:...@thread.tacv2" "Nightly build is green."
+teams post --conversation "19:..." --card-file /tmp/report.json
+```
+
+You can only post into a chat or channel the bot is **already in for this
+project**. Anything else returns 403 — list the targets first rather than
+guessing an id.
+</posting-somewhere-else>
+
 <other-surfaces>
 Reach for these only when the task explicitly asks. They run through the connector gateway against Microsoft Graph (read-only).
 
