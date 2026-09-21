@@ -32,8 +32,14 @@ mock.module('../shared/db', () => ({
 let turn: Record<string, unknown> | null = null;
 const finalized: Array<Record<string, unknown>> = [];
 const deleted: string[] = [];
+let finalizeClaim = true;
+const claims: string[] = [];
 mock.module('../channels/teams/turn', () => ({
   loadTurn: async () => turn,
+  claimFinalize: async (id: string) => {
+    claims.push(id);
+    return finalizeClaim;
+  },
   finalizeTurn: async (_h: unknown, opts: Record<string, unknown>) => {
     finalized.push(opts);
   },
@@ -67,6 +73,8 @@ beforeEach(() => {
   participantThrows = false;
   turn = liveTurn('29:owner');
   abortResult = true;
+  finalizeClaim = true;
+  claims.length = 0;
   finalized.length = 0;
   deleted.length = 0;
   aborted.length = 0;
@@ -193,6 +201,47 @@ describe('stopTeamsTurn', () => {
 
     expect((await stopTeamsTurn({ sessionId: SESSION_ID, teamsUserId: '29:owner' })).stopped).toBe(true);
     expect(finalized).toHaveLength(1);
+  });
+
+  test('the finalize is claimed BEFORE the runtime is touched', async () => {
+    // The abort makes OpenCode end the turn, which relays back as
+    // `relayTurnEnd(status: 'error')` and claims the same row. Claiming first
+    // is what stops a deliberate Stop being repainted "Run failed" by the
+    // failure it caused.
+    const order: string[] = [];
+    claims.push = ((id: string) => {
+      order.push('claim');
+      return Array.prototype.push.call(claims, id);
+    }) as never;
+    aborted.push = ((id: string) => {
+      order.push('abort');
+      return Array.prototype.push.call(aborted, id);
+    }) as never;
+    const { stopTeamsTurn } = await load();
+
+    await stopTeamsTurn({ sessionId: SESSION_ID, teamsUserId: '29:owner' });
+
+    expect(order).toEqual(['claim', 'abort']);
+  });
+
+  test('a turn that settled between the load and the claim is not painted over', async () => {
+    finalizeClaim = false;
+    const { stopTeamsTurn } = await load();
+
+    const outcome = await stopTeamsTurn({ sessionId: SESSION_ID, teamsUserId: '29:owner' });
+
+    expect(outcome).toEqual({ stopped: false, notice: 'That run has already finished.' });
+    expect(aborted).toEqual([]);
+    expect(finalized).toEqual([]);
+  });
+
+  test('a refused presser never claims the turn', async () => {
+    participantRow = { status: 'pending' };
+    const { stopTeamsTurn } = await load();
+
+    await stopTeamsTurn({ sessionId: SESSION_ID, teamsUserId: '29:bystander' });
+
+    expect(claims).toEqual([]);
   });
 
   test('the abort reaches the runtime BEFORE the card is settled', async () => {

@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { chatThreadParticipants } from '@kortix/db';
 import { db } from '../../shared/db';
-import { deleteTurn, finalizeTurn, loadTurn } from './turn';
+import { claimFinalize, deleteTurn, finalizeTurn, loadTurn } from './turn';
 import type { TeamsLiveTurn } from './types';
 
 const PLATFORM = 'teams';
@@ -80,6 +80,16 @@ export async function stopTeamsTurn(input: {
       stopped: false,
       notice: 'Only the person who sent this message, or someone already working in this session, can stop it.',
     };
+  }
+
+  // Claim the finalize BEFORE touching the runtime. The abort makes OpenCode
+  // end the turn, which relays back as `relayTurnEnd(status: 'error')` — and
+  // that path claims the same row and repaints the card "Run failed". Winning
+  // the claim first makes the relay a no-op, so a deliberate stop cannot be
+  // overwritten by the failure it caused. Losing it means the turn settled
+  // between `loadTurn` and here; say so rather than paint over the result.
+  if (!(await claimFinalize(input.sessionId))) {
+    return { stopped: false, notice: 'That run has already finished.' };
   }
 
   let stoppedRuntime = false;
