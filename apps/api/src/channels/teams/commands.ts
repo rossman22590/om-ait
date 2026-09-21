@@ -1,4 +1,5 @@
 import { config } from '../../config';
+import { formatRelativeTime, sessionWebUrl } from '../slack/util';
 import { lookupEmailsByUserIds } from '../../projects/lib/access';
 import { listPickerModels, labelForModelRef } from '../../llm-gateway/models/picker';
 import { isModelServableForAccount } from '../../llm-gateway/resolution/default-model';
@@ -13,7 +14,7 @@ import {
   setChannelModel,
 } from '../slack/selection';
 import { buildAgentsPicker } from './agent-picker';
-import { conversationSessionId, stopTeamsTurn } from './stop';
+import { stopTeamsTurn } from './stop';
 import { conversationPolicyLabel, normalizeConversationPolicy } from './participants';
 import { sendCard } from '../teams-api';
 import {
@@ -25,6 +26,8 @@ import {
   type SelectOption,
 } from './cards';
 import {
+  conversationSession,
+  type TeamsConversationSession,
   ensureTeamsConversationBinding,
   listTenantProjects,
   resolveConversationProject,
@@ -95,13 +98,13 @@ export async function handleTeamsCommand(input: {
       case 'cancel': {
         // The live card's Stop button is the primary lever; this is the one
         // that still works after the card has scrolled out of reach.
-        const sessionId = await conversationSessionId(input.tenantId, conversationId);
-        if (!sessionId) {
+        const session = await conversationSession(input.tenantId, conversationId);
+        if (!session) {
           await post(buildNoticeCard('Nothing is running in this conversation.'));
           return true;
         }
         const outcome = await stopTeamsTurn({
-          sessionId,
+          sessionId: session.sessionId,
           teamsUserId: userId ?? '',
           byName: input.activity.from?.name,
         });
@@ -194,9 +197,10 @@ async function buildStatusCard(
   conversationId: string,
   projectId: string,
 ) {
-  const [selection, projects] = await Promise.all([
+  const [selection, projects, session] = await Promise.all([
     currentChannelSelection(ctx),
     listTenantProjects(tenantId).catch(() => []),
+    conversationSession(tenantId, conversationId).catch(() => null),
   ]);
   const projectName = projects.find((p) => p.projectId === projectId)?.name ?? projectId;
   return buildPanelCard({
@@ -206,9 +210,33 @@ async function buildStatusCard(
       { label: 'Project', value: projectName },
       { label: 'Agent', value: selection?.agentName || 'default' },
       { label: 'Model', value: selection?.opencodeModel ? labelForModelRef(selection.opencodeModel) : 'project default' },
+      // The run itself. `/status` was the one place a user looks to answer
+      // "what is this conversation doing", and it answered everything except
+      // that — so a run that had quietly stopped looked identical to one still
+      // working.
+      { label: 'Session', value: describeConversationSession(session) },
     ],
-    url: `${dashboardBase()}/projects/${projectId}`,
+    // Deep-link to the run when there is one: the project page is a detour
+    // from the thing the card is about.
+    url: session
+      ? sessionWebUrl(config.FRONTEND_URL, projectId, session.sessionId)
+      : `${dashboardBase()}/projects/${projectId}`,
   });
+}
+
+const SESSION_STATUS_GLYPH: Record<string, string> = {
+  running: '⏳',
+  idle: '✓',
+  stopped: '•',
+  failed: '✗',
+};
+
+function describeConversationSession(session: TeamsConversationSession | null): string {
+  if (!session) return 'none yet — @-mention me with a task';
+  const status = session.status ?? 'unknown';
+  const glyph = SESSION_STATUS_GLYPH[status] ?? '•';
+  const when = session.createdAt ? ` · started ${formatRelativeTime(session.createdAt)}` : '';
+  return `${glyph} ${status}${when}`;
 }
 
 async function buildWhoamiCard(

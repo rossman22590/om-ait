@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { chatThreadParticipants, chatThreads } from '@kortix/db';
+import { chatThreadParticipants } from '@kortix/db';
 import { db } from '../../shared/db';
 import { deleteTurn, finalizeTurn, loadTurn } from './turn';
 import type { TeamsLiveTurn } from './types';
@@ -103,29 +103,4 @@ export async function stopTeamsTurn(input: {
   });
   await deleteTurn(input.sessionId);
   return { stopped: true, stoppedRuntime };
-}
-
-/**
- * The session a `/stop` types against: the one bound to this conversation.
- *
- * The button carries its own session id; a typed command has nothing but the
- * conversation it was typed in, and a Teams conversation holds exactly one
- * Kortix session at a time (`chat_threads` is keyed on the thread).
- */
-export async function conversationSessionId(
-  tenantId: string,
-  conversationId: string,
-): Promise<string | null> {
-  const [row] = await db
-    .select({ sessionId: chatThreads.sessionId })
-    .from(chatThreads)
-    .where(
-      and(
-        eq(chatThreads.platform, PLATFORM),
-        eq(chatThreads.workspaceId, tenantId),
-        eq(chatThreads.threadId, conversationId),
-      ),
-    )
-    .limit(1);
-  return row?.sessionId ?? null;
 }
