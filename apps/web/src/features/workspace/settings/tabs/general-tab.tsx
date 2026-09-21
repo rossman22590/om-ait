@@ -139,9 +139,11 @@ import {
   renameOnSettled,
 } from '@/hooks/projects/project-rename-cache';
 import { useDebounce } from '@/hooks/use-debounce';
+import { PROJECT_LANDING_PATH } from '@/lib/onboarding/landing-destination';
 import { forgetLastProjectId } from '@/lib/onboarding/last-project-cookie';
 import { PROJECT_ACTIONS } from '@/lib/project-actions';
 import { useProjectCans } from '@/lib/use-project-can';
+import { useSettingsPanelStore } from '@/stores/settings-panel-store';
 import {
   archiveProject,
   getProject,
@@ -151,6 +153,7 @@ import {
 } from '@kortix/sdk';
 import { contract, invalidateProjectIdentity, qk } from '@kortix/sdk/react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { useTranslations } from '@/i18n/use-translations';
 import { SettingsTabHeader } from '../settings-tab-header';
 
@@ -394,9 +397,14 @@ export async function runProjectArchive(
    *  only after the archive lands — a failed archive leaves a project that
    *  still renders, so its cookie must survive. */
   onForget?: () => void,
+  /** Leave the deleted project for the id-free landing door. Runs LAST, after
+   *  the cookie is forgotten, so the door opens the next project — or, after
+   *  the account's last one, the create form. */
+  onLeave?: (path: string) => void,
 ): Promise<void> {
   await client.archiveProject(projectId);
   onForget?.();
+  onLeave?.(PROJECT_LANDING_PATH);
 }
 
 /** Workspace name + icon. Moved from `settings-view.tsx`'s
@@ -537,6 +545,7 @@ export function GeneralTab({ projectId }: { projectId: string }) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
   const t = useTranslations('settings.workspace');
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { user } = useAuth();
   const [archiveOpen, setArchiveOpen] = useState(false);
 
@@ -563,6 +572,13 @@ export function GeneralTab({ projectId }: { projectId: string }) {
         // The archived project must stop being where `/` and the settings
         // exit land (JAY-729) — otherwise they redirect into a 404 gate.
         () => forgetLastProjectId(user?.id, projectId),
+        // The overlay's open state is global, so close it first or it would
+        // reopen over the next project. `replace`: Back must not return to
+        // the deleted project.
+        (path) => {
+          useSettingsPanelStore.getState().close();
+          router.replace(path);
+        },
       ),
     onSuccess: () => {
       successToast(tI18nComplete('textdd9e881230eb'));

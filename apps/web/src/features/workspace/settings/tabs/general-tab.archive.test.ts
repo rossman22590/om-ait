@@ -51,6 +51,42 @@ describe('runProjectArchive', () => {
     expect(events).toEqual(['archived', 'forgotten']);
   });
 
+  /**
+   * Deleting from the settings panel left the user on `/projects/<deleted-id>`
+   * with no redirect (#7447). The exit is the id-free door `/projects/start`:
+   * it opens the next project (the deleted id is already forgotten) or, after
+   * the account's last one, the create form.
+   */
+  test('leaves for /projects/start after the archive lands and the cookie is forgotten', async () => {
+    const events: string[] = [];
+    await runProjectArchive(
+      'p1',
+      client({
+        archiveProject: async () => {
+          events.push('archived');
+        },
+      }),
+      () => events.push('forgotten'),
+      (path: string) => events.push(`left:${path}`),
+    );
+    expect(events).toEqual(['archived', 'forgotten', 'left:/projects/start']);
+  });
+
+  test('does NOT leave the project when the archive call fails', async () => {
+    let leaveCalls = 0;
+    const failing = client({
+      archiveProject: async () => {
+        throw new Error('archive failed');
+      },
+    });
+    await expect(
+      runProjectArchive('p1', failing, undefined, () => {
+        leaveCalls += 1;
+      }),
+    ).rejects.toThrow('archive failed');
+    expect(leaveCalls).toBe(0);
+  });
+
   test('does NOT forget the landing target when the archive call fails', async () => {
     let forgetCalls = 0;
     const failing = client({
@@ -80,5 +116,14 @@ describe('GeneralTab wires the archive mutation to runProjectArchive', () => {
     expect(code).toContain('runProjectArchive(');
     expect(code).toContain('{ archiveProject }');
     expect(code).toContain('forgetLastProjectId(user?.id, projectId)');
+  });
+
+  test('the leave callback closes the settings overlay and replaces the route', async () => {
+    const code = (await source).replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    // The overlay's open state is global: left open, it reappears over the
+    // next project. `replace`, not `push`: Back must not reopen the deleted one.
+    expect(code).toContain('useSettingsPanelStore.getState().close();');
+    expect(code).toContain('router.replace(path);');
+    expect(code).not.toContain('router.push(path)');
   });
 });
