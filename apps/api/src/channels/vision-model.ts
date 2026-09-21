@@ -117,25 +117,29 @@ export async function channelTurnModel(input: {
 }): Promise<string | null> {
   const { projectId, accountId, userId, currentModel, hasImage } = input;
   if (!userId) return null;
-  if (!(await projectLlmGatewayEnabledById(projectId).catch(() => false))) return null;
 
+  // EVERY inbound channel message lands here, so the ordinary case — a plain
+  // text message on a healthy pin — must cost no I/O at all. The catalog is an
+  // in-memory snapshot; both questions below are answered from it, and nothing
+  // else runs unless one of them says something is wrong.
   const catalog = gatewayModelCatalog(projectId);
   const effective = currentModel || platformDefaultModelId();
   const needsVision = hasImage && !modelReadsImages(projectId, effective);
-
   // A pin the catalog no longer carries is the cheap signal for "retired".
-  // Confirm it authoritatively before replacing anything: a BYOK ref can be
-  // absent from this view for reasons that are not a retirement.
-  let pinUnservable = false;
+  const pinMissing = !!currentModel && !catalog[wireModelId(currentModel)];
+  if (!needsVision && !pinMissing) return null;
+
+  if (!(await projectLlmGatewayEnabledById(projectId).catch(() => false))) return null;
+
   const freeModelsOnly = !(await accountMayUseManagedModels(accountId).catch(() => false));
   const probe = (model: string) =>
     isModelServableForAccount({ userId, accountId, projectId, freeModelsOnly, model }).catch(
       () => false,
     );
-  if (currentModel && !catalog[wireModelId(currentModel)]) {
-    pinUnservable = !(await probe(wireModelId(currentModel)));
-  }
 
+  // Confirm the retirement authoritatively before replacing anything: a BYOK
+  // ref can be absent from this view for reasons that are not a retirement.
+  const pinUnservable = pinMissing && currentModel ? !(await probe(wireModelId(currentModel))) : false;
   if (!needsVision && !pinUnservable) return null;
 
   const candidates = replacementCandidates(projectId, effective, needsVision);
