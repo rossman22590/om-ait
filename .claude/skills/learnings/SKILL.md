@@ -6945,7 +6945,6 @@ second labelled account staying on the connection-scoped route, a 403 that must
 not fall back). `packages/sdk/src/core/rest/projects-client/connectors.test.ts`
 pins that `connectorFinalize` sends `owner`/`connection_id` and still sends `{}`
 for the published two-argument callers.
-
 ### 2026-09-18 — A deployed-SHA assertion covers every surface the gate drives, or it certifies the ones it skipped
 
 **When:** adding a surface to a deployed environment, or writing any "is the
@@ -7145,7 +7144,6 @@ no balance), flow `COST-3` (a real sandbox on a legacy-default free account
 opens a compute window), `credit-plans.test.ts` (`accountRowMetersCompute`
 truth table), and `r8-session-prompts.test.ts`, whose `checkBillingActive` mock
 throws. No enforcer yet for rule (1) in general — it is a review habit.
-
 ### A release's RECORD is never gated on an external registry; "shipped but unrecorded" is its own failure mode (2026-09-21)
 
 **When:** wiring `needs:` on any job that writes a release's record — the tag,
@@ -7216,6 +7214,7 @@ change — only a per-package Trusted Publisher entry on npmjs.com for
 `@kortix/llm-catalog`, `@kortix/sdk` and `@kortix/agent-tunnel`. That removes
 the stored `NPM_TOKEN` and this expiry failure mode entirely.
 
+
 ### 2026-09-21 — A job that hits `timeout-minutes` concludes `cancelled`, not `failure`, so `if: failure()` misses a hang
 
 **When:** writing any job that must react to another job going red — a
@@ -7254,3 +7253,28 @@ pre-existing flakes, both false alarms against an innocent commit.
 condition, rejects `failure()` on its `if:` line, and pins
 `timeout-minutes: 20` on the lanes; each was proven to fail on a seeded
 revert. PRs #7415, #7443.
+
+### 2026-09-21 — Two credentials configured for one backend: the silent winner
+
+**Incident.** From 2026-09-16 18:12Z to 2026-09-21 10:49Z, every
+`POST /v1/projects/provision` on production returned `502`: 5 days, every
+Kortix-managed project creation. Production set `MANAGED_GIT_GITHUB_TOKEN` and
+`MANAGED_GIT_GITHUB_INSTALL_ID` together. The resolver picks the token whenever
+one is set, and the token had no `Administration: write`. The App installation
+that could create repositories was never consulted. Nothing logged that choice,
+and the failure log stored GitHub's reason under `message`, the log line's own
+text key, so Better Stack never saw the reason. The fix was config only: empty
+the token in `kortix-prod-env` and restart the API tasks.
+
+**Rule.** When two configured credentials can serve one backend, the one that
+wins must say so at startup, and the one that loses must be named. A structured
+log field must never reuse a key the logger owns (`message`, `level`, `dt`).
+Before calling a credential repair done, exercise the write it exists for on the
+real environment, and read back the log signal that alerts on it.
+
+**Enforcement.** `resolveGitBackend` logs `... are both set: the token is used
+and the App installation <id> is ignored` once per process
+(`instance-git-config.test.ts`). `provision-core.ts` logs the reason as `error`.
+Procedure and verified installation ids: `docs/runbooks/managed-git-config.md`.
+Owed: an alert on the provision 5xx ratio (the stream route answers `200` with
+an `error` frame, so a status alert alone misses it).
