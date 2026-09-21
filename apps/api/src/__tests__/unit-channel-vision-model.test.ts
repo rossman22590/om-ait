@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'bun:test';
-import { promptModelOverride } from '../channels/vision-model';
+import { describe, expect, mock, test } from 'bun:test';
+import { promptModelOverride, visionCandidates } from '../channels/vision-model';
 
 /**
  * Why this exists: on dev 2026-09-19 a Teams message with a pasted screenshot
@@ -43,3 +43,54 @@ describe('promptModelOverride', () => {
     });
   });
 });
+
+/**
+ * Candidate ORDER is the whole safety story. Probed live on dev 2026-09-21,
+ * the configured target `gpt-5.6-luna` answers "requires Kortix's managed
+ * provider, which is disabled on this deployment" — so a selector that
+ * returns only the configured id either no-ops or fails the turn. The list
+ * has to fall through to something the deployment actually serves
+ * (`glm-5.3-flash` there, verified with a real prompt).
+ */
+describe('visionCandidates', () => {
+  test('the configured target comes first', () => {
+    expect(visionCandidates('p1', 'deepseek-v4-flash')[0]).toBe('gpt-5.6-luna');
+  });
+
+  test('the rest fall through cheapest-first, so an unservable target still has a successor', () => {
+    expect(visionCandidates('p1', 'deepseek-v4-flash')).toEqual([
+      'gpt-5.6-luna',
+      'glm-5.3-flash',
+      'kimi-k3',
+    ]);
+  });
+
+  test('a text-only model is never a candidate', () => {
+    expect(visionCandidates('p1', 'deepseek-v4-flash')).not.toContain('deepseek-v4-flash');
+  });
+
+  test('a model that already reads images is not offered as its own replacement', () => {
+    expect(visionCandidates('p1', 'glm-5.3-flash')).not.toContain('glm-5.3-flash');
+  });
+
+  test('a kortix/-prefixed current model is matched on its wire id', () => {
+    expect(visionCandidates('p1', 'kortix/gpt-5.6-luna')).not.toContain('gpt-5.6-luna');
+  });
+});
+
+mock.module('../config', () => ({
+  config: { LLM_GATEWAY_VISION_MODEL: 'gpt-5.6-luna' },
+}));
+
+mock.module('../llm-gateway/models/served-managed-models', () => ({
+  platformDefaultModelId: () => 'deepseek-v4-flash',
+}));
+
+mock.module('../llm-gateway/models/catalog-models', () => ({
+  gatewayModelCatalog: () => ({
+    'deepseek-v4-flash': { name: 'DeepSeek V4 Flash', attachment: false, cost: { input: 0.09 } },
+    'gpt-5.6-luna': { name: 'GPT-5.6 Luna', attachment: true, cost: { input: 0.2 } },
+    'glm-5.3-flash': { name: 'GLM 5.3 Flash', attachment: true, cost: { input: 0.075 } },
+    'kimi-k3': { name: 'Kimi K3', attachment: true, cost: { input: 0.5 } },
+  }),
+}));

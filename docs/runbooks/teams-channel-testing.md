@@ -539,6 +539,20 @@ Teams and Slack both use it. A follow-up gets a per-prompt
 with an image is created on the vision model. Off-gateway deployments are a
 no-op.
 
+**The configured target is not always servable.** Probed live on dev with a
+real prompt override:
+
+| model | result |
+|---|---|
+| `gpt-5.6-luna` (the `LLM_GATEWAY_VISION_MODEL` default) | `APIError`: *requires Kortix's managed provider, which is disabled on this deployment* |
+| `glm-5.3-flash` | answered `probe ok` |
+
+So the selector walks candidates — configured target, platform default, then
+the catalog's vision-capable models cheapest-first — and takes the first that
+passes `isModelServableForAccount`. Pinning a prompt to an unservable model
+turns a degraded answer into a failed turn, which is worse than not routing at
+all; when no candidate qualifies the turn runs unchanged and logs why.
+
 Also fixed here: Teams sends inline images as the wildcard type `image/*`, so
 the prompt used to name the file `image.*`.
 
