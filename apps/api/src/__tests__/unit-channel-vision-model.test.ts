@@ -1,80 +1,75 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { channelTurnModel, promptModelOverride, visionCandidates } from '../channels/vision-model';
+import { capabilityReadsImages, channelTurnModel, promptModelOverride } from '../channels/vision-model';
 
 /**
  * Why this exists: on dev 2026-09-19 a Teams message with a pasted screenshot
- * ran on `deepseek-v4-flash`, whose served catalog entry says
- * `capabilities.input.image: false`. The agent downloaded the PNG (28 740
- * bytes, verified), called `read`, saw nothing, went looking for ImageMagick
- * and tesseract, and ended the turn with no answer.
- *
- * `visionModelFor` itself reads the live gateway catalog, so its behaviour is
- * covered where the catalog is real (the channel session tests + the live dev
- * run). What is pure and worth pinning here is the wire shape of the override:
- * an override with the wrong `providerID` silently resolves to nothing and the
- * turn quietly runs on the text-only model again.
+ * ran on `deepseek-v4-flash`. The agent downloaded the PNG (28 740 bytes,
+ * verified), called `read`, saw nothing, went looking for ImageMagick and
+ * tesseract, and ended the turn with no answer. The retry on 2026-09-21 then
+ * failed a second way, which the first two blocks below pin down.
  */
-describe('promptModelOverride', () => {
-  test('a managed slug is addressed on the kortix provider', () => {
-    expect(promptModelOverride('gpt-5.6-luna')).toEqual({
-      providerID: 'kortix',
-      modelID: 'gpt-5.6-luna',
-    });
+
+/**
+ * The flag that matters. `glm-5.3-flash` ships `attachment: true` with
+ * text-only modalities — the managed catalog sets `vision: true` by hand while
+ * its models.dev record carries no image modality — and OpenCode honours the
+ * modalities. Selecting on `attachment` routed a Teams image turn to it and
+ * the agent answered "the model I'm running on right now can't process images".
+ */
+describe('capabilityReadsImages', () => {
+  test('modalities win over a hand-set attachment flag', () => {
+    expect(capabilityReadsImages({ attachment: true, modalities: { input: ['text'] } })).toBe(false);
   });
 
-  test('an already-prefixed ref does not get a second provider segment', () => {
-    expect(promptModelOverride('kortix/gpt-5.6-luna')).toEqual({
-      providerID: 'kortix',
-      modelID: 'gpt-5.6-luna',
-    });
+  test('an image modality is the yes', () => {
+    expect(capabilityReadsImages({ attachment: true, modalities: { input: ['text', 'image'] } })).toBe(true);
   });
 
-  test('a native provider ref keeps its own provider', () => {
-    expect(promptModelOverride('anthropic/claude-opus-4-8')).toEqual({
-      providerID: 'anthropic',
-      modelID: 'claude-opus-4-8',
-    });
+  test('attachment is the fallback only when nothing publishes modalities', () => {
+    expect(capabilityReadsImages({ attachment: true })).toBe(true);
+    expect(capabilityReadsImages({ attachment: false })).toBe(false);
+    expect(capabilityReadsImages({ attachment: true, modalities: {} })).toBe(true);
   });
 
-  test('a BYOK ref with a nested model id keeps the whole tail as the model', () => {
-    expect(promptModelOverride('openrouter/z-ai/glm-5.3')).toEqual({
-      providerID: 'openrouter',
-      modelID: 'z-ai/glm-5.3',
-    });
+  test('an unknown model never claims vision', () => {
+    expect(capabilityReadsImages(undefined)).toBe(false);
   });
 });
 
 /**
- * Candidate ORDER is the whole safety story. Probed live on dev 2026-09-21,
- * the configured target `gpt-5.6-luna` answers "requires Kortix's managed
- * provider, which is disabled on this deployment" — so a selector that
- * returns only the configured id either no-ops or fails the turn. The list
- * has to fall through to something the deployment actually serves
- * (`glm-5.3-flash` there, verified with a real prompt).
+ * Every served model is registered under the ONE synthetic `kortix` OpenCode
+ * provider, so a slash belongs to the model id. Splitting it addresses a
+ * provider the runtime has never heard of, the override is dropped without a
+ * word, and the turn quietly runs on the text-only model again — which would
+ * break exactly the `codex/*` models that can read images.
  */
-describe('visionCandidates', () => {
-  test('the configured target comes first', () => {
-    expect(visionCandidates('p1', 'deepseek-v4-flash')[0]).toBe('gpt-5.6-luna');
+describe('promptModelOverride', () => {
+  test('a managed slug is addressed on the kortix provider', () => {
+    expect(promptModelOverride('glm-5.3-flash')).toEqual({
+      providerID: 'kortix',
+      modelID: 'glm-5.3-flash',
+    });
   });
 
-  test('the rest fall through cheapest-first, so an unservable target still has a successor', () => {
-    expect(visionCandidates('p1', 'deepseek-v4-flash')).toEqual([
-      'gpt-5.6-luna',
-      'glm-5.3-flash',
-      'kimi-k3',
-    ]);
+  test('a codex id stays whole on the kortix provider', () => {
+    expect(promptModelOverride('codex/gpt-6-astra')).toEqual({
+      providerID: 'kortix',
+      modelID: 'codex/gpt-6-astra',
+    });
   });
 
-  test('a text-only model is never a candidate', () => {
-    expect(visionCandidates('p1', 'deepseek-v4-flash')).not.toContain('deepseek-v4-flash');
+  test('a BYOK ref keeps every slash in the model id', () => {
+    expect(promptModelOverride('openrouter/z-ai/glm-5.3')).toEqual({
+      providerID: 'kortix',
+      modelID: 'openrouter/z-ai/glm-5.3',
+    });
   });
 
-  test('a model that already reads images is not offered as its own replacement', () => {
-    expect(visionCandidates('p1', 'glm-5.3-flash')).not.toContain('glm-5.3-flash');
-  });
-
-  test('a kortix/-prefixed current model is matched on its wire id', () => {
-    expect(visionCandidates('p1', 'kortix/gpt-5.6-luna')).not.toContain('gpt-5.6-luna');
+  test('only a leading kortix/ is stripped', () => {
+    expect(promptModelOverride('kortix/codex/gpt-6-astra')).toEqual({
+      providerID: 'kortix',
+      modelID: 'codex/gpt-6-astra',
+    });
   });
 });
 
@@ -85,95 +80,58 @@ describe('visionCandidates', () => {
  * `Model "deepseek-v4-flash" is not available for this account` for the model
  * that Teams session had been pinned to since 2026-09-18, so every turn would
  * have failed upstream with nothing shown to the user.
+ *
+ * The configured vision target is mocked as `gpt-5.6-luna`, which dev refuses,
+ * so these also prove the fall-through: a target that is not servable must
+ * never be pinned onto the prompt.
  */
 describe('channelTurnModel', () => {
+  const base = { projectId: 'p1', accountId: 'a1', userId: 'u1' };
+
   test('leaves a healthy pin alone when the message has no image', async () => {
-    expect(
-      await channelTurnModel({
-        projectId: 'p1',
-        accountId: 'a1',
-        userId: 'u1',
-        currentModel: 'glm-5.3-flash',
-        hasImage: false,
-      }),
-    ).toBeNull();
+    expect(await channelTurnModel({ ...base, currentModel: 'codex/gpt-6-astra', hasImage: false })).toBeNull();
   });
 
   test('leaves a vision-capable pin alone even when the message has an image', async () => {
-    expect(
-      await channelTurnModel({
-        projectId: 'p1',
-        accountId: 'a1',
-        userId: 'u1',
-        currentModel: 'glm-5.3-flash',
-        hasImage: true,
-      }),
-    ).toBeNull();
+    expect(await channelTurnModel({ ...base, currentModel: 'codex/gpt-6-astra', hasImage: true })).toBeNull();
   });
 
-  test('replaces a text-only pin for an image message', async () => {
-    expect(
-      await channelTurnModel({
-        projectId: 'p1',
-        accountId: 'a1',
-        userId: 'u1',
-        currentModel: 'deepseek-v4-flash',
-        hasImage: true,
-      }),
-    ).toBe('glm-5.3-flash');
+  test('a text-only pin with an image moves to a model that really reads images', async () => {
+    expect(await channelTurnModel({ ...base, currentModel: 'deepseek-v4-flash', hasImage: true })).toBe(
+      'codex/gpt-6-astra',
+    );
+  });
+
+  test('the unservable configured target is skipped, not pinned', async () => {
+    expect(await channelTurnModel({ ...base, currentModel: 'deepseek-v4-flash', hasImage: true })).not.toBe(
+      'gpt-5.6-luna',
+    );
+  });
+
+  test('glm-5.3-flash is never chosen for an image despite attachment: true', async () => {
+    expect(await channelTurnModel({ ...base, currentModel: 'deepseek-v4-flash', hasImage: true })).not.toBe(
+      'glm-5.3-flash',
+    );
   });
 
   test('replaces a retired pin with the platform default when no image is involved', async () => {
-    expect(
-      await channelTurnModel({
-        projectId: 'p1',
-        accountId: 'a1',
-        userId: 'u1',
-        currentModel: 'retired-model-v1',
-        hasImage: false,
-      }),
-    ).toBe('deepseek-v4-flash');
+    expect(await channelTurnModel({ ...base, currentModel: 'retired-model-v1', hasImage: false })).toBe(
+      'deepseek-v4-flash',
+    );
   });
 
   test('a retired pin AND an image must land on a model that can read one', async () => {
-    expect(
-      await channelTurnModel({
-        projectId: 'p1',
-        accountId: 'a1',
-        userId: 'u1',
-        currentModel: 'retired-model-v1',
-        hasImage: true,
-      }),
-    ).toBe('glm-5.3-flash');
+    expect(await channelTurnModel({ ...base, currentModel: 'retired-model-v1', hasImage: true })).toBe(
+      'codex/gpt-6-astra',
+    );
   });
 
   test('an unauthenticated sender never moves the model', async () => {
     expect(
-      await channelTurnModel({
-        projectId: 'p1',
-        accountId: 'a1',
-        userId: null,
-        currentModel: 'retired-model-v1',
-        hasImage: true,
-      }),
+      await channelTurnModel({ ...base, userId: null, currentModel: 'retired-model-v1', hasImage: true }),
     ).toBeNull();
   });
 });
-
-mock.module('../llm-gateway/enablement', () => ({
-  projectLlmGatewayEnabledById: async () => true,
-}));
-
-mock.module('../billing/services/entitlements', () => ({
-  accountMayUseManagedModels: async () => true,
-}));
-
-// Mirrors dev: the configured vision target is refused, the catalog's cheapest
-// vision model is not.
-mock.module('../llm-gateway/resolution/default-model', () => ({
-  isModelServableForAccount: async ({ model }: { model: string }) =>
-    model !== 'gpt-5.6-luna' && model !== 'retired-model-v1',
-}));
 
 mock.module('../config', () => ({
   config: { LLM_GATEWAY_VISION_MODEL: 'gpt-5.6-luna' },
@@ -183,11 +141,51 @@ mock.module('../llm-gateway/models/served-managed-models', () => ({
   platformDefaultModelId: () => 'deepseek-v4-flash',
 }));
 
+mock.module('../llm-gateway/enablement', () => ({
+  projectLlmGatewayEnabledById: async () => true,
+}));
+
+mock.module('../billing/services/entitlements', () => ({
+  accountMayUseManagedModels: async () => true,
+}));
+
+// Mirrors dev: the configured vision target is refused, the rest are not.
+mock.module('../llm-gateway/resolution/default-model', () => ({
+  isModelServableForAccount: async ({ model }: { model: string }) =>
+    model !== 'gpt-5.6-luna' && model !== 'retired-model-v1',
+}));
+
+const CATALOG = {
+  'deepseek-v4-flash': {
+    name: 'DeepSeek V4 Flash',
+    attachment: false,
+    modalities: { input: ['text'] },
+    cost: { input: 0.09 },
+  },
+  // Exactly the dev shape: hand-set vision, text-only modalities.
+  'glm-5.3-flash': {
+    name: 'GLM 5.3 Flash',
+    attachment: true,
+    modalities: { input: ['text'] },
+    cost: { input: 0.075 },
+  },
+  'codex/gpt-6-astra': {
+    name: 'GPT-6 Astra',
+    attachment: true,
+    modalities: { input: ['text', 'image'] },
+    cost: { input: 1.25 },
+  },
+};
+
 mock.module('../llm-gateway/models/catalog-models', () => ({
-  gatewayModelCatalog: () => ({
-    'deepseek-v4-flash': { name: 'DeepSeek V4 Flash', attachment: false, cost: { input: 0.09 } },
-    'gpt-5.6-luna': { name: 'GPT-5.6 Luna', attachment: true, cost: { input: 0.2 } },
-    'glm-5.3-flash': { name: 'GLM 5.3 Flash', attachment: true, cost: { input: 0.075 } },
-    'kimi-k3': { name: 'Kimi K3', attachment: true, cost: { input: 0.5 } },
+  gatewayModelCatalog: () => CATALOG,
+}));
+
+mock.module('../llm-gateway/models/servable-catalog', () => ({
+  servableProjectCatalog: async () => ({
+    models: Object.fromEntries(Object.entries(CATALOG).map(([k, v]) => [k, { ...v, enabled: true }])),
+    modelOverrides: {},
+    defaultModel: 'deepseek-v4-flash',
+    usingDefaults: true,
   }),
 }));
