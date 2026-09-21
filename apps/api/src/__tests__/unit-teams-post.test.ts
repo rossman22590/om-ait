@@ -54,7 +54,9 @@ describe('postToTeamsConversation', () => {
       text: 'hello',
     });
     expect(res.ok).toBe(false);
-    expect((res as { status: number }).status).toBe(403);
+    // 404 — not addressable by this project. 403 is reserved for the caller
+    // gate, so the two failures stay distinguishable.
+    expect((res as { status: number }).status).toBe(404);
     expect(sent).toHaveLength(0);
   });
 
@@ -62,7 +64,7 @@ describe('postToTeamsConversation', () => {
     const { postToTeamsConversation } = await import('../channels/teams/post');
     const res = await postToTeamsConversation('p1', { conversationId: '19:invented@thread.tacv2', text: 'x' });
     expect(res.ok).toBe(false);
-    expect((res as { status: number }).status).toBe(403);
+    expect((res as { status: number }).status).toBe(404);
     expect(sent).toHaveLength(0);
   });
 

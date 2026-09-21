@@ -67,11 +67,16 @@ export async function postToTeamsConversation(
     )
     .limit(1);
   if (!binding) {
+    // 404, not 403. A 403 on this route means the CALLER may not post at all
+    // (the `project.connector.write` gate above, matching the Slack upload
+    // twin and flow CHN-20). "This project has no such conversation" is an
+    // addressing answer, and keeping the two apart is what makes a test of
+    // either one meaningful.
     return {
       ok: false,
       error:
-        'That conversation is not connected to this project. Post only to a chat or channel the bot is already in — `teams conversations` lists them.',
-      status: 403,
+        'This project has no such Teams conversation. Post only to a chat or channel the bot is already in — `teams conversations` lists them.',
+      status: 404,
     };
   }
 
