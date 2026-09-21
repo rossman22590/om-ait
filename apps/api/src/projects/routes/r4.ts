@@ -166,6 +166,7 @@ import {
   findProjectTriggerBySlug,
 } from '../triggers';
 import { turnStreamKindField, turnStreamKindNeedsConnectorWrite } from './r4-turn-stream-kind';
+import { buildFormCard, type TeamsFormSpec } from '../../channels/teams/cards';
 import {
   abandonSandboxTurn,
   acceptSandboxTurn,
@@ -2466,6 +2467,7 @@ projectsApp.openapi(
       sources?: Array<{ url?: string; text?: string }>;
       blocks?: unknown[];
       card?: Record<string, unknown>;
+      form?: Record<string, unknown>;
       status?: string;
       opencode_session_id?: string;
       turn_message_id?: string;
@@ -2889,10 +2891,25 @@ projectsApp.openapi(
       : undefined;
     const blocks = Array.isArray(body.blocks) && body.blocks.length > 0 ? body.blocks : undefined;
     // A full Adaptive Card for the Teams answer (`teams send --card-file`).
-    const card =
-      body.card && typeof body.card === 'object' && !Array.isArray(body.card)
+    // `form` is the safe alternative: the agent describes the FIELDS and the
+    // server builds the card, so the submit verb and the branding cannot
+    // drift and a malformed spec fails here instead of rendering a dead
+    // button. See channels/teams/cards.ts buildFormCard.
+    const formSpec =
+      body.form && typeof body.form === 'object' && !Array.isArray(body.form)
+        ? (body.form as unknown as TeamsFormSpec)
+        : undefined;
+    const card = formSpec
+      ? (buildFormCard(formSpec) ?? undefined)
+      : body.card && typeof body.card === 'object' && !Array.isArray(body.card)
         ? (body.card as Record<string, unknown>)
         : undefined;
+    if (formSpec && !card) {
+      return c.json(
+        { ok: false, reason: 'invalid_form', error: 'the form needs at least one field with an id and a label' },
+        400,
+      );
+    }
 
     // `reason` is what makes `ok: false` actionable in the sandbox: `slack
     // step` and `slack send` print it, so an agent can tell "no Slack turn is

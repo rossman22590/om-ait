@@ -123,7 +123,13 @@ async function connectorCall(action: string, args: Record<string, unknown>): Pro
 async function relayTurnStream(
   kind: 'step' | 'answer',
   text: string,
-  extras: { detail?: string; output?: string; sources?: Array<{ url: string; text: string }>; card?: Record<string, unknown> } = {},
+  extras: {
+    detail?: string;
+    output?: string;
+    sources?: Array<{ url: string; text: string }>;
+    card?: Record<string, unknown>;
+    form?: Record<string, unknown>;
+  } = {},
 ): Promise<boolean> {
   const projectId = kortixProjectId();
   const sessionId = kortixSessionId();
@@ -137,6 +143,7 @@ async function relayTurnStream(
       ...(extras.output ? { output: extras.output } : {}),
       ...(extras.sources && extras.sources.length > 0 ? { sources: extras.sources } : {}),
       ...(extras.card ? { card: extras.card } : {}),
+      ...(extras.form ? { form: extras.form } : {}),
     });
     return r?.ok === true;
   } catch {
@@ -209,6 +216,25 @@ async function main(): Promise<void> {
       }
       throw new CliError('No active Teams turn to answer.');
     }
+    case 'ask': {
+      if (!flags['form-file']) throw new CliError('--form-file <path> required');
+      let form: Record<string, unknown>;
+      try {
+        form = JSON.parse(readFileSync(flags['form-file'], 'utf-8')) as Record<string, unknown>;
+      } catch {
+        throw new CliError(`Cannot read/parse --form-file: ${flags['form-file']}`);
+      }
+      if (!Array.isArray((form as { fields?: unknown }).fields)) {
+        throw new CliError('--form-file must be a JSON object with a "fields" array');
+      }
+      const text = readTextFlag(flags) ?? args[0] ?? 'A few details, please.';
+      const relayed = await relayTurnStream('answer', text, { form });
+      if (relayed) {
+        out({ ok: true, delivered: 'form' });
+        break;
+      }
+      throw new CliError('No active Teams turn to post a form into.');
+    }
     case 'download':
       if (!flags.url || !flags.out) throw new CliError('--url and --out required');
       out(await downloadFile(flags.url, flags.out));
@@ -246,6 +272,11 @@ Turn commands (use these when answering a Teams message):
   step  "<checkpoint>"   [--detail "<subtitle>"] [--output "<prev result>"] [--source URL|TITLE]
   send  "<answer>"       # deliver your reply — finalizes the live Adaptive Card
   send  --card-file <path>   # deliver a full Adaptive Card JSON as the reply
+  ask   --form-file <path>   # post a FORM — real text boxes, dropdowns, toggles, one Submit
+                             # {"title":"...","fields":[{"id":"env","label":"Environment",
+                             #   "type":"choice","choices":["prod","staging"],"required":true}]}
+                             # types: text | textarea | number | date | time | choice | multichoice | toggle
+                             # The answers come back as your NEXT turn — post it, then END your turn.
 
 Files:
   send     --file <path> [--text "<description>"]   # personal chat: consent card; channel: inline image or team-drive link
