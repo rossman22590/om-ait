@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { resolve } from 'node:path';
+import { readFileSync } from '@/i18n/test-source';
 
 import type { MyAccountInvite } from '@kortix/sdk';
 
@@ -20,7 +22,7 @@ function invite(overrides: Partial<MyAccountInvite> = {}): MyAccountInvite {
     inviter_email: 'marko@kortix.ai',
     created_at: '2026-09-21T00:00:00.000Z',
     expires_at: '2026-10-05T00:00:00.000Z',
-    projects: [],
+    projects: [{ project_id: 'p-1', name: 'Mirko Boss 900', role: 'member' }],
     ...overrides,
   };
 }
@@ -52,7 +54,7 @@ describe('joinDestination', () => {
   });
 
   test('a plain workspace invite has no project to open, so the door resolves one', () => {
-    expect(joinDestination(invite())).toBeNull();
+    expect(joinDestination(invite({ projects: [] }))).toBeNull();
   });
 });
 
@@ -65,46 +67,58 @@ function render(props: Partial<ProjectChooserViewProps>) {
       canCreate: true,
       joiningInviteId: null,
       onJoin: () => {},
+      onLogOut: () => {},
+      signingOut: false,
       ...props,
     }),
   );
 }
 
 describe('ProjectChooserView', () => {
-  test('the empty state offers exactly one create action and names the email invites go to', () => {
-    const html = render({});
-    expect(html).toContain('Create your first project');
-    expect(html).toContain('href="/new"');
-    expect(html).toContain('test21221x@yopmail.com');
-    expect(html).not.toContain('Join');
-  });
-
-  test('a project invite names the project, the workspace and the inviter, with a Join action', () => {
-    const html = render({
-      invites: [invite({ projects: [{ project_id: 'p-1', name: 'Mirko Boss 900', role: 'member' }] })],
-    });
+  // Same page shape as `/new`: one heading, the muted line, the quiet Log out.
+  test('invites: heading, the invite row with workspace and inviter, Join, and a quiet create link', () => {
+    const html = render({ invites: [invite()] });
+    expect(html).toContain("You&#x27;re invited");
     expect(html).toContain('Invitations');
     expect(html).toContain('Mirko Boss 900');
     expect(html).toContain('Mirkos Org');
-    expect(html).toContain('marko@kortix.ai');
+    expect(html).toContain('Invited by marko@kortix.ai');
     expect(html).toContain('Join');
-    // With invites to act on, creating is the secondary path, not the headline.
-    expect(html).not.toContain('Create your first project');
-    expect(html).toContain('href="/new"');
+    expect(html).toContain('Create a new project instead');
+    expect(html).toContain('Log out');
+  });
+
+  test('the empty state is the /new create form itself, with no Back link to this page', () => {
+    const source = readFileSync(resolve(import.meta.dir, 'project-chooser.tsx'), 'utf8');
+    expect(source).toContain('<NewWorkspacePage showBack={false} />');
+  });
+
+  test('while invites load, the page is blank: no spinner', () => {
+    const html = render({ invitesLoading: true });
+    expect(html).not.toContain('Join');
+    expect(html).not.toContain('<svg');
+    expect(html).toContain('Log out');
   });
 
   test('a member with no invites and no create permission gets no create control', () => {
     const html = render({ canCreate: false });
     expect(html).toContain('No workspace yet');
     expect(html).not.toContain('href="/new"');
+    expect(html).toContain('Log out');
   });
 
-  test('the row being joined disables every Join button', () => {
+  test('an invitee without create permission gets Join but no create link', () => {
+    const html = render({ invites: [invite()], canCreate: false });
+    expect(html).toContain('Join');
+    expect(html).not.toContain('href="/new"');
+  });
+
+  test('a join in flight disables every Join button', () => {
     const html = render({
       invites: [invite(), invite({ invite_id: 'inv-2', account_name: 'Second Org' })],
       joiningInviteId: 'inv-1',
     });
-    expect(html.match(/<button[^>]*disabled/g)?.length).toBe(2);
+    expect(html.match(/<button[^>]*disabled[^>]*>(?:(?!<\/button>).)*Join/g)?.length).toBe(2);
   });
 
   test('the chooser never links back to /projects, which redirects here', () => {

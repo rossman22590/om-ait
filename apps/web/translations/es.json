@@ -19454,19 +19454,15 @@
     "resetError": "No se pudo restablecer la lista de modelos."
   },
   "projectChooser": {
-    "invitesTitle": "Elige dónde trabajar",
-    "signedInAs": "Sesión iniciada como {email}",
     "invitations": "Invitaciones",
     "invitedBy": "Invitado por {email}",
     "join": "Unirse",
     "joinError": "No se pudo unir. Inténtalo de nuevo.",
     "unnamedWorkspace": "Espacio de trabajo",
-    "createProjectInstead": "Crear un proyecto nuevo",
-    "emptyTitle": "Crea tu primer proyecto",
-    "emptyBody": "Un proyecto guarda las sesiones, archivos y ajustes de tu agente. Puedes invitar a tu equipo después.",
-    "createProject": "Crear proyecto",
-    "waitingForInvite": "¿Esperas una invitación? Aparece aquí cuando alguien invita a {email}.",
     "noPermissionTitle": "Aún no hay espacio de trabajo",
-    "noPermissionBody": "Pide a un propietario o administrador que invite a {email}."
+    "noPermissionBody": "Pide a un propietario o administrador que invite a {email}.",
+    "invitesTitle": "Te han invitado",
+    "invitesDescription": "Únete a un proyecto de tu equipo o crea el tuyo.",
+    "createProjectInstead": "Crear un proyecto nuevo"
   }
 }

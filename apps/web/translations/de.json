@@ -19454,19 +19454,15 @@
     "resetError": "Die Modellliste konnte nicht zurückgesetzt werden."
   },
   "projectChooser": {
-    "invitesTitle": "Wähle, wo du arbeitest",
-    "signedInAs": "Angemeldet als {email}",
     "invitations": "Einladungen",
     "invitedBy": "Eingeladen von {email}",
     "join": "Beitreten",
     "joinError": "Beitritt fehlgeschlagen. Versuche es erneut.",
     "unnamedWorkspace": "Workspace",
-    "createProjectInstead": "Stattdessen ein neues Projekt erstellen",
-    "emptyTitle": "Erstelle dein erstes Projekt",
-    "emptyBody": "Ein Projekt enthält die Sitzungen, Dateien und Einstellungen deines Agenten. Dein Team kannst du danach einladen.",
-    "createProject": "Projekt erstellen",
-    "waitingForInvite": "Wartest du auf eine Einladung? Sie erscheint hier, sobald jemand {email} einlädt.",
     "noPermissionTitle": "Noch kein Workspace",
-    "noPermissionBody": "Bitte einen Owner oder Admin, {email} einzuladen."
+    "noPermissionBody": "Bitte einen Owner oder Admin, {email} einzuladen.",
+    "invitesTitle": "Du wurdest eingeladen",
+    "invitesDescription": "Tritt einem Projekt deines Teams bei oder starte dein eigenes.",
+    "createProjectInstead": "Stattdessen ein neues Projekt erstellen"
   }
 }

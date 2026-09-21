@@ -72,15 +72,18 @@ describe('/projects/start never creates a project on its own', () => {
 });
 
 describe('/projects/start stuck states offer a sign-out escape hatch', () => {
-  test('chooser AND error branches mount StartSignOutButton', () => {
+  test('the error branch mounts StartSignOutButton; the chooser carries its own Log out row', () => {
     const mounts = source.split('<StartSignOutButton />').length - 1;
-    expect(mounts).toBe(2);
+    expect(mounts).toBe(1);
+    const chooser = readFileSync(resolve(import.meta.dir, 'project-chooser.tsx'), 'utf8');
+    expect(chooser).toContain("tNew('actions.logOut')");
+    expect(chooser).toContain('void performSignOut();');
   });
 
   // `resolve()` returns early on an empty list, so neither `chooser` nor
   // `failed` was ever set: the loading frame stayed up forever with no control.
   // On desktop, with no browser Back, that was a hard lock.
-  test('an empty account list renders the chooser with sign-out, not an endless loading frame', () => {
+  test('an empty account list renders the chooser, not an endless loading frame', () => {
     expect(source).toContain('const noAccounts = accountsQuery.isSuccess && accountsQuery.data.length === 0;');
     expect(source).toContain('const shownChooser = chooser ?? (noAccounts ? { canCreate: false } : null);');
     expect(source).toContain('if (shownChooser) {');

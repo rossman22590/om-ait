@@ -165,7 +165,6 @@ export default function ProjectStartPage() {
             void accountsQuery.refetch().then(({ data }) => resolve(data));
           }}
         />
-        <StartSignOutButton />
       </div>
     );
   }
@@ -191,14 +190,11 @@ export default function ProjectStartPage() {
 }
 
 /**
- * Both non-redirect states on this route (chooser and error) used to be dead
- * ends: no app chrome renders here, so a user parked on "No workspace yet" had
- * no way to sign out and try another account. `performSignOut` clears every
- * piece of persisted client state — including the stale account selection that
- * used to cause the false terminal — and then leaves on a document load.
- *
- * Rendered AFTER the chooser (and `z-20`) because the chooser is a fixed,
- * full-window surface; the button must paint and hit-test above it.
+ * The error state used to be a dead end: no app chrome renders here, so a
+ * user parked on it had no way to sign out and try another account.
+ * `performSignOut` clears every piece of persisted client state and then
+ * leaves on a document load. The chooser carries its own Log out row, the
+ * last row of its panel, the same as the sidebar menu.
  */
 function StartSignOutButton() {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
@@ -209,7 +205,7 @@ function StartSignOutButton() {
   // spans the window, so it passes clicks through and only the button takes
   // them.
   return (
-    <div className="kx-desktop-band-row pointer-events-none absolute inset-x-0 top-4 z-20 flex justify-end px-4 sm:top-6 sm:px-6">
+    <div className="kx-desktop-band-row pointer-events-none absolute inset-x-0 top-4 flex justify-end px-4 sm:top-6 sm:px-6">
       <Button
         variant="outline"
         size="sm"

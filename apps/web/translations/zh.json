@@ -19454,19 +19454,15 @@
     "resetError": "无法重置模型列表。"
   },
   "projectChooser": {
-    "invitesTitle": "选择工作位置",
-    "signedInAs": "已登录为 {email}",
     "invitations": "邀请",
     "invitedBy": "{email} 邀请了你",
     "join": "加入",
     "joinError": "无法加入，请重试。",
     "unnamedWorkspace": "工作区",
-    "createProjectInstead": "改为创建新项目",
-    "emptyTitle": "创建你的第一个项目",
-    "emptyBody": "项目包含智能体的会话、文件和设置。之后可以邀请团队成员。",
-    "createProject": "创建项目",
-    "waitingForInvite": "在等邀请？有人邀请 {email} 后，邀请会显示在这里。",
     "noPermissionTitle": "还没有工作区",
-    "noPermissionBody": "请让所有者或管理员邀请 {email}。"
+    "noPermissionBody": "请让所有者或管理员邀请 {email}。",
+    "invitesTitle": "你收到了邀请",
+    "invitesDescription": "加入团队共享的项目，或创建你自己的项目。",
+    "createProjectInstead": "改为创建新项目"
   }
 }

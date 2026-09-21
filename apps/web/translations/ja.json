@@ -19454,19 +19454,15 @@
     "resetError": "モデル一覧をリセットできませんでした。"
   },
   "projectChooser": {
-    "invitesTitle": "作業する場所を選択",
-    "signedInAs": "{email} でサインイン中",
     "invitations": "招待",
     "invitedBy": "{email} からの招待",
     "join": "参加",
     "joinError": "参加できませんでした。もう一度お試しください。",
     "unnamedWorkspace": "ワークスペース",
-    "createProjectInstead": "代わりに新しいプロジェクトを作成",
-    "emptyTitle": "最初のプロジェクトを作成",
-    "emptyBody": "プロジェクトには、エージェントのセッション、ファイル、設定が入ります。チームは後から招待できます。",
-    "createProject": "プロジェクトを作成",
-    "waitingForInvite": "招待を待っていますか？誰かが {email} を招待すると、ここに表示されます。",
     "noPermissionTitle": "ワークスペースがまだありません",
-    "noPermissionBody": "オーナーまたは管理者に {email} の招待を依頼してください。"
+    "noPermissionBody": "オーナーまたは管理者に {email} の招待を依頼してください。",
+    "invitesTitle": "招待されています",
+    "invitesDescription": "チームが共有したプロジェクトに参加するか、自分のプロジェクトを作成してください。",
+    "createProjectInstead": "代わりに新しいプロジェクトを作成"
   }
 }

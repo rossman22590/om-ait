@@ -1,20 +1,20 @@
 'use client';
 
-import { KortixLogo } from '@/components/sidebar/kortix-logo';
 import { Button } from '@/components/ui/button';
 import { EntityAvatar } from '@/components/ui/entity-avatar';
+import { Label } from '@/components/ui/label';
 import Loading from '@/components/ui/loading';
 import { errorToast } from '@/components/ui/toast';
-import { WallpaperBackground } from '@/components/ui/wallpaper-background';
 import { useAuth } from '@/features/providers/auth-provider';
 import { useMyInvites } from '@/hooks/account/use-my-invites';
 import { useTranslations } from '@/i18n/use-translations';
-import { cn } from '@/lib/utils';
+import { NewWorkspacePage } from '@/features/workspace/new/new-workspace-page';
+import { performSignOut } from '@/lib/auth/perform-sign-out';
 import { acceptAccountInvite, type MyAccountInvite } from '@kortix/sdk';
 import { qk } from '@kortix/sdk/react';
-import { PlusIcon } from '@phosphor-icons/react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
+import { Suspense, useState } from 'react';
 
 /**
  * `/projects/start` with nothing to open: the chooser.
@@ -58,9 +58,19 @@ export interface ProjectChooserViewProps {
   /** The invite whose Join is in flight; every Join is disabled meanwhile. */
   joiningInviteId: string | null;
   onJoin: (invite: MyAccountInvite) => void;
+  onLogOut: () => void;
+  signingOut: boolean;
 }
 
-/** Props-only half, so every state renders under `renderToStaticMarkup`. */
+/**
+ * Props-only half, so every state renders under `renderToStaticMarkup`.
+ *
+ * Laid out exactly like `/new` (`new-workspace-page.tsx`): the same centered
+ * `max-w-md` column, top-right ghost Log out, `text-2xl` title with a muted
+ * line under it, field-well rows (`Input`'s own `border bg-input rounded-md`)
+ * under a `Label`, and a full-width `lg` primary action. Both pages are the
+ * two halves of one first-run flow, so they must read as one surface.
+ */
 export function ProjectChooserView({
   email,
   invites,
@@ -68,97 +78,86 @@ export function ProjectChooserView({
   canCreate,
   joiningInviteId,
   onJoin,
+  onLogOut,
+  signingOut,
 }: ProjectChooserViewProps) {
   const t = useTranslations('projectChooser');
+  const tNew = useTranslations('newWorkspace');
   const mode = chooserMode({ inviteCount: invites.length, canCreate });
   const recipient = email ?? '';
 
+  // `empty` never reaches this view: `ProjectChooser` renders the `/new` form
+  // itself for it.
+  const title = mode === 'invites' ? t('invitesTitle') : t('noPermissionTitle');
+  const description =
+    mode === 'invites' ? t('invitesDescription') : t('noPermissionBody', { email: recipient });
+
   return (
-    <div className="fixed inset-0 overflow-y-auto">
-      <WallpaperBackground wallpaperId="brandmark" />
-      <div className="relative z-10 flex min-h-full flex-col items-center justify-center gap-5 px-4 py-10">
-        <KortixLogo size={24} />
-        {/* Floats over the wallpaper, so it takes an overlay's border + shadow. */}
-        <div className="bg-popover w-full max-w-md overflow-hidden rounded-md border shadow-lg">
-          {invitesLoading ? (
-            <div className="flex items-center justify-center px-4 py-10">
-              <Loading className="size-4 shrink-0" />
-            </div>
-          ) : mode === 'invites' ? (
-            <>
-              <header className="space-y-1 px-4 pt-5 pb-4">
-                <h1 className="text-foreground text-xl font-medium">{t('invitesTitle')}</h1>
-                {recipient ? (
-                  <p className="text-muted-foreground text-xs">{t('signedInAs', { email: recipient })}</p>
-                ) : null}
-              </header>
-              <p className="text-muted-foreground border-t px-4 pt-3 pb-1 text-xs">
-                {t('invitations')} · {invites.length}
-              </p>
-              <ul>
-                {invites.map((invite, i) => (
+    <main className="mx-auto flex min-h-svh w-full max-w-md flex-col justify-center gap-6 px-6 py-16">
+      <div className="kx-desktop-band-row absolute inset-x-0 top-3 z-10 flex items-center justify-end gap-3 px-4 sm:top-4 sm:px-6">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground shrink-0"
+          disabled={signingOut}
+          onClick={onLogOut}
+        >
+          {signingOut ? <Loading className="size-4 shrink-0" /> : null}
+          {signingOut ? tNew('actions.signingOut') : tNew('actions.logOut')}
+        </Button>
+      </div>
+
+      {/* Blank while the invite list loads — no spinner. It resolves in one
+          round trip, and a spinner here was a third loader on one navigation. */}
+      {invitesLoading ? null : (
+        <div className="flex flex-col gap-6">
+          <header className="flex flex-col gap-2 text-center">
+            <h1 className="text-foreground text-2xl font-semibold tracking-tight">{title}</h1>
+            <p className="text-muted-foreground text-sm text-balance">{description}</p>
+          </header>
+
+          {mode === 'invites' ? (
+            <div className="flex flex-col space-y-3">
+              <Label>{t('invitations')}</Label>
+              <ul className="space-y-2">
+                {invites.map((invite) => (
                   <InviteRow
                     key={invite.invite_id}
                     invite={invite}
-                    first={i === 0}
                     joining={joiningInviteId === invite.invite_id}
                     disabled={joiningInviteId !== null}
                     onJoin={onJoin}
                   />
                 ))}
               </ul>
-              {canCreate ? (
-                <div className="border-t px-4 py-3">
-                  <Button asChild variant="ghost" size="sm" className="gap-1.5">
-                    <Link href="/new">
-                      <PlusIcon className="size-3.5 shrink-0" />
-                      {t('createProjectInstead')}
-                    </Link>
-                  </Button>
-                </div>
-              ) : null}
-            </>
-          ) : mode === 'empty' ? (
-            <div className="space-y-5 px-4 py-5">
-              <div className="space-y-1">
-                <h1 className="text-foreground text-xl font-medium">{t('emptyTitle')}</h1>
-                <p className="text-muted-foreground text-sm">{t('emptyBody')}</p>
-              </div>
-              <Button asChild className="w-full gap-1.5">
-                <Link href="/new">
-                  <PlusIcon className="size-4 shrink-0" />
-                  {t('createProject')}
-                </Link>
-              </Button>
-              {recipient ? (
-                <p className="text-muted-foreground text-xs">
-                  {t('waitingForInvite', { email: recipient })}
-                </p>
-              ) : null}
             </div>
-          ) : (
-            <div className="space-y-1 px-4 py-5">
-              <h1 className="text-foreground text-xl font-medium">{t('noPermissionTitle')}</h1>
-              <p className="text-muted-foreground text-sm">
-                {t('noPermissionBody', { email: recipient })}
-              </p>
-            </div>
-          )}
+          ) : null}
+
+          {mode === 'invites' && canCreate ? (
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-foreground self-center"
+            >
+              <Link href="/new">{t('createProjectInstead')}</Link>
+            </Button>
+          ) : null}
+
         </div>
-      </div>
-    </div>
+      )}
+    </main>
   );
 }
 
 function InviteRow({
   invite,
-  first,
   joining,
   disabled,
   onJoin,
 }: {
   invite: MyAccountInvite;
-  first: boolean;
   joining: boolean;
   disabled: boolean;
   onJoin: (invite: MyAccountInvite) => void;
@@ -167,21 +166,20 @@ function InviteRow({
   const workspace = invite.account_name ?? t('unnamedWorkspace');
   // A project invite leads with the project — that is where Join lands. A
   // workspace invite leads with the workspace.
-  const title = invite.projects.length > 0 ? invite.projects.map((p) => p.name).join(', ') : workspace;
+  const hasProjects = invite.projects.length > 0;
+  const title = hasProjects ? invite.projects.map((p) => p.name).join(', ') : workspace;
 
   return (
-    <li className={cn('flex items-center gap-3 px-4 py-2.5', !first && 'border-t')}>
+    <li className="border-border bg-input flex items-center gap-3 rounded-md border px-3 py-2.5">
       <EntityAvatar label={title} size="md" />
       <div className="min-w-0 flex-1 space-y-0.5">
         <p className="text-foreground truncate text-sm font-medium">{title}</p>
-        {/* Not `InlineMeta`: it truncates every item alike. The workspace name
-            is short and identifies the invite; only the long inviter email
-            may truncate. */}
+        {/* Only the long inviter email truncates; the workspace name stays whole. */}
         <p className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs">
-          {invite.projects.length > 0 ? <span className="shrink-0">{workspace}</span> : null}
-          {invite.projects.length > 0 && invite.inviter_email ? (
+          {hasProjects ? <span className="shrink-0">{workspace}</span> : null}
+          {hasProjects && invite.inviter_email ? (
             <span aria-hidden className="text-muted-foreground/40">
-              &bull;
+              {'•'}
             </span>
           ) : null}
           {invite.inviter_email ? (
@@ -213,6 +211,9 @@ export function ProjectChooser({
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const invitesQuery = useMyInvites();
+  const invites = invitesQuery.data ?? [];
+  // Never cleared: `performSignOut` replaces the document.
+  const [signingOut, setSigningOut] = useState(false);
 
   const join = useMutation({
     mutationFn: (invite: MyAccountInvite) => acceptAccountInvite(invite.invite_id),
@@ -230,16 +231,32 @@ export function ProjectChooser({
     },
   });
 
+  // Nothing to join and allowed to create: the create form IS the empty state.
+  // A page whose only control is a link to `/new` is one click too many.
+  if (!invitesQuery.isLoading && chooserMode({ inviteCount: invites.length, canCreate }) === 'empty') {
+    return (
+      <Suspense fallback={null}>
+        <NewWorkspacePage showBack={false} />
+      </Suspense>
+    );
+  }
+
   return (
     <ProjectChooserView
       email={user?.email ?? null}
-      invites={invitesQuery.data ?? []}
+      invites={invites}
       // A failed invite read degrades to "no invites" rather than blocking the
       // create path — the switcher shows the same list once it loads.
       invitesLoading={invitesQuery.isLoading}
       canCreate={canCreate}
       joiningInviteId={join.isPending ? (join.variables?.invite_id ?? null) : null}
       onJoin={(invite) => join.mutate(invite)}
+      // `performSignOut` owns the whole exit and ends on a document load.
+      onLogOut={() => {
+        setSigningOut(true);
+        void performSignOut();
+      }}
+      signingOut={signingOut}
     />
   );
 }

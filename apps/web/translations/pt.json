@@ -19454,19 +19454,15 @@
     "resetError": "Não foi possível redefinir a lista de modelos."
   },
   "projectChooser": {
-    "invitesTitle": "Escolha onde trabalhar",
-    "signedInAs": "Conectado como {email}",
     "invitations": "Convites",
     "invitedBy": "Convidado por {email}",
     "join": "Entrar",
     "joinError": "Não foi possível entrar. Tente novamente.",
     "unnamedWorkspace": "Espaço de trabalho",
-    "createProjectInstead": "Criar um novo projeto",
-    "emptyTitle": "Crie seu primeiro projeto",
-    "emptyBody": "Um projeto guarda as sessões, arquivos e configurações do seu agente. Você pode convidar sua equipe depois.",
-    "createProject": "Criar projeto",
-    "waitingForInvite": "Esperando um convite? Ele aparece aqui quando alguém convida {email}.",
     "noPermissionTitle": "Ainda sem espaço de trabalho",
-    "noPermissionBody": "Peça a um proprietário ou administrador para convidar {email}."
+    "noPermissionBody": "Peça a um proprietário ou administrador para convidar {email}.",
+    "invitesTitle": "Você foi convidado",
+    "invitesDescription": "Entre em um projeto da sua equipe ou crie o seu.",
+    "createProjectInstead": "Criar um novo projeto"
   }
 }
