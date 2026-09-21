@@ -207,6 +207,20 @@ describe('channelTurnModel', () => {
     ).toBe('codex/gpt-6-astra');
   });
 
+  // Not knowing the grant is not permission to use one.
+  test('a grant that cannot be resolved fails closed and skips codex', async () => {
+    expect(
+      await channelTurnModel({
+        ...base,
+        currentModel: 'deepseek-v4-flash',
+        hasImage: true,
+        agentGrantEnv: async () => {
+          throw new Error('manifest unreadable');
+        },
+      }),
+    ).toBeNull();
+  });
+
   test('an unauthenticated sender never moves the model', async () => {
     expect(
       await channelTurnModel({ ...base, userId: null, currentModel: 'retired-model-v1', hasImage: true }),

@@ -122,7 +122,11 @@ function agentGrantEnvFor(
   agentName: string | null,
 ): () => Promise<readonly string[] | 'all' | null> {
   return async () => {
-    const grant = await resolveAgentGrant(agentName || 'default', project as never).catch(() => null);
+    // A resolution failure is NOT "unrestricted": returning an empty list
+    // makes `grantAllowsCodex` fail closed, so a turn is never pinned to a
+    // ChatGPT-backed model this agent might not be allowed to use.
+    const grant = await resolveAgentGrant(agentName || 'default', project as never).catch(() => undefined);
+    if (grant === undefined) return [];
     const env = (grant as { env?: readonly string[] | 'all' } | null)?.env;
     return env ?? null;
   };

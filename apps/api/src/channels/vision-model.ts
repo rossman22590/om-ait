@@ -159,8 +159,12 @@ async function replacementCandidates(input: {
     if (wire === current || seen.has(wire) || !usableIds.has(wire)) continue;
     if (wire.startsWith('codex/')) {
       if (codexAllowed === null) {
+        // FAIL CLOSED. If the grant cannot be resolved we do not know whether
+        // this agent may use a ChatGPT connection, and picking one it may not
+        // use turns a degraded answer into `Run failed`. An empty list is the
+        // restrictive answer; `null`/`'all'` genuinely mean unrestricted.
         codexAllowed = input.agentGrantEnv
-          ? grantAllowsCodex(await input.agentGrantEnv().catch(() => null))
+          ? grantAllowsCodex(await input.agentGrantEnv().catch(() => [] as string[]))
           : true;
       }
       if (!codexAllowed) continue;
