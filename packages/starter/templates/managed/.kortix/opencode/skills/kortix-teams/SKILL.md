@@ -143,6 +143,37 @@ This finalizes the live card: the plan flips to **Task complete**, your answer r
 
 Teams questions are **async**: ask, stop, and resume when they reply — their reply arrives as a fresh turn with full context. Don't sit waiting for an answer inside a turn.
 
+### `teams ask --form-file <path>` — ask with real inputs
+
+When you need structured answers, post a **form** instead of prose. Teams
+renders it as a card with actual text boxes, dropdowns, toggles and one Submit
+button — the same shape as asking in the Kortix app. Write a small JSON spec;
+the server builds the card.
+
+```sh
+cat > /tmp/form.json <<'JSON'
+{
+  "title": "Deploy details",
+  "subtitle": "Two things before I start",
+  "submitLabel": "Deploy",
+  "fields": [
+    { "id": "env", "label": "Environment", "type": "choice",
+      "choices": ["prod", "staging"], "required": true },
+    { "id": "notes", "label": "Anything I should know?", "type": "textarea" },
+    { "id": "dry", "label": "Dry run first", "type": "toggle" }
+  ]
+}
+JSON
+teams ask --form-file /tmp/form.json --text "Before I deploy:"
+```
+
+Field `type`: `text`, `textarea`, `number`, `date`, `time`, `choice`,
+`multichoice`, `toggle`. Add `placeholder`, `value` (prefill) and
+`required`. Up to 12 fields, 24 choices each.
+
+`ask` **finalizes the turn**, exactly like `send`. The user's Submit arrives as
+your NEXT turn with their answers, so post the form and then END your turn.
+
 **Do NOT use the built-in `question` tool on a Teams turn.** It's a synchronous web-UI/Slack construct and has no form renderer in Teams — calling it just hangs or fails. Put your question in `teams send` as plain prose (offer the options inline, e.g. "Reply **prod**, **staging**, or **dev**"), end the turn, and handle their answer next turn.
 
 | When you want to… | Use |
