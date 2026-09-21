@@ -415,8 +415,11 @@ See `tests/e2e/helpers/session-auth.ts` for the exact calls.
   Mailpit, and HTTPS origin.
 - Preview CI runs `pnpm test -- --target-full` against that origin. The sticky
   pull request comment links the origin and its `/_tests/` HTML report.
-- A preview head change deletes the sandbox and removes the stale `preview`
-  label. Unlabel, close, and scheduled reconciliation also delete the sandbox.
+- A push to a `preview`-labelled branch redeploys its environment in place; the
+  label stays. Removing the label or deleting the branch tears it down. Closing
+  the pull request does not. A daily reconciler deletes environments whose
+  branch no longer exists (`deploy-preview.yml` `teardown`, `teardown-branch`,
+  `reconcile`).
 - Preview warm images contain dependencies and Docker layers only. They never
   contain a database or runtime secret.
 - Preview Mailpit handles authentication and invite email. The dedicated
