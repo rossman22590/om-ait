@@ -739,3 +739,20 @@ read back: GET /v1/p/<ext>/4096/session/<ses_…>/message
 To exercise a new CLI command in Teams, start a conversation that has no
 session yet (a new channel, or unbind the existing thread) so a fresh sandbox
 is built.
+
+### The stale-turn sweep now ends the RUN, not just the card
+
+Both channel GC sweeps (`channels/slack/turn.ts`, `channels/teams/turn.ts`)
+close a turn that has been silent for 30 minutes. They now also
+`POST /session/:id/abort` on the runtime.
+
+Closing the card was never enough. On 2026-09-19 the ledger settled the dead
+turn `runtime_gone` and the GC closed the Adaptive Card, while OpenCode kept
+its assistant message OPEN — `time.created` set, `time.completed` absent — for
+two days. `prompt_async` accepted every later message in that conversation and
+ran none of them; two of the user's messages vanished with nothing shown to
+them. Aborting by hand flipped the open message to `MessageAbortedError` and
+the conversation accepted prompts again.
+
+The abort is best effort and imported lazily, so the channel modules keep no
+static edge into the session-lifecycle engine.
