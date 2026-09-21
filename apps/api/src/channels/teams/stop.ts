@@ -23,7 +23,7 @@ const PLATFORM = 'teams';
  * worst case is that a bystander waits for the run to end, instead of a
  * bystander ending someone else's work.
  */
-export async function mayStopTeamsTurn(
+async function mayStopTeamsTurn(
   handle: TeamsLiveTurn,
   teamsUserId: string,
 ): Promise<boolean> {
