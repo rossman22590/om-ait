@@ -21,6 +21,10 @@ linked, not inlined.
 
 ## Register
 
+### A repository replacement must not block an existing session (2026-09-21)
+
+**Rule:** Load an existing session and its preserved workspace through the ordinary lifecycle after a repository replacement. Keep its stable project Git proxy origin, resolve the current upstream repository and credentials server-side, and show only a compact warning that the workspace started from the previous repository. Never replace the transcript with a repository-generation gate. **Incident:** the first cutover guard made 16,000+ historical sessions inaccessible even though their proxy URL and session branch authority remained valid. **Enforcers:** `SESS-33`, browser journey 31, and Git proxy authorization tests.
+
 ### A guard written on ONE route is not a ceiling; put it where every write path passes (2026-09-21)
 
 **When:** adding or reviewing an authorization rule for a role, especially
