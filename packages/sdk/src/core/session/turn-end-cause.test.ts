@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { turnEndCause } from './turn-end-cause';
+import { turnEndCause, turnFailedWithoutCause } from './turn-end-cause';
 
 // Session ad02e053 (2026-09-18): the sandbox memory guard aborted a turn at 97 %
 // box memory. The transcript only says `MessageAbortedError: Aborted`; the
@@ -58,5 +58,31 @@ describe('turnEndCause', () => {
     };
     expect(turnEndCause(observation, 'msg_u2')).toEqual(GUARD);
     expect(turnEndCause(observation, 'msg_u3')).toBeNull();
+  });
+});
+
+// "All four sub-agents failed and the turn said nothing." A turn the control
+// plane lists as failed is a failure the user must see, cause or no cause. The
+// one abort that is NOT listed is the Stop the user pressed.
+describe('turnFailedWithoutCause', () => {
+  const failures = [
+    { message_id: 'msg_named', ended_at: null, error: GUARD },
+    { message_id: 'msg_unnamed', ended_at: null, error: null },
+  ];
+
+  test('is true for a listed failure that has no named cause', () => {
+    expect(turnFailedWithoutCause({ recent_failures: failures }, 'msg_unnamed')).toBe(true);
+  });
+
+  test('is false when the cause is named: turnEndCause carries that one', () => {
+    expect(turnFailedWithoutCause({ recent_failures: failures }, 'msg_named')).toBe(false);
+    expect(turnEndCause({ recent_failures: failures }, 'msg_named')).toEqual(GUARD);
+  });
+
+  test('is false for a turn that is not listed: a user Stop, a completed turn, a turn still running', () => {
+    expect(turnFailedWithoutCause({ recent_failures: failures }, 'msg_stopped_by_user')).toBe(false);
+    expect(turnFailedWithoutCause({ recent_failures: [] }, 'msg_unnamed')).toBe(false);
+    expect(turnFailedWithoutCause(undefined, 'msg_unnamed')).toBe(false);
+    expect(turnFailedWithoutCause({ recent_failures: failures }, null)).toBe(false);
   });
 });

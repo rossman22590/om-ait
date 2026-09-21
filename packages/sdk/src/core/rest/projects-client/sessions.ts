@@ -765,11 +765,13 @@ export interface SessionTurnEndError {
   message: string | null;
 }
 
-/** One recent turn that failed for a named cause, keyed by its user message. */
+/** One recent turn that failed, keyed by its user message. A turn the user
+ *  stopped is not a failure and is never listed. */
 export interface SessionTurnFailure {
   message_id: string;
   ended_at: string | null;
-  error: SessionTurnEndError;
+  /** Null when the turn failed and nobody named why. */
+  error: SessionTurnEndError | null;
 }
 
 export interface SessionTurnEnded {
@@ -788,7 +790,7 @@ export interface SessionTurnStatus {
    *  prompt, say), so this is a list and never a single turn. */
   turns: SessionTurn[];
   last_ended?: SessionTurnEnded;
-  /** Recent turns that failed for a named cause, newest first. Reported whether
+  /** Recent turns that failed, newest first, with the cause when one was named. Reported whether
    *  or not a turn is running — `last_ended` is one row and vanishes when the
    *  next turn starts. Absent when there are none. */
   recent_failures?: SessionTurnFailure[];

@@ -37,3 +37,21 @@ export function turnEndCause(
   if (isAbortError({ name: error.name ?? undefined, message: error.message })) return null;
   return error;
 }
+
+/**
+ * Did the control plane record this turn as FAILED without naming why?
+ *
+ * `recent_failures` lists every failed turn and leaves out the one abort that
+ * is not a failure: a Stop the user pressed. So a listed turn with no cause is
+ * an ending nobody asked for and nobody explained — a renderer must still say
+ * so, because the transcript of such a turn only carries an abort, and an abort
+ * renders nothing. `false` for a named cause; `turnEndCause` carries that one.
+ */
+export function turnFailedWithoutCause(
+  outcome: SessionTurnOutcome | undefined,
+  messageId: string | null | undefined,
+): boolean {
+  if (!outcome || !messageId) return false;
+  const listed = outcome.recent_failures?.find((failure) => failure.message_id === messageId);
+  return listed !== undefined && turnEndCause(outcome, messageId) === null;
+}

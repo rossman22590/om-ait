@@ -227,7 +227,12 @@ import {
   shouldShowToolPart,
   unwrapError,
 } from '@/ui';
-import { isAbortError, turnEndCause, type SessionTurnEndError } from '@kortix/sdk';
+import {
+  isAbortError,
+  turnEndCause,
+  turnFailedWithoutCause,
+  type SessionTurnEndError,
+} from '@kortix/sdk';
 import type { ProviderListResponse } from '@kortix/sdk/react';
 import {
   type AbortSettlement,
@@ -613,10 +618,21 @@ export function deriveTurnErrorPresentation(input: {
   turnError: string | undefined;
   isAbort: boolean;
   endCause: SessionTurnEndError | null;
+  /** The control plane lists this turn as failed and nobody named why. A Stop
+   *  the user pressed is never listed, so this is never their own stop. */
+  failedWithoutCause?: boolean;
 }): { text: string | undefined; isAbort: boolean; suggestion: string | undefined } {
-  const { turnError, isAbort, endCause } = input;
-  if (endCause?.message && (isAbort || !turnError)) {
+  const { turnError, isAbort, endCause, failedWithoutCause } = input;
+  const transcriptSaysNothing = isAbort || !turnError;
+  if (endCause?.message && transcriptSaysNothing) {
     return { isAbort: false, ...describeTurnEndCause(endCause) };
+  }
+  if (failedWithoutCause && transcriptSaysNothing) {
+    return {
+      isAbort: false,
+      text: 'This turn stopped before it finished.',
+      suggestion: 'No reason was reported. Send a message to continue from where it stopped.',
+    };
   }
   return { text: turnError, isAbort, suggestion: undefined };
 }
@@ -648,6 +664,8 @@ interface SessionTurnProps {
   turn: Turn;
   /** The cause the control plane recorded for THIS turn's ending, if any. */
   endCause: SessionTurnEndError | null;
+  /** The control plane lists THIS turn as failed with no named cause. */
+  failedWithoutCause: boolean;
   /**
    * Both were derived HERE from `allMessages`, once per turn, on every render.
    *
@@ -838,6 +856,7 @@ function resolveTurnError(turn: Turn): string | undefined {
 function SessionTurnImpl({
   turn,
   endCause,
+  failedWithoutCause,
   isLast,
   ownsPlan,
   sessionId,
@@ -1032,8 +1051,14 @@ function SessionTurnImpl({
    */
   const turnErrorIsAbort = useMemo(() => deriveTurnErrorAbortState(turn).isAbort, [turn]);
   const turnErrorRow = useMemo(
-    () => deriveTurnErrorPresentation({ turnError, isAbort: turnErrorIsAbort, endCause }),
-    [turnError, turnErrorIsAbort, endCause],
+    () =>
+      deriveTurnErrorPresentation({
+        turnError,
+        isAbort: turnErrorIsAbort,
+        endCause,
+        failedWithoutCause,
+      }),
+    [turnError, turnErrorIsAbort, endCause, failedWithoutCause],
   );
 
   // The gateway's structured fields (provider/suggestion/request_id) for
@@ -5825,6 +5850,10 @@ export function SessionChat({
                                 <SessionTurn
                                   turn={turn}
                                   endCause={turnEndCause(turnOutcome, turn.userMessage.info.id)}
+                                  failedWithoutCause={turnFailedWithoutCause(
+                                    turnOutcome,
+                                    turn.userMessage.info.id,
+                                  )}
                                   isLast={turn.userMessage.info.id === lastUserMessageId}
                                   ownsPlan={turn.userMessage.info.id === planAnchorId}
                                   sessionId={sessionId}

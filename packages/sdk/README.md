@@ -916,6 +916,13 @@ the cache `useSessionWorking()` keeps fresh and makes no request of its own.
 `turnEndCause(outcome, messageId)` returns the cause for one turn, or `null` for
 a plain Stop and for a turn with no recorded cause.
 
+`recent_failures` lists every failed turn. Its `error` is `null` when nobody
+named the cause. A turn the user stopped is never listed: the Stop reaches the
+control plane before the abort and marks the turn. `turnFailedWithoutCause(outcome,
+messageId)` is `true` for a listed turn with no named cause. Render a plain
+"stopped before it finished" row for it, because its transcript only carries an
+abort.
+
 A worker claim only checks admission and keeps the prompt waiting. Delivery starts
 after admission succeeds. A confirmed active turn clears the pending presentation
 even if the previous inbox snapshot still lists that prompt. Runtime activity

@@ -157,11 +157,17 @@ request. Pass the result to `turnEndCause(outcome, messageId)`:
 const outcome = useSessionTurnOutcome(projectId, sessionId);
 const cause = turnEndCause(outcome, turn.userMessage.info.id);
 // cause: { name: 'SandboxMemoryGuard', message: 'sandbox memory at 97% …' } | null
+const unexplained = turnFailedWithoutCause(outcome, turn.userMessage.info.id);
+// unexplained: true when the turn failed and nobody named why
 ```
 
 `turnEndCause` returns `null` for a plain Stop and for a turn with no recorded
 cause. `recent_failures` is present whether or not a turn is running, so a cause
 stays attached to its turn after the next turn starts.
+
+`recent_failures` lists every failed turn, with `error: null` when no cause was
+named. A turn the user stopped is never listed. Show a plain "stopped before it
+finished" row when `turnFailedWithoutCause` is `true`.
 
 
 A worker claim only checks admission and keeps the prompt waiting. Delivery starts

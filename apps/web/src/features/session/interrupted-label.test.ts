@@ -196,6 +196,41 @@ describe('deriveTurnErrorPresentation — a named cause outranks the abort it pr
     ).toEqual({ text: 'upstream 500', isAbort: false, suggestion: undefined });
   });
 
+  // "All four sub-agents failed and the turn said nothing." The control plane
+  // lists the turn as failed and nobody named why: the row must still say so.
+  test('a failed turn with no named cause still says it stopped', () => {
+    const row = deriveTurnErrorPresentation({
+      turnError: 'Aborted',
+      isAbort: true,
+      endCause: null,
+      failedWithoutCause: true,
+    });
+    expect(row.isAbort).toBe(false);
+    expect(row.text).toBe('This turn stopped before it finished.');
+    expect(row.suggestion).toBe('No reason was reported. Send a message to continue from where it stopped.');
+  });
+
+  test('the same holds when the transcript carries no error at all', () => {
+    const row = deriveTurnErrorPresentation({
+      turnError: undefined,
+      isAbort: false,
+      endCause: null,
+      failedWithoutCause: true,
+    });
+    expect(row.text).toBe('This turn stopped before it finished.');
+  });
+
+  test("an unnamed failure never replaces the transcript's own error", () => {
+    expect(
+      deriveTurnErrorPresentation({
+        turnError: 'upstream 500',
+        isAbort: false,
+        endCause: null,
+        failedWithoutCause: true,
+      }),
+    ).toEqual({ text: 'upstream 500', isAbort: false, suggestion: undefined });
+  });
+
   test('a turn with no error and no cause shows nothing', () => {
     expect(
       deriveTurnErrorPresentation({ turnError: undefined, isAbort: false, endCause: null }),
