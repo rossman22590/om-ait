@@ -564,3 +564,26 @@ the prompt used to name the file `image.*`.
 3. For a follow-up in an existing conversation the pin does NOT change; look
    for `[teams-webhook] routing an image-bearing turn to the vision model` and
    for the answer itself describing the image.
+
+### A retired model pin kills a conversation just as quietly
+
+Probed on dev 2026-09-21 with `PUT /v1/projects/:pid/sessions/:sid/model`,
+which runs the same `isModelServableForAccount` check a session create does:
+
+| model | result |
+|---|---|
+| `deepseek-v4-flash` — what the Teams session had been pinned to since 2026-09-18 | `400 INVALID_SESSION_MODEL`, *not available for this account* |
+| `deepseek-v4.1-flash` — the current platform default, vision-capable | `200 applied_live` |
+| `glm-5.3-flash` — cheapest vision-capable | `200 applied_live` |
+| `deepseek-v4-pro-0813` — servable, `attachment: false` | `200 applied_live` |
+| `gpt-5.6-luna` | `400 INVALID_SESSION_MODEL` |
+
+Nothing re-validates a session's pin after creation, so a model retired from
+the catalog leaves the conversation answering nothing, forever, with no
+message to the user. `channelTurnModel` now replaces an unservable pin as well
+as a vision-incapable one. The cheap signal is absence from
+`gatewayModelCatalog`; the decision is always confirmed with
+`isModelServableForAccount` before anything is replaced.
+
+`deepseek-v4-pro-0813` is the fixture for testing the vision path by hand: it
+serves, and it cannot read images.

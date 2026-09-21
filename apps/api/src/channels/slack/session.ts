@@ -20,7 +20,7 @@ import {
 } from './participants';
 import { buildSlackTurnEnv, finalizeTurn, saveTurn, startTurn } from './turn';
 import type { SlackEnvelope, SlackEvent } from './types';
-import { promptModelOverride, visionModelForProject } from '../vision-model';
+import { channelTurnModel, promptModelOverride } from '../vision-model';
 
 const defaultSlackSessionLifecycle = {
   continueSession: continueLifecycleSession,
@@ -60,37 +60,29 @@ export function slackMessageHasImage(event: SlackEvent): boolean {
 }
 
 /**
- * The model an image-bearing follow-up must run on, or null when the session's
- * own model already reads images. One extra read, only for messages with an
- * image on them.
+ * The model a follow-up must run on — see channels/vision-model.ts. Null when
+ * the session's own model is fine.
  */
-async function visionModelForFollowUp(
+async function followUpModel(
   projectId: string,
   accountId: string,
   userId: string,
   sessionId: string,
   event: SlackEvent,
 ): Promise<string | null> {
-  if (!slackMessageHasImage(event)) return null;
   const [row] = await db
     .select({ metadata: projectSessions.metadata })
     .from(projectSessions)
     .where(eq(projectSessions.sessionId, sessionId))
     .limit(1);
   const pinned = (row?.metadata as Record<string, unknown> | null)?.opencode_model;
-  const model = await visionModelForProject({
+  return channelTurnModel({
     projectId,
     accountId,
     userId,
     currentModel: typeof pinned === 'string' && pinned.trim() ? pinned.trim() : null,
+    hasImage: slackMessageHasImage(event),
   });
-  if (model) {
-    console.info('[slack-webhook] routing an image-bearing turn to the vision model', {
-      sessionId,
-      model,
-    });
-  }
-  return model;
 }
 
 // Atomically create the durable session for a brand-new Slack thread — or, if a
@@ -135,7 +127,7 @@ export async function createOrJoinThreadSession(input: {
         sessionId,
         text: renderFollowUpPrompt(envelope, event),
         userId: actorUserId,
-        model: await visionModelForFollowUp(projectId, project.accountId, actorUserId, sessionId, event),
+        model: await followUpModel(projectId, project.accountId, actorUserId, sessionId, event),
       });
     } else {
       console.warn('[slack-webhook] lost thread-create claim but winner never published a session', {
@@ -166,7 +158,7 @@ export async function createOrJoinThreadSession(input: {
         sessionId: existing.sessionId,
         text: renderFollowUpPrompt(envelope, event),
         userId: actorUserId,
-        model: await visionModelForFollowUp(projectId, project.accountId, actorUserId, existing.sessionId, event),
+        model: await followUpModel(projectId, project.accountId, actorUserId, existing.sessionId, event),
       });
       return;
     }
@@ -216,15 +208,16 @@ export async function createOrJoinThreadSession(input: {
     return;
   }
 
-  // A thread that OPENS with an image has to start on a model that can read one.
-  const createModel = slackMessageHasImage(event)
-    ? ((await visionModelForProject({
-        projectId,
-        accountId: project.accountId,
-        userId,
-        currentModel: selection?.opencodeModel,
-      })) ?? selection?.opencodeModel)
-    : selection?.opencodeModel;
+  // A thread that OPENS with an image has to start on a model that can read
+  // one, and a retired `/kortix models` pick has to be replaced.
+  const createModel =
+    (await channelTurnModel({
+      projectId,
+      accountId: project.accountId,
+      userId,
+      currentModel: selection?.opencodeModel,
+      hasImage: slackMessageHasImage(event),
+    })) ?? selection?.opencodeModel;
 
   const result = await slackSessionLifecycle.createSession({
     source: 'slack',

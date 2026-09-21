@@ -23,7 +23,7 @@ import {
   startTurn,
 } from './turn';
 import { sessionWebUrl } from '../slack/util';
-import { promptModelOverride, visionModelForProject } from '../vision-model';
+import { channelTurnModel, promptModelOverride } from '../vision-model';
 import {
   extractTeamsAttachments,
   teamsMessageHasImage,
@@ -246,20 +246,13 @@ async function deliverFollowUp(input: {
 
   // An image is unreadable on a text-only model, so THIS turn runs on the
   // configured vision model. The session's own pin is untouched.
-  const turnModel = teamsMessageHasImage(activity)
-    ? await visionModelForProject({
-        projectId,
-        accountId: input.accountId,
-        userId,
-        currentModel: sessionModelOf(input.sessionMetadata),
-      })
-    : null;
-  if (turnModel) {
-    console.info('[teams-webhook] routing an image-bearing turn to the vision model', {
-      sessionId,
-      model: turnModel,
-    });
-  }
+  const turnModel = await channelTurnModel({
+    projectId,
+    accountId: input.accountId,
+    userId,
+    currentModel: sessionModelOf(input.sessionMetadata),
+    hasImage: teamsMessageHasImage(activity),
+  });
   const outcome = await deliverTeamsFollowUpToSession({
     sessionId,
     text: renderFollowUpPrompt(activity),
@@ -428,15 +421,16 @@ export async function createOrJoinTeamsConversationSession(input: {
   const selection = await currentChannelSelection(teamsChannelCtx(tenantId, conversationId));
 
   // A conversation that OPENS with an image has to start on a model that can
-  // read one — the session pin is what every later turn inherits.
-  const createModel = teamsMessageHasImage(activity)
-    ? ((await visionModelForProject({
-        projectId,
-        accountId: project.accountId,
-        userId,
-        currentModel: selection?.opencodeModel,
-      })) ?? selection?.opencodeModel)
-    : selection?.opencodeModel;
+  // read one, and a `/model` pick that has since been retired has to be
+  // replaced — the session pin is what every later turn inherits.
+  const createModel =
+    (await channelTurnModel({
+      projectId,
+      accountId: project.accountId,
+      userId,
+      currentModel: selection?.opencodeModel,
+      hasImage: teamsMessageHasImage(activity),
+    })) ?? selection?.opencodeModel;
 
   const result = await teamsSessionLifecycle.createSession({
     source: 'teams',

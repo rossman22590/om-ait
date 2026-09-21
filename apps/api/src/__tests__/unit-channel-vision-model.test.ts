@@ -1,5 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
-import { promptModelOverride, visionCandidates } from '../channels/vision-model';
+import { channelTurnModel, promptModelOverride, visionCandidates } from '../channels/vision-model';
 
 /**
  * Why this exists: on dev 2026-09-19 a Teams message with a pasted screenshot
@@ -77,6 +77,103 @@ describe('visionCandidates', () => {
     expect(visionCandidates('p1', 'kortix/gpt-5.6-luna')).not.toContain('gpt-5.6-luna');
   });
 });
+
+/**
+ * The second way a channel turn is dead before it starts: the session's pin
+ * was retired from the catalog. Verified on dev 2026-09-21 —
+ * `PUT /sessions/:id/model` answered
+ * `Model "deepseek-v4-flash" is not available for this account` for the model
+ * that Teams session had been pinned to since 2026-09-18, so every turn would
+ * have failed upstream with nothing shown to the user.
+ */
+describe('channelTurnModel', () => {
+  test('leaves a healthy pin alone when the message has no image', async () => {
+    expect(
+      await channelTurnModel({
+        projectId: 'p1',
+        accountId: 'a1',
+        userId: 'u1',
+        currentModel: 'glm-5.3-flash',
+        hasImage: false,
+      }),
+    ).toBeNull();
+  });
+
+  test('leaves a vision-capable pin alone even when the message has an image', async () => {
+    expect(
+      await channelTurnModel({
+        projectId: 'p1',
+        accountId: 'a1',
+        userId: 'u1',
+        currentModel: 'glm-5.3-flash',
+        hasImage: true,
+      }),
+    ).toBeNull();
+  });
+
+  test('replaces a text-only pin for an image message', async () => {
+    expect(
+      await channelTurnModel({
+        projectId: 'p1',
+        accountId: 'a1',
+        userId: 'u1',
+        currentModel: 'deepseek-v4-flash',
+        hasImage: true,
+      }),
+    ).toBe('glm-5.3-flash');
+  });
+
+  test('replaces a retired pin with the platform default when no image is involved', async () => {
+    expect(
+      await channelTurnModel({
+        projectId: 'p1',
+        accountId: 'a1',
+        userId: 'u1',
+        currentModel: 'retired-model-v1',
+        hasImage: false,
+      }),
+    ).toBe('deepseek-v4-flash');
+  });
+
+  test('a retired pin AND an image must land on a model that can read one', async () => {
+    expect(
+      await channelTurnModel({
+        projectId: 'p1',
+        accountId: 'a1',
+        userId: 'u1',
+        currentModel: 'retired-model-v1',
+        hasImage: true,
+      }),
+    ).toBe('glm-5.3-flash');
+  });
+
+  test('an unauthenticated sender never moves the model', async () => {
+    expect(
+      await channelTurnModel({
+        projectId: 'p1',
+        accountId: 'a1',
+        userId: null,
+        currentModel: 'retired-model-v1',
+        hasImage: true,
+      }),
+    ).toBeNull();
+  });
+});
+
+mock.module('../llm-gateway/enablement', () => ({
+  projectLlmGatewayEnabledById: async () => true,
+}));
+
+mock.module('../billing/services/entitlements', () => ({
+  accountMayUseManagedModels: async () => true,
+}));
+
+// Mirrors dev: the configured vision target is refused, the catalog's cheapest
+// vision model is not.
+mock.module('../llm-gateway/resolution/default-model', () => ({
+  isModelServableForAccount: async ({ model }: { model: string }) =>
+    model !== 'gpt-5.6-luna' && model !== 'retired-model-v1',
+}));
 
 mock.module('../config', () => ({
   config: { LLM_GATEWAY_VISION_MODEL: 'gpt-5.6-luna' },

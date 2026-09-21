@@ -48,18 +48,21 @@ function inputCostOf(cost: { input?: number } | undefined): number {
 }
 
 /**
- * Preference order: the operator's configured target, then the platform
- * default (often vision-capable in its own right), then the cheapest
- * vision-capable model the project's catalog carries. Deduped, capped, and
- * never the model we are trying to move off.
+ * Every model this project can serve, cheapest first, vision-capable first
+ * when the message needs it.
  */
-export function visionCandidates(projectId: string, currentModel: string | null | undefined): string[] {
+function replacementCandidates(
+  projectId: string,
+  currentModel: string | null,
+  needsVision: boolean,
+): string[] {
   const catalog = gatewayModelCatalog(projectId);
-  const preferred = [config.LLM_GATEWAY_VISION_MODEL?.trim(), platformDefaultModelId()].filter(
-    (m): m is string => !!m,
-  );
+  const preferred = [
+    ...(needsVision ? [config.LLM_GATEWAY_VISION_MODEL?.trim()] : []),
+    platformDefaultModelId(),
+  ].filter((m): m is string => !!m);
   const byCost = Object.entries(catalog)
-    .filter(([, m]) => m.attachment === true)
+    .filter(([, m]) => (needsVision ? m.attachment === true : true))
     .sort(([, a], [, b]) => inputCostOf(a.cost) - inputCostOf(b.cost))
     .map(([id]) => id);
 
@@ -69,7 +72,9 @@ export function visionCandidates(projectId: string, currentModel: string | null 
   for (const candidate of [...preferred, ...byCost]) {
     const wire = wireModelId(candidate);
     if (wire === current || seen.has(wire)) continue;
-    if (catalog[wire]?.attachment !== true) continue;
+    const entry = catalog[wire];
+    if (!entry) continue;
+    if (needsVision && entry.attachment !== true) continue;
     seen.add(wire);
     out.push(wire);
     if (out.length >= MAX_CANDIDATE_PROBES) break;
@@ -78,42 +83,77 @@ export function visionCandidates(projectId: string, currentModel: string | null 
 }
 
 /**
- * The model this turn must run on to be able to read an inbound image, or
- * `null` when the current model already reads images, the project is
- * off-gateway, or nothing servable can read one.
- *
- * `currentModel` is the session's pin (or the channel binding's `/model`
- * pick); `null` means the turn would take the platform default.
+ * Preference order for an image-bearing message. Kept as its own export
+ * because the ORDER is the safety story — see the module comment.
  */
-export async function visionModelForProject(input: {
+export function visionCandidates(projectId: string, currentModel: string | null | undefined): string[] {
+  return replacementCandidates(projectId, currentModel ?? null, true);
+}
+
+/**
+ * The model this channel turn must run on, or `null` to leave it alone.
+ *
+ * Two things make a turn unanswerable before it starts, and both are
+ * invisible to the person typing in Teams or Slack:
+ *
+ * 1. The message carries an image the pinned model cannot read (`hasImage`).
+ * 2. The pinned model is no longer servable at all. Models are retired from
+ *    the catalog, and nothing re-validates a session's pin — the dev Teams
+ *    session was pinned to `deepseek-v4-flash` and
+ *    `PUT /sessions/:id/model` answered
+ *    `Model "deepseek-v4-flash" is not available for this account`, so every
+ *    turn would have failed upstream with no way for the user to know why.
+ *
+ * The replacement is always probed with `isModelServableForAccount` first, so
+ * this can never pin a turn to something the gateway will refuse. When nothing
+ * qualifies the answer is `null` and the turn runs exactly as before.
+ */
+export async function channelTurnModel(input: {
   projectId: string;
   accountId: string;
   userId: string | null | undefined;
   currentModel: string | null | undefined;
+  hasImage: boolean;
 }): Promise<string | null> {
-  const { projectId, accountId, userId, currentModel } = input;
+  const { projectId, accountId, userId, currentModel, hasImage } = input;
   if (!userId) return null;
   if (!(await projectLlmGatewayEnabledById(projectId).catch(() => false))) return null;
 
+  const catalog = gatewayModelCatalog(projectId);
   const effective = currentModel || platformDefaultModelId();
-  if (modelReadsImages(projectId, effective)) return null;
+  const needsVision = hasImage && !modelReadsImages(projectId, effective);
 
-  const candidates = visionCandidates(projectId, effective);
-  if (candidates.length === 0) return null;
-
+  // A pin the catalog no longer carries is the cheap signal for "retired".
+  // Confirm it authoritatively before replacing anything: a BYOK ref can be
+  // absent from this view for reasons that are not a retirement.
+  let pinUnservable = false;
   const freeModelsOnly = !(await accountMayUseManagedModels(accountId).catch(() => false));
-  for (const model of candidates) {
-    const servable = await isModelServableForAccount({
-      userId,
-      accountId,
-      projectId,
-      freeModelsOnly,
-      model,
-    }).catch(() => false);
-    if (servable) return model;
+  const probe = (model: string) =>
+    isModelServableForAccount({ userId, accountId, projectId, freeModelsOnly, model }).catch(
+      () => false,
+    );
+  if (currentModel && !catalog[wireModelId(currentModel)]) {
+    pinUnservable = !(await probe(wireModelId(currentModel)));
   }
-  console.info('[channels] no servable vision model for this account — the image turn runs unchanged', {
+
+  if (!needsVision && !pinUnservable) return null;
+
+  const candidates = replacementCandidates(projectId, effective, needsVision);
+  for (const model of candidates) {
+    if (await probe(model)) {
+      console.info('[channels] replacing this turn\'s model', {
+        projectId,
+        from: currentModel ?? null,
+        to: model,
+        reason: needsVision ? (pinUnservable ? 'image+retired' : 'image') : 'retired',
+      });
+      return model;
+    }
+  }
+  console.info('[channels] no servable replacement model — the turn runs unchanged', {
     projectId,
+    needsVision,
+    pinUnservable,
     tried: candidates,
   });
   return null;
