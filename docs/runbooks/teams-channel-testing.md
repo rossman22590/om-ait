@@ -639,10 +639,10 @@ message now carries an explicit model every time, even when the pin already
 reads images. Trusting the recorded pin is what let a stale runtime model
 answer an image turn.
 
-Also this round: the pin is now confirmed with `isModelServableForAccount` on
-every channel message rather than only when it is missing from the in-memory
-catalog, because the two disagree. `deepseek-v4-flash` IS in the catalog and
-still fails upstream:
+Also this round: the pin is confirmed with `isModelServableForAccount` on
+every channel message. Presence in `gatewayModelCatalog` is deliberately NOT
+used as a cheap pre-filter, because the catalog and the gate disagree —
+`deepseek-v4-flash` IS in the catalog and still fails upstream:
 
 ```
 The "deepseek-v4-flash-0731" model requires Kortix's managed provider,

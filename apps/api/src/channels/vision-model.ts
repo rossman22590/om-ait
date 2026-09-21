@@ -201,11 +201,17 @@ export async function channelTurnModel(input: {
   const effective = currentModel || platformDefaultModelId();
   const effectiveReadsImages = modelReadsImages(projectId, effective);
 
-  // A plain text message on a pin we have no reason to doubt costs nothing.
-  // `pinMissing` is the cheap, in-memory signal that a pin may have been
-  // retired; the authoritative probe below decides.
-  const pinMissing = !!currentModel && !gatewayModelCatalog(projectId)[wireModelId(currentModel)];
-  if (!hasImage && !pinMissing) return null;
+  // Nothing pinned and no image: there is nothing to check.
+  //
+  // A pin IS checked on every message, and presence in `gatewayModelCatalog`
+  // is NOT used as a cheap pre-filter, because the catalog and the servability
+  // gate disagree — `deepseek-v4-flash` is in the catalog and still answers
+  // `requires Kortix's managed provider, which is disabled on this deployment`
+  // upstream. Two live Teams sessions were pinned to it on 2026-09-21, failing
+  // every message with nothing shown to the user. A pre-filter on the catalog
+  // would have skipped exactly those. The probe is cached per
+  // account+project+model, so a burst of chat costs one resolution.
+  if (!hasImage && !currentModel) return null;
 
   if (!(await projectLlmGatewayEnabledById(projectId).catch(() => false))) return null;
 

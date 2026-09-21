@@ -158,6 +158,27 @@ describe('channelTurnModel', () => {
     );
   });
 
+  /**
+   * The catalog is NOT a usable pre-filter for this. `deepseek-v4-flash` is in
+   * `gatewayModelCatalog` and still answers "requires Kortix's managed
+   * provider, which is disabled on this deployment" upstream. Two live Teams
+   * sessions were pinned to it on 2026-09-21, failing every message with
+   * nothing shown to the user; a catalog pre-filter would have skipped exactly
+   * those. `glm-5.3-flash` stands in for that shape here: present in the
+   * catalog, refused by the probe.
+   */
+  test('a pin that is IN the catalog but refused upstream is still replaced', async () => {
+    expect(await channelTurnModel({ ...base, currentModel: 'glm-5.3-flash', hasImage: false })).toBe(
+      'deepseek-v4-flash',
+    );
+  });
+
+  test('nothing pinned and no image costs no probe at all', async () => {
+    probeCalls.length = 0;
+    expect(await channelTurnModel({ ...base, currentModel: null, hasImage: false })).toBeNull();
+    expect(probeCalls).toHaveLength(0);
+  });
+
   test('an unservable pin AND an image must land on a model that can read one', async () => {
     expect(await channelTurnModel({ ...base, currentModel: 'retired-model-v1', hasImage: true })).toBe(
       'codex/gpt-6-astra',
@@ -223,7 +244,10 @@ const probeCalls: string[] = [];
 mock.module('../llm-gateway/resolution/default-model', () => ({
   isModelServableForAccount: async ({ model }: { model: string }) => {
     probeCalls.push(model);
-    return model !== 'gpt-5.6-luna' && model !== 'retired-model-v1';
+    // Mirrors dev: the configured vision target and the retired pin are
+    // refused. `glm-5.3-flash` is refused too, standing in for a model the
+    // catalog still lists while the gateway will not serve it.
+    return !['gpt-5.6-luna', 'retired-model-v1', 'glm-5.3-flash'].includes(model);
   },
 }));
 
