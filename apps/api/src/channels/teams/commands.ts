@@ -12,6 +12,7 @@ import {
   setChannelConversationPolicy,
   setChannelModel,
 } from '../slack/selection';
+import { buildAgentsPicker } from './agent-picker';
 import { conversationPolicyLabel, normalizeConversationPolicy } from './participants';
 import { sendCard } from '../teams-api';
 import {
@@ -104,7 +105,7 @@ export async function handleTeamsCommand(input: {
         return true;
       case 'agents':
         await ensureBinding(input.tenantId, conversationId, input.projectId, input.activity);
-        await post(await buildAgentsCard(ctx, input.projectId));
+        await post(await buildAgentsPicker(ctx, input.projectId));
         return true;
       case 'agent':
         await ensureBinding(input.tenantId, conversationId, input.projectId, input.activity);
@@ -286,39 +287,9 @@ async function setModel(ctx: ReturnType<typeof teamsChannelCtx>, arg: string) {
   return buildNoticeCard(`Model set to ${labelForModelRef(stored)}. New sessions will use it.`);
 }
 
-async function buildAgentsCard(ctx: ReturnType<typeof teamsChannelCtx>, projectId: string) {
-  const [governance, selection] = await Promise.all([
-    loadProjectAgentGovernance(projectId),
-    currentChannelSelection(ctx),
-  ]);
-  const current = selection?.agentName ?? null;
-  if (governance.agents.length === 0) {
-    return buildNoticeCard(
-      'This project has no declared agents, so it runs the default agent. Declare agents in `kortix.yaml` to switch here.',
-      '🤖',
-    );
-  }
-  const options: SelectOption[] = [
-    { label: 'Default', current: !current, data: { agent: '' } },
-    ...governance.agents.slice(0, 6).map((a) => ({
-      label: a.name,
-      hint: a.description ?? undefined,
-      current: current === a.name,
-      data: { agent: a.name },
-    })),
-  ];
-  return buildSelectCard({
-    emoji: '🤖',
-    title: 'Agent',
-    subtitle: current ? `Currently ${current}` : 'Currently the default agent',
-    verb: 'teams_set_agent',
-    options,
-  });
-}
-
 async function setAgent(ctx: ReturnType<typeof teamsChannelCtx>, arg: string) {
   const name = arg.trim();
-  if (!name) return buildAgentsCard(ctx, (await currentChannelSelection(ctx))?.projectId ?? '');
+  if (!name) return buildAgentsPicker(ctx, (await currentChannelSelection(ctx))?.projectId ?? '');
   if (name.toLowerCase() === 'default') {
     await setChannelAgent(ctx, null);
     return buildNoticeCard('Agent reset to the project default.');

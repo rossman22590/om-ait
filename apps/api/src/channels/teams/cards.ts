@@ -235,6 +235,41 @@ export function buildSelectCard(opts: {
   return card(body);
 }
 
+/**
+ * The agent picker, in both of its moods.
+ *
+ * `/agents` builds the neutral one: the conversation's current pick is marked
+ * "✓ In use". A failed session start builds the recovery one by passing `lead`
+ * — it leads with the failure, marks nothing as current (the conversation's own
+ * pick is the dead agent it is replacing), and closes with what to do next.
+ * Both carry the same `teams_set_agent` verb, so one tap fixes the conversation
+ * either way and `interactivity.ts` needs no second handler.
+ */
+export function buildAgentPickerCard(opts: {
+  agents: ReadonlyArray<{ name: string; description?: string | null }>;
+  current: string | null;
+  lead?: { title: string; subtitle: string };
+}): Record<string, unknown> {
+  const current = opts.lead ? null : opts.current;
+  const options: SelectOption[] = [
+    { label: 'Default', current: !opts.lead && !current, data: { agent: '' } },
+    ...opts.agents.slice(0, 6).map((a) => ({
+      label: a.name,
+      hint: a.description ?? undefined,
+      current: current === a.name,
+      data: { agent: a.name },
+    })),
+  ];
+  return buildSelectCard({
+    emoji: opts.lead ? '⚠️' : '🤖',
+    title: opts.lead?.title ?? 'Agent',
+    subtitle: opts.lead?.subtitle ?? (current ? `Currently ${current}` : 'Currently the default agent'),
+    verb: 'teams_set_agent',
+    options,
+    ...(opts.lead ? { footer: 'Pick one, then send your message again.' } : {}),
+  });
+}
+
 export function buildPanelCard(opts: {
   emoji?: string;
   title: string;
