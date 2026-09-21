@@ -174,14 +174,26 @@ Field `type`: `text`, `textarea`, `number`, `date`, `time`, `choice`,
 `ask` **finalizes the turn**, exactly like `send`. The user's Submit arrives as
 your NEXT turn with their answers, so post the form and then END your turn.
 
-**Do NOT use the built-in `question` tool on a Teams turn.** It's a synchronous web-UI/Slack construct and has no form renderer in Teams — calling it just hangs or fails. Put your question in `teams send` as plain prose (offer the options inline, e.g. "Reply **prod**, **staging**, or **dev**"), end the turn, and handle their answer next turn.
+**Ask with a card, not with prose.** Teams renders real controls, so a question
+written as a numbered list in `teams send` is a worse version of what the
+platform already gives you. Reach for prose only when there is genuinely
+nothing to pick or fill in.
+
+The built-in `question` tool DOES work here: the Kortix server renders it as a
+card with a button per option and returns immediately with a note telling you
+to end your turn. It does not block. Use it for a quick either/or; use
+`teams ask --form-file` when you need typed input or several answers at once.
 
 | When you want to… | Use |
 | --- | --- |
-| Ask the user something | `teams send` with the question, then end the turn |
+| Ask a quick either/or | the `question` tool — buttons, one tap |
+| Ask for typed input, or several answers | `teams ask --form-file` |
+| Ask something genuinely open-ended | `teams send` with the question |
 | Deliver the final answer | `teams send` |
 | Show progress along the way | `teams step` |
 | Send a file | `teams send --file` |
+
+Whichever you use, the reply arrives as your NEXT turn. Ask, then END the turn.
 </asking-the-user>
 
 <files-and-artifacts>

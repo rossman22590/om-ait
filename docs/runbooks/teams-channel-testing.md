@@ -756,3 +756,29 @@ the conversation accepted prompts again.
 
 The abort is best effort and imported lazily, so the channel modules keep no
 static edge into the session-lifecycle engine.
+
+### The "ask me in the nice UI" gap was stale skill guidance
+
+The `kortix-teams` skill said:
+
+> Do NOT use the built-in `question` tool on a Teams turn. It's a synchronous
+> web-UI/Slack construct and has no form renderer in Teams — calling it just
+> hangs or fails.
+
+That has not been true for some time. `channels/teams/questions.ts`
+`postTeamsQuestion` finalizes the live card, posts `buildQuestionCard` (a
+button per option, up to six) and returns **immediately** with a sentinel
+telling the agent that Teams questions are async and to end the turn. It
+cannot hang.
+
+So the agent was being told to avoid the one thing that renders controls, and
+it wrote its questions as a numbered list instead — which is exactly what
+"ask me again, but in the nice ui" was reacting to. The skill now says to ask
+with a card: the `question` tool for a quick either/or, `teams ask --form-file`
+for typed input or several answers, prose only when there is genuinely nothing
+to pick.
+
+Managed skills are baked into the image (`/opt/kortix/managed-skills`) and
+overlaid into every session at boot, so this reaches sandboxes built after the
+change — the same rule as the CLI, and the project repo's own copy is
+overridden by the overlay.
