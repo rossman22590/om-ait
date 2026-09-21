@@ -114,6 +114,9 @@ mock.module('../channels/teams/turn', () => ({
     calls.push('persistServiceUrl');
   },
   buildTeamsTurnEnv: () => ({}),
+  showStopOnLiveCard: async () => {
+    calls.push('showStopOnLiveCard');
+  },
 }));
 
 mock.module('../channels/teams/identity', () => ({
@@ -489,5 +492,19 @@ describe('createOrJoinTeamsConversationSession — a start failure says what to 
     await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
 
     expect((finalized[0] as { error: string }).error.toLowerCase()).toContain('sandbox runtime');
+  });
+});
+
+// Stop is only paintable once the card knows which session it would end, so
+// the repaint has to follow the bind — otherwise the button appears only when
+// the agent reports its first step, which on a slow start is the whole wait.
+describe('createOrJoinTeamsConversationSession — Stop appears as soon as the session exists', () => {
+  test('the live card is repainted immediately after the turn binds', async () => {
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+
+    const bind = calls.indexOf('saveTurn');
+    const repaint = calls.indexOf('showStopOnLiveCard');
+    expect(bind).toBeGreaterThanOrEqual(0);
+    expect(repaint).toBeGreaterThan(bind);
   });
 });

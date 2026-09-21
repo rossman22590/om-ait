@@ -23,6 +23,7 @@ import {
   noticeOnLiveCard,
   persistServiceUrl,
   saveTurn,
+  showStopOnLiveCard,
   startTurn,
 } from './turn';
 import { sessionWebUrl } from '../slack/util';
@@ -144,6 +145,8 @@ async function bindTurnToSession(handle: TeamsLiveTurn | null, sessionId: string
   if (!handle) return;
   handle.sessionId = sessionId;
   await saveTurn(handle);
+  // Stop is only paintable once the card knows which session it would end.
+  await showStopOnLiveCard(handle);
 }
 
 const ERROR_NOTICE_TTL_MS = 30 * 24 * 60 * 60 * 1000;

@@ -13,6 +13,7 @@ import {
   setChannelModel,
 } from '../slack/selection';
 import { buildAgentsPicker } from './agent-picker';
+import { conversationSessionId, stopTeamsTurn } from './stop';
 import { conversationPolicyLabel, normalizeConversationPolicy } from './participants';
 import { sendCard } from '../teams-api';
 import {
@@ -90,6 +91,32 @@ export async function handleTeamsCommand(input: {
       case 'help':
         await post(helpCard());
         return true;
+      case 'stop':
+      case 'cancel': {
+        // The live card's Stop button is the primary lever; this is the one
+        // that still works after the card has scrolled out of reach.
+        const sessionId = await conversationSessionId(input.tenantId, conversationId);
+        if (!sessionId) {
+          await post(buildNoticeCard('Nothing is running in this conversation.'));
+          return true;
+        }
+        const outcome = await stopTeamsTurn({
+          sessionId,
+          teamsUserId: userId ?? '',
+          byName: input.activity.from?.name,
+        });
+        await post(
+          outcome.stopped
+            ? buildNoticeCard(
+                outcome.stoppedRuntime
+                  ? 'Stopped. The agent is no longer working on this.'
+                  : 'Stopped. The run was already closing on its own.',
+                '✅',
+              )
+            : buildNoticeCard(outcome.notice),
+        );
+        return true;
+      }
       case 'status':
       case 'config':
       case 'settings':
@@ -156,6 +183,7 @@ function helpCard() {
     { cmd: '/agents', desc: 'pick the agent for this conversation' },
     { cmd: '/projects', desc: 'list connected projects' },
     { cmd: '/use <name>', desc: 'point this conversation at another project' },
+    { cmd: '/stop', desc: 'stop the run in progress here' },
     { cmd: '/policy', desc: 'who may join sessions started here: open, owner, approval' },
   ]);
 }

@@ -80,8 +80,26 @@ function planContainer(title: string, steps: StreamTaskChunk[]): CardElement[] {
   return elements;
 }
 
-export function buildPlanCard(title: string, steps: StreamTaskChunk[]): Record<string, unknown> {
-  return card(planContainer(title, steps));
+export const TEAMS_STOP_VERB = 'teams_stop';
+
+/**
+ * The live "working on it" card.
+ *
+ * `sessionId` adds the Stop button. Every other Kortix surface can end a run
+ * the moment it goes wrong; in Teams the only lever was to wait out the
+ * 30-minute GC, and a wedged turn swallowed every later message in the
+ * conversation (dev 2026-09-19). The button carries the session id because the
+ * invoke that comes back names no turn of its own.
+ */
+export function buildPlanCard(
+  title: string,
+  steps: StreamTaskChunk[],
+  sessionId?: string,
+): Record<string, unknown> {
+  return card(
+    planContainer(title, steps),
+    sessionId ? [executeAction('Stop', TEAMS_STOP_VERB, { sessionId })] : undefined,
+  );
 }
 
 export function buildFinalCard(opts: {
