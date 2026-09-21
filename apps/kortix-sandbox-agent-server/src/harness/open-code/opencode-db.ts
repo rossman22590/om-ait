@@ -288,6 +288,31 @@ export class OpencodeDb {
     return row ?? null
   }
 
+  /**
+   * The user message the session's newest ASSISTANT message answers — the turn
+   * that is running, when one is. `null` when there is none or the DB is
+   * unreadable.
+   *
+   * One `message` row and no `part` rows, on purpose: the memory guard asks this
+   * at ~97 % box memory, and parts are where inline image bytes live. Trailing
+   * user rows (a prompt forwarded into the live turn) are skipped, exactly as
+   * `readRootTurnState` skips them.
+   */
+  newestAssistantParentId(sessionId: string): string | null {
+    const row = this.retry('newestAssistantParentId', (db) =>
+      db
+        .query<{ parent_id: string | null }, [string]>(
+          `SELECT json_extract(data, '$.parentID') AS parent_id
+             FROM message
+            WHERE session_id = ? AND json_extract(data, '$.role') = 'assistant'
+            ORDER BY time_created DESC, id DESC
+            LIMIT 1`,
+        )
+        .get(sessionId),
+    )
+    return typeof row?.parent_id === 'string' && row.parent_id ? row.parent_id : null
+  }
+
   /** OpenCode's own durable event cursor, per aggregate (= per OpenCode session). */
   headSeqs(): Record<string, number> | null {
     const rows = this.retry('headSeqs', (db) =>

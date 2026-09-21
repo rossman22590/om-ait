@@ -299,6 +299,53 @@ describe('reads', () => {
   })
 })
 
+describe('newestAssistantParentId — the running turn, from one small row', () => {
+  // The memory guard asks this at 97 % box memory, so it must not load parts
+  // (that is where inline image bytes live) and must not go through HTTP.
+  function seedTurn(db: Database, session: string, n: number, role: 'user' | 'assistant', parent?: string): string {
+    const id = seedMessage(db, session, n, role)
+    db.query('UPDATE message SET data = ? WHERE id = ?').run(
+      JSON.stringify({ role, ...(parent ? { parentID: parent } : {}), time: { created: n * 10 } }),
+      id,
+    )
+    return id
+  }
+
+  test('names the user message the newest assistant message answers', () => {
+    let running = ''
+    build((db) => {
+      seedSession(db, 'ses_a')
+      const first = seedTurn(db, 'ses_a', 1, 'user')
+      seedTurn(db, 'ses_a', 2, 'assistant', first)
+      running = seedTurn(db, 'ses_a', 3, 'user')
+      seedTurn(db, 'ses_a', 4, 'assistant', running)
+    })
+    expect(new OpencodeDb(dbPath).newestAssistantParentId('ses_a')).toBe(running)
+  })
+
+  test('a prompt forwarded into the live turn does not hide the turn that is running', () => {
+    let running = ''
+    build((db) => {
+      seedSession(db, 'ses_a')
+      running = seedTurn(db, 'ses_a', 1, 'user')
+      seedTurn(db, 'ses_a', 2, 'assistant', running)
+      seedTurn(db, 'ses_a', 3, 'user')
+    })
+    expect(new OpencodeDb(dbPath).newestAssistantParentId('ses_a')).toBe(running)
+  })
+
+  test('is scoped to the session, and null when no assistant message exists', () => {
+    build((db) => {
+      seedSession(db, 'ses_a')
+      seedSession(db, 'ses_b')
+      const other = seedTurn(db, 'ses_b', 1, 'user')
+      seedTurn(db, 'ses_b', 2, 'assistant', other)
+      seedTurn(db, 'ses_a', 3, 'user')
+    })
+    expect(new OpencodeDb(dbPath).newestAssistantParentId('ses_a')).toBeNull()
+  })
+})
+
 describe('concurrency with a live writer', () => {
   test('a page taken mid-write sees ONE consistent snapshot, never a mix', () => {
     build((db) => {

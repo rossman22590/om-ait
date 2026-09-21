@@ -5,7 +5,12 @@ import { startResourceMonitor, type ResourceMonitor } from '../../resources'
 import type { Opencode } from './lifecycle'
 import { OPENCODE_HOME } from './paths'
 import { defaultSidecarDir, opencodeDbPath, runAttachmentOffloadPass } from './attachment-offload'
-import { opencodeSessionInFlight, opencodeTurnInFlight, readPinnedSessionId } from './opencode-turn-state'
+import {
+  TURN_PROBE_WINDOW,
+  opencodeSessionInFlight,
+  opencodeTurnInFlight,
+  readPinnedSessionId,
+} from './opencode-turn-state'
 import { OpencodeDb } from './opencode-db'
 import { QuickQueueInterrupt, quickQueueSnapshotFromPage } from './quick-queue-interrupt'
 import {
@@ -91,6 +96,13 @@ export function startOpenCodeBackground(
       offloadRunning = false
     }
   }
+  // The root the guard aborted and the turn that was running on it. The relay
+  // names both. The turn is read BEFORE the abort, from one small SQLite row:
+  // after the abort a queued prompt can already be the newest turn, and the
+  // HTTP transcript can be tens of MB at the moment memory is at its worst.
+  const turnDb = new OpencodeDb(offloadDbPath)
+  let guardedSessionId: string | null = null
+  let guardedTurnMessageId: string | null = null
   const offloadTimer = setInterval(() => void runOffloadIfIdle('interval'), 5 * 60_000)
   offloadTimer.unref?.()
   const offloadBootTimer = setTimeout(() => void runOffloadIfIdle('boot'), 90_000)
@@ -111,7 +123,10 @@ export function startOpenCodeBackground(
       turnInFlight,
       abortTurn: async (reason) => {
         const sessionId = readPinnedSessionId()
+        guardedSessionId = sessionId
+        guardedTurnMessageId = null
         if (!sessionId) return false
+        if (turnDb.probe().supported) guardedTurnMessageId = turnDb.newestAssistantParentId(sessionId)
         const url =
           `${opencode.getInternalUrl()}/session/${encodeURIComponent(sessionId)}/abort` +
           `?directory=${encodeURIComponent(cfg.workspace)}`
@@ -120,10 +135,18 @@ export function startOpenCodeBackground(
         return res.ok
       },
       onGuard: async ({ reason, snapshot, aborted }) => {
-        // Tell the control plane in the same words the UI already renders for
-        // a turn that ended in error, BEFORE OpenCode's own `session.error`
-        // ("Aborted") can claim the turn end — the first end wins.
-        await relayMemoryGuardTurnEnd({ reason, aborted, opencodeRssMb: snapshot.runtime?.rssMb ?? null })
+        // Tell the control plane why the turn ended. Sent after the abort, so
+        // OpenCode's own end frame for the same turn races this one; apps/api
+        // keeps the first end for a turn.
+        await relayMemoryGuardTurnEnd({
+          reason,
+          aborted,
+          opencodeRssMb: snapshot.runtime?.rssMb ?? null,
+          opencodeSessionId: guardedSessionId,
+          turnMessageId: guardedTurnMessageId,
+          opencode,
+          workspace: cfg.workspace,
+        })
         void runOffloadIfIdle('memory-guard')
       },
     },
@@ -147,13 +170,18 @@ export function startOpenCodeBackground(
  * Report a memory-guard abort to apps/api as the turn's end, in the shape
  * the turn-stream already accepts (`kind: 'end'`, `status: 'error'`), so the
  * ledger records `failed` with a reason that names memory and the UI shows
- * it. Sent BEFORE the abort lands: OpenCode's own `session.error` ("Aborted")
- * follows, and the turn-stream keeps the first end for a turn.
+ * it. apps/api closes a turn only when the frame names it (`turn_message_id`);
+ * an unnamed frame settles as `identity_mismatch` and the reason is lost.
  */
 export async function relayMemoryGuardTurnEnd(input: {
   reason: string
   aborted: boolean
   opencodeRssMb: number | null
+  opencodeSessionId: string | null
+  /** The aborted turn, when it was read before the abort. */
+  turnMessageId?: string | null
+  opencode: Pick<Opencode, 'getInternalUrl'>
+  workspace: string
 }): Promise<boolean> {
   const projectId = process.env.KORTIX_PROJECT_ID
   const sessionId = process.env.KORTIX_SESSION_ID
@@ -161,6 +189,13 @@ export async function relayMemoryGuardTurnEnd(input: {
   const apiUrl = (process.env.KORTIX_API_URL ?? '').replace(/\/+$/, '')
   if (!projectId || !sessionId || !token || !apiUrl) return false
   const apiRoot = apiUrl.endsWith('/v1') ? apiUrl : `${apiUrl}/v1`
+  // Name the turn only when the abort landed: a named end closes the turn,
+  // and a failed abort leaves it running.
+  const turnMessageId =
+    input.aborted && input.opencodeSessionId
+      ? (input.turnMessageId ??
+        (await readGuardedTurnMessageId(input.opencode.getInternalUrl(), input.workspace, input.opencodeSessionId)))
+      : null
   try {
     const res = await fetch(`${apiRoot}/projects/${encodeURIComponent(projectId)}/turn-stream`, {
       method: 'POST',
@@ -169,15 +204,20 @@ export async function relayMemoryGuardTurnEnd(input: {
         session_id: sessionId,
         kind: 'end',
         status: 'error',
-        opencode_session_id: readPinnedSessionId() ?? undefined,
+        opencode_session_id: input.opencodeSessionId ?? undefined,
+        turn_message_id: turnMessageId ?? undefined,
         error_name: 'SandboxMemoryGuard',
         error_message: input.reason,
-        error_retryable: true,
+        // An aborted turn is over. apps/api reads `true` as "a retry, still
+        // running" and drops the frame as `non_terminal`; that is only the
+        // truth when the abort did not land.
+        error_retryable: !input.aborted,
       }),
       signal: AbortSignal.timeout(10_000),
     })
     logger.warn('[resources] memory guard relayed to the control plane', {
       status: res.status,
+      turnMessageId,
       aborted: input.aborted,
       opencodeRssMb: input.opencodeRssMb,
     })
@@ -185,5 +225,31 @@ export async function relayMemoryGuardTurnEnd(input: {
   } catch (err) {
     logger.warn('[resources] memory guard relay failed', { err: (err as Error).message })
     return false
+  }
+}
+
+/**
+ * The user message of the turn the guard aborted: the newest assistant
+ * message's `parentID`. Read after the abort, which stamps that message with
+ * `MessageAbortedError` and a completion time but keeps its parent. `null`
+ * when OpenCode cannot be read.
+ */
+async function readGuardedTurnMessageId(
+  baseUrl: string,
+  workspace: string,
+  sessionId: string,
+): Promise<string | null> {
+  try {
+    const url =
+      `${baseUrl}/session/${encodeURIComponent(sessionId)}/message` +
+      `?directory=${encodeURIComponent(workspace)}&limit=${TURN_PROBE_WINDOW}`
+    const res = await fetch(url, { signal: AbortSignal.timeout(5_000) })
+    if (!res.ok) return null
+    const rows = (await res.json()) as Array<{ info?: { role?: string; parentID?: string } }>
+    if (!Array.isArray(rows)) return null
+    const newest = rows.findLast((row) => row.info?.role === 'assistant')
+    return newest?.info?.parentID ?? null
+  } catch {
+    return null
   }
 }
