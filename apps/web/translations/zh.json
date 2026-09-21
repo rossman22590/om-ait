@@ -19463,5 +19463,17 @@
     "modelError": "无法更新模型访问权限。",
     "hiddenShort": "已从选择器中隐藏。仍允许直接请求。",
     "resetError": "无法重置模型列表。"
+  },
+  "projectChooser": {
+    "invitations": "邀请",
+    "invitedBy": "{email} 邀请了你",
+    "join": "加入",
+    "joinError": "无法加入，请重试。",
+    "unnamedWorkspace": "工作区",
+    "noPermissionTitle": "还没有工作区",
+    "noPermissionBody": "请让所有者或管理员邀请 {email}。",
+    "invitesTitle": "你收到了邀请",
+    "invitesDescription": "加入团队共享的项目，或创建你自己的项目。",
+    "createProjectInstead": "改为创建新项目"
   }
 }

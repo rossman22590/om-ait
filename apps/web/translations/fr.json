@@ -19463,5 +19463,17 @@
     "modelError": "Impossible de modifier l’accès au modèle.",
     "hiddenShort": "Masqué dans le sélecteur. Les requêtes directes restent autorisées.",
     "resetError": "Impossible de réinitialiser la liste des modèles."
+  },
+  "projectChooser": {
+    "invitations": "Invitations",
+    "invitedBy": "Invité par {email}",
+    "join": "Rejoindre",
+    "joinError": "Impossible de rejoindre. Réessayez.",
+    "unnamedWorkspace": "Espace de travail",
+    "noPermissionTitle": "Aucun espace de travail",
+    "noPermissionBody": "Demandez à un propriétaire ou un administrateur d'inviter {email}.",
+    "invitesTitle": "Vous êtes invité",
+    "invitesDescription": "Rejoignez un projet partagé par votre équipe, ou créez le vôtre.",
+    "createProjectInstead": "Créer plutôt un nouveau projet"
   }
 }

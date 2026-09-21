@@ -19463,5 +19463,17 @@
     "modelError": "Could not update model access.",
     "hiddenShort": "Hidden from the picker. Direct requests are still allowed.",
     "resetError": "Could not reset the model list."
+  },
+  "projectChooser": {
+    "invitations": "Invitations",
+    "invitedBy": "Invited by {email}",
+    "join": "Join",
+    "joinError": "Could not join. Try again.",
+    "unnamedWorkspace": "Workspace",
+    "noPermissionTitle": "No workspace yet",
+    "noPermissionBody": "Ask an owner or admin to invite {email}.",
+    "invitesTitle": "You're invited",
+    "invitesDescription": "Join a project your team shared, or start your own.",
+    "createProjectInstead": "Create a new project instead"
   }
 }

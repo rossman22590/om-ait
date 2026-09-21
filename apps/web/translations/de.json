@@ -19463,5 +19463,17 @@
     "modelError": "Der Modellzugriff konnte nicht aktualisiert werden.",
     "hiddenShort": "In der Auswahl ausgeblendet. Direkte Anfragen sind weiterhin erlaubt.",
     "resetError": "Die Modellliste konnte nicht zurückgesetzt werden."
+  },
+  "projectChooser": {
+    "invitations": "Einladungen",
+    "invitedBy": "Eingeladen von {email}",
+    "join": "Beitreten",
+    "joinError": "Beitritt fehlgeschlagen. Versuche es erneut.",
+    "unnamedWorkspace": "Workspace",
+    "noPermissionTitle": "Noch kein Workspace",
+    "noPermissionBody": "Bitte einen Owner oder Admin, {email} einzuladen.",
+    "invitesTitle": "Du wurdest eingeladen",
+    "invitesDescription": "Tritt einem Projekt deines Teams bei oder starte dein eigenes.",
+    "createProjectInstead": "Stattdessen ein neues Projekt erstellen"
   }
 }

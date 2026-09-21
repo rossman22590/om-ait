@@ -19463,5 +19463,17 @@
     "modelError": "モデルへのアクセスを更新できませんでした。",
     "hiddenShort": "選択リストでは非表示です。直接リクエストは引き続き許可されます。",
     "resetError": "モデル一覧をリセットできませんでした。"
+  },
+  "projectChooser": {
+    "invitations": "招待",
+    "invitedBy": "{email} からの招待",
+    "join": "参加",
+    "joinError": "参加できませんでした。もう一度お試しください。",
+    "unnamedWorkspace": "ワークスペース",
+    "noPermissionTitle": "ワークスペースがまだありません",
+    "noPermissionBody": "オーナーまたは管理者に {email} の招待を依頼してください。",
+    "invitesTitle": "招待されています",
+    "invitesDescription": "チームが共有したプロジェクトに参加するか、自分のプロジェクトを作成してください。",
+    "createProjectInstead": "代わりに新しいプロジェクトを作成"
   }
 }
