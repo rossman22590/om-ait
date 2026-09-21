@@ -132,7 +132,7 @@ export async function handleTeamsCommand(input: {
         return true;
       case 'agents':
         await ensureBinding(input.tenantId, conversationId, input.projectId, input.activity);
-        await post(await buildAgentsPicker(ctx, input.projectId));
+        await post(await buildAgentsPicker(ctx, input.projectId, undefined, userId));
         return true;
       case 'agent':
         await ensureBinding(input.tenantId, conversationId, input.projectId, input.activity);

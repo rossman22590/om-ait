@@ -121,6 +121,9 @@ mock.module('../channels/teams/turn', () => ({
 
 mock.module('../channels/teams/identity', () => ({
   teamsUserId: () => 'aad-user-1',
+  // Reached by the AGENT_NOT_DECLARED recovery picker, which scopes its list
+  // to the pressing user.
+  lookupTeamsIdentity: async () => null,
   resolveTeamsActor: async () => {
     calls.push('resolveTeamsActor');
     return actor;
@@ -142,11 +145,11 @@ mock.module('../channels/teams/binding', () => ({
 
 // `mock.module` REPLACES the module wholesale, so every export the
 // session-start path reaches through this file has to be listed. Session start
-// pulls `loadProjectAgentGovernance` through the AGENT_NOT_DECLARED recovery
-// picker (channels/teams/agent-picker.ts).
+// pulls `listProjectAgents` through the AGENT_NOT_DECLARED recovery picker
+// (channels/teams/agent-picker.ts -> channels/scoped-agents.ts).
 mock.module('../channels/slack/selection', () => ({
   currentChannelSelection: async () => null,
-  loadProjectAgentGovernance: async () => ({ agents: [] }),
+  listProjectAgents: async () => [],
 }));
 
 let participantVerdict: { allowed: true } | { allowed: false; notice: string } = { allowed: true };

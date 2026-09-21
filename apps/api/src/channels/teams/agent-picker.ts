@@ -1,5 +1,7 @@
-import { currentChannelSelection, loadProjectAgentGovernance } from '../slack/selection';
+import { currentChannelSelection } from '../slack/selection';
+import { scopedProjectAgents } from '../scoped-agents';
 import { teamsChannelCtx } from './binding';
+import { lookupTeamsIdentity } from './identity';
 import { buildAgentPickerCard, buildNoticeCard } from './cards';
 
 /**
@@ -16,12 +18,17 @@ export async function buildAgentsPicker(
   ctx: ReturnType<typeof teamsChannelCtx>,
   projectId: string,
   lead?: { title: string; subtitle: string },
+  // The Teams user pressing this, so the list is scoped to what they may
+  // actually run. Omitted means unlinked, which sees the unscoped set.
+  teamsUserId?: string | null,
 ): Promise<Record<string, unknown>> {
-  const [governance, selection] = await Promise.all([
-    loadProjectAgentGovernance(projectId),
+  const identity =
+    teamsUserId && ctx.teamId ? await lookupTeamsIdentity(ctx.teamId, teamsUserId) : null;
+  const [agents, selection] = await Promise.all([
+    scopedProjectAgents(projectId, identity?.userId ?? null),
     currentChannelSelection(ctx),
   ]);
-  if (governance.agents.length === 0) {
+  if (agents.length === 0) {
     return buildNoticeCard(
       lead
         ? "I couldn't start a session — the agent set for this conversation no longer exists, and this project declares no other agent. Run `/agents default` to fall back to the project default, or declare an agent in `kortix.yaml`."
@@ -30,7 +37,7 @@ export async function buildAgentsPicker(
     );
   }
   return buildAgentPickerCard({
-    agents: governance.agents,
+    agents,
     current: selection?.agentName ?? null,
     lead,
   });
@@ -51,11 +58,17 @@ export async function buildAgentUnavailableCard(input: {
   conversationId: string;
   projectId: string;
   badAgent: string | null;
+  teamsUserId?: string | null;
 }): Promise<Record<string, unknown>> {
-  return buildAgentsPicker(teamsChannelCtx(input.tenantId, input.conversationId), input.projectId, {
-    title: "Couldn't start — pick an agent",
-    subtitle: input.badAgent
-      ? `The agent set for this conversation (${input.badAgent}) no longer exists.`
-      : 'The agent set for this conversation no longer exists.',
-  });
+  return buildAgentsPicker(
+    teamsChannelCtx(input.tenantId, input.conversationId),
+    input.projectId,
+    {
+      title: "Couldn't start — pick an agent",
+      subtitle: input.badAgent
+        ? `The agent set for this conversation (${input.badAgent}) no longer exists.`
+        : 'The agent set for this conversation no longer exists.',
+    },
+    input.teamsUserId,
+  );
 }

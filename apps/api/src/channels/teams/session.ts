@@ -534,6 +534,7 @@ export async function createOrJoinTeamsConversationSession(input: {
             conversationId,
             projectId,
             badAgent: selection?.agentName ?? null,
+            teamsUserId: teamsUserId(activity),
           }),
         });
       } else {
