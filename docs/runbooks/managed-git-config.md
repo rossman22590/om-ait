@@ -130,6 +130,16 @@ Verified on the App path locally, real API against real GitHub (2026-09-21): pro
 `201` with starter commits, read, rename, clone and push through the git proxy,
 archive, and purge (`repo_deleted: true`, GitHub `404` afterwards).
 
+**Alerting.** Better Stack turns every `[projects] provision create_repo failed`
+line from the prod API into the metric `provision_create_repo_failed` (log-to-
+metric rule `m-25907071` on source `kortix_api`, 2346957). The dashboard
+"Kortix API — project creation" (1131427) charts it, and the alert
+"Prod: managed project creation failing" (2988583914) opens an incident at 3 or
+more failures in 10 minutes, by email and push. The log line covers both
+creation routes; `POST /v1/projects/provision-stream` answers `200` with an
+`error` frame, so a status-code alert alone misses half the failures. The
+outage produced about 12 failures per 10 minutes.
+
 **Known gap: collaborator invitations.**
 `POST /v1/projects/:id/git/collaborators` answers `200` on the App path for an
 organization member. Inviting a non-member is unverified: the App got `403
