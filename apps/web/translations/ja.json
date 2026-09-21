@@ -18583,7 +18583,10 @@
       "text5c71673648a2": "Teams で Apps → Manage your apps → Upload an app を開き、ZIP をアップロードします。",
       "text91b9932411cc": "アプリをチャットまたはチャネルに追加し、メンションしてセッションを開始します。",
       "textd208e2f1260f": "Teams 管理センターを開く",
-      "text98722a5463cb": "Teams に接続できませんでした"
+      "text98722a5463cb": "Teams に接続できませんでした",
+      "text53e5f96332d9": "Kortix ボットがテナントで動作できるよう、管理者の同意を付与します。",
+      "texte2f95a2e3a77": "Teams 管理センター（または Teams → Apps → Manage your apps → Upload）で、このマニフェストと color.png・outline.png アイコンから作成したアプリ パッケージをアップロードします。",
+      "textd9692dea50e7": "アプリをチャットまたはチャネルに追加し、下にテナント ID を貼り付けてこのプロジェクトに紐付けます。"
     }
   },
   "projectOnboarding": {

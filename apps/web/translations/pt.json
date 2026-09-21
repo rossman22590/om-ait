@@ -18583,7 +18583,10 @@
       "text5c71673648a2": "No Teams, vá a Apps → Manage your apps → Upload an app e carregue o zip.",
       "text91b9932411cc": "Adicione a aplicação a um chat ou canal e mencione-a para iniciar uma sessão.",
       "textd208e2f1260f": "Abrir o centro de administração do Teams",
-      "text98722a5463cb": "Não foi possível ligar o Teams"
+      "text98722a5463cb": "Não foi possível ligar o Teams",
+      "text53e5f96332d9": "Conceda o consentimento de administrador para que o bot do Kortix possa funcionar no seu inquilino.",
+      "texte2f95a2e3a77": "No centro de administração do Teams (ou Teams → Apps → Manage your apps → Upload), carregue um pacote da aplicação criado a partir deste manifesto, com os ícones color.png e outline.png.",
+      "textd9692dea50e7": "Adicione a aplicação a um chat ou canal e cole abaixo o ID do seu inquilino para a associar a este projeto."
     }
   },
   "projectOnboarding": {
