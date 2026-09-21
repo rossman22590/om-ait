@@ -44,6 +44,28 @@ import { accountMayUseManagedModels } from '../billing/services/entitlements';
 /** How many candidates to probe. A probe is a candidate resolution, not an upstream request. */
 const MAX_CANDIDATE_PROBES = 8;
 
+/**
+ * Servability answers are stable for far longer than a burst of chat messages,
+ * and the probe is the only authoritative source, so it is cached briefly
+ * rather than skipped. Keyed by account+project+model.
+ */
+const PROBE_TTL_MS = 60_000;
+const probeCache = new Map<string, { at: number; servable: boolean }>();
+
+function cachedProbe(key: string): boolean | undefined {
+  const hit = probeCache.get(key);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at > PROBE_TTL_MS) {
+    probeCache.delete(key);
+    return undefined;
+  }
+  return hit.servable;
+}
+
+export function resetVisionProbeCacheForTest(): void {
+  probeCache.clear();
+}
+
 type CapabilityView = { attachment?: boolean; modalities?: { input?: string[] }; cost?: { input?: number } };
 
 function wireModelId(model: string): string {
@@ -144,30 +166,48 @@ export async function channelTurnModel(input: {
   const { projectId, accountId, userId, currentModel, hasImage } = input;
   if (!userId) return null;
 
-  // EVERY inbound channel message lands here, so the ordinary case — a plain
-  // text message on a healthy pin — must cost no I/O at all. The catalog is an
-  // in-memory snapshot; both questions below are answered from it, and nothing
-  // else runs unless one of them says something is wrong.
-  const catalog = gatewayModelCatalog(projectId);
   const effective = currentModel || platformDefaultModelId();
-  const needsVision = hasImage && !modelReadsImages(projectId, effective);
-  // A pin the catalog no longer carries is the cheap signal for "retired".
-  const pinMissing = !!currentModel && !catalog[wireModelId(currentModel)];
-  if (!needsVision && !pinMissing) return null;
+  const effectiveReadsImages = modelReadsImages(projectId, effective);
+
+  // A plain text message on a pin we have no reason to doubt costs nothing.
+  // `pinMissing` is the cheap, in-memory signal that a pin may have been
+  // retired; the authoritative probe below decides.
+  const pinMissing = !!currentModel && !gatewayModelCatalog(projectId)[wireModelId(currentModel)];
+  if (!hasImage && !pinMissing) return null;
 
   if (!(await projectLlmGatewayEnabledById(projectId).catch(() => false))) return null;
 
   const freeModelsOnly = !(await accountMayUseManagedModels(accountId).catch(() => false));
-  const probe = (model: string) =>
-    isModelServableForAccount({ userId, accountId, projectId, freeModelsOnly, model }).catch(
-      () => false,
-    );
+  const probe = async (model: string): Promise<boolean> => {
+    const key = `${accountId}:${projectId}:${model}`;
+    const hit = cachedProbe(key);
+    if (hit !== undefined) return hit;
+    const servable = await isModelServableForAccount({
+      userId,
+      accountId,
+      projectId,
+      freeModelsOnly,
+      model,
+    }).catch(() => false);
+    probeCache.set(key, { at: Date.now(), servable });
+    return servable;
+  };
 
-  // Confirm the retirement authoritatively before replacing anything: a BYOK
-  // ref can be absent from this view for reasons that are not a retirement.
-  const pinUnservable = pinMissing && currentModel ? !(await probe(wireModelId(currentModel))) : false;
-  if (!needsVision && !pinUnservable) return null;
+  const pinServable = currentModel ? await probe(wireModelId(currentModel)) : true;
 
+  // An image message ALWAYS carries an explicit model, even when the pin is
+  // already fine. The session's recorded model is not reliably what OpenCode
+  // runs — on dev 2026-09-21 a session whose metadata and `/config` both said
+  // `kortix/codex/gpt-6-astra` answered on `deepseek-v4-pro-0813`, because a
+  // live model change updates the config while the OpenCode session keeps its
+  // own. A per-prompt override is the one lever that is always honoured, so
+  // for an image we pin deliberately instead of trusting that state.
+  if (hasImage && effectiveReadsImages && pinServable && currentModel) {
+    return wireModelId(currentModel);
+  }
+  if (!hasImage && pinServable) return null;
+
+  const needsVision = hasImage;
   const candidates = await replacementCandidates({
     projectId,
     accountId,
@@ -181,15 +221,15 @@ export async function channelTurnModel(input: {
         projectId,
         from: currentModel ?? null,
         to: model,
-        reason: needsVision ? (pinUnservable ? 'image+retired' : 'image') : 'retired',
+        reason: needsVision ? (pinServable ? 'image' : 'image+unservable') : 'unservable',
       });
       return model;
     }
   }
   console.info('[channels] no servable replacement model — the turn runs unchanged', {
     projectId,
-    needsVision,
-    pinUnservable,
+    hasImage,
+    pinServable,
     tried: candidates,
   });
   return null;

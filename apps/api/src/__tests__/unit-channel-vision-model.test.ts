@@ -1,5 +1,10 @@
-import { describe, expect, mock, test } from 'bun:test';
-import { capabilityReadsImages, channelTurnModel, promptModelOverride } from '../channels/vision-model';
+import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import {
+  capabilityReadsImages,
+  channelTurnModel,
+  promptModelOverride,
+  resetVisionProbeCacheForTest,
+} from '../channels/vision-model';
 
 /**
  * Why this exists: on dev 2026-09-19 a Teams message with a pasted screenshot
@@ -87,13 +92,23 @@ describe('promptModelOverride', () => {
  */
 describe('channelTurnModel', () => {
   const base = { projectId: 'p1', accountId: 'a1', userId: 'u1' };
+  beforeEach(() => resetVisionProbeCacheForTest());
 
-  test('leaves a healthy pin alone when the message has no image', async () => {
+  test('a plain text message on a healthy pin is left alone', async () => {
     expect(await channelTurnModel({ ...base, currentModel: 'codex/gpt-6-astra', hasImage: false })).toBeNull();
   });
 
-  test('leaves a vision-capable pin alone even when the message has an image', async () => {
-    expect(await channelTurnModel({ ...base, currentModel: 'codex/gpt-6-astra', hasImage: true })).toBeNull();
+  /**
+   * An image message ALWAYS carries an explicit model. On dev 2026-09-21 a
+   * session whose metadata AND `/config` both read `kortix/codex/gpt-6-astra`
+   * answered on `deepseek-v4-pro-0813`: a live model change updates the config
+   * while the OpenCode session keeps its own. Returning null here would leave
+   * the image turn on whatever stale model the runtime happened to hold.
+   */
+  test('an image message pins the model explicitly even when the pin already reads images', async () => {
+    expect(await channelTurnModel({ ...base, currentModel: 'codex/gpt-6-astra', hasImage: true })).toBe(
+      'codex/gpt-6-astra',
+    );
   });
 
   test('a text-only pin with an image moves to a model that really reads images', async () => {
@@ -114,13 +129,13 @@ describe('channelTurnModel', () => {
     );
   });
 
-  test('replaces a retired pin with the platform default when no image is involved', async () => {
+  test('a pin the deployment refuses is replaced even on a plain text message', async () => {
     expect(await channelTurnModel({ ...base, currentModel: 'retired-model-v1', hasImage: false })).toBe(
       'deepseek-v4-flash',
     );
   });
 
-  test('a retired pin AND an image must land on a model that can read one', async () => {
+  test('an unservable pin AND an image must land on a model that can read one', async () => {
     expect(await channelTurnModel({ ...base, currentModel: 'retired-model-v1', hasImage: true })).toBe(
       'codex/gpt-6-astra',
     );
@@ -130,6 +145,15 @@ describe('channelTurnModel', () => {
     expect(
       await channelTurnModel({ ...base, userId: null, currentModel: 'retired-model-v1', hasImage: true }),
     ).toBeNull();
+  });
+
+  test('the servability answer is cached, so a burst of messages probes once', async () => {
+    probeCalls.length = 0;
+    await channelTurnModel({ ...base, currentModel: 'retired-model-v1', hasImage: false });
+    const first = probeCalls.length;
+    expect(first).toBeGreaterThan(0);
+    await channelTurnModel({ ...base, currentModel: 'retired-model-v1', hasImage: false });
+    expect(probeCalls.length).toBe(first);
   });
 });
 
@@ -150,9 +174,12 @@ mock.module('../billing/services/entitlements', () => ({
 }));
 
 // Mirrors dev: the configured vision target is refused, the rest are not.
+const probeCalls: string[] = [];
 mock.module('../llm-gateway/resolution/default-model', () => ({
-  isModelServableForAccount: async ({ model }: { model: string }) =>
-    model !== 'gpt-5.6-luna' && model !== 'retired-model-v1',
+  isModelServableForAccount: async ({ model }: { model: string }) => {
+    probeCalls.push(model);
+    return model !== 'gpt-5.6-luna' && model !== 'retired-model-v1';
+  },
 }));
 
 const CATALOG = {

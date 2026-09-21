@@ -622,3 +622,32 @@ Two more things this round:
   override was dropped silently.
 
 **On dev, the image-capable models are the five `codex/*` ones.**
+
+### Round three: the session's recorded model is not what OpenCode runs
+
+With the modality fix in, session `196a99f5` had
+`metadata.opencode_model = kortix/codex/gpt-6-astra` and the sandbox's
+`/v1/p/<ext>/4096/config` reported `model: kortix/codex/gpt-6-astra` — and the
+next turn still answered on `deepseek-v4-pro-0813`. `PUT /sessions/:id/model`
+returns `applied_live: true` and updates the config, but the OpenCode session
+keeps its own model, so the config is not a reliable statement about the next
+turn.
+
+The per-prompt `overrides.model` IS always honoured — proved twice, with
+`glm-5.3-flash` and with the Teams image turn. So an image-bearing channel
+message now carries an explicit model every time, even when the pin already
+reads images. Trusting the recorded pin is what let a stale runtime model
+answer an image turn.
+
+Also this round: the pin is now confirmed with `isModelServableForAccount` on
+every channel message rather than only when it is missing from the in-memory
+catalog, because the two disagree. `deepseek-v4-flash` IS in the catalog and
+still fails upstream:
+
+```
+The "deepseek-v4-flash-0731" model requires Kortix's managed provider,
+which is disabled on this deployment.
+```
+
+The probe result is cached for 60 s per account+project+model, so a burst of
+chat messages probes once.
