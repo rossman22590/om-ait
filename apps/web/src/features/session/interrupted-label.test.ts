@@ -158,87 +158,69 @@ describe('deriveTurnErrorAbortState — the wiring that feeds TurnErrorDisplay',
 
 // Session ad02e053 (2026-09-18): the sandbox memory guard aborted a turn at 97 %
 // box memory. The transcript only says `MessageAbortedError`, an abort renders
-// nothing, and the user saw the agent stop with no explanation. When the control
-// plane names the cause of THIS turn's ending, that cause is what the row shows.
-describe('deriveTurnErrorPresentation — a named cause outranks the abort it produced', () => {
-  const guard = {
-    name: 'SandboxMemoryGuard',
-    message:
-      'sandbox memory at 97% (opencode 513 MB RSS of 3915 MB): turn stopped before the kernel would kill opencode',
-  };
-  const other = { name: 'SomeFutureGuard', message: 'the daemon stopped this turn' };
-
-  test('a memory-guard stop reads as a sentence, says what to do, and keeps the numbers', () => {
-    const row = deriveTurnErrorPresentation({ turnError: 'Aborted', isAbort: true, endCause: guard });
-    expect(row.isAbort).toBe(false);
-    expect(row.text).toBe('This turn was stopped because the sandbox ran out of memory (97% used).');
-    expect(row.suggestion).toContain('Ask the agent to continue');
-    expect(row.suggestion).toContain('sandbox memory at 97% (opencode 513 MB RSS of 3915 MB)');
-    // The daemon's internal rationale is not advice for the user.
-    expect(row.suggestion).not.toContain('kernel');
-  });
-
-  test('an unknown named cause shows its own message, as a real error', () => {
-    expect(
-      deriveTurnErrorPresentation({ turnError: 'Aborted', isAbort: true, endCause: other }),
-    ).toEqual({ text: other.message, isAbort: false, suggestion: undefined });
-  });
-
-  test('a plain Stop still renders nothing: no cause, the abort stands', () => {
-    expect(
-      deriveTurnErrorPresentation({ turnError: 'Aborted', isAbort: true, endCause: null }),
-    ).toEqual({ text: 'Aborted', isAbort: true, suggestion: undefined });
-  });
-
-  test("a genuine failure keeps its own text: the transcript's error is the more specific one", () => {
-    expect(
-      deriveTurnErrorPresentation({ turnError: 'upstream 500', isAbort: false, endCause: guard }),
-    ).toEqual({ text: 'upstream 500', isAbort: false, suggestion: undefined });
-  });
-
-  // "All four sub-agents failed and the turn said nothing." The control plane
-  // lists the turn as failed and nobody named why: the row must still say so.
-  test('a failed turn with no named cause still says it stopped', () => {
+// nothing, and the user saw the agent stop with no explanation. WHICH notice a
+// turn gets is the SDK's decision (`turnEndNotice`, tested there); this is only
+// the wording for each kind.
+describe('deriveTurnErrorPresentation — words for each kind of notice', () => {
+  test('a memory stop reads as a sentence, says what to do, and keeps the numbers', () => {
     const row = deriveTurnErrorPresentation({
       turnError: 'Aborted',
       isAbort: true,
-      endCause: null,
-      failedWithoutCause: true,
+      notice: {
+        kind: 'sandbox-memory',
+        usedPct: 97,
+        detail: 'sandbox memory at 97% (opencode 513 MB RSS of 3915 MB)',
+      },
     });
     expect(row.isAbort).toBe(false);
-    expect(row.text).toBe('This turn stopped before it finished.');
-    expect(row.suggestion).toBe('No reason was reported. Send a message to continue from where it stopped.');
+    expect(row.text).toBe('This turn was stopped because the sandbox was almost out of memory (97% used).');
+    expect(row.suggestion).toContain('Ask the agent to continue');
+    expect(row.suggestion).toContain('sandbox memory at 97% (opencode 513 MB RSS of 3915 MB)');
   });
 
-  test('the same holds when the transcript carries no error at all', () => {
+  test('a memory stop without numbers still reads as a sentence', () => {
     const row = deriveTurnErrorPresentation({
-      turnError: undefined,
-      isAbort: false,
-      endCause: null,
-      failedWithoutCause: true,
+      turnError: 'Aborted',
+      isAbort: true,
+      notice: { kind: 'sandbox-memory', usedPct: null, detail: null },
     });
-    expect(row.text).toBe('This turn stopped before it finished.');
+    expect(row.text).toBe('This turn was stopped because the sandbox was almost out of memory.');
+    expect(row.suggestion).not.toContain('Details');
   });
 
-  test("an unnamed failure never replaces the transcript's own error", () => {
+  test('another named cause shows its own message, as a real error', () => {
     expect(
       deriveTurnErrorPresentation({
-        turnError: 'upstream 500',
-        isAbort: false,
-        endCause: null,
-        failedWithoutCause: true,
+        turnError: 'Aborted',
+        isAbort: true,
+        notice: { kind: 'cause', name: 'SomeFutureGuard', message: 'the daemon stopped this turn' },
       }),
-    ).toEqual({ text: 'upstream 500', isAbort: false, suggestion: undefined });
+    ).toEqual({ text: 'the daemon stopped this turn', isAbort: false, suggestion: undefined });
   });
 
-  test('a turn with no error and no cause shows nothing', () => {
+  test('a turn that died unexplained still says it stopped', () => {
     expect(
-      deriveTurnErrorPresentation({ turnError: undefined, isAbort: false, endCause: null }),
-    ).toEqual({ text: undefined, isAbort: false, suggestion: undefined });
+      deriveTurnErrorPresentation({ turnError: undefined, isAbort: false, notice: { kind: 'unexplained' } }),
+    ).toEqual({
+      isAbort: false,
+      text: 'This turn stopped before it finished.',
+      suggestion: 'No reason was reported. Send a message to continue from where it stopped.',
+    });
   });
 
-  test('a cause alone is shown: the abort has not reached this tab yet', () => {
-    const row = deriveTurnErrorPresentation({ turnError: undefined, isAbort: false, endCause: other });
-    expect(row).toEqual({ text: other.message, isAbort: false, suggestion: undefined });
+  test('no notice: a stop somebody asked for keeps rendering nothing', () => {
+    expect(deriveTurnErrorPresentation({ turnError: 'Aborted', isAbort: true, notice: null })).toEqual({
+      text: 'Aborted',
+      isAbort: true,
+      suggestion: undefined,
+    });
+  });
+
+  test("no notice: the transcript's own error is shown as it is", () => {
+    expect(deriveTurnErrorPresentation({ turnError: 'upstream 500', isAbort: false, notice: null })).toEqual({
+      text: 'upstream 500',
+      isAbort: false,
+      suggestion: undefined,
+    });
   });
 });

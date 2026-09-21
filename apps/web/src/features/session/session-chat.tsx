@@ -229,9 +229,9 @@ import {
 } from '@/ui';
 import {
   isAbortError,
-  turnEndCause,
-  turnFailedWithoutCause,
-  type SessionTurnEndError,
+  turnEndNotice,
+  type SessionTurnOutcome,
+  type TurnEndNotice,
 } from '@kortix/sdk';
 import type { ProviderListResponse } from '@kortix/sdk/react';
 import {
@@ -610,62 +610,44 @@ export function deriveTurnErrorAbortState(turn: {
 
 /**
  * What a turn's error row shows. An abort renders nothing — but an abort is the
- * EFFECT of whatever stopped the turn. When the control plane named that cause
- * (`turnEndCause`: a sandbox memory guard, say), the cause is the row, as a real
- * error. A genuine failure keeps its own, more specific text.
+ * EFFECT of whatever stopped the turn. `turnEndNotice` (SDK) decides whether the
+ * control plane has something to say about THIS turn and what kind; this only
+ * puts words on it. No notice: the transcript's own error stands, abort or not.
  */
 export function deriveTurnErrorPresentation(input: {
   turnError: string | undefined;
   isAbort: boolean;
-  endCause: SessionTurnEndError | null;
-  /** The control plane lists this turn as failed and nobody named why. A Stop
-   *  the user pressed is never listed, so this is never their own stop. */
-  failedWithoutCause?: boolean;
+  notice: TurnEndNotice | null;
 }): { text: string | undefined; isAbort: boolean; suggestion: string | undefined } {
-  const { turnError, isAbort, endCause, failedWithoutCause } = input;
-  const transcriptSaysNothing = isAbort || !turnError;
-  if (endCause?.message && transcriptSaysNothing) {
-    return { isAbort: false, ...describeTurnEndCause(endCause) };
+  const { turnError, isAbort, notice } = input;
+  if (!notice) return { text: turnError, isAbort, suggestion: undefined };
+  switch (notice.kind) {
+    case 'sandbox-memory':
+      return {
+        isAbort: false,
+        text: `This turn was stopped because the sandbox was almost out of memory${
+          notice.usedPct === null ? '' : ` (${notice.usedPct}% used)`
+        }.`,
+        suggestion:
+          'The last command used almost all of the sandbox memory. Ask the agent to continue with a ' +
+          'lighter command, for example fewer parallel workers.' +
+          (notice.detail ? ` Details: ${notice.detail}.` : ''),
+      };
+    case 'cause':
+      return { isAbort: false, text: notice.message, suggestion: undefined };
+    case 'unexplained':
+      return {
+        isAbort: false,
+        text: 'This turn stopped before it finished.',
+        suggestion: 'No reason was reported. Send a message to continue from where it stopped.',
+      };
   }
-  if (failedWithoutCause && transcriptSaysNothing) {
-    return {
-      isAbort: false,
-      text: 'This turn stopped before it finished.',
-      suggestion: 'No reason was reported. Send a message to continue from where it stopped.',
-    };
-  }
-  return { text: turnError, isAbort, suggestion: undefined };
-}
-
-/**
- * A cause the sandbox names is written for a log, not for a person. The ones we
- * know get a sentence and a next step, and keep their numbers for support; an
- * unknown one shows its own message rather than nothing.
- */
-function describeTurnEndCause(cause: SessionTurnEndError): {
-  text: string;
-  suggestion: string | undefined;
-} {
-  const message = cause.message ?? '';
-  if (cause.name !== 'SandboxMemoryGuard') return { text: message, suggestion: undefined };
-  const percent = message.match(/(\d{1,3})%/)?.[1];
-  // Everything after the first ':' is the daemon's own rationale, not advice.
-  const measured = message.split(':')[0]?.trim();
-  return {
-    text: `This turn was stopped because the sandbox ran out of memory${percent ? ` (${percent}% used)` : ''}.`,
-    suggestion:
-      'The last command used almost all of the sandbox memory. Ask the agent to continue with a ' +
-      'lighter command, for example fewer parallel workers.' +
-      (measured ? ` Details: ${measured}.` : ''),
-  };
 }
 
 interface SessionTurnProps {
   turn: Turn;
-  /** The cause the control plane recorded for THIS turn's ending, if any. */
-  endCause: SessionTurnEndError | null;
-  /** The control plane lists THIS turn as failed with no named cause. */
-  failedWithoutCause: boolean;
+  /** What the control plane recorded about how THIS session's turns ended. */
+  turnOutcome: SessionTurnOutcome;
   /**
    * Both were derived HERE from `allMessages`, once per turn, on every render.
    *
@@ -855,8 +837,7 @@ function resolveTurnError(turn: Turn): string | undefined {
 
 function SessionTurnImpl({
   turn,
-  endCause,
-  failedWithoutCause,
+  turnOutcome,
   isLast,
   ownsPlan,
   sessionId,
@@ -1055,10 +1036,12 @@ function SessionTurnImpl({
       deriveTurnErrorPresentation({
         turnError,
         isAbort: turnErrorIsAbort,
-        endCause,
-        failedWithoutCause,
+        notice: turnEndNotice(turnOutcome, turn.userMessage.info.id, {
+          hasError: Boolean(turnError),
+          isAbort: turnErrorIsAbort,
+        }),
       }),
-    [turnError, turnErrorIsAbort, endCause, failedWithoutCause],
+    [turnError, turnErrorIsAbort, turnOutcome, turn.userMessage.info.id],
   );
 
   // The gateway's structured fields (provider/suggestion/request_id) for
@@ -5849,11 +5832,7 @@ export function SessionChat({
                               {suppressedFailedCompaction ? null : (
                                 <SessionTurn
                                   turn={turn}
-                                  endCause={turnEndCause(turnOutcome, turn.userMessage.info.id)}
-                                  failedWithoutCause={turnFailedWithoutCause(
-                                    turnOutcome,
-                                    turn.userMessage.info.id,
-                                  )}
+                                  turnOutcome={turnOutcome}
                                   isLast={turn.userMessage.info.id === lastUserMessageId}
                                   ownsPlan={turn.userMessage.info.id === planAnchorId}
                                   sessionId={sessionId}
