@@ -587,3 +587,38 @@ as a vision-incapable one. The cheap signal is absence from
 
 `deepseek-v4-pro-0813` is the fixture for testing the vision path by hand: it
 serves, and it cannot read images.
+
+### Round two: `attachment` is not the vision flag
+
+The first fix routed the image turn away from `deepseek-v4-flash` correctly —
+and landed on `glm-5.3-flash`, which also cannot see images. The agent replied
+*"the model I'm running on right now can't process images"*.
+
+Read from the sandbox at `/v1/p/<ext>/4096/config/providers`:
+
+| model | `attachment` | `input.image` | servable on dev |
+|---|---|---|---|
+| `glm-5.3-flash` | true | **false** | yes |
+| `deepseek-v4-flash` | false | false | **no** (retired) |
+| `gpt-5.6-luna` | true | true | **no** (managed provider off) |
+| `codex/gpt-6-astra`, `codex/gpt-5.6-sol`, `codex/gpt-5.6-terra`, `codex/gpt-5.6-luna`, `codex/gpt-5.5` | true | true | yes |
+
+`glm-5.3-flash` is `vision: true` by hand in `packages/llm-catalog` while its
+`pricingRef` record on models.dev carries text-only modalities. OpenCode
+honours the modalities, so `attachment` is the wrong predicate. The selector
+now uses `modalities.input` containing `image`, and falls back to `attachment`
+only when a model publishes no modalities at all.
+
+Two more things this round:
+
+- Candidates now come from `servableProjectCatalog` — the same list the
+  sandbox registers and the picker shows — instead of the whole org catalog,
+  so the probe loop cannot exhaust itself on BYOK models this project cannot
+  run.
+- `promptModelOverride` must NOT split the model id on its slash. Every served
+  model is registered under the one synthetic `kortix` OpenCode provider, so
+  `codex/gpt-6-astra` is a model on `kortix`, not a model on a provider
+  `codex`. Splitting it addressed a provider the runtime does not have and the
+  override was dropped silently.
+
+**On dev, the image-capable models are the five `codex/*` ones.**
