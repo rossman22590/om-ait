@@ -6916,3 +6916,28 @@ second labelled account staying on the connection-scoped route, a 403 that must
 not fall back). `packages/sdk/src/core/rest/projects-client/connectors.test.ts`
 pins that `connectorFinalize` sends `owner`/`connection_id` and still sends `{}`
 for the published two-argument callers.
+
+### 2026-09-21 — Two credentials configured for one backend: the silent winner
+
+**Incident.** From 2026-09-16 18:12Z to 2026-09-21 10:49Z, every
+`POST /v1/projects/provision` on production returned `502`: 5 days, every
+Kortix-managed project creation. Production set `MANAGED_GIT_GITHUB_TOKEN` and
+`MANAGED_GIT_GITHUB_INSTALL_ID` together. The resolver picks the token whenever
+one is set, and the token had no `Administration: write`. The App installation
+that could create repositories was never consulted. Nothing logged that choice,
+and the failure log stored GitHub's reason under `message`, the log line's own
+text key, so Better Stack never saw the reason. The fix was config only: empty
+the token in `kortix-prod-env` and restart the API tasks.
+
+**Rule.** When two configured credentials can serve one backend, the one that
+wins must say so at startup, and the one that loses must be named. A structured
+log field must never reuse a key the logger owns (`message`, `level`, `dt`).
+Before calling a credential repair done, exercise the write it exists for on the
+real environment, and read back the log signal that alerts on it.
+
+**Enforcement.** `resolveGitBackend` logs `... are both set: the token is used
+and the App installation <id> is ignored` once per process
+(`instance-git-config.test.ts`). `provision-core.ts` logs the reason as `error`.
+Procedure and verified installation ids: `docs/runbooks/managed-git-config.md`.
+Owed: an alert on the provision 5xx ratio (the stream route answers `200` with
+an `error` frame, so a status alert alone misses it).

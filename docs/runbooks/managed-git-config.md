@@ -98,21 +98,35 @@ To select the App on a deployed environment:
    answers `404` on token mint. Verified values, 2026-09-21: prod `140097279`,
    dev `158197129`, staging `158197210`.
 2. Set `MANAGED_GIT_GITHUB_TOKEN` to an **empty value** in the
-   `kortix-<env>-env` Secrets Manager blob. **Do not delete the key.** Removing
-   exactly this key caused the 2026-07-18 production outage: a task definition
-   that references a key by name cannot start without it. The resolver treats an
-   empty value as unset.
+   `kortix-<env>-env` Secrets Manager blob, and merge into the current JSON:
+   never write a fresh key set. The resolver treats an empty value as unset. The
+   blob's primary region is `us-west-2`; `eu-west-2` is a read replica, so read
+   `describe-secret --query PrimaryRegion` before writing. (The 2026-07-18
+   outage came from a task definition that referenced this key by name. Current
+   task definitions read the whole blob through one `KORTIX_ENV_JSON` selector,
+   so a missing optional key no longer blocks task start. Emptying stays the
+   reversible choice.)
 3. Set a read-only `GITHUB_TOKEN` if none exists. The marketplace catalog reads
    `GITHUB_TOKEN || MANAGED_GIT_GITHUB_TOKEN`; without either it falls back to
    unauthenticated GitHub at 60 requests per hour.
 4. Restart the API tasks (`aws ecs update-service --force-new-deployment`). The
    blob is read at task start.
-5. Copy the blob back into the tracked file:
-   `python3 scripts/secrets-sm-parity.py pull <env>`.
+5. Make the tracked file match: an empty blob value means the key is ABSENT
+   from `apps/api/.env.<env>` (`secrets-sm-parity.py`, "an empty SM value is
+   satisfied by absence"). Set any new key with `dotenvx set`. Run
+   `python3 scripts/secrets-sm-parity.py check <env>`; use `pull` only after
+   reading the diff, because it copies every differing value from the blob.
 6. Prove it: `GET /v1/projects/git/backend` reports `"kind":"app"`, then create
    a real project.
 
-Verified on the App path, real API against real GitHub (2026-09-21): provision
+**Production switched to the App on 2026-09-21 10:47Z** (secret version
+`95916fdd…`, previous `71c9941b…`). Proof on `https://api.kortix.com`: backend
+`"kind":"app"`, provision `201`, clone and push through the git proxy, purge
+`repo_deleted:true`, and zero `provision create_repo failed` lines after the
+restart. Dev and staging still run on their tokens, and their tracked
+installation ids are stale.
+
+Verified on the App path locally, real API against real GitHub (2026-09-21): provision
 `201` with starter commits, read, rename, clone and push through the git proxy,
 archive, and purge (`repo_deleted: true`, GitHub `404` afterwards).
 
