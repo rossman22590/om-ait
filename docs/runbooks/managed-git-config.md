@@ -123,8 +123,12 @@ To select the App on a deployed environment:
 `95916fdd…`, previous `71c9941b…`). Proof on `https://api.kortix.com`: backend
 `"kind":"app"`, provision `201`, clone and push through the git proxy, purge
 `repo_deleted:true`, and zero `provision create_repo failed` lines after the
-restart. Dev and staging still run on their tokens, and their tracked
-installation ids are stale.
+restart. **Dev and staging switched on 2026-09-21 11:06Z** (dev
+`63e1e941…`, staging `64e79c44…`), with their installation ids corrected. Each
+passed backend `"kind":"app"`, provision `201`, clone, push, and purge on its own
+API. All three environments now run managed git on the App only, and
+`secrets-sm-parity.py check dev staging prod` is clean. No Kortix-cloud
+environment holds a managed-git token.
 
 Verified on the App path locally, real API against real GitHub (2026-09-21): provision
 `201` with starter commits, read, rename, clone and push through the git proxy,
