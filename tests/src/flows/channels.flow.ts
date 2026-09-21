@@ -870,6 +870,82 @@ flow(
   },
 );
 
+// CHN-T5 — Teams proactive posting. The Slack twin of `send_message`, and the
+// one Teams route that takes a conversation id from the CALLER while holding a
+// tenant-wide bot credential. So the interesting assertion is the refusal: an
+// id nothing is bound to must be rejected, never delivered.
+flow(
+  "CHN-T5",
+  {
+    domain: "channels",
+    routes: [
+      "GET /v1/projects/:projectId/channels/teams/conversations",
+      "POST /v1/projects/:projectId/channels/teams/message",
+    ],
+  },
+  async (ctx) => {
+    const p = await ctx.fixtures.sharedProject();
+    await ctx.step("OWNER lists targets, teams flag off (default) → 403 feature_disabled", async () => {
+      const r = await ctx.client
+        .as(ctx.P.OWNER)
+        .get("/v1/projects/:projectId/channels/teams/conversations", { params: { projectId: p.id } });
+      r.status(403);
+      r.body().has("$.code", "feature_disabled");
+    });
+
+    const own = await ctx.fixtures.project();
+    await ctx.step("OWNER enables the teams experiment", async () => {
+      const enabled = await ctx.client
+        .as(ctx.P.OWNER)
+        .patch("/v1/projects/:projectId/experimental", { feature: "teams", enabled: true }, { params: { projectId: own.id } });
+      enabled.status(200);
+    });
+    await ctx.step("a project with no Teams conversations lists none", async () => {
+      const r = await ctx.client
+        .as(ctx.P.OWNER)
+        .get("/v1/projects/:projectId/channels/teams/conversations", { params: { projectId: own.id } });
+      r.status(200);
+      r.body().has("$.conversations", []);
+    });
+    await ctx.step("posting to a conversation nothing is bound to → 403, nothing sent", async () => {
+      const r = await ctx.client
+        .as(ctx.P.OWNER)
+        .post(
+          "/v1/projects/:projectId/channels/teams/message",
+          { conversation_id: "19:not-bound@thread.tacv2", text: "should never arrive" },
+          { params: { projectId: own.id } },
+        );
+      r.status(403);
+    });
+    await ctx.step("a post with nothing to say → 400", async () => {
+      const r = await ctx.client
+        .as(ctx.P.OWNER)
+        .post(
+          "/v1/projects/:projectId/channels/teams/message",
+          { conversation_id: "19:not-bound@thread.tacv2" },
+          { params: { projectId: own.id } },
+        );
+      r.status([400, 403]);
+    });
+    await ctx.step("NONMEMBER → 403/404", async () => {
+      const r = await ctx.client
+        .as(ctx.P.NONMEMBER)
+        .post(
+          "/v1/projects/:projectId/channels/teams/message",
+          { conversation_id: "19:x@thread.tacv2", text: "hi" },
+          { params: { projectId: own.id } },
+        );
+      r.status([403, 404]);
+    });
+    await ctx.step("ANON → 401", async () => {
+      const r = await ctx.client
+        .as(ctx.P.ANON)
+        .get("/v1/projects/:projectId/channels/teams/conversations", { params: { projectId: own.id } });
+      r.status(401);
+    });
+  },
+);
+
 // CHN-T4 — Teams inbound webhook (public, JWT-gated). Unconfigured → 503; configured + no/invalid token → 401.
 flow(
   "CHN-T4",
