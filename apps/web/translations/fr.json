@@ -19452,5 +19452,21 @@
     "modelError": "Impossible de modifier l’accès au modèle.",
     "hiddenShort": "Masqué dans le sélecteur. Les requêtes directes restent autorisées.",
     "resetError": "Impossible de réinitialiser la liste des modèles."
+  },
+  "projectChooser": {
+    "invitesTitle": "Choisissez où travailler",
+    "signedInAs": "Connecté en tant que {email}",
+    "invitations": "Invitations",
+    "invitedBy": "Invité par {email}",
+    "join": "Rejoindre",
+    "joinError": "Impossible de rejoindre. Réessayez.",
+    "unnamedWorkspace": "Espace de travail",
+    "createProjectInstead": "Créer plutôt un nouveau projet",
+    "emptyTitle": "Créez votre premier projet",
+    "emptyBody": "Un projet contient les sessions, fichiers et paramètres de votre agent. Vous pourrez inviter votre équipe ensuite.",
+    "createProject": "Créer un projet",
+    "waitingForInvite": "Vous attendez une invitation ? Elle apparaît ici quand quelqu'un invite {email}.",
+    "noPermissionTitle": "Aucun espace de travail",
+    "noPermissionBody": "Demandez à un propriétaire ou un administrateur d'inviter {email}."
   }
 }

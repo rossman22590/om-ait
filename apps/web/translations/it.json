@@ -19452,5 +19452,21 @@
     "modelError": "Impossibile aggiornare l’accesso al modello.",
     "hiddenShort": "Nascosto nel selettore. Le richieste dirette sono ancora consentite.",
     "resetError": "Impossibile reimpostare l’elenco dei modelli."
+  },
+  "projectChooser": {
+    "invitesTitle": "Scegli dove lavorare",
+    "signedInAs": "Accesso come {email}",
+    "invitations": "Inviti",
+    "invitedBy": "Invitato da {email}",
+    "join": "Unisciti",
+    "joinError": "Impossibile unirsi. Riprova.",
+    "unnamedWorkspace": "Workspace",
+    "createProjectInstead": "Crea invece un nuovo progetto",
+    "emptyTitle": "Crea il tuo primo progetto",
+    "emptyBody": "Un progetto contiene sessioni, file e impostazioni del tuo agente. Potrai invitare il team dopo.",
+    "createProject": "Crea progetto",
+    "waitingForInvite": "Aspetti un invito? Compare qui quando qualcuno invita {email}.",
+    "noPermissionTitle": "Ancora nessun workspace",
+    "noPermissionBody": "Chiedi a un owner o admin di invitare {email}."
   }
 }

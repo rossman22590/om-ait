@@ -19452,5 +19452,21 @@
     "modelError": "Could not update model access.",
     "hiddenShort": "Hidden from the picker. Direct requests are still allowed.",
     "resetError": "Could not reset the model list."
+  },
+  "projectChooser": {
+    "invitesTitle": "Choose where to work",
+    "signedInAs": "Signed in as {email}",
+    "invitations": "Invitations",
+    "invitedBy": "Invited by {email}",
+    "join": "Join",
+    "joinError": "Could not join. Try again.",
+    "unnamedWorkspace": "Workspace",
+    "createProjectInstead": "Create a new project instead",
+    "emptyTitle": "Create your first project",
+    "emptyBody": "A project holds your agent's sessions, files, and settings. You can invite your team after.",
+    "createProject": "Create project",
+    "waitingForInvite": "Waiting for an invite? It appears here when someone invites {email}.",
+    "noPermissionTitle": "No workspace yet",
+    "noPermissionBody": "Ask an owner or admin to invite {email}."
   }
 }

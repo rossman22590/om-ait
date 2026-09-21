@@ -19452,5 +19452,21 @@
     "modelError": "Nije moguće ažurirati pristup modelu.",
     "hiddenShort": "Sakriven iz birača. Direktni zahtevi su i dalje dozvoljeni.",
     "resetError": "Nije moguće resetovati listu modela."
+  },
+  "projectChooser": {
+    "invitesTitle": "Izaberite gde radite",
+    "signedInAs": "Prijavljeni ste kao {email}",
+    "invitations": "Pozivi",
+    "invitedBy": "Poziva {email}",
+    "join": "Pridruži se",
+    "joinError": "Pridruživanje nije uspelo. Pokušajte ponovo.",
+    "unnamedWorkspace": "Radni prostor",
+    "createProjectInstead": "Umesto toga napravite novi projekat",
+    "emptyTitle": "Napravite prvi projekat",
+    "emptyBody": "Projekat sadrži sesije, fajlove i podešavanja vašeg agenta. Tim možete pozvati kasnije.",
+    "createProject": "Napravi projekat",
+    "waitingForInvite": "Čekate poziv? Pojaviće se ovde kada neko pozove {email}.",
+    "noPermissionTitle": "Još nema radnog prostora",
+    "noPermissionBody": "Zamolite vlasnika ili administratora da pozove {email}."
   }
 }
