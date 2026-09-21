@@ -21,6 +21,15 @@ linked, not inlined.
 
 ## Register
 
+### Exercise expensive Git setup only in the test that owns its contract (2026-09-21)
+
+**Rule:** A shared CLI fixture must not repeat local Git pushes for cases that
+only test request fields. Model a managed repository outside the branch-specific
+case. **Incident:** `sessions.e2e.test.ts` repeated a local push in all 7 cases.
+The second push hung for 30 seconds under package-lane load and failed every PR.
+**Enforcer:** the fixture enables client-side branch creation only in the test
+that asserts its remote ref; the remaining cases use managed-repository metadata.
+
 ### Workflow dependency changes must update every contract test (2026-09-21)
 
 **Rule:** Search the repository for every changed workflow dependency list and
