@@ -5916,7 +5916,7 @@ the role insert and cleanup delete. The preview journey must observe the grant
 through `/v1/user-roles` and render the admin overview.
 ### Preserve permanent prompt refusals and persist Stop before acknowledging it (2026-09-15)
 
-**Incident.** LibreMax session `5889a055-6bad-42f2-8511-50c573946408`
+**Incident.** A production customer session
 retained a binding to a disabled Gmail connector. The proxy returned `409`,
 but delivery discarded the body and retried until `delivery outcome: pending`.
 The UI displayed Thinking although the model received no prompt. Stop marked
@@ -5937,7 +5937,7 @@ The original hello received an assistant reply, and `GET /prompts` returned `[]`
 
 ### Connector bindings do not declare mandatory prompt dependencies (2026-09-15)
 
-**Incident.** The LibreMax incident above persisted after the agent's Gmail
+**Incident.** The production incident above persisted after the agent's Gmail
 requirement was removed. Prompt preflight promoted every stored binding into a
 mandatory dependency. A disabled optional connector blocked unrelated messages.
 
@@ -7090,6 +7090,28 @@ with the fix.
 **Unverified.** No real ECS rollout was exercised — no AWS credentials in this
 environment. The poll's behaviour against live ECS is proven only by the next
 real deploy of this script.
+### 2026-09-20 — Customer migration evidence never belongs in a product branch
+
+**Incident.** A customer migration branch included a customer name, account IDs,
+user emails, Auth UUIDs, session IDs, and production verification scripts. The
+same identifiers appeared in the pull request title and description. The pull
+request was closed and its remote branch was deleted.
+
+**Rules.**
+1. Product branches contain generic runtime behavior and synthetic fixtures only.
+2. Customer migration inputs, ledgers, queries, and verification output stay in
+   the ignored migration workspace with mode `0600`.
+3. Pull request titles, bodies, commit messages, branch names, tests, examples,
+   screenshots, and comments use generic tenant names and synthetic identifiers.
+4. Before push, scan the complete branch diff and commit messages for customer
+   names, domains, emails, account IDs, user IDs, project IDs, and session IDs.
+5. If customer data reaches a pull request, close it, delete its remote branch,
+   rebuild from the base branch, and open a clean replacement. Editing the title
+   alone does not remove the exposure.
+
+**Enforcement.** The replacement branch contains only generic SSO reconciliation
+logic and synthetic tests. A full repository scan must return zero occurrences
+of the removed customer name before push.
 
 ### 2026-09-18 — A column default is a population, and a check that debits is not a check
 
