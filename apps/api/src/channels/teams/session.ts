@@ -23,7 +23,13 @@ import {
   startTurn,
 } from './turn';
 import { sessionWebUrl } from '../slack/util';
-import { extractTeamsAttachments, type TeamsActivity, type TeamsLiveTurn } from './types';
+import { promptModelOverride, visionModelForProject } from '../vision-model';
+import {
+  extractTeamsAttachments,
+  teamsMessageHasImage,
+  type TeamsActivity,
+  type TeamsLiveTurn,
+} from './types';
 import { describeTeamsConversation, stripTeamsMentions } from './util';
 import { ensureTeamsThreadParticipant, normalizeConversationPolicy, rememberTeamsThreadOwner } from './participants';
 
@@ -93,13 +99,22 @@ export async function deliverTeamsFollowUpToSession(input: {
   sessionId: string;
   text: string;
   userId?: string | null;
+  /** This turn only — see channels/vision-model.ts. */
+  model?: string | null;
 }) {
   return teamsSessionLifecycle.continueSession({
     source: 'teams',
     sessionId: input.sessionId,
     text: input.text,
     userId: input.userId,
+    ...(input.model ? { overrides: { model: promptModelOverride(input.model) } } : {}),
   });
+}
+
+/** The model this session is pinned to, as `createProjectSession` recorded it. */
+function sessionModelOf(metadata: Record<string, unknown> | null | undefined): string | null {
+  const value = metadata?.opencode_model;
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 async function bindTurnToSession(handle: TeamsLiveTurn | null, sessionId: string): Promise<void> {
@@ -228,7 +243,23 @@ async function deliverFollowUp(input: {
     await bindTurnToSession(handle, sessionId);
   }
 
-  const outcome = await deliverTeamsFollowUpToSession({ sessionId, text: renderFollowUpPrompt(activity), userId });
+  // An image is unreadable on a text-only model, so THIS turn runs on the
+  // configured vision model. The session's own pin is untouched.
+  const turnModel = teamsMessageHasImage(activity)
+    ? await visionModelForProject(projectId, sessionModelOf(input.sessionMetadata))
+    : null;
+  if (turnModel) {
+    console.info('[teams-webhook] routing an image-bearing turn to the vision model', {
+      sessionId,
+      model: turnModel,
+    });
+  }
+  const outcome = await deliverTeamsFollowUpToSession({
+    sessionId,
+    text: renderFollowUpPrompt(activity),
+    userId,
+    model: turnModel,
+  });
 
   if (outcome === 'delivered') {
     await db
@@ -388,6 +419,13 @@ export async function createOrJoinTeamsConversationSession(input: {
   await ensureTeamsConversationBinding({ projectId, tenantId, conversationId, ...describeTeamsConversation(activity) });
   const selection = await currentChannelSelection(teamsChannelCtx(tenantId, conversationId));
 
+  // A conversation that OPENS with an image has to start on a model that can
+  // read one — the session pin is what every later turn inherits.
+  const createModel = teamsMessageHasImage(activity)
+    ? ((await visionModelForProject(projectId, selection?.opencodeModel)) ??
+      selection?.opencodeModel)
+    : selection?.opencodeModel;
+
   const result = await teamsSessionLifecycle.createSession({
     source: 'teams',
     project,
@@ -396,7 +434,7 @@ export async function createOrJoinTeamsConversationSession(input: {
     body: {
       base_ref: project.defaultBranch,
       agent_name: selection?.agentName || 'default',
-      ...(selection?.opencodeModel ? { opencode_model: selection.opencodeModel } : {}),
+      ...(createModel ? { opencode_model: createModel } : {}),
       initial_prompt: renderAgentPrompt(activity, revived),
       // Title from the user's actual words — without the `<at>…</at>` mention
       // markup Teams wraps around the bot's name in channels.
@@ -521,7 +559,22 @@ function renderAttachments(activity: TeamsActivity): string[] {
   const attachments = extractTeamsAttachments(activity);
   if (attachments.length === 0) return [];
   const lines = ['', 'Attached files (download with `teams download --url <url> --out <path>`):'];
-  for (const a of attachments) lines.push(`- ${a.name} — ${a.downloadUrl}`);
+  for (const a of attachments) {
+    const ext = a.fileType ? `.${a.fileType}` : '';
+    lines.push(`- ${a.name}${a.isImage ? ' (image)' : ''} — ${a.downloadUrl}`);
+    if (a.isImage) {
+      lines.push(
+        `    teams download --url "${a.downloadUrl}" --out /workspace/attachment${ext || '.png'}`,
+      );
+    }
+  }
+  if (attachments.some((a) => a.isImage)) {
+    lines.push(
+      '',
+      'Then open the downloaded image with the `read` tool and answer from what you see.',
+      'Do not look for OCR tools — you can read the image directly.',
+    );
+  }
   return lines;
 }
 
