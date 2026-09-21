@@ -63,7 +63,7 @@ GitHub Actions uses `.github/workflows/tests.yml` for every local-profile run.
 It runs on every push to `main`, on a pull request into `staging`, on a pull
 request labelled `test` or `preview`, and on manual dispatch. The label
 re-triggers an open pull request without a push. A plain pull request into
-`main` does not run it; the `Tests` check shows as skipped. The push-to-`main`
+`main` does not run it; its check shows as skipped. The push-to-`main`
 run blocks nothing — `main` and `staging` require no status check — and a red
 run comments on the offending commit with the failing lane names. A cancelled
 run means a newer commit superseded it. Deployed-target runs are separate:

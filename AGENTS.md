@@ -397,7 +397,7 @@ See `tests/e2e/helpers/session-auth.ts` for the exact calls.
 - The suite runs on every push to `main`, on a pull request into `staging`, on a
   pull request labelled `test` or `preview`, and on manual dispatch. The label
   re-triggers an open pull request without a push. A plain pull request into
-  `main` skips it, and the `Tests` check shows as skipped. A push-to-`main` run
+  `main` skips it, and its check shows as skipped. A push-to-`main` run
   blocks nothing: a red run comments the failing lanes on the commit, a cancelled
   run means a newer commit superseded it. A pull request into `prod` runs
   `tests-release.yml` against deployed staging instead.

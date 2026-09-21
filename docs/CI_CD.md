@@ -41,7 +41,7 @@ not raise them.
 | pull request into `staging` | yes — release candidate |
 | pull request labelled `test` or `preview` | yes — the label re-triggers it, no push needed |
 | manual dispatch | yes |
-| plain pull request into `main` | no — the `Tests` check shows as skipped |
+| plain pull request into `main` | no — its check shows as skipped |
 | pull request into `prod` | no — `tests-release.yml` tests deployed staging |
 
 The old per-pull-request gate cost ~11 min median and 68 min worst case and

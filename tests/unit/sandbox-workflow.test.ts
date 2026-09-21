@@ -159,33 +159,51 @@ describe('native test-lane workflow', () => {
       'types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]',
     );
 
-    // The four clauses of the `lane` gate. `contains(<array>, 'test')`
-    // compares whole elements, so `no-tests-needed` and `latest` cannot match.
-    expect(testWorkflow).toContain("github.event_name != 'pull_request'");
-    expect(testWorkflow).toContain("|| github.base_ref == 'staging'");
-    expect(testWorkflow).toContain(
-      "|| contains(github.event.pull_request.labels.*.name, 'test')",
+    // The four clauses of the gate, asserted inside the `lane` job block so
+    // moving the `if:` onto another job fails here. `contains(<array>, 'test')`
+    // compares whole elements, so `no-tests-needed` cannot match.
+    const laneJob = testWorkflow.slice(
+      testWorkflow.indexOf('\n  lane:'),
+      testWorkflow.indexOf('\n  trunk-report:'),
     );
-    expect(testWorkflow).toContain(
-      "|| contains(github.event.pull_request.labels.*.name, 'preview')",
-    );
+    expect(laneJob).toContain("github.event_name != 'pull_request'");
+    expect(laneJob).toContain("|| github.base_ref == 'staging'");
+    expect(laneJob).toContain("|| contains(github.event.pull_request.labels.*.name, 'test')");
+    expect(laneJob).toContain("|| contains(github.event.pull_request.labels.*.name, 'preview')");
+    expect(laneJob).toContain('fail-fast: false');
+    // `trunk-report` finds failed lanes by `endswith("lane")` on this name.
+    expect(laneJob).toContain('name: ${{ matrix.lane }} lane');
 
     // One file, one gate. The reusable-workflow plumbing and its `decide` job
     // are gone; a second dispatch path is how the gate drifts.
     expect(testWorkflow).not.toContain('workflow_call');
     expect(testWorkflow).not.toContain('inputs.mode');
-    expect(testWorkflow).not.toContain('decide');
+    expect(testWorkflow).not.toMatch(/^  decide:/m);
   });
 
   test('the dev trunk tests its own latest commit, and cannot block anything', () => {
     // A push-triggered run has nothing left to gate: the code merged, and
     // deploy-dev.yml deploys the same push without waiting.
-    expect(testWorkflow).toContain('push:\n    branches: [main]');
+    expect(testWorkflow).toMatch(/\n  push:\n(?:\s+#.*\n)*\s+branches: \[main\]/);
+    // The suite parses markdown (tests/spec/end-to-end.md feeds route coverage).
+    // Skipping docs-only pushes leaves main red with no run and blames the
+    // next commit.
+    expect(testWorkflow).not.toMatch(/^\s+paths-ignore:/m);
 
-    // Converge on newest, like deploy-dev.yml. `failure()` is false for a
-    // cancelled run, so a superseded commit never reports a break.
+    // Per-ref group: a PR run (refs/pull/N/merge) can never cancel the trunk.
+    expect(testWorkflow).toContain('group: tests-${{ github.ref }}');
     expect(testWorkflow).toContain('cancel-in-progress: true');
-    expect(testWorkflow).toContain("if: failure() && github.event_name == 'push'");
+
+    const report = testWorkflow.slice(testWorkflow.indexOf('\n  trunk-report:'));
+    expect(report).toContain('needs: lane');
+    // A lane that hits `timeout-minutes` concludes `cancelled`, not `failure`,
+    // so `failure()` would miss it. `cancelled()` covers the superseded run.
+    expect(report).toContain(
+      "if: github.event_name == 'push' && !cancelled() && needs.lane.result != 'success'",
+    );
+    expect(report).not.toMatch(/^\s+if:.*failure\(\)/m);
+    // Top level is `contents: read`; the commit comment 403s without this.
+    expect(report).toContain('contents: write');
 
     // A red trunk has to reach its author, or nobody learns main is broken.
     expect(testWorkflow).toContain('repos/$REPO/commits/$SHA/comments');

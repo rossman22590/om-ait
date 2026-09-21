@@ -15,7 +15,9 @@ name: Tests
 # blocked a merge. `main` is the dev trunk.
 #
 # `trunk-report` comments on the offending commit when a push to `main` is red.
-# A cancelled (superseded) run reports nothing. A green run adds no job.
+# A superseded (cancelled) run reports nothing. A green run runs no extra job.
+# Any label change on a labelled pull request restarts its in-flight suite:
+# `types` cannot filter by label name.
 
 on:
   pull_request:
@@ -24,16 +26,9 @@ on:
     # pull request re-triggers this workflow with no push.
     types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
   push:
+    # No `paths-ignore`: the suite parses markdown (`tests/spec/end-to-end.md`
+    # feeds route coverage), so a docs-only push can break it.
     branches: [main]
-    # Skip only pushes that cannot change a test outcome. GitHub applies
-    # `paths-ignore` to the whole changed set, not per file.
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '.claude/**'
-      - 'output/**'
-      - 'LICENSE'
-      - '.github/ISSUE_TEMPLATE/**'
   workflow_dispatch:
 
 concurrency:
@@ -165,9 +160,10 @@ jobs:
   trunk-report:
     name: trunk verdict
     needs: lane
-    # Only a red push to `main`. `failure()` is false for a cancelled run, so a
-    # superseded commit never posts a comment.
-    if: failure() && github.event_name == 'push'
+    # A lane that hits `timeout-minutes` concludes `cancelled`, not `failure`,
+    # so `failure()` would miss it. `cancelled()` is true only when the whole
+    # run is cancelled, which is the superseded-commit case.
+    if: github.event_name == 'push' && !cancelled() && needs.lane.result != 'success'
     runs-on: ${{ vars.CI_RUNNER_S || 'blacksmith-2vcpu-ubuntu-2404' }}
     timeout-minutes: 10
     permissions:
@@ -184,8 +180,9 @@ jobs:
         run: |
           set -euo pipefail
 
+          # `|| true`: a failed lookup must not swallow the comment below.
           failed="$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --paginate \
-            --jq '[.jobs[] | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != null) | select(.name | endswith("lane")) | .name] | join(", ")')"
+            --jq '[.jobs[] | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != null) | select(.name | endswith("lane")) | .name] | join(", ")' || true)"
 
           {
             echo "## \`main\` @ \`${SHA:0:8}\`: failure"

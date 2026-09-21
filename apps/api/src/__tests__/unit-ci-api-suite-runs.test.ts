@@ -16,7 +16,7 @@ const packageJson = JSON.parse(read('apps/api/package.json')) as {
 const laneJob = workflow.slice(workflow.indexOf('\n  lane:'));
 
 describe('the kortix-api suite actually runs on pull requests', () => {
-  test('the reusable workflow runs every root lane natively at the exact PR head SHA', () => {
+  test('the test workflow runs every root lane natively at the exact PR head SHA', () => {
     expect(laneJob).toContain('matrix:');
     expect(laneJob).toContain('- lane: core');
     expect(laneJob).toContain('- lane: browser-1');
