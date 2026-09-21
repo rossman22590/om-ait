@@ -441,7 +441,7 @@ jobs:
     # npm rejects sigstore provenance built on a non-GitHub-hosted runner
     # (E422 'Unsupported GitHub Actions runner environment', v0.13.25,
     # run 35589361726). Trusted Publishing needs a GitHub-hosted runner.
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER_S || 'blacksmith-2vcpu-ubuntu-2404' }}
     permissions:
       contents: read
       id-token: write
@@ -480,7 +480,7 @@ jobs:
     # npm rejects sigstore provenance built on a non-GitHub-hosted runner
     # (E422 'Unsupported GitHub Actions runner environment', v0.13.25,
     # run 35589361726). Trusted Publishing needs a GitHub-hosted runner.
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER_S || 'blacksmith-2vcpu-ubuntu-2404' }}
     permissions:
       contents: read
       id-token: write
@@ -519,7 +519,7 @@ jobs:
     # npm rejects sigstore provenance built on a non-GitHub-hosted runner
     # (E422 'Unsupported GitHub Actions runner environment', v0.13.25,
     # run 35589361726). Trusted Publishing needs a GitHub-hosted runner.
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER_S || 'blacksmith-2vcpu-ubuntu-2404' }}
     permissions:
       contents: read
       id-token: write
@@ -557,7 +557,7 @@ jobs:
     # npm rejects sigstore provenance built on a non-GitHub-hosted runner
     # (E422 'Unsupported GitHub Actions runner environment', v0.13.25,
     # run 35589361726). Trusted Publishing needs a GitHub-hosted runner.
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER_S || 'blacksmith-2vcpu-ubuntu-2404' }}
     permissions:
       contents: read
       id-token: write
