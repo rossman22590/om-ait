@@ -247,8 +247,12 @@ async function readGuardedTurnMessageId(
     if (!res.ok) return null
     const rows = (await res.json()) as Array<{ info?: { role?: string; parentID?: string } }>
     if (!Array.isArray(rows)) return null
-    const newest = rows.findLast((row) => row.info?.role === 'assistant')
-    return newest?.info?.parentID ?? null
+    // A plain loop: apps/api type-checks this file against a lib without `findLast`.
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const info = rows[i]?.info
+      if (info?.role === 'assistant') return info.parentID ?? null
+    }
+    return null
   } catch {
     return null
   }
