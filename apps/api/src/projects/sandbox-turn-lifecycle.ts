@@ -228,6 +228,25 @@ const END_ERROR_MESSAGE_MAX_CHARS = 2000;
 // frame that names the cause replaces it; nothing replaces a named cause.
 export const ABORT_END_ERROR_NAMES = ['MessageAbortedError', 'AbortError'];
 
+// A Stop the user pressed. Written on the OPEN turn the moment the Stop reaches
+// the control plane (`POST .../prompts/hold`), which the web awaits BEFORE it
+// aborts. It is the only thing that tells a requested stop from an abort nobody
+// asked for: both reach the ledger as the same OpenCode "Aborted" end frame.
+export const USER_STOP_END_ERROR_NAME = 'UserStop';
+
+/** Mark every turn this session still has open as stopped by the user. */
+export async function markOpenTurnsUserStopped(sessionId: string): Promise<void> {
+  const mark = JSON.stringify({ name: USER_STOP_END_ERROR_NAME, message: null });
+  await recordTurnLedger(
+    sql`UPDATE kortix.session_turns
+           SET end_error = ${mark}::jsonb,
+               updated_at = now()
+         WHERE session_id = ${sessionId}
+           AND state <> 'ended'`,
+    `mark user stop ${sessionId}`,
+  );
+}
+
 function endErrorRecord(
   status: 'idle' | 'error',
   error?: SandboxTurnEndError | null,
@@ -268,7 +287,11 @@ function endedTurnLedger(
       ON CONFLICT (turn_token) DO UPDATE SET
             state = 'ended',
             end_reason = EXCLUDED.end_reason,
-            end_error = EXCLUDED.end_error,
+            end_error = CASE
+              WHEN kortix.session_turns.end_error->>'name' = ${USER_STOP_END_ERROR_NAME}
+                THEN kortix.session_turns.end_error
+              ELSE EXCLUDED.end_error
+            END,
             ended_at = now(),
             opencode_session_id = coalesce(kortix.session_turns.opencode_session_id,
                                            EXCLUDED.opencode_session_id),

@@ -58,6 +58,7 @@ function ledgerRow(overrides: {
   started_at?: Date;
   accepted_at?: Date | null;
   end_reason?: string | null;
+  end_error?: { name: string | null; message: string | null } | null;
   ended_at?: Date | null;
 }): Record<string, unknown> {
   return {
@@ -68,6 +69,7 @@ function ledgerRow(overrides: {
     started_at: new Date('2026-08-17T00:00:00.000Z'),
     accepted_at: null,
     end_reason: null,
+    end_error: null,
     ended_at: null,
     ...overrides,
   };
@@ -581,6 +583,40 @@ describe('GET /v1/projects/:projectId/sessions/:sessionId/turn', () => {
     expect(queries[1].where).toContain('col:turn_token in');
     expect(queries.some((q) => q.orderBy.some((term) => term.includes('ended_at')))).toBe(false);
     expect(queries[2].orderBy.some((term) => term.includes('started_at'))).toBe(true);
+  });
+
+  test('lists every failed turn, names the cause when there is one, and never lists a user Stop', async () => {
+    // Session ad02e053: four sub-agent tasks read "failed" and the turn said
+    // nothing. A failure the user cannot see is the bug; the one ending that is
+    // NOT a failure is the Stop the user pressed.
+    const at = (s: number) => new Date(`2026-08-17T00:00:0${s}.000Z`);
+    const failed = (token: string, s: number, end_error: { name: string | null; message: string | null } | null) =>
+      ledgerRow({
+        turn_token: token,
+        state: 'ended',
+        end_reason: 'failed',
+        message_id: `msg_${token}`,
+        started_at: at(s),
+        ended_at: at(s),
+        end_error,
+      });
+    turnTable = [
+      failed('named', 4, { name: 'SandboxMemoryGuard', message: 'sandbox memory at 97%' }),
+      failed('bare-abort', 3, { name: 'MessageAbortedError', message: 'Aborted' }),
+      failed('nothing-recorded', 2, null),
+      failed('user-stop', 1, { name: 'UserStop', message: null }),
+    ];
+
+    const body = await (await getTurn()).json();
+    expect(body.recent_failures).toEqual([
+      {
+        message_id: 'msg_named',
+        ended_at: '2026-08-17T00:00:04.000Z',
+        error: { name: 'SandboxMemoryGuard', message: 'sandbox memory at 97%' },
+      },
+      { message_id: 'msg_bare-abort', ended_at: '2026-08-17T00:00:03.000Z', error: null },
+      { message_id: 'msg_nothing-recorded', ended_at: '2026-08-17T00:00:02.000Z', error: null },
+    ]);
   });
 
   test('returns the NEWEST settled turn as last_ended', async () => {

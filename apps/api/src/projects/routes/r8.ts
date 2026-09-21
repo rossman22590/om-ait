@@ -62,6 +62,7 @@ import {
   flattenPromptText,
   sanitizeInboxPromptParts,
 } from '../session-lifecycle/prompt-parts';
+import { markOpenTurnsUserStopped } from '../sandbox-turn-lifecycle';
 import { isWarmProjectSession } from '../lib/warm-sessions';
 import { dropWarmSessionMarkerOnAdopt } from './warm-sessions';
 import { refreshCrTips } from './shared';
@@ -332,7 +333,8 @@ const SessionTurnLastEndedSchema = z.object({
 const SessionTurnFailureSchema = z.object({
   message_id: z.string(),
   ended_at: z.string().nullable(),
-  error: z.object({ name: z.string().nullable(), message: z.string().nullable() }),
+  // Null when the turn failed and nobody named why.
+  error: z.object({ name: z.string().nullable(), message: z.string().nullable() }).nullable(),
 });
 
 const SessionTurnResponseSchema = z.object({
@@ -961,6 +963,9 @@ projectsApp.openapi(
       return c.json({ error: 'held must be a boolean' }, 400);
     }
 
+    // A hold is the Stop itself, and the web awaits it before it aborts: mark the
+    // running turn now, or its abort is indistinguishable from an unexplained one.
+    if (body.held) await markOpenTurnsUserStopped(sessionId);
     await holdInboxPrompts(sessionId, body.held);
     if (body.held) await disarmAllQuickQueueInterrupt(sessionId, loaded.userId);
     // After the write, before the read-back — either instant orders this

@@ -52,6 +52,7 @@ const {
   deliveringSandboxTurn,
   extractTurnIdentity,
   initialSandboxTurnMetadata,
+  markOpenTurnsUserStopped,
   prepareInitialSandboxTurn,
   reconcileSandboxTurnDelivery,
   renewActiveSandboxTurn,
@@ -438,6 +439,34 @@ describe('terminal turn handling', () => {
 
     expect(result.outcome).toBe('non_terminal');
     expect(executed).toHaveLength(0);
+  });
+
+  test('a Stop marks every open turn of the session as stopped by the user', async () => {
+    await markOpenTurnsUserStopped('sess-1');
+
+    expect(executed).toHaveLength(1);
+    expect(executed[0]).toContain('UPDATE kortix.session_turns');
+    expect(executed[0]).toContain('UserStop');
+    expect(executed[0]).toContain('sess-1');
+    // Only a turn that is still open: a finished turn keeps whatever it ended with.
+    expect(executed[0]).toContain("state <> 'ended'");
+  });
+
+  test('the abort that follows a Stop does not erase the stop mark', async () => {
+    executeResults = [[OWNED_TURN_ROW]];
+
+    await completeSandboxTurn(
+      'sess-1',
+      'error',
+      { opencodeSessionId: 'ses_root', messageId: 'msg_turn_1' },
+      { name: 'MessageAbortedError', message: 'Aborted' },
+    );
+
+    const ledger = executed.find((query) => query.includes('INSERT INTO kortix.session_turns'));
+    // The stop mark is a bound parameter, so the rendered text splits around it.
+    expect(ledger).toContain("WHEN kortix.session_turns.end_error->>'name' =");
+    expect(ledger).toContain('UserStop');
+    expect(ledger).toContain('THEN kortix.session_turns.end_error');
   });
 
   test('a repeated terminal identity reports already_closed', async () => {

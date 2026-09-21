@@ -23,6 +23,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import {
   ABORT_END_ERROR_NAMES,
   RUNNING_SANDBOX_STATUSES,
+  USER_STOP_END_ERROR_NAME,
   storedSandboxTurns,
 } from '../sandbox-turn-lifecycle';
 
@@ -49,10 +50,11 @@ export interface SessionTurnState {
     error?: { name: string | null; message: string | null };
   };
   /**
-   * Recent turns that failed for a NAMED cause, newest first. OMITTED when there
-   * are none. Reported whether or not a turn is running: `last_ended` is one row
-   * and vanishes the moment the next turn starts, and a queued prompt starts it
-   * seconds after a failure — the cause has to stay findable by `message_id`.
+   * Recent turns that FAILED, newest first, with the cause when one was named.
+   * OMITTED when there are none. A turn the user stopped is not a failure and is
+   * never listed. Reported whether or not a turn is running: `last_ended` is one
+   * row and vanishes the moment the next turn starts, and a queued prompt starts
+   * it seconds after a failure — the outcome has to stay findable by `message_id`.
    */
   recent_failures?: SessionTurnFailure[];
 }
@@ -60,7 +62,8 @@ export interface SessionTurnState {
 export interface SessionTurnFailure {
   message_id: string;
   ended_at: string | null;
-  error: { name: string | null; message: string | null };
+  /** Null when the turn failed and nobody named why (a bare abort, or nothing). */
+  error: { name: string | null; message: string | null } | null;
 }
 
 /** How many of a session's newest turns are searched for named failures. */
@@ -69,8 +72,12 @@ const RECENT_FAILURE_TURN_WINDOW = 50;
 /**
  * Bounded by turn count, not by failure count: this read is polled, and a
  * session with no failures must not scan its whole history to learn that.
- * Served by `session_turns_session_idx` (session_id, started_at DESC). An abort
- * is excluded — it is the effect of a Stop or of a cause recorded in its place.
+ * Served by `session_turns_session_idx` (session_id, started_at DESC).
+ *
+ * Every `failed` turn is listed, because a failure the user cannot see is the
+ * bug this read exists to end. Two refinements: a turn the user stopped
+ * (`UserStop`, stamped by the Stop itself) is not a failure; and a bare abort is
+ * the EFFECT of whatever stopped the turn, never a cause, so it reads as `null`.
  */
 async function readRecentTurnFailures(sessionId: string): Promise<SessionTurnFailure[]> {
   const recent = await db
@@ -86,12 +93,14 @@ async function readRecentTurnFailures(sessionId: string): Promise<SessionTurnFai
     .limit(RECENT_FAILURE_TURN_WINDOW);
   const failures: SessionTurnFailure[] = [];
   for (const turn of recent) {
-    if (turn.endReason !== 'failed' || !turn.messageId || !turn.endError) continue;
-    if (turn.endError.name && ABORT_END_ERROR_NAMES.includes(turn.endError.name)) continue;
+    if (turn.endReason !== 'failed' || !turn.messageId) continue;
+    const name = turn.endError?.name ?? null;
+    if (name === USER_STOP_END_ERROR_NAME) continue;
+    const named = turn.endError && !(name && ABORT_END_ERROR_NAMES.includes(name));
     failures.push({
       message_id: turn.messageId,
       ended_at: turn.endedAt ? turn.endedAt.toISOString() : null,
-      error: turn.endError,
+      error: named ? turn.endError : null,
     });
   }
   return failures;
