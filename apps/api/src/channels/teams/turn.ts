@@ -302,7 +302,14 @@ export async function relayTurnEnd(
 
 export async function finalizeTurn(
   handle: TeamsLiveTurn,
-  opts: { answer?: string; error?: string; title?: string; card?: Record<string, unknown> },
+  opts: {
+    answer?: string;
+    error?: string;
+    title?: string;
+    card?: Record<string, unknown>;
+    /** A deliberate stop: the step in flight neither finished nor failed. */
+    stopped?: boolean;
+  },
 ): Promise<void> {
   if (handle.finalized && handle.messageActivityId === '' && !opts.answer && !opts.error && !opts.card) return;
   const hasContent = Boolean(opts.answer || opts.error || opts.card);
@@ -320,7 +327,12 @@ export async function finalizeTurn(
       else await sendCard(refOf(handle), answer);
     } else if (handle.messageActivityId) {
       const last = handle.steps[handle.steps.length - 1];
-      if (last && last.status === 'in_progress') last.status = opts.error ? 'error' : 'complete';
+      if (last && last.status === 'in_progress') {
+        // A stopped step gets the neutral glyph. `complete` would claim work
+        // that never finished, and `error` paints a red ✗ over something the
+        // user chose to end.
+        last.status = opts.stopped ? 'pending' : opts.error ? 'error' : 'complete';
+      }
       await updateCard(
         refOf(handle),
         handle.messageActivityId,
