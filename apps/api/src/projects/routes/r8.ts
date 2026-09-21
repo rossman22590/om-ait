@@ -62,7 +62,6 @@ import {
   flattenPromptText,
   sanitizeInboxPromptParts,
 } from '../session-lifecycle/prompt-parts';
-import { markOpenTurnsUserStopped } from '../sandbox-turn-lifecycle';
 import { isWarmProjectSession } from '../lib/warm-sessions';
 import { dropWarmSessionMarkerOnAdopt } from './warm-sessions';
 import { refreshCrTips } from './shared';
@@ -963,9 +962,6 @@ projectsApp.openapi(
       return c.json({ error: 'held must be a boolean' }, 400);
     }
 
-    // A hold is the Stop itself, and the web awaits it before it aborts: mark the
-    // running turn now, or its abort is indistinguishable from an unexplained one.
-    if (body.held) await markOpenTurnsUserStopped(sessionId);
     await holdInboxPrompts(sessionId, body.held);
     if (body.held) await disarmAllQuickQueueInterrupt(sessionId, loaded.userId);
     // After the write, before the read-back — either instant orders this

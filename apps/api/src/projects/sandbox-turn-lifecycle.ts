@@ -228,22 +228,70 @@ const END_ERROR_MESSAGE_MAX_CHARS = 2000;
 // frame that names the cause replaces it; nothing replaces a named cause.
 export const ABORT_END_ERROR_NAMES = ['MessageAbortedError', 'AbortError'];
 
-// A Stop the user pressed. Written on the OPEN turn the moment the Stop reaches
-// the control plane (`POST .../prompts/hold`), which the web awaits BEFORE it
-// aborts. It is the only thing that tells a requested stop from an abort nobody
-// asked for: both reach the ledger as the same OpenCode "Aborted" end frame.
-export const USER_STOP_END_ERROR_NAME = 'UserStop';
+// A STOP SOMEBODY ASKED FOR IS NOT A FAILURE, and the end frame cannot say so:
+// a requested stop and an abort nobody asked for both reach the ledger as the
+// same OpenCode "Aborted" frame. So the request is stamped on the OPEN turn, at
+// the one place each kind of request passes through the control plane:
+//
+//   UserStop        every client abort (web, mobile, SDK, CLI) is an OpenCode
+//                   `POST /session/:id/abort` through the sandbox proxy.
+//   QueueInterrupt  a prompt sent into a busy session arms an interrupt at the
+//                   next tool boundary (`armQuickQueueInterrupt`).
+//
+// CLOSED on purpose, like `STOP_REASONS`: a reader hides these turns from the
+// failure list, so a free-text value would hide a real failure silently.
+export const REQUESTED_STOP_NAMES = ['UserStop', 'QueueInterrupt'] as const;
+export type RequestedStopName = (typeof REQUESTED_STOP_NAMES)[number];
 
-/** Mark every turn this session still has open as stopped by the user. */
-export async function markOpenTurnsUserStopped(sessionId: string): Promise<void> {
-  const mark = JSON.stringify({ name: USER_STOP_END_ERROR_NAME, message: null });
+export function isRequestedStopName(name: string | null | undefined): name is RequestedStopName {
+  return (REQUESTED_STOP_NAMES as readonly string[]).includes(name ?? '');
+}
+
+/** Which open turns a request applies to. Omitted fields match every turn. */
+export interface RequestedStopScope {
+  opencodeSessionId?: string | null;
+  messageId?: string | null;
+}
+
+/**
+ * Stamp a requested stop on the session's open turns. A row whose OpenCode
+ * session is not recorded yet still matches: it cannot be proved to be another
+ * session's turn, and an unmarked stop reads as a failure.
+ */
+export async function markTurnStopRequested(
+  sessionId: string,
+  name: RequestedStopName,
+  scope: RequestedStopScope = {},
+): Promise<void> {
+  const mark = JSON.stringify({ name, message: null });
   await recordTurnLedger(
     sql`UPDATE kortix.session_turns
            SET end_error = ${mark}::jsonb,
                updated_at = now()
          WHERE session_id = ${sessionId}
-           AND state <> 'ended'`,
-    `mark user stop ${sessionId}`,
+           AND state <> 'ended'
+           AND (${scope.opencodeSessionId ?? null}::text IS NULL
+             OR opencode_session_id IS NULL
+             OR opencode_session_id = ${scope.opencodeSessionId ?? null})
+           AND (${scope.messageId ?? null}::text IS NULL
+             OR message_id = ${scope.messageId ?? null})`,
+    `mark ${name} ${sessionId}`,
+  );
+}
+
+/** Withdraw a request that will not happen (a disarmed queue interrupt). */
+export async function clearTurnStopRequest(
+  sessionId: string,
+  name: RequestedStopName,
+): Promise<void> {
+  await recordTurnLedger(
+    sql`UPDATE kortix.session_turns
+           SET end_error = NULL,
+               updated_at = now()
+         WHERE session_id = ${sessionId}
+           AND state <> 'ended'
+           AND end_error->>'name' = ${name}`,
+    `clear ${name} ${sessionId}`,
   );
 }
 
@@ -264,6 +312,11 @@ function endedTurnLedger(
   endError: SessionTurnEndErrorRecord | null = null,
 ): SQL {
   const endErrorJson = endError ? JSON.stringify(endError) : null;
+  // A requested stop survives only the abort it caused. A turn that completed
+  // drops it, and a NAMED cause (a memory guard that fired after the request)
+  // always wins: the mark must never hide a failure.
+  const requestedStopNames = sql.join(REQUESTED_STOP_NAMES.map((name) => sql`${name}`), sql`, `);
+  const abortNames = sql.join(ABORT_END_ERROR_NAMES.map((name) => sql`${name}`), sql`, `);
   const values = sql.join(
     turns.map(
       (turn) => sql`(${turn.token}, ${owner.sessionId}, ${owner.sandboxId}::uuid,
@@ -288,7 +341,10 @@ function endedTurnLedger(
             state = 'ended',
             end_reason = EXCLUDED.end_reason,
             end_error = CASE
-              WHEN kortix.session_turns.end_error->>'name' = ${USER_STOP_END_ERROR_NAME}
+              WHEN EXCLUDED.end_reason = 'failed'
+               AND kortix.session_turns.end_error->>'name' IN (${requestedStopNames})
+               AND (EXCLUDED.end_error IS NULL
+                 OR EXCLUDED.end_error->>'name' IN (${abortNames}))
                 THEN kortix.session_turns.end_error
               ELSE EXCLUDED.end_error
             END,

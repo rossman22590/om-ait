@@ -52,7 +52,6 @@ const {
   deliveringSandboxTurn,
   extractTurnIdentity,
   initialSandboxTurnMetadata,
-  markOpenTurnsUserStopped,
   prepareInitialSandboxTurn,
   reconcileSandboxTurnDelivery,
   renewActiveSandboxTurn,
@@ -346,70 +345,15 @@ describe('terminal turn handling', () => {
     });
   });
 
-  // Session ad02e053 (2026-09-18): the sandbox memory guard stopped two turns
-  // and the user was told nothing. The ledger is where the reason has to land.
+  // What `end_error` ends up holding — a cause, a requested stop, and which one
+  // wins — is decided by SQL, so it is asserted against a real Postgres in
+  // `__tests__/integration-sandbox-turn-lifecycle.test.ts`. Here: only what this
+  // mock can prove, which statements run at all.
   const MEMORY_GUARD = {
     name: 'SandboxMemoryGuard',
     message: 'sandbox memory at 97% (opencode 513 MB RSS of 3915 MB): turn stopped',
     isRetryable: false,
   };
-  const OWNED_TURN_ROW = {
-    ended_turns: [
-      {
-        token: 'turn-token',
-        opencodeSessionId: 'ses_root',
-        messageId: 'msg_turn_1',
-        startedAtMs: 1_700_000_000_000,
-      },
-    ],
-    active_turn_count: 1,
-    completed: true,
-    session_id: 'sess-1',
-    sandbox_id: '00000000-0000-4000-8000-000000000001',
-    project_id: '00000000-0000-4000-8000-000000000002',
-    account_id: '00000000-0000-4000-8000-000000000003',
-  };
-
-  test('a named failure that closes the turn is written to the ledger with its reason', async () => {
-    executeResults = [[OWNED_TURN_ROW]];
-
-    const result = await completeSandboxTurn(
-      'sess-1',
-      'error',
-      { opencodeSessionId: 'ses_root', messageId: 'msg_turn_1' },
-      MEMORY_GUARD,
-    );
-
-    expect(result.outcome).toBe('closed');
-    const ledger = executed.find((query) => query.includes('INSERT INTO kortix.session_turns'));
-    expect(ledger).toContain('end_error');
-    expect(ledger).toContain('SandboxMemoryGuard');
-    expect(ledger).toContain('sandbox memory at 97%');
-    expect(ledger).toContain('failed');
-  });
-
-  test('a named failure that arrives after an abort already closed the turn replaces the abort', async () => {
-    // OpenCode's own "Aborted" end and the guard's end race; the abort often wins.
-    executeResults = [
-      [{ ended_turns: [], active_turn_count: 0, completed: true }],
-      [{ already_ended: true }],
-    ];
-
-    const result = await completeSandboxTurn(
-      'sess-1',
-      'error',
-      { opencodeSessionId: 'ses_root', messageId: 'msg_turn_1' },
-      MEMORY_GUARD,
-    );
-
-    expect(result.outcome).toBe('already_closed');
-    const refine = executed.find((query) => query.includes('UPDATE kortix.session_turns'));
-    expect(refine).toContain('SandboxMemoryGuard');
-    expect(refine).toContain('msg_turn_1');
-    // Only an abort (or nothing) may be replaced; a named cause is final.
-    expect(refine).toContain('MessageAbortedError');
-    expect(refine).toContain("end_reason = 'failed'");
-  });
 
   test('a late abort never overwrites the reason a turn already has', async () => {
     executeResults = [
@@ -439,34 +383,6 @@ describe('terminal turn handling', () => {
 
     expect(result.outcome).toBe('non_terminal');
     expect(executed).toHaveLength(0);
-  });
-
-  test('a Stop marks every open turn of the session as stopped by the user', async () => {
-    await markOpenTurnsUserStopped('sess-1');
-
-    expect(executed).toHaveLength(1);
-    expect(executed[0]).toContain('UPDATE kortix.session_turns');
-    expect(executed[0]).toContain('UserStop');
-    expect(executed[0]).toContain('sess-1');
-    // Only a turn that is still open: a finished turn keeps whatever it ended with.
-    expect(executed[0]).toContain("state <> 'ended'");
-  });
-
-  test('the abort that follows a Stop does not erase the stop mark', async () => {
-    executeResults = [[OWNED_TURN_ROW]];
-
-    await completeSandboxTurn(
-      'sess-1',
-      'error',
-      { opencodeSessionId: 'ses_root', messageId: 'msg_turn_1' },
-      { name: 'MessageAbortedError', message: 'Aborted' },
-    );
-
-    const ledger = executed.find((query) => query.includes('INSERT INTO kortix.session_turns'));
-    // The stop mark is a bound parameter, so the rendered text splits around it.
-    expect(ledger).toContain("WHEN kortix.session_turns.end_error->>'name' =");
-    expect(ledger).toContain('UserStop');
-    expect(ledger).toContain('THEN kortix.session_turns.end_error');
   });
 
   test('a repeated terminal identity reports already_closed', async () => {

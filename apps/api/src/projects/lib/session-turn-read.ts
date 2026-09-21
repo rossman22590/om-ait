@@ -23,7 +23,7 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import {
   ABORT_END_ERROR_NAMES,
   RUNNING_SANDBOX_STATUSES,
-  USER_STOP_END_ERROR_NAME,
+  isRequestedStopName,
   storedSandboxTurns,
 } from '../sandbox-turn-lifecycle';
 
@@ -74,10 +74,18 @@ const RECENT_FAILURE_TURN_WINDOW = 50;
  * session with no failures must not scan its whole history to learn that.
  * Served by `session_turns_session_idx` (session_id, started_at DESC).
  *
- * Every `failed` turn is listed, because a failure the user cannot see is the
- * bug this read exists to end. Two refinements: a turn the user stopped
- * (`UserStop`, stamped by the Stop itself) is not a failure; and a bare abort is
- * the EFFECT of whatever stopped the turn, never a cause, so it reads as `null`.
+ * A failure the user cannot see is the bug this read exists to end, so a turn is
+ * listed whenever the ledger says it died:
+ *
+ *   - `runtime_gone`: the box vanished under it. Never a requested stop.
+ *   - `failed` with a recorded error. A bare abort is the EFFECT of whatever
+ *     stopped the turn, never a cause, so it reads as `error: null`.
+ *
+ * Not listed: a stop somebody asked for (`REQUESTED_STOP_NAMES`), and a `failed`
+ * row with NO recorded error. Every end frame has written `end_error` since the
+ * column exists, so such a row predates it — and before it, a user Stop and an
+ * unexplained abort were stored identically. Listing them would flag every turn
+ * anyone ever stopped.
  */
 async function readRecentTurnFailures(sessionId: string): Promise<SessionTurnFailure[]> {
   const recent = await db
@@ -93,9 +101,11 @@ async function readRecentTurnFailures(sessionId: string): Promise<SessionTurnFai
     .limit(RECENT_FAILURE_TURN_WINDOW);
   const failures: SessionTurnFailure[] = [];
   for (const turn of recent) {
-    if (turn.endReason !== 'failed' || !turn.messageId) continue;
+    if (!turn.messageId) continue;
     const name = turn.endError?.name ?? null;
-    if (name === USER_STOP_END_ERROR_NAME) continue;
+    const died =
+      turn.endReason === 'runtime_gone' || (turn.endReason === 'failed' && turn.endError !== null);
+    if (!died || isRequestedStopName(name)) continue;
     const named = turn.endError && !(name && ABORT_END_ERROR_NAMES.includes(name));
     failures.push({
       message_id: turn.messageId,
@@ -238,7 +248,10 @@ export async function readSessionTurnState(sessionId: string): Promise<SessionTu
             ...(ended.messageId ? { message_id: ended.messageId } : {}),
             end_reason: ended.endReason,
             ended_at: ended.endedAt ? ended.endedAt.toISOString() : null,
-            ...(ended.endError ? { error: ended.endError } : {}),
+            // A requested stop is bookkeeping, not an error to report.
+            ...(ended.endError && !isRequestedStopName(ended.endError.name)
+              ? { error: ended.endError }
+              : {}),
           },
         }
       : {}),

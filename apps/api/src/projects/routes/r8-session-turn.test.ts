@@ -585,38 +585,64 @@ describe('GET /v1/projects/:projectId/sessions/:sessionId/turn', () => {
     expect(queries[2].orderBy.some((term) => term.includes('started_at'))).toBe(true);
   });
 
-  test('lists every failed turn, names the cause when there is one, and never lists a user Stop', async () => {
+  test('lists the turns that died, names the cause when there is one, and never a stop somebody asked for', async () => {
     // Session ad02e053: four sub-agent tasks read "failed" and the turn said
-    // nothing. A failure the user cannot see is the bug; the one ending that is
-    // NOT a failure is the Stop the user pressed.
+    // nothing. A failure the user cannot see is the bug.
     const at = (s: number) => new Date(`2026-08-17T00:00:0${s}.000Z`);
-    const failed = (token: string, s: number, end_error: { name: string | null; message: string | null } | null) =>
+    const ended = (
+      token: string,
+      s: number,
+      end_reason: string,
+      end_error: { name: string | null; message: string | null } | null,
+    ) =>
       ledgerRow({
         turn_token: token,
         state: 'ended',
-        end_reason: 'failed',
+        end_reason,
         message_id: `msg_${token}`,
         started_at: at(s),
         ended_at: at(s),
         end_error,
       });
     turnTable = [
-      failed('named', 4, { name: 'SandboxMemoryGuard', message: 'sandbox memory at 97%' }),
-      failed('bare-abort', 3, { name: 'MessageAbortedError', message: 'Aborted' }),
-      failed('nothing-recorded', 2, null),
-      failed('user-stop', 1, { name: 'UserStop', message: null }),
+      ended('named', 7, 'failed', { name: 'SandboxMemoryGuard', message: 'sandbox memory at 97%' }),
+      ended('bare-abort', 6, 'failed', { name: 'MessageAbortedError', message: 'Aborted' }),
+      ended('box-gone', 5, 'runtime_gone', null),
+      // Not failures: somebody asked for these.
+      ended('user-stop', 4, 'failed', { name: 'UserStop', message: null }),
+      ended('queue-interrupt', 3, 'failed', { name: 'QueueInterrupt', message: null }),
+      // Predates `end_error`: a Stop and an unexplained abort were stored alike.
+      ended('legacy', 2, 'failed', null),
+      ended('fine', 1, 'completed', null),
     ];
 
     const body = await (await getTurn()).json();
     expect(body.recent_failures).toEqual([
       {
         message_id: 'msg_named',
-        ended_at: '2026-08-17T00:00:04.000Z',
+        ended_at: '2026-08-17T00:00:07.000Z',
         error: { name: 'SandboxMemoryGuard', message: 'sandbox memory at 97%' },
       },
-      { message_id: 'msg_bare-abort', ended_at: '2026-08-17T00:00:03.000Z', error: null },
-      { message_id: 'msg_nothing-recorded', ended_at: '2026-08-17T00:00:02.000Z', error: null },
+      { message_id: 'msg_bare-abort', ended_at: '2026-08-17T00:00:06.000Z', error: null },
+      { message_id: 'msg_box-gone', ended_at: '2026-08-17T00:00:05.000Z', error: null },
     ]);
+  });
+
+  test('a requested stop is never reported as the last turn\'s error', async () => {
+    turnTable = [
+      ledgerRow({
+        turn_token: 't-stopped',
+        state: 'ended',
+        end_reason: 'failed',
+        message_id: 'msg_stopped',
+        ended_at: new Date('2026-08-17T00:00:09.000Z'),
+        end_error: { name: 'UserStop', message: null },
+      }),
+    ];
+    const body = await (await getTurn()).json();
+    expect(body.last_ended.end_reason).toBe('failed');
+    expect(body.last_ended).not.toHaveProperty('error');
+    expect(body).not.toHaveProperty('recent_failures');
   });
 
   test('returns the NEWEST settled turn as last_ended', async () => {
