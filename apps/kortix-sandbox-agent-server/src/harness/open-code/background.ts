@@ -97,9 +97,11 @@ export function startOpenCodeBackground(
     }
   }
   // The root the guard aborted and the turn that was running on it. The relay
-  // names both. The turn is read BEFORE the abort, from one small SQLite row:
-  // after the abort a queued prompt can already be the newest turn, and the
-  // HTTP transcript can be tens of MB at the moment memory is at its worst.
+  // names both. The turn is read BEFORE the abort, and only while it is still
+  // open: after the abort the newest turn can be a queued prompt, and a finished
+  // turn must never be blamed for an abort that came later. One small SQLite row
+  // first — the HTTP transcript can be tens of MB at the moment memory is at its
+  // worst — and the transcript window only when that store cannot be read.
   const turnDb = new OpencodeDb(offloadDbPath)
   let guardedSessionId: string | null = null
   let guardedTurnMessageId: string | null = null
@@ -126,7 +128,11 @@ export function startOpenCodeBackground(
         guardedSessionId = sessionId
         guardedTurnMessageId = null
         if (!sessionId) return false
-        if (turnDb.probe().supported) guardedTurnMessageId = turnDb.newestAssistantParentId(sessionId)
+        // `null` from the store is "no open turn" OR "could not read"; the
+        // transcript settles which, and only costs a read in that rare case.
+        guardedTurnMessageId =
+          (turnDb.probe().supported ? turnDb.openTurnMessageId(sessionId) : null) ??
+          (await readOpenTurnMessageId(opencode.getInternalUrl(), cfg.workspace, sessionId))
         const url =
           `${opencode.getInternalUrl()}/session/${encodeURIComponent(sessionId)}/abort` +
           `?directory=${encodeURIComponent(cfg.workspace)}`
@@ -136,16 +142,14 @@ export function startOpenCodeBackground(
       },
       onGuard: async ({ reason, snapshot, aborted }) => {
         // Tell the control plane why the turn ended. Sent after the abort, so
-        // OpenCode's own end frame for the same turn races this one; apps/api
-        // keeps the first end for a turn.
+        // OpenCode's own "Aborted" end frame races this one. Either order ends
+        // the same: apps/api lets a named cause replace the abort that beat it.
         await relayMemoryGuardTurnEnd({
           reason,
           aborted,
           opencodeRssMb: snapshot.runtime?.rssMb ?? null,
           opencodeSessionId: guardedSessionId,
           turnMessageId: guardedTurnMessageId,
-          opencode,
-          workspace: cfg.workspace,
         })
         void runOffloadIfIdle('memory-guard')
       },
@@ -178,10 +182,8 @@ export async function relayMemoryGuardTurnEnd(input: {
   aborted: boolean
   opencodeRssMb: number | null
   opencodeSessionId: string | null
-  /** The aborted turn, when it was read before the abort. */
-  turnMessageId?: string | null
-  opencode: Pick<Opencode, 'getInternalUrl'>
-  workspace: string
+  /** The turn that was running when the guard fired, read before the abort. */
+  turnMessageId: string | null
 }): Promise<boolean> {
   const projectId = process.env.KORTIX_PROJECT_ID
   const sessionId = process.env.KORTIX_SESSION_ID
@@ -191,11 +193,7 @@ export async function relayMemoryGuardTurnEnd(input: {
   const apiRoot = apiUrl.endsWith('/v1') ? apiUrl : `${apiUrl}/v1`
   // Name the turn only when the abort landed: a named end closes the turn,
   // and a failed abort leaves it running.
-  const turnMessageId =
-    input.aborted && input.opencodeSessionId
-      ? (input.turnMessageId ??
-        (await readGuardedTurnMessageId(input.opencode.getInternalUrl(), input.workspace, input.opencodeSessionId)))
-      : null
+  const turnMessageId = input.aborted ? input.turnMessageId : null
   try {
     const res = await fetch(`${apiRoot}/projects/${encodeURIComponent(projectId)}/turn-stream`, {
       method: 'POST',
@@ -229,12 +227,11 @@ export async function relayMemoryGuardTurnEnd(input: {
 }
 
 /**
- * The user message of the turn the guard aborted: the newest assistant
- * message's `parentID`. Read after the abort, which stamps that message with
- * `MessageAbortedError` and a completion time but keeps its parent. `null`
- * when OpenCode cannot be read.
+ * `OpencodeDb.openTurnMessageId` over HTTP, for a store this daemon cannot read:
+ * the user message of the turn that is running, or `null`. Same rule — the
+ * newest assistant message must still be open.
  */
-async function readGuardedTurnMessageId(
+async function readOpenTurnMessageId(
   baseUrl: string,
   workspace: string,
   sessionId: string,
@@ -245,12 +242,21 @@ async function readGuardedTurnMessageId(
       `?directory=${encodeURIComponent(workspace)}&limit=${TURN_PROBE_WINDOW}`
     const res = await fetch(url, { signal: AbortSignal.timeout(5_000) })
     if (!res.ok) return null
-    const rows = (await res.json()) as Array<{ info?: { role?: string; parentID?: string } }>
+    const rows = (await res.json()) as Array<{
+      info?: {
+        role?: string
+        parentID?: string
+        time?: { completed?: number }
+        error?: { data?: { isRetryable?: boolean } }
+      }
+    }>
     if (!Array.isArray(rows)) return null
     // A plain loop: apps/api type-checks this file against a lib without `findLast`.
     for (let i = rows.length - 1; i >= 0; i--) {
       const info = rows[i]?.info
-      if (info?.role === 'assistant') return info.parentID ?? null
+      if (info?.role !== 'assistant') continue
+      const open = info.time?.completed == null && (!info.error || info.error.data?.isRetryable === true)
+      return open ? (info.parentID ?? null) : null
     }
     return null
   } catch {

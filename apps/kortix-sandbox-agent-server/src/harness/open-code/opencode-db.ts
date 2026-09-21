@@ -289,20 +289,31 @@ export class OpencodeDb {
   }
 
   /**
-   * The user message the session's newest ASSISTANT message answers — the turn
-   * that is running, when one is. `null` when there is none or the DB is
-   * unreadable.
+   * The user message of the turn that is RUNNING on this session, or `null` when
+   * none is, or the DB is unreadable.
    *
-   * One `message` row and no `part` rows, on purpose: the memory guard asks this
-   * at ~97 % box memory, and parts are where inline image bytes live. Trailing
-   * user rows (a prompt forwarded into the live turn) are skipped, exactly as
+   * A turn is running when the newest ASSISTANT message is still open: no
+   * completion time, and no error except one OpenCode is retrying — the same
+   * rule `inspectOpencodeRoot` uses. A finished turn is never named: the memory
+   * guard also fires when it cannot tell whether a turn is running, and naming
+   * the previous turn would rewrite how that one ended.
+   *
+   * One `message` row and no `part` rows, on purpose: the guard asks this at
+   * ~97 % box memory, and parts are where inline image bytes live. Trailing user
+   * rows (a prompt forwarded into the live turn) are skipped, exactly as
    * `readRootTurnState` skips them.
    */
-  newestAssistantParentId(sessionId: string): string | null {
-    const row = this.retry('newestAssistantParentId', (db) =>
+  openTurnMessageId(sessionId: string): string | null {
+    const row = this.retry('openTurnMessageId', (db) =>
       db
-        .query<{ parent_id: string | null }, [string]>(
-          `SELECT json_extract(data, '$.parentID') AS parent_id
+        .query<
+          { parent_id: string | null; completed: number | null; error: string | null; retryable: number | null },
+          [string]
+        >(
+          `SELECT json_extract(data, '$.parentID') AS parent_id,
+                  json_extract(data, '$.time.completed') AS completed,
+                  json_extract(data, '$.error.name') AS error,
+                  json_extract(data, '$.error.data.isRetryable') AS retryable
              FROM message
             WHERE session_id = ? AND json_extract(data, '$.role') = 'assistant'
             ORDER BY time_created DESC, id DESC
@@ -310,7 +321,9 @@ export class OpencodeDb {
         )
         .get(sessionId),
     )
-    return typeof row?.parent_id === 'string' && row.parent_id ? row.parent_id : null
+    if (!row || row.completed !== null) return null
+    if (row.error !== null && row.retryable !== 1) return null
+    return typeof row.parent_id === 'string' && row.parent_id ? row.parent_id : null
   }
 
   /** OpenCode's own durable event cursor, per aggregate (= per OpenCode session). */
