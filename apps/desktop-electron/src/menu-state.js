@@ -5,9 +5,9 @@ function menuContextForUrl(url) {
   } catch {
     return { inProject: false, hasActiveTab: false };
   }
-  const inProject = /^\/projects\/[^/]+(?:\/|$)/.test(pathname);
-  const hasActiveTab =
-    inProject && /^\/projects\/[^/]+\/(?:sessions\/[^/]+|customize)(?:\/|$)/.test(pathname);
+  const projectId = /^\/projects\/([^/]+)(?:\/|$)/.exec(pathname)?.[1];
+  const inProject = Boolean(projectId && projectId !== 'start' && projectId !== 'new');
+  const hasActiveTab = inProject && /^\/projects\/[^/]+\/(?:sessions\/[^/]+|customize)(?:\/|$)/.test(pathname);
   return { inProject, hasActiveTab };
 }
 

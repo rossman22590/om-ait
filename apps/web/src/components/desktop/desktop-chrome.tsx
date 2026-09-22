@@ -9,6 +9,7 @@ import {
   zoomOut,
   zoomReset,
 } from '@/lib/desktop';
+import { projectIdFromPathname } from '@/stores/project-switch-store';
 import { useSettingsPanelStore } from '@/stores/settings-panel-store';
 import { useTheme } from 'next-themes';
 import { usePathname, useRouter } from 'next/navigation';
@@ -17,10 +18,8 @@ import { useEffect } from 'react';
 /**
  * Invisible top-of-window drag region. The web app's own UI extends to the
  * window edge; this layer just makes the empty area near the traffic lights
- * draggable. On macOS the OS draws the traffic lights itself; on Win/Linux
- * we render minimal min/max/close buttons here since `decorations: true` would
- * draw the OS title bar (which we don't want). The strip has zero visual
- * presence — `transparent`, no border, no background.
+ * draggable. macOS draws its traffic lights. Windows and Linux draw their
+ * native frame. The strip has zero visual presence: no border or background.
  */
 export function DesktopChrome() {
   const { theme } = useTheme();
@@ -28,7 +27,7 @@ export function DesktopChrome() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!isDesktop()) return;
+    if (!isDesktop() || !theme) return;
     void setDesktopNativeTheme(theme);
   }, [theme]);
 
@@ -67,7 +66,7 @@ export function DesktopChrome() {
       else if (command === 'zoom-out') void zoomOut();
       else if (command === 'zoom-reset') void zoomReset();
       else if (command === 'open-settings') {
-        if (pathname?.startsWith('/projects/')) {
+        if (projectIdFromPathname(pathname)) {
           useSettingsPanelStore.getState().openSettings('preferences');
         } else {
           router.push('/settings');

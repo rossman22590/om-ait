@@ -47,6 +47,16 @@ test('desktop chrome never resizes or drags generic product tab lists', () => {
   }
 });
 
+test('desktop native theme waits for next-themes hydration', () => {
+  const chromeSource = readFileSync(
+    join(repoRoot, 'apps/web/src/components/desktop/desktop-chrome.tsx'),
+    'utf8',
+  );
+  const bridgeSource = readFileSync(join(repoRoot, 'apps/web/src/lib/desktop.ts'), 'utf8');
+  expect(chromeSource).toContain('if (!isDesktop() || !theme) return;');
+  expect(bridgeSource).toContain("if (typeof window === 'undefined' || !theme) return;");
+});
+
 /** The variable block on the bare `html[data-desktop-platform='macos']` rule. */
 function macVarBlock(): string {
   const match = css.match(/html\[data-desktop-platform='macos'\]\s*\{([^}]*)\}/);
@@ -344,7 +354,10 @@ describe('top-reaching standalone surfaces clear native macOS controls', () => {
       'utf8',
     ),
     presentation: readFileSync(
-      join(repoRoot, 'apps/web/src/app/presentations/engine/deck.tsx'),
+      join(
+        repoRoot,
+        'apps/web/src/features/file-renderers/presentation/FullScreenPresentationViewer.tsx',
+      ),
       'utf8',
     ),
     connecting: readFileSync(

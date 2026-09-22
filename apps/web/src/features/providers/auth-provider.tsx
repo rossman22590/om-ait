@@ -55,6 +55,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const lastUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     /**
      * Make the client state safe to hand to `nextUserId`, then record that it
      * belongs to them. Resolves only once any wipe has finished, so callers can
@@ -91,6 +92,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const {
           data: { session: currentSession },
         } = await withAuthBootstrapTimeout(supabase.auth.getSession(), AUTH_BOOTSTRAP_TIMEOUT_MS);
+        if (!active) return;
 
         if (currentSession) {
           // Validate the session against the auth server — catches stale
@@ -100,9 +102,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             supabase.auth.getUser(),
             AUTH_BOOTSTRAP_TIMEOUT_MS,
           );
+          if (!active) return;
           if (userError) {
             console.warn('[AuthProvider] Stale session detected, signing out:', userError.message);
             await supabase.auth.signOut();
+            if (!active) return;
             setBootstrapAuthToken(null);
             setCachedAuthToken(null);
             setSession(null);
@@ -116,6 +120,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // even for the length of one render — is the bug this guard exists for.
         if (currentSession?.user?.id) {
           await adoptUser(currentSession.user.id);
+          if (!active) return;
         }
 
         setSession(currentSession);
@@ -125,6 +130,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setBootstrapAuthToken(null);
         }
       } catch (error) {
+        if (!active) return;
         console.warn('[AuthProvider] Failed to bootstrap initial session:', error);
         setBootstrapError(
           error instanceof Error && error.message.startsWith('Authentication did not answer')
@@ -134,7 +140,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               : new Error('Authentication failed'),
         );
       } finally {
-        setIsLoading(false);
+        if (active) setIsLoading(false);
       }
     };
 
@@ -152,6 +158,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       // against them.
       if (nextUserId && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
         await adoptUser(nextUserId);
+        if (!active) return;
       }
 
       setSession(newSession);
@@ -203,6 +210,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => {
+      active = false;
       authListener?.subscription.unsubscribe();
     };
   }, [bootstrapAttempt, supabase]);

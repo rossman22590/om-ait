@@ -181,12 +181,12 @@ Group/role/policy-writing and SSO/SCIM-writing routes are ALSO gated behind `req
 `IAM-9` **super-admin bypass** — the account creator is super-admin; their effective probe (`…/members/:userId/effective`) is `allowed:true reason:super_admin` for every action (account-write, project.create, and any project action on any/unknown project) regardless of policies or project membership. A revoked-super-admin owner still passes via `role`, never `super_admin`. Asserted via the effective endpoint.
 
 > **Allow-reason contract (canonical RBAC).** Every ALLOW that comes from a role the principal holds reports `reason:"role"`. The pre-canonical engine reported `account_role`, `project_role` or `custom_policy` depending on which of the five grant stores the row lived in; `role_assignments` is now the only store, so the distinction has no referent. DENIAL reasons are unchanged (`account_role_insufficient`, `project_role_insufficient`, `no_project_membership`, `resource_scope_insufficient`, `agent_scope_insufficient`, `service_account_scope_insufficient`, `token_out_of_scope`, `account_mfa_required`, `not_a_member`), because each names a constraint the caller can act on and `denial-message.ts` is keyed on them.
-`IAM-10` **no deny precedence** — V2 has NO deny rules (engine: "No deny precedence"; access is allow-by-role only, max-role-wins across direct+group sources). There is no constructible allow+deny conflict via real routes. Closest assertion: stack a low (viewer) direct role and a high (manager) group grant on the same project — effective `project.delete` is `allowed:true` (max wins, never denied by the lower grant). NOTE: classic deny-wins is unverifiable black-box because the feature does not exist.
-`IAM-11` **PATs inherit the minter (no token-only policy eval)** — V2 has no per-token policies; a PAT carries no narrowing policy set, it only optionally binds to one project (`account_tokens.project_id`). An unscoped account PAT's effective access equals its minter's (owner → super-admin set). Asserted by exercising the same `…/effective` reads as the JWT owner. NOTE: per-token policy evaluation is unverifiable black-box because the feature does not exist; project-bound-PAT scope narrowing is covered indirectly by the token/scope flows, not here.
-`IAM-12` **account role → action set** — the account-scope role assignment maps to the action set: a plain `member` gets account-reads only — `account.read` allowed but `account.write`/`project.create` denied (`reason:account_role_insufficient`), and a project action on a project they're not on is denied (`reason:no_project_membership`), so they cannot reach all projects. owner/admin → Administrator-level set (`account.write` allowed; implicit Manager on every project). Asserted via the effective endpoint.
-`IAM-13` **scope match** — a project group-grant matches only its own project. Grant a group Manager on project A; a member of that group probed with `resourceType=project&resourceId=A` → `project.delete` allowed (`reason:role`); the same probe against project B (no grant) → denied (`reason:no_project_membership`). Asserted via the effective endpoint with/without the matching `resourceId`.
-`IAM-25` Custom roles/action catalog: `GET …/iam/actions`, `GET/POST/PATCH/DELETE …/iam/roles`, `GET/PUT …/iam/roles/:roleId/permissions`, `GET …/usage`. Invalid role key → 400; built-in role permission edit/delete → 400.
-`IAM-26` Custom policies: `GET/POST/PATCH/DELETE …/iam/policies`, `POST …/iam/policies:bulk-delete`, `POST …/iam/policies:bulk-import`, plus `GET …/iam/agent-identities`. Built-in role policy → 400; non-member read → 403.
+> `IAM-10` **no deny precedence** — V2 has NO deny rules (engine: "No deny precedence"; access is allow-by-role only, max-role-wins across direct+group sources). There is no constructible allow+deny conflict via real routes. Closest assertion: stack a low (viewer) direct role and a high (manager) group grant on the same project — effective `project.delete` is `allowed:true` (max wins, never denied by the lower grant). NOTE: classic deny-wins is unverifiable black-box because the feature does not exist.
+> `IAM-11` **PATs inherit the minter (no token-only policy eval)** — V2 has no per-token policies; a PAT carries no narrowing policy set, it only optionally binds to one project (`account_tokens.project_id`). An unscoped account PAT's effective access equals its minter's (owner → super-admin set). Asserted by exercising the same `…/effective` reads as the JWT owner. NOTE: per-token policy evaluation is unverifiable black-box because the feature does not exist; project-bound-PAT scope narrowing is covered indirectly by the token/scope flows, not here.
+> `IAM-12` **account role → action set** — the account-scope role assignment maps to the action set: a plain `member` gets account-reads only — `account.read` allowed but `account.write`/`project.create` denied (`reason:account_role_insufficient`), and a project action on a project they're not on is denied (`reason:no_project_membership`), so they cannot reach all projects. owner/admin → Administrator-level set (`account.write` allowed; implicit Manager on every project). Asserted via the effective endpoint.
+> `IAM-13` **scope match** — a project group-grant matches only its own project. Grant a group Manager on project A; a member of that group probed with `resourceType=project&resourceId=A` → `project.delete` allowed (`reason:role`); the same probe against project B (no grant) → denied (`reason:no_project_membership`). Asserted via the effective endpoint with/without the matching `resourceId`.
+> `IAM-25` Custom roles/action catalog: `GET …/iam/actions`, `GET/POST/PATCH/DELETE …/iam/roles`, `GET/PUT …/iam/roles/:roleId/permissions`, `GET …/usage`. Invalid role key → 400; built-in role permission edit/delete → 400.
+> `IAM-26` Custom policies: `GET/POST/PATCH/DELETE …/iam/policies`, `POST …/iam/policies:bulk-delete`, `POST …/iam/policies:bulk-import`, plus `GET …/iam/agent-identities`. Built-in role policy → 400; non-member read → 403.
 
 ### Approval control-plane (project access-requests, approvals, agent/connector scoping)
 
@@ -556,7 +556,6 @@ The destination bytes match the source. Repeat the write through a Computer Tunn
 connector and assert its returned digest and persisted bytes. Same-length corrupted bytes with the source
 checksum fail without replacing the destination. Malformed base64 returns 400.
 Cleanup removes the connection and temporary files.
-
 
 ### Ops (platform admin)
 
@@ -1024,8 +1023,40 @@ GET, and select the Connected filter. Light and dark settings retain row geometr
 
 At 720 × 480, the sidebar opener must remain reachable and open the workspace
 selector. The Settings capability tab must scroll into view and load its route.
-Native zoom-in and reset shortcuts must change and restore the zoom factor;
-the workspace selector must remain clickable afterward.
+When a collapsed desktop sidebar opens on hover, it must show exactly one Pin
+sidebar control and leave no empty titlebar gap. Native zoom-in, zoom-out, and
+reset menu commands must change and restore the zoom factor. The workspace
+selector must remain clickable afterward. Entering and leaving native fullscreen
+must remove and restore the macOS traffic-light gutter.
+
+The Electron shell must use native macOS traffic lights. Windows and Linux must
+use the native window frame and must not render web-drawn window controls. Light,
+dark, and system theme choices must synchronize with Electron's native theme.
+The File menu must expose New Session, Close Tab, and Close Window with native
+accelerators and enable route-dependent actions only when their target exists.
+The Settings menu command must open Settings.
+
+When a page prevents unload, Reload, Back, Home, Close Window, and Quit must
+show the native Leave/Stay confirmation. Stay must preserve the current page.
+Leave must complete the requested action. Dock activation must restore a
+minimized main window. When only a popup remains, Dock activation must create a
+new main window without closing the popup.
+
+The shell must persist the last normal window bounds and maximized state. A
+process relaunch must restore both values. Saved bounds that no longer fit any
+connected display must be clamped or centered until the full window is visible.
+Full-document reloads while macOS fullscreen is active must keep the
+traffic-light gutter removed.
+
+Connector authorization must be able to create an opener-preserving blank child
+window and then navigate it to an HTTP(S) provider URL. Ordinary links remain
+external. Unsafe child-window navigation schemes remain blocked.
+An authenticating HTTP proxy must receive credentials from a native prompt and
+must not reuse origin credentials. If Supabase auth does not answer within 15
+seconds, the splash must expose Retry and Sign out instead of loading forever.
+A failed tunnel permission decision must retain its error, expose Retry and
+Dismiss, and remain dismissible through Escape or the close button. Dismissed
+permission requests must not reopen when their SSE event repeats.
 Native commands trust only the configured frontend origin in the main window's
 main frame. A second window at that same origin must receive an unauthorized
 sender error. Full document navigation within the configured frontend stays in

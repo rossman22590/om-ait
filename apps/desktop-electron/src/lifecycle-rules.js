@@ -6,4 +6,11 @@ function shouldAllowPreventedUnload(response) {
   return response === 0;
 }
 
-module.exports = { needsMainWindow, shouldAllowPreventedUnload };
+function revealMainWindow(mainWindow) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+module.exports = { needsMainWindow, revealMainWindow, shouldAllowPreventedUnload };

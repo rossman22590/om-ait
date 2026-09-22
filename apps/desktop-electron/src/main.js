@@ -20,7 +20,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const { setupAutoUpdates, checkForUpdatesInteractive } = require('./updater');
 const basicAuth = require('./basic-auth');
-const { needsMainWindow, shouldAllowPreventedUnload } = require('./lifecycle-rules');
+const { needsMainWindow, revealMainWindow, shouldAllowPreventedUnload } = require('./lifecycle-rules');
 const { menuContextForUrl } = require('./menu-state');
 const { decidePopup, isAllowedPopupNavigation } = require('./popup-rules');
 const { backgroundForTheme, normalizeTheme } = require('./theme-state');
@@ -326,6 +326,11 @@ function createMainWindow() {
   // coexist with native buttons after focus/reload transitions.
   configureNativeWindowControls(mainWindow, isMac);
 
+  const syncRendererWindowState = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send('kortix:fullscreen', mainWindow.isFullScreen());
+  };
+
   // Reveal once content is in. did-finish-load fires when the document + its
   // subresources are loaded — good enough to swap the splash for real chrome
   // instead of a blank window.
@@ -333,7 +338,6 @@ function createMainWindow() {
     dismissSplash();
     if (!mainWindow) return;
     if (restored.maximized) mainWindow.maximize();
-    mainWindow.webContents.send('kortix:fullscreen', mainWindow.isFullScreen());
     refreshNavigationMenu();
     mainWindow.show();
     mainWindow.focus();
@@ -352,6 +356,7 @@ function createMainWindow() {
   // the thin top-edge drag handle; no compositor-level overlay covers content.
   mainWindow.webContents.on('did-finish-load', () => {
     mainWindow?.webContents.executeJavaScript(DESKTOP_CHROME_JS).catch(() => {});
+    syncRendererWindowState();
     // Render diagnostic (blur): on Retina expect dpr=2 and zoom=1.
     mainWindow?.webContents
       .executeJavaScript('window.devicePixelRatio')
@@ -574,11 +579,11 @@ async function changeInstance(mode, error = null) {
    the safeStorage-encrypted file userData/basic_auth.json, the per-session
    memory, the dialog window, and the "was that rejected?" bookkeeping. */
 
-/** host → { user, password } for this process lifetime (remembered or not). */
+/** challenge key → { user, password } for this process lifetime. */
 const sessionBasicCredentials = new Map();
-/** host → { source: 'env'|'stored'|'prompt', at } — last credential we sent. */
+/** challenge key → { source: 'env'|'stored'|'prompt', at } — last credential sent. */
 const lastBasicAnswers = new Map();
-/** host → Promise resolving to the dialog result; dedupes parallel challenges. */
+/** challenge key → dialog promise; dedupes parallel challenges. */
 const pendingBasicPrompts = new Map();
 
 function basicAuthStorePath() {
@@ -753,7 +758,7 @@ function promptForBasicCredential({ key, host, realm, user, error }) {
   return promise;
 }
 
-/** Answer one app-origin Basic challenge (env → remembered → dialog). */
+/** Answer one allowed Basic challenge (app origin: env/store/dialog; proxy: store/dialog). */
 async function answerBasicChallenge(authInfo, callback) {
   const host = authInfo.host;
   const key = basicAuth.challengeKey(authInfo);
@@ -1110,22 +1115,24 @@ if (!gotLock) {
   // A kortix:// link that arrives before the window exists (macOS cold start).
   let pendingDeepLink = null;
 
-  // HTTP Basic challenges (dev/staging sit behind one shared credential — see
-  // apps/web/src/middleware.ts, which answers 401 "Authentication required.").
+  // HTTP Basic challenges cover the app origin and authenticating proxies.
+  // Dev/staging sit behind one shared origin credential — see apps/web/src/
+  // middleware.ts, which answers 401 "Authentication required.".
   //
   // Chrome shows its own username/password dialog for these. Electron does NOT:
   // if nothing handles 'login' the request is simply cancelled, so the window
   // renders the bare 401 body with no way to get past it. That is exactly what
   // a dev build pointed at dev.kortix.com looked like before this handler.
   //
-  // Order: KORTIX_DESKTOP_BASIC_PASSWORD env → credential remembered for this
-  // host → a native-style dialog (assets/basic-auth.html). Policy, including
-  // "was our last answer rejected?", is the pure decideChallenge() in
-  // src/basic-auth.js so it is unit-tested.
+  // Origin order: KORTIX_DESKTOP_BASIC_PASSWORD env → credential remembered
+  // for this host and port → a native-style dialog (assets/basic-auth.html).
+  // Proxy order omits the app-origin environment credential. Proxy entries are
+  // isolated by proxy host and port. Policy, including rejection detection, is
+  // the pure decideChallenge() in src/basic-auth.js so it is unit-tested.
   //
-  // The credential is answered ONLY for the configured app origin. Untrusted
-  // in-app content (sandbox previews, iframes) can point at any host, and a
-  // 401 Basic challenge is all an attacker host would need to harvest it.
+  // A non-proxy credential is answered ONLY for the configured app origin.
+  // Untrusted in-app content (sandbox previews, iframes) can point at any host,
+  // and a 401 Basic challenge is all an attacker host needs to harvest it.
   app.on('login', (event, _webContents, _details, authInfo, callback) => {
     if (authInfo.scheme !== 'basic') return;
     if (!authInfo.isProxy && !isAppOriginChallenge(authInfo)) {
@@ -1141,11 +1148,7 @@ if (!gotLock) {
   app.on('second-instance', (_event, argv) => {
     const deepLink = argv.find((a) => a.startsWith(`${URL_SCHEME}://`));
     if (deepLink) handleDeepLink(deepLink);
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.show();
-      mainWindow.focus();
-    }
+    revealMainWindow(mainWindow);
     // First launch: the chooser is the only window.
     focusInstanceChooser();
   });
@@ -1206,8 +1209,7 @@ if (!gotLock) {
         createSplash();
         createMainWindow();
       } else {
-        mainWindow?.show();
-        mainWindow?.focus();
+        revealMainWindow(mainWindow);
       }
     });
   });

@@ -54,6 +54,35 @@ describe('window state restoration', () => {
       maximized: false,
     });
   });
+
+  it('makes partially visible and oversized saved bounds fully visible', () => {
+    expect(
+      windowState.restoreWindowState?.(
+        {
+          bounds: { x: 1439, y: 870, width: 1000, height: 700 },
+          maximized: false,
+        },
+        [primary],
+        primary,
+      ),
+    ).toEqual({
+      bounds: { x: 440, y: 200, width: 1000, height: 700 },
+      maximized: false,
+    });
+    expect(
+      windowState.restoreWindowState?.(
+        {
+          bounds: { x: 0, y: 25, width: 3000, height: 2000 },
+          maximized: false,
+        },
+        [primary],
+        primary,
+      ),
+    ).toEqual({
+      bounds: { x: 0, y: 25, width: 1440, height: 875 },
+      maximized: false,
+    });
+  });
 });
 
 describe('popup navigation policy', () => {
@@ -108,6 +137,18 @@ describe('desktop lifecycle decisions', () => {
     expect(lifecycleRules.shouldAllowPreventedUnload?.(0)).toBe(true);
     expect(lifecycleRules.shouldAllowPreventedUnload?.(1)).toBe(false);
   });
+
+  it('restores a minimized main window before showing and focusing it', () => {
+    const calls = [];
+    lifecycleRules.revealMainWindow?.({
+      isDestroyed: () => false,
+      isMinimized: () => true,
+      restore: () => calls.push('restore'),
+      show: () => calls.push('show'),
+      focus: () => calls.push('focus'),
+    });
+    expect(calls).toEqual(['restore', 'show', 'focus']);
+  });
 });
 
 describe('native menu state', () => {
@@ -122,8 +163,17 @@ describe('native menu state', () => {
       menuState.menuContextForUrl?.(
         'https://kortix.com/projects/project-1/sessions/session-1',
       ),
-    ).toEqual({ inProject: true, hasActiveTab: true });
+    ).toEqual({
+      inProject: true,
+      hasActiveTab: true,
+    });
     expect(menuState.menuContextForUrl?.('https://kortix.com/new')).toEqual({
+      inProject: false,
+      hasActiveTab: false,
+    });
+    expect(
+      menuState.menuContextForUrl?.('https://kortix.com/projects/start'),
+    ).toEqual({
       inProject: false,
       hasActiveTab: false,
     });
@@ -178,6 +228,7 @@ describe('Electron integration wiring', () => {
 
   it('bridges native full-screen and menu commands into the renderer', () => {
     expect(mainSource).toContain("send('kortix:fullscreen'");
+    expect(mainSource).toContain('syncRendererWindowState();');
     expect(mainSource).toContain("send('kortix:command'");
     expect(preloadSource).toContain(
       "setAttribute('data-desktop-fullscreen', 'true')",

@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { InfoBanner } from '@/components/ui/info-banner';
 import {
   Select,
   SelectContent,
@@ -35,7 +36,7 @@ import {
   ShieldIcon as Shield,
   XIcon as X,
 } from '@phosphor-icons/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getScopeEditorCapability } from './scope-editors';
 import { FilesystemScopeEditor } from './scope-editors/filesystem-scope-editor';
 import { ShellScopeEditor } from './scope-editors/shell-scope-editor';
@@ -65,7 +66,7 @@ export function TunnelPermissionRequestDialog() {
   const [expiryValue, setExpiryValue] = useState('7d');
   const [scopeExpanded, setScopeExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [failedAction, setFailedAction] = useState<FailedAction | null>(null);
+  const failedAction = useRef<FailedAction | null>(null);
 
   // Pre-fill scope from the request
   const initialScope = useMemo(() => {
@@ -83,7 +84,7 @@ export function TunnelPermissionRequestDialog() {
       setScopeExpanded(false);
       setCustomScope(extractScopeFromRequest(currentRequest));
       setError(null);
-      setFailedAction(null);
+      failedAction.current = null;
     }
   }, [currentRequest]);
 
@@ -126,7 +127,7 @@ export function TunnelPermissionRequestDialog() {
       );
     } catch (err) {
       console.error('Failed to approve:', err);
-      setFailedAction('approve');
+      failedAction.current = 'approve';
       setError(
         err instanceof Error ? err.message : tHardcodedUi.raw('i18nComplete.text28c39aaf0edc'),
       );
@@ -141,7 +142,7 @@ export function TunnelPermissionRequestDialog() {
       successToast(tHardcodedUi.raw('i18nComplete.textf44bf9c0530c'));
     } catch (err) {
       console.error('Failed to deny:', err);
-      setFailedAction('deny');
+      failedAction.current = 'deny';
       setError(
         err instanceof Error ? err.message : tHardcodedUi.raw('i18nComplete.text25950c20dae9'),
       );
@@ -154,7 +155,7 @@ export function TunnelPermissionRequestDialog() {
     <Dialog
       open={!!currentRequest}
       onOpenChange={(open) => {
-        if (!open && !isPending) dismiss();
+        if (!open) dismiss();
       }}
     >
       <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()}>
@@ -286,25 +287,30 @@ export function TunnelPermissionRequestDialog() {
           )}
 
           {error && (
-            <div
-              className="border-destructive/30 bg-destructive/10 space-y-3 rounded-lg border p-3"
+            <InfoBanner
+              tone="destructive"
+              icon={AlertTriangle}
               role="alert"
+              action={
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() =>
+                      void (failedAction.current === 'deny' ? handleDeny() : handleApprove())
+                    }
+                    disabled={isPending}
+                  >
+                    {tHardcodedUi.raw('i18nComplete.text942087cc2d41')}
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" onClick={dismiss}>
+                    {tHardcodedUi.raw('i18nComplete.text48845bff334a')}
+                  </Button>
+                </div>
+              }
             >
-              <p className="text-destructive text-sm">{error}</p>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => void (failedAction === 'deny' ? handleDeny() : handleApprove())}
-                  disabled={isPending}
-                >
-                  {tHardcodedUi.raw('i18nComplete.text942087cc2d41')}
-                </Button>
-                <Button type="button" size="sm" variant="outline" onClick={dismiss}>
-                  {tHardcodedUi.raw('i18nComplete.text48845bff334a')}
-                </Button>
-              </div>
-            </div>
+              {error}
+            </InfoBanner>
           )}
         </div>
 

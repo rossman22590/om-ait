@@ -257,7 +257,7 @@ export const zoomOut = () => setDesktopZoom(getDesktopZoom() / ZOOM_STEP);
 export const zoomReset = () => setDesktopZoom(DESKTOP_BASE_ZOOM);
 
 export async function setDesktopNativeTheme(theme: string | undefined): Promise<void> {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || !theme) return;
   const selected = theme === 'light' || theme === 'dark' ? theme : 'system';
   const t = (
     window as unknown as {

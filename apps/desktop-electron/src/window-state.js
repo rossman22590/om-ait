@@ -1,13 +1,19 @@
 const MIN_WIDTH = 720;
 const MIN_HEIGHT = 480;
 
-function intersects(a, b) {
+function contains(outer, inner) {
   return (
-    a.x < b.x + b.width &&
-    a.x + a.width > b.x &&
-    a.y < b.y + b.height &&
-    a.y + a.height > b.y
+    inner.x >= outer.x &&
+    inner.y >= outer.y &&
+    inner.x + inner.width <= outer.x + outer.width &&
+    inner.y + inner.height <= outer.y + outer.height
   );
+}
+
+function intersectionArea(a, b) {
+  const width = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+  const height = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+  return width * height;
 }
 
 function centeredBounds(display, width, height) {
@@ -32,15 +38,34 @@ function restoreWindowState(saved, displays, primaryDisplay, fallbackBounds) {
     width: Math.max(MIN_WIDTH, Math.round(Number(raw.width) || fallback.width)),
     height: Math.max(MIN_HEIGHT, Math.round(Number(raw.height) || fallback.height)),
   };
-  const visible =
-    Number.isFinite(bounds.x) &&
-    Number.isFinite(bounds.y) &&
-    displays.some((display) => intersects(bounds, display.workArea || display));
+  const positioned = Number.isFinite(bounds.x) && Number.isFinite(bounds.y);
+  const areas = displays.map((display) => display.workArea || display);
+  const fullyVisible = positioned && areas.some((area) => contains(area, bounds));
+
+  if (fullyVisible) {
+    return { bounds, maximized: Boolean(saved?.maximized) };
+  }
+
+  const intersectingArea = positioned
+    ? areas
+        .map((area) => ({ area, overlap: intersectionArea(bounds, area) }))
+        .filter(({ overlap }) => overlap > 0)
+        .sort((a, b) => b.overlap - a.overlap)[0]?.area
+    : null;
+  const target = intersectingArea || primaryDisplay.workArea || primaryDisplay;
+  const width = Math.min(bounds.width, target.width);
+  const height = Math.min(bounds.height, target.height);
+  const fitted = intersectingArea
+    ? {
+        x: Math.min(Math.max(bounds.x, target.x), target.x + target.width - width),
+        y: Math.min(Math.max(bounds.y, target.y), target.y + target.height - height),
+        width,
+        height,
+      }
+    : centeredBounds(target, width, height);
 
   return {
-    bounds: visible
-      ? bounds
-      : centeredBounds(primaryDisplay.workArea || primaryDisplay, bounds.width, bounds.height),
+    bounds: fitted,
     maximized: Boolean(saved?.maximized),
   };
 }

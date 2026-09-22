@@ -235,10 +235,7 @@ export function Deck({
         </AnimatePresence>
 
         {/* ── Chrome (navbar-style) ───────────────────────────────────── */}
-        <div
-          className="kx-titlebar-row pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-6 py-5 sm:px-8"
-          data-sidebar-collapsed=""
-        >
+        <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-6 py-5 sm:px-8">
           <KortixLogo variant="logomark" size={22} className="text-foreground" />
           <div className="pointer-events-auto flex items-center gap-3">
             <Link

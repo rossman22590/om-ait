@@ -25,35 +25,37 @@ import {
 } from "../helpers/session-auth";
 import { dismissOnboarding, selectAccountForUi } from "../helpers/ui";
 
+const desktopRoot = fileURLToPath(
+  new URL("../../../apps/desktop-electron", import.meta.url),
+);
+const requireDesktop = createRequire(join(desktopRoot, "package.json"));
+
+async function launchDesktop(baseURL: string, profile: string) {
+  const app = await _electron.launch({
+    executablePath: requireDesktop("electron"),
+    args: [desktopRoot],
+    env: {
+      ...process.env,
+      KORTIX_DESKTOP_USER_DATA: profile,
+      KORTIX_DESKTOP_URL: `${baseURL}/projects`,
+    },
+  });
+  await expect
+    .poll(
+      () => app.windows().some((window) => window.url().startsWith(baseURL)),
+      { timeout: 120_000 },
+    )
+    .toBe(true);
+  return app;
+}
+
 const test = browserTest.extend<{ desktopApp: ElectronApplication | null }>({
   desktopApp: async ({ baseURL }, use) => {
     if (process.env.E2E_DESKTOP_NATIVE !== "1") return use(null);
-    const desktopRoot = fileURLToPath(
-      new URL("../../../apps/desktop-electron", import.meta.url),
-    );
     const profile = await mkdtemp(join(tmpdir(), "kortix-desktop-parity-"));
-    const requireDesktop = createRequire(join(desktopRoot, "package.json"));
     let app: ElectronApplication | undefined;
     try {
-      app = await _electron.launch({
-        executablePath: requireDesktop("electron"),
-        args: [desktopRoot],
-        env: {
-          ...process.env,
-          KORTIX_DESKTOP_USER_DATA: profile,
-          KORTIX_DESKTOP_URL: `${baseURL}/projects`,
-        },
-      });
-      const launchedApp = app;
-      await expect
-        .poll(
-          () =>
-            launchedApp
-              .windows()
-              .some((window) => window.url().startsWith(baseURL!)),
-          { timeout: 120_000 },
-        )
-        .toBe(true);
+      app = await launchDesktop(baseURL!, profile);
       await use(app);
     } finally {
       try {
@@ -231,12 +233,20 @@ for (const runtime of runtimes) {
         await dialog
           .getByRole("tab", { name: "Appearance", exact: true })
           .click();
-        for (const theme of ["Light", "Dark"]) {
+        for (const theme of ["Light", "Dark", "System"]) {
           await dialog
             .getByRole("button", { name: theme, exact: true })
             .click();
+          const expectedTheme =
+            theme === "System"
+              ? (await page.evaluate(
+                  () => matchMedia("(prefers-color-scheme: dark)").matches,
+                ))
+                ? "dark"
+                : "light"
+              : theme.toLowerCase();
           await expect(page.locator("html")).toHaveClass(
-            new RegExp(theme.toLowerCase()),
+            new RegExp(expectedTheme),
           );
           if (desktopApp) {
             await expect
@@ -332,21 +342,40 @@ for (const runtime of runtimes) {
           path: test.info().outputPath("desktop-connectors.png"),
           scale: "css",
         });
+        if (desktopApp) {
+          await page
+            .getByRole("button", { name: "Collapse sidebar", exact: true })
+            .click();
+          const edgePeek = page.locator('[data-slot="sidebar-edge-peek"]');
+          await expect(edgePeek).toBeVisible();
+          await edgePeek.hover();
+          await expect(switcher).toBeVisible();
+          const peekingSidebar = page.locator(
+            '[data-slot="sidebar"][data-peek]',
+          );
+          const peekHeader = peekingSidebar.locator(
+            '[data-slot="sidebar-header"]',
+          );
+          await expect(peekHeader).toBeVisible();
+          const peekPadding = await peekHeader.evaluate((header) => {
+            const style = getComputedStyle(header);
+            return {
+              top: Number.parseFloat(style.paddingTop),
+              left: Number.parseFloat(style.paddingLeft),
+            };
+          });
+          expect(peekPadding.top).toBeCloseTo(peekPadding.left, 2);
+          await expect(
+            page.getByRole("button", { name: "Pin sidebar", exact: true }),
+          ).toHaveCount(1);
+          await page.mouse.move(1300, 850);
+        }
         await resize(720, 480);
         const opener = page.getByRole("button", {
           name: desktop ? "Open sidebar" : "Collapse sidebar",
           exact: true,
         });
         await expect(opener).toBeVisible();
-        if (desktopApp) {
-          await page.locator('[data-slot="sidebar-edge-peek"]').hover();
-          await expect(switcher).toBeVisible();
-          await expect(
-            page.getByRole("button", { name: "Pin sidebar", exact: true }),
-          ).toHaveCount(1);
-          await page.mouse.move(719, 479);
-          await expect(switcher).toBeHidden();
-        }
         await opener.click();
         await expect(switcher).toBeVisible();
         await page.screenshot({
@@ -406,7 +435,13 @@ for (const runtime of runtimes) {
             )
             .toBe(originalZoom);
 
-          await window.evaluate((window) => window.setFullScreen(true));
+          await window.evaluate(async (window) => {
+            if (window.isFullScreen()) return;
+            await new Promise<void>((resolve) => {
+              window.once("enter-full-screen", resolve);
+              window.setFullScreen(true);
+            });
+          });
           await expect(page.locator("html")).toHaveAttribute(
             "data-desktop-fullscreen",
             "true",
@@ -422,7 +457,18 @@ for (const runtime of runtimes) {
                 ),
             )
             .toBe("0px");
-          await window.evaluate((window) => window.setFullScreen(false));
+          await page.reload();
+          await expect(page.locator("html")).toHaveAttribute(
+            "data-desktop-fullscreen",
+            "true",
+          );
+          await window.evaluate(async (window) => {
+            if (!window.isFullScreen()) return;
+            await new Promise<void>((resolve) => {
+              window.once("leave-full-screen", resolve);
+              window.setFullScreen(false);
+            });
+          });
           await expect(page.locator("html")).not.toHaveAttribute(
             "data-desktop-fullscreen",
           );
@@ -465,7 +511,10 @@ for (const runtime of runtimes) {
             .getByRole("dialog")
             .getByRole("button", { name: "Back to app" })
             .click();
-          await expect(switcher).toBeVisible();
+          await page
+            .getByRole("button", { name: "Open sidebar", exact: true })
+            .click();
+          await expect(switcher).toBeInViewport();
           await switcher.click();
           await expect(
             page.getByRole("menuitem", { name: /^Settings/ }),
@@ -510,11 +559,137 @@ for (const runtime of runtimes) {
             },
           );
           expect(denied).toContain("Unauthorized IPC sender");
+
+          await page.goto(`${baseURL}/settings`);
+          await expect(page).toHaveURL(/\/settings(?:\?|$)/, {
+            timeout: 60_000,
+          });
+          await expect
+            .poll(() => menuState("kx-file-new-session"))
+            .toMatchObject({ enabled: false });
+          await expect
+            .poll(() => menuState("kx-file-close-tab"))
+            .toMatchObject({ enabled: false });
+          await clickNativeMenu("kx-app-settings");
+          await expect(page).toHaveURL(/\/settings(?:\?|$)/, {
+            timeout: 60_000,
+          });
+
+          const unloadAllowed = (response: number) =>
+            desktopApp.evaluate(
+              ({ BrowserWindow, dialog }, options) => {
+                const main = BrowserWindow.getAllWindows().find((window) =>
+                  window.webContents.getURL().startsWith(options.origin),
+                );
+                if (!main) throw new Error("main window not found");
+                const original = dialog.showMessageBoxSync;
+                let allowed = false;
+                dialog.showMessageBoxSync = () => options.response;
+                try {
+                  main.webContents.emit("will-prevent-unload", {
+                    preventDefault: () => {
+                      allowed = true;
+                    },
+                  });
+                  return allowed;
+                } finally {
+                  dialog.showMessageBoxSync = original;
+                }
+              },
+              { origin: baseURL!, response },
+            );
+          expect(await unloadAllowed(1)).toBe(false);
+          expect(await unloadAllowed(0)).toBe(true);
         }
       } finally {
         await project?.dispose();
         await deleteAuthUser(user.id, authOptions);
       }
+    });
+
+    test("dock activation recreates the main window with its persisted native state", async ({
+      desktopApp,
+      baseURL,
+    }) => {
+      test.skip(!desktopApp, "requires the native Electron shell");
+      test.setTimeout(180_000);
+
+      const restored = await desktopApp!.evaluate(
+        async ({ BrowserWindow, app, screen }, origin) => {
+          const delay = (ms: number) =>
+            new Promise((resolve) => setTimeout(resolve, ms));
+          const main = BrowserWindow.getAllWindows().find((window) =>
+            window.webContents.getURL().startsWith(origin),
+          );
+          if (!main) throw new Error("main window not found");
+          main.minimize();
+          await delay(100);
+          app.emit("activate");
+          for (
+            let attempt = 0;
+            attempt < 80 && main.isMinimized();
+            attempt += 1
+          ) {
+            await delay(50);
+          }
+          const restoredFromMinimized = !main.isMinimized() && main.isVisible();
+          const area = screen.getPrimaryDisplay().workArea;
+          const expected = {
+            x: area.x + 80,
+            y: area.y + 70,
+            width: Math.min(980, area.width - 160),
+            height: Math.min(680, area.height - 140),
+          };
+          main.unmaximize();
+          main.setBounds(expected);
+          await delay(350);
+          main.maximize();
+          for (
+            let attempt = 0;
+            attempt < 80 && !main.isMaximized();
+            attempt += 1
+          ) {
+            await delay(50);
+          }
+          if (!main.isMaximized())
+            throw new Error("main window did not maximize");
+          await delay(350);
+
+          const popup = new BrowserWindow({ show: false });
+          await popup.loadURL("about:blank");
+          main.destroy();
+          await delay(100);
+          app.emit("activate");
+
+          let replacement = BrowserWindow.getAllWindows().find(() => false);
+          for (let attempt = 0; attempt < 240; attempt += 1) {
+            replacement = BrowserWindow.getAllWindows().find(
+              (window) =>
+                window !== popup &&
+                window.webContents.getURL().startsWith(origin),
+            );
+            if (replacement?.isVisible() && replacement.isMaximized()) break;
+            await delay(250);
+          }
+          if (!replacement)
+            throw new Error("replacement main window not found");
+          const result = {
+            expected,
+            normalBounds: replacement.getNormalBounds(),
+            maximized: replacement.isMaximized(),
+            popupAlive: !popup.isDestroyed(),
+            restoredFromMinimized,
+          };
+          popup.destroy();
+          return result;
+        },
+        baseURL!,
+      );
+
+      expect(restored.popupAlive).toBe(true);
+      expect(restored.restoredFromMinimized).toBe(true);
+      expect(restored.maximized).toBe(true);
+      expect(restored.normalBounds).toEqual(restored.expected);
     });
 
     test("a frame without product navigation keeps a way back", async ({
@@ -795,3 +970,121 @@ for (const runtime of runtimes) {
     });
   });
 }
+
+browserTest(
+  "27 — desktop parity persists window state across a process relaunch",
+  async ({ baseURL }) => {
+    browserTest.skip(
+      process.env.E2E_DESKTOP_NATIVE !== "1",
+      "requires the native Electron shell",
+    );
+    browserTest.setTimeout(240_000);
+    const profile = await mkdtemp(join(tmpdir(), "kortix-desktop-relaunch-"));
+    let first: ElectronApplication | undefined;
+    let second: ElectronApplication | undefined;
+    try {
+      first = await launchDesktop(baseURL!, profile);
+      const firstPage = first
+        .windows()
+        .find((window) => window.url().startsWith(baseURL!));
+      if (!firstPage) throw new Error("first native page not found");
+      await expect(firstPage.locator("html")).toHaveAttribute(
+        "data-desktop",
+        "true",
+      );
+      await expect
+        .poll(() =>
+          first!.evaluate(({ BrowserWindow }, origin) => {
+            const main = BrowserWindow.getAllWindows().find((window) =>
+              window.webContents.getURL().startsWith(origin),
+            );
+            return main?.webContents.getZoomFactor() ?? 0;
+          }, baseURL!),
+        )
+        .toBeCloseTo(0.94);
+      const initialZoom = await first.evaluate(({ BrowserWindow }, origin) => {
+        const main = BrowserWindow.getAllWindows().find((window) =>
+          window.webContents.getURL().startsWith(origin),
+        );
+        if (!main) throw new Error("first native main window not found");
+        return main.webContents.getZoomFactor();
+      }, baseURL!);
+      await firstPage.evaluate(() => {
+        window.dispatchEvent(
+          new CustomEvent("kortix-desktop-command", { detail: "zoom-in" }),
+        );
+      });
+      await expect
+        .poll(() =>
+          first!.evaluate(({ BrowserWindow }, origin) => {
+            const main = BrowserWindow.getAllWindows().find((window) =>
+              window.webContents.getURL().startsWith(origin),
+            );
+            return main?.webContents.getZoomFactor() ?? 0;
+          }, baseURL!),
+        )
+        .toBeGreaterThan(initialZoom);
+      const expectedZoom = await first.evaluate(({ BrowserWindow }, origin) => {
+        const main = BrowserWindow.getAllWindows().find((window) =>
+          window.webContents.getURL().startsWith(origin),
+        );
+        if (!main) throw new Error("first native main window not found");
+        return main.webContents.getZoomFactor();
+      }, baseURL!);
+      const expectedBounds = await first.evaluate(
+        async ({ BrowserWindow, screen }, origin) => {
+          const main = BrowserWindow.getAllWindows().find((window) =>
+            window.webContents.getURL().startsWith(origin),
+          );
+          if (!main) throw new Error("first native main window not found");
+          const area = screen.getPrimaryDisplay().workArea;
+          const bounds = {
+            x: area.x + 90,
+            y: area.y + 80,
+            width: Math.min(960, area.width - 180),
+            height: Math.min(660, area.height - 160),
+          };
+          main.unmaximize();
+          main.setBounds(bounds);
+          await new Promise((resolve) => setTimeout(resolve, 350));
+          main.maximize();
+          await new Promise((resolve) => setTimeout(resolve, 350));
+          return bounds;
+        },
+        baseURL!,
+      );
+      await first.close();
+      first = undefined;
+
+      second = await launchDesktop(baseURL!, profile);
+      await expect
+        .poll(() =>
+          second!.evaluate(({ BrowserWindow }, origin) => {
+            const main = BrowserWindow.getAllWindows().find((window) =>
+              window.webContents.getURL().startsWith(origin),
+            );
+            return main?.isMaximized() ?? false;
+          }, baseURL!),
+        )
+        .toBe(true);
+      const restored = await second.evaluate(({ BrowserWindow }, origin) => {
+        const main = BrowserWindow.getAllWindows().find((window) =>
+          window.webContents.getURL().startsWith(origin),
+        );
+        if (!main) throw new Error("restarted native main window not found");
+        return {
+          maximized: main.isMaximized(),
+          normalBounds: main.getNormalBounds(),
+          zoom: main.webContents.getZoomFactor(),
+        };
+      }, baseURL!);
+      expect(restored.maximized).toBe(true);
+      expect(restored.normalBounds).toEqual(expectedBounds);
+      expect(restored.zoom).toBe(expectedZoom);
+    } finally {
+      await first?.close();
+      await second?.close();
+      await rm(profile, { recursive: true, force: true });
+    }
+  },
+);

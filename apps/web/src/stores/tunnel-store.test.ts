@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, test } from 'bun:test';
 import type { TunnelPermissionRequest } from '@/hooks/tunnel/use-tunnel';
+import { afterEach, describe, expect, test } from 'bun:test';
 import { useTunnelStore } from './tunnel-store';
 
 const request = {
