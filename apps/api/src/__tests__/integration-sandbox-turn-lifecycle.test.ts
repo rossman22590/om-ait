@@ -1408,3 +1408,56 @@ describe('recordUnidentifiedTurnCause: a cause frame that does not name its turn
   });
 });
 
+
+// The reaper closes a turn whose end frame never arrived. `failed` with no
+// cause was hidden from the UI entirely: the reader took it for a row older
+// than the end_error column. The reaper now says what it saw, as a fallback
+// that never overrides a stop somebody asked for.
+describe('clearSandboxTurn: the reaper names what it saw', () => {
+  const ROOT = 'ses_root';
+  async function openTurn(token: string, messageId: string) {
+    await setLifecycleState({
+      activeTurns: {
+        [token]: { token, state: 'active', opencodeSessionId: ROOT, messageId, startedAtMs: 1 },
+      },
+    });
+    await db.execute(sql`
+      INSERT INTO kortix.session_turns
+        (turn_token, session_id, sandbox_id, project_id, account_id,
+         opencode_session_id, message_id, state, started_at, created_at, updated_at)
+      VALUES (${token}, ${SESSION_ID}, ${SANDBOX_ID}::uuid, ${PROJECT_ID}::uuid,
+              ${ACCOUNT_ID}::uuid, ${ROOT}, ${messageId}, 'active', now(), now(), now())`);
+    return token;
+  }
+  const HUSK = { name: 'TurnHuskFinalized', message: 'The agent stopped responding in the middle of this turn, so Kortix closed it.' };
+
+  test('a failed clear records the cause it was given', async () => {
+    const token = await openTurn(t('reap-husk'), 'msg_r1');
+    expect(await clearSandboxTurn(SANDBOX_ID, token, 60_000, 'failed', HUSK)).toBe(true);
+    const row = await readTurn(token);
+    expect(row?.end_reason).toBe('failed');
+    expect(row?.end_error).toEqual(HUSK);
+  });
+
+  test('the reaper cause never overrides a requested stop', async () => {
+    const token = await openTurn(t('reap-stop'), 'msg_r2');
+    await markTurnStopRequested(SESSION_ID, 'UserStop', { messageId: 'msg_r2' });
+    await clearSandboxTurn(SANDBOX_ID, token, 60_000, 'failed', HUSK);
+    expect((await readTurn(token))?.end_error).toEqual({ name: 'UserStop', message: null });
+  });
+
+  test('a turn the reaper finds completed drops the request that never fired', async () => {
+    const token = await openTurn(t('reap-done'), 'msg_r4');
+    await markTurnStopRequested(SESSION_ID, 'QueueInterrupt', { messageId: 'msg_r4' });
+    await clearSandboxTurn(SANDBOX_ID, token, 60_000, 'completed');
+    const row = await readTurn(token);
+    expect(row?.end_reason).toBe('completed');
+    expect(row?.end_error).toBeNull();
+  });
+
+  test('a clear without a cause still writes none', async () => {
+    const token = await openTurn(t('reap-none'), 'msg_r3');
+    await clearSandboxTurn(SANDBOX_ID, token, 60_000, 'runtime_gone');
+    expect((await readTurn(token))?.end_error).toBeNull();
+  });
+});

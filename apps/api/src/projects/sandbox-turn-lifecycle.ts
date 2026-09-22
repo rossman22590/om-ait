@@ -295,6 +295,23 @@ export async function clearTurnStopRequest(
   );
 }
 
+/**
+ * What the reaper saw when it had to close a turn whose own end frame never
+ * arrived. The message is shown to the user as the reason, so it is copy.
+ */
+export const REAPER_TURN_CAUSES = {
+  /** The daemon said no turn is running, yet OpenCode held the reply open. */
+  huskFinalized: {
+    name: 'TurnHuskFinalized',
+    message: 'The agent stopped responding in the middle of this turn, so Kortix closed it.',
+  },
+  /** The daemon said the turn failed; the frame that said why was lost. */
+  runtimeFailed: {
+    name: 'RuntimeTurnFailed',
+    message: 'The sandbox reported that this turn failed, but the error did not reach Kortix.',
+  },
+} as const satisfies Record<string, SessionTurnEndErrorRecord>;
+
 /** How long after a bare abort a cause with no turn identity may still claim it. */
 export const UNIDENTIFIED_CAUSE_WINDOW_MS = 60_000;
 
@@ -379,6 +396,11 @@ function endedTurnLedger(
   turns: EndedTurnRecord[],
   reason: SessionTurnEndReason,
   endError: SessionTurnEndErrorRecord | null = null,
+  /**
+   * `endError` is the control plane's own inference (the reaper), not the
+   * sandbox's report: it fills an empty `end_error` and never replaces one.
+   */
+  endErrorIsFallback = false,
 ): SQL {
   const endErrorJson = endError ? JSON.stringify(endError) : null;
   // A mark held on the open turn — a requested stop, or a cause that arrived
@@ -410,6 +432,8 @@ function endedTurnLedger(
             state = 'ended',
             end_reason = EXCLUDED.end_reason,
             end_error = CASE
+              WHEN ${endErrorIsFallback}
+                THEN coalesce(kortix.session_turns.end_error, EXCLUDED.end_error)
               WHEN EXCLUDED.end_reason = 'failed'
                AND kortix.session_turns.end_error IS NOT NULL
                AND coalesce(kortix.session_turns.end_error->>'name', '') NOT IN (${abortNames})
@@ -999,6 +1023,8 @@ export async function clearSandboxTurn(
   token: string,
   graceMs = idleGraceMs(),
   reason: SessionTurnEndReason = 'runtime_gone',
+  /** What the control plane saw, recorded only when the turn has no cause yet. */
+  cause: SessionTurnEndErrorRecord | null = null,
 ): Promise<boolean> {
   const metadata = jsonbObject(sql`s.metadata`);
   const result = await execute(sql`
@@ -1058,6 +1084,8 @@ export async function clearSandboxTurn(
           ? turns
           : [{ token, opencodeSessionId: null, messageId: null, startedAtMs: null }],
         reason,
+        cause,
+        cause !== null,
       ),
       `clear ${token} (${reason})`,
     );

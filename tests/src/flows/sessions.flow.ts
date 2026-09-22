@@ -1511,7 +1511,11 @@ flow(
         const rows: Array<[string, string, string, Record<string, unknown> | null, number]> = [
           // token suffix, end_reason, message_id, end_error, seconds ago (newest last)
           ['completed', 'completed', 'msg_fine', null, 90],
-          ['legacy', 'failed', 'msg_legacy', null, 80],
+          // Ended before the end_error column existed (2026-08-21): a Stop and
+          // an unexplained abort looked the same then, so it stays hidden.
+          ['legacy', 'failed', 'msg_legacy', null, 60 * 60 * 24 * 400],
+          // Ended after it: nobody said why, and the read must still say it died.
+          ['unnamed', 'failed', 'msg_unnamed', null, 35],
           ['queue-interrupt', 'failed', 'msg_queue', { name: 'QueueInterrupt', message: null }, 70],
           ['user-stop', 'failed', 'msg_stop', { name: 'UserStop', message: null }, 60],
           ['box-gone', 'runtime_gone', 'msg_gone', null, 50],
@@ -1547,6 +1551,7 @@ flow(
         const listed = (body.recent_failures ?? []).map((f) => [f.message_id, f.error?.name ?? null]);
         const expected = [
           ['msg_memory', 'SandboxMemoryGuard'],
+          ['msg_unnamed', null],
           ['msg_abort', null],
           ['msg_gone', null],
         ];
