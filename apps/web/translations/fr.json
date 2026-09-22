@@ -1604,7 +1604,13 @@
       "resume": "Reprendre l’espace précédent",
       "resuming": "Reprise…",
       "newSession": "Démarrer une nouvelle session",
-      "delete": "Supprimer la session"
+      "delete": "Supprimer la session",
+      "update": "Mettre à jour",
+      "updating": "Mise à jour…",
+      "dismiss": "Ignorer",
+      "updateHint": "Envoie un prompt à cette session",
+      "updateSent": "Mise à jour lancée dans cette session",
+      "updateFailed": "Impossible d’envoyer le prompt de mise à jour."
     },
     "lost": {
       "title": "L’ordinateur de cette session a été perdu",

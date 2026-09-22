@@ -1604,7 +1604,13 @@
       "resume": "Riprendi area di lavoro precedente",
       "resuming": "Ripresa in corso…",
       "newSession": "Avvia nuova sessione",
-      "delete": "Elimina sessione"
+      "delete": "Elimina sessione",
+      "update": "Aggiorna all’ultima versione",
+      "updating": "Aggiornamento…",
+      "dismiss": "Ignora",
+      "updateHint": "Invia un prompt a questa sessione",
+      "updateSent": "Aggiornamento avviato in questa sessione",
+      "updateFailed": "Impossibile inviare il prompt di aggiornamento."
     },
     "lost": {
       "title": "Il computer di questa sessione è andato perso",

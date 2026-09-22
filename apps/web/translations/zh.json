@@ -1604,7 +1604,13 @@
       "resume": "恢复先前的工作区",
       "resuming": "正在恢复…",
       "newSession": "启动新会话",
-      "delete": "删除会话"
+      "delete": "删除会话",
+      "update": "更新到最新",
+      "updating": "正在更新…",
+      "dismiss": "关闭",
+      "updateHint": "向此会话发送提示",
+      "updateSent": "已在此会话中开始更新",
+      "updateFailed": "无法发送更新提示。"
     },
     "lost": {
       "title": "此会话的计算机已丢失",

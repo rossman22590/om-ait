@@ -1604,7 +1604,13 @@
       "resume": "Vorherigen Arbeitsbereich fortsetzen",
       "resuming": "Wird fortgesetzt…",
       "newSession": "Neue Sitzung starten",
-      "delete": "Sitzung löschen"
+      "delete": "Sitzung löschen",
+      "update": "Auf neuesten Stand bringen",
+      "updating": "Wird aktualisiert…",
+      "dismiss": "Schließen",
+      "updateHint": "Sendet einen Prompt an diese Sitzung",
+      "updateSent": "Aktualisierung in dieser Sitzung gestartet",
+      "updateFailed": "Der Aktualisierungs-Prompt konnte nicht gesendet werden."
     },
     "lost": {
       "title": "Der Computer dieser Sitzung ist verloren gegangen",

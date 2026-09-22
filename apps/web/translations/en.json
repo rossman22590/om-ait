@@ -1604,7 +1604,13 @@
       "resume": "Resume previous workspace",
       "resuming": "Resuming…",
       "newSession": "Start new session",
-      "delete": "Delete session"
+      "delete": "Delete session",
+      "update": "Update to latest",
+      "updating": "Updating…",
+      "dismiss": "Dismiss",
+      "updateHint": "Sends a prompt to this session",
+      "updateSent": "Update started in this session",
+      "updateFailed": "Could not send the update prompt."
     },
     "lost": {
       "title": "This session's computer was lost",

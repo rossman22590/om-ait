@@ -1604,7 +1604,13 @@
       "resume": "Retomar espaço anterior",
       "resuming": "Retomando…",
       "newSession": "Iniciar nova sessão",
-      "delete": "Excluir sessão"
+      "delete": "Excluir sessão",
+      "update": "Atualizar para o mais recente",
+      "updating": "Atualizando…",
+      "dismiss": "Dispensar",
+      "updateHint": "Envia um prompt para esta sessão",
+      "updateSent": "Atualização iniciada nesta sessão",
+      "updateFailed": "Não foi possível enviar o prompt de atualização."
     },
     "lost": {
       "title": "O computador desta sessão foi perdido",
