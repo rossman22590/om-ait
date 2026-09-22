@@ -192,4 +192,138 @@ describeWithDb('session_sandboxes.metadata writers merge atomically (real Postgr
       expect(await readMetadata()).toEqual({ egress_ip: '203.0.113.7' });
     });
   });
+
+  describe('restart claim vs concurrent writers', () => {
+    const claim = () => {
+      const startedAt = new Date();
+      return {
+        id: crypto.randomUUID(),
+        startedAt,
+        leaseExpiresAt: new Date(startedAt.getTime() + 4 * 60_000),
+      };
+    };
+
+    test('a pin committed while the restart claim is in flight survives the claim', async () => {
+      // The reverse order of SESS-9: the restart read the row, the pin landed,
+      // then the claim wrote its stale copy back and the session lost its
+      // egress pin (the secret broker then fails OPEN for that session).
+      await seed({
+        initStatus: 'ready',
+        opencodeBootPhase: 'ready',
+        runtimeStartFailureCount: 2,
+        stopReason: 'idle',
+      });
+      const { claimInPlaceRestart } = await import('../projects/session-lifecycle/runtime-restart-claim');
+      const restart = claim();
+      let owned = false;
+      await interleave(
+        (tx) =>
+          tx.query(
+            `UPDATE kortix.session_sandboxes
+             SET metadata = metadata || '{"egress_ip":"203.0.113.7"}'::jsonb
+             WHERE sandbox_id = $1`,
+            [SANDBOX_ID],
+          ),
+        async () => {
+          owned = await claimInPlaceRestart({
+            sandboxId: SANDBOX_ID,
+            externalId: EXTERNAL_ID,
+            claim: restart,
+          });
+        },
+      );
+      expect(owned).toBe(true);
+      const metadata = await readMetadata();
+      expect(metadata.egress_ip).toBe('203.0.113.7');
+      expect(metadata.runtimeRestartId).toBe(restart.id);
+      expect(metadata.runtimeRestartPhase).toBe('stopping');
+      expect(metadata.runtimeWakeStartedAt).toBe(restart.startedAt.toISOString());
+      expect(metadata.runtimeWakeProviderStatus).toBe('starting');
+      // What an explicit restart clears is still cleared.
+      expect(metadata.opencodeBootPhase).toBeUndefined();
+      expect(metadata.runtimeStartFailureCount).toBeUndefined();
+      expect(metadata.stopReason).toBeUndefined();
+      expect(metadata.initStatus).toBe('ready');
+    });
+
+    test('an unexpired claim still fences a second restart', async () => {
+      const { claimInPlaceRestart } = await import('../projects/session-lifecycle/runtime-restart-claim');
+      const first = claim();
+      const second = claim();
+      expect(
+        await claimInPlaceRestart({ sandboxId: SANDBOX_ID, externalId: EXTERNAL_ID, claim: first }),
+      ).toBe(true);
+      expect(
+        await claimInPlaceRestart({ sandboxId: SANDBOX_ID, externalId: EXTERNAL_ID, claim: second }),
+      ).toBe(false);
+      expect((await readMetadata()).runtimeRestartId).toBe(first.id);
+    });
+
+    test('a /start readiness write from a row read before the claim does not erase it', async () => {
+      const { markOpencodeReadyWaitStarted } = await import('../projects/routes/shared');
+      const { claimInPlaceRestart } = await import('../projects/session-lifecycle/runtime-restart-claim');
+      const staleRow = { sandboxId: SANDBOX_ID, metadata: await readMetadata() } as never;
+      const restart = claim();
+      await claimInPlaceRestart({ sandboxId: SANDBOX_ID, externalId: EXTERNAL_ID, claim: restart });
+
+      await markOpencodeReadyWaitStarted(staleRow, 'not_ready', 'config-deps|opencode=starting');
+
+      const metadata = await readMetadata();
+      expect(metadata.runtimeRestartId).toBe(restart.id);
+      expect(metadata.runtimeWakeStartedAt).toBe(restart.startedAt.toISOString());
+    });
+
+    test('a /start readiness write merges its clocks and keeps keys written after its read', async () => {
+      const { markOpencodeReadyWaitStarted } = await import('../projects/routes/shared');
+      const staleRow = { sandboxId: SANDBOX_ID, metadata: await readMetadata() } as never;
+      await admin.query(
+        `UPDATE kortix.session_sandboxes SET metadata = metadata || '{"egress_ip":"203.0.113.7"}'::jsonb
+         WHERE sandbox_id = $1`,
+        [SANDBOX_ID],
+      );
+
+      await markOpencodeReadyWaitStarted(staleRow, 'not_ready', 'config-deps|opencode=starting');
+
+      const metadata = await readMetadata();
+      expect(metadata.egress_ip).toBe('203.0.113.7');
+      expect(metadata.opencodeReadyWaitReason).toBe('not_ready');
+      expect(typeof metadata.opencodeNotReadyWaitStartedAt).toBe('string');
+      expect(typeof metadata.opencodeBootWaitFirstSeenAt).toBe('string');
+      expect(metadata.opencodeBootPhase).toBe('config-deps|opencode=starting');
+      expect(metadata.initStatus).toBe('ready');
+    });
+
+    test('a /start wake mark from a row read before the claim does not erase it', async () => {
+      const { markRuntimeWakeStarted } = await import('../projects/routes/shared');
+      const { claimInPlaceRestart } = await import('../projects/session-lifecycle/runtime-restart-claim');
+      const staleRow = { sandboxId: SANDBOX_ID, metadata: await readMetadata() } as never;
+      const restart = claim();
+      await claimInPlaceRestart({ sandboxId: SANDBOX_ID, externalId: EXTERNAL_ID, claim: restart });
+
+      await markRuntimeWakeStarted(staleRow, 'unknown');
+
+      const metadata = await readMetadata();
+      expect(metadata.runtimeRestartId).toBe(restart.id);
+      // The claim's wake clock is the current attempt's; a stale poll must not move it.
+      expect(metadata.runtimeWakeStartedAt).toBe(restart.startedAt.toISOString());
+      expect(metadata.runtimeWakeProviderStatus).toBe('starting');
+    });
+
+    test('a /start wake mark merges and keeps keys written after its read', async () => {
+      const { markRuntimeWakeStarted } = await import('../projects/routes/shared');
+      const staleRow = { sandboxId: SANDBOX_ID, metadata: await readMetadata() } as never;
+      await admin.query(
+        `UPDATE kortix.session_sandboxes SET metadata = metadata || '{"egress_ip":"203.0.113.7"}'::jsonb
+         WHERE sandbox_id = $1`,
+        [SANDBOX_ID],
+      );
+
+      await markRuntimeWakeStarted(staleRow, 'unknown');
+
+      const metadata = await readMetadata();
+      expect(metadata.egress_ip).toBe('203.0.113.7');
+      expect(typeof metadata.runtimeWakeStartedAt).toBe('string');
+      expect(metadata.runtimeWakeProviderStatus).toBe('unknown');
+    });
+  });
 });

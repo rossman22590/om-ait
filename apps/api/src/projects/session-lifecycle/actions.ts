@@ -39,11 +39,10 @@ import {
 } from '../runtime-identity';
 import { inspectSandboxRuntime } from '../runtime-inspection';
 import { prepareInitialSandboxTurn } from '../sandbox-turn-lifecycle';
-import { prepareInPlaceRestartMetadata } from './readiness-clocks';
+import { claimInPlaceRestart } from './runtime-restart-claim';
 import {
   RUNTIME_RESTART_LEASE_MS,
   restartClaimIsActive,
-  runtimeRestartClaimMetadata,
 } from './runtime-restart-fence';
 
 export async function deleteSession(input: {
@@ -381,38 +380,15 @@ export async function restartSession(input: {
     const restartLeaseExpiresAt = new Date(
       restartStartedAt.getTime() + RUNTIME_RESTART_LEASE_MS,
     );
-    const restartMetadata = runtimeRestartClaimMetadata(
-      prepareInPlaceRestartMetadata(existingSandbox.metadata, restartStartedAt),
-      {
+    const claimedRestart = await claimInPlaceRestart({
+      sandboxId: sessionId,
+      externalId,
+      claim: {
         id: restartId,
         startedAt: restartStartedAt,
         leaseExpiresAt: restartLeaseExpiresAt,
       },
-    );
-    // The metadata predicate is the lifecycle lock. `/restart` returns before
-    // the provider stop/start finishes, so an HTTP mutation's `isPending` flag
-    // cannot serialize a second tab, a refresh, or a repeated click. Only one
-    // request may install an unexpired restart id on this session.
-    const [claimedRestart] = await db
-      .update(sessionSandboxes)
-      .set({
-        status: 'provisioning',
-        metadata: restartMetadata,
-        updatedAt: restartStartedAt,
-      })
-      .where(
-        and(
-          eq(sessionSandboxes.sandboxId, sessionId),
-          eq(sessionSandboxes.externalId, externalId),
-          sql`(
-            ${sessionSandboxes.metadata}->>'runtimeRestartId' IS NULL
-            OR ${sessionSandboxes.metadata}->>'runtimeRestartLeaseExpiresAt' IS NULL
-            OR ${sessionSandboxes.metadata}->>'runtimeRestartLeaseExpiresAt' !~ '^\\d{4}-\\d{2}-\\d{2}T'
-            OR ${sessionSandboxes.metadata}->>'runtimeRestartLeaseExpiresAt' <= ${restartStartedAt.toISOString()}
-          )`,
-        ),
-      )
-      .returning({ sandboxId: sessionSandboxes.sandboxId });
+    });
     if (!claimedRestart) {
       const [current] = await db
         .select({ metadata: sessionSandboxes.metadata })
