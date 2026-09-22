@@ -164,6 +164,7 @@ setInterval(() => {
           });
         }
         await deleteTurn(row.sessionId);
+        await abortDeadRuntimeTurn(row.sessionId);
       }
       await db.delete(chatEventDedup).where(lt(chatEventDedup.expiresAt, now));
     } catch (err) {
@@ -271,7 +272,15 @@ export function buildSlackTurnEnv(teamId: string, event: SlackEvent): Record<str
 //     thread untouched. This is what stops an orphaned "On it…" from lingering.
 export async function finalizeTurn(
   handle: LiveTurn,
-  opts: { answer?: string; error?: string; blocks?: unknown[]; title?: string },
+  opts: {
+    answer?: string;
+    error?: string;
+    blocks?: unknown[];
+    title?: string;
+    /** The step in flight neither finished nor failed — e.g. the turn ended by
+     *  ASKING. `complete` would claim work that never happened. */
+    unfinished?: boolean;
+  },
 ): Promise<void> {
   if (handle.finalized) return;
   handle.finalized = true;
@@ -298,7 +307,7 @@ export async function finalizeTurn(
       // A plan message exists — close out the last in-progress step and render the
       // final plan (+ answer/error) into it via chat.update.
       const last = handle.steps[handle.steps.length - 1];
-      if (last && last.status === 'in_progress') last.status = opts.error ? 'error' : 'complete';
+      if (last && last.status === 'in_progress') last.status = opts.unfinished ? 'pending' : opts.error ? 'error' : 'complete';
       rendered = await updateBlocks(
         handle.token,
         handle.channel,
@@ -798,3 +807,20 @@ export async function relayProvisioningFailure(sessionId: string, message: strin
 // inverted so platform/ never imports channels/). Runs once when this module is
 // first imported — which is at server boot, since the Slack app mounts it.
 registerSessionFailureNotifier(relayProvisioningFailure);
+
+/**
+ * Closing the card is not ending the run. A turn this sweep reaps has been
+ * silent for 30 minutes, but OpenCode can still hold its assistant message
+ * OPEN — and while it does, every later prompt in that conversation is
+ * accepted and never runs. Seen on dev 2026-09-19: two messages vanished that
+ * way over two days. Imported lazily so the channel modules keep no static
+ * edge into the session-lifecycle engine.
+ */
+async function abortDeadRuntimeTurn(sessionId: string): Promise<void> {
+  try {
+    const { abortRuntimeTurn } = await import('../../projects/session-lifecycle/abort-runtime-turn');
+    await abortRuntimeTurn(sessionId);
+  } catch {
+    /* housekeeping: a runtime that cannot be reached needs no abort */
+  }
+}
