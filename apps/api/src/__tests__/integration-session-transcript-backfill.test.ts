@@ -142,7 +142,57 @@ test('a wake backfills an unmirrored session, repairs a headless one, and skips 
     await backfillSessionTranscriptMirrorOnWake(fresh, deps);
     expect(reads.get(fresh)).toBe(1);
 
-    // 6. A RE-PINNED ROOT IS NOT WHOLE. `head_complete` describes the root it
+    // 6. AN ATTEMPT THAT COULD NOT RUN IS NOT A RESULT. `/start` reports
+    //    `ready` before the OpenCode root is pinned, and the box can be briefly
+    //    unreachable right after it comes up; capture answers null for both.
+    //    Recording that as done would leave the session blank until some later
+    //    turn end — the exact failure this whole function removes.
+    const flaky = await seedSession(true);
+    let boxUp = false;
+    const flakyDeps = {
+      readMessages: async (sessionId: string) => {
+        reads.set(sessionId, (reads.get(sessionId) ?? 0) + 1);
+        if (!boxUp) return null;
+        return {
+          opencodeSessionId: ROOT,
+          payload: messages(120),
+          headComplete: true,
+          complete: true,
+        };
+      },
+    };
+    // A full-history capture retries internally, so one backfill round is
+    // several reads. What matters is whether a LATER round happens at all.
+    await backfillSessionTranscriptMirrorOnWake(flaky, flakyDeps);
+    const afterFirst = reads.get(flaky) ?? 0;
+    expect(afterFirst).toBeGreaterThan(0);
+    expect(await stored(flaky)).toBe(0);
+    // The next open tries again rather than giving up for the process's life.
+    await backfillSessionTranscriptMirrorOnWake(flaky, flakyDeps);
+    expect(reads.get(flaky)!).toBeGreaterThan(afterFirst);
+    boxUp = true;
+    await backfillSessionTranscriptMirrorOnWake(flaky, flakyDeps);
+    expect(await stored(flaky)).toBe(120);
+    // Settled now: a result was recorded, so further opens read nothing.
+    const afterSuccess = reads.get(flaky) ?? 0;
+    await backfillSessionTranscriptMirrorOnWake(flaky, flakyDeps);
+    expect(reads.get(flaky)).toBe(afterSuccess);
+    // ...but it does not retry FOREVER: a session that can never be read must
+    // not re-read its box once per open indefinitely.
+    const unreadable = await seedSession(true);
+    const deadDeps = {
+      readMessages: async (sessionId: string) => {
+        reads.set(sessionId, (reads.get(sessionId) ?? 0) + 1);
+        return null;
+      },
+    };
+    for (let i = 0; i < 3; i++) await backfillSessionTranscriptMirrorOnWake(unreadable, deadDeps);
+    const atCap = reads.get(unreadable) ?? 0;
+    expect(atCap).toBeGreaterThan(0);
+    for (let i = 0; i < 5; i++) await backfillSessionTranscriptMirrorOnWake(unreadable, deadDeps);
+    expect(reads.get(unreadable)).toBe(atCap);
+
+    // 7. A RE-PINNED ROOT IS NOT WHOLE. `head_complete` describes the root it
     //    was captured from; against a different one it proves nothing.
     resetTranscriptBackfillMemoForTests();
     activeRoot = 'ses_repinned';

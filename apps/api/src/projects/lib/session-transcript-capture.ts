@@ -458,15 +458,29 @@ async function captureSessionTranscript(
 }
 
 /**
- * Sessions this process has already considered for a wake backfill.
+ * Wake-backfill attempts per session, in this process.
  *
- * `/start` answers `ready` on EVERY poll once the box is up, so without this
+ * `/start` answers `ready` on EVERY poll once the box is up, so without a memo
  * the guard below would run one SELECT per poll for the life of the session.
- * Bounded because a long-lived API process opens a lot of sessions; the cost of
- * forgetting one is a single extra guard read on its next wake.
+ *
+ * It counts rather than flags, because "considered" and "done" are not the same
+ * thing. A capture can answer null for reasons that pass: `/start` reports
+ * `ready` before the OpenCode root is pinned, and the box can be briefly
+ * unreachable right after it comes up. Remembering that as DONE would leave the
+ * session blank until some later turn end — which is the exact failure this
+ * whole function exists to remove, reintroduced one level down.
+ *
+ * So a settled outcome (flag off, already whole, or a capture that returned a
+ * result) is recorded as done and never retried; an attempt that could not run
+ * leaves room for the next open to try again, and stops after
+ * {@link BACKFILL_MAX_ATTEMPTS} so a permanently unreadable session cannot
+ * read its box once per open forever.
  */
-const backfillConsidered = new Set<string>();
+const backfillAttempts = new Map<string, number>();
 const BACKFILL_MEMO_MAX = 10_000;
+const BACKFILL_MAX_ATTEMPTS = 3;
+/** Recorded for a settled session: at or above the cap, so it never retries. */
+const BACKFILL_DONE = BACKFILL_MAX_ATTEMPTS;
 
 /**
  * BACKFILL ON WAKE — what makes the feature work for sessions that already exist.
@@ -479,8 +493,10 @@ const BACKFILL_MEMO_MAX = 10_000;
  * so the second open was as blank as the first.
  *
  * So: the first time a flagged session's runtime is up, mirror what is already
- * there. One attempt per session per process, and only when the mirror cannot
- * already prove it holds the session's first message.
+ * there — only when the mirror cannot already prove it holds the session's
+ * first message, and at most {@link BACKFILL_MAX_ATTEMPTS} times per process
+ * (see {@link backfillAttempts} for why an attempt is not the same as a
+ * result).
  *
  * Fire-and-forget by construction — `captureSessionTranscriptMirror` never
  * throws, and a backfill must never be able to fail or delay an open.
@@ -495,9 +511,15 @@ export function backfillSessionTranscriptMirrorOnWake(
   sessionId: string,
   deps: CaptureDeps = liveCaptureDeps,
 ): Promise<void> {
-  if (backfillConsidered.has(sessionId)) return Promise.resolve();
-  if (backfillConsidered.size >= BACKFILL_MEMO_MAX) backfillConsidered.clear();
-  backfillConsidered.add(sessionId);
+  const attempts = backfillAttempts.get(sessionId) ?? 0;
+  if (attempts >= BACKFILL_MAX_ATTEMPTS) return Promise.resolve();
+  if (backfillAttempts.size >= BACKFILL_MEMO_MAX) backfillAttempts.clear();
+  // Claimed BEFORE the first await: two concurrent `/start` calls for one
+  // session must not both walk its history.
+  backfillAttempts.set(sessionId, attempts + 1);
+  const settle = (): void => {
+    backfillAttempts.set(sessionId, BACKFILL_DONE);
+  };
   return (async () => {
     try {
       const [row] = await db
@@ -515,14 +537,17 @@ export function backfillSessionTranscriptMirrorOnWake(
         )
         .where(eq(projectSessions.sessionId, sessionId))
         .limit(1);
-      if (!row) return;
+      // No such session. Nothing will ever change that.
+      if (!row) return settle();
       // Off ⇒ the surface stays dark and so does this. A legacy tail mirror is
       // still maintained at turn end exactly as before.
-      if (!resolveFeatureFlag(row.metadata, 'session_transcript_history')) return;
+      if (!resolveFeatureFlag(row.metadata, 'session_transcript_history')) return settle();
       // Already whole, for the root this session actually runs. Nothing a
       // backfill could add — a re-pinned root is NOT whole, whatever the row says.
-      if (row.headComplete && row.mirrorRoot && row.mirrorRoot === row.root) return;
-      await captureSessionTranscriptMirror(sessionId, deps);
+      if (row.headComplete && row.mirrorRoot && row.mirrorRoot === row.root) return settle();
+      // A RESULT settles it; null means the read could not run (no pinned root
+      // yet, box not reachable) and the next open is allowed to try again.
+      if (await captureSessionTranscriptMirror(sessionId, deps)) settle();
     } catch (err) {
       console.warn(
         `[transcript-mirror] wake backfill failed for session ${sessionId}:`,
@@ -534,7 +559,7 @@ export function backfillSessionTranscriptMirrorOnWake(
 
 /** Test seam: the memo is process-global and would leak between cases. */
 export function resetTranscriptBackfillMemoForTests(): void {
-  backfillConsidered.clear();
+  backfillAttempts.clear();
 }
 
 const captures = new Map<string, Promise<CaptureResult | null>>();
