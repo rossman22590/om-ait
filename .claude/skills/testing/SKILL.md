@@ -115,7 +115,8 @@ must change together.
 - Add `preview` only after a writer reviews the exact same-repository PR SHA.
 - Build the API, gateway, and frontend without credentials in separate jobs.
 - Run the trusted preview controller from `main`.
-- Restore Platinum first. Use Daytona only for an infrastructure failure.
+- Run on Platinum only: the preview host and every session inside it. A
+  Platinum failure fails the preview. Never fall back to Daytona.
 - Generate the regular `kortix self-host` Compose distribution in the sandbox.
 - Give each preview a fresh PostgreSQL and Supabase data plane.
 - Run `pnpm test -- --target-full` against the sandbox HTTPS origin.
@@ -123,7 +124,8 @@ must change together.
 - Keep a failed product-test sandbox. Do not hide its failure with fallback.
 - Delete the sandbox on unlabel, close, or PR head change.
 - Remove the `preview` label after a PR head change.
-- Reconcile stale Platinum and Daytona previews each day.
+- Reconcile stale previews each day. Daytona reconciliation only deletes
+  previews created before 2026-09-22.
 
 The preview warm image can contain dependencies and Docker layers. It must not
 contain a database or runtime secret. Keep the runtime secret allowlist in
