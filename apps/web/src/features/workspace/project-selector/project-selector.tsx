@@ -19,7 +19,6 @@ import { Input } from '@/components/ui/input';
 import { KortixLogo } from '@/components/ui/kortix-logo';
 import { Label } from '@/components/ui/label';
 import Loading from '@/components/ui/loading';
-import { Skeleton } from '@/components/ui/skeleton';
 import { errorToast } from '@/components/ui/toast';
 import { useAuth } from '@/features/providers/auth-provider';
 import { newWorkspacePathForAccount } from '@/features/workspace/new/account-param';
@@ -80,7 +79,10 @@ export function ProjectSelectorView(props: ProjectSelectorViewProps) {
   // same thing twice. Other empty accounts keep their own create row.
   const listed = sections.filter(
     (section) =>
-      !(section.state === 'empty-creatable' && newWorkspacePathForAccount(section.accountId) === createHref),
+      !(
+        section.state === 'empty-creatable' &&
+        newWorkspacePathForAccount(section.accountId) === createHref
+      ),
   );
   const noAccess = !loading && !loadFailed && !createHref && !hasAnything;
 
@@ -92,87 +94,96 @@ export function ProjectSelectorView(props: ProjectSelectorViewProps) {
       : t('descriptionNew');
 
   return (
-    <main className="mx-auto flex min-h-svh w-full max-w-lg flex-col px-6 pt-24 pb-20">
+    <main className="mx-auto flex min-h-svh w-full max-w-lg flex-col px-6 py-20">
       <TopBar email={email} signingOut={props.signingOut} onLogOut={props.onLogOut} />
 
-      <header className="flex flex-col items-center gap-2 text-center">
-        <KortixLogo size={28} variant="icon" className="mb-3" />
-        <h1 className="text-foreground text-2xl font-semibold tracking-tight">
-          {noAccess ? t('noAccessTitle') : title}
-        </h1>
-        <p className="text-muted-foreground text-sm text-balance">{description}</p>
-      </header>
+      {/* `my-auto` centers the block in the viewport while it fits, and lets
+          it start at the top and scroll once the project list is taller.
+          Blank while the reads resolve (one round trip): a centered block
+          that changes height would slide the header down under the eye. */}
+      {loading ? null : (
+        <div className="my-auto w-full">
+          <header className="flex flex-col items-center gap-2 text-center">
+            <KortixLogo size={28} variant="icon" className="mb-3" />
+            <h1 className="text-foreground text-2xl font-semibold tracking-tight">
+              {noAccess ? t('noAccessTitle') : title}
+            </h1>
+            <p className="text-muted-foreground text-sm text-balance">{description}</p>
+          </header>
 
-      {loading ? (
-        <SelectorSkeleton />
-      ) : loadFailed ? (
-        <div className="mt-10 flex flex-col items-center gap-3 text-center">
-          <div className="space-y-1">
-            <p className="text-sm font-medium">{t('loadErrorTitle')}</p>
-            <p className="text-muted-foreground text-xs">{t('loadErrorBody')}</p>
-          </div>
-          <Button size="sm" variant="outline" onClick={props.onRetryAll}>
-            {t('retry')}
-          </Button>
-        </div>
-      ) : (
-        <div className="mt-10 flex flex-col gap-8">
-          {createHref ? <CreateCard href={createHref} /> : null}
-
-          {createHref && hasAnything ? (
-            <div className="flex items-center gap-3" aria-hidden>
-              <span className="bg-border h-px flex-1" />
-              <span className="text-muted-foreground text-xs">{t('orContinue')}</span>
-              <span className="bg-border h-px flex-1" />
+          {loadFailed ? (
+            <div className="mt-10 flex flex-col items-center gap-3 text-center">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">{t('loadErrorTitle')}</p>
+                <p className="text-muted-foreground text-xs">{t('loadErrorBody')}</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={props.onRetryAll}>
+                {t('retry')}
+              </Button>
             </div>
-          ) : null}
+          ) : (
+            <div className="mt-10 flex flex-col gap-8">
+              {createHref ? <CreateCard href={createHref} /> : null}
 
-          {invites.length > 0 ? (
-            <section className="space-y-3" data-testid="selector-invites">
-              <SectionHeading title={t('invitations')} meta={email ? t('sentTo', { email }) : null} />
-              <ul className="space-y-2">
-                {invites.map((invite) => (
-                  <InviteRow
-                    key={invite.invite_id}
-                    invite={invite}
-                    joining={props.joiningInviteId === invite.invite_id}
-                    disabled={props.joiningInviteId !== null}
-                    onJoin={props.onJoin}
+              {createHref && hasAnything ? (
+                <div className="flex items-center gap-3" aria-hidden>
+                  <span className="bg-border h-px flex-1" />
+                  <span className="text-muted-foreground text-xs">{t('orContinue')}</span>
+                  <span className="bg-border h-px flex-1" />
+                </div>
+              ) : null}
+
+              {invites.length > 0 ? (
+                <section className="space-y-3" data-testid="selector-invites">
+                  <SectionHeading
+                    title={t('invitations')}
+                    meta={email ? t('sentTo', { email }) : null}
                   />
-                ))}
-              </ul>
-            </section>
-          ) : null}
+                  <ul className="space-y-2">
+                    {invites.map((invite) => (
+                      <InviteRow
+                        key={invite.invite_id}
+                        invite={invite}
+                        joining={props.joiningInviteId === invite.invite_id}
+                        disabled={props.joiningInviteId !== null}
+                        onJoin={props.onJoin}
+                      />
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
 
-          {total > SEARCH_THRESHOLD ? (
-            <div className="relative">
-              <MagnifyingGlassIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={t('search')}
-                aria-label={t('search')}
-                className="pl-9"
-              />
+              {total > SEARCH_THRESHOLD ? (
+                <div className="relative">
+                  <MagnifyingGlassIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+                  <Input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder={t('search')}
+                    aria-label={t('search')}
+                    className="pl-9"
+                  />
+                </div>
+              ) : null}
+
+              {query.trim() && visible.length === 0 ? (
+                <p className="text-muted-foreground px-3 py-6 text-center text-xs">
+                  {t('noMatches', { query: query.trim() })}
+                </p>
+              ) : null}
+
+              {(query.trim() ? visible : listed).map((section) => (
+                <AccountBlock
+                  key={section.accountId}
+                  section={section}
+                  expandedByQuery={query.trim().length > 0}
+                  openingProjectId={props.openingProjectId}
+                  onOpenProject={props.onOpenProject}
+                  onRetry={props.onRetryAccount}
+                />
+              ))}
             </div>
-          ) : null}
-
-          {query.trim() && visible.length === 0 ? (
-            <p className="text-muted-foreground px-3 py-6 text-center text-xs">
-              {t('noMatches', { query: query.trim() })}
-            </p>
-          ) : null}
-
-          {(query.trim() ? visible : listed).map((section) => (
-            <AccountBlock
-              key={section.accountId}
-              section={section}
-              expandedByQuery={query.trim().length > 0}
-              openingProjectId={props.openingProjectId}
-              onOpenProject={props.onOpenProject}
-              onRetry={props.onRetryAccount}
-            />
-          ))}
+          )}
         </div>
       )}
     </main>
@@ -318,7 +329,11 @@ function AccountBlock({
     .join(' · ');
 
   return (
-    <section className="space-y-3" data-testid="selector-account" data-account-id={section.accountId}>
+    <section
+      className="space-y-3"
+      data-testid="selector-account"
+      data-account-id={section.accountId}
+    >
       <SectionHeading title={section.accountName} meta={meta} />
 
       {section.state === 'projects' ? (
@@ -331,7 +346,8 @@ function AccountBlock({
               onOpen={onOpenProject}
             />
           ))}
-          {hidden > 0 || (expanded && section.projects.length > COLLAPSED_PROJECT_LIMIT && !expandedByQuery) ? (
+          {hidden > 0 ||
+          (expanded && section.projects.length > COLLAPSED_PROJECT_LIMIT && !expandedByQuery) ? (
             <li>
               <Button
                 variant="ghost"
@@ -394,7 +410,7 @@ function ProjectRow({
         href={`/projects/${project.project_id}`}
         onClick={(event) => onOpen(event, project)}
         data-testid="selector-project"
-        className="group bg-popover hover:bg-hover focus-visible:ring-ring flex items-center gap-3 rounded-md border px-4 py-2.5 transition-colors duration-fast outline-none focus-visible:ring-2"
+        className="group bg-popover hover:bg-hover focus-visible:ring-ring duration-fast flex items-center gap-3 rounded-md border px-4 py-2.5 transition-colors outline-none focus-visible:ring-2"
       >
         <EntityAvatar
           label={project.name}
@@ -413,29 +429,13 @@ function ProjectRow({
         ) : (
           <ArrowRightIcon
             className={cn(
-              'text-muted-foreground size-4 shrink-0 opacity-0 transition-opacity duration-fast',
+              'text-muted-foreground duration-fast size-4 shrink-0 opacity-0 transition-opacity',
               'group-hover:opacity-100 group-focus-visible:opacity-100',
             )}
           />
         )}
       </Link>
     </li>
-  );
-}
-
-function SelectorSkeleton() {
-  return (
-    <div className="mt-10 flex flex-col gap-8" aria-hidden>
-      <Skeleton className="h-16 rounded-md" />
-      <div className="space-y-3">
-        <Skeleton className="h-4 w-32 rounded-sm" />
-        <div className="space-y-2">
-          {Array.from({ length: 3 }, (_, index) => (
-            <Skeleton key={index} className="h-14 rounded-md" />
-          ))}
-        </div>
-      </div>
-    </div>
   );
 }
 
