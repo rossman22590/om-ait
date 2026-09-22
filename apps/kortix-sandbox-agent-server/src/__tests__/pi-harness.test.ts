@@ -267,7 +267,7 @@ describe('pi harness', () => {
     // A window that stops short MUST advertise the next one, naming its oldest
     // row — the exclusive upper bound the next request passes back.
     const newest = await r.user(`/session/${root}/message?limit=2`)
-    expect(newest.headers.get('x-next-cursor')).toBe(ids[1])
+    expect(newest.headers.get('x-next-cursor')).toBe(ids[1]!)
   })
 
   test('the catalog reads the composer needs answer from the runtime', async () => {
