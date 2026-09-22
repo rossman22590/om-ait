@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import {
+  capturedPageGate,
   captureScope,
   MIRROR_CAPTURE_LIMIT,
   MIRROR_MAX_MESSAGE_CHARS,
@@ -212,5 +213,72 @@ describe('what one capture reads, and what it is allowed to prune', () => {
       fullHistory: false,
       retainHistory: false,
     });
+  });
+});
+
+describe('when a walk may stop at history it already holds', () => {
+  const stored = (entries: Array<[string, number | null]>) => new Map(entries);
+  const page = (ids: Array<[string, number | null]>) =>
+    ids.map(([id, completed]) => ({
+      info: { id, time: completed === null ? {} : { created: completed - 1, completed } },
+    }));
+
+  test('a mirror that never reached the head may not stop', () => {
+    // Otherwise it catches up on the same page forever and the session's first
+    // message is never captured.
+    expect(
+      capturedPageGate({
+        fullHistory: true,
+        headComplete: false,
+        completedById: stored([['m1', 10]]),
+      }),
+    ).toBeUndefined();
+  });
+
+  test('a bounded tail read may not stop early either', () => {
+    expect(
+      capturedPageGate({ fullHistory: false, headComplete: true, completedById: stored([]) }),
+    ).toBeUndefined();
+  });
+
+  test('a page whose every message is stored and completed stops the walk', () => {
+    const gate = capturedPageGate({
+      fullHistory: true,
+      headComplete: true,
+      completedById: stored([
+        ['m1', 10],
+        ['m2', 20],
+      ]),
+    })!;
+    expect(gate(page([['m1', 10], ['m2', 20]]))).toBe(true);
+  });
+
+  test('one unseen message keeps the walk going', () => {
+    const gate = capturedPageGate({
+      fullHistory: true,
+      headComplete: true,
+      completedById: stored([['m1', 10]]),
+    })!;
+    expect(gate(page([['m1', 10], ['m_new', 20]]))).toBe(false);
+  });
+
+  test('a message whose completion time moved is not the one we stored', () => {
+    const gate = capturedPageGate({
+      fullHistory: true,
+      headComplete: true,
+      completedById: stored([['m1', 10]]),
+    })!;
+    expect(gate(page([['m1', 11]]))).toBe(false);
+  });
+
+  test('an uncompleted message is never evidence, stored or not', () => {
+    // It can still grow. Stopping on it would freeze a turn mid-flight into
+    // the mirror and never look at it again.
+    const gate = capturedPageGate({
+      fullHistory: true,
+      headComplete: true,
+      completedById: stored([['m1', null]]),
+    })!;
+    expect(gate(page([['m1', null]]))).toBe(false);
   });
 });

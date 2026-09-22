@@ -213,6 +213,46 @@ export function headCompleteAfterCapture(input: {
 }
 
 /**
+ * The "have I already got this page?" test a full-history walk stops on, or
+ * `undefined` when stopping would be unsound.
+ *
+ * TWO CONDITIONS, both load-bearing.
+ *
+ * 1. THE PREVIOUS CAPTURE REACHED THE HEAD (`headComplete`). Pages run
+ *    newest-first, so "I hold this page" only implies "I hold everything below
+ *    it" when a previous walk actually got to the session's first message.
+ *    Without the gate, a mirror that never got past page three would catch up
+ *    on page three forever and the head would never be captured at all.
+ * 2. THE MESSAGE IS COMPLETED, and its completion time matches what is stored.
+ *    An uncompleted message can still grow, so it is never evidence of
+ *    anything; `time.completed` is the field OpenCode stamps when the turn
+ *    ends, which is why the mirror denormalizes it.
+ */
+export function capturedPageGate(input: {
+  fullHistory: boolean;
+  headComplete: boolean;
+  /** message id -> stored `message_completed_at` in epoch ms, null when the
+   *  message is stored but not completed. */
+  completedById: ReadonlyMap<string, number | null>;
+}): ((rows: Array<{ info: Record<string, unknown> }>) => boolean) | undefined {
+  if (!input.fullHistory || !input.headComplete) return undefined;
+  return (rows) =>
+    rows.every((row) => {
+      const id = String(row.info.id);
+      if (!input.completedById.has(id)) return false;
+      const time = row.info.time;
+      const completed =
+        time && typeof time === 'object' && !Array.isArray(time)
+          ? (time as Record<string, unknown>).completed
+          : undefined;
+      if (typeof completed !== 'number' || !Number.isFinite(completed) || completed <= 0) {
+        return false;
+      }
+      return input.completedById.get(id) === completed;
+    });
+}
+
+/**
  * What ONE capture reads, and what it may prune.
  *
  * `fullHistory` decides whether the read paginates the whole session or takes

@@ -35,6 +35,7 @@ import {
   MIRROR_CAPTURE_LIMIT,
   MIRROR_MAX_MESSAGES,
   captureScope,
+  capturedPageGate,
   headCompleteAfterCapture,
   mirrorRowsFromOpencodePayload,
 } from './session-transcript-mirror';
@@ -72,6 +73,9 @@ export interface CaptureDeps {
      *  the complete truth about which messages exist — see
      *  `TranscriptPageWalk.complete`. */
     complete?: boolean;
+    /** The walk stopped at already-captured history rather than at the head.
+     *  A successful stop: everything older is held. */
+    caughtUp?: boolean;
   } | null>;
 }
 
@@ -85,6 +89,7 @@ const liveCaptureDeps: CaptureDeps = {
           .select({
             messageId: sessionTranscriptMessages.messageId,
             parts: sessionTranscriptMessages.parts,
+            messageCompletedAt: sessionTranscriptMessages.messageCompletedAt,
           })
           .from(sessionTranscriptMessages)
           .where(
@@ -97,6 +102,40 @@ const liveCaptureDeps: CaptureDeps = {
     const savedParts = new Map(
       previous.map((row) => [row.messageId, row.parts as Record<string, unknown>[]]),
     );
+    /*
+      STOPPING EARLY, AND WHEN IT IS SOUND.
+
+      Pages run newest-first, so a page whose every message is already stored
+      unchanged means everything below it is stored too — but only if a
+      previous capture actually REACHED the session's first message. That is
+      exactly what `head_complete` records, so it is the gate. Without it, a
+      mirror that never got past page three would "catch up" on page three
+      forever and the head would never be captured.
+
+      A message counts as unchanged only when it is stored AND completed AND
+      its completion time matches. An uncompleted message can still grow, so it
+      is never evidence of anything.
+    */
+    const completedById = new Map(
+      previous.map((row) => [row.messageId, row.messageCompletedAt?.getTime() ?? null]),
+    );
+    const [mirror] = options?.fullHistory
+      ? await db
+          .select({ headComplete: sessionTranscriptMirrors.headComplete })
+          .from(sessionTranscriptMirrors)
+          .where(
+            and(
+              eq(sessionTranscriptMirrors.sessionId, sessionId),
+              eq(sessionTranscriptMirrors.opencodeSessionId, resolved.opencodeSessionId),
+            ),
+          )
+          .limit(1)
+      : [];
+    const isAlreadyCaptured = capturedPageGate({
+      fullHistory: options?.fullHistory === true,
+      headComplete: mirror?.headComplete === true,
+      completedById,
+    });
     const result = await readTranscriptPages(
       async (cursor) => {
         const url = new URL(
@@ -143,12 +182,14 @@ const liveCaptureDeps: CaptureDeps = {
                 }),
             })
         : undefined,
+      isAlreadyCaptured,
     );
     return {
       opencodeSessionId: resolved.opencodeSessionId,
       payload: result.rows,
       headComplete: result.headComplete,
       complete: result.complete,
+      caughtUp: result.caughtUp,
     };
   },
 };
@@ -214,6 +255,10 @@ async function captureSessionTranscript(
         merged and nothing is claimed about the rest.
       */
       const completeRead = fullHistory && read.complete === true && read.headComplete === true;
+      // A walk that stopped at already-captured history. Its rows are the
+      // NEWEST ones, which is exactly the range a rewind removes from, so it
+      // may delete inside the range it covered — and never below it.
+      const caughtUpRead = fullHistory && read.caughtUp === true;
       if (rows.length === 0 && !completeRead) return null;
 
       const now = startedAt;
@@ -316,6 +361,32 @@ async function captureSessionTranscript(
               : sql`DELETE FROM kortix.session_transcript_messages
                      WHERE session_id = ${sessionId}`,
           );
+        } else if (caughtUpRead && readIds.length > 0) {
+          /*
+            A rewind removes the NEWEST messages, which is the range an
+            incremental walk reads. So a caught-up walk can still clear what a
+            rewind removed — bounded at the oldest row it actually saw, because
+            below that it read nothing and knows nothing.
+
+            The floor is that oldest row's own key in the stored order
+            (`message_created_at`, `message_id`). Rows with a NULL
+            `message_created_at` sort oldest and are therefore always below the
+            floor, so they are never touched here.
+          */
+          const oldest = rows[0];
+          const floorCreatedAt = oldest ? timeField(oldest.info, 'created') : null;
+          const floorId = oldest ? String(oldest.info.id) : null;
+          if (floorCreatedAt && floorId) {
+            const floor = floorCreatedAt.toISOString();
+            await tx.execute(sql`
+              DELETE FROM kortix.session_transcript_messages
+               WHERE session_id = ${sessionId}
+                 AND NOT (message_id = ANY(${sql.param(readIds)}::text[]))
+                 AND message_created_at IS NOT NULL
+                 AND (message_created_at > ${floor}::timestamptz
+                      OR (message_created_at = ${floor}::timestamptz AND message_id >= ${floorId}))
+            `);
+          }
         }
 
         const values = rows.map((row) => ({
