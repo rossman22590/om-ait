@@ -18601,7 +18601,12 @@
       "textd9692dea50e7": "Aggiungi l'app a una chat o a un canale, poi incolla qui sotto l'ID del tuo tenant per collegarla a questo progetto.",
       "text8dd795841572": "Il segreto client è cifrato. Solo l'agente di questo spazio di lavoro può leggerlo.",
       "text5cb103d6008c": "Thread del canale",
-      "text31d248c44579": "Conversazione senza titolo"
+      "text31d248c44579": "Conversazione senza titolo",
+      "text3ea5efedf114": "Consentito agli admin di aprire ogni sessione",
+      "text88cfd89168a0": "Non più consentito agli admin di aprire ogni sessione",
+      "textcbccc00faa36": "Sessione di un membro aperta come admin dell’account",
+      "text798f62f95bed": "Visualizzato l’accesso admin alle sessioni",
+      "text0814e13d671d": "Modificato l’accesso admin alle sessioni"
     }
   },
   "projectOnboarding": {

@@ -18601,7 +18601,12 @@
       "textd9692dea50e7": "Ajoutez l'application à une conversation ou un canal, puis collez ci-dessous votre ID de locataire pour la lier à ce projet.",
       "text8dd795841572": "Le secret client est chiffré. Seul l'agent de cet espace de travail peut le lire.",
       "text5cb103d6008c": "Fil de canal",
-      "text31d248c44579": "Conversation sans titre"
+      "text31d248c44579": "Conversation sans titre",
+      "text3ea5efedf114": "Admins autorisés à ouvrir toutes les sessions",
+      "text88cfd89168a0": "Admins non autorisés à ouvrir toutes les sessions",
+      "textcbccc00faa36": "Session d’un membre ouverte en tant qu’admin du compte",
+      "text798f62f95bed": "Accès admin aux sessions consulté",
+      "text0814e13d671d": "Accès admin aux sessions modifié"
     }
   },
   "projectOnboarding": {

@@ -18601,7 +18601,12 @@
       "textd9692dea50e7": "Añade la app a un chat o canal y pega abajo el ID de tu inquilino para vincularla a este proyecto.",
       "text8dd795841572": "El secreto de cliente está cifrado. Solo el agente de este espacio de trabajo puede leerlo.",
       "text5cb103d6008c": "Hilo de canal",
-      "text31d248c44579": "Conversación sin título"
+      "text31d248c44579": "Conversación sin título",
+      "text3ea5efedf114": "Se permitió a los administradores abrir cualquier sesión",
+      "text88cfd89168a0": "Se dejó de permitir a los administradores abrir cualquier sesión",
+      "textcbccc00faa36": "Se abrió la sesión de un miembro como administrador de la cuenta",
+      "text798f62f95bed": "Se consultó el acceso de administradores a sesiones",
+      "text0814e13d671d": "Se cambió el acceso de administradores a sesiones"
     }
   },
   "projectOnboarding": {

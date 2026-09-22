@@ -18601,7 +18601,12 @@
       "textd9692dea50e7": "Add the app to a chat or channel, then paste your tenant ID below to bind it to this project.",
       "text8dd795841572": "The client secret is encrypted. Only this workspace's agent can read it.",
       "text5cb103d6008c": "Channel thread",
-      "text31d248c44579": "Untitled conversation"
+      "text31d248c44579": "Untitled conversation",
+      "text3ea5efedf114": "Let admins open every session",
+      "text88cfd89168a0": "Stopped admins opening every session",
+      "textcbccc00faa36": "Opened a member session as account admin",
+      "text798f62f95bed": "Viewed admin session access",
+      "text0814e13d671d": "Changed admin session access"
     }
   },
   "projectOnboarding": {

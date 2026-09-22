@@ -18601,7 +18601,12 @@
       "textd9692dea50e7": "Dodajte aplikaciju u ćaskanje ili kanal, pa ispod nalepite ID zakupca da biste je povezali sa ovim projektom.",
       "text8dd795841572": "Tajna klijenta je šifrovana. Može je pročitati samo agent ovog radnog prostora.",
       "text5cb103d6008c": "Nit kanala",
-      "text31d248c44579": "Razgovor bez naslova"
+      "text31d248c44579": "Razgovor bez naslova",
+      "text3ea5efedf114": "Администраторима дозвољено да отворе сваку сесију",
+      "text88cfd89168a0": "Администраторима забрањено да отворе сваку сесију",
+      "textcbccc00faa36": "Сесија члана отворена као администратор налога",
+      "text798f62f95bed": "Прегледан приступ администратора сесијама",
+      "text0814e13d671d": "Промењен приступ администратора сесијама"
     }
   },
   "projectOnboarding": {

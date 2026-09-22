@@ -18601,7 +18601,12 @@
       "textd9692dea50e7": "Füge die App einem Chat oder Kanal hinzu und füge unten deine Mandanten-ID ein, um sie mit diesem Projekt zu verknüpfen.",
       "text8dd795841572": "Das Clientgeheimnis ist verschlüsselt. Nur der Agent dieses Workspaces kann es lesen.",
       "text5cb103d6008c": "Kanal-Thread",
-      "text31d248c44579": "Unbenannte Unterhaltung"
+      "text31d248c44579": "Unbenannte Unterhaltung",
+      "text3ea5efedf114": "Admins dürfen jede Sitzung öffnen",
+      "text88cfd89168a0": "Admins dürfen nicht mehr jede Sitzung öffnen",
+      "textcbccc00faa36": "Sitzung eines Mitglieds als Konto-Admin geöffnet",
+      "text798f62f95bed": "Admin-Sitzungszugriff angesehen",
+      "text0814e13d671d": "Admin-Sitzungszugriff geändert"
     }
   },
   "projectOnboarding": {
