@@ -172,3 +172,28 @@ describe('buildQuestionCard — degenerate input', () => {
     expect(id).toEndWith('…');
   });
 });
+
+// `Action.Execute` REPLACES the card it was tapped on. Without the question
+// travelling with the answer, the conversation is left showing a bare "Answer
+// received: Yes" — no context for anyone reading the channel later — and the
+// agent receives a bare label for a question it can only infer.
+describe('buildQuestionCard — the answer carries its question', () => {
+  test('each button sends the question back alongside the answer', () => {
+    const card = buildQuestionCard([
+      { question: 'Deploy to prod?', options: [{ label: 'Yes' }, { label: 'No' }] },
+    ]) as unknown as Card;
+
+    expect(card.actions?.map((a) => a.data)).toEqual([
+      { verb: 'teams_answer', answer: 'Yes', question: 'Deploy to prod?' },
+      { verb: 'teams_answer', answer: 'No', question: 'Deploy to prod?' },
+    ]);
+  });
+
+  test('a long question is truncated — action data travels on every tap', () => {
+    const card = buildQuestionCard([
+      { question: 'x'.repeat(500), options: [{ label: 'Yes' }] },
+    ]) as unknown as Card;
+
+    expect(String(card.actions?.[0].data.question)).toHaveLength(200);
+  });
+});

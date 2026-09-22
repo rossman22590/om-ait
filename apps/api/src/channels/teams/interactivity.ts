@@ -179,10 +179,15 @@ async function handleAnswer(
   const projectId = await resolveConversationProject(convo.tenantId, convo.conversationId);
   if (!projectId) return cardResponse(buildNoticeCard("This conversation isn't connected to a project."));
 
+  // The question travels on the action (cards.ts), because the tap REPLACES the
+  // card that asked it. Sending the agent a bare "Yes" leaves it to infer what
+  // was agreed to; sending the pair leaves nothing to infer. Older cards, posted
+  // before this shipped, carry no question — they still work.
+  const question = typeof data.question === 'string' ? data.question.trim() : '';
   const synthetic: TeamsActivity = {
     ...activity,
     type: 'message',
-    text: answer,
+    text: question ? `${question}\n${answer}` : answer,
     id: `${activity.id ?? 'answer'}:answer`,
   };
   void createOrJoinTeamsConversationSession({
@@ -192,7 +197,9 @@ async function handleAnswer(
     activity: synthetic,
   }).catch((err) => console.error('[teams-webhook] answer follow-up failed', err));
 
-  return cardResponse(buildNoticeCard(`Answer received: ${answer}`));
+  return cardResponse(
+    buildNoticeCard(question ? `**${question}**\n\n${answer} — working on it.` : `Answer received: ${answer}`, '✅'),
+  );
 }
 
 /**

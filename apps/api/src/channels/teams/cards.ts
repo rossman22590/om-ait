@@ -369,7 +369,17 @@ export function buildQuestionCard(questions: TeamsQuestion[]): Record<string, un
     body.push(text('Tap an option, or just reply in the chat.', { isSubtle: true, size: 'small', spacing: 'medium' }));
     return card(
       body,
-      options.map((o) => executeAction(o.label, 'teams_answer', { answer: o.label })),
+      // The question rides along with the answer. `Action.Execute` REPLACES
+      // the card, so without it the conversation is left showing a bare
+      // "Answer received: Yes" — no context for anyone reading the channel
+      // later, and a bare label for the agent. Truncated because action data
+      // travels on every tap.
+      options.map((o) =>
+        executeAction(o.label, 'teams_answer', {
+          answer: o.label,
+          question: single.question.slice(0, 200),
+        }),
+      ),
     );
   }
 
