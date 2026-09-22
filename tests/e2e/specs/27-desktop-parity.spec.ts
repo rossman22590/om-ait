@@ -607,90 +607,93 @@ for (const runtime of runtimes) {
       }
     });
 
-    test("dock activation recreates the main window with its persisted native state", async ({
-      desktopApp,
-      baseURL,
-    }) => {
-      test.skip(!desktopApp, "requires the native Electron shell");
-      test.setTimeout(180_000);
+    const nativeTest = process.env.E2E_DESKTOP_NATIVE === "1" ? test : null;
+    nativeTest?.(
+      "dock activation recreates the main window with its persisted native state",
+      async ({ desktopApp, baseURL }) => {
+        if (!desktopApp)
+          throw new Error("native Electron application is required");
+        test.setTimeout(180_000);
 
-      const restored = await desktopApp!.evaluate(
-        async ({ BrowserWindow, app, screen }, origin) => {
-          const delay = (ms: number) =>
-            new Promise((resolve) => setTimeout(resolve, ms));
-          const main = BrowserWindow.getAllWindows().find((window) =>
-            window.webContents.getURL().startsWith(origin),
-          );
-          if (!main) throw new Error("main window not found");
-          main.minimize();
-          await delay(100);
-          app.emit("activate");
-          for (
-            let attempt = 0;
-            attempt < 80 && main.isMinimized();
-            attempt += 1
-          ) {
-            await delay(50);
-          }
-          const restoredFromMinimized = !main.isMinimized() && main.isVisible();
-          const area = screen.getPrimaryDisplay().workArea;
-          const expected = {
-            x: area.x + 80,
-            y: area.y + 70,
-            width: Math.min(980, area.width - 160),
-            height: Math.min(680, area.height - 140),
-          };
-          main.unmaximize();
-          main.setBounds(expected);
-          await delay(350);
-          main.maximize();
-          for (
-            let attempt = 0;
-            attempt < 80 && !main.isMaximized();
-            attempt += 1
-          ) {
-            await delay(50);
-          }
-          if (!main.isMaximized())
-            throw new Error("main window did not maximize");
-          await delay(350);
-
-          const popup = new BrowserWindow({ show: false });
-          await popup.loadURL("about:blank");
-          main.destroy();
-          await delay(100);
-          app.emit("activate");
-
-          let replacement = BrowserWindow.getAllWindows().find(() => false);
-          for (let attempt = 0; attempt < 240; attempt += 1) {
-            replacement = BrowserWindow.getAllWindows().find(
-              (window) =>
-                window !== popup &&
-                window.webContents.getURL().startsWith(origin),
+        const restored = await desktopApp.evaluate(
+          async ({ BrowserWindow, app, screen }, origin) => {
+            const delay = (ms: number) =>
+              new Promise((resolve) => setTimeout(resolve, ms));
+            const main = BrowserWindow.getAllWindows().find((window) =>
+              window.webContents.getURL().startsWith(origin),
             );
-            if (replacement?.isVisible() && replacement.isMaximized()) break;
-            await delay(250);
-          }
-          if (!replacement)
-            throw new Error("replacement main window not found");
-          const result = {
-            expected,
-            normalBounds: replacement.getNormalBounds(),
-            maximized: replacement.isMaximized(),
-            popupAlive: !popup.isDestroyed(),
-            restoredFromMinimized,
-          };
-          popup.destroy();
-          return result;
-        },
-        baseURL!,
-      );
+            if (!main) throw new Error("main window not found");
+            main.minimize();
+            await delay(100);
+            app.emit("activate");
+            for (
+              let attempt = 0;
+              attempt < 80 && main.isMinimized();
+              attempt += 1
+            ) {
+              await delay(50);
+            }
+            const restoredFromMinimized =
+              !main.isMinimized() && main.isVisible();
+            const area = screen.getPrimaryDisplay().workArea;
+            const expected = {
+              x: area.x + 80,
+              y: area.y + 70,
+              width: Math.min(980, area.width - 160),
+              height: Math.min(680, area.height - 140),
+            };
+            main.unmaximize();
+            main.setBounds(expected);
+            await delay(350);
+            main.maximize();
+            for (
+              let attempt = 0;
+              attempt < 80 && !main.isMaximized();
+              attempt += 1
+            ) {
+              await delay(50);
+            }
+            if (!main.isMaximized())
+              throw new Error("main window did not maximize");
+            await delay(350);
 
-      expect(restored.popupAlive).toBe(true);
-      expect(restored.restoredFromMinimized).toBe(true);
-      expect(restored.maximized).toBe(true);
-      expect(restored.normalBounds).toEqual(restored.expected);
-    });
+            const popup = new BrowserWindow({ show: false });
+            await popup.loadURL("about:blank");
+            main.destroy();
+            await delay(100);
+            app.emit("activate");
+
+            let replacement = BrowserWindow.getAllWindows().find(() => false);
+            for (let attempt = 0; attempt < 240; attempt += 1) {
+              replacement = BrowserWindow.getAllWindows().find(
+                (window) =>
+                  window !== popup &&
+                  window.webContents.getURL().startsWith(origin),
+              );
+              if (replacement?.isVisible() && replacement.isMaximized()) break;
+              await delay(250);
+            }
+            if (!replacement)
+              throw new Error("replacement main window not found");
+            const result = {
+              expected,
+              normalBounds: replacement.getNormalBounds(),
+              maximized: replacement.isMaximized(),
+              popupAlive: !popup.isDestroyed(),
+              restoredFromMinimized,
+            };
+            popup.destroy();
+            return result;
+          },
+          baseURL!,
+        );
+
+        expect(restored.popupAlive).toBe(true);
+        expect(restored.restoredFromMinimized).toBe(true);
+        expect(restored.maximized).toBe(true);
+        expect(restored.normalBounds).toEqual(restored.expected);
+      },
+    );
 
     test("a frame without product navigation keeps a way back", async ({
       page,
@@ -971,13 +974,11 @@ for (const runtime of runtimes) {
   });
 }
 
-browserTest(
+const nativeBrowserTest =
+  process.env.E2E_DESKTOP_NATIVE === "1" ? browserTest : null;
+nativeBrowserTest?.(
   "27 — desktop parity persists window state across a process relaunch",
   async ({ baseURL }) => {
-    browserTest.skip(
-      process.env.E2E_DESKTOP_NATIVE !== "1",
-      "requires the native Electron shell",
-    );
     browserTest.setTimeout(240_000);
     const profile = await mkdtemp(join(tmpdir(), "kortix-desktop-relaunch-"));
     let first: ElectronApplication | undefined;
