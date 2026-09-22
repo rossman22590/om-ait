@@ -15,13 +15,13 @@
  * dismissed. The dismissal is a per-viewer convenience, so it lives in
  * `localStorage` and falls back to "shown" when storage is unavailable.
  *
- *     [tile]  Session uses previous repository            [x]
- *             This workspace started from ...
+ *     [tile]  This session is out of date                 [x]
+ *             The project changed after this session ...
  *     ----------------------------------------------------------
  *                                          [Update to latest]
  */
 
-import { GitBranchIcon, XIcon } from '@phosphor-icons/react';
+import { ArrowsClockwiseIcon, XIcon } from '@phosphor-icons/react';
 import { useParams } from 'next/navigation';
 import { createContext, useCallback, useContext, useState } from 'react';
 
@@ -166,7 +166,7 @@ function PreviousRepositoryNoticeCard({
     >
       <div className="border-border flex items-start gap-3 border-b py-3.5 pr-2 pl-4">
         <span className="bg-kortix-orange/15 text-kortix-orange flex size-9 shrink-0 items-center justify-center rounded-sm">
-          <GitBranchIcon className="size-5" weight="bold" />
+          <ArrowsClockwiseIcon className="size-5" weight="bold" />
         </span>
         <div className="min-w-0 flex-1 space-y-1">
           <h3 className="text-foreground text-sm font-medium">{t('title')}</h3>
