@@ -295,6 +295,75 @@ export async function clearTurnStopRequest(
   );
 }
 
+/** How long after a bare abort a cause with no turn identity may still claim it. */
+export const UNIDENTIFIED_CAUSE_WINDOW_MS = 60_000;
+
+export type UnidentifiedTurnCauseOutcome = 'refined_ended' | 'marked_open' | 'none';
+
+/**
+ * Attach a named cause to the turn it stopped when the frame does not name
+ * that turn.
+ *
+ * A daemon built before the memory guard named its turn sends the cause with
+ * no `turn_message_id` and `error_retryable: true`. `completeSandboxTurn`
+ * drops that frame as `non_terminal`, and the UI showed "No reason was
+ * reported" under a turn the guard stopped (prod 2026-09-22). Sandboxes keep
+ * their daemon until they restart, so the control plane must accept the frame.
+ *
+ * The guard aborts first and reports second, so the abort usually closes the
+ * turn before the cause arrives. In order:
+ *  1. The newest turn of this OpenCode session that ended with a bare abort
+ *     in the last `windowMs` gets the cause. This beats an open turn: the
+ *     next prompt can start before the cause lands.
+ *  2. Otherwise the open turn holds the cause, like a requested stop. The
+ *     abort that follows keeps it; a completion drops it.
+ * A requested stop or another named cause is never rewritten.
+ */
+export async function recordUnidentifiedTurnCause(
+  sessionId: string,
+  opencodeSessionId: string | null | undefined,
+  cause: SessionTurnEndErrorRecord,
+  windowMs = UNIDENTIFIED_CAUSE_WINDOW_MS,
+): Promise<UnidentifiedTurnCauseOutcome> {
+  const causeJson = JSON.stringify(cause);
+  const abortNames = sql.join(ABORT_END_ERROR_NAMES.map((name) => sql`${name}`), sql`, `);
+  const requestedStopNames = sql.join(REQUESTED_STOP_NAMES.map((name) => sql`${name}`), sql`, `);
+  const sameRoot = sql`(${opencodeSessionId ?? null}::text IS NULL
+                         OR t.opencode_session_id IS NULL
+                         OR t.opencode_session_id = ${opencodeSessionId ?? null})`;
+  const refined = normalizeRows(
+    await execute(sql`
+      UPDATE kortix.session_turns
+         SET end_error = ${causeJson}::jsonb, updated_at = now()
+       WHERE turn_token = (
+         SELECT t.turn_token
+           FROM kortix.session_turns t
+          WHERE t.session_id = ${sessionId}
+            AND t.state = 'ended'
+            AND t.end_reason = 'failed'
+            AND t.ended_at > now() - make_interval(secs => ${secs(windowMs)})
+            AND ${sameRoot}
+          ORDER BY t.ended_at DESC
+          LIMIT 1)
+         AND (end_error IS NULL OR end_error->>'name' IN (${abortNames}))
+      RETURNING turn_token`),
+  );
+  if (refined && refined.length > 0) return 'refined_ended';
+  const marked = normalizeRows(
+    await execute(sql`
+      UPDATE kortix.session_turns t
+         SET end_error = ${causeJson}::jsonb, updated_at = now()
+       WHERE t.session_id = ${sessionId}
+         AND t.state <> 'ended'
+         AND ${sameRoot}
+         AND (t.end_error IS NULL
+           OR t.end_error->>'name' IN (${abortNames})
+           OR t.end_error->>'name' IN (${requestedStopNames}))
+      RETURNING t.turn_token`),
+  );
+  return marked && marked.length > 0 ? 'marked_open' : 'none';
+}
+
 function endErrorRecord(
   status: 'idle' | 'error',
   error?: SandboxTurnEndError | null,
@@ -312,10 +381,10 @@ function endedTurnLedger(
   endError: SessionTurnEndErrorRecord | null = null,
 ): SQL {
   const endErrorJson = endError ? JSON.stringify(endError) : null;
-  // A requested stop survives only the abort it caused. A turn that completed
-  // drops it, and a NAMED cause (a memory guard that fired after the request)
-  // always wins: the mark must never hide a failure.
-  const requestedStopNames = sql.join(REQUESTED_STOP_NAMES.map((name) => sql`${name}`), sql`, `);
+  // A mark held on the open turn — a requested stop, or a cause that arrived
+  // before its abort (`recordUnidentifiedTurnCause`) — survives only the abort
+  // it caused. A turn that completed drops it, and a NAMED cause in the end
+  // frame always wins: the mark must never hide a failure.
   const abortNames = sql.join(ABORT_END_ERROR_NAMES.map((name) => sql`${name}`), sql`, `);
   const values = sql.join(
     turns.map(
@@ -342,7 +411,8 @@ function endedTurnLedger(
             end_reason = EXCLUDED.end_reason,
             end_error = CASE
               WHEN EXCLUDED.end_reason = 'failed'
-               AND kortix.session_turns.end_error->>'name' IN (${requestedStopNames})
+               AND kortix.session_turns.end_error IS NOT NULL
+               AND coalesce(kortix.session_turns.end_error->>'name', '') NOT IN (${abortNames})
                AND (EXCLUDED.end_error IS NULL
                  OR EXCLUDED.end_error->>'name' IN (${abortNames}))
                 THEN kortix.session_turns.end_error
