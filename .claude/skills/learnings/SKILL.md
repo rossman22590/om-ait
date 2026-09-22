@@ -7519,3 +7519,28 @@ and the App installation <id> is ignored` once per process
 Procedure and verified installation ids: `docs/runbooks/managed-git-config.md`.
 Owed: an alert on the provision 5xx ratio (the stream route answers `200` with
 an `error` frame, so a status alert alone misses it).
+
+### 2026-09-22 — A provider fan-out that folds refusals into a silent 503
+
+**Near-miss.** PR previews moved to Platinum-only sessions (#7482). The first
+tested run (35708105773) failed SNAP-2: `POST /v1/projects/:id/snapshots/rebuild`
+answered `503 Could not start a rebuild on any sandbox provider` with no log
+line. Platinum refuses `DELETE /v1/templates/:id` while any sandbox pins the
+template (`409 template_in_use`, reproduced live with a probe sandbox). Daytona
+deletes a snapshot under live sandboxes. The shared default image is in use
+whenever a session runs, so Rebuild failed every time on a Platinum-only
+deployment. The same run also exposed two tests that passed only because
+Daytona answered a fabricated `external_id` non-definitively (spec 26) or was
+the hard-coded pin target (PROJ-31, spec 12).
+
+**Rule.** A route that fans an action out to providers and folds the results
+into one status must log each provider's error, and must map an expected
+provider state (in use, not found) to a typed error with its own status. A
+generic 5xx means "a provider failed", never "the provider said no". A test
+fixture must never depend on a provider's answer about an id the test made up;
+put the state the test needs in the fixture, and read enabled providers from
+the API instead of naming one.
+
+**Enforcement.** `SnapshotInUseError` + `rebuildFailureResponse`
+(`provider-actions.test.ts`, `platinum-list-pagination.test.ts`); SNAP-2
+asserts `202` or `409 SNAPSHOT_IN_USE` and fails on `503`. PR #7491.
