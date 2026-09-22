@@ -420,6 +420,9 @@ export function buildQuestionCard(questions: TeamsQuestion[]): Record<string, un
   return form ?? buildNoticeCard(list.map((q) => q.question).join('\n\n'), '💬');
 }
 
+/** The id the review card's feedback box reports under. */
+export const REVIEW_FEEDBACK_INPUT = 'reviewFeedback';
+
 export function buildReviewCard(opts: {
   reviewItemId: string;
   title: string;
@@ -436,6 +439,21 @@ export function buildReviewCard(opts: {
       ]),
     );
   }
+  // `Action.Execute` returns EVERY input on the card, whichever button was
+  // pressed — so one optional box serves all three verdicts. Without it
+  // `applyVerdict` was always called with `feedback: null` and the agent was
+  // told to "ask what to change", asking the reviewer for something they
+  // already knew when they clicked. The column has always existed
+  // (review_items.feedback); nothing ever filled it.
+  body.push(
+    text('Feedback (optional)', { weight: 'bolder', size: 'small', spacing: 'medium' }),
+    {
+      type: 'Input.Text',
+      id: REVIEW_FEEDBACK_INPUT,
+      isMultiline: true,
+      placeholder: 'What should change, or why — sent to the agent with your decision',
+    },
+  );
   const actions: CardElement[] = [
     { type: 'Action.Execute', title: 'Approve', verb: 'teams_review', data: { verb: 'teams_review', reviewItemId: opts.reviewItemId, verdict: 'approve' }, style: 'positive' },
     executeAction('Request changes', 'teams_review', { reviewItemId: opts.reviewItemId, verdict: 'changes' }),
