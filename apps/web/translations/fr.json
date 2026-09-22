@@ -19507,5 +19507,20 @@
     "invitesTitle": "Vous êtes invité",
     "invitesDescription": "Rejoignez un projet partagé par votre équipe, ou créez le vôtre.",
     "createProjectInstead": "Créer plutôt un nouveau projet"
+  },
+  "sessionOversight": {
+    "label": "Les admins peuvent ouvrir toutes les sessions",
+    "description": "Les propriétaires et admins du compte peuvent ouvrir n’importe quelle session de ce compte, y compris les sessions privées. Chaque session ouverte ainsi figure dans le journal d’audit.",
+    "ownerOnlyDescription": "Les propriétaires et admins du compte peuvent ouvrir n’importe quelle session de ce compte, y compris les sessions privées. Seul un propriétaire du compte peut modifier ce réglage.",
+    "enableTitle": "Autoriser les admins à ouvrir toutes les sessions ?",
+    "enableDescription": "Les propriétaires et admins pourront ouvrir toutes les sessions de ce compte, y compris celles que les membres gardent privées. Les membres verront un avis dans la fenêtre de partage. Chaque session ouverte ainsi est enregistrée dans le journal d’audit.",
+    "enableConfirm": "Activer",
+    "disableTitle": "Ne plus autoriser les admins à ouvrir toutes les sessions ?",
+    "disableDescription": "Les sessions privées redeviennent réservées à leur propriétaire. Les admins gardent l’accès uniquement aux sessions partagées avec eux.",
+    "disableConfirm": "Désactiver",
+    "enabledToast": "Les admins peuvent désormais ouvrir toutes les sessions",
+    "disabledToast": "Les sessions privées sont de nouveau réservées à leur propriétaire",
+    "failedToast": "Impossible de modifier ce réglage",
+    "shareDisclosure": "Les propriétaires et admins du compte peuvent ouvrir toutes les sessions de ce compte, quel que soit votre choix ici."
   }
 }

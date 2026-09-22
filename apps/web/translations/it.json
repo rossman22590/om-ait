@@ -19507,5 +19507,20 @@
     "invitesTitle": "Sei stato invitato",
     "invitesDescription": "Unisciti a un progetto del tuo team o creane uno tuo.",
     "createProjectInstead": "Crea invece un nuovo progetto"
+  },
+  "sessionOversight": {
+    "label": "Gli admin possono aprire ogni sessione",
+    "description": "Proprietari e admin dell’account possono aprire qualsiasi sessione di questo account, comprese quelle private. Ogni sessione aperta così è nel registro di audit.",
+    "ownerOnlyDescription": "Proprietari e admin dell’account possono aprire qualsiasi sessione di questo account, comprese quelle private. Solo un proprietario dell’account può modificarlo.",
+    "enableTitle": "Consentire agli admin di aprire ogni sessione?",
+    "enableDescription": "Proprietari e admin potranno aprire tutte le sessioni di questo account, comprese quelle che i membri mantengono private. I membri vedranno un avviso nella finestra di condivisione. Ogni sessione aperta così viene registrata nel registro di audit.",
+    "enableConfirm": "Attiva",
+    "disableTitle": "Non consentire più agli admin di aprire ogni sessione?",
+    "disableDescription": "Le sessioni private tornano visibili solo al proprietario. Gli admin mantengono l’accesso solo alle sessioni condivise con loro.",
+    "disableConfirm": "Disattiva",
+    "enabledToast": "Ora gli admin possono aprire ogni sessione",
+    "disabledToast": "Le sessioni private sono di nuovo solo del proprietario",
+    "failedToast": "Impossibile aggiornare questa impostazione",
+    "shareDisclosure": "Proprietari e admin dell’account possono aprire ogni sessione di questo account, qualunque sia la tua scelta qui."
   }
 }

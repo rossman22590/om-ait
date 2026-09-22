@@ -19507,5 +19507,20 @@
     "invitesTitle": "你收到了邀请",
     "invitesDescription": "加入团队共享的项目，或创建你自己的项目。",
     "createProjectInstead": "改为创建新项目"
+  },
+  "sessionOversight": {
+    "label": "管理员可打开所有会话",
+    "description": "账户所有者和管理员可以打开此账户中的任何会话，包括私密会话。以此方式打开的每个会话都会记入审计日志。",
+    "ownerOnlyDescription": "账户所有者和管理员可以打开此账户中的任何会话，包括私密会话。只有账户所有者可以更改此设置。",
+    "enableTitle": "允许管理员打开所有会话？",
+    "enableDescription": "账户所有者和管理员将能够打开此账户中的所有会话，包括成员设为私密的会话。成员会在共享对话框中看到提示。以此方式打开的每个会话都会记入审计日志。",
+    "enableConfirm": "开启",
+    "disableTitle": "不再允许管理员打开所有会话？",
+    "disableDescription": "私密会话恢复为仅所有者可见。管理员只保留对与其共享的会话的访问权限。",
+    "disableConfirm": "关闭",
+    "enabledToast": "管理员现在可以打开所有会话",
+    "disabledToast": "私密会话已恢复为仅所有者可见",
+    "failedToast": "无法更新此设置",
+    "shareDisclosure": "无论你在这里如何选择，账户所有者和管理员都可以打开此账户中的所有会话。"
   }
 }

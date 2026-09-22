@@ -19507,5 +19507,20 @@
     "invitesTitle": "Você foi convidado",
     "invitesDescription": "Entre em um projeto da sua equipe ou crie o seu.",
     "createProjectInstead": "Criar um novo projeto"
+  },
+  "sessionOversight": {
+    "label": "Admins podem abrir qualquer sessão",
+    "description": "Proprietários e admins da conta podem abrir qualquer sessão desta conta, incluindo as privadas. Cada sessão aberta assim fica no registro de auditoria.",
+    "ownerOnlyDescription": "Proprietários e admins da conta podem abrir qualquer sessão desta conta, incluindo as privadas. Só um proprietário da conta pode alterar isso.",
+    "enableTitle": "Permitir que admins abram qualquer sessão?",
+    "enableDescription": "Proprietários e admins poderão abrir todas as sessões desta conta, incluindo as que os membros mantêm privadas. Os membros verão um aviso na janela de compartilhamento. Cada sessão aberta assim é registrada no registro de auditoria.",
+    "enableConfirm": "Ativar",
+    "disableTitle": "Deixar de permitir que admins abram qualquer sessão?",
+    "disableDescription": "As sessões privadas voltam a ser apenas do proprietário. Os admins mantêm acesso apenas às sessões compartilhadas com eles.",
+    "disableConfirm": "Desativar",
+    "enabledToast": "Agora os admins podem abrir qualquer sessão",
+    "disabledToast": "As sessões privadas voltaram a ser apenas do proprietário",
+    "failedToast": "Não foi possível atualizar esta configuração",
+    "shareDisclosure": "Proprietários e admins da conta podem abrir qualquer sessão desta conta, seja qual for a sua escolha aqui."
   }
 }

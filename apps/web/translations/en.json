@@ -19507,5 +19507,20 @@
     "invitesTitle": "You're invited",
     "invitesDescription": "Join a project your team shared, or start your own.",
     "createProjectInstead": "Create a new project instead"
+  },
+  "sessionOversight": {
+    "label": "Admins can open every session",
+    "description": "Account owners and admins can open any session in this account, including private ones. Every session opened this way is in the audit log.",
+    "ownerOnlyDescription": "Account owners and admins can open any session in this account, including private ones. Only an account owner can change this.",
+    "enableTitle": "Let admins open every session?",
+    "enableDescription": "Account owners and admins will be able to open every session in this account, including sessions members kept private. Members see a notice in the share dialog. Each session opened this way is recorded in the audit log.",
+    "enableConfirm": "Turn on",
+    "disableTitle": "Stop admins opening every session?",
+    "disableDescription": "Private sessions go back to owner-only. Admins keep access only to sessions shared with them.",
+    "disableConfirm": "Turn off",
+    "enabledToast": "Admins can now open every session",
+    "disabledToast": "Private sessions are owner-only again",
+    "failedToast": "Could not update this setting",
+    "shareDisclosure": "Account owners and admins can open every session in this account, whatever you choose here."
   }
 }

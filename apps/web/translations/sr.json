@@ -19507,5 +19507,20 @@
     "invitesTitle": "Pozvani ste",
     "invitesDescription": "Pridružite se projektu vašeg tima ili napravite svoj.",
     "createProjectInstead": "Umesto toga napravite novi projekat"
+  },
+  "sessionOversight": {
+    "label": "Administratori mogu da otvore svaku sesiju",
+    "description": "Vlasnici i administratori naloga mogu da otvore bilo koju sesiju u ovom nalogu, uključujući privatne. Svaka sesija otvorena na ovaj način upisuje se u dnevnik revizije.",
+    "ownerOnlyDescription": "Vlasnici i administratori naloga mogu da otvore bilo koju sesiju u ovom nalogu, uključujući privatne. Samo vlasnik naloga može ovo da promeni.",
+    "enableTitle": "Dozvoliti administratorima da otvore svaku sesiju?",
+    "enableDescription": "Vlasnici i administratori moći će da otvore svaku sesiju u ovom nalogu, uključujući sesije koje članovi drže privatnim. Članovi vide obaveštenje u dijalogu za deljenje. Svaka sesija otvorena na ovaj način upisuje se u dnevnik revizije.",
+    "enableConfirm": "Uključi",
+    "disableTitle": "Zabraniti administratorima da otvore svaku sesiju?",
+    "disableDescription": "Privatne sesije ponovo pripadaju samo vlasniku. Administratori zadržavaju pristup samo sesijama koje su podeljene sa njima.",
+    "disableConfirm": "Isključi",
+    "enabledToast": "Administratori sada mogu da otvore svaku sesiju",
+    "disabledToast": "Privatne sesije ponovo pripadaju samo vlasniku",
+    "failedToast": "Podešavanje nije moglo da se ažurira",
+    "shareDisclosure": "Vlasnici i administratori naloga mogu da otvore svaku sesiju u ovom nalogu, bez obzira na izbor ovde."
   }
 }
