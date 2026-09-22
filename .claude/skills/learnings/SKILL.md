@@ -21,6 +21,38 @@ linked, not inlined.
 
 ## Register
 
+### A PR into `main` shows all-green with the whole suite skipped (2026-09-22)
+
+**Rule:** before merging any PR into `main`, read the CHECK NAMES, not the
+pass count. `tests.yml` gates its lane matrix on
+`contains(labels, 'test') || contains(labels, 'preview')` for pull requests
+into `main`, so an unlabelled PR skips all six lanes — core, browser-1..4,
+packages — and still reports every remaining check green. `${{ matrix.lane }}
+lane: skipping` beside `9 pass / 0 fail` is a PR that ran CodeQL, gitleaks and
+a typecheck, and nothing else. Add the `test` label and wait, or merge knowing
+only lint ran. **Near-miss:** PR #7483 (transcript mirror paging, apps/api +
+packages/sdk) was `MERGEABLE`/`CLEAN` with zero lanes run; labelled, the core
+lane then failed and four browser lanes passed. **Gotcha within the gotcha:**
+`gh pr edit --add-label` can fail on a Projects-classic GraphQL error and
+apply NOTHING while exiting noisily — check
+`gh pr view --json labels`, or use
+`gh api -X POST repos/<owner>/<repo>/issues/<n>/labels -f 'labels[]=test'`.
+*Enforcer:* none — the skip is by design, so nothing will ever fail for it.
+The check-name read is the control.
+
+### A local-stack CI failure is the stack, not the diff (2026-09-22)
+
+**Rule:** when a `core` or `browser` lane fails, find the first error before
+the test list. `local Supabase start exited with code 1` at
+`tests/src/core/local-stack.ts` with `failed to set up container networking`
+is the runner's docker, and the flows it gates never ran — nothing asserted
+false. Re-run that lane; do not touch the code, and do not report the re-run
+as a fix. If it fails the same way twice, that is a signal about the runner
+and belongs in a report, not in a third re-run. **Near-miss:** PR #7483's core
+lane failed exactly this way while `sdk`, `flow-runner-unit`,
+`route-coverage` and `worktree-unit` passed in the same lane; the re-run went
+green with no change. *Enforcer:* none.
+
 ### Port a guard with the feature, or the second platform ships without it (2026-09-22)
 
 **Rule:** When a channel/platform copies an interaction from another, copy its
