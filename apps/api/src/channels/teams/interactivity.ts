@@ -7,8 +7,8 @@ import { consumePendingTeamsPickerMessage } from './auth-resume';
 import { REVIEW_FEEDBACK_INPUT, TEAMS_FORM_VERB, TEAMS_STOP_VERB, buildNoticeCard } from './cards';
 import {
   createTeamsAccessRequest,
-  lookupTeamsIdentity,
   notifyAdminsOfTeamsAccessRequest,
+  resolveTeamsActor,
   teamsUserId,
 } from './identity';
 import { decideTeamsThreadJoin } from './participants';
@@ -272,22 +272,37 @@ async function handleReview(
   const uid = teamsUserId(activity);
   if (!convo || !reviewItemId || !verdict) return cardResponse(buildNoticeCard("I couldn't apply that decision."));
 
-  const identity = uid ? await lookupTeamsIdentity(convo.tenantId, uid) : null;
-  if (!identity) {
-    return cardResponse(buildNoticeCard('Connect your Kortix account (`/login`) to act on reviews.'));
-  }
-
   const projectId = await resolveConversationProject(convo.tenantId, convo.conversationId);
   if (!projectId) return cardResponse(buildNoticeCard("This conversation isn't connected to a project."));
 
   const item = await getReviewItemById(reviewItemId, projectId);
   if (!item) return cardResponse(buildNoticeCard('That review item no longer exists.'));
 
+  // The actor must be a linked Kortix user with WRITE access to this project —
+  // the same bar Slack has always applied (channels/slack/interactivity.ts).
+  // This checked only that the presser had *some* linked identity in the
+  // tenant, so anyone who had ever run `/login` could approve or deny a review
+  // for a project they are not a member of. The card is posted to the whole
+  // conversation, so the check has to happen on the press.
+  //
+  // The item is loaded FIRST because the authorization is scoped to its own
+  // account, not to whatever account the presser happens to belong to.
+  const actor = await resolveTeamsActor(convo.tenantId, uid ?? '', item.accountId, projectId);
+  if ('reason' in actor) {
+    return cardResponse(
+      buildNoticeCard(
+        actor.reason === 'unlinked'
+          ? 'Connect your Kortix account (`/login`) to act on reviews.'
+          : "You don't have access to act on this project's reviews.",
+      ),
+    );
+  }
+
   // The card carries an optional box; `Action.Execute` hands back its value
   // whichever button was pressed.
   const raw = data[REVIEW_FEEDBACK_INPUT];
   const feedback = typeof raw === 'string' && raw.trim() ? raw.trim().slice(0, 2000) : null;
-  await applyVerdict(reviewItemId, projectId, { verdict, feedback, actingUserId: identity.userId });
+  await applyVerdict(reviewItemId, projectId, { verdict, feedback, actingUserId: actor.userId });
 
   const base =
     verdict === 'approve'
