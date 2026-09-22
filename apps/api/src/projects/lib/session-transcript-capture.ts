@@ -457,6 +457,86 @@ async function captureSessionTranscript(
   }
 }
 
+/**
+ * Sessions this process has already considered for a wake backfill.
+ *
+ * `/start` answers `ready` on EVERY poll once the box is up, so without this
+ * the guard below would run one SELECT per poll for the life of the session.
+ * Bounded because a long-lived API process opens a lot of sessions; the cost of
+ * forgetting one is a single extra guard read on its next wake.
+ */
+const backfillConsidered = new Set<string>();
+const BACKFILL_MEMO_MAX = 10_000;
+
+/**
+ * BACKFILL ON WAKE — what makes the feature work for sessions that already exist.
+ *
+ * Capture runs at turn end. That is the right moment to record a turn, but it
+ * means a project that enables `session_transcript_history` gets NOTHING for
+ * its existing sessions: the mirror for each one stays empty until somebody
+ * happens to send it another message. Opening the session — the exact moment
+ * the user is waiting and the feature is supposed to pay off — wrote nothing,
+ * so the second open was as blank as the first.
+ *
+ * So: the first time a flagged session's runtime is up, mirror what is already
+ * there. One attempt per session per process, and only when the mirror cannot
+ * already prove it holds the session's first message.
+ *
+ * Fire-and-forget by construction — `captureSessionTranscriptMirror` never
+ * throws, and a backfill must never be able to fail or delay an open.
+ *
+ * SAFE AGAINST THE DELETE BRANCH. A complete full-history read licenses the
+ * writer to remove stored ids the box no longer has. A backfill of an EMPTY
+ * mirror has nothing to remove, and a backfill of a `head_complete: false`
+ * mirror (pruned by legacy retention) merges the head back rather than
+ * trimming — which is the repair this is for.
+ */
+export function backfillSessionTranscriptMirrorOnWake(
+  sessionId: string,
+  deps: CaptureDeps = liveCaptureDeps,
+): Promise<void> {
+  if (backfillConsidered.has(sessionId)) return Promise.resolve();
+  if (backfillConsidered.size >= BACKFILL_MEMO_MAX) backfillConsidered.clear();
+  backfillConsidered.add(sessionId);
+  return (async () => {
+    try {
+      const [row] = await db
+        .select({
+          metadata: projects.metadata,
+          root: projectSessions.opencodeSessionId,
+          mirrorRoot: sessionTranscriptMirrors.opencodeSessionId,
+          headComplete: sessionTranscriptMirrors.headComplete,
+        })
+        .from(projectSessions)
+        .innerJoin(projects, eq(projects.projectId, projectSessions.projectId))
+        .leftJoin(
+          sessionTranscriptMirrors,
+          eq(sessionTranscriptMirrors.sessionId, projectSessions.sessionId),
+        )
+        .where(eq(projectSessions.sessionId, sessionId))
+        .limit(1);
+      if (!row) return;
+      // Off ⇒ the surface stays dark and so does this. A legacy tail mirror is
+      // still maintained at turn end exactly as before.
+      if (!resolveFeatureFlag(row.metadata, 'session_transcript_history')) return;
+      // Already whole, for the root this session actually runs. Nothing a
+      // backfill could add — a re-pinned root is NOT whole, whatever the row says.
+      if (row.headComplete && row.mirrorRoot && row.mirrorRoot === row.root) return;
+      await captureSessionTranscriptMirror(sessionId, deps);
+    } catch (err) {
+      console.warn(
+        `[transcript-mirror] wake backfill failed for session ${sessionId}:`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  })();
+}
+
+/** Test seam: the memo is process-global and would leak between cases. */
+export function resetTranscriptBackfillMemoForTests(): void {
+  backfillConsidered.clear();
+}
+
 const captures = new Map<string, Promise<CaptureResult | null>>();
 
 export function captureSessionTranscriptMirror(
