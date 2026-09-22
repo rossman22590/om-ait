@@ -8,7 +8,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ComposerChatInput, type ComposerOptions } from '@/features/session/composer-chat-input';
 import type { DraftScope } from '@/features/session/composer/draft/composer-draft';
 import { OptimisticTurn } from '@/features/session/optimistic-turn';
-import { SESSION_TRANSCRIPT_CLASS } from '@/features/session/session-body';
 import type { AttachedFile } from '@/features/session/session-chat-input';
 import {
   buildOptimisticPromptTextWithUploads,
@@ -70,12 +69,7 @@ export function ProjectHome({
 
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
-  const [prefill, setPrefill] = useState<{
-    text: string;
-    id: number;
-    files?: AttachedFile[];
-    mode?: 'replace' | 'merge';
-  } | null>(null);
+  const [prefill, setPrefill] = useState<{ text: string; id: number } | null>(null);
   /**
    * The message this screen has just sent, painted here until the navigation
    * lands — the "fake send" every other composer in the app already does.
@@ -178,23 +172,10 @@ export function ProjectHome({
         );
       } catch (error) {
         // Refused: no session was created and nothing navigated. Take the
-        // bubble back and put the message where it came from.
-        //
-        // The composer's own `planFailedSendRecovery` cannot do it here. This
-        // screen swaps layouts on send — the composer stops being a child of
-        // the hero column and becomes a sibling of the thread — so React
-        // UNMOUNTS and remounts it across the swap, and the document that
-        // recovery writes into the old editor dies with it. Measured: a refused
-        // create left the box empty and the sentence gone, which is worse than
-        // the frozen box this whole change replaces.
-        //
-        // A prefill survives because it is THIS component's state, handed to
-        // whichever composer instance is mounted when it lands. `mode: 'merge'`
-        // rather than `'replace'` so it can never double the text if the
-        // composer did keep its own restore, and never overwrites something
-        // typed in the meantime — it is the same merge the recovery uses.
+        // bubble back and rethrow, so the composer restores the draft and the
+        // uploads that produced it (`planFailedSendRecovery`) — which it can,
+        // because it never left its slot. See the layout note below.
         setSentPreview(null);
-        setPrefill({ text, id: Date.now(), files, mode: 'merge' });
         throw error;
       }
     },
@@ -319,43 +300,40 @@ export function ProjectHome({
       <SidebarToggle placement="floating" />
       <AccessRequestsBell count={pendingAccessCount} to={accessRequestsTo} />
 
-      {sentPreview ? (
-        /* The same swap `InstantSessionShell` makes at its own first send: the
-           hero column becomes a thread, and the composer leaves the middle of
-           the page to dock under it. Doing it HERE, at the keypress, is what
-           makes the create round trip invisible — the surface the navigation
-           lands on is already the surface on screen, so the bubble does not
-           travel from the page's centre to its top a second later.
+      {/* ONE layout, in both states, and that is the constraint — not a
+          preference. The composer owns its upload registry
+          (`usePromptAttachments`, composer.tsx), its editor, its draft and its
+          submit latch, so moving it to a different parent unmounts it and
+          takes all of that with it. A version of this screen that docked the
+          composer under the thread did exactly that, and the e2e journey
+          caught what it cost: after a refused send the tray showed its three
+          tiles and the text was back, but the handles behind them were gone,
+          so the next Send silently did nothing
+          (`captureAttachmentSubmission` no longer recognised the ids).
 
-           `SESSION_TRANSCRIPT_CLASS` is the shared definition, imported rather
-           than approximated: same max width, same asymmetric gutter, same top
-           padding as the shell and the real chat — see `session-body.tsx` on
-           what a third copy of those numbers costs. */
-        <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-          <div className="scrollbar-hide relative min-h-0 flex-1 overflow-y-auto">
-            <div className={SESSION_TRANSCRIPT_CLASS}>
-              {/* The instant shell's own component, given the same inputs it
-                  gives itself, so the bubble and its waiting row are identical
-                  across the navigation — see `OptimisticTurn`'s doc comment on
-                  why there is exactly one of these in the codebase.
-                  `deferPreview`: there is no sandbox yet, so a file mention has
-                  no path to resolve and must render as a static chip. */}
-              <OptimisticTurn
-                text={buildOptimisticPromptTextWithUploads(sentPreview.text, sentPreview.files)}
-                attachments={sentPreview.files ? sentAttachmentsOf(sentPreview.files) : undefined}
-                deferPreview
-              />
-            </div>
-          </div>
-          {composerEl}
-        </div>
-      ) : (
-        <ProjectHomeWelcomeBody
-          projectId={projectId}
-          onPickSuggestion={applySuggestion}
-          composer={composerEl}
-        />
-      )}
+          So the turn takes the HEADING's slot and everything else holds still.
+          The bubble travels once, at the navigation, when the instant shell
+          re-paints it at the top of a real thread. */}
+      <ProjectHomeWelcomeBody
+        projectId={projectId}
+        onPickSuggestion={applySuggestion}
+        sentTurn={
+          sentPreview ? (
+            // The instant shell's own component, given the same inputs it gives
+            // itself, so the bubble is identical across the navigation — see
+            // `OptimisticTurn`'s doc comment on why there is exactly one of
+            // these in the codebase. `deferPreview`: there is no sandbox yet,
+            // so a file mention has no path to resolve and renders as a static
+            // chip.
+            <OptimisticTurn
+              text={buildOptimisticPromptTextWithUploads(sentPreview.text, sentPreview.files)}
+              attachments={sentPreview.files ? sentAttachmentsOf(sentPreview.files) : undefined}
+              deferPreview
+            />
+          ) : undefined
+        }
+        composer={composerEl}
+      />
     </div>
   );
 }
