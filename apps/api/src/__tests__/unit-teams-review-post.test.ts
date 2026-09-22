@@ -28,7 +28,7 @@ const ITEM = {
   title: 'Delete the staging bucket',
   summary: 'Removes 400 objects',
   risk: 'high',
-} as never;
+};
 
 const load = async () => await import('../channels/teams/review');
 
@@ -56,7 +56,7 @@ describe('postTeamsReviewCard', () => {
   test('the live card does NOT close as "Task complete" — a decision is pending', async () => {
     const { postTeamsReviewCard } = await load();
 
-    await postTeamsReviewCard(SESSION_ID, ITEM);
+    await postTeamsReviewCard(SESSION_ID, ITEM as never);
 
     expect(finalized).toEqual([{ title: 'Waiting for your decision', unfinished: true }]);
   });
@@ -68,7 +68,7 @@ describe('postTeamsReviewCard', () => {
     cardOk = false;
     const { postTeamsReviewCard } = await load();
 
-    const res = await postTeamsReviewCard(SESSION_ID, ITEM);
+    const res = await postTeamsReviewCard(SESSION_ID, ITEM as never);
 
     expect(res.ok).toBe(true);
     expect(texts[0]).toContain('Delete the staging bucket');
@@ -82,7 +82,7 @@ describe('postTeamsReviewCard', () => {
     textOk = false;
     const { postTeamsReviewCard } = await load();
 
-    const res = await postTeamsReviewCard(SESSION_ID, ITEM);
+    const res = await postTeamsReviewCard(SESSION_ID, ITEM as never);
 
     expect(res.ok).toBe(false);
     expect(res.error).toContain('Failed to post the review card');
@@ -101,7 +101,7 @@ describe('postTeamsReviewCard', () => {
     turn = null;
     const { postTeamsReviewCard } = await load();
 
-    const res = await postTeamsReviewCard(SESSION_ID, ITEM);
+    const res = await postTeamsReviewCard(SESSION_ID, ITEM as never);
 
     expect(res.ok).toBe(false);
     expect(finalized).toEqual([]);
