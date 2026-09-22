@@ -7,7 +7,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ComposerChatInput, type ComposerOptions } from '@/features/session/composer-chat-input';
 import type { DraftScope } from '@/features/session/composer/draft/composer-draft';
+import { OptimisticTurn } from '@/features/session/optimistic-turn';
+import { SESSION_TRANSCRIPT_CLASS } from '@/features/session/session-body';
 import type { AttachedFile } from '@/features/session/session-chat-input';
+import {
+  buildOptimisticPromptTextWithUploads,
+  sentAttachmentsOf,
+} from '@/features/session/uploaded-file-refs';
 import { SidebarToggle } from '@/features/workspace/project-layout/sidebar-toggle';
 import { PROJECT_ACTIONS } from '@/lib/project-actions';
 import { useProjectCan } from '@/lib/use-project-can';
@@ -64,7 +70,31 @@ export function ProjectHome({
 
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
-  const [prefill, setPrefill] = useState<{ text: string; id: number } | null>(null);
+  const [prefill, setPrefill] = useState<{
+    text: string;
+    id: number;
+    files?: AttachedFile[];
+    mode?: 'replace' | 'merge';
+  } | null>(null);
+  /**
+   * The message this screen has just sent, painted here until the navigation
+   * lands — the "fake send" every other composer in the app already does.
+   *
+   * Send on this screen used to leave the sentence sitting in a locked box
+   * behind a spinner for the whole create round trip, because the composer was
+   * told not to clear (`clearOnSend={false}`, for the attachment previews the
+   * instant shell needs). Measured on localhost: 1165ms from click to the
+   * session route, `POST .../sessions` alone 908ms, all of it with nothing on
+   * screen to say the message had gone anywhere.
+   *
+   * Cleared only by a REFUSED send. A successful one navigates this component
+   * away, and the instant shell re-paints this same `OptimisticTurn` on the
+   * other side (`useFirstPromptPreviewStore`), so the bubble never blinks out.
+   */
+  const [sentPreview, setSentPreview] = useState<{
+    text: string;
+    files: AttachedFile[] | undefined;
+  } | null>(null);
 
   // The sandbox TEMPLATE catalog, not live sandbox health (that is
   // `useSandboxHealth`, its own key and its own polling). Changed only by this
@@ -123,25 +153,50 @@ export function ProjectHome({
     : null;
 
   const handleSend = useCallback(
-    (
+    async (
       text: string,
       files: AttachedFile[] | undefined,
       options: ComposerOptions,
       attachments?: AttachmentSubmission,
     ) => {
-      return onSend(
-        text,
-        files,
-        {
-          ...options,
-          ...(metaSelected
-            ? { sandbox_slug: META_SANDBOX_SLUG }
-            : selectedSlug
-              ? { sandbox_slug: selectedSlug }
-              : {}),
-        },
-        attachments,
-      );
+      // BEFORE the host runs, in the same tick as the composer's own clear, so
+      // the message is on screen from the frame the box empties.
+      setSentPreview({ text, files });
+      try {
+        await onSend(
+          text,
+          files,
+          {
+            ...options,
+            ...(metaSelected
+              ? { sandbox_slug: META_SANDBOX_SLUG }
+              : selectedSlug
+                ? { sandbox_slug: selectedSlug }
+                : {}),
+          },
+          attachments,
+        );
+      } catch (error) {
+        // Refused: no session was created and nothing navigated. Take the
+        // bubble back and put the message where it came from.
+        //
+        // The composer's own `planFailedSendRecovery` cannot do it here. This
+        // screen swaps layouts on send — the composer stops being a child of
+        // the hero column and becomes a sibling of the thread — so React
+        // UNMOUNTS and remounts it across the swap, and the document that
+        // recovery writes into the old editor dies with it. Measured: a refused
+        // create left the box empty and the sentence gone, which is worse than
+        // the frozen box this whole change replaces.
+        //
+        // A prefill survives because it is THIS component's state, handed to
+        // whichever composer instance is mounted when it lands. `mode: 'merge'`
+        // rather than `'replace'` so it can never double the text if the
+        // composer did keep its own restore, and never overwrites something
+        // typed in the meantime — it is the same merge the recovery uses.
+        setSentPreview(null);
+        setPrefill({ text, id: Date.now(), files, mode: 'merge' });
+        throw error;
+      }
     },
     [metaSelected, selectedSlug, onSend],
   );
@@ -212,51 +267,95 @@ export function ProjectHome({
         }
       : undefined;
 
+  const composerEl = (
+    <ComposerChatInput
+      onSend={handleSend}
+      onCommand={handleCommand}
+      projectId={projectId}
+      draftScope={draftScope}
+      // `busy` here means "create in flight" — spinner in the send slot,
+      // input locked. NOT isBusy (that renders agent-running stop-button
+      // semantics, which leave the composer with no button at all here).
+      isSending={busy}
+      disabled={busy}
+      // Clear the box, revoke nothing (`composer-reset.ts`). The text
+      // has to LEAVE the composer at the keypress — it used to sit there
+      // locked under the spinner for the whole create round trip, which
+      // reads as a send that did not happen — while the local object URLs
+      // behind any attachments stay alive, because the instant shell
+      // draws its previews from those same URLs after the navigation.
+      // The sentence itself is not lost by clearing: it is already in
+      // this send's closure, in the durable `create.pending_prompt` row,
+      // and in `sentPreview` above; a refused send puts it back in the
+      // editor (`planFailedSendRecovery`).
+      clearOnSend="text-only"
+      autoFocus
+      // A hero composer floating mid-page has no column for a second
+      // rail to align to, so the attach/agent/context controls ride on
+      // the toolbar itself, ahead of the model selector. The session
+      // page keeps the default row beneath the card.
+      underbarPlacement="inline"
+      // Hero composer mid-page: the `/` menu opens BELOW the card, into
+      // the empty lower half, instead of shoving the heading up.
+      slashMenuPlacement="below"
+      placeholder={tI18nHardcoded.raw(
+        'autoFeaturesCoWorkerProjectLayoutProjectHomeJsxAttrPlaceholder115e6c2d',
+      )}
+      prefill={prefill}
+      onAgentSelectionChange={setSelectedAgent}
+      toolbarSlot={metaSelected ? <MetaRuntimeIndicator /> : null}
+      sandboxSlot={sandboxSlot}
+    />
+  );
+
   return (
     <div className="bg-background relative flex min-h-0 flex-1 flex-col overflow-hidden lg:px-4.5">
-      <ProjectHomeWallpaper />
+      {/* Gone the moment a message is sent, exactly as the instant session
+          shell drops its own copy at the same instant: a thread sits on a solid
+          background, and leaving the dots up here would make the navigation a
+          visible dotted → plain swap under a bubble that otherwise does not
+          move. */}
+      {!sentPreview && <ProjectHomeWallpaper />}
       <SidebarToggle placement="floating" />
       <AccessRequestsBell count={pendingAccessCount} to={accessRequestsTo} />
 
-      <ProjectHomeWelcomeBody
-        projectId={projectId}
-        onPickSuggestion={applySuggestion}
-        composer={
-          <ComposerChatInput
-            onSend={handleSend}
-            onCommand={handleCommand}
-            projectId={projectId}
-            draftScope={draftScope}
-            // `busy` here means "create in flight" — spinner in the send slot,
-            // input locked. NOT isBusy (that renders agent-running stop-button
-            // semantics, which leave the composer with no button at all here).
-            isSending={busy}
-            disabled={busy}
-            // The home composer navigates to the new session on send — don't
-            // clear it first (that only flashes an empty box before the route
-            // swaps, and would drop the text on a gated send). The message
-            // rides across via the start-stash and reappears as the instant
-            // shell's optimistic turn.
-            clearOnSend={false}
-            autoFocus
-            // A hero composer floating mid-page has no column for a second
-            // rail to align to, so the attach/agent/context controls ride on
-            // the toolbar itself, ahead of the model selector. The session
-            // page keeps the default row beneath the card.
-            underbarPlacement="inline"
-            // Hero composer mid-page: the `/` menu opens BELOW the card, into
-            // the empty lower half, instead of shoving the heading up.
-            slashMenuPlacement="below"
-            placeholder={tI18nHardcoded.raw(
-              'autoFeaturesCoWorkerProjectLayoutProjectHomeJsxAttrPlaceholder115e6c2d',
-            )}
-            prefill={prefill}
-            onAgentSelectionChange={setSelectedAgent}
-            toolbarSlot={metaSelected ? <MetaRuntimeIndicator /> : null}
-            sandboxSlot={sandboxSlot}
-          />
-        }
-      />
+      {sentPreview ? (
+        /* The same swap `InstantSessionShell` makes at its own first send: the
+           hero column becomes a thread, and the composer leaves the middle of
+           the page to dock under it. Doing it HERE, at the keypress, is what
+           makes the create round trip invisible — the surface the navigation
+           lands on is already the surface on screen, so the bubble does not
+           travel from the page's centre to its top a second later.
+
+           `SESSION_TRANSCRIPT_CLASS` is the shared definition, imported rather
+           than approximated: same max width, same asymmetric gutter, same top
+           padding as the shell and the real chat — see `session-body.tsx` on
+           what a third copy of those numbers costs. */
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+          <div className="scrollbar-hide relative min-h-0 flex-1 overflow-y-auto">
+            <div className={SESSION_TRANSCRIPT_CLASS}>
+              {/* The instant shell's own component, given the same inputs it
+                  gives itself, so the bubble and its waiting row are identical
+                  across the navigation — see `OptimisticTurn`'s doc comment on
+                  why there is exactly one of these in the codebase.
+                  `deferPreview`: there is no sandbox yet, so a file mention has
+                  no path to resolve and must render as a static chip. */}
+              <OptimisticTurn
+                text={buildOptimisticPromptTextWithUploads(sentPreview.text, sentPreview.files)}
+                attachments={sentPreview.files ? sentAttachmentsOf(sentPreview.files) : undefined}
+                deferPreview
+              />
+            </div>
+          </div>
+          {composerEl}
+        </div>
+      ) : (
+        <ProjectHomeWelcomeBody
+          projectId={projectId}
+          onPickSuggestion={applySuggestion}
+          composer={composerEl}
+        />
+      )}
     </div>
   );
 }
