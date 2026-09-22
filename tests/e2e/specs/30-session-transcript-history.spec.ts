@@ -11,6 +11,7 @@ import {
   installBrowserSessionDirect,
   signIn,
 } from '../helpers/session-auth';
+import { waitForSessionReady } from '../helpers/session-ready';
 import {
   dismissOnboarding,
   dismissWelcomeCard,
@@ -411,18 +412,10 @@ if (process.env.E2E_ENABLE_SDK_ONLY_SESSION === '1') {
             textOf(message).trim().replace(/^`([^`\n]+)`$/, '$1') === text,
         );
       await test.step('a real cloud sandbox reaches ready', async () => {
-        await expect
-          .poll(
-            async () => {
-              const result = await api<{
-                stage: string;
-                sandbox?: { status?: string };
-              }>(auth.access_token, 'POST', `${sessionPath}/start?wait_ms=8000`, {});
-              return `${result.stage}:${result.sandbox?.status}`;
-            },
-            { timeout: 12 * 60_000, intervals: [2_000, 5_000] },
-          )
-          .toBe('ready:active');
+        await waitForSessionReady(api, auth.access_token, projectId, sessionId, {
+          timeoutMs: 12 * 60_000,
+          intervalMs: 5_000,
+        });
       });
       page.on('request', (request) => {
         if (request.method() === 'POST' && request.url().endsWith(`${sessionPath}/prompts`)) {
