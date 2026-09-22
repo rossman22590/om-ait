@@ -347,8 +347,14 @@ export function buildQuestionCard(questions: TeamsQuestion[]): Record<string, un
 
   const single = list.length === 1 ? list[0] : null;
   const options = single?.options?.filter((o) => o?.label?.trim()) ?? [];
-  const oneTap =
-    single && options.length > 0 && options.length <= MAX_BUTTON_OPTIONS && !single.multiple && !single.custom;
+  // `custom` deliberately does NOT force the form. The relay route defaults it
+  // to true (`obj.custom === false ? false : true`, projects/routes/r4.ts), so
+  // gating on it would turn every plain yes/no into a form with a Submit
+  // button. In Teams the free-text path already exists and always has: the
+  // card says "or just reply in the chat", and a reply arrives as the next
+  // turn. The form's own "(other)" box is for when the user is in a form
+  // anyway.
+  const oneTap = single && options.length > 0 && options.length <= MAX_BUTTON_OPTIONS && !single.multiple;
 
   if (oneTap && single) {
     const body: CardElement[] = [...headerBlock('💬', single.header?.trim() || 'A quick question')];

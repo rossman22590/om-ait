@@ -87,11 +87,27 @@ describe('buildQuestionCard — anything the buttons cannot express becomes a fo
   });
 
   test('`custom` adds a box for an answer that is not on the list', () => {
+    // Only once a form is warranted for some OTHER reason — here, two questions.
     const card = buildQuestionCard([
       { question: 'Which model?', custom: true, options: [{ label: 'a' }, { label: 'b' }] },
+      { question: 'Proceed?', options: [{ label: 'Yes' }] },
     ]) as unknown as Card;
     expect(ofType(card, 'Input.Text')).toHaveLength(1);
-    expect(card.actions?.[0].data.fieldIds).toBe('Which model?,Which model? (other)');
+    expect(card.actions?.[0].data.fieldIds).toBe('Which model?,Which model? (other),Proceed?');
+  });
+
+  test('`custom` ALONE never forces a form — the relay route defaults it to true', () => {
+    // projects/routes/r4.ts:3839 is `obj.custom === false ? false : true`, so
+    // nearly every question arrives with custom set. Gating the one-tap card on
+    // it would turn every plain yes/no into a form with a Submit button.
+    // Replying in chat is already the free-text path, and the card says so.
+    const card = buildQuestionCard([
+      { question: 'Deploy to prod?', options: [{ label: 'Yes' }, { label: 'No' }], multiple: false, custom: true },
+    ]) as unknown as Card;
+    expect(card.actions?.map((a) => a.title)).toEqual(['Yes', 'No']);
+    expect(ofType(card, 'Input.Text')).toHaveLength(0);
+    expect(ofType(card, 'Input.ChoiceSet')).toHaveLength(0);
+    expect(allText(card)).toContain('or just reply in the chat');
   });
 
   test('a question with no options becomes a text box, not a dead card', () => {
