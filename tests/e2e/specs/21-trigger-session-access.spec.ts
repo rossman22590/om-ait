@@ -58,7 +58,7 @@ async function openTriggerAccess(page: Page, projectId: string) {
   return { panel, section, sheet };
 }
 
-test.describe('21 — Trigger-created session access UI', () => {
+test.describe('21 — Session access UI', () => {
   test('defaults private and saves selected members and groups through the trigger PATCH', async ({
     page,
   }) => {
@@ -265,6 +265,135 @@ test.describe('21 — Trigger-created session access UI', () => {
       }
       if (project) await project.dispose().catch(() => {});
       await deleteAuthUser(user.id, authOptions).catch(() => {});
+    }
+  });
+  test('an owner lets admins open every session; the admin then finds a member\'s private session', async ({
+    page,
+    browser,
+  }) => {
+    test.skip(!databaseUrl, 'KE2E_DATABASE_URL is required');
+    test.setTimeout(240_000);
+
+    const runId = Date.now().toString(36);
+    const ownerEmail = `e2e-oversight-owner-${runId}@example.test`;
+    const adminEmail = `e2e-oversight-admin-${runId}@example.test`;
+    const owner = await createAuthUser(ownerEmail, authOptions);
+    const admin = await createAuthUser(adminEmail, authOptions);
+    const ownerSession = await signIn(ownerEmail, authOptions);
+    const adminSession = await signIn(adminEmail, authOptions);
+    const env = loadEnv();
+    let accountId: string | null = null;
+    let project: ManifestProject | null = null;
+    const pageErrors: string[] = [];
+    page.on('pageerror', (error) => pageErrors.push(error.message));
+
+    try {
+      // Personal accounts are lazy; a token mint creates the owner's.
+      await api(ownerSession.access_token, 'POST', '/accounts/tokens', { name: `e2e-${runId}` }, 201);
+      const team = await api<{ account_id: string }>(
+        ownerSession.access_token,
+        'POST',
+        '/accounts',
+        { name: `Oversight ${runId}` },
+        201,
+      );
+      accountId = team.account_id;
+      await api(
+        ownerSession.access_token,
+        'POST',
+        `/accounts/${accountId}/members`,
+        { email: adminEmail, role: 'admin' },
+        201,
+      );
+      project = await createManifestProject({
+        api,
+        accessToken: ownerSession.access_token,
+        accountId,
+        userId: owner.id,
+        name: `Oversight UI ${runId}`,
+        databaseUrl: databaseUrl!,
+      });
+      const projectId = project.id;
+      // Another member's private session: invisible to the admin by default.
+      await createDatabaseSession(env, {
+        projectId,
+        accountId,
+        userId: crypto.randomUUID(),
+        visibility: 'private',
+        metadata: { custom_name: 'Member private chat' },
+      });
+
+      // Owner: the switch is off, then on through the confirm dialog.
+      await installBrowserSessionDirect(page, ownerSession, `/projects/${projectId}`, authOptions);
+      await selectAccountForUi(page, accountId);
+      await page.goto(`/projects/${projectId}/sessions?accountId=${accountId}&accountTab=settings`, {
+        waitUntil: 'domcontentloaded',
+      });
+      await dismissOnboarding(page);
+      const toggle = page.getByRole('switch', { name: 'Admins can open every session' });
+      await expect(toggle).toBeEnabled();
+      await expect(toggle).toHaveAttribute('aria-checked', 'false');
+      await toggle.click();
+      const confirm = page.getByRole('alertdialog');
+      await expect(confirm.getByText('Let admins open every session?')).toBeVisible();
+      const patchRequest = page.waitForRequest(
+        (request) =>
+          request.method() === 'PATCH' &&
+          request.url().endsWith(`/v1/accounts/${accountId}/iam/session-oversight`),
+      );
+      const patchResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'PATCH' &&
+          response.url().endsWith(`/v1/accounts/${accountId}/iam/session-oversight`),
+      );
+      await confirm.getByRole('button', { name: 'Turn on', exact: true }).click();
+      expect((await patchRequest).postDataJSON()).toEqual({ enabled: true });
+      expect((await patchResponse).status()).toBe(200);
+      await expect(toggle).toHaveAttribute('aria-checked', 'true');
+      const readback = await api<{ enabled: boolean }>(
+        ownerSession.access_token,
+        'GET',
+        `/accounts/${accountId}/iam/session-oversight`,
+      );
+      expect(readback.enabled).toBe(true);
+
+      // Admin: the switch is read-only for them, and the Sessions page now
+      // lists the member's private session.
+      const adminContext = await browser.newContext();
+      const adminPage = await adminContext.newPage();
+      try {
+        await installBrowserSessionDirect(adminPage, adminSession, `/projects/${projectId}`, authOptions);
+        await selectAccountForUi(adminPage, accountId);
+        const inventory = adminPage.waitForResponse(
+          (response) =>
+            response.url().includes(`/v1/projects/${projectId}/sessions`) &&
+            response.url().includes('scope=project'),
+        );
+        await adminPage.goto(`/projects/${projectId}/sessions`, { waitUntil: 'domcontentloaded' });
+        await dismissOnboarding(adminPage);
+        expect((await inventory).status()).toBe(200);
+        await expect(adminPage.getByLabel('Show details for Member private chat')).toBeVisible();
+
+        await adminPage.goto(
+          `/projects/${projectId}/sessions?accountId=${accountId}&accountTab=settings`,
+          { waitUntil: 'domcontentloaded' },
+        );
+        const adminToggle = adminPage.getByRole('switch', { name: 'Admins can open every session' });
+        await expect(adminToggle).toBeDisabled();
+        await expect(adminPage.getByText('Only an account owner can change this.')).toBeVisible();
+      } finally {
+        await adminContext.close();
+      }
+      expect(pageErrors).toEqual([]);
+    } finally {
+      if (project) await project.dispose().catch(() => {});
+      if (accountId) {
+        await api(ownerSession.access_token, 'DELETE', '/billing/account/delete-immediately', {
+          account_id: accountId,
+        }).catch(() => {});
+      }
+      await deleteAuthUser(owner.id, authOptions).catch(() => {});
+      await deleteAuthUser(admin.id, authOptions).catch(() => {});
     }
   });
 });
