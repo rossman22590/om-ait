@@ -148,16 +148,50 @@ jobs:
               docker rm -f $ids || true
             fi
           done
+          # Wait by ATTEMPTING A BIND, not by reading `ss`.
+          #
+          # `ss -ltn` lists LISTENING sockets only, so it reports a port free
+          # while `bind()` still returns EADDRINUSE — a closing docker-proxy is
+          # not "listening". Measured on run 35709… (browser-2): `supabase
+          # stop` returned at 09:19:26.710, this loop cleared all four ports by
+          # 09:19:27.448 (0.74s, first poll), and `supabase start` still failed
+          # to bind 54324 twenty-five seconds later. The check was passing on a
+          # port that was not free. Two earlier fixes rested on that reading.
+          #
+          # A bind cannot disagree with Docker, because it is what Docker does.
+          # SO_REUSEADDR is set to match docker-proxy: without it a lingering
+          # TIME_WAIT would make this wait the full 30s on a healthy runner.
           for port in 54321 54322 54323 54324; do
             for _ in $(seq 1 30); do
-              ss -ltnH "sport = :$port" | grep -q . || break
+              python3 -c "
+import socket, sys
+s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+try:
+    s.bind(('0.0.0.0', int(sys.argv[1])))
+except OSError:
+    sys.exit(1)
+finally:
+    s.close()
+" "$port" && break
               sleep 1
             done
-            if ss -ltnH "sport = :$port" | grep -q .; then
-              echo "::warning::port $port is still bound after the sweep; supabase start may fail"
+            python3 -c "
+import socket, sys
+s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+try:
+    s.bind(('0.0.0.0', int(sys.argv[1])))
+except OSError:
+    sys.exit(1)
+finally:
+    s.close()
+" "$port" || {
+              echo "::warning::port $port still refuses a bind after the sweep; supabase start will fail"
               ss -ltnp "sport = :$port" || true
+              ss -tanH "sport = :$port" || true
               docker ps -a --filter "publish=$port" --format '{{.ID}} {{.Image}} {{.Status}} {{.Ports}}' || true
-            fi
+            }
           done
       - name: Prestart Supabase for the browser lane
         # The root runner reuses a running local Supabase. Starting it before the
