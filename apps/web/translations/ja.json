@@ -19501,5 +19501,42 @@
     "invitesTitle": "招待されています",
     "invitesDescription": "チームが共有したプロジェクトに参加するか、自分のプロジェクトを作成してください。",
     "createProjectInstead": "代わりに新しいプロジェクトを作成"
+  },
+  "projectSelector": {
+    "welcome": "Kortix へようこそ",
+    "welcomeBack": "おかえりなさい",
+    "descriptionNew": "最初のプロジェクトを作成するか、チームが共有したプロジェクトに参加してください。",
+    "descriptionReturning": "プロジェクトを開くか、新しく作成してください。",
+    "signedInAs": "{email} でサインイン中",
+    "createTitle": "新しいプロジェクトを作成",
+    "createBody": "プロジェクトにはエージェント、ファイル、セッションが入ります。",
+    "orContinue": "または既存のプロジェクトを開く",
+    "invitations": "招待",
+    "sentTo": "{email} 宛て",
+    "invitedBy": "{email} からの招待",
+    "join": "参加",
+    "joinError": "参加できませんでした。もう一度お試しください。",
+    "unnamedWorkspace": "ワークスペース",
+    "search": "プロジェクトを検索",
+    "noMatches": "「{query}」に一致するプロジェクトはありません。",
+    "projectCount": "{count, plural, other {# 件のプロジェクト}}",
+    "role": {
+      "owner": "オーナー",
+      "admin": "管理者",
+      "member": "メンバー"
+    },
+    "openedAgo": "{time}に開いた",
+    "neverOpened": "まだ開いていません",
+    "showAll": "すべて表示（{count}）",
+    "showFewer": "表示を減らす",
+    "createIn": "プロジェクトを作成",
+    "emptyCreatable": "このワークスペースにはまだプロジェクトがありません。",
+    "emptyMember": "ここではまだ共有されたプロジェクトがありません。オーナーまたは管理者にアクセスを依頼してください。",
+    "failed": "これらのプロジェクトを読み込めませんでした。",
+    "retry": "再試行",
+    "noAccessTitle": "まだプロジェクトがありません",
+    "noAccessBody": "オーナーまたは管理者に {email} の招待を依頼してください。",
+    "loadErrorTitle": "プロジェクトを読み込めませんでした",
+    "loadErrorBody": "接続を確認して、もう一度お試しください。"
   }
 }

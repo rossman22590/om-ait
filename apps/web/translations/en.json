@@ -19501,5 +19501,42 @@
     "invitesTitle": "You're invited",
     "invitesDescription": "Join a project your team shared, or start your own.",
     "createProjectInstead": "Create a new project instead"
+  },
+  "projectSelector": {
+    "welcome": "Welcome to Kortix",
+    "welcomeBack": "Welcome back",
+    "descriptionNew": "Create your first project, or join one your team shared.",
+    "descriptionReturning": "Open a project, or create a new one.",
+    "signedInAs": "Signed in as {email}",
+    "createTitle": "Create a new project",
+    "createBody": "A project holds your agents, files and sessions.",
+    "orContinue": "or open an existing project",
+    "invitations": "Invitations",
+    "sentTo": "Sent to {email}",
+    "invitedBy": "Invited by {email}",
+    "join": "Join",
+    "joinError": "Could not join. Try again.",
+    "unnamedWorkspace": "Workspace",
+    "search": "Find a project",
+    "noMatches": "No project matches “{query}”.",
+    "projectCount": "{count, plural, one {# project} other {# projects}}",
+    "role": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member"
+    },
+    "openedAgo": "Opened {time}",
+    "neverOpened": "Not opened yet",
+    "showAll": "Show all {count}",
+    "showFewer": "Show fewer",
+    "createIn": "Create a project",
+    "emptyCreatable": "No projects in this workspace yet.",
+    "emptyMember": "No projects are shared with you here yet. Ask an owner or admin for access.",
+    "failed": "Could not load these projects.",
+    "retry": "Retry",
+    "noAccessTitle": "No projects yet",
+    "noAccessBody": "Ask an owner or admin to invite {email}.",
+    "loadErrorTitle": "Could not load your projects",
+    "loadErrorBody": "Check your connection and try again."
   }
 }

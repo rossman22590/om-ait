@@ -19501,5 +19501,42 @@
     "invitesTitle": "Pozvani ste",
     "invitesDescription": "Pridružite se projektu vašeg tima ili napravite svoj.",
     "createProjectInstead": "Umesto toga napravite novi projekat"
+  },
+  "projectSelector": {
+    "welcome": "Dobro došli u Kortix",
+    "welcomeBack": "Dobro došli nazad",
+    "descriptionNew": "Napravite svoj prvi projekat ili se pridružite onom koji je vaš tim podelio.",
+    "descriptionReturning": "Otvorite projekat ili napravite novi.",
+    "signedInAs": "Prijavljeni ste kao {email}",
+    "createTitle": "Napravi novi projekat",
+    "createBody": "Projekat sadrži vaše agente, fajlove i sesije.",
+    "orContinue": "ili otvorite postojeći projekat",
+    "invitations": "Pozivnice",
+    "sentTo": "Poslato na {email}",
+    "invitedBy": "Pozvao/la {email}",
+    "join": "Pridruži se",
+    "joinError": "Pridruživanje nije uspelo. Pokušajte ponovo.",
+    "unnamedWorkspace": "Radni prostor",
+    "search": "Pronađi projekat",
+    "noMatches": "Nijedan projekat ne odgovara „{query}“.",
+    "projectCount": "{count, plural, one {# projekat} few {# projekta} other {# projekata}}",
+    "role": {
+      "owner": "Vlasnik",
+      "admin": "Admin",
+      "member": "Član"
+    },
+    "openedAgo": "Otvoreno {time}",
+    "neverOpened": "Još nije otvoren",
+    "showAll": "Prikaži sve ({count})",
+    "showFewer": "Prikaži manje",
+    "createIn": "Napravi projekat",
+    "emptyCreatable": "U ovom radnom prostoru još nema projekata.",
+    "emptyMember": "Ovde još nijedan projekat nije podeljen sa vama. Zatražite pristup od vlasnika ili admina.",
+    "failed": "Ovi projekti nisu mogli da se učitaju.",
+    "retry": "Pokušaj ponovo",
+    "noAccessTitle": "Još nema projekata",
+    "noAccessBody": "Zamolite vlasnika ili admina da pozove {email}.",
+    "loadErrorTitle": "Vaši projekti nisu mogli da se učitaju",
+    "loadErrorBody": "Proverite vezu i pokušajte ponovo."
   }
 }
