@@ -272,7 +272,15 @@ export function buildSlackTurnEnv(teamId: string, event: SlackEvent): Record<str
 //     thread untouched. This is what stops an orphaned "On it…" from lingering.
 export async function finalizeTurn(
   handle: LiveTurn,
-  opts: { answer?: string; error?: string; blocks?: unknown[]; title?: string },
+  opts: {
+    answer?: string;
+    error?: string;
+    blocks?: unknown[];
+    title?: string;
+    /** The step in flight neither finished nor failed — e.g. the turn ended by
+     *  ASKING. `complete` would claim work that never happened. */
+    unfinished?: boolean;
+  },
 ): Promise<void> {
   if (handle.finalized) return;
   handle.finalized = true;
@@ -299,7 +307,7 @@ export async function finalizeTurn(
       // A plan message exists — close out the last in-progress step and render the
       // final plan (+ answer/error) into it via chat.update.
       const last = handle.steps[handle.steps.length - 1];
-      if (last && last.status === 'in_progress') last.status = opts.error ? 'error' : 'complete';
+      if (last && last.status === 'in_progress') last.status = opts.unfinished ? 'pending' : opts.error ? 'error' : 'complete';
       rendered = await updateBlocks(
         handle.token,
         handle.channel,
