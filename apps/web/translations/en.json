@@ -1441,7 +1441,8 @@
         "status": "Status",
         "activity": "Activity",
         "source": "Source",
-        "none": "None"
+        "none": "None",
+        "owner": "Owner"
       },
       "order": {
         "activity": "Last activity",
@@ -1475,7 +1476,19 @@
       "sourceValue": {
         "mine": "My chats",
         "shared": "Shared"
-      }
+      },
+      "owner": "Owner",
+      "access": "Access",
+      "ownerValue": {
+        "you": "You",
+        "unknown": "Unknown owner"
+      },
+      "accessValue": {
+        "private": "Only the owner",
+        "restricted": "Specific people",
+        "project": "Whole project"
+      },
+      "ownerAccess": "{owner} · {access}"
     },
     "loadingMore": "Loading…",
     "loadMoreSessions": "Load more sessions"

@@ -1441,7 +1441,8 @@
         "status": "ステータス",
         "activity": "アクティビティ",
         "source": "ソース",
-        "none": "なし"
+        "none": "なし",
+        "owner": "オーナー"
       },
       "order": {
         "activity": "最終アクティビティ",
@@ -1475,7 +1476,19 @@
       "sourceValue": {
         "mine": "自分のチャット",
         "shared": "共有"
-      }
+      },
+      "owner": "オーナー",
+      "access": "アクセス",
+      "ownerValue": {
+        "you": "あなた",
+        "unknown": "不明なオーナー"
+      },
+      "accessValue": {
+        "private": "オーナーのみ",
+        "restricted": "特定のユーザー",
+        "project": "プロジェクト全体"
+      },
+      "ownerAccess": "{owner} · {access}"
     },
     "loadingMore": "読み込み中…",
     "loadMoreSessions": "セッションをさらに読み込む"

@@ -1441,7 +1441,8 @@
         "status": "状态",
         "activity": "活动",
         "source": "来源",
-        "none": "不分组"
+        "none": "不分组",
+        "owner": "所有者"
       },
       "order": {
         "activity": "最近活动",
@@ -1475,7 +1476,19 @@
       "sourceValue": {
         "mine": "我的聊天",
         "shared": "共享"
-      }
+      },
+      "owner": "所有者",
+      "access": "访问权限",
+      "ownerValue": {
+        "you": "你",
+        "unknown": "未知所有者"
+      },
+      "accessValue": {
+        "private": "仅所有者",
+        "restricted": "特定成员",
+        "project": "整个项目"
+      },
+      "ownerAccess": "{owner} · {access}"
     },
     "loadingMore": "加载中…",
     "loadMoreSessions": "加载更多会话"

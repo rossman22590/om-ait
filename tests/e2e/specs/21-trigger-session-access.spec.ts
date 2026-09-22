@@ -322,6 +322,14 @@ test.describe('21 — Session access UI', () => {
         visibility: 'private',
         metadata: { custom_name: 'Member private chat' },
       });
+      // A whole-project session, so the Access facet has two kinds to offer.
+      await createDatabaseSession(env, {
+        projectId,
+        accountId,
+        userId: crypto.randomUUID(),
+        visibility: 'project',
+        metadata: { custom_name: 'Team roadmap' },
+      });
 
       // Owner: the switch is off, then on through the confirm dialog.
       await installBrowserSessionDirect(page, ownerSession, `/projects/${projectId}`, authOptions);
@@ -372,7 +380,39 @@ test.describe('21 — Session access UI', () => {
         await adminPage.goto(`/projects/${projectId}/sessions`, { waitUntil: 'domcontentloaded' });
         await dismissOnboarding(adminPage);
         expect((await inventory).status()).toBe(200);
-        await expect(adminPage.getByLabel('Show details for Member private chat')).toBeVisible();
+        const memberRow = adminPage.getByLabel('Show details for Member private chat');
+        await expect(memberRow).toBeVisible();
+        // The row names its owner and its access; the admin's is not theirs.
+        await expect(memberRow.locator('[data-session-owner]')).toHaveAttribute(
+          'aria-label',
+          /· Only the owner$/,
+        );
+        await expect(memberRow.locator('[data-session-shared="true"]')).toHaveCount(1);
+
+        // The Access facet narrows the inventory: whole-project sessions only.
+        await adminPage
+          .getByRole('button', { name: 'Session view options', exact: true })
+          .last()
+          .click();
+        // Drive the submenu from the keyboard. The toolbar sits at the right
+        // edge, so at 1280px the submenu flips LEFT of the menu, and a pointer
+        // jump from its trigger leaves Radix's grace area and closes it (the
+        // pre-existing Status submenu does the same). Keys are deterministic.
+        await adminPage.getByRole('menuitem', { name: /^Access/ }).hover();
+        await adminPage.keyboard.press('ArrowRight');
+        const wholeProject = adminPage.getByRole('menuitemcheckbox', { name: /Whole project/ });
+        await expect(wholeProject).toBeVisible();
+        for (let step = 0; step < 4; step += 1) {
+          if (await wholeProject.evaluate((el) => el === document.activeElement)) break;
+          await adminPage.keyboard.press('ArrowDown');
+        }
+        await expect(wholeProject).toBeFocused();
+        await adminPage.keyboard.press('Space');
+        await expect(wholeProject).toHaveAttribute('aria-checked', 'true');
+        await adminPage.keyboard.press('Escape');
+        await adminPage.keyboard.press('Escape');
+        await expect(adminPage.getByLabel('Show details for Team roadmap')).toBeVisible();
+        await expect(memberRow).toHaveCount(0);
 
         await adminPage.goto(
           `/projects/${projectId}/sessions?accountId=${accountId}&accountTab=settings`,

@@ -1441,7 +1441,8 @@
         "status": "Stato",
         "activity": "Attività",
         "source": "Origine",
-        "none": "Nessuno"
+        "none": "Nessuno",
+        "owner": "Proprietario"
       },
       "order": {
         "activity": "Ultima attività",
@@ -1475,7 +1476,19 @@
       "sourceValue": {
         "mine": "Le mie chat",
         "shared": "Condivise"
-      }
+      },
+      "owner": "Proprietario",
+      "access": "Accesso",
+      "ownerValue": {
+        "you": "Tu",
+        "unknown": "Proprietario sconosciuto"
+      },
+      "accessValue": {
+        "private": "Solo il proprietario",
+        "restricted": "Persone specifiche",
+        "project": "Tutto il progetto"
+      },
+      "ownerAccess": "{owner} · {access}"
     },
     "loadingMore": "Caricamento…",
     "loadMoreSessions": "Carica altre sessioni"

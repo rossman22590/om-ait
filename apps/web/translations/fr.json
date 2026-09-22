@@ -1441,7 +1441,8 @@
         "status": "État",
         "activity": "Activité",
         "source": "Source",
-        "none": "Aucun"
+        "none": "Aucun",
+        "owner": "Propriétaire"
       },
       "order": {
         "activity": "Dernière activité",
@@ -1475,7 +1476,19 @@
       "sourceValue": {
         "mine": "Mes discussions",
         "shared": "Partagées"
-      }
+      },
+      "owner": "Propriétaire",
+      "access": "Accès",
+      "ownerValue": {
+        "you": "Vous",
+        "unknown": "Propriétaire inconnu"
+      },
+      "accessValue": {
+        "private": "Propriétaire uniquement",
+        "restricted": "Personnes choisies",
+        "project": "Tout le projet"
+      },
+      "ownerAccess": "{owner} · {access}"
     },
     "loadingMore": "Chargement…",
     "loadMoreSessions": "Charger plus de sessions"

@@ -1441,7 +1441,8 @@
         "status": "Статус",
         "activity": "Активност",
         "source": "Извор",
-        "none": "Без груписања"
+        "none": "Без груписања",
+        "owner": "Власник"
       },
       "order": {
         "activity": "Последња активност",
@@ -1475,7 +1476,19 @@
       "sourceValue": {
         "mine": "Моја ћаскања",
         "shared": "Дељено"
-      }
+      },
+      "owner": "Власник",
+      "access": "Приступ",
+      "ownerValue": {
+        "you": "Ти",
+        "unknown": "Непознат власник"
+      },
+      "accessValue": {
+        "private": "Само власник",
+        "restricted": "Одређене особе",
+        "project": "Цео пројекат"
+      },
+      "ownerAccess": "{owner} · {access}"
     },
     "loadingMore": "Учитавање…",
     "loadMoreSessions": "Учитајте још сесија"
