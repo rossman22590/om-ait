@@ -7,6 +7,11 @@ import {
 } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
+import {
+  createServer,
+  request as requestHttp,
+  type Server as HttpServer,
+} from "node:http";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -47,6 +52,63 @@ async function launchDesktop(baseURL: string, profile: string) {
     )
     .toBe(true);
   return app;
+}
+
+async function startBasicProxy() {
+  const expected = `Basic ${Buffer.from("proxy-user:proxy-pass").toString("base64")}`;
+  let challenges = 0;
+  let authorizedRequests = 0;
+  const server: HttpServer = createServer((incoming, outgoing) => {
+    if (incoming.headers["proxy-authorization"] !== expected) {
+      challenges += 1;
+      outgoing.writeHead(407, {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Proxy-Authenticate": 'Basic realm="Kortix proxy test"',
+      });
+      outgoing.end("Proxy authentication required");
+      return;
+    }
+
+    authorizedRequests += 1;
+    let target: URL;
+    try {
+      target = new URL(incoming.url || "");
+    } catch {
+      outgoing.writeHead(400).end("Invalid proxy target");
+      return;
+    }
+    const headers = { ...incoming.headers };
+    delete headers["proxy-authorization"];
+    delete headers["proxy-connection"];
+    const upstream = requestHttp(
+      target,
+      { method: incoming.method, headers },
+      (response) => {
+        outgoing.writeHead(response.statusCode || 502, response.headers);
+        response.pipe(outgoing);
+      },
+    );
+    upstream.on("error", (error) => {
+      if (!outgoing.headersSent) outgoing.writeHead(502);
+      outgoing.end(String(error.message || error));
+    });
+    incoming.pipe(upstream);
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve());
+  });
+  const address = server.address();
+  if (!address || typeof address === "string")
+    throw new Error("Basic proxy did not bind to a TCP port");
+  return {
+    url: `http://127.0.0.1:${address.port}`,
+    stats: () => ({ challenges, authorizedRequests }),
+    close: () =>
+      new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      ),
+  };
 }
 
 const test = browserTest.extend<{ desktopApp: ElectronApplication | null }>({
@@ -976,6 +1038,103 @@ for (const runtime of runtimes) {
 
 const nativeBrowserTest =
   process.env.E2E_DESKTOP_NATIVE === "1" ? browserTest : null;
+nativeBrowserTest?.(
+  "27 — desktop parity authenticates an HTTP proxy and recovers from cancel",
+  async ({ baseURL }) => {
+    browserTest.setTimeout(240_000);
+    const profile = await mkdtemp(join(tmpdir(), "kortix-desktop-proxy-"));
+    const firstProxy = await startBasicProxy();
+    const secondProxy = await startBasicProxy();
+    let app: ElectronApplication | undefined;
+    try {
+      app = await launchDesktop(baseURL!, profile);
+      const main = app
+        .windows()
+        .find((window) => window.url().startsWith(baseURL!));
+      if (!main) throw new Error("native main window not found");
+      const routeThrough = async (proxyRules: string) => {
+        await app!.evaluate(async ({ session }, rules) => {
+          await session.defaultSession.setProxy({
+            proxyRules: rules,
+            proxyBypassRules: "<-loopback>",
+          });
+        }, proxyRules);
+        // The proxy challenge aborts the in-flight navigation while Electron
+        // opens its modal sign-in window. That abort is the expected signal.
+        await main.reload().catch(() => null);
+      };
+      const authWindow = async () => {
+        await expect
+          .poll(
+            () =>
+              app!
+                .windows()
+                .find((window) => window.url().endsWith("/basic-auth.html"))
+                ?.url() || "",
+            { timeout: 60_000 },
+          )
+          .toContain("basic-auth.html");
+        const window = app!
+          .windows()
+          .find((candidate) => candidate.url().endsWith("/basic-auth.html"));
+        if (!window) throw new Error("proxy sign-in window not found");
+        return window;
+      };
+
+      await routeThrough(firstProxy.url);
+      let auth = await authWindow();
+      await expect(auth.locator("#host")).toHaveText("127.0.0.1");
+      await auth.locator("#user").fill("proxy-user");
+      await auth.locator("#pass").fill("wrong");
+      await auth.locator("#submit").click();
+
+      auth = await authWindow();
+      await expect(auth.locator("#error")).toContainText(
+        "rejected the username or password",
+      );
+      await auth.locator("#user").fill("proxy-user");
+      await auth.locator("#pass").fill("proxy-pass");
+      await auth.locator("#submit").click();
+      await expect
+        .poll(
+          () =>
+            app!.windows().some((window) => window.url().startsWith(baseURL!)),
+          { timeout: 120_000 },
+        )
+        .toBe(true);
+      expect(firstProxy.stats().challenges).toBeGreaterThanOrEqual(2);
+      expect(firstProxy.stats().authorizedRequests).toBeGreaterThan(0);
+
+      await routeThrough(secondProxy.url);
+      auth = await authWindow();
+      await auth.locator("#cancel").click();
+      await expect
+        .poll(
+          () =>
+            app!
+              .windows()
+              .find((window) => window.url().endsWith("/instance-chooser.html"))
+              ?.url() || "",
+          { timeout: 60_000 },
+        )
+        .toContain("instance-chooser.html");
+      const chooser = app
+        .windows()
+        .find((window) => window.url().endsWith("/instance-chooser.html"));
+      if (!chooser) throw new Error("proxy recovery window not found");
+      await expect(chooser.locator("#title")).toContainText("Can’t reach");
+      await expect(chooser.locator("#primary")).toHaveText("Try Again");
+      await expect(chooser.locator("#error")).toContainText(
+        "Proxy sign-in for 127.0.0.1 was cancelled",
+      );
+    } finally {
+      await app?.close();
+      await Promise.allSettled([firstProxy.close(), secondProxy.close()]);
+      await rm(profile, { recursive: true, force: true });
+    }
+  },
+);
+
 nativeBrowserTest?.(
   "27 — desktop parity persists window state across a process relaunch",
   async ({ baseURL }) => {

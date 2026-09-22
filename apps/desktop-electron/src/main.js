@@ -796,9 +796,17 @@ async function answerBasicChallenge(authInfo, callback) {
   });
   if (!result) {
     // Cancel → the request fails and the page renders the 401 body, same as
-    // Chrome. A reload re-challenges.
+    // Chrome. For an app-origin challenge, a reload re-challenges. A proxy
+    // response is not a navigation failure, so surface the shell's existing
+    // Retry / change-instance screen instead of leaving the raw 407 page open.
     lastBasicAnswers.delete(key);
     callback();
+    if (authInfo.isProxy) {
+      void changeInstance(
+        'unreachable',
+        `Proxy sign-in for ${host} was cancelled. Try again to reconnect.`,
+      );
+    }
     return;
   }
   rememberBasicCredential(key, { user: result.user, password: result.password }, result.remember);
