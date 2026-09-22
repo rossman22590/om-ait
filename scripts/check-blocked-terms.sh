@@ -44,11 +44,12 @@ load_terms() {
   elif [ -x "$here/node_modules/.bin/dotenvx" ]; then dx="$here/node_modules/.bin/dotenvx"
   elif [ -x "$primary/node_modules/.bin/dotenvx" ]; then dx="$primary/node_modules/.bin/dotenvx"
   else return 1; fi
-  # This checkout's list first, then the primary's: a worktree cut before a
-  # term was added (or before the guard existed) still gets the current list.
-  for env in "$top/apps/api/.env" "$primary/apps/api/.env"; do
+  # This checkout's list first, then the one beside the hooks, then the
+  # primary's: a worktree cut before a term was added (or before the guard
+  # existed) still gets the current list.
+  for env in "$top/apps/api/.env" "$here/apps/api/.env" "$primary/apps/api/.env"; do
     [ -f "$env" ] || continue
-    for keys in "$top/apps/api/.env.keys" "$primary/apps/api/.env.keys"; do
+    for keys in "$top/apps/api/.env.keys" "$here/apps/api/.env.keys" "$primary/apps/api/.env.keys"; do
       [ -f "$keys" ] || continue
       out=$($dx get BLOCKED_COMMIT_TERMS -f "$env" -fk "$keys" 2>/dev/null) && [ -n "$out" ] && { printf '%s' "$out"; return 0; }
     done
