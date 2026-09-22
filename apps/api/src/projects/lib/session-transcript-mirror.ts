@@ -213,6 +213,34 @@ export function headCompleteAfterCapture(input: {
 }
 
 /**
+ * What ONE capture reads, and what it may prune.
+ *
+ * `fullHistory` decides whether the read paginates the whole session or takes
+ * one bounded page. It is the project flag — EXCEPT when the caller asks for a
+ * tail, which manual stop does: stop AWAITS this read before powering the box
+ * off, and a full-history read there is a 60s pagination with three retries
+ * standing between the user and a Stop button. The full copy is already
+ * maintained at every turn end (fire-and-forget, box definitionally up), so
+ * the only gap a stop can close is the turn that just ended — one page.
+ *
+ * `retainHistory` is NEVER derived from `fullHistory`. If it were, a forced
+ * tail would re-enable pruning and a single Stop would cut a retained history
+ * down to {@link MIRROR_MAX_MESSAGES} — the feature deleting exactly what it
+ * exists to keep. It follows the flag and the project's sticky marker, both of
+ * which say "this project keeps its history", whatever this one read does.
+ */
+export function captureScope(input: {
+  flagEnabled: boolean;
+  everRetained: boolean;
+  requested?: 'auto' | 'tail';
+}): { fullHistory: boolean; retainHistory: boolean } {
+  return {
+    fullHistory: input.requested === 'tail' ? false : input.flagEnabled,
+    retainHistory: input.flagEnabled || input.everRetained,
+  };
+}
+
+/**
  * A `before` cursor that names no message this session has mirrored.
  *
  * Distinct from "no mirror" on purpose. Serving the newest window instead

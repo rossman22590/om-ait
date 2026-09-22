@@ -34,6 +34,7 @@ import { resolveSessionOpencodeEndpoint } from '../session-lifecycle/engine';
 import {
   MIRROR_CAPTURE_LIMIT,
   MIRROR_MAX_MESSAGES,
+  captureScope,
   headCompleteAfterCapture,
   mirrorRowsFromOpencodePayload,
 } from './session-transcript-mirror';
@@ -45,6 +46,14 @@ export interface CaptureResult {
   captured: number;
   head_complete: boolean;
   pruned: number;
+}
+
+export interface CaptureOptions {
+  /**
+   * `tail` forces ONE bounded page, whatever the project flag says. For a
+   * caller the user is waiting on — see `captureScope`.
+   */
+  scope?: 'auto' | 'tail';
 }
 
 export interface CaptureDeps {
@@ -157,6 +166,7 @@ function timeField(info: Record<string, unknown>, key: 'created' | 'completed'):
 async function captureSessionTranscript(
   sessionId: string,
   deps: CaptureDeps = liveCaptureDeps,
+  options?: CaptureOptions,
 ): Promise<CaptureResult | null> {
   try {
     const [session] = await db
@@ -171,9 +181,11 @@ async function captureSessionTranscript(
       .limit(1);
     if (!session) return null;
 
-    const fullHistory = resolveFeatureFlag(session.metadata, 'session_transcript_history');
-    const retainHistory =
-      fullHistory || session.metadata?.session_transcript_history_retained === true;
+    const { fullHistory, retainHistory } = captureScope({
+      flagEnabled: resolveFeatureFlag(session.metadata, 'session_transcript_history'),
+      everRetained: session.metadata?.session_transcript_history_retained === true,
+      requested: options?.scope,
+    });
     const capture = async (): Promise<CaptureResult | null> => {
       const startedAt = new Date();
       const read = await deps.readMessages(sessionId, {
@@ -235,7 +247,7 @@ async function captureSessionTranscript(
             },
           });
 
-        if (fullHistory && !session.metadata?.session_transcript_history_retained) {
+        if (retainHistory && !session.metadata?.session_transcript_history_retained) {
           await tx
             .update(projects)
             .set({
@@ -354,9 +366,10 @@ const captures = new Map<string, Promise<CaptureResult | null>>();
 export function captureSessionTranscriptMirror(
   sessionId: string,
   deps: CaptureDeps = liveCaptureDeps,
+  options?: CaptureOptions,
 ): Promise<CaptureResult | null> {
   const previous = captures.get(sessionId) ?? Promise.resolve(null);
-  const pending = previous.then(() => captureSessionTranscript(sessionId, deps));
+  const pending = previous.then(() => captureSessionTranscript(sessionId, deps, options));
   captures.set(sessionId, pending);
   void pending.finally(() => {
     if (captures.get(sessionId) === pending) captures.delete(sessionId);
