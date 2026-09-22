@@ -622,6 +622,26 @@ for (const runtime of runtimes) {
           );
           expect(denied).toContain("Unauthorized IPC sender");
 
+          await clickNativeMenu("kx-file-new-session");
+          await expect(page).toHaveURL(
+            new RegExp(`/projects/${project.id}(?:\\?|$)`),
+            { timeout: 60_000 },
+          );
+          await page.goto(
+            `${baseURL}/projects/${project.id}/customize/connectors`,
+          );
+          await expect(
+            page.getByRole("tab", { name: "Connected", exact: true }),
+          ).toBeVisible();
+          await expect
+            .poll(() => menuState("kx-file-close-tab"))
+            .toMatchObject({ enabled: true });
+          await clickNativeMenu("kx-file-close-tab");
+          await expect(page).toHaveURL(
+            new RegExp(`/projects/${project.id}(?:\\?|$)`),
+            { timeout: 60_000 },
+          );
+
           await page.goto(`${baseURL}/settings`);
           await expect(page).toHaveURL(/\/settings(?:\?|$)/, {
             timeout: 60_000,
@@ -662,6 +682,33 @@ for (const runtime of runtimes) {
             );
           expect(await unloadAllowed(1)).toBe(false);
           expect(await unloadAllowed(0)).toBe(true);
+
+          await project.dispose();
+          project = undefined;
+          await desktopApp.evaluate(
+            async ({ BrowserWindow, Menu, dialog }, itemId) => {
+              const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
+              const window = BrowserWindow.getAllWindows()[0];
+              const original = dialog.showMessageBoxSync;
+              dialog.showMessageBoxSync = () => 0;
+              try {
+                await new Promise<void>((resolve, reject) => {
+                  const timeout = setTimeout(
+                    () => reject(new Error("Native Close Window timed out")),
+                    10_000,
+                  );
+                  window.once("closed", () => {
+                    clearTimeout(timeout);
+                    resolve();
+                  });
+                  item?.click(undefined, window, undefined);
+                });
+              } finally {
+                dialog.showMessageBoxSync = original;
+              }
+            },
+            "kx-file-close-window",
+          );
         }
       } finally {
         await project?.dispose();

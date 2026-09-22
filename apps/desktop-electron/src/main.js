@@ -903,6 +903,7 @@ function buildMenu() {
           click: () => sendDesktopCommand('close-tab'),
         },
         {
+          id: 'kx-file-close-window',
           label: 'Close Window',
           accelerator: 'CommandOrControl+Shift+W',
           click: () => mainWindow?.close(),
