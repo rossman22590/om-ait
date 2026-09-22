@@ -46,21 +46,76 @@ test("legacy capture reads one page and does not claim it is complete", async ()
   expect(result.headComplete).toBe(false);
 });
 
-test("a repeated cursor fails instead of looping or claiming a complete history", async () => {
-  await expect(
-    readTranscriptPages(async () => page([1], "same"), true),
-  ).rejects.toThrow("cursor");
+test("a repeated cursor stops the walk instead of looping, and claims nothing", async () => {
+  // CHANGED EXPECTATION, deliberately. This used to assert a throw. The two
+  // things it protects — do not loop, do not claim a complete history — are
+  // both still asserted here; discarding the pages that landed was never one
+  // of them, and a repeat can only be seen with a page already in hand.
+  let reads = 0;
+  const result = await readTranscriptPages(async () => {
+    reads += 1;
+    if (reads > 5) throw new Error("looped");
+    return page([1], "same");
+  }, true);
+  expect(reads).toBe(2);
+  expect(result.headComplete).toBe(false);
+  expect(result.complete).toBe(false);
+  expect(result.rows.map((row) => row.info.id)).toEqual(["msg_1"]);
 });
 
-test("a failed older page rejects the capture instead of replacing good stored history", async () => {
+test("a repeated cursor AFTER pages landed keeps them instead of looping", async () => {
   let reads = 0;
+  const result = await readTranscriptPages(async () => {
+    reads += 1;
+    return reads === 1 ? page([3, 4], "older") : page([1, 2], "older");
+  }, true);
+  expect(result.rows.map((row) => row.info.id)).toEqual([
+    "msg_1",
+    "msg_2",
+    "msg_3",
+    "msg_4",
+  ]);
+  expect(result.complete).toBe(false);
+});
+
+test("a failed older page keeps the pages that were read and says it is incomplete", async () => {
+  // CHANGED EXPECTATION, deliberately. This used to reject, because the writer
+  // deleted the session's whole history before re-inserting: a partial read
+  // there would have REPLACED good stored history with a fragment. The writer
+  // now merges and only deletes ids a COMPLETE read proves are gone, so a
+  // partial read can no longer destroy anything — and throwing away the pages
+  // it did read means the newest turn stays unmirrored until some later
+  // capture happens to succeed.
+  let reads = 0;
+  const result = await readTranscriptPages(
+    async () =>
+      ++reads === 1 ? page([2], "older") : new Response("", { status: 503 }),
+    true,
+  );
+  expect(result.rows.map((row) => row.info.id)).toEqual(["msg_2"]);
+  expect(result.complete).toBe(false);
+  expect(result.headComplete).toBe(false);
+});
+
+test("a FIRST page that fails still throws — nothing was read at all", async () => {
+  // Distinct from the case above: no page landed, so there is nothing to keep
+  // and the box is simply unreachable. That is what the capture retries.
   await expect(
-    readTranscriptPages(
-      async () =>
-        ++reads === 1 ? page([2], "older") : new Response("", { status: 503 }),
-      true,
-    ),
+    readTranscriptPages(async () => new Response("", { status: 503 }), true),
   ).rejects.toThrow("503");
+});
+
+test("a complete walk reports complete", async () => {
+  const pages = [page([3, 4], "older"), page([1, 2])];
+  const result = await readTranscriptPages(async () => pages.shift()!, true);
+  expect(result.complete).toBe(true);
+  expect(result.headComplete).toBe(true);
+});
+
+test("a bounded tail read is not complete — it never tried to reach the head", async () => {
+  const result = await readTranscriptPages(async () => page([5, 6], "older"), false);
+  expect(result.complete).toBe(false);
+  expect(result.headComplete).toBe(false);
 });
 
 test("overlapping pages preserve the newest copy of each message once", async () => {

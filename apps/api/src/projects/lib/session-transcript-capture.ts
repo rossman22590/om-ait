@@ -68,6 +68,10 @@ export interface CaptureDeps {
     opencodeSessionId: string;
     payload: unknown;
     headComplete?: boolean;
+    /** Every page the walk meant to read was read. Only then is the payload
+     *  the complete truth about which messages exist — see
+     *  `TranscriptPageWalk.complete`. */
+    complete?: boolean;
   } | null>;
 }
 
@@ -144,6 +148,7 @@ const liveCaptureDeps: CaptureDeps = {
       opencodeSessionId: resolved.opencodeSessionId,
       payload: result.rows,
       headComplete: result.headComplete,
+      complete: result.complete,
     };
   },
 };
@@ -195,8 +200,21 @@ async function captureSessionTranscript(
       });
       if (!read) return null;
       const rows = mirrorRowsFromOpencodePayload(read.payload);
-      if (rows.length === 0 && !fullHistory) return null;
-      if (fullHistory && read.headComplete !== true) return null;
+      /*
+        A COMPLETE read is the only one that may speak for what does NOT exist.
+        It reached the session's first message and every page in between, so an
+        id it lacks is genuinely gone; that is what licenses the delete below
+        and the `head_complete` claim.
+
+        A PARTIAL full-history read — a page failed, or the daemon stopped
+        advancing its cursor — used to be thrown away whole. That cost the
+        newest turn its mirror until some later capture happened to succeed,
+        and it was only ever necessary because the writer deleted the whole
+        history before re-inserting. The writer merges now, so what was read is
+        merged and nothing is claimed about the rest.
+      */
+      const completeRead = fullHistory && read.complete === true && read.headComplete === true;
+      if (rows.length === 0 && !completeRead) return null;
 
       const now = startedAt;
       return await db.transaction(async (tx) => {
@@ -219,12 +237,17 @@ async function captureSessionTranscript(
         if (!current || (current.root && current.root !== read.opencodeSessionId)) return null;
         const rootChanged =
           !!existing?.opencodeSessionId && existing.opencodeSessionId !== read.opencodeSessionId;
+        const previousHeadComplete = rootChanged ? false : (existing?.headComplete ?? false);
         const headComplete = fullHistory
-          ? read.headComplete === true
+          ? // Never `headCompleteAfterCapture` on a multi-page walk: its rule
+            // is "fewer rows than the page limit means the box had no more",
+            // which is only true of a SINGLE bounded page. A partial walk that
+            // died after 30 rows would read as complete under it.
+            completeRead || previousHeadComplete
           : headCompleteAfterCapture({
               returned: rows.length,
               limit: MIRROR_CAPTURE_LIMIT,
-              previous: rootChanged ? false : (existing?.headComplete ?? false),
+              previous: previousHeadComplete,
             });
         await tx
           .insert(sessionTranscriptMirrors)
@@ -262,14 +285,16 @@ async function captureSessionTranscript(
           await tx
             .delete(sessionTranscriptMessages)
             .where(eq(sessionTranscriptMessages.sessionId, sessionId));
-        } else if (fullHistory) {
+        } else if (completeRead) {
           /*
             DELETE WHAT DISAPPEARED, not everything.
 
-            A full-history read IS the complete truth, so a stored id missing
+            A COMPLETE full-history read IS the truth, so a stored id missing
             from it is genuinely gone upstream (a rewind) and must go. That is
             all this needs to remove — but it used to delete the session's
-            entire history and rewrite it, every single turn.
+            entire history and rewrite it, every single turn. A partial read
+            reaches neither branch: it cannot tell "gone" from "not read that
+            far".
 
             Measured on a real PostgreSQL, one turn end on a session already
             holding 242 messages: 244 inserts + 242 deletes for the two
