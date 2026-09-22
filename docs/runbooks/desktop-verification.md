@@ -24,9 +24,11 @@ change the user's signed-in profile.
 The journey covers the workspace selector, settings navigation, agent section
 navigation, and connector filters. It asserts rendered row geometry, titlebar
 clearance, selected state, route changes, and a successful connector request.
-Native mode checks zoom, full document navigation, and rejection of native
-commands from a second window. The configured frontend origin owns the native
-bridge; embedded content and other windows must not inherit that permission.
+Native mode checks zoom through keyboard and menu commands, full screen, the
+sidebar hover peek, opener-preserving OAuth popups, native theme sync, full
+document navigation, and rejection of native commands from a second window.
+The configured frontend origin owns the native bridge. Embedded content and
+other windows must not inherit that permission.
 Screenshots and failures appear under `tests/test-results/artifacts`.
 Electron unit tests run in the existing packages lane through
 `pnpm --filter @kortix/desktop-electron test`.
@@ -42,6 +44,12 @@ Electron unit tests run in the existing packages lane through
 - Use Go → Back, Forward and Home, their shortcuts, and the mouse side buttons.
 - Check light and dark themes at 1440 × 900 and 720 × 480 window sizes.
 - Check default zoom, zoom in, zoom out, and reset. Native controls do not zoom.
+- Relaunch after moving, resizing, and maximizing the window. The window must
+  restore on a connected display and stay at least 720 × 480.
+- Trigger an unsaved-change guard. Close, Reload, Home, Back, and Quit must show
+  the native Leave/Stay confirmation.
+- Leave only an OAuth popup open, then click the Dock icon. The main window must
+  reappear.
 - Use Tab, arrows, Enter, and Escape. Focus must remain visible and reachable.
 - Scroll long lists. Check empty, loading, error, and disabled states where relevant.
 - Repeat on the PR preview with Electron's Frontend URL set to the preview origin.
@@ -75,6 +83,10 @@ verify the deployed SHA and repeat the affected interaction against dev.
 `apps/desktop-electron/src/window-chrome.js` owns native traffic-light geometry.
 The CSS variables in `apps/web/src/app/globals.css` mirror it. The focused
 `desktop-titlebar.test.ts` tests keep these values synchronized.
+
+macOS uses AppKit's traffic lights through Electron's `titleBarStyle: hidden`.
+Windows and Linux use the OS-native frame. The web layer does not draw minimize,
+maximize, or close controls on any platform.
 
 `.kx-titlebar-tabs` marks only the top capability bar. Product tab lists keep
 the shared Tabs component's layout. `.kx-titlebar-spacer` reserves native chrome

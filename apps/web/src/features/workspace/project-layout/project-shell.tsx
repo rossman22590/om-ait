@@ -8,6 +8,7 @@ import { Suspense, lazy, useCallback, useEffect, useLayoutEffect } from 'react';
 import { TITLEBAR_CONTROL_CLASS } from '@/components/desktop/titlebar-control';
 import { PersonalOnboardingWelcome } from '@/components/projects/personal-onboarding-welcome';
 import { ProjectOnboardingWizard } from '@/components/projects/project-onboarding-wizard';
+import { ProjectPendingScreen } from '@/components/projects/project-pending-screen';
 import { Button } from '@/components/ui/button';
 import Hint from '@/components/ui/hint';
 import { SidebarEdgePeek, useSidebar } from '@/components/ui/sidebar';
@@ -74,7 +75,7 @@ export function ProjectShell({ projectId, initialSidebarOpen, children }: Projec
   const resolvedSidebarOpen = initialSidebarOpen ?? readSidebarOpenCookie();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, bootstrapError } = useAuth();
 
   const { data: projectDetail, error: projectDetailError } = useQuery({
     queryKey: qk.project.detail(projectId),
@@ -223,6 +224,8 @@ export function ProjectShell({ projectId, initialSidebarOpen, children }: Projec
   useLayoutEffect(() => {
     if (activeSessionId) openTab(projectId, activeSessionId);
   }, [projectId, activeSessionId, openTab]);
+
+  if (bootstrapError) return <ProjectPendingScreen />;
 
   if (authLoading || !user) {
     return <div className="bg-background min-h-screen" />;

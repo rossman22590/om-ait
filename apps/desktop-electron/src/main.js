@@ -15,34 +15,22 @@
 // `window.__TAURI__` bridge shape (see preload.js) so the web app's desktop
 // bridge (apps/web/src/lib/desktop.ts) runs UNCHANGED.
 
-const {
-  app,
-  BrowserWindow,
-  Menu,
-  dialog,
-  shell,
-  ipcMain,
-  nativeTheme,
-  safeStorage,
-} = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, ipcMain, nativeTheme, safeStorage } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { setupAutoUpdates, checkForUpdatesInteractive } = require('./updater');
 const basicAuth = require('./basic-auth');
+const { needsMainWindow, shouldAllowPreventedUnload } = require('./lifecycle-rules');
+const { menuContextForUrl } = require('./menu-state');
+const { decidePopup, isAllowedPopupNavigation } = require('./popup-rules');
+const { backgroundForTheme, normalizeTheme } = require('./theme-state');
+const { restoreWindowState } = require('./window-state');
 const { openInstanceChooser, focusInstanceChooser } = require('./instance-chooser');
 const { explainNetError, hostOf, normalizeInstanceUrl } = require('./instance-rules');
 const { createInstanceStore } = require('./instance-store');
 const { isConfiguredAppUrl, isTrustedAppSender } = require('./native-sender');
-const {
-  NAVIGATION_SHORTCUTS,
-  historyTarget,
-  isAppPath,
-} = require('./navigation');
-const {
-  DESKTOP_CHROME_JS,
-  configureNativeWindowControls,
-  macTrafficLightPosition,
-} = require('./window-chrome');
+const { NAVIGATION_SHORTCUTS, historyTarget, isAppPath } = require('./navigation');
+const { DESKTOP_CHROME_JS, configureNativeWindowControls, macTrafficLightPosition } = require('./window-chrome');
 
 // Name comes from the bundle (productName): "Kortix" for prod, "Kortix Dev" for
 // dev builds. Per-name data dir so dev + prod coexist without sharing a session,
@@ -53,8 +41,7 @@ const {
 // runs, side-by-side test sessions) without touching the real one.
 app.setPath(
   'userData',
-  process.env.KORTIX_DESKTOP_USER_DATA ||
-    path.join(app.getPath('appData'), `${app.getName()} Desktop`),
+  process.env.KORTIX_DESKTOP_USER_DATA || path.join(app.getPath('appData'), `${app.getName()} Desktop`),
 );
 
 /* ─── Config ──────────────────────────────────────────────────────────── */
@@ -75,10 +62,7 @@ function bakedDefaultUrl() {
 //   2. value baked into package.json at build time (CI dev vs prod)
 //   3. production kortix.com
 // A runtime KORTIX_DESKTOP_URL / the Frontend-URL menu still overrides this.
-const DEFAULT_URL =
-  process.env.KORTIX_DESKTOP_DEFAULT_URL ||
-  bakedDefaultUrl() ||
-  'https://kortix.com/projects';
+const DEFAULT_URL = process.env.KORTIX_DESKTOP_DEFAULT_URL || bakedDefaultUrl() || 'https://kortix.com/projects';
 
 const PRESET_PROD = 'https://kortix.com/projects';
 const PRESET_DEV = 'https://dev.kortix.com/projects';
@@ -88,11 +72,6 @@ const URL_SCHEME = 'kortix';
 // Matches DESKTOP_UA_TOKEN in apps/web/src/lib/desktop.ts and the
 // KortixDesktop check in apps/web/src/middleware.ts.
 const UA_TOKEN = 'KortixDesktop/0.1.0';
-
-// Opaque dark background so the first paint (before the remote app loads) is
-// the brand surface, never a white flash. Tauri sets this on <body> via CSS;
-// here it's the native window background.
-const BG_COLOR = '#0a0a0a';
 
 // net::ERR_ABORTED — a navigation replaced by another one, not a failure.
 const ERR_ABORTED = -3;
@@ -124,46 +103,61 @@ function isAppOriginChallenge(authInfo) {
     return false;
   }
   if (!authInfo.host || authInfo.host !== target.hostname) return false;
-  const targetPort = Number(
-    target.port || (target.protocol === 'https:' ? 443 : 80),
-  );
+  const targetPort = Number(target.port || (target.protocol === 'https:' ? 443 : 80));
   return !authInfo.port || authInfo.port === targetPort;
 }
 
-/* ─── Maximized-state persistence ─────────────────────────────────────────
-   Like Tauri we persist ONLY the maximized flag — never size/position, which
-   have stranded windows off-screen or restored a tiny window. Every launch
-   re-centers at ~85% of the primary display (clamped). */
+/* ─── Window and shell-state persistence ───────────────────────────────── */
 
 function statePath() {
   return path.join(app.getPath('userData'), 'window_state.json');
 }
 
-function readMaximized() {
+function readWindowState() {
   try {
-    return !!JSON.parse(fs.readFileSync(statePath(), 'utf8')).maximized;
+    return JSON.parse(fs.readFileSync(statePath(), 'utf8'));
   } catch {
-    return false;
+    return null;
   }
 }
 
-function writeMaximized(maximized) {
+function writeWindowState(state) {
   try {
-    fs.writeFileSync(statePath(), JSON.stringify({ maximized }), 'utf8');
+    fs.writeFileSync(statePath(), JSON.stringify(state), 'utf8');
   } catch {
     /* best-effort */
   }
+}
+
+function themePath() {
+  return path.join(app.getPath('userData'), 'theme.json');
+}
+
+function readTheme() {
+  try {
+    return normalizeTheme(JSON.parse(fs.readFileSync(themePath(), 'utf8')).theme);
+  } catch {
+    return 'system';
+  }
+}
+
+function writeTheme(theme) {
+  try {
+    fs.writeFileSync(themePath(), JSON.stringify({ theme: normalizeTheme(theme) }), 'utf8');
+  } catch {
+    /* best-effort */
+  }
+}
+
+function currentBackgroundColor() {
+  return backgroundForTheme(nativeTheme.themeSource, nativeTheme.shouldUseDarkColors);
 }
 
 /* ─── Navigation gate (port of lib.rs) ───────────────────────────────────── */
 
 // Sandbox previews / tunnels — user content, always in-app.
 function isPreviewHost(host) {
-  return (
-    host.endsWith('.localhost') ||
-    host === 'kortix.cloud' ||
-    host.endsWith('.kortix.cloud')
-  );
+  return host.endsWith('.localhost') || host === 'kortix.cloud' || host.endsWith('.kortix.cloud');
 }
 
 // Product + auth route prefixes live in navigation.js (APP_PATH_PREFIXES); its
@@ -229,9 +223,7 @@ function translateDeepLink(deepLink) {
 function handleDeepLink(deepLink) {
   const target = translateDeepLink(deepLink);
   if (!target || !mainWindow) return;
-  mainWindow.webContents.executeJavaScript(
-    `window.location.replace(${JSON.stringify(target)})`,
-  );
+  mainWindow.webContents.executeJavaScript(`window.location.replace(${JSON.stringify(target)})`);
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.focus();
 }
@@ -259,20 +251,23 @@ function launchSize() {
   }
 }
 
+function restoredWindowState() {
+  const { screen } = require('electron');
+  return restoreWindowState(readWindowState(), screen.getAllDisplays(), screen.getPrimaryDisplay(), launchSize());
+}
+
 function createSplash() {
   // Same size + center as the main window so swapping splash → app is seamless
   // (no jump in size or position, no white flash).
-  const { width, height } = launchSize();
+  const { bounds } = restoredWindowState();
   splashWindow = new BrowserWindow({
-    width,
-    height,
+    ...bounds,
     frame: false,
     resizable: false,
     movable: false,
     show: true,
-    center: true,
     hasShadow: true,
-    backgroundColor: BG_COLOR,
+    backgroundColor: currentBackgroundColor(),
     title: 'Kortix',
     webPreferences: { contextIsolation: true, nodeIntegration: false },
   });
@@ -290,7 +285,7 @@ function dismissSplash() {
 }
 
 function createMainWindow() {
-  const { width, height } = launchSize();
+  const restored = restoredWindowState();
 
   const isMac = process.platform === 'darwin';
 
@@ -299,13 +294,11 @@ function createMainWindow() {
   const winIcon = path.join(__dirname, '..', 'build', 'icon.png');
 
   mainWindow = new BrowserWindow({
-    width,
-    height,
+    ...restored.bounds,
     minWidth: 720,
     minHeight: 480,
-    center: true,
     show: false, // revealed once the remote app finishes loading (splash covers the gap)
-    backgroundColor: BG_COLOR,
+    backgroundColor: currentBackgroundColor(),
     title: 'Kortix',
     // macOS: hidden title bar, traffic lights centered in the title-bar band
     // the web app's first row shares with them. The band height and every
@@ -339,7 +332,9 @@ function createMainWindow() {
   mainWindow.webContents.once('did-finish-load', () => {
     dismissSplash();
     if (!mainWindow) return;
-    if (readMaximized()) mainWindow.maximize();
+    if (restored.maximized) mainWindow.maximize();
+    mainWindow.webContents.send('kortix:fullscreen', mainWindow.isFullScreen());
+    refreshNavigationMenu();
     mainWindow.show();
     mainWindow.focus();
   });
@@ -360,26 +355,57 @@ function createMainWindow() {
     // Render diagnostic (blur): on Retina expect dpr=2 and zoom=1.
     mainWindow?.webContents
       .executeJavaScript('window.devicePixelRatio')
-      .then((dpr) =>
-        console.log(
-          `[kortix-render] dpr=${dpr} zoom=${mainWindow?.webContents.getZoomFactor()}`,
-        ),
-      )
+      .then((dpr) => console.log(`[kortix-render] dpr=${dpr} zoom=${mainWindow?.webContents.getZoomFactor()}`))
       .catch(() => {});
   });
 
-  // Persist ONLY the maximized flag, and notify the renderer so any custom
-  // window controls can refresh their maximize/restore state (Tauri onResized).
-  const emitResized = () =>
-    mainWindow?.webContents.send('kortix:resized');
-  mainWindow.on('resize', emitResized);
+  // Persist the last normal bounds. Maximized/full-screen bounds are not valid
+  // restore geometry. restoreWindowState() rejects off-screen saved positions.
+  let lastNormalBounds = restored.bounds;
+  let persistTimer = null;
+  const persistWindowState = () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!mainWindow.isMaximized() && !mainWindow.isFullScreen()) {
+      lastNormalBounds = mainWindow.getBounds();
+    }
+    writeWindowState({
+      bounds: lastNormalBounds,
+      maximized: mainWindow.isMaximized(),
+    });
+  };
+  const schedulePersist = () => {
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(persistWindowState, 200);
+  };
+
+  const emitResized = () => mainWindow?.webContents.send('kortix:resized');
+  mainWindow.on('resize', () => {
+    emitResized();
+    schedulePersist();
+  });
+  mainWindow.on('move', schedulePersist);
   mainWindow.on('maximize', () => {
-    writeMaximized(true);
+    persistWindowState();
     emitResized();
   });
   mainWindow.on('unmaximize', () => {
-    writeMaximized(false);
+    persistWindowState();
     emitResized();
+  });
+  mainWindow.on('enter-full-screen', () => mainWindow?.webContents.send('kortix:fullscreen', true));
+  mainWindow.on('leave-full-screen', () => mainWindow?.webContents.send('kortix:fullscreen', false));
+  mainWindow.on('close', persistWindowState);
+
+  mainWindow.webContents.on('will-prevent-unload', (event) => {
+    const response = dialog.showMessageBoxSync(mainWindow, {
+      type: 'warning',
+      buttons: ['Leave', 'Stay'],
+      defaultId: 1,
+      cancelId: 1,
+      message: 'Leave this page?',
+      detail: 'You have unsaved changes. Leaving will discard them.',
+    });
+    if (shouldAllowPreventedUnload(response)) event.preventDefault();
   });
 
   // Navigation gate — top-frame only. Anything that isn't a logged-in product/
@@ -409,12 +435,8 @@ function createMainWindow() {
   // popup → OAuth → postMessage-back handshake completes like a normal browser,
   // and only send plain "open in new tab" links to the system browser.
   mainWindow.webContents.setWindowOpenHandler(({ url, disposition, features }) => {
-    if (!url || !/^https?:\/\//.test(url)) return { action: 'deny' };
-    // A real popup (window.open with window features) that wants an opener
-    // handle — the OAuth/Connect case. `_blank` links carry `noopener` and/or a
-    // tab disposition, so they fall through to the system browser below.
-    const wantsOpener = !/\bnoopener\b/i.test(features || '');
-    if (disposition === 'new-window' && wantsOpener) {
+    const decision = decidePopup({ url, disposition, features });
+    if (decision === 'popup') {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
@@ -422,7 +444,7 @@ function createMainWindow() {
           height: 720,
           minimizable: false,
           fullscreenable: false,
-          backgroundColor: BG_COLOR,
+          backgroundColor: currentBackgroundColor(),
           autoHideMenuBar: true,
           webPreferences: {
             contextIsolation: true,
@@ -432,27 +454,34 @@ function createMainWindow() {
         },
       };
     }
-    shell.openExternal(url);
+    if (decision === 'external') shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('did-create-window', (child) => {
+    const keepPopupNavigationSafe = (event, url) => {
+      if (isAllowedPopupNavigation(url)) return;
+      event.preventDefault();
+    };
+    child.webContents.on('will-navigate', keepPopupNavigationSafe);
+    child.webContents.on('will-redirect', keepPopupNavigationSafe);
   });
 
   // Electron ships no network error page: a dead app origin paints only the
   // window background. Offer to retry or pick another instance instead. Only
   // the main frame on the configured origin counts — a failing sandbox preview
   // is not an instance problem. ERR_ABORTED is a navigation replaced by another.
-  mainWindow.webContents.on(
-    'did-fail-load',
-    (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
-      if (!isMainFrame || errorCode === ERR_ABORTED) return;
-      if (!isConfiguredAppUrl(validatedURL, instanceStore.appUrl())) return;
-      console.warn(`[kortix] ${validatedURL} did not load: ${errorDescription} (${errorCode}).`);
-      dismissSplash();
-      if (mainWindow && !mainWindow.isVisible()) mainWindow.show();
-      void changeInstance('unreachable', explainNetError(hostOf(validatedURL), errorDescription));
-    },
-  );
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame || errorCode === ERR_ABORTED) return;
+    if (!isConfiguredAppUrl(validatedURL, instanceStore.appUrl())) return;
+    console.warn(`[kortix] ${validatedURL} did not load: ${errorDescription} (${errorCode}).`);
+    dismissSplash();
+    if (mainWindow && !mainWindow.isVisible()) mainWindow.show();
+    void changeInstance('unreachable', explainNetError(hostOf(validatedURL), errorDescription));
+  });
 
   mainWindow.on('closed', () => {
+    if (persistTimer) clearTimeout(persistTimer);
     mainWindow = null;
   });
 
@@ -513,6 +542,16 @@ function refreshNavigationMenu() {
     const item = menu.getMenuItemById(`kx-go-${direction}`);
     if (item) item.enabled = mainHistoryTarget(direction) >= 0;
   }
+  const context = menuContextForUrl(mainWindow?.webContents.getURL() || '');
+  const newSession = menu.getMenuItemById('kx-file-new-session');
+  const closeTab = menu.getMenuItemById('kx-file-close-tab');
+  if (newSession) newSession.enabled = context.inProject;
+  if (closeTab) closeTab.enabled = context.hasActiveTab;
+}
+
+function sendDesktopCommand(command) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('kortix:command', command);
 }
 
 /** Save a choice (menu, web bridge) and load the app onto it. Returns the save error, or null. */
@@ -557,7 +596,9 @@ function readBasicAuthStore() {
 function writeBasicAuthStore(store) {
   try {
     fs.mkdirSync(path.dirname(basicAuthStorePath()), { recursive: true });
-    fs.writeFileSync(basicAuthStorePath(), basicAuth.serializeStore(store), { mode: 0o600 });
+    fs.writeFileSync(basicAuthStorePath(), basicAuth.serializeStore(store), {
+      mode: 0o600,
+    });
   } catch (e) {
     console.warn(`[kortix] could not write ${basicAuthStorePath()}: ${e}`);
   }
@@ -572,48 +613,55 @@ function canRememberBasicCredential() {
 }
 
 /** Remembered credential for `host` — memory first, then the encrypted file. */
-function loadBasicCredential(host) {
-  const inMemory = sessionBasicCredentials.get(host);
+function loadBasicCredential(key) {
+  const inMemory = sessionBasicCredentials.get(key);
   if (inMemory) return inMemory;
-  const entry = basicAuth.lookupHost(readBasicAuthStore(), host);
+  const entry = basicAuth.lookupHost(readBasicAuthStore(), key);
   if (!entry || !canRememberBasicCredential()) return null;
   try {
     const password = safeStorage.decryptString(Buffer.from(entry.secret, 'base64'));
     const cred = { user: entry.user, password };
-    sessionBasicCredentials.set(host, cred);
+    sessionBasicCredentials.set(key, cred);
     return cred;
   } catch (e) {
     // Keychain changed / different user account — the blob is unreadable.
-    console.warn(`[kortix] dropping unreadable saved credential for ${host}: ${e}`);
-    writeBasicAuthStore(basicAuth.removeHost(readBasicAuthStore(), host));
+    console.warn(`[kortix] dropping unreadable saved credential for ${key}: ${e}`);
+    writeBasicAuthStore(basicAuth.removeHost(readBasicAuthStore(), key));
     return null;
   }
 }
 
-function rememberBasicCredential(host, cred, persist) {
-  sessionBasicCredentials.set(host, cred);
+function rememberBasicCredential(key, cred, persist) {
+  sessionBasicCredentials.set(key, cred);
   if (!persist || !canRememberBasicCredential()) return;
   const secret = safeStorage.encryptString(cred.password).toString('base64');
-  writeBasicAuthStore(basicAuth.upsertHost(readBasicAuthStore(), host, { user: cred.user, secret }));
+  writeBasicAuthStore(
+    basicAuth.upsertHost(readBasicAuthStore(), key, {
+      user: cred.user,
+      secret,
+    }),
+  );
 }
 
-function forgetBasicCredential(host) {
-  sessionBasicCredentials.delete(host);
-  lastBasicAnswers.delete(host);
+function forgetBasicCredential(key) {
+  sessionBasicCredentials.delete(key);
+  lastBasicAnswers.delete(key);
   const store = readBasicAuthStore();
-  const had = !!basicAuth.lookupHost(store, host);
-  if (had) writeBasicAuthStore(basicAuth.removeHost(store, host));
+  const had = !!basicAuth.lookupHost(store, key);
+  if (had) writeBasicAuthStore(basicAuth.removeHost(store, key));
   return had;
 }
 
 function forgetBasicCredentialForAppHost() {
-  let host;
+  let target;
   try {
-    host = new URL(instanceStore.appUrl()).hostname;
+    target = new URL(instanceStore.appUrl());
   } catch {
     return;
   }
-  const had = forgetBasicCredential(host);
+  const host = target.hostname;
+  const port = Number(target.port || (target.protocol === 'https:' ? 443 : 80));
+  const had = forgetBasicCredential(basicAuth.challengeKey({ host, port, isProxy: false }));
   dialog.showMessageBox({
     type: 'info',
     message: had
@@ -627,8 +675,8 @@ function forgetBasicCredentialForAppHost() {
  * Open the credential dialog. Resolves to { user, password, remember } or null
  * on cancel/close. Parallel challenges for one host share one dialog.
  */
-function promptForBasicCredential({ host, realm, user, error }) {
-  const pending = pendingBasicPrompts.get(host);
+function promptForBasicCredential({ key, host, realm, user, error }) {
+  const pending = pendingBasicPrompts.get(key);
   if (pending) return pending;
 
   // The first challenge fires before the app has painted, while the main
@@ -652,7 +700,7 @@ function promptForBasicCredential({ host, realm, user, error }) {
       maximizable: false,
       fullscreenable: false,
       title: 'Sign in',
-      backgroundColor: '#141414',
+      backgroundColor: currentBackgroundColor(),
       webPreferences: {
         preload: path.join(__dirname, 'basic-auth-preload.js'),
         contextIsolation: true,
@@ -669,7 +717,7 @@ function promptForBasicCredential({ host, realm, user, error }) {
       console.log(`[kortix] Basic sign-in dialog for ${host}: ${result ? 'submitted' : 'cancelled'}.`);
       ipcMain.removeListener('kortix:basic-auth:submit', onSubmit);
       ipcMain.removeListener('kortix:basic-auth:cancel', onCancel);
-      pendingBasicPrompts.delete(host);
+      pendingBasicPrompts.delete(key);
       if (!win.isDestroyed()) win.destroy();
       resolve(result);
     };
@@ -701,27 +749,30 @@ function promptForBasicCredential({ host, realm, user, error }) {
     });
     win.loadFile(path.join(__dirname, '..', 'assets', 'basic-auth.html'));
   });
-  pendingBasicPrompts.set(host, promise);
+  pendingBasicPrompts.set(key, promise);
   return promise;
 }
 
 /** Answer one app-origin Basic challenge (env → remembered → dialog). */
 async function answerBasicChallenge(authInfo, callback) {
   const host = authInfo.host;
+  const key = basicAuth.challengeKey(authInfo);
   const decision = basicAuth.decideChallenge({
     host,
-    env: {
-      user: process.env.KORTIX_DESKTOP_BASIC_USER,
-      password: process.env.KORTIX_DESKTOP_BASIC_PASSWORD,
-    },
-    stored: loadBasicCredential(host),
-    lastAnswer: lastBasicAnswers.get(host) || null,
+    env: authInfo.isProxy
+      ? undefined
+      : {
+          user: process.env.KORTIX_DESKTOP_BASIC_USER,
+          password: process.env.KORTIX_DESKTOP_BASIC_PASSWORD,
+        },
+    stored: loadBasicCredential(key),
+    lastAnswer: lastBasicAnswers.get(key) || null,
     now: Date.now(),
   });
 
   if (decision.action === 'answer') {
     console.log(`[kortix] Basic challenge from ${host}: answering from ${decision.source}.`);
-    lastBasicAnswers.set(host, { source: decision.source, at: Date.now() });
+    lastBasicAnswers.set(key, { source: decision.source, at: Date.now() });
     callback(decision.user, decision.password);
     return;
   }
@@ -729,9 +780,10 @@ async function answerBasicChallenge(authInfo, callback) {
 
   if (decision.dropStored) {
     console.warn(`[kortix] ${host} rejected the saved environment password — forgetting it.`);
-    forgetBasicCredential(host);
+    forgetBasicCredential(key);
   }
   const result = await promptForBasicCredential({
+    key,
     host,
     realm: authInfo.realm,
     user: decision.user,
@@ -740,12 +792,12 @@ async function answerBasicChallenge(authInfo, callback) {
   if (!result) {
     // Cancel → the request fails and the page renders the 401 body, same as
     // Chrome. A reload re-challenges.
-    lastBasicAnswers.delete(host);
+    lastBasicAnswers.delete(key);
     callback();
     return;
   }
-  rememberBasicCredential(host, { user: result.user, password: result.password }, result.remember);
-  lastBasicAnswers.set(host, { source: 'prompt', at: Date.now() });
+  rememberBasicCredential(key, { user: result.user, password: result.password }, result.remember);
+  lastBasicAnswers.set(key, { source: 'prompt', at: Date.now() });
   callback(result.user, result.password);
 }
 
@@ -757,7 +809,10 @@ function buildMenu() {
 
   // Hidden, nested dev switcher so the backend the app points at can change
   // without a rebuild — mirrors the Tauri "Frontend URL" submenu.
-  const preset = (label, url) => ({ label, click: () => switchInstance({ kind: 'custom', url }) });
+  const preset = (label, url) => ({
+    label,
+    click: () => switchInstance({ kind: 'custom', url }),
+  });
   const frontendSubmenu = {
     label: 'Frontend URL',
     submenu: [
@@ -772,7 +827,10 @@ function buildMenu() {
         // `kortix-open-frontend-url`; the web prompt stays for them.)
         click: () => void changeInstance('change'),
       },
-      { label: 'Reset to Default', click: () => switchInstance({ kind: 'default' }) },
+      {
+        label: 'Reset to Default',
+        click: () => switchInstance({ kind: 'default' }),
+      },
       { type: 'separator' },
       {
         // Drops the HTTP Basic credential remembered for the current app host
@@ -791,6 +849,12 @@ function buildMenu() {
             submenu: [
               { role: 'about' },
               {
+                id: 'kx-app-settings',
+                label: 'Settings…',
+                accelerator: 'CommandOrControl+,',
+                click: () => sendDesktopCommand('open-settings'),
+              },
+              {
                 label: 'Check for Updates…',
                 click: () => checkForUpdatesInteractive(),
               },
@@ -808,6 +872,41 @@ function buildMenu() {
           },
         ]
       : []),
+    {
+      label: 'File',
+      submenu: [
+        {
+          id: 'kx-file-new-session',
+          label: 'New Session',
+          accelerator: 'CommandOrControl+N',
+          enabled: false,
+          click: () => sendDesktopCommand('new-session'),
+        },
+        {
+          id: 'kx-file-close-tab',
+          label: 'Close Tab',
+          accelerator: 'CommandOrControl+W',
+          enabled: false,
+          click: () => sendDesktopCommand('close-tab'),
+        },
+        {
+          label: 'Close Window',
+          accelerator: 'CommandOrControl+Shift+W',
+          click: () => mainWindow?.close(),
+        },
+        ...(!isMac
+          ? [
+              { type: 'separator' },
+              {
+                id: 'kx-file-settings',
+                label: 'Settings…',
+                accelerator: 'CommandOrControl+,',
+                click: () => sendDesktopCommand('open-settings'),
+              },
+            ]
+          : []),
+      ],
+    },
     { role: 'editMenu' },
     {
       label: 'View',
@@ -816,16 +915,34 @@ function buildMenu() {
         { role: 'forceReload' },
         { role: 'toggleDevTools' },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
+        {
+          id: 'kx-view-actual-size',
+          label: 'Actual Size',
+          accelerator: 'CommandOrControl+0',
+          click: () => sendDesktopCommand('zoom-reset'),
+        },
+        {
+          id: 'kx-view-zoom-in',
+          label: 'Zoom In',
+          accelerator: 'CommandOrControl+Plus',
+          click: () => sendDesktopCommand('zoom-in'),
+        },
+        {
+          id: 'kx-view-zoom-out',
+          label: 'Zoom Out',
+          accelerator: 'CommandOrControl+-',
+          click: () => sendDesktopCommand('zoom-out'),
+        },
         { type: 'separator' },
         { role: 'togglefullscreen' },
         ...(isMac
           ? []
           : [
               { type: 'separator' },
-              { label: 'Check for Updates…', click: () => checkForUpdatesInteractive() },
+              {
+                label: 'Check for Updates…',
+                click: () => checkForUpdatesInteractive(),
+              },
               frontendSubmenu,
             ]),
       ],
@@ -851,7 +968,12 @@ function buildMenu() {
           click: () => navigateWindow('forward'),
         },
         { type: 'separator' },
-        { id: 'kx-go-home', label: 'Home', accelerator: shortcuts.home, click: () => navigateWindow('home') },
+        {
+          id: 'kx-go-home',
+          label: 'Home',
+          accelerator: shortcuts.home,
+          click: () => navigateWindow('home'),
+        },
       ],
     },
     { role: 'windowMenu' },
@@ -894,6 +1016,15 @@ function registerIpc() {
         wc?.setZoomFactor(scale);
         return null;
       }
+      case 'set_native_theme': {
+        const theme = normalizeTheme(args.theme);
+        nativeTheme.themeSource = theme;
+        writeTheme(theme);
+        const background = currentBackgroundColor();
+        mainWindow?.setBackgroundColor(background);
+        splashWindow?.setBackgroundColor(background);
+        return null;
+      }
       case 'open_external': {
         const url = String(args.url || '');
         // Only ever hand http(s) URLs to the OS shell — never file:, custom
@@ -908,7 +1039,10 @@ function registerIpc() {
         // Same URL rules as the instance chooser.
         const normalized = normalizeInstanceUrl(String(args.url || ''));
         if (!normalized.ok) throw new Error(normalized.error);
-        const saveError = switchInstance({ kind: 'custom', url: normalized.url });
+        const saveError = switchInstance({
+          kind: 'custom',
+          url: normalized.url,
+        });
         if (saveError) throw new Error(`Kortix could not save the URL: ${saveError}`);
         return null;
       }
@@ -960,9 +1094,7 @@ function applyUserAgent() {
   // Strip the Electron token and the product token (whatever the app is named —
   // "Kortix" or "Kortix Dev") before appending the stable KortixDesktop marker.
   const name = app.getName().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const ua = app.userAgentFallback
-    .replace(/\sElectron\/\S+/, '')
-    .replace(new RegExp(`\\s${name}\\/\\S+`), '');
+  const ua = app.userAgentFallback.replace(/\sElectron\/\S+/, '').replace(new RegExp(`\\s${name}\\/\\S+`), '');
   app.userAgentFallback = `${ua} ${UA_TOKEN}`;
 }
 
@@ -995,11 +1127,9 @@ if (!gotLock) {
   // in-app content (sandbox previews, iframes) can point at any host, and a
   // 401 Basic challenge is all an attacker host would need to harvest it.
   app.on('login', (event, _webContents, _details, authInfo, callback) => {
-    if (authInfo.isProxy || authInfo.scheme !== 'basic') return;
-    if (!isAppOriginChallenge(authInfo)) {
-      console.warn(
-        `[kortix] ignoring HTTP Basic challenge from ${authInfo.host} — not the app origin.`,
-      );
+    if (authInfo.scheme !== 'basic') return;
+    if (!authInfo.isProxy && !isAppOriginChallenge(authInfo)) {
+      console.warn(`[kortix] ignoring HTTP Basic challenge from ${authInfo.host} — not the app origin.`);
       event.preventDefault();
       callback();
       return;
@@ -1030,17 +1160,20 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     // Register kortix:// so the OS routes auth callbacks back to the app.
     if (process.defaultApp && process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient(URL_SCHEME, process.execPath, [
-        path.resolve(process.argv[1]),
-      ]);
+      app.setAsDefaultProtocolClient(URL_SCHEME, process.execPath, [path.resolve(process.argv[1])]);
     } else {
       app.setAsDefaultProtocolClient(URL_SCHEME);
     }
 
     applyUserAgent();
     registerIpc();
+    nativeTheme.themeSource = readTheme();
+    nativeTheme.on('updated', () => {
+      const background = currentBackgroundColor();
+      mainWindow?.setBackgroundColor(background);
+      splashWindow?.setBackgroundColor(background);
+    });
     buildMenu();
-    nativeTheme.themeSource = 'dark';
 
     // First launch of a new profile: choose the instance before anything loads.
     if (instanceStore.needsSetup() && !(await openInstanceChooser({ mode: 'setup', store: instanceStore }))) {
@@ -1059,9 +1192,7 @@ if (!gotLock) {
     });
 
     // A deep link that arrived during cold start (macOS first-launch via URL).
-    const firstArgvDeepLink = process.argv.find((a) =>
-      a.startsWith(`${URL_SCHEME}://`),
-    );
+    const firstArgvDeepLink = process.argv.find((a) => a.startsWith(`${URL_SCHEME}://`));
     if (firstArgvDeepLink) pendingDeepLink = firstArgvDeepLink;
     if (pendingDeepLink) {
       mainWindow?.webContents.once('did-finish-load', () => {
@@ -1071,7 +1202,7 @@ if (!gotLock) {
     }
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
+      if (needsMainWindow(mainWindow)) {
         createSplash();
         createMainWindow();
       } else {

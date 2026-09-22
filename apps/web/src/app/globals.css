@@ -1206,7 +1206,7 @@ html[data-desktop='true'] .kx-desktop-chrome {
   right: 0;
   height: 32px;
   z-index: 100;
-  display: flex;
+  display: none;
   align-items: stretch;
   background: transparent;
   pointer-events: none;
@@ -1226,41 +1226,6 @@ html[data-desktop='true'] .kx-desktop-drag {
 html[data-desktop-platform='macos'] .kx-desktop-drag {
   margin-left: 80px;
 }
-html[data-desktop='true'] .kx-desktop-controls {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding-right: 4px;
-}
-html[data-desktop-platform='macos'] .kx-desktop-controls {
-  display: none;
-}
-html[data-desktop='true'] .kx-desktop-ctrl {
-  width: 36px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: 0;
-  color: var(--foreground, #111);
-  opacity: 0.7;
-  cursor: default;
-  border-radius: 4px;
-  transition:
-    background-color 120ms ease,
-    opacity 120ms ease;
-}
-html[data-desktop='true'] .kx-desktop-ctrl:hover {
-  background: color-mix(in oklab, currentColor 12%, transparent);
-  opacity: 1;
-}
-html[data-desktop='true'] .kx-desktop-ctrl-close:hover {
-  background: #e81123;
-  color: #fff;
-  opacity: 1;
-}
-
 /* ─── Native macOS feel — Linear-style title-bar zone ───────────────────
    Both columns reserve the same 32px title-bar zone at top so their
    first content rows align (sidebar workspace selector ↔ inset page
@@ -1338,9 +1303,6 @@ html[data-desktop-platform='macos'] .kx-desktop-drag {
   height: 100%;
   width: 100%;
 }
-html[data-desktop-platform='macos'] .kx-desktop-controls {
-  display: none;
-}
 /* Drag region: the chrome strip covers the title-bar zone. On macOS the
    first 80px is the OS traffic-light area; rest is freely draggable. */
 
@@ -1349,31 +1311,22 @@ html[data-desktop-platform='macos'] .kx-desktop-controls {
    controls, so top-reaching surfaces (the AppHeader, full-screen modals)
    never sit under them. Zero on the web; on desktop, tall enough to clear
    the macOS traffic lights / the Win-Linux control cluster. */
-/* Win/Linux baseline. The window controls are drawn by the web layer
-   (.kx-desktop-ctrl) top-RIGHT, so the top-LEFT corner is free and the app's
-   own control can hug it.
+/* Win/Linux baseline. Electron keeps the OS-native frame, so the web content
+   starts below the native title bar and reserves no duplicate control area.
 
    ─── The shell zoom, and who has to cancel it ───
    The shell runs the page at DESKTOP_BASE_ZOOM (lib/desktop.ts) — real browser
    zoom via webContents.setZoomFactor, which rescales the CSS pixel itself.
 
-   These baseline values are NOT compensated, on purpose. Every control this
-   block clears is drawn by the WEB layer (.kx-desktop-ctrl), so it shrinks by
-   exactly the same factor the reservation does; cancelling the zoom here would
-   reserve 124 window px for a cluster that now occupies 111.6. On Win/Linux
-   the top-LEFT corner has no OS chrome to align to at all, so the band simply
-   scales with the page.
-
-   macOS is the exception and compensates below — see that block. */
+   macOS is the exception because `titleBarStyle: hidden` places AppKit's
+   traffic lights inside the web content area. */
 html[data-desktop='true'] {
   --kx-desktop-zoom: 0.94;
   /* Box of a control sitting IN the band. `control-top` is derived from this
      size, so the two must share a coordinate space or the centring drifts. */
   --kx-titlebar-control-size: 28px;
-  --kx-titlebar-inset: 28px;
-  /* min/max/close: 3 × 36px + 2px gaps + 4px padding. Any row reaching the top
-     of the window keeps its trailing controls out from under them. */
-  --kx-titlebar-controls-width: 124px;
+  --kx-titlebar-inset: 0px;
+  --kx-titlebar-controls-width: 0px;
   /* Placement of the one control the app draws in the band, and of whatever
      follows it. Consumed as `top-[var(…)]` / `left-[var(…)]` so the React
      components carry no platform branch of their own. */
@@ -1410,6 +1363,16 @@ html[data-desktop-platform='macos'] {
   --kx-titlebar-content-left: calc(108px / var(--kx-desktop-zoom));
   /* macOS controls are on the LEFT, so the right edge is free. */
   --kx-titlebar-controls-width: 0px;
+}
+
+/* AppKit hides the traffic lights in native full screen. Remove their gutter
+   until Electron reports that the window has left full screen. */
+html[data-desktop-platform='macos'][data-desktop-fullscreen='true'] {
+  --kx-titlebar-inset: 0px;
+  --kx-titlebar-lights-end: 0px;
+  --kx-titlebar-control-top: 6px;
+  --kx-titlebar-control-left: 8px;
+  --kx-titlebar-content-left: 44px;
 }
 
 /* AppHeader (the breadcrumb bar on standalone pages like /projects, /accounts):
@@ -1533,6 +1496,18 @@ html[data-desktop='true'] .kx-titlebar-row {
 }
 html[data-desktop='true'] .kx-titlebar-row[data-sidebar-collapsed] {
   padding-left: var(--kx-titlebar-content-left);
+}
+html[data-desktop-platform='macos'] .kx-titlebar-row {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+html[data-desktop-platform='macos'] .kx-titlebar-row button,
+html[data-desktop-platform='macos'] .kx-titlebar-row a,
+html[data-desktop-platform='macos'] .kx-titlebar-row input,
+html[data-desktop-platform='macos'] .kx-titlebar-row [role='button'],
+html[data-desktop-platform='macos'] .kx-titlebar-row [role='tab'] {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 /* Below the sidebar breakpoint, its docked cookie does not describe the
    visible layout. Every top row clears the native controls and shell opener. */

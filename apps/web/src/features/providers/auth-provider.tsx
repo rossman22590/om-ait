@@ -7,7 +7,17 @@ import { safeGetItem, safeSetItem } from '@/lib/storage/managed-storage';
 import { createClient } from '@/lib/supabase/client';
 import { resetClientState } from '@/lib/utils/reset-client-state';
 import { Session, SupabaseClient, User } from '@supabase/supabase-js';
-import { createContext, ReactNode, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { withAuthBootstrapTimeout } from './auth-bootstrap';
 // Auth tracking moved to AuthEventTracker component (handles OAuth redirects)
 
 type AuthContextType = {
@@ -15,16 +25,27 @@ type AuthContextType = {
   session: Session | null;
   user: User | null;
   isLoading: boolean;
+  bootstrapError: Error | null;
+  retryAuth: () => void;
   signOut: () => Promise<void>;
 };
+
+const AUTH_BOOTSTRAP_TIMEOUT_MS = 15_000;
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [bootstrapError, setBootstrapError] = useState<Error | null>(null);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+  const retryAuth = useCallback(() => {
+    setIsLoading(true);
+    setBootstrapError(null);
+    setBootstrapAttempt((attempt) => attempt + 1);
+  }, []);
   /**
    * The last user THIS document published. The localStorage marker cannot do
    * this job: it is one origin-wide value, so two tabs signed into two accounts
@@ -69,13 +90,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         const {
           data: { session: currentSession },
-        } = await supabase.auth.getSession();
+        } = await withAuthBootstrapTimeout(supabase.auth.getSession(), AUTH_BOOTSTRAP_TIMEOUT_MS);
 
         if (currentSession) {
           // Validate the session against the auth server — catches stale
           // sessions after a DB reset where the JWT is valid but the user
           // no longer exists.
-          const { error: userError } = await supabase.auth.getUser();
+          const { error: userError } = await withAuthBootstrapTimeout(
+            supabase.auth.getUser(),
+            AUTH_BOOTSTRAP_TIMEOUT_MS,
+          );
           if (userError) {
             console.warn('[AuthProvider] Stale session detected, signing out:', userError.message);
             await supabase.auth.signOut();
@@ -102,6 +126,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (error) {
         console.warn('[AuthProvider] Failed to bootstrap initial session:', error);
+        setBootstrapError(
+          error instanceof Error && error.message.startsWith('Authentication did not answer')
+            ? new Error('Authentication is not responding. Check your connection and retry.')
+            : error instanceof Error
+              ? error
+              : new Error('Authentication failed'),
+        );
       } finally {
         setIsLoading(false);
       }
@@ -174,7 +205,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, [bootstrapAttempt, supabase]);
 
   // Memoize the context value to prevent cascading re-renders of the entire
   // component tree on every auth state change (e.g. silent token refreshes).
@@ -184,8 +215,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // routing it through here is what keeps every consumer of `useAuth()` on the
   // one sign-out path instead of hand-rolling a fifth cleanup.
   const value = useMemo<AuthContextType>(
-    () => ({ supabase, session, user, isLoading, signOut: performSignOut }),
-    [supabase, session, user, isLoading],
+    () => ({
+      supabase,
+      session,
+      user,
+      isLoading,
+      bootstrapError,
+      retryAuth,
+      signOut: performSignOut,
+    }),
+    [supabase, session, user, isLoading, bootstrapError, retryAuth],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

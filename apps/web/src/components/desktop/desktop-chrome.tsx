@@ -1,19 +1,18 @@
 'use client';
 
-import { useTranslations } from '@/i18n/use-translations';
-
 import {
-  desktopPlatform,
-  desktopWindow,
   getDesktopZoom,
   isDesktop,
+  setDesktopNativeTheme,
   setDesktopZoom,
   zoomIn,
   zoomOut,
   zoomReset,
-  type DesktopPlatform,
 } from '@/lib/desktop';
-import { useEffect, useState } from 'react';
+import { useSettingsPanelStore } from '@/stores/settings-panel-store';
+import { useTheme } from 'next-themes';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 /**
  * Invisible top-of-window drag region. The web app's own UI extends to the
@@ -24,11 +23,17 @@ import { useEffect, useState } from 'react';
  * presence — `transparent`, no border, no background.
  */
 export function DesktopChrome() {
-  const [platform, setPlatform] = useState<DesktopPlatform | null>(null);
+  const { theme } = useTheme();
+  const pathname = usePathname();
+  const router = useRouter();
 
   useEffect(() => {
     if (!isDesktop()) return;
-    setPlatform(desktopPlatform());
+    void setDesktopNativeTheme(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!isDesktop()) return;
 
     // Reapply persisted zoom on mount. WKWebView resets to 1.0 each launch,
     // so we always have to push the saved value back in.
@@ -56,61 +61,33 @@ export function DesktopChrome() {
         window.location.reload();
       }
     };
+    const onCommand = (event: Event) => {
+      const command = (event as CustomEvent<string>).detail;
+      if (command === 'zoom-in') void zoomIn();
+      else if (command === 'zoom-out') void zoomOut();
+      else if (command === 'zoom-reset') void zoomReset();
+      else if (command === 'open-settings') {
+        if (pathname?.startsWith('/projects/')) {
+          useSettingsPanelStore.getState().openSettings('preferences');
+        } else {
+          router.push('/settings');
+        }
+      }
+    };
     // Capture phase so we see the keystroke before any inner element (or
     // WKWebView default) consumes it — otherwise Cmd+R can be silently
     // swallowed before our window-level bubble handler ever runs.
     window.addEventListener('keydown', onKey, { capture: true });
-    return () =>
+    window.addEventListener('kortix-desktop-command', onCommand);
+    return () => {
       window.removeEventListener('keydown', onKey, { capture: true } as EventListenerOptions);
-  }, []);
+      window.removeEventListener('kortix-desktop-command', onCommand);
+    };
+  }, [pathname, router]);
 
   return (
     <div className="kx-desktop-chrome" aria-hidden>
       <div className="kx-desktop-drag" data-tauri-drag-region />
-      {platform && platform !== 'macos' ? <WindowControls /> : null}
-    </div>
-  );
-}
-
-function WindowControls() {
-  const tHardcodedUi = useTranslations('hardcodedUi');
-  return (
-    <div
-      className="kx-desktop-controls"
-      aria-label={tHardcodedUi.raw(
-        'componentsDesktopDesktopChrome.line74JsxAttrAriaLabelWindowControls',
-      )}
-    >
-      <button
-        type="button"
-        className="kx-desktop-ctrl"
-        aria-label={tHardcodedUi.raw('i18nComplete.textd72e311c4dda')}
-        onClick={() => void desktopWindow.minimize()}
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
-          <rect x="1" y="4.5" width="8" height="1" fill="currentColor" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        className="kx-desktop-ctrl"
-        aria-label={tHardcodedUi.raw('i18nComplete.textfba6c2c5d946')}
-        onClick={() => void desktopWindow.toggleMaximize()}
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
-          <rect x="1" y="1" width="8" height="8" fill="none" stroke="currentColor" />
-        </svg>
-      </button>
-      <button
-        type="button"
-        className="kx-desktop-ctrl kx-desktop-ctrl-close"
-        aria-label={tHardcodedUi.raw('i18nComplete.text7d9eb7acb13e')}
-        onClick={() => void desktopWindow.close()}
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
-          <path d="M1 1 L9 9 M9 1 L1 9" stroke="currentColor" strokeWidth="1" />
-        </svg>
-      </button>
     </div>
   );
 }

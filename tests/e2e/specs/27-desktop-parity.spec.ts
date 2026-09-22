@@ -238,6 +238,15 @@ for (const runtime of runtimes) {
           await expect(page.locator("html")).toHaveClass(
             new RegExp(theme.toLowerCase()),
           );
+          if (desktopApp) {
+            await expect
+              .poll(() =>
+                desktopApp.evaluate(
+                  ({ nativeTheme }) => nativeTheme.themeSource,
+                ),
+              )
+              .toBe(theme.toLowerCase());
+          }
           await expectSeparateRows(
             dialog.locator(
               '[role="tablist"][aria-orientation="vertical"] [role="tab"]',
@@ -256,7 +265,10 @@ for (const runtime of runtimes) {
         // By href, not by a /Kortix/i name: before the agent list renders, the
         // last link matching that name can be the Skills tab, and the click
         // lands on /customize/skills.
-        await page.locator('a[href$="/customize/agents/kortix"]').first().click();
+        await page
+          .locator('a[href$="/customize/agents/kortix"]')
+          .first()
+          .click();
         await expect(page).toHaveURL(/\/customize\/agents\/kortix/);
         await expectSeparateRows(
           page.locator(
@@ -326,6 +338,15 @@ for (const runtime of runtimes) {
           exact: true,
         });
         await expect(opener).toBeVisible();
+        if (desktopApp) {
+          await page.locator('[data-slot="sidebar-edge-peek"]').hover();
+          await expect(switcher).toBeVisible();
+          await expect(
+            page.getByRole("button", { name: "Pin sidebar", exact: true }),
+          ).toHaveCount(1);
+          await page.mouse.move(719, 479);
+          await expect(switcher).toBeHidden();
+        }
         await opener.click();
         await expect(switcher).toBeVisible();
         await page.screenshot({
@@ -363,6 +384,87 @@ for (const runtime of runtimes) {
               window.evaluate((window) => window.webContents.getZoomFactor()),
             )
             .toBe(originalZoom);
+          const clickNativeMenu = (id: string) =>
+            desktopApp.evaluate(({ Menu, BrowserWindow }, itemId) => {
+              const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
+              item?.click(
+                undefined,
+                BrowserWindow.getAllWindows()[0],
+                undefined,
+              );
+            }, id);
+          await clickNativeMenu("kx-view-zoom-in");
+          await expect
+            .poll(() =>
+              window.evaluate((window) => window.webContents.getZoomFactor()),
+            )
+            .toBeGreaterThan(originalZoom);
+          await clickNativeMenu("kx-view-actual-size");
+          await expect
+            .poll(() =>
+              window.evaluate((window) => window.webContents.getZoomFactor()),
+            )
+            .toBe(originalZoom);
+
+          await window.evaluate((window) => window.setFullScreen(true));
+          await expect(page.locator("html")).toHaveAttribute(
+            "data-desktop-fullscreen",
+            "true",
+          );
+          await expect
+            .poll(() =>
+              page
+                .locator("html")
+                .evaluate((html) =>
+                  getComputedStyle(html)
+                    .getPropertyValue("--kx-titlebar-inset")
+                    .trim(),
+                ),
+            )
+            .toBe("0px");
+          await window.evaluate((window) => window.setFullScreen(false));
+          await expect(page.locator("html")).not.toHaveAttribute(
+            "data-desktop-fullscreen",
+          );
+
+          const windowsBeforePopup = desktopApp.windows().length;
+          await page.evaluate(() => {
+            window.open("", "connector-auth", "width=520,height=720");
+          });
+          await expect
+            .poll(() => desktopApp.windows().length)
+            .toBe(windowsBeforePopup + 1);
+          const popup = desktopApp
+            .windows()
+            .find((candidate) => candidate !== page);
+          expect(popup?.url()).toBe("about:blank");
+          await popup?.close();
+
+          const menuState = (id: string) =>
+            desktopApp.evaluate(({ Menu }, itemId) => {
+              const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
+              return item
+                ? { enabled: item.enabled, accelerator: item.accelerator }
+                : null;
+            }, id);
+          await expect
+            .poll(() => menuState("kx-file-new-session"))
+            .toMatchObject({
+              enabled: true,
+              accelerator: "CommandOrControl+N",
+            });
+          await expect
+            .poll(() => menuState("kx-file-close-tab"))
+            .toMatchObject({
+              enabled: true,
+              accelerator: "CommandOrControl+W",
+            });
+          await clickNativeMenu("kx-app-settings");
+          await expect(page.getByRole("dialog")).toBeVisible();
+          await page
+            .getByRole("dialog")
+            .getByRole("button", { name: "Back to app" })
+            .click();
           await expect(switcher).toBeVisible();
           await switcher.click();
           await expect(
@@ -516,15 +618,24 @@ for (const runtime of runtimes) {
           databaseUrl,
         });
         const projectUrl = `${baseURL}/projects/${project.id}`;
-        await installBrowserSessionDirect(page, session, projectUrl, authOptions);
+        await installBrowserSessionDirect(
+          page,
+          session,
+          projectUrl,
+          authOptions,
+        );
         await selectAccountForUi(page, accountId);
         await page.goto(projectUrl);
         await dismissOnboarding(page);
 
         // The reported soft lock: the switcher opens /new, and /new has no
         // navigation of its own — only an account picker and Log out.
-        await page.getByRole("button", { name: "Switch project", exact: true }).click();
-        await page.getByRole("menuitem", { name: "Switch Project", exact: true }).click();
+        await page
+          .getByRole("button", { name: "Switch project", exact: true })
+          .click();
+        await page
+          .getByRole("menuitem", { name: "Switch Project", exact: true })
+          .click();
         await page.getByRole("menuitem", { name: "Create a project…" }).click();
         await expect(page).toHaveURL(/\/new(\?|$)/, { timeout: 60_000 });
         await expect(
@@ -539,10 +650,19 @@ for (const runtime of runtimes) {
         }
         await expect(back).toBeVisible();
         const backBox = (await back.boundingBox())!;
-        expect(backBox.x, "Back must clear the macOS traffic lights").toBeGreaterThanOrEqual(62);
-        expect(backBox.y + backBox.height, "Back must sit inside the title-bar band").toBeLessThanOrEqual(43);
+        expect(
+          backBox.x,
+          "Back must clear the macOS traffic lights",
+        ).toBeGreaterThanOrEqual(62);
+        expect(
+          backBox.y + backBox.height,
+          "Back must sit inside the title-bar band",
+        ).toBeLessThanOrEqual(43);
         // The page's own top row (account picker, Log out) drops below the band.
-        const logOut = page.getByRole("button", { name: "Log out", exact: true });
+        const logOut = page.getByRole("button", {
+          name: "Log out",
+          exact: true,
+        });
         await expect(logOut).toBeVisible();
         expect(
           (await logOut.boundingBox())!.y,
@@ -555,42 +675,64 @@ for (const runtime of runtimes) {
         });
 
         if (!desktopApp) {
-          // Windows and Linux: the window controls sit top-right, so Back takes
-          // the band's left edge and the page's top row must clear the 124px
-          // control cluster on the right. Same session, same history shape.
+          // Windows and Linux keep Electron's OS-native frame. The web content
+          // must reserve no duplicate control cluster.
           for (const platform of ["Win32", "Linux x86_64"]) {
             const other = await page.context().newPage();
             try {
               await other.addInitScript(
                 (value) =>
-                  Object.defineProperty(navigator, "platform", { get: () => value }),
+                  Object.defineProperty(navigator, "platform", {
+                    get: () => value,
+                  }),
                 platform,
               );
               await other.setViewportSize({ width: 1440, height: 900 });
               await other.goto(projectUrl);
               await expect(
-                other.getByRole("button", { name: "Switch project", exact: true }),
+                other.getByRole("button", {
+                  name: "Switch project",
+                  exact: true,
+                }),
               ).toBeVisible({ timeout: 60_000 });
               await other.goto(`${baseURL}/new`);
               await expect(
                 other.getByRole("heading", { name: "Create a project" }),
               ).toBeVisible({ timeout: 60_000 });
-              const otherBack = other.getByRole("button", { name: "Back", exact: true });
+              const otherBack = other.getByRole("button", {
+                name: "Back",
+                exact: true,
+              });
               await expect(otherBack, `${platform}: Back`).toBeVisible();
               const b = (await otherBack.boundingBox())!;
-              expect(b.x, `${platform}: Back starts at the band's left edge`).toBeLessThan(24);
-              expect(b.y + b.height, `${platform}: Back sits inside the band`).toBeLessThanOrEqual(42);
-              const otherLogOut = other.getByRole("button", { name: "Log out", exact: true });
-              const l = (await otherLogOut.boundingBox())!;
               expect(
-                l.x + l.width,
-                `${platform}: Log out clears the window controls`,
-              ).toBeLessThanOrEqual(1440 - 124);
-              expect(l.y, `${platform}: Log out sits below Back`).toBeGreaterThanOrEqual(b.y + b.height);
+                b.x,
+                `${platform}: Back starts at the band's left edge`,
+              ).toBeLessThan(24);
+              expect(
+                b.y + b.height,
+                `${platform}: Back sits inside the band`,
+              ).toBeLessThanOrEqual(42);
+              await expect(other.locator(".kx-desktop-controls")).toHaveCount(
+                0,
+              );
+              expect(
+                await other
+                  .locator("html")
+                  .evaluate((html) =>
+                    getComputedStyle(html)
+                      .getPropertyValue("--kx-titlebar-controls-width")
+                      .trim(),
+                  ),
+                `${platform}: no web-drawn control reservation`,
+              ).toBe("0px");
               await otherBack.click();
-              await expect(other).toHaveURL(new RegExp(`/projects/${project.id}`), {
-                timeout: 60_000,
-              });
+              await expect(other).toHaveURL(
+                new RegExp(`/projects/${project.id}`),
+                {
+                  timeout: 60_000,
+                },
+              );
             } finally {
               await other.close();
             }
@@ -632,10 +774,14 @@ for (const runtime of runtimes) {
             const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
             item?.click(undefined, BrowserWindow.getAllWindows()[0], undefined);
           }, id);
-        await expect.poll(() => menuItem("kx-go-forward")).toEqual({ enabled: true });
+        await expect
+          .poll(() => menuItem("kx-go-forward"))
+          .toEqual({ enabled: true });
         await clickMenu("kx-go-forward");
         await expect(page).toHaveURL(/\/new(\?|$)/, { timeout: 60_000 });
-        await expect.poll(() => menuItem("kx-go-back")).toEqual({ enabled: true });
+        await expect
+          .poll(() => menuItem("kx-go-back"))
+          .toEqual({ enabled: true });
         await clickMenu("kx-go-back");
         await expect(page).toHaveURL(new RegExp(`/projects/${project.id}`), {
           timeout: 60_000,

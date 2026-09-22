@@ -68,3 +68,15 @@ contextBridge.exposeInMainWorld('kortixDesktop', {
   // cancelled by the gate (will-navigate does fire for it) and nothing happens.
   navigate: (direction) => ipcRenderer.invoke('kortix:navigate', direction),
 });
+
+ipcRenderer.on('kortix:command', (_event, command) => {
+  window.dispatchEvent(new CustomEvent('kortix-desktop-command', { detail: command }));
+});
+
+const setFullscreenState = (fullscreen) => {
+  const html = document.documentElement;
+  if (!html) return;
+  if (fullscreen) html.setAttribute('data-desktop-fullscreen', 'true');
+  else html.removeAttribute('data-desktop-fullscreen');
+};
+ipcRenderer.on('kortix:fullscreen', (_event, fullscreen) => setFullscreenState(fullscreen));

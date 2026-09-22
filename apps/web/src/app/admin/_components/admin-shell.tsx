@@ -161,7 +161,10 @@ function AdminHeader() {
   const showToggle = isMobile || state === 'collapsed';
 
   return (
-    <header className="border-border flex h-11 shrink-0 items-center gap-1 border-b px-2">
+    <header
+      className="kx-titlebar-row border-border flex h-11 shrink-0 items-center gap-1 border-b px-2"
+      data-sidebar-collapsed={state === 'collapsed' ? '' : undefined}
+    >
       {showToggle ? <SidebarTrigger className="text-muted-foreground" /> : null}
       <Breadcrumb className="min-w-0 flex-1">
         <BreadcrumbList className="text-foreground flex-nowrap gap-1 text-sm font-medium sm:gap-1">

@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { errorToast, successToast } from '@/components/ui/toast';
+import { successToast } from '@/components/ui/toast';
 import {
   useApprovePermissionRequest,
   useDenyPermissionRequest,
@@ -49,6 +49,7 @@ import {
 } from './types';
 
 type Mode = 'once' | 'scoped' | 'all';
+type FailedAction = 'approve' | 'deny';
 
 export function TunnelPermissionRequestDialog() {
   const tHardcodedUi = useTranslations('hardcodedUi');
@@ -63,6 +64,8 @@ export function TunnelPermissionRequestDialog() {
   const [mode, setMode] = useState<Mode>('scoped');
   const [expiryValue, setExpiryValue] = useState('7d');
   const [scopeExpanded, setScopeExpanded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [failedAction, setFailedAction] = useState<FailedAction | null>(null);
 
   // Pre-fill scope from the request
   const initialScope = useMemo(() => {
@@ -79,6 +82,8 @@ export function TunnelPermissionRequestDialog() {
       setExpiryValue('7d');
       setScopeExpanded(false);
       setCustomScope(extractScopeFromRequest(currentRequest));
+      setError(null);
+      setFailedAction(null);
     }
   }, [currentRequest]);
 
@@ -92,6 +97,7 @@ export function TunnelPermissionRequestDialog() {
   const isPending = approveMutation.isPending || denyMutation.isPending;
 
   const handleApprove = async () => {
+    setError(null);
     try {
       let scope: Record<string, unknown> | undefined;
       let expiresAt: string | undefined;
@@ -120,27 +126,37 @@ export function TunnelPermissionRequestDialog() {
       );
     } catch (err) {
       console.error('Failed to approve:', err);
-      errorToast(tHardcodedUi.raw('i18nComplete.text28c39aaf0edc'), {
-        description: err instanceof Error ? err.message : undefined,
-      });
+      setFailedAction('approve');
+      setError(
+        err instanceof Error ? err.message : tHardcodedUi.raw('i18nComplete.text28c39aaf0edc'),
+      );
     }
   };
 
   const handleDeny = async () => {
+    setError(null);
     try {
       await denyMutation.mutateAsync(currentRequest.requestId);
       removePendingRequest(currentRequest.requestId);
       successToast(tHardcodedUi.raw('i18nComplete.textf44bf9c0530c'));
     } catch (err) {
       console.error('Failed to deny:', err);
-      errorToast(tHardcodedUi.raw('i18nComplete.text25950c20dae9'), {
-        description: err instanceof Error ? err.message : undefined,
-      });
+      setFailedAction('deny');
+      setError(
+        err instanceof Error ? err.message : tHardcodedUi.raw('i18nComplete.text25950c20dae9'),
+      );
     }
   };
 
+  const dismiss = () => removePendingRequest(currentRequest.requestId);
+
   return (
-    <Dialog open={!!currentRequest} onOpenChange={() => {}}>
+    <Dialog
+      open={!!currentRequest}
+      onOpenChange={(open) => {
+        if (!open && !isPending) dismiss();
+      }}
+    >
       <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -267,6 +283,28 @@ export function TunnelPermissionRequestDialog() {
               {pendingRequests.length > 2 ? 's' : ''}{' '}
               {tHardcodedUi.raw('i18nComplete.text62a2fed3d6e0')}
             </p>
+          )}
+
+          {error && (
+            <div
+              className="border-destructive/30 bg-destructive/10 space-y-3 rounded-lg border p-3"
+              role="alert"
+            >
+              <p className="text-destructive text-sm">{error}</p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void (failedAction === 'deny' ? handleDeny() : handleApprove())}
+                  disabled={isPending}
+                >
+                  {tHardcodedUi.raw('i18nComplete.text942087cc2d41')}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={dismiss}>
+                  {tHardcodedUi.raw('i18nComplete.text48845bff334a')}
+                </Button>
+              </div>
+            </div>
           )}
         </div>
 

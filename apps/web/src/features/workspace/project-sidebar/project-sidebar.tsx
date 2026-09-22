@@ -45,7 +45,7 @@ const modSymbol = isMac ? '⌘' : 'Ctrl';
 export function ProjectSidebar({ projectId }: { projectId: string }) {
   const tI18nComplete = useTranslations('hardcodedUi.i18nComplete');
   const t = useTranslations('sidebar');
-  const { state, setOpenMobile, toggleSidebar } = useSidebar();
+  const { state, setOpenMobile, toggleSidebar, peek } = useSidebar();
   const isExpanded = state === 'expanded';
   const isMobile = useIsMobile();
   const sessionsGroupRef = useRef<HTMLDivElement>(null);
@@ -117,8 +117,9 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
       <SidebarHeader
         className="space-y-2"
         style={{
-          paddingTop:
-            'max(calc(var(--spacing) * 2), env(safe-area-inset-top, 0px), var(--kx-titlebar-inset, 0px))',
+          paddingTop: peek
+            ? 'calc(var(--spacing) * 2)'
+            : 'max(calc(var(--spacing) * 2), env(safe-area-inset-top, 0px), var(--kx-titlebar-inset, 0px))',
         }}
       >
         {/* Offcanvas everywhere: the whole panel slides, so the header keeps a
@@ -172,7 +173,7 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
                 state to collapse (`state` there still reads the desktop cookie),
                 and it already dismisses by backdrop/swipe. Clicking while the
                 panel is a hover flyout docks it open, hence the "Pin" label. */}
-            {!isMobile && (
+            {!isMobile && !peek && (
               <Hint
                 side="bottom"
 

@@ -228,13 +228,15 @@ describe('the shell zoom does not drag the band off the OS controls', () => {
     expect(control).not.toContain('h-[28px]');
   });
 
-  // Win/Linux draws its OWN min/max/close in CSS, so that cluster shrinks by
-  // the same factor any reservation would — cancelling the zoom there reserves
-  // 124 window px for something now occupying 111.6. Compensation is a macOS
-  // concern only, because only macOS has chrome the page cannot scale.
-  test('the Win/Linux baseline does NOT compensate', () => {
+  test('Win/Linux use the native frame and reserve no web-drawn control area', () => {
+    const desktopChrome = readFileSync(
+      join(repoRoot, 'apps/web/src/components/desktop/desktop-chrome.tsx'),
+      'utf8',
+    );
     expect(baseBlock![1]).not.toContain('var(--kx-desktop-zoom)');
-    expect(baseBlock![1]).toMatch(/--kx-titlebar-controls-width:\s*124px/);
+    expect(baseBlock![1]).toMatch(/--kx-titlebar-inset:\s*0px/);
+    expect(baseBlock![1]).toMatch(/--kx-titlebar-controls-width:\s*0px/);
+    expect(desktopChrome).not.toContain('WindowControls');
   });
 
   // Cmd+/Cmd- must move the variable too, or zooming re-breaks the alignment
@@ -300,6 +302,65 @@ describe('nothing re-hard-codes the band', () => {
   test('.kx-titlebar-row indents on both sides, on every desktop platform', () => {
     expect(css).toContain("html[data-desktop='true'] .kx-titlebar-row {");
     expect(css).toContain("html[data-desktop='true'] .kx-titlebar-row[data-sidebar-collapsed] {");
+  });
+
+  test('macOS title-bar rows drag while their controls stay interactive', () => {
+    expect(css).toContain("html[data-desktop-platform='macos'] .kx-titlebar-row {");
+    expect(css).toContain("html[data-desktop-platform='macos'] .kx-titlebar-row button");
+    expect(css).toContain('-webkit-app-region: no-drag');
+  });
+
+  test('native full screen removes the traffic-light gutter', () => {
+    const block = css.match(
+      /html\[data-desktop-platform='macos'\]\[data-desktop-fullscreen='true'\]\s*\{([^}]*)\}/,
+    );
+    expect(block).not.toBeNull();
+    expect(block![1]).toMatch(/--kx-titlebar-inset:\s*0px/);
+    expect(block![1]).toMatch(/--kx-titlebar-lights-end:\s*0px/);
+  });
+});
+
+describe('sidebar hover peek owns one toggle and no title-bar gap', () => {
+  const sidebar = readFileSync(
+    join(repoRoot, 'apps/web/src/features/workspace/project-sidebar/project-sidebar.tsx'),
+    'utf8',
+  );
+
+  test('the flyout header uses normal padding and hides its duplicate pin control', () => {
+    expect(sidebar).toContain('const { state, setOpenMobile, toggleSidebar, peek } = useSidebar()');
+    expect(sidebar).toMatch(/paddingTop:\s*peek\s*\?\s*'calc\(var\(--spacing\) \* 2\)'/);
+    expect(sidebar).toContain('!isMobile && !peek');
+  });
+});
+
+describe('top-reaching standalone surfaces clear native macOS controls', () => {
+  const sources = {
+    admin: readFileSync(
+      join(repoRoot, 'apps/web/src/app/admin/_components/admin-shell.tsx'),
+      'utf8',
+    ),
+    accountHub: readFileSync(
+      join(repoRoot, 'apps/web/src/features/accounts/hub/account-hub-panel.tsx'),
+      'utf8',
+    ),
+    presentation: readFileSync(
+      join(repoRoot, 'apps/web/src/app/presentations/engine/deck.tsx'),
+      'utf8',
+    ),
+    connecting: readFileSync(
+      join(repoRoot, 'apps/web/src/components/dashboard/connecting-screen.tsx'),
+      'utf8',
+    ),
+  };
+
+  test('admin and presentation header rows share the title-bar geometry', () => {
+    expect(sources.admin).toContain('kx-titlebar-row');
+    expect(sources.presentation).toContain('kx-titlebar-row');
+  });
+
+  test('the account hub and connecting exit clear the full title-bar inset', () => {
+    expect(sources.accountHub).toContain('kx-titlebar-spacer');
+    expect(sources.connecting).toContain('var(--kx-titlebar-inset,0px)');
   });
 });
 
