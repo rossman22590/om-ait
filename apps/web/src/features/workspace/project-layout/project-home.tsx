@@ -248,46 +248,6 @@ export function ProjectHome({
         }
       : undefined;
 
-  const composerEl = (
-    <ComposerChatInput
-      onSend={handleSend}
-      onCommand={handleCommand}
-      projectId={projectId}
-      draftScope={draftScope}
-      // `busy` here means "create in flight" — spinner in the send slot,
-      // input locked. NOT isBusy (that renders agent-running stop-button
-      // semantics, which leave the composer with no button at all here).
-      isSending={busy}
-      disabled={busy}
-      // Clear the box, revoke nothing (`composer-reset.ts`). The text
-      // has to LEAVE the composer at the keypress — it used to sit there
-      // locked under the spinner for the whole create round trip, which
-      // reads as a send that did not happen — while the local object URLs
-      // behind any attachments stay alive, because the instant shell
-      // draws its previews from those same URLs after the navigation.
-      // The sentence itself is not lost by clearing: it is already in
-      // this send's closure, in the durable `create.pending_prompt` row,
-      // and in `sentPreview` above; a refused send puts it back in the
-      // editor (`planFailedSendRecovery`).
-      clearOnSend="text-only"
-      autoFocus
-      // A hero composer floating mid-page has no column for a second
-      // rail to align to, so the attach/agent/context controls ride on
-      // the toolbar itself, ahead of the model selector. The session
-      // page keeps the default row beneath the card.
-      underbarPlacement="inline"
-      // Hero composer mid-page: the `/` menu opens BELOW the card, into
-      // the empty lower half, instead of shoving the heading up.
-      slashMenuPlacement="below"
-      placeholder={tI18nHardcoded.raw(
-        'autoFeaturesCoWorkerProjectLayoutProjectHomeJsxAttrPlaceholder115e6c2d',
-      )}
-      prefill={prefill}
-      onAgentSelectionChange={setSelectedAgent}
-      toolbarSlot={metaSelected ? <MetaRuntimeIndicator /> : null}
-      sandboxSlot={sandboxSlot}
-    />
-  );
 
   return (
     <div className="bg-background relative flex min-h-0 flex-1 flex-col overflow-hidden lg:px-4.5">
@@ -332,7 +292,46 @@ export function ProjectHome({
             />
           ) : undefined
         }
-        composer={composerEl}
+        composer={
+          <ComposerChatInput
+            onSend={handleSend}
+            onCommand={handleCommand}
+            projectId={projectId}
+            draftScope={draftScope}
+            // `busy` here means "create in flight" — spinner in the send slot,
+            // input locked. NOT isBusy (that renders agent-running stop-button
+            // semantics, which leave the composer with no button at all here).
+            isSending={busy}
+            disabled={busy}
+            // Clear the box, revoke nothing (`composer-reset.ts`). The text
+            // has to LEAVE the composer at the keypress — it used to sit there
+            // locked under the spinner for the whole create round trip, which
+            // reads as a send that did not happen — while the local object URLs
+            // behind any attachments stay alive, because the instant shell
+            // draws its previews from those same URLs after the navigation.
+            // The sentence itself is not lost by clearing: it is already in
+            // this send's closure, in the durable `create.pending_prompt` row,
+            // and in `sentPreview` above; a refused send puts it back in the
+            // editor (`planFailedSendRecovery`).
+            clearOnSend="text-only"
+            autoFocus
+            // A hero composer floating mid-page has no column for a second
+            // rail to align to, so the attach/agent/context controls ride on
+            // the toolbar itself, ahead of the model selector. The session
+            // page keeps the default row beneath the card.
+            underbarPlacement="inline"
+            // Hero composer mid-page: the `/` menu opens BELOW the card, into
+            // the empty lower half, instead of shoving the heading up.
+            slashMenuPlacement="below"
+            placeholder={tI18nHardcoded.raw(
+              'autoFeaturesCoWorkerProjectLayoutProjectHomeJsxAttrPlaceholder115e6c2d',
+            )}
+            prefill={prefill}
+            onAgentSelectionChange={setSelectedAgent}
+            toolbarSlot={metaSelected ? <MetaRuntimeIndicator /> : null}
+            sandboxSlot={sandboxSlot}
+          />
+        }
       />
     </div>
   );
