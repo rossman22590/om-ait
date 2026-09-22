@@ -85,7 +85,13 @@ describe('native test-lane workflow', () => {
     // still failed to bind 54324 twenty-five seconds later. A bind cannot
     // disagree with Docker, because it is what Docker does.
     expect(free).toContain('SO_REUSEADDR');
-    expect(free).toContain("s.bind(('0.0.0.0', int(sys.argv[1])))");
+    expect(free).toContain("s.bind(('0.0.0.0',int(sys.argv[1])))");
+    // A ONE-LINER on purpose: multi-line python inside this block scalar sits
+    // at column 0, which ends the scalar and makes the whole workflow fail to
+    // parse — a run with zero jobs, and a pull request that reads CLEAN with no
+    // lane checks at all. That is how this shipped broken the first time.
+    expect(free).toContain('bindable() {');
+    expect(free).not.toMatch(/^import socket/m);
     expect(free).not.toMatch(/ss -ltnH[^\n]*\|\s*grep -q/);
     expect(free).toMatch(/::warning::port \$port still refuses a bind/);
     // The diagnostic still names the holder, and now reads ALL socket states —

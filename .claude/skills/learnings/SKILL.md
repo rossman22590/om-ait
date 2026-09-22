@@ -39,6 +39,16 @@ docker-proxy, or a lingering TIME_WAIT makes it wait the full 30s), pinned by
 `tests/unit/sandbox-workflow.test.ts`, which now also forbids the
 `ss -ltnH | grep -q` shape.
 
+**Second rule from the same change:** keep embedded scripts inside a workflow
+`run: |` block to ONE LINE, or indent every line past the block's own indent.
+A multi-line `python3 -c "` whose body starts at column 0 ENDS the block
+scalar, and GitHub then fails to parse the whole workflow. The symptom is
+silent and misleading: the run completes with **zero jobs**, and the pull
+request reads `CLEAN` with **no lane checks at all** — a green that means
+"nothing ran". Check with `gh run view <id> --json jobs`; an empty list is a
+parse failure, not a pass. Verified locally by asserting every non-blank line
+inside each `run: |` is indented past its key.
+
 **Meta-rule, earned the hard way:** a diagnostic that reports "clean" is not
 evidence of clean until you have proved the diagnostic can report dirty. This
 one was run against four genuinely-held ports and warned on all four; the `ss`
