@@ -244,10 +244,41 @@ async function captureSessionTranscript(
             .where(eq(projects.projectId, session.projectId));
         }
 
-        if (rootChanged || fullHistory) {
+        const readIds = rows.map((row) => String(row.info.id));
+        if (rootChanged) {
+          // A different OpenCode root makes every stored id unreachable.
           await tx
             .delete(sessionTranscriptMessages)
             .where(eq(sessionTranscriptMessages.sessionId, sessionId));
+        } else if (fullHistory) {
+          /*
+            DELETE WHAT DISAPPEARED, not everything.
+
+            A full-history read IS the complete truth, so a stored id missing
+            from it is genuinely gone upstream (a rewind) and must go. That is
+            all this needs to remove — but it used to delete the session's
+            entire history and rewrite it, every single turn.
+
+            Measured on a real PostgreSQL, one turn end on a session already
+            holding 242 messages: 244 inserts + 242 deletes for the two
+            messages the turn actually added. Linear in session length, paid
+            per turn, so quadratic over the life of a thread — and every
+            deleted row is a dead tuple for vacuum plus index churn.
+
+            An empty read deletes everything, which is what the old code did
+            too: with `fullHistory` there is no early return for zero rows, and
+            a complete read of nothing is a claim that nothing is there.
+          */
+          await tx.execute(
+            readIds.length > 0
+              ? // `sql.param` — a bare `${readIds}` expands to one placeholder
+                // PER ELEMENT, which is not an array and is not valid here.
+                sql`DELETE FROM kortix.session_transcript_messages
+                     WHERE session_id = ${sessionId}
+                       AND NOT (message_id = ANY(${sql.param(readIds)}::text[]))`
+              : sql`DELETE FROM kortix.session_transcript_messages
+                     WHERE session_id = ${sessionId}`,
+          );
         }
 
         const values = rows.map((row) => ({
@@ -279,6 +310,25 @@ async function captureSessionTranscript(
                 parts: sql`excluded.parts`,
                 capturedAt: sql`excluded.captured_at`,
               },
+              /*
+                Rewrite a row only when it actually changed. Every turn re-reads
+                the whole history, so without this the other 242 rows are
+                written again to say the same thing — and an UPDATE of an
+                unchanged row still costs a new tuple version and a vacuum.
+
+                `IS DISTINCT FROM` on the two fields that carry content, not on
+                `captured_at`: that moves on every capture by construction, so
+                comparing it would make every row differ and the clause a no-op.
+                A row whose content is unchanged keeps its older `captured_at`,
+                which is honest — it says when that message was last actually
+                observed to change.
+
+                It must stay a CONTENT comparison. Attachment recovery rewrites
+                the file parts of OLD messages (`recoverTranscriptAttachments`),
+                and those rows differ, so they still land.
+              */
+              setWhere: sql`${sessionTranscriptMessages.info} IS DISTINCT FROM excluded.info
+                OR ${sessionTranscriptMessages.parts} IS DISTINCT FROM excluded.parts`,
             });
         }
         const pruned = retainHistory ? 0 : await pruneSessionTranscriptMirror(sessionId, tx);
