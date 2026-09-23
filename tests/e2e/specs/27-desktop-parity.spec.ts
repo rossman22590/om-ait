@@ -310,11 +310,13 @@ for (const runtime of runtimes) {
         await expect(
           dialog.getByRole("button", { name: "Back to app" }),
         ).toBeVisible();
-        expect(
-          (await dialog
-            .getByRole("button", { name: "Back to app" })
-            .boundingBox())!.y,
-        ).toBeGreaterThanOrEqual(desktop ? 40 : 0);
+        const backBox = (await dialog
+          .getByRole("button", { name: "Back to app" })
+          .boundingBox())!;
+        if (desktop) {
+          expect(backBox.y, "Back to app shares the traffic-light row").toBeLessThan(40);
+          expect(backBox.x, "Back to app clears the native window controls").toBeGreaterThanOrEqual(62);
+        }
         await expectSeparateRows(
           dialog.locator(
             '[role="tablist"][aria-orientation="vertical"] [role="tab"]',
