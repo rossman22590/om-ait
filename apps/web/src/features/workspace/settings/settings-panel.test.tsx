@@ -244,6 +244,16 @@ describe('SettingsPanelView — the dialog frame', () => {
   });
 });
 
+test('mobile Settings navigation has a zoom-safe first row on macOS', () => {
+  const source = readFileSync(join(import.meta.dir, 'settings-panel.tsx'), 'utf8');
+  const css = readFileSync(join(import.meta.dir, '../../../app/globals.css'), 'utf8');
+  expect(source).toContain('kx-settings-mobile-titlebar');
+  expect(source).toContain('kx-settings-mobile-scroll min-w-0 flex flex-1 items-center py-2');
+  expect(source).toContain('kx-settings-mobile-tabs');
+  expect(css).toMatch(/\.kx-settings-mobile-titlebar \.kx-settings-mobile-tabs\s*\{[^}]*height:\s*var\(--kx-titlebar-control-size\)/);
+  expect(css).toMatch(/\.kx-settings-mobile-titlebar \[data-slot='tabs-trigger'\]\s*\{[^}]*height:\s*var\(--kx-titlebar-control-size\)/);
+});
+
 /**
  * Radix's `TabsContent` keeps a `<div role="tabpanel">` in the tree for
  * EVERY value, not just the active one — internally it always calls

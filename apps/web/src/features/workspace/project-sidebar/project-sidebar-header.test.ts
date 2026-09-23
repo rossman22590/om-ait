@@ -31,6 +31,13 @@ const header = source.slice(source.indexOf('<SidebarHeader'), source.indexOf('</
 const headerCode = header.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
 describe('project sidebar header', () => {
+  test('the docked first row shares the native-light band without a blank inset', () => {
+    expect(headerCode).toContain('kx-project-sidebar-titlebar');
+    expect(headerCode).toContain('kx-titlebar-band-height');
+    expect(headerCode).not.toContain('var(--kx-titlebar-inset');
+    expect(headerCode).toContain('data-peek={peek ?');
+  });
+
   test('the workspace switcher leads the row', () => {
     expect(header).toContain('<WorkspaceSwitcher projectId={projectId} />');
   });

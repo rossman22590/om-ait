@@ -1396,11 +1396,40 @@ nativeBrowserTest?.(
       await nativeWindow.evaluate((window) => window.setContentSize(1100, 700));
       const currentZoom = () =>
         nativeWindow.evaluate((window) => window.webContents.getZoomFactor());
+      const centeredInBand = async (control: Locator) => {
+        const box = (await control.boundingBox())!;
+        const centerY = (box.y + box.height / 2) * (await currentZoom());
+        expect(Math.abs(centerY - 20)).toBeLessThanOrEqual(1);
+      };
+      const clearsLights = async (control: Locator) => {
+        const box = (await control.boundingBox())!;
+        expect(box.x * (await currentZoom())).toBeGreaterThanOrEqual(71.5);
+      };
+      const projectRow = main.locator(".kx-project-sidebar-titlebar");
+      await expect(projectRow).toBeVisible();
+      const switcher = projectRow.locator("[data-sidebar='menu-button']");
+      const projectSearch = projectRow.getByRole("button", { name: /Search/i });
+      const projectCollapse = projectRow.getByRole("button", { name: "Collapse sidebar" });
+      for (const control of [projectRow, switcher, projectSearch, projectCollapse]) {
+        await expect(control).toBeVisible();
+        await centeredInBand(control);
+      }
+      await clearsLights(switcher);
+      for (let index = 0; index < 3; index++) await main.keyboard.press("Meta+=");
+      await expect.poll(currentZoom).toBeGreaterThan(1.2);
+      for (const control of [switcher, projectSearch, projectCollapse]) {
+        await centeredInBand(control);
+        await clearsLights(control);
+      }
+      await main.keyboard.press("Meta+0");
+      await expect.poll(currentZoom).toBe(0.94);
       await main.getByRole("button", { name: "Collapse sidebar" }).click();
 
       for (const route of ["apps", "files"] as const) {
         await main.goto(`${baseURL}/projects/${project.id}/${route}`);
-        const row = main.locator(".kx-titlebar-row").first();
+        const row = main
+          .locator(".kx-titlebar-row[data-sidebar-collapsed='true']")
+          .first();
         await expect(row).toBeVisible({ timeout: 60_000 });
         await expect(row).toHaveAttribute("data-sidebar-collapsed", "true");
         await expect
@@ -1489,15 +1518,6 @@ nativeBrowserTest?.(
       await expect(hub.locator(".kx-titlebar-spacer")).toHaveCount(0);
       const sidebarRow = hub.locator(".kx-overlay-sidebar-titlebar");
       const breadcrumbRow = hub.locator(".kx-account-hub-header");
-      const centeredInBand = async (control: Locator) => {
-        const box = (await control.boundingBox())!;
-        const centerY = (box.y + box.height / 2) * (await currentZoom());
-        expect(Math.abs(centerY - 20)).toBeLessThanOrEqual(1);
-      };
-      const clearsLights = async (control: Locator) => {
-        const box = (await control.boundingBox())!;
-        expect(box.x * (await currentZoom())).toBeGreaterThanOrEqual(71.5);
-      };
       await expect(sidebarRow).toBeVisible();
       await expect(breadcrumbRow).toBeVisible();
       await centeredInBand(sidebarRow);
@@ -1572,6 +1592,29 @@ nativeBrowserTest?.(
       await centeredInBand(settingsBack);
       await centeredInBand(settingsBreadcrumb);
       await clearsLights(settingsBack);
+      await nativeWindow.evaluate((window) => window.setContentSize(720, 480));
+      for (let index = 0; index < 3; index++) await main.keyboard.press("Meta+=");
+      await expect.poll(currentZoom).toBeGreaterThan(1.2);
+      const mobileSettingsRow = settings.locator(".kx-settings-mobile-titlebar");
+      const mobileSettingsTabsWrapper = mobileSettingsRow
+        .locator(".kx-settings-mobile-tabs")
+        .first();
+      const mobileSettingsTabs = mobileSettingsRow.locator("[data-slot='tabs-list']");
+      await expect(mobileSettingsRow).toBeVisible();
+      await expect(mobileSettingsTabsWrapper).toBeVisible();
+      await expect(mobileSettingsTabs).toBeVisible();
+      await centeredInBand(mobileSettingsRow);
+      await centeredInBand(mobileSettingsTabsWrapper);
+      await centeredInBand(mobileSettingsTabs);
+      const mobileRowBox = (await mobileSettingsRow.boundingBox())!;
+      const mobileTabsBox = (await mobileSettingsTabs.boundingBox())!;
+      expect(mobileTabsBox.y).toBeGreaterThanOrEqual(mobileRowBox.y - 1);
+      expect(mobileTabsBox.y + mobileTabsBox.height).toBeLessThanOrEqual(
+        mobileRowBox.y + mobileRowBox.height + 1,
+      );
+      await main.keyboard.press("Meta+0");
+      await nativeWindow.evaluate((window) => window.setContentSize(1100, 700));
+      await expect(settingsBack).toBeVisible();
       await settingsBack.click();
       await expect(settings).not.toBeVisible();
 

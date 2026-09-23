@@ -168,6 +168,12 @@ describe('no app control overlaps the macOS traffic lights', () => {
     expect(overlaps({ left, right: left + box, top, bottom: top + box })).toBe(false);
   });
 
+  test('the expanded project sidebar row clears the native lights at every zoom', () => {
+    expect(css).toContain(".kx-project-sidebar-titlebar");
+    expect(css).toMatch(/\.kx-project-sidebar-titlebar\s*\{[^}]*padding-left:\s*var\(--kx-titlebar-control-left\)/);
+    expect(css).toMatch(/data-desktop-fullscreen='true'\] \.kx-project-sidebar-titlebar\s*\{[^}]*padding-left:\s*0\.5rem/);
+  });
+
   test('content that follows it clears them too', () => {
     const left = cssVarPx(block, '--kx-titlebar-content-left');
     expect(
@@ -339,7 +345,9 @@ describe('sidebar hover peek owns one toggle and no title-bar gap', () => {
 
   test('the flyout header uses normal padding and hides its duplicate pin control', () => {
     expect(sidebar).toContain('const { state, setOpenMobile, toggleSidebar, peek } = useSidebar()');
-    expect(sidebar).toMatch(/paddingTop:\s*peek\s*\?\s*'calc\(var\(--spacing\) \* 2\)'/);
+    expect(sidebar).toContain("data-peek={peek ? '' : undefined}");
+    expect(sidebar).toContain("!peek && 'kx-titlebar-row kx-titlebar-band-height kx-project-sidebar-titlebar'");
+    expect(css).toContain("html[data-desktop-platform='macos'] .kx-project-sidebar-header:not([data-peek]) {");
     expect(sidebar).toContain('!isMobile && !peek');
   });
 });

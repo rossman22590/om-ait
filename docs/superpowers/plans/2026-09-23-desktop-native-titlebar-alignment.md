@@ -41,7 +41,7 @@
 **Interfaces:** Consume the existing `.kx-titlebar-row` and `.kx-titlebar-band-height` classes. Produce explicit first-row markers for test selection. Preserve existing close, command-palette, and sidebar-toggle callbacks.
 
 - [ ] **Step 1: Write failing structure tests.** Assert neither overlay renders `.kx-titlebar-spacer`; assert Settings Back lives in a `.kx-titlebar-row` with a right-aligned action group; assert account sidebar actions and account breadcrumb each live in a titlebar row; assert the collapsed header exposes a state marker to gate macOS clearance.
-- [ ] **Step 2: Run tests to verify failure.** `PATH=/Users/jay/.nvm/versions/node/v22.22.3/bin:$PATH pnpm exec bun test apps/web/src/features/workspace/settings/settings-panel.test.tsx apps/web/src/features/workspace/project-layout/desktop-titlebar.test.ts`
+- [ ] **Step 2: Run tests to verify failure.** With the repository-supported Node version active, run `pnpm exec bun test apps/web/src/features/workspace/settings/settings-panel.test.tsx apps/web/src/features/workspace/project-layout/desktop-titlebar.test.ts`.
 - [ ] **Step 3: Remove both overlay spacer elements.** Change only the overlay shells. Make their first row own the band. Pack Settings Back toward the sidebar's right edge; keep account Back, Search, and Hide Sidebar in one right-aligned group. Add the collapse marker to the account content header and keep its breadcrumb in that row.
 - [ ] **Step 4: Run the same tests and confirm pass.** Commit with `fix(desktop): align overlay titlebar rows`.
 
@@ -56,7 +56,7 @@
 **Interfaces:** `macTrafficLightPosition()` continues to return `{ x, y }` to the BrowserWindow constructor. CSS consumes `--kx-titlebar-inset`, `--kx-titlebar-lights-end`, and `--kx-titlebar-content-left` under `data-desktop-platform='macos'`.
 
 - [ ] **Step 1: Write failing geometry tests.** Pin the empirical native-light offset against the existing project/session centerline, and require the overlay rows to use the same 40px band. Assert collapsed account header starts after `--kx-titlebar-content-left` and fullscreen removes the clearance.
-- [ ] **Step 2: Run focused tests to verify failure.** `PATH=/Users/jay/.nvm/versions/node/v22.22.3/bin:$PATH pnpm --filter @kortix/desktop-electron test` and the focused web titlebar test.
+- [ ] **Step 2: Run focused tests to verify failure.** With the repository-supported Node version active, run `pnpm --filter @kortix/desktop-electron test` and the focused web titlebar test.
 - [ ] **Step 3: Calibrate only the native macOS light position from a real Electron screenshot.** Update `macTrafficLightPosition()` and its measured-frame comment; retain the 40px web band. Add explicit CSS for the overlay first rows and collapsed header, divided by `--kx-desktop-zoom` where they represent window pixels. Do not alter project/session header position.
 - [ ] **Step 4: Run focused tests and inspect the screenshot again.** Commit with `fix(desktop): align native window controls`.
 

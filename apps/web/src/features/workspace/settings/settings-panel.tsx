@@ -477,15 +477,15 @@ export function SettingsPanelShell({
         {isMobile ? (
           <nav
             aria-label={chrome.settings}
-            className="kx-titlebar-row kx-titlebar-band-height border-border/60 flex h-auto shrink-0 items-center border-b bg-inherit"
+            className="kx-titlebar-row kx-titlebar-band-height kx-settings-mobile-titlebar border-border/60 flex h-auto shrink-0 items-center border-b bg-inherit"
             data-sidebar-collapsed=""
           >
             <FadedScrollArea
               orientation="horizontal"
               fadeColor="from-background"
-              className="min-w-0 flex-1 py-2"
+              className="kx-settings-mobile-scroll min-w-0 flex flex-1 items-center py-2"
             >
-              <TabsList orientation="horizontal" className="w-fit gap-1 px-2">
+              <TabsList orientation="horizontal" className="kx-settings-mobile-tabs w-fit gap-1 px-2">
                 {allItems.map((item) => (
                   <TabsTrigger
                     key={item.tab}
@@ -501,7 +501,7 @@ export function SettingsPanelShell({
                     <ModalClose asChild key={account.account_id}>
                       <HubLink
                         to={hubTarget(account.account_id)}
-                        className="text-muted-foreground hover:text-foreground flex h-8 w-auto shrink-0 items-center gap-1 px-3 text-sm whitespace-nowrap transition-colors"
+                        className="kx-settings-mobile-org-link text-muted-foreground hover:text-foreground flex h-8 w-auto shrink-0 items-center gap-1 px-3 text-sm whitespace-nowrap transition-colors"
                       >
                         {account.name?.trim() || organizationCopy.fallbackAccountName}
                         <ArrowUpRightIcon aria-hidden className="size-3.5 shrink-0 opacity-60" />
@@ -515,7 +515,7 @@ export function SettingsPanelShell({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="text-muted-foreground hit-area-2 shrink-0"
+                  className="kx-settings-mobile-close text-muted-foreground hit-area-2 shrink-0"
                   aria-label={chrome.close}
                 >
                   <Close className="text-foreground size-4 stroke-1" />

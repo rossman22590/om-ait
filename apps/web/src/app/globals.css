@@ -1226,12 +1226,20 @@ html[data-desktop='true'] .kx-desktop-drag {
 html[data-desktop-platform='macos'] .kx-desktop-drag {
   margin-left: 80px;
 }
-/* The project sidebar keeps its own top inset, set inline by its component.
-   Do not apply that inset to overlay sidebars: their first row IS the native
-   titlebar band. */
+/* The docked project sidebar shares the native-light band. The hover-peek card
+   keeps its normal 8px padding and must not gain a 40px blank strip. */
 html[data-desktop-platform='macos'] .kx-project-sidebar-header {
   -webkit-app-region: drag;
   app-region: drag;
+}
+html[data-desktop-platform='macos'] .kx-project-sidebar-header:not([data-peek]) {
+  padding-top: 0;
+}
+html[data-desktop-platform='macos'] .kx-project-sidebar-titlebar {
+  padding-left: var(--kx-titlebar-control-left);
+}
+html[data-desktop-platform='macos'][data-desktop-fullscreen='true'] .kx-project-sidebar-titlebar {
+  padding-left: 0.5rem;
 }
 /* Right sidebar header sits in the same vertical band as the inset's
    tab bar so the expand/collapse toggle aligns visually with the
@@ -1525,6 +1533,29 @@ html[data-desktop-platform='macos'][data-desktop-fullscreen='true'] .kx-overlay-
 }
 html[data-desktop-platform='macos'][data-desktop-fullscreen='true'] .kx-account-hub-header[data-sidebar-collapsed] {
   padding-left: 0.5rem;
+}
+/* The narrow Settings rail is a horizontal tab strip. Its default 36px list,
+   32px tabs, and 8px vertical padding exceed the 40px physical band at zoom. */
+html[data-desktop-platform='macos'] .kx-settings-mobile-titlebar .kx-settings-mobile-scroll {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+/* TabsList wraps its Radix list in the sliding-indicator container. Size both
+   boxes; sizing only the inner list leaves the 36px wrapper clipped at zoom. */
+html[data-desktop-platform='macos'] .kx-settings-mobile-titlebar .kx-settings-mobile-tabs {
+  height: var(--kx-titlebar-control-size);
+}
+html[data-desktop-platform='macos'] .kx-settings-mobile-titlebar [data-slot='tabs-trigger'] {
+  height: var(--kx-titlebar-control-size);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+html[data-desktop-platform='macos'] .kx-settings-mobile-titlebar .kx-settings-mobile-org-link,
+html[data-desktop-platform='macos'] .kx-settings-mobile-titlebar .kx-settings-mobile-close {
+  height: var(--kx-titlebar-control-size);
+}
+html[data-desktop-platform='macos'] .kx-settings-mobile-titlebar .kx-settings-mobile-close {
+  width: var(--kx-titlebar-control-size);
 }
 /* Below the sidebar breakpoint, its docked cookie does not describe the
    visible layout. Every top row clears the native controls and shell opener. */

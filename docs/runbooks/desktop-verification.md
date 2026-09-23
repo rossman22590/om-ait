@@ -89,9 +89,12 @@ Windows and Linux use the OS-native frame. The web layer does not draw minimize,
 maximize, or close controls on any platform.
 
 `.kx-titlebar-tabs` marks only the top capability bar. Product tab lists keep
-the shared Tabs component's layout. Settings and account overlays put their first
-header rows in the native-light band. Do not add `.kx-titlebar-spacer` to either
-overlay; it creates a blank strip above the breadcrumb.
+the shared Tabs component's layout. The docked project sidebar, Settings, and
+account overlays put their first control rows in the native-light band. The
+project sidebar's hover peek keeps its normal padding and one toggle. At narrow
+width, Settings sizes both the mobile tab list and its indicator wrapper to the
+zoom-safe control height. Do not add `.kx-titlebar-spacer` to either overlay;
+it creates a blank strip above the breadcrumb.
 
 The shell has no browser toolbar. No screen may be a soft lock. Two layers
 guarantee an exit:
