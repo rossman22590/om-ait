@@ -535,6 +535,11 @@ export async function createOrJoinTeamsConversationSession(input: {
 
   if (result.error) {
     console.error('[teams-webhook] createProjectSession failed', { status: result.error.status, body: result.error.body });
+    // No session exists, so no mapping will ever be published under this
+    // claim. Held for its 5-minute TTL, it made every retry inside that
+    // window lose the claim, wait 8 s, and fail with "couldn't start" —
+    // including the retry the agent picker below asks for.
+    if (claimKey) await releaseThreadCreate(claimKey);
     if (handle) {
       // A deleted / renamed / disabled agent is rejected up front as
       // `400 AGENT_NOT_DECLARED`, and no amount of retrying revives it. Hand
@@ -606,6 +611,13 @@ async function claimThreadCreate(key: string): Promise<boolean> {
     console.warn('[teams-webhook] thread-create claim failed (fail-open)', err);
     return true;
   }
+}
+
+async function releaseThreadCreate(key: string): Promise<void> {
+  await db
+    .delete(chatEventDedup)
+    .where(eq(chatEventDedup.eventId, key))
+    .catch((err) => console.warn('[teams-webhook] thread-create claim release failed', err));
 }
 
 async function waitForConversationSession(tenantId: string, conversationId: string): Promise<string | null> {

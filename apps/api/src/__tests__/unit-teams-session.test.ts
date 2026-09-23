@@ -42,6 +42,9 @@ function chain(result: unknown[]): any {
   return c;
 }
 
+// The real table object: a delete is told apart by the table it targets.
+const { chatEventDedup: chatEventDedupTable } = await import('@kortix/db');
+
 let selectCount = 0;
 mock.module('../shared/db', () => ({
   hasDatabase: true,
@@ -58,8 +61,8 @@ mock.module('../shared/db', () => ({
       if (insertQueue.length) return chain(insertQueue.shift()!);
       return chain(claimWins ? [{ eventId: 'claimed' }] : []);
     },
-    delete: () => {
-      dbOps.push('delete');
+    delete: (table: unknown) => {
+      dbOps.push(table === chatEventDedupTable ? 'delete:dedup' : 'delete');
       return chain([]);
     },
     update: () => {
@@ -524,6 +527,27 @@ describe('createOrJoinTeamsConversationSession — a start failure says what to 
     await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
 
     expect((finalized[0] as { error: string }).error.toLowerCase()).toContain('sandbox runtime');
+  });
+
+  test('a failed start releases the thread-create claim, so the retry it asks for can start', async () => {
+    // The claim lives 5 minutes. Held after a failure, every retry inside
+    // that window lost it, waited 8 s for a session nobody was creating, and
+    // failed with "couldn't start" — including the retry the agent picker
+    // asks for ("Pick one, then send your message again").
+    startFails(400, { code: 'AGENT_NOT_DECLARED', error: 'agent "reviewer" is not declared' });
+
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+
+    expect(dbOps).toContain('delete:dedup');
+  });
+});
+
+describe('createOrJoinTeamsConversationSession — a started session keeps its claim', () => {
+  test('a session that started does not release the claim a racing message must lose', async () => {
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+
+    expect(created).toHaveLength(1);
+    expect(dbOps).not.toContain('delete:dedup');
   });
 });
 
