@@ -7,6 +7,7 @@ import { normalizeAuditClientSource } from './audit-client-source';
 import { type AuditRow, getAuditQueue } from './audit-queue';
 import { AnonymousAuditBudget, type AnonymousAuditSummary } from './audit-anonymous-budget';
 import {
+  type AuditPrincipal,
   type HonoIdentitySnapshot,
   type InboundAuditScope,
   type InboundEntrypoint,
@@ -533,6 +534,27 @@ async function agentAttributionForSnapshot(
   }
 }
 
+/**
+ * The bound principal with its deferred lookup applied. Runs at write time, so
+ * a slow lookup never holds the response; a failed one keeps what was bound.
+ */
+async function principalWithLateAttribution(principal: AuditPrincipal): Promise<AuditPrincipal> {
+  const { lateAttribution, ...bound } = principal;
+  if (!lateAttribution) return bound;
+  try {
+    const late = await lateAttribution();
+    if (!late) return bound;
+    const merged: AuditPrincipal = { ...bound };
+    for (const [key, value] of Object.entries(late)) {
+      if (value !== undefined) (merged as Record<string, unknown>)[key] = value;
+    }
+    return merged;
+  } catch (error) {
+    console.error('[audit] deferred attribution failed:', error);
+    return bound;
+  }
+}
+
 /** The resource a non-Hono entrypoint acts on, when no handler said more. */
 const ENTRYPOINT_RESOURCE_TYPE: Record<InboundEntrypoint, string> = {
   http: 'unknown',
@@ -553,7 +575,7 @@ async function inboundAuditInput(
 ): Promise<AuditEventInput> {
   const request = getRequestContext();
   const hono = scope.hono;
-  const bound = scope.principal;
+  const bound = await principalWithLateAttribution(scope.principal);
   const annotation = scope.annotation;
   const ids = hono ? pathIds(hono.path) : { projectId: null, sessionId: null };
   const agent = hono ? await agentAttributionForSnapshot(hono) : null;
@@ -565,10 +587,13 @@ async function inboundAuditInput(
     bound.accountId !== undefined
       ? bound.accountId
       : (hono?.accountId ?? request?.accountId ?? scope.queryAccountId ?? null);
+  // `system` means an account-level credential with no user — an account API
+  // key the auth middleware resolved. An account a route merely bound (the
+  // project an invalid token was aimed at) proves no caller: `anonymous`.
   const actorType: AuditActorType =
     bound.actorType ??
     (hono ? actorTypeForSnapshot(hono, tokenUserId) : null) ??
-    (actorUserId ? 'human' : accountId ? 'system' : 'anonymous');
+    (actorUserId ? 'human' : hono?.accountId ? 'system' : 'anonymous');
   const source =
     bound.authoritativeSource ??
     (actorType === 'anonymous' ? 'anonymous' : auditSourceFor(hono?.authType, actorType));

@@ -78,6 +78,13 @@ export interface AuditPrincipal {
    * with that name, correctly.)
    */
   authMethod?: Record<string, unknown> | null;
+  /**
+   * Attribution that needs a lookup — an agent session's on-behalf-of human,
+   * say. Resolved when the row is written, off the request path; the fields
+   * it returns win over the ones bound alongside it. A lookup that fails
+   * keeps what was bound.
+   */
+  lateAttribution?: () => Promise<Omit<AuditPrincipal, 'lateAttribution'> | null>;
 }
 
 /** What a handler knows that the transport does not. */

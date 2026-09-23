@@ -183,6 +183,71 @@ describe('authenticators and handlers write into the request scope', () => {
     expect(auditRows[0]).toMatchObject({ action: 'git.push', outcome: 'denied', httpStatus: 200 });
   });
 
+  test('a project bound without a caller is anonymous, not "system"', async () => {
+    // An invalid token against a known project: the project owner should see
+    // the attempt, but nothing proved who made it.
+    const app = gitApp((c) => {
+      bindAuditPrincipal({ accountId: ACCOUNT, projectId: PROJECT });
+      return c.text('Invalid PAT', 401);
+    });
+
+    await app.request(`/v1/git/${PROJECT}/git-receive-pack`, { method: 'POST' });
+
+    expect(auditRows[0]).toMatchObject({
+      accountId: ACCOUNT,
+      projectId: PROJECT,
+      actorUserId: null,
+      actorType: 'anonymous',
+      source: 'anonymous',
+      outcome: 'denied',
+    });
+  });
+
+  test('attribution that needs a lookup is resolved when the row is written', async () => {
+    const HUMAN = '00000000-0000-4000-a000-000000000002';
+    const app = gitApp((c) => {
+      bindAuditPrincipal({
+        accountId: ACCOUNT,
+        actorUserId: USER,
+        actorType: 'agent',
+        lateAttribution: async () => ({
+          actorUserId: HUMAN,
+          agentName: 'kortix',
+          onBehalfOfUserId: HUMAN,
+        }),
+      });
+      return c.body(null, 200);
+    });
+
+    await app.request(`/v1/git/${PROJECT}/git-receive-pack`, { method: 'POST' });
+
+    expect(auditRows[0]).toMatchObject({
+      actorType: 'agent',
+      actorUserId: HUMAN,
+      agentName: 'kortix',
+      onBehalfOfUserId: HUMAN,
+    });
+  });
+
+  test('a lookup that fails keeps what was bound, and the row is still written', async () => {
+    const app = gitApp((c) => {
+      bindAuditPrincipal({
+        accountId: ACCOUNT,
+        actorUserId: USER,
+        actorType: 'agent',
+        lateAttribution: async () => {
+          throw new Error('token binding lookup timed out');
+        },
+      });
+      return c.body(null, 200);
+    });
+
+    await app.request(`/v1/git/${PROJECT}/git-receive-pack`, { method: 'POST' });
+
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]).toMatchObject({ actorType: 'agent', actorUserId: USER });
+  });
+
   test('an unannotated row keeps exactly the metadata it always had', async () => {
     const app = new Hono();
     app.use('*', auditApiRequest);
