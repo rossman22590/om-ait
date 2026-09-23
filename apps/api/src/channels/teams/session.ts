@@ -614,10 +614,12 @@ async function claimThreadCreate(key: string): Promise<boolean> {
 }
 
 async function releaseThreadCreate(key: string): Promise<void> {
-  await db
-    .delete(chatEventDedup)
-    .where(eq(chatEventDedup.eventId, key))
-    .catch((err) => console.warn('[teams-webhook] thread-create claim release failed', err));
+  try {
+    await db.delete(chatEventDedup).where(eq(chatEventDedup.eventId, key));
+  } catch (err) {
+    // The claim still expires on its own; only the retry window stays shut.
+    console.warn('[teams-webhook] thread-create claim release failed', err);
+  }
 }
 
 async function waitForConversationSession(tenantId: string, conversationId: string): Promise<string | null> {

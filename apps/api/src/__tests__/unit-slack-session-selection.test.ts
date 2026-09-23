@@ -50,8 +50,18 @@ function makeChain(): any {
   chain.then = (resolve: (rows: unknown[]) => unknown) => Promise.resolve(resolve(dbResults.shift() ?? []));
   return chain;
 }
+// Every table a delete targeted, so a released claim can be asserted.
+const deletedFrom: unknown[] = [];
 mock.module('../shared/db', () => ({
-  db: { select: () => makeChain(), insert: () => makeChain(), update: () => makeChain(), delete: () => makeChain() },
+  db: {
+    select: () => makeChain(),
+    insert: () => makeChain(),
+    update: () => makeChain(),
+    delete: (table: unknown) => {
+      deletedFrom.push(table);
+      return makeChain();
+    },
+  },
   hasDatabase: () => true,
 }));
 mock.module('../projects/session-lifecycle', () => ({
@@ -289,6 +299,29 @@ test('deleted channel agent (AGENT_NOT_DECLARED) → in-thread agent picker, not
 });
 
 // A non-agent failure still renders honest, specific copy (not the picker).
+// The thread-create claim lives 5 minutes. A failed start kept it, so the
+// re-send the picker asks for ("Pick a current agent, then send your message
+// again") lost the claim, waited 8 s for a session nobody was creating, and
+// was dropped without a word.
+test('a failed start releases the thread-create claim', async () => {
+  const { chatEventDedup } = await import('@kortix/db');
+  selection = { projectId: 'proj-1', agentName: 'ghost', opencodeModel: null };
+  setSlackSessionLifecycleForTest({
+    continueSession: async () => 'delivered',
+    createSession: async () => ({
+      status: 'failed',
+      retryable: false,
+      error: { status: 400, body: { error: 'Agent "ghost" is not declared in this project', code: 'AGENT_NOT_DECLARED' } },
+    }),
+    resolveProjectAutomationActor: async () => 'user-1',
+  });
+  newThreadFifo();
+  deletedFrom.length = 0;
+  await spawnAgentTurn('proj-1', envelope, event);
+
+  expect(deletedFrom).toContain(chatEventDedup);
+});
+
 test('out-of-credits (402) → credit copy, no picker blocks', async () => {
   selection = { projectId: 'proj-1', agentName: null, opencodeModel: null };
   setSlackSessionLifecycleForTest({
