@@ -313,6 +313,8 @@ export interface TeamsQuestion {
 }
 
 const MAX_BUTTON_OPTIONS = 6;
+/** Past this, a column of radios stops being scannable and a dropdown wins. */
+const MAX_EXPANDED_CHOICES = 6;
 
 /**
  * An `Input.*` id doubles as the label the agent reads back, because
@@ -384,14 +386,27 @@ export function buildQuestionCard(questions: TeamsQuestion[]): Record<string, un
   }
 
   const fields: TeamsFormField[] = [];
+  const numbered = list.length > 1;
   for (const [i, q] of list.entries()) {
     const id = questionFieldId(q.question, i);
     const opts = q.options?.filter((o) => o?.label?.trim()) ?? [];
+    // Shape of the Kortix web question UI: each question carries its short
+    // header, and several questions are numbered so "question 2" means one
+    // thing. The field ID stays the bare question — `handleForm` relays it to
+    // the agent, which should read the question, not "2. ".
+    const label = numbered ? `${i + 1}. ${q.question}` : q.question;
+    const caption = q.header?.trim() || undefined;
     if (opts.length > 0) {
       fields.push({
         id,
-        label: q.question,
+        label,
+        caption,
         type: q.multiple ? 'multichoice' : 'choice',
+        // Every option VISIBLE, as the web UI shows them — a dropdown hides the
+        // choices behind a tap and turns "which of these?" into "open this to
+        // find out". Past MAX_EXPANDED_CHOICES a list of radios stops being
+        // scannable, and the dropdown earns its place back.
+        style: opts.length <= MAX_EXPANDED_CHOICES ? 'expanded' : 'compact',
         // A description belongs on the choice itself, where the user reads it.
         choices: opts.map((o) => ({
           title: o.description?.trim() ? `${o.label} — ${o.description.trim()}` : o.label,
@@ -399,13 +414,16 @@ export function buildQuestionCard(questions: TeamsQuestion[]): Record<string, un
         })),
         placeholder: q.multiple ? 'Pick one or more' : 'Pick one',
       });
-      // `custom` means the listed options are not exhaustive. Give that its own
-      // box rather than pretending the list is closed.
+      // `custom` means the listed options are not exhaustive. The relay route
+      // defaults it to TRUE, so this box appears under nearly every question —
+      // which is why it carries NO label of its own: an unlabeled box directly
+      // under the choices reads as "or say it yourself", where a repeated bold
+      // "Something else" read as a second question.
       if (q.custom) {
-        fields.push({ id: `${id} (other)`, label: 'Something else', type: 'text', placeholder: 'Your own answer' });
+        fields.push({ id: `${id} (other)`, label: '', type: 'text', placeholder: 'Or type your own answer' });
       }
     } else {
-      fields.push({ id, label: q.question, type: 'textarea', placeholder: 'Your answer' });
+      fields.push({ id, label, caption, type: 'textarea', placeholder: 'Your answer' });
     }
   }
 
@@ -559,6 +577,14 @@ export interface TeamsFormField {
   required?: boolean;
   /** For `choice` / `multichoice`. A bare string is both label and value. */
   choices?: Array<string | { title: string; value: string }>;
+  /**
+   * `expanded` lays every choice out as a visible radio/checkbox; `compact` is
+   * a dropdown. Unset keeps the Adaptive Cards default (compact for a single
+   * choice), so agent-authored `teams ask --form-file` forms are unchanged.
+   */
+  style?: 'expanded' | 'compact';
+  /** A small, subtle line ABOVE the label — a question's short header. */
+  caption?: string;
 }
 
 export interface TeamsFormSpec {
@@ -603,6 +629,7 @@ function formInput(field: TeamsFormField): CardElement | null {
         type: 'Input.ChoiceSet',
         choices,
         ...(field.type === 'multichoice' ? { isMultiSelect: true, style: 'expanded' } : {}),
+        ...(field.style ? { style: field.style } : {}),
         placeholder: field.placeholder,
         value: field.value,
         ...common,
@@ -624,9 +651,22 @@ export function buildFormCard(spec: TeamsFormSpec): Record<string, unknown> | nu
   for (const field of fields) {
     const input = formInput(field);
     if (!input) continue;
-    // A toggle renders its own label, so it does not get a second one.
-    if ((field.type ?? 'text') !== 'toggle') {
-      body.push(text(field.label, { weight: 'bolder', size: 'small', spacing: 'medium', wrap: true }));
+    if (field.caption?.trim()) {
+      body.push(text(field.caption.trim(), { isSubtle: true, size: 'small', spacing: 'large', wrap: true }));
+    }
+    // A toggle renders its own label, so it does not get a second one. An
+    // EMPTY label means the input belongs to the field above it — the "type
+    // your own answer" box under a question — and a second bold label there is
+    // what made one question read as two.
+    if ((field.type ?? 'text') !== 'toggle' && field.label.trim()) {
+      body.push(
+        text(field.label, {
+          weight: 'bolder',
+          size: 'small',
+          spacing: field.caption?.trim() ? 'none' : 'medium',
+          wrap: true,
+        }),
+      );
     }
     body.push(input);
     ids.push(field.id.trim());
