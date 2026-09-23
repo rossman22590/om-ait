@@ -48,6 +48,38 @@ describe('parseUserMessageText', () => {
     expect(parseUserMessageText(raw).files[0]?.filename).toBe('R&D.pdf');
   });
 
+  test('strips two <file> tags and keeps the prose around them', () => {
+    const raw =
+      'before <file path="/w/a.png" mime="image/png" filename="a.png">A</file> middle <file path="/w/b.pdf" filename="b.pdf">B</file> after';
+    const parsed = parseUserMessageText(raw);
+    expect(parsed.text).toBe('before  middle  after');
+    expect(parsed.files).toEqual([
+      { path: '/w/a.png', mime: 'image/png', filename: 'a.png' },
+      { path: '/w/b.pdf', mime: '', filename: 'b.pdf' },
+    ]);
+  });
+
+  test('keeps a <file> tag that names neither path nor filename', () => {
+    const raw = 'x <file note="y">z</file>';
+    expect(parseUserMessageText(raw)).toMatchObject({ text: raw, files: [] });
+  });
+
+  test('keeps an unclosed <file> tag as typed', () => {
+    const raw = 'look <file path="/w/a"> nothing closes it';
+    expect(parseUserMessageText(raw)).toMatchObject({ text: raw, files: [] });
+  });
+
+  // The old `<file>` regex was quadratic on whitespace that never reaches `>`.
+  // This ~440k-character message froze it for ~20 s under Bun on a laptop.
+  // The trailing `x` keeps the first `.trim()` from removing the whitespace.
+  test('a pathological <file> opener does not freeze the parser', () => {
+    const evil = `${'<file\t'.repeat(40_000)}<file${'\t'.repeat(200_000)}x`;
+    const started = performance.now();
+    const parsed = parseUserMessageText(evil);
+    expect(performance.now() - started).toBeLessThan(100);
+    expect(parsed.files).toEqual([]);
+  });
+
   test('extracts reply context', () => {
     const parsed = parseUserMessageText('<reply_context>quoted bit</reply_context>\nmy answer');
     expect(parsed.replyContext).toBe('quoted bit');

@@ -7,6 +7,7 @@
  */
 
 import { formatMessageDay, isAbortError } from '@kortix/sdk';
+import { fileTagBlocks } from '@kortix/shared';
 
 // ─── Web metrics ─────────────────────────────────────────────────────────────
 
@@ -54,7 +55,23 @@ function unescapeAttr(value: string): string {
     .replace(/&amp;/g, '&');
 }
 
-const FILE_TAG_REGEX = /<file\s+([^>]*?)>\s*[\s\S]*?<\/file>/g;
+/**
+ * Pass every `<file …>…</file>` block through `replace(whole, attrs)`.
+ *
+ * The blocks come from `fileTagBlocks`, not a regex. The regex this replaced
+ * was quadratic in the message text: `<file` followed by many whitespace
+ * characters and no `>` froze the app for seconds, and in a shared session one
+ * member's message froze every member who opened it. See `@kortix/shared/file-tags`.
+ */
+function replaceFileTags(text: string, replace: (whole: string, attrs: string) => string): string {
+  let out = '';
+  let end = 0;
+  for (const block of fileTagBlocks(text)) {
+    out += text.slice(end, block.index) + replace(text.slice(block.index, block.end), block.attrs);
+    end = block.end;
+  }
+  return out + text.slice(end);
+}
 
 /**
  * Strip every structured block a user message carries and keep what the user
@@ -73,19 +90,17 @@ export function parseUserMessageText(raw: string): ParsedUserMessageText {
   }
 
   const files: ParsedFileRef[] = [];
-  text = text
-    .replace(FILE_TAG_REGEX, (whole, attrs: string) => {
-      const pick = (key: string): string | undefined => {
-        const m = attrs.match(new RegExp(`\\b${key}="([^"]*?)"`));
-        return m ? unescapeAttr(m[1]!) : undefined;
-      };
-      const path = pick('path');
-      const filename = pick('filename');
-      if (path === undefined && filename === undefined) return whole;
-      files.push({ path: path ?? '', mime: pick('mime') ?? '', filename: filename ?? '' });
-      return '';
-    })
-    .trim();
+  text = replaceFileTags(text, (whole, attrs) => {
+    const pick = (key: string): string | undefined => {
+      const m = attrs.match(new RegExp(`\\b${key}="([^"]*?)"`));
+      return m ? unescapeAttr(m[1]!) : undefined;
+    };
+    const path = pick('path');
+    const filename = pick('filename');
+    if (path === undefined && filename === undefined) return whole;
+    files.push({ path: path ?? '', mime: pick('mime') ?? '', filename: filename ?? '' });
+    return '';
+  }).trim();
 
   text = text
     .replace(/<project_ref\b[\s\S]*?\/>/g, '')
