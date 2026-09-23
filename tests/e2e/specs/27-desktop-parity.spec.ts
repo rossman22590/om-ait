@@ -295,9 +295,12 @@ for (const runtime of runtimes) {
         ).toHaveCount(0);
         const box = await switcher.boundingBox();
         expect(
-          box!.y,
+          box!.x,
           "workspace selector must clear native window controls",
-        ).toBeGreaterThanOrEqual(desktop ? 40 : 0);
+        ).toBeGreaterThanOrEqual(desktop ? 62 : 0);
+        if (desktop) {
+          expect(box!.y, "workspace selector shares the traffic-light row").toBeLessThan(40);
+        }
         await switcher.click();
         await expect(
           page.getByRole("menuitem", { name: "Download app", exact: true }),
@@ -1192,93 +1195,111 @@ for (const runtime of runtimes) {
               .getByText("First prompt still starting", { exact: true }),
           ).toBeVisible();
 
-          await clickNativeMenu("kx-file-new-session");
-          await expect(page).toHaveURL(
-            new RegExp(`/projects/${project.id}(?:\\?|$)`),
-            { timeout: 60_000 },
-          );
-          await page.goto(
-            `${baseURL}/projects/${project.id}/customize/connectors`,
-          );
-          await expect(
-            page.getByRole("tab", { name: "Connected", exact: true }),
-          ).toBeVisible();
-          await expect
-            .poll(() => menuState("kx-file-close-tab"))
-            .toMatchObject({ enabled: true });
-          await clickNativeMenu("kx-file-close-tab");
-          await expect(page).toHaveURL(
-            new RegExp(`/projects/${project.id}(?:\\?|$)`),
-            { timeout: 60_000 },
-          );
-
-          await page.goto(`${baseURL}/settings`);
-          await expect(page).toHaveURL(/\/settings(?:\?|$)/, {
-            timeout: 60_000,
-          });
-          await expect
-            .poll(() => menuState("kx-file-new-session"))
-            .toMatchObject({ enabled: false });
-          await expect
-            .poll(() => menuState("kx-file-close-tab"))
-            .toMatchObject({ enabled: false });
-          await clickNativeMenu("kx-app-settings");
-          await expect(page).toHaveURL(/\/settings(?:\?|$)/, {
-            timeout: 60_000,
-          });
-
-          const unloadAllowed = (response: number) =>
-            desktopApp.evaluate(
-              ({ BrowserWindow, dialog }, options) => {
-                const main = BrowserWindow.getAllWindows().find((window) =>
-                  window.webContents.getURL().startsWith(options.origin),
+          if (desktopApp) {
+            const clickNativeMenu = (id: string) =>
+              desktopApp.evaluate(({ Menu, BrowserWindow }, itemId) => {
+                const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
+                item?.click(
+                  undefined,
+                  BrowserWindow.getAllWindows()[0],
+                  undefined,
                 );
-                if (!main) throw new Error("main window not found");
+              }, id);
+            const menuState = (id: string) =>
+              desktopApp.evaluate(({ Menu }, itemId) => {
+                const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
+                return item
+                  ? { enabled: item.enabled, accelerator: item.accelerator }
+                  : null;
+              }, id);
+            await clickNativeMenu("kx-file-new-session");
+            await expect(page).toHaveURL(
+              new RegExp(`/projects/${project.id}(?:\\?|$)`),
+              { timeout: 60_000 },
+            );
+            await page.goto(
+              `${baseURL}/projects/${project.id}/customize/connectors`,
+            );
+            await expect(
+              page.getByRole("tab", { name: "Connected", exact: true }),
+            ).toBeVisible();
+            await expect
+              .poll(() => menuState("kx-file-close-tab"))
+              .toMatchObject({ enabled: true });
+            await clickNativeMenu("kx-file-close-tab");
+            await expect(page).toHaveURL(
+              new RegExp(`/projects/${project.id}(?:\\?|$)`),
+              { timeout: 60_000 },
+            );
+
+            await page.goto(`${baseURL}/settings`);
+            await expect(page).toHaveURL(/\/settings(?:\?|$)/, {
+              timeout: 60_000,
+            });
+            await expect
+              .poll(() => menuState("kx-file-new-session"))
+              .toMatchObject({ enabled: false });
+            await expect
+              .poll(() => menuState("kx-file-close-tab"))
+              .toMatchObject({ enabled: false });
+            await clickNativeMenu("kx-app-settings");
+            await expect(page).toHaveURL(/\/settings(?:\?|$)/, {
+              timeout: 60_000,
+            });
+
+            const unloadAllowed = (response: number) =>
+              desktopApp.evaluate(
+                ({ BrowserWindow, dialog }, options) => {
+                  const main = BrowserWindow.getAllWindows().find((window) =>
+                    window.webContents.getURL().startsWith(options.origin),
+                  );
+                  if (!main) throw new Error("main window not found");
+                  const original = dialog.showMessageBoxSync;
+                  let allowed = false;
+                  dialog.showMessageBoxSync = () => options.response;
+                  try {
+                    main.webContents.emit("will-prevent-unload", {
+                      preventDefault: () => {
+                        allowed = true;
+                      },
+                    });
+                    return allowed;
+                  } finally {
+                    dialog.showMessageBoxSync = original;
+                  }
+                },
+                { origin: baseURL!, response },
+              );
+            expect(await unloadAllowed(1)).toBe(false);
+            expect(await unloadAllowed(0)).toBe(true);
+
+            await project.dispose();
+            project = undefined;
+            await desktopApp.evaluate(
+              async ({ BrowserWindow, Menu, dialog }, itemId) => {
+                const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
+                const window = BrowserWindow.getAllWindows()[0];
                 const original = dialog.showMessageBoxSync;
-                let allowed = false;
-                dialog.showMessageBoxSync = () => options.response;
+                dialog.showMessageBoxSync = () => 0;
                 try {
-                  main.webContents.emit("will-prevent-unload", {
-                    preventDefault: () => {
-                      allowed = true;
-                    },
+                  await new Promise<void>((resolve, reject) => {
+                    const timeout = setTimeout(
+                      () => reject(new Error("Native Close Window timed out")),
+                      10_000,
+                    );
+                    window.once("closed", () => {
+                      clearTimeout(timeout);
+                      resolve();
+                    });
+                    item?.click(undefined, window, undefined);
                   });
-                  return allowed;
                 } finally {
                   dialog.showMessageBoxSync = original;
                 }
               },
-              { origin: baseURL!, response },
+              "kx-file-close-window",
             );
-          expect(await unloadAllowed(1)).toBe(false);
-          expect(await unloadAllowed(0)).toBe(true);
-
-          await project.dispose();
-          project = undefined;
-          await desktopApp.evaluate(
-            async ({ BrowserWindow, Menu, dialog }, itemId) => {
-              const item = Menu.getApplicationMenu()?.getMenuItemById(itemId);
-              const window = BrowserWindow.getAllWindows()[0];
-              const original = dialog.showMessageBoxSync;
-              dialog.showMessageBoxSync = () => 0;
-              try {
-                await new Promise<void>((resolve, reject) => {
-                  const timeout = setTimeout(
-                    () => reject(new Error("Native Close Window timed out")),
-                    10_000,
-                  );
-                  window.once("closed", () => {
-                    clearTimeout(timeout);
-                    resolve();
-                  });
-                  item?.click(undefined, window, undefined);
-                });
-              } finally {
-                dialog.showMessageBoxSync = original;
-              }
-            },
-            "kx-file-close-window",
-          );
+          }
         }
       } finally {
         if (project && bootSessionId)
