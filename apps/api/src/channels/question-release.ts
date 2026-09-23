@@ -55,7 +55,7 @@ export function questionReleaseSentinel(channel: ChatChannel, posted: boolean): 
     return (
       `(Posted to ${where}. Questions here are async — the user answers with a tap or ` +
       'a reply, and that reaches you as a NEW turn with full context. Do NOT wait for an ' +
-      'answer; finish this turn now.)'
+      'answer, and post nothing else: the question is your reply. Just finish this turn now.)'
     );
   }
   const send = channel === 'teams' ? '`teams send`' : '`slack send`';

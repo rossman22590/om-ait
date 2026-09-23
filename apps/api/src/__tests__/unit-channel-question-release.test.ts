@@ -40,6 +40,8 @@ describe('questionReleaseSentinel', () => {
     const s = questionReleaseSentinel('teams', true);
     expect(s).toContain('Posted to the Teams conversation');
     expect(s).toContain('finish this turn now');
+    // A `teams send` after the card would be a second reply to one question.
+    expect(s).toContain('post nothing else');
     expect(s).toContain('NEW turn');
   });
 
