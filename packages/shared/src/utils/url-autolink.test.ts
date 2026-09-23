@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { autoLinkUrls } from './url-autolink';
+import { autoLinkUrls, openMarkdownLinkAtEnd } from './url-autolink';
 
 describe('autoLinkUrls', () => {
   test('returns empty string unchanged', () => {
@@ -178,5 +178,35 @@ describe('autoLinkUrls', () => {
       expect(typeof out).toBe('string');
       expect(Date.now() - start).toBeLessThan(10_000);
     }
+  });
+});
+
+describe('openMarkdownLinkAtEnd', () => {
+  test('reports a destination that is still arriving', () => {
+    expect(openMarkdownLinkAtEnd('Here:\n[Connect Outlook](https://host/connect/ks')).toEqual({
+      start: 6,
+      label: 'Connect Outlook',
+      destination: 'https://host/connect/ks',
+    });
+  });
+
+  test('reports a label that is still arriving, with no destination yet', () => {
+    expect(openMarkdownLinkAtEnd('see [Connect Out')).toEqual({
+      start: 4,
+      label: 'Connect Out',
+      destination: null,
+    });
+  });
+
+  test('an empty destination is still an open one', () => {
+    expect(openMarkdownLinkAtEnd('[docs](')).toEqual({ start: 0, label: 'docs', destination: '' });
+  });
+
+  test('finished links, earlier lines, and plain text are not open', () => {
+    expect(openMarkdownLinkAtEnd('[docs](https://example.com)')).toBeNull();
+    expect(openMarkdownLinkAtEnd('[docs](https://example.com) and more')).toBeNull();
+    expect(openMarkdownLinkAtEnd('arr[0\nnext line')).toBeNull();
+    expect(openMarkdownLinkAtEnd('no brackets at all')).toBeNull();
+    expect(openMarkdownLinkAtEnd('')).toBeNull();
   });
 });

@@ -10,6 +10,7 @@
  *
  * Safely skips content that is already inside:
  * - Markdown links: [text](url) — neither the text nor the url part
+ * - A link still being written at the end of streaming text: [text](url…
  * - Code blocks: ```...```
  * - Inline code: `...`
  * - LaTeX inline math: $...$ (currency like $4M is escaped before parsing)
@@ -99,40 +100,59 @@ function buildProtectedRanges(text: string): Array<[number, number]> {
   }
 
   // ── A link still being written at the very end  [text](url… ─────────────
-  const openLink = openLinkTailStart(text);
-  if (openLink !== -1) ranges.push([openLink, text.length - 1]);
+  const openLink = openMarkdownLinkAtEnd(text);
+  if (openLink) ranges.push([openLink.start, text.length - 1]);
 
   return ranges;
 }
 
+/** A markdown link the text ends inside of. See `openMarkdownLinkAtEnd`. */
+export interface OpenMarkdownLink {
+  /** Index of the `[` that opens the link. */
+  start: number;
+  /** The label so far: up to `]`, or to the end while the label is still open. */
+  label: string;
+  /** The destination so far, or `null` while the label is still open. */
+  destination: string | null;
+}
+
 /**
- * Where a markdown link left open at the very end of the text starts, or -1.
+ * The markdown link left open at the very end of the text, or null.
  *
  * Only streaming text ends inside a link: `[label` with no `]` yet, or
  * `[label](https://…` with no `)` yet. Linkifying the half-written URL there
  * wraps it in a second link — `[label]([https://…](https://…)` — so the reader
- * sees a raw `[label](` until the closing paren arrives. Leaving it as written
- * lets Streamdown's remend close it for display instead.
+ * sees a raw `[label](` until the closing paren arrives. `autoLinkUrls` leaves
+ * it as written and Streamdown's remend closes it for display; the web renderer
+ * also reads it to show a setup link as a pending card while it arrives.
  *
- * Only the last line counts, so a stray `[` earlier in the text protects
- * nothing. Plain index scans, not a `$`-anchored regex: that backtracks
- * quadratically on a run of `[` followed by a newline.
+ * Only the last line counts, so a stray `[` earlier in the text is never open.
+ * Plain index scans, not a `$`-anchored regex: that backtracks quadratically on
+ * a run of `[` followed by a newline.
  */
-function openLinkTailStart(text: string): number {
+export function openMarkdownLinkAtEnd(text: string): OpenMarkdownLink | null {
   const lineStart = text.lastIndexOf('\n') + 1;
 
   // Destination still open: the last `](` on the line, with no `)` after it.
   const destination = text.lastIndexOf('](');
   if (destination >= lineStart && text.indexOf(')', destination + 2) === -1) {
-    const label = text.lastIndexOf('[', destination);
-    if (label >= lineStart) return label;
+    const start = text.lastIndexOf('[', destination);
+    if (start >= lineStart) {
+      return {
+        start,
+        label: text.slice(start + 1, destination),
+        destination: text.slice(destination + 2),
+      };
+    }
   }
 
   // Label still open: the last `[` on the line, with no `]` after it.
-  const bracket = text.lastIndexOf('[');
-  if (bracket >= lineStart && text.indexOf(']', bracket + 1) === -1) return bracket;
+  const start = text.lastIndexOf('[');
+  if (start >= lineStart && text.indexOf(']', start + 1) === -1) {
+    return { start, label: text.slice(start + 1), destination: null };
+  }
 
-  return -1;
+  return null;
 }
 
 function isInProtectedRange(
