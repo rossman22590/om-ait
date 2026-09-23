@@ -126,7 +126,6 @@ export function AccountHubPanel() {
         )}
       >
         <ModalTitle className="sr-only">{tI18nComplete.raw('text74a883a037bc')}</ModalTitle>
-        <div className="kx-titlebar-spacer" aria-hidden />
         <Suspense fallback={<AccountHubFallback />}>
           <AccountHubOverlayBody />
         </Suspense>

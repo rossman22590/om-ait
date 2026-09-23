@@ -378,8 +378,19 @@ describe('top-reaching standalone surfaces clear native macOS controls', () => {
     expect(sources.presentation).toContain('kx-titlebar-row');
   });
 
-  test('the account hub and connecting exit clear the full title-bar inset', () => {
-    expect(sources.accountHub).toContain('kx-titlebar-spacer');
+  test('the account hub starts with its titlebar row, not a blank strip', () => {
+    expect(codeOnly(sources.accountHub)).not.toContain('className="kx-titlebar-spacer"');
+  });
+
+  test('account hub actions and breadcrumb share the titlebar band', () => {
+    const sidebar = codeOnly(readFileSync(join(repoRoot, 'apps/web/src/features/accounts/hub/account-settings-sidebar.tsx'), 'utf8'));
+    const shell = codeOnly(readFileSync(join(repoRoot, 'apps/web/src/features/accounts/hub/account-settings-shell.tsx'), 'utf8'));
+    expect(sidebar).toContain('kx-titlebar-row kx-titlebar-band-height');
+    expect(shell).toContain('kx-titlebar-row kx-titlebar-band-height');
+    expect(shell).toContain('data-sidebar-collapsed={open ? undefined :');
+  });
+
+  test('connecting exit clears the full title-bar inset', () => {
     expect(sources.connecting).toContain('var(--kx-titlebar-inset,0px)');
   });
 });

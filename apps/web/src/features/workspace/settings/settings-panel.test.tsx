@@ -181,6 +181,17 @@ describe('SettingsPanelShell — desktop rail', () => {
     expect(html).not.toContain('Back to workspace');
   });
 
+  test('Back to app sits at the right edge of the native titlebar row', () => {
+    const html = render();
+    expect(html).toMatch(/<aside[^>]*>[\s\S]*?<div class="[^"]*kx-titlebar-row[^"]*kx-titlebar-band-height[^"]*justify-end[^"]*"/);
+    expect(html).toMatch(/kx-titlebar-row[\s\S]*?Back to app/);
+  });
+
+  test('Settings breadcrumb shares the native titlebar row', () => {
+    const html = render();
+    expect(html).toMatch(/<header class="[^"]*kx-titlebar-row[^"]*kx-titlebar-band-height[^"]*"/);
+  });
+
   test('the desktop content column carries a Settings breadcrumb bar', () => {
     expect(render()).toContain('aria-label="breadcrumb"');
     expect(render({ isMobile: true })).not.toContain('aria-label="breadcrumb"');
@@ -209,6 +220,10 @@ describe('SettingsPanelView — the dialog frame', () => {
 
   test('takes the fullscreen side', () => {
     expect(SOURCE).toContain('side="fullscreen"');
+  });
+
+  test('does not add a blank strip above the titlebar row', () => {
+    expect(SOURCE).not.toContain('className="kx-titlebar-spacer"');
   });
 
   test('fills the viewport with important-marked overrides, not plain classes the modal chrome outranks', () => {
