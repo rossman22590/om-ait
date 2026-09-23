@@ -70,6 +70,7 @@ import {
   parseReplyContext,
   parseSessionReferences,
   parseSystemNotifications,
+  parseTriggerEvent,
   stripSystemPtyText,
   SystemNotificationCard,
 } from '../message-parsing';
@@ -1474,18 +1475,7 @@ export function UserMessage({
   const channelMessageInfo = useMemo(() => parseChannelMessage(rawText), [rawText]);
 
   // Detect trigger_event in user message
-  const triggerEventInfo = useMemo(() => {
-    if (!rawText) return undefined;
-    const match = rawText.match(/<trigger_event>\s*([\s\S]*?)\s*<\/trigger_event>/);
-    if (!match) return undefined;
-    try {
-      const data = JSON.parse(match[1]);
-      const promptText = rawText.replace(/<trigger_event>[\s\S]*?<\/trigger_event>/, '').trim();
-      return { data, prompt: promptText };
-    } catch {
-      return undefined;
-    }
-  }, [rawText]);
+  const triggerEventInfo = useMemo(() => parseTriggerEvent(rawText), [rawText]);
 
   // Extract DCP notifications from ignored text parts (DCP plugin sends ignored user messages)
   const ignoredTextParts = stickyParts.filter(
