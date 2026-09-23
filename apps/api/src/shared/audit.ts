@@ -190,7 +190,8 @@ export function clientReportedAuditSource(c: AuditContext): string | null {
 function outcomeForStatus(status: number): AuditOutcome {
   if (status === 202) return 'pending';
   if (status === 401 || status === 403) return 'denied';
-  if (status >= 200 && status < 400) return 'success';
+  // 101: a WebSocket handshake that completed. The socket is open.
+  if (status === 101 || (status >= 200 && status < 400)) return 'success';
   return 'failure';
 }
 
