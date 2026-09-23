@@ -10,6 +10,7 @@
  *
  * Safely skips content that is already inside:
  * - Markdown links: [text](url) — neither the text nor the url part
+ * - Link reference definitions: [label]: url
  * - A link still being written at the end of streaming text: [text](url…
  * - Code blocks: ```...```
  * - Inline code: `...`
@@ -90,6 +91,15 @@ function buildProtectedRanges(text: string): Array<[number, number]> {
   // Protect BOTH the link-text part AND the url part so we never re-process them.
   const linkRe = /\[([^\]]{0,4096})\]\(([^)]{0,8192})\)/g;
   while ((m = linkRe.exec(text)) !== null) {
+    ranges.push([m.index, m.index + m[0].length - 1]);
+  }
+
+  // ── Link reference definitions  [label]: https://… ──────────────────────
+  // The target of every `[text][label]`. Wrapping its URL corrupts the
+  // definition, and each reference then renders as `text [blocked]`. Up to
+  // three spaces of indent, as in CommonMark; four makes an indented code block.
+  const definitionRe = /^ {0,3}\[[^\]\n]{1,999}\]:[^\n]*/gm;
+  while ((m = definitionRe.exec(text)) !== null) {
     ranges.push([m.index, m.index + m[0].length - 1]);
   }
 

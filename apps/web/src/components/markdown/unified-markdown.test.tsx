@@ -345,7 +345,12 @@ describe('UnifiedMarkdown — a setup link while it streams', () => {
   });
 
   test('never shows raw link syntax, a blocked marker, or token characters', () => {
-    for (const through of ['[Connect Out', '(https://app.example.com/co', '/connect/', SETUP_TOKEN]) {
+    for (const through of [
+      '[Connect Out',
+      '(https://app.example.com/co',
+      '/connect/',
+      SETUP_TOKEN,
+    ]) {
       const text = visibleText(render(through));
       expect(text).not.toContain('](');
       expect(text).not.toContain('[blocked]');
@@ -359,5 +364,40 @@ describe('UnifiedMarkdown — a setup link while it streams', () => {
     expect(html).not.toContain('aria-busy');
     expect(html).not.toMatch(/\bdisabled=""/);
     expect(visibleText(html)).toContain('Waiting for you');
+  });
+});
+
+// ─── Reference-style links ──────────────────────────────────────────────────
+// `[the docs][1]` resolves through a definition, `[1]: https://…`. autoLinkUrls
+// used to wrap the definition's URL, which corrupted it, so a settled message
+// rendered every reference as `the docs [blocked]`.
+// ────────────────────────────────────────────────────────────────────────────
+
+const REFERENCE_MD = [
+  'Two sources: [the docs][1] and [the changelog][2].',
+  '',
+  'A second paragraph.',
+  '',
+  '[1]: https://kortix.com/docs',
+  '[2]: https://kortix.com/changelog',
+].join('\n');
+
+describe('UnifiedMarkdown — reference-style links', () => {
+  test('resolve to their definitions, never "[blocked]"', () => {
+    const html = renderToStaticMarkup(withIntl(<UnifiedMarkdown content={REFERENCE_MD} />));
+
+    expect(html).toContain('href="https://kortix.com/docs"');
+    expect(html).toContain('href="https://kortix.com/changelog"');
+    expect(visibleText(html)).toContain('Two sources: the docs and the changelog.');
+    expect(html).not.toContain('[blocked]');
+  });
+
+  test('the definitions themselves never render', () => {
+    const text = visibleText(
+      renderToStaticMarkup(withIntl(<UnifiedMarkdown content={REFERENCE_MD} />)),
+    );
+
+    expect(text).not.toContain('[1]');
+    expect(text).not.toContain('https://kortix.com/docs');
   });
 });

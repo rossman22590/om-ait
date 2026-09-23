@@ -116,6 +116,29 @@ describe('autoLinkUrls', () => {
     expect(autoLinkUrls('math $x = example.com$ end')).toBe('math $x = example.com$ end');
   });
 
+  // `[1]: https://…` defines the target of a reference-style link, `[text][1]`.
+  // Linkifying its URL turned the definition into `[1]: [https://…](https://…)`,
+  // a destination beginning `[https`: sanitize stripped it and every reference
+  // rendered as `text [blocked]`.
+  describe('link reference definitions', () => {
+    test('leave the definition line as written', () => {
+      const input = [
+        'Sources: [the docs][1] and [the changelog][two].',
+        '',
+        '[1]: https://example.com/docs',
+        '[two]: https://example.com/changelog "Changelog"',
+        '   [x]: https://example.com/x',
+      ].join('\n');
+      expect(autoLinkUrls(input)).toBe(input);
+    });
+
+    test('bare urls elsewhere in the text still link', () => {
+      expect(autoLinkUrls('See example.com.\n\n[1]: https://example.com/docs')).toBe(
+        'See [example.com](https://example.com).\n\n[1]: https://example.com/docs',
+      );
+    });
+  });
+
   // While a turn streams, the text can end inside a link. Linkifying the
   // half-written URL there wrapped it in a second link, so the reader saw
   // `[label]([https://…](https://…)` — a raw `[label](` followed by a link to a
@@ -171,6 +194,7 @@ describe('autoLinkUrls', () => {
       `${'['.repeat(50_000)}\nx`, // unclosed labels, then a later line
       `${'[a]('.repeat(12_000)}\n`, // destinations that never close, then a newline
       `[${'a '.repeat(25_000)}`, // one label left open to the very end
+      `[${'a'.repeat(50_000)}\n`.repeat(2), // definition-shaped lines that never reach ']:'
     ];
     for (const input of cases) {
       const start = Date.now();

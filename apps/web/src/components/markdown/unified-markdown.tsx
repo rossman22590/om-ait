@@ -14,6 +14,7 @@ import {
 } from '@/components/markdown/katex-markdown';
 import { MarkdownOrderedList } from '@/components/markdown/ordered-list';
 import {
+  hasLinkReferenceDefinition,
   isInternalUrl,
   isStreamingLinkPlaceholder,
   prepareMarkdownSource,
@@ -25,7 +26,7 @@ import { useSandboxProxy } from '@/hooks/use-sandbox-proxy';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import React, { useCallback, useContext, useMemo, useState } from 'react';
-import { Streamdown } from 'streamdown';
+import { parseMarkdownIntoBlocks, Streamdown } from 'streamdown';
 
 const LINK_CLASS = cn(
   'font-medium text-kortix-blue',
@@ -339,6 +340,15 @@ const MARKDOWN_COMPONENTS = {
   },
 };
 
+/**
+ * Streamdown's block split, except that a message defining reference-style
+ * link targets stays one block, so `[text][1]` can reach `[1]: https://…`.
+ * See `hasLinkReferenceDefinition`.
+ */
+function parseMarkdownBlocks(markdown: string): string[] {
+  return hasLinkReferenceDefinition(markdown) ? [markdown] : parseMarkdownIntoBlocks(markdown);
+}
+
 export interface UnifiedMarkdownProps {
   content: string;
   className?: string;
@@ -403,6 +413,7 @@ export const UnifiedMarkdown = React.memo<UnifiedMarkdownProps>(
             // Completing half-written markdown is for text that is still
             // arriving. A settled message renders exactly as written.
             parseIncompleteMarkdown={isStreaming}
+            parseMarkdownIntoBlocksFn={parseMarkdownBlocks}
             components={MARKDOWN_COMPONENTS as any}
             remarkPlugins={katexRemarkPlugins}
             // Module-level arrays for the same reason as MARKDOWN_COMPONENTS: a

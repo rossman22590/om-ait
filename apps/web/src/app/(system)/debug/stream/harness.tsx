@@ -54,6 +54,19 @@ const SCENARIOS: Scenario[] = [
       `Open this to connect Gmail: ${origin}/connect/${FAKE_TOKEN}\n\nReply **done** when it says connected.`,
   },
   {
+    id: 'reference-links',
+    label: 'Reference links',
+    text: () =>
+      [
+        'Two sources, cited by reference: [the docs][1] and [the changelog][2].',
+        '',
+        'A second paragraph, so the definitions land in a later block.',
+        '',
+        '[1]: https://kortix.com/docs',
+        '[2]: https://kortix.com/changelog',
+      ].join('\n'),
+  },
+  {
     id: 'links-and-list',
     label: 'Links and a list',
     text: () =>

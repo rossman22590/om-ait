@@ -44,6 +44,21 @@ export function prepareMarkdownSource(content: string, isStreaming: boolean): st
   return autoLinkUrls(isStreaming ? holdPendingSetupLink(prepared) : prepared);
 }
 
+/** A reference-style link target: `[label]: destination`, up to three spaces in. */
+const LINK_REFERENCE_DEFINITION = /^ {0,3}\[[^\]\n]{1,999}\]:[ \t]*\S/m;
+
+/**
+ * Does this markdown define a reference-style link target (`[1]: https://…`)?
+ *
+ * Streamdown parses a streaming message block by block, and a definition in
+ * one block cannot resolve a `[text][1]` in another: the reference renders as
+ * raw brackets. A message with a definition is therefore parsed whole, which is
+ * what Streamdown already does for footnotes.
+ */
+export function hasLinkReferenceDefinition(markdown: string): boolean {
+  return LINK_REFERENCE_DEFINITION.test(markdown);
+}
+
 /**
  * Is this href Streamdown's stand-in for a URL that has not arrived yet?
  *
