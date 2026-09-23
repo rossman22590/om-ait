@@ -69,6 +69,17 @@ describe('parseUserMessageText', () => {
     expect(parseUserMessageText(raw)).toMatchObject({ text: raw, files: [] });
   });
 
+  // The old `<file>` regex was quadratic on whitespace that never reaches `>`.
+  // This ~440k-character message froze it for ~20 s under Bun on a laptop.
+  // The trailing `x` keeps the first `.trim()` from removing the whitespace.
+  test('a pathological <file> opener does not freeze the parser', () => {
+    const evil = `${'<file\t'.repeat(40_000)}<file${'\t'.repeat(200_000)}x`;
+    const started = performance.now();
+    const parsed = parseUserMessageText(evil);
+    expect(performance.now() - started).toBeLessThan(100);
+    expect(parsed.files).toEqual([]);
+  });
+
   test('extracts reply context', () => {
     const parsed = parseUserMessageText('<reply_context>quoted bit</reply_context>\nmy answer');
     expect(parsed.replyContext).toBe('quoted bit');
