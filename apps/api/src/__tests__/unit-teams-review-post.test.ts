@@ -113,7 +113,7 @@ describe('postTeamsReviewCard', () => {
 
   test('a review filed by a prompt with no card still reaches its conversation', async () => {
     turn = null;
-    ownedRef = { serviceUrl: 'https://smba.trafficmanager.net/emea/', conversationId: 'a:1FQy', tenantId: 'tenant-1', projectId: 'proj-1' };
+    ownedRef = { serviceUrl: 'https://smba.trafficmanager.net/emea/', conversationId: 'a:synthetic-chat', tenantId: 'tenant-1', projectId: 'proj-1' };
     const { postTeamsReviewCard } = await load();
 
     const res = await postTeamsReviewCard(SESSION_ID, ITEM as never);

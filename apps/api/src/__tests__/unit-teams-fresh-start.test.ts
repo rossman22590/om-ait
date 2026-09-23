@@ -6,7 +6,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 // These pin what a fresh start removes, what it leaves alone, and who may do it.
 
 const TENANT = 'tenant-1';
-const CONVO = 'a:1FQyR2jW1pEUK';
+const CONVO = 'a:synthetic-chat';
 
 const { chatEventDedup, chatThreadParticipants, chatThreads } = await import('@kortix/db');
 

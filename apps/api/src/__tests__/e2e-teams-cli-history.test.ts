@@ -17,7 +17,7 @@ const CONNECTOR_CLI_ENTRY = resolve(REPO_ROOT, 'apps/cli/src/index.ts');
 
 const PROJECT = 'proj-teams-cli';
 const TOKEN = 'kortix_test_teams_cli';
-const CHANNEL = '19:Q4Y0S4OunOL6U33B55zVUk4UEt2g9@thread.tacv2';
+const CHANNEL = '19:synthetic-channel@thread.tacv2';
 const ROOT = '1789730833598';
 
 let calls: Array<{ action: string; args: Record<string, unknown> }> = [];
@@ -166,7 +166,7 @@ describe('teams history', () => {
 
 describe('outside a channel, it says so instead of failing obscurely', () => {
   test('a personal chat is refused with the reason, and calls nothing', async () => {
-    const { exitCode, body } = await runTeams(['thread'], { MS_TEAMS_CONVERSATION_ID: 'a:1FQyR2jW1pEUK_1d5E' });
+    const { exitCode, body } = await runTeams(['thread'], { MS_TEAMS_CONVERSATION_ID: 'a:synthetic-personal-chat' });
 
     expect(exitCode).not.toBe(0);
     expect(JSON.stringify(body)).toContain('NOT_A_CHANNEL');

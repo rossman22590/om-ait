@@ -133,7 +133,7 @@ describe('postTeamsQuestion', () => {
     // A message sent while another run was going, or a queued start, runs
     // with no live card. Its question used to be dropped as "no turn".
     turn = null;
-    ownedRef = { serviceUrl: 'https://smba.trafficmanager.net/emea/', conversationId: 'a:1FQy', tenantId: 'tenant-1', projectId: 'proj-1' };
+    ownedRef = { serviceUrl: 'https://smba.trafficmanager.net/emea/', conversationId: 'a:synthetic-chat', tenantId: 'tenant-1', projectId: 'proj-1' };
     const { postTeamsQuestion } = await load();
 
     const res = await postTeamsQuestion(SESSION_ID, [

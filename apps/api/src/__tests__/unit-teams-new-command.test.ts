@@ -4,9 +4,9 @@ import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
 // sees in the chat, and what reaches the next session. fresh-start.ts owns the
 // reset rules (unit-teams-fresh-start.test.ts); this pins the wiring.
 
-const PROJECT = '40c2e222-c4c2-47f6-ba40-05e8f40098b3';
+const PROJECT = '00000000-0000-4000-8000-000000000001';
 const TENANT = 'tenant-1';
-const CONVO = 'a:1FQyR2jW1pEUK';
+const CONVO = 'a:synthetic-chat';
 
 mock.module('../config', () => ({
   SANDBOX_VERSION: 'test',
