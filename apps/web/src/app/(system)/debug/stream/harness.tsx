@@ -36,6 +36,27 @@ const SCENARIOS: Scenario[] = [
       ].join('\n'),
   },
   {
+    // The link shares a paragraph with the bold line above it (one newline,
+    // not a blank line), so the card is a block inside inline content.
+    id: 'setup-links-under-headings',
+    label: 'Setup links under headings',
+    text: (origin) =>
+      [
+        'Both links are ready — **24h TTL, yours alone**:',
+        '',
+        '📅 **Google Calendar (member level — you@example.com):**',
+        `[Authorize my private Calendar](${origin}/connect/${FAKE_TOKEN})`,
+        '',
+        '📄 **Google Docs (member level — you@example.com):**',
+        `[Authorize my private Docs](${origin}/connect/${FAKE_TOKEN}2)`,
+        '',
+        'Two notes:',
+        '',
+        '1. Open them while signed into Google as you@example.com.',
+        '2. Once both are authorized, I will verify the identities and clean up.',
+      ].join('\n'),
+  },
+  {
     id: 'secret-link',
     label: 'Secret link',
     text: (origin) =>

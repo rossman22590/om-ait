@@ -277,6 +277,14 @@ describe('holdPendingSetupLink', () => {
     }
   });
 
+  test('holds a link on the line after a bold heading in the same paragraph', () => {
+    withWindowOrigin('https://kortix.com');
+    const heading = `${LEAD}📅 **Google Calendar (member level):**\n`;
+    expect(holdPendingSetupLink(`${heading}[Authorize my Calendar](${URL.slice(0, 40)}`)).toBe(
+      `${heading}[Authorize my Calendar](${pendingSetupLinkHref('connector')})`,
+    );
+  });
+
   test('a label that is itself the setup URL holds with no label, like the bare URL it becomes', () => {
     withWindowOrigin('https://kortix.com');
     expect(holdPendingSetupLink(`${LEAD}[https://kortix.com/secret-intake/ksl_A`)).toBe(

@@ -63,6 +63,38 @@ test.describe('32 — A setup link while its turn streams', () => {
     await expect(card.getByRole('button', { name: 'Connect', exact: true })).toBeEnabled();
   });
 
+  test('a card that shares a paragraph with the line above it sits below that line, whole', async ({
+    page,
+  }) => {
+    // The shape agents actually write: a bold line, one newline, then the
+    // link — so the card is a block inside inline content. The regression put
+    // each card's first sliver beside the bold line and dropped the marker
+    // from the list still streaming underneath.
+    await page.goto('/debug/stream?scenario=setup-links-under-headings&at=end&working=1', {
+      waitUntil: 'domcontentloaded',
+    });
+    await expect(page.getByTestId('stream-position')).toBeVisible({ timeout: 120_000 });
+    const replay = page.getByTestId('stream-replay');
+    await expect(markdownIn(replay)).toHaveAttribute('data-streaming', 'true');
+
+    const cards = cardIn(replay);
+    await expect(cards).toHaveCount(2);
+    for (const card of await cards.all()) {
+      const layout = await card.evaluate((el) => {
+        const heading = el.parentElement?.querySelector('strong')?.getBoundingClientRect();
+        return {
+          display: getComputedStyle(el).display,
+          fragments: el.getClientRects().length,
+          belowHeading: heading ? el.getBoundingClientRect().top >= heading.bottom - 1 : false,
+        };
+      });
+      expect(layout).toEqual({ display: 'flex', fragments: 1, belowHeading: true });
+    }
+
+    const lastItem = replay.locator('li').last();
+    expect(await lastItem.evaluate((el) => getComputedStyle(el).display)).toBe('list-item');
+  });
+
   test('while the URL streams: the label as text, then the card it will become', async ({
     page,
   }) => {
