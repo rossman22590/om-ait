@@ -117,7 +117,7 @@ import { setupApp } from './setup';
 import { startAccessControlCache, stopAccessControlCache } from './shared/access-control-cache';
 import { auditApiRequest, shutdownAuditEvents } from './shared/audit';
 import { runInboundAudit } from './shared/audit-edge';
-import { setInboundAuditEntrypoint } from './shared/audit-scope';
+import { annotateAuditEvent, setInboundAuditEntrypoint } from './shared/audit-scope';
 import {
   startAuditReconciliationWorker,
   stopAuditReconciliationWorker,
@@ -1858,6 +1858,12 @@ async function dispatchInbound(
         },
       );
     }
+
+    // The upgrade carries only the tunnel id; the machine's token arrives in
+
+    // its first message and is audited by the tunnel's own authenticator.
+
+    annotateAuditEvent({ resourceType: 'tunnel', resourceId: tunnelId });
 
     const success = server.upgrade(req, {
       data: {
