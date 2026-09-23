@@ -125,7 +125,8 @@ describe('the stale-turn sweep', () => {
 
   test('a run the runtime still holds keeps its card and is not aborted', async () => {
     runtimeLive = true;
-    dbResults = [[staleRow()], []];
+    // Old replied-turn markers first, then the stale open turns.
+    dbResults = [[], [staleRow()], []];
 
     await sweepStaleTeamsTurns();
 
@@ -133,18 +134,79 @@ describe('the stale-turn sweep', () => {
     expect(aborted).toEqual([]);
     // Touched, so it is not reconsidered on every tick.
     expect(dbWrites.some((w) => w.op === 'update.set' && 'updatedAt' in (w.payload as object))).toBe(true);
-    expect(dbWrites.some((w) => w.op === 'delete')).toBe(false);
+    // Only the marker sweep deletes; the live turn's row stays.
+    expect(dbWrites.filter((w) => w.op === 'delete')).toHaveLength(1);
   });
 
   test('a run the runtime no longer holds is closed, and its runtime turn aborted', async () => {
     runtimeLive = false;
-    dbResults = [[staleRow()], [{ sessionId: 'sess-1' }], []];
+    dbResults = [[], [staleRow()], [{ sessionId: 'sess-1' }], []];
 
     await sweepStaleTeamsTurns();
 
     expect(apiCalls.map((c) => c.fn)).toEqual(['updateCard']);
     expect(JSON.stringify(cardOf(apiCalls[0]))).toContain('This run ended without a reply.');
     expect(aborted).toEqual(['sess-1']);
+  });
+});
+
+// After the agent replies — an answer, a question card — the closed turn is
+// kept as a marker of which runtime turn replied. Deleting it made any later
+// relay from the SAME run (a `teams send` after a question, a stray step after
+// the answer) open a second card.
+describe('the replied-turn marker', () => {
+  const marker = (repliedTurns: string[]) =>
+    streamRow({
+      messageTs: 'act-1',
+      finalized: true,
+      channelRef: { platform: 'teams', serviceUrl: 'https://smba/', conversationId: 'conv-1', repliedTurns },
+    });
+  const box = (...tokens: string[]) => [
+    {
+      status: 'active',
+      metadata: {
+        activeTurns: Object.fromEntries(tokens.map((t) => [t, { token: t, state: 'active', opencodeSessionId: 'ses_1' }])),
+      },
+    },
+  ];
+
+  test('a stray send from the run that replied is dropped', async () => {
+    dbResults = [[marker(['tok-1'])], box('tok-1')];
+
+    expect(await relayTurnAnswer('sess-1', 'I asked above.')).toBe(false);
+    expect(apiCalls).toHaveLength(0);
+  });
+
+  test('a stray step from the run that replied is dropped', async () => {
+    dbResults = [[marker(['tok-1'])], box('tok-1')];
+
+    expect(await relayTurnStep('sess-1', 'Wrapping up')).toBe(false);
+    expect(apiCalls).toHaveLength(0);
+  });
+
+  test('work from a newer runtime turn replaces the marker and gets its own card', async () => {
+    // The old run's end-of-turn relay was lost; the ledger says a turn the
+    // marker never saw is running.
+    dbResults = [[marker(['tok-1'])], box('tok-2'), [{ projectId: 'proj-1', tenantId: 'tenant-1', conversationId: 'conv-1' }], [{ sessionId: 'sess-1' }], []];
+
+    expect(await relayTurnStep('sess-1', 'Starting the follow-up')).toBe(true);
+    expect(apiCalls.map((c) => c.fn)).toEqual(['sendCard']);
+    expect(JSON.stringify(apiCalls[0]!.args[1])).toContain('Starting the follow-up');
+  });
+
+  test('the end of the run that replied removes the marker', async () => {
+    dbResults = [[marker(['tok-1'])], []];
+
+    expect(await relayTurnEnd('sess-1', 'idle')).toBe(false);
+    expect(dbWrites.some((w) => w.op === 'delete')).toBe(true);
+    expect(apiCalls).toHaveLength(0);
+  });
+
+  test('a finalized row that is not a marker is left to the path closing it', async () => {
+    dbResults = [[streamRow({ messageTs: 'act-1', finalized: true })]];
+
+    expect(await relayTurnEnd('sess-1', 'idle')).toBe(false);
+    expect(dbWrites.some((w) => w.op === 'delete')).toBe(false);
   });
 });
 
@@ -354,7 +416,10 @@ describe('relayTurnAnswer', () => {
     const ok = await relayTurnAnswer('sess-1', 'Here is the answer.');
     expect(ok).toBe(true);
     expect(apiCalls.map((c) => c.fn)).toEqual(['updateCard']);
-    expect(dbWrites.some((w) => w.op === 'delete')).toBe(true);
+    // Kept as a replied-turn marker: a stray relay from this run is dropped,
+    // and the run's own end-of-turn relay removes it.
+    expect(dbWrites.some((w) => w.op === 'update.set' && (w.payload as { finalized?: boolean }).finalized === true)).toBe(true);
+    expect(dbWrites.some((w) => w.op === 'delete')).toBe(false);
   });
 
   test('loses the finalize race → no render', async () => {

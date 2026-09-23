@@ -43,6 +43,7 @@ function rowToHandle(row: typeof chatTurnStreams.$inferSelect): TeamsLiveTurn {
     projectId: row.projectId,
     sessionId: row.sessionId,
     originatingActivity: row.originatingEvent as TeamsActivity,
+    ...(Array.isArray(ref.repliedTurns) ? { repliedTurns: ref.repliedTurns } : {}),
   };
 }
 
@@ -205,6 +206,67 @@ export async function showStopOnLiveCard(handle: TeamsLiveTurn | null): Promise<
 }
 
 /**
+ * The runtime turn tokens live for this session right now — the ledger that
+ * `GET .../turn` and inbox admission read. Empty when there is no running box,
+ * no ledger, or it cannot be read. Imported lazily: the channel modules keep
+ * no static edge into the lifecycle code.
+ */
+async function liveRuntimeTurnTokens(sessionId: string): Promise<string[]> {
+  try {
+    const [{ sessionSandboxes }, { RUNNING_SANDBOX_STATUSES, storedSandboxTurns }] = await Promise.all([
+      import('@kortix/db'),
+      import('../../projects/sandbox-turn-lifecycle'),
+    ]);
+    const [box] = await db
+      .select({ status: sessionSandboxes.status, metadata: sessionSandboxes.metadata })
+      .from(sessionSandboxes)
+      .where(eq(sessionSandboxes.sessionId, sessionId))
+      .limit(1);
+    if (!box || !RUNNING_SANDBOX_STATUSES.has(box.status)) return [];
+    return storedSandboxTurns(box.metadata).map((t) => t.token);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Close the turn because the agent replied — an answer, a question card, a
+ * review card — and keep the row as a marker of which runtime turn replied.
+ *
+ * Deleting the row instead made any later relay from the SAME run (a
+ * `teams send` after a question, a stray step after the answer) open a second
+ * card. The marker drops those; the runtime's own end-of-turn relay removes
+ * it, and a relay from a newer runtime turn replaces it (`reopenTurn`).
+ */
+export async function markTurnReplied(sessionId: string): Promise<void> {
+  const tokens = await liveRuntimeTurnTokens(sessionId);
+  await db
+    .update(chatTurnStreams)
+    .set({
+      finalized: true,
+      // Merged in SQL, never read-modify-write (learnings, 2026-09-22).
+      channelRef: sql`coalesce(${chatTurnStreams.channelRef}, '{}'::jsonb) || jsonb_build_object('repliedTurns', ${JSON.stringify(tokens)}::jsonb)`,
+      updatedAt: new Date(),
+    })
+    .where(eq(chatTurnStreams.sessionId, sessionId));
+}
+
+/**
+ * Is a relay that finds this replied-turn marker from the run that replied?
+ * Only when the runtime's live turns are all ones the marker recorded. A turn
+ * the marker never saw is new work — a message sent while the run was going,
+ * a queued start — and its end-of-turn relay for the old run may simply have
+ * been lost. Unknown (no ledger) counts as "same run": a stray card is the
+ * cheaper mistake only when nothing says otherwise.
+ */
+async function replyMarkerCoversRuntime(handle: TeamsLiveTurn): Promise<boolean> {
+  const replied = handle.repliedTurns ?? [];
+  const live = await liveRuntimeTurnTokens(handle.sessionId);
+  if (live.length === 0) return true;
+  return live.every((token) => replied.includes(token));
+}
+
+/**
  * The conversation a session still owns, as a reference the bot can post to.
  * Null when the conversation was detached from it (`/new`) or the project has
  * no service URL on record yet.
@@ -244,7 +306,7 @@ export async function conversationRefForSession(sessionId: string): Promise<Team
  * session must not post into the chat that left it. Two relays racing here
  * share one row: the insert does nothing if a turn already exists.
  */
-export async function reopenTurn(sessionId: string): Promise<TeamsLiveTurn | null> {
+export async function reopenTurn(sessionId: string, replaceReplied = false): Promise<TeamsLiveTurn | null> {
   const ref = await conversationRefForSession(sessionId);
   if (!ref) return null;
   const now = Date.now();
@@ -262,24 +324,31 @@ export async function reopenTurn(sessionId: string): Promise<TeamsLiveTurn | nul
     originatingActivity: {} as TeamsActivity,
   };
   const channelRef: TeamsChannelRef = { platform: 'teams', serviceUrl: ref.serviceUrl, conversationId: ref.conversationId };
-  const inserted = await db
-    .insert(chatTurnStreams)
-    .values({
-      sessionId,
-      projectId: handle.projectId,
-      teamId: handle.tenantId,
-      channel: handle.conversationId,
-      triggerTs: handle.triggerActivityId,
-      messageTs: null,
-      finalized: false,
-      steps: [],
-      originatingEvent: {},
-      channelRef: channelRef as unknown,
-      expiresAt: new Date(handle.expiry),
-      updatedAt: new Date(now),
-    } as typeof chatTurnStreams.$inferInsert)
-    .onConflictDoNothing({ target: chatTurnStreams.sessionId })
-    .returning({ sessionId: chatTurnStreams.sessionId });
+  const values = {
+    sessionId,
+    projectId: handle.projectId,
+    teamId: handle.tenantId,
+    channel: handle.conversationId,
+    triggerTs: handle.triggerActivityId,
+    messageTs: null,
+    finalized: false,
+    steps: [],
+    originatingEvent: {},
+    channelRef: channelRef as unknown,
+    expiresAt: new Date(handle.expiry),
+    updatedAt: new Date(now),
+  } as typeof chatTurnStreams.$inferInsert;
+  const insert = db.insert(chatTurnStreams).values(values);
+  const inserted = await (replaceReplied
+    ? insert.onConflictDoUpdate({
+        target: chatTurnStreams.sessionId,
+        set: values,
+        // Only a replied-turn marker is replaced; a live turn is never
+        // overwritten, and a turn being closed right now is left alone.
+        setWhere: sql`${chatTurnStreams.finalized} = true AND (${chatTurnStreams.channelRef} -> 'repliedTurns') IS NOT NULL`,
+      })
+    : insert.onConflictDoNothing({ target: chatTurnStreams.sessionId })
+  ).returning({ sessionId: chatTurnStreams.sessionId });
   if (inserted.length === 0) return loadTurn(sessionId);
   console.info('[teams-webhook] opened a turn for work that had no card', { sessionId });
   return handle;
@@ -294,9 +363,7 @@ export async function relayTurnStep(
     sourcesForPrev?: Array<{ url: string; text: string }>;
   } = {},
 ): Promise<boolean> {
-  // No row at all: this prompt started without a card. A FINALIZED row is a
-  // turn being closed right now, and must not be reopened under it.
-  const handle = (await loadTurn(sessionId)) ?? (await reopenTurn(sessionId));
+  const handle = await turnForRelay(sessionId);
   if (!handle || handle.finalized) {
     if (!handle) {
       console.warn('[teams-webhook] turn-stream step dropped — no open turn for session', {
@@ -358,12 +425,31 @@ export async function relayTurnAnswer(
   text: string,
   card?: Record<string, unknown>,
 ): Promise<boolean> {
-  const handle = (await loadTurn(sessionId)) ?? (await reopenTurn(sessionId));
+  const handle = await turnForRelay(sessionId);
   if (!handle || handle.finalized) return false;
   if (!(await claimFinalize(sessionId))) return false;
   await finalizeTurn(handle, { answer: text, card });
-  await deleteTurn(sessionId);
+  await markTurnReplied(sessionId);
   return true;
+}
+
+/**
+ * The turn a step or an answer lands in.
+ *
+ * - An open turn: that one.
+ * - No row: this prompt started without a card — open one.
+ * - A replied-turn marker: a stray from the run that replied is dropped (the
+ *   finalized handle comes back); work from a newer runtime turn replaces it.
+ * - Any other finalized row is a turn being closed right now, and is never
+ *   reopened under it.
+ */
+async function turnForRelay(sessionId: string): Promise<TeamsLiveTurn | null> {
+  const handle = await loadTurn(sessionId);
+  if (!handle) return reopenTurn(sessionId);
+  if (handle.finalized && handle.repliedTurns && !(await replyMarkerCoversRuntime(handle))) {
+    return reopenTurn(sessionId, true);
+  }
+  return handle;
 }
 
 export async function relayTurnEnd(
@@ -372,7 +458,12 @@ export async function relayTurnEnd(
   errorInfo?: TurnErrorInfo,
 ): Promise<boolean> {
   const handle = await loadTurn(sessionId);
-  if (!handle || handle.finalized) return false;
+  if (!handle) return false;
+  if (handle.finalized) {
+    // The run that replied has ended: nothing can stray from it any more.
+    if (handle.repliedTurns) await deleteTurn(sessionId);
+    return false;
+  }
   if (!(await claimFinalize(sessionId))) return false;
   if (status === 'error') {
     const classified = classifyTurnError(errorInfo);
@@ -520,6 +611,17 @@ export async function persistServiceUrl(projectId: string, serviceUrl?: string):
 /** One pass of the stale-turn sweep. Exported for tests; the interval below runs it. */
 export async function sweepStaleTeamsTurns(): Promise<void> {
   const cutoff = new Date(Date.now() - STALE_AFTER_MS);
+  // A replied-turn marker whose end-of-turn relay never came.
+  await db
+    .delete(chatTurnStreams)
+    .where(
+      and(
+        eq(chatTurnStreams.finalized, true),
+        lt(chatTurnStreams.updatedAt, cutoff),
+        sql`${chatTurnStreams.channelRef}->>'platform' = 'teams'`,
+        sql`(${chatTurnStreams.channelRef} -> 'repliedTurns') IS NOT NULL`,
+      ),
+    );
   const stale = await db
     .select()
     .from(chatTurnStreams)

@@ -1,7 +1,7 @@
 import { config } from '../../config';
 import { sendCard, sendText } from '../teams-api';
 import { buildReviewCard } from './cards';
-import { conversationRefForSession, deleteTurn, finalizeTurn, loadTurn } from './turn';
+import { conversationRefForSession, finalizeTurn, loadTurn, markTurnReplied } from './turn';
 import type { ReviewCardItem } from '../slack/review-cards';
 import type { TeamsConversationRef } from './types';
 
@@ -16,7 +16,9 @@ export async function postTeamsReviewCard(
     // decision. Same mistake the question path carried: the default title sat
     // one line above a card asking the user to approve or deny something.
     await finalizeTurn(handle, { title: 'Waiting for your decision', unfinished: true });
-    await deleteTurn(sessionId);
+    // Kept as a replied-turn marker, so a `teams send` from this same run
+    // after the card does not open a second one.
+    await markTurnReplied(sessionId);
     ref = {
       serviceUrl: handle.serviceUrl,
       conversationId: handle.conversationId,

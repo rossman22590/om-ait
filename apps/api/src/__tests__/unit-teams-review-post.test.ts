@@ -12,6 +12,7 @@ mock.module('../channels/teams/turn', () => ({
     finalized.push(opts);
   },
   deleteTurn: async () => {},
+  markTurnReplied: async () => {},
 }));
 
 let cardOk = true;

@@ -155,6 +155,13 @@ export interface TeamsChannelRef {
   conversationId: string;
   botId?: string;
   fromId?: string;
+  /**
+   * Set once the agent has replied for this turn (answer, question or review
+   * card): the runtime turn tokens that were live then. A later relay from one
+   * of THOSE turns is a stray and is dropped; one from any other turn is new
+   * work and opens a card. See `replyMarkerCoversRuntime` in turn.ts.
+   */
+  repliedTurns?: string[];
 }
 
 export interface TeamsLiveTurn {
@@ -173,6 +180,8 @@ export interface TeamsLiveTurn {
   projectId: string;
   sessionId: string;
   originatingActivity: TeamsActivity;
+  /** Present on a closed turn the agent already replied in: see TeamsChannelRef. */
+  repliedTurns?: string[];
 }
 
 /** Does this message carry an image the model has to be able to see? */

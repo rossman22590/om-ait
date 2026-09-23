@@ -5,6 +5,7 @@ const SESSION_ID = 'sess-asking';
 let turn: Record<string, unknown> | null = null;
 const finalized: Array<Record<string, unknown>> = [];
 const deleted: string[] = [];
+const replied: string[] = [];
 /** The conversation the session still owns, for a prompt with no card of its own. */
 let ownedRef: Record<string, unknown> | null = null;
 mock.module('../channels/teams/turn', () => ({
@@ -15,6 +16,9 @@ mock.module('../channels/teams/turn', () => ({
   },
   deleteTurn: async (id: string) => {
     deleted.push(id);
+  },
+  markTurnReplied: async (id: string) => {
+    replied.push(id);
   },
 }));
 
@@ -46,6 +50,7 @@ beforeEach(() => {
   };
   finalized.length = 0;
   deleted.length = 0;
+  replied.length = 0;
   texts.length = 0;
   cardPosted = null;
   cardOk = true;
@@ -69,7 +74,10 @@ describe('postTeamsQuestion', () => {
       expect(finalized[0].title).toBe('Waiting for your answer');
       // The step in flight neither finished nor failed.
       expect(finalized[0].unfinished).toBe(true);
-      expect(deleted).toEqual([SESSION_ID]);
+      // Kept as a replied-turn marker, not deleted: a `teams send` from the
+      // same run after the question must not open a second card.
+      expect(replied).toEqual([SESSION_ID]);
+      expect(deleted).toEqual([]);
     });
   });
 

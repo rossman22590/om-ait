@@ -1,6 +1,6 @@
 import { sendCard, sendText } from '../teams-api';
 import { buildQuestionCard } from './cards';
-import { conversationRefForSession, deleteTurn, finalizeTurn, loadTurn } from './turn';
+import { conversationRefForSession, finalizeTurn, loadTurn, markTurnReplied } from './turn';
 import type { QuestionInfo } from '../slack/types';
 import type { TeamsConversationRef } from './types';
 
@@ -30,7 +30,9 @@ export async function postTeamsQuestion(
     // line above a card asking them a question. The step in flight gets the
     // neutral glyph for the same reason.
     await finalizeTurn(handle, { title: 'Waiting for your answer', unfinished: true });
-    await deleteTurn(sessionId);
+    // Kept as a replied-turn marker, so a `teams send` from this same run
+    // after the card does not open a second one.
+    await markTurnReplied(sessionId);
     ref = {
       serviceUrl: handle.serviceUrl,
       conversationId: handle.conversationId,
