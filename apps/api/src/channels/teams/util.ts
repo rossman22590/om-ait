@@ -73,6 +73,8 @@ const COMMAND_VERBS = new Set([
   'help',
   'stop',
   'cancel',
+  'new',
+  'reset',
   'status',
   'config',
   'settings',
