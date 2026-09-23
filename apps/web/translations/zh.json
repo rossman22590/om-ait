@@ -18633,7 +18633,8 @@
       "textde340d411411": "此图表为空。",
       "textc53147a0d05b": "无法渲染此图表",
       "text91aec62280a3": "下载 SVG",
-      "text751dfdcf3878": "第 {value0} 行"
+      "text751dfdcf3878": "第 {value0} 行",
+      "text0a7b76552107": "已重命名连接器账户"
     }
   },
   "projectOnboarding": {
