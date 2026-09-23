@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline';
-import type { MessageWithParts, Part } from '@kortix/sdk';
+import { findSessionAttachments, type MessageWithParts, type Part } from '@kortix/sdk';
 
 import type { Auth } from '../api/auth.ts';
 import { kortixFromAuth, unwrapRuntime, withKortixScope } from '../api/sdk.ts';
@@ -675,6 +675,15 @@ export async function runSessionsLog(argv: string[]): Promise<number> {
     return 0;
   }
   for (const msg of messages) printMessage(msg);
+  // A `[file · name]` line says a file exists; it does not say it can be
+  // fetched. Point at the command that fetches it — sandbox or no sandbox.
+  const stored = findSessionAttachments(messages).length;
+  if (stored > 0) {
+    process.stdout.write(
+      `\n  ${C.dim}${stored} stored file${stored === 1 ? '' : 's'} — download with ` +
+        `\`kortix sessions attachments ${s.session_id}\`.${C.reset}\n`,
+    );
+  }
   process.stdout.write('\n');
   return 0;
 }
@@ -682,7 +691,7 @@ export async function runSessionsLog(argv: string[]): Promise<number> {
 /** The mirror's largest window; the route answers 400 above it. */
 const SAVED_WINDOW_MAX = 500;
 
-type SavedTranscript =
+export type SavedTranscript =
   | { kind: 'ok'; messages: MessageWithParts[]; capturedAt: string | null }
   | { kind: 'none' }
   | { kind: 'error'; error: unknown };
@@ -695,7 +704,7 @@ type SavedTranscript =
  * walks OLDER windows by `next_cursor` until it is met or the saved history
  * runs out. Through the SDK's session handle, never a hand-rolled request.
  */
-async function readSavedTranscript(
+export async function readSavedTranscript(
   auth: Auth,
   projectId: string,
   sessionId: string,

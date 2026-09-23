@@ -290,6 +290,11 @@ flow(
       "POST /v1/projects/:projectId/sessions/:sessionId/prompts",
       "DELETE /v1/projects/:projectId/sessions/:sessionId",
       "PATCH /v1/projects/:projectId/features",
+      // `kortix sessions attachments` logs in, locates the session, reads its
+      // saved transcript as the index, then fetches the bytes.
+      "GET /v1/accounts/me",
+      "GET /v1/projects/:projectId/sessions/:sessionId",
+      "GET /v1/projects/:projectId/sessions/:sessionId/transcript",
     ],
   },
   async (ctx) => {
@@ -428,6 +433,124 @@ flow(
         const response = (await owner.get(download, { params })).status(200);
         if (response.text() !== contents)
           throw new Error("Disabling the flag removed saved bytes");
+      },
+    );
+    await ctx.step(
+      "the real CLI lists and downloads a stopped session's stored file without its sandbox",
+      async () => {
+        // The saved transcript is the index of what a session stored. Seed one
+        // whose user message references the uploaded file, stop the session,
+        // and read it back through `kortix sessions attachments` — the flag is
+        // OFF here, so this also proves files stored earlier stay reachable.
+        const db = new Client({ connectionString: ctx.env.databaseUrl! });
+        await db.connect();
+        try {
+          const root = `ses_${sessionId.replaceAll("-", "")}`;
+          await db.query(
+            "UPDATE kortix.project_sessions SET status = 'stopped', opencode_session_id = $2 WHERE session_id = $1",
+            [sessionId, root],
+          );
+          await db.query(
+            "INSERT INTO kortix.session_transcript_mirrors (session_id, project_id, account_id, opencode_session_id, head_complete) VALUES ($1,$2,$3,$4,true)",
+            [sessionId, project.id, ctx.P.OWNER.accountId, root],
+          );
+          const info = {
+            id: "msg_attach_000000000000001",
+            sessionID: root,
+            role: "user",
+            time: { created: Date.now() - 1_000 },
+          };
+          const parts = [
+            { id: "prt_text", type: "text", text: "Here are my notes." },
+            {
+              id: "prt_file",
+              type: "file",
+              filename: "notes.txt",
+              mime: "text/plain",
+              url: ref,
+            },
+          ];
+          await db.query(
+            "INSERT INTO kortix.session_transcript_messages (session_id, message_id, opencode_session_id, role, message_created_at, info, parts) VALUES ($1,$2,$3,'user',$4,$5,$6)",
+            [sessionId, info.id, root, new Date(info.time.created), JSON.stringify(info), JSON.stringify(parts)],
+          );
+        } finally {
+          await db.end();
+        }
+        const pat = await ctx.fixtures.pat({ name: ctx.fixtures.name("cli-attachments") });
+        const cli = new CliSandbox("attachments");
+        try {
+          const login = await cli.login(pat, { noProject: true, account: ctx.P.OWNER.accountId });
+          if (login.exitCode !== 0)
+            throw new Error(`kortix login exited ${login.exitCode}: ${login.all}`);
+
+          const listed = await cli.run([
+            "sessions", "attachments", sessionId, "--project", project.id, "--json",
+          ]);
+          throwIfCliInfraFailure(listed, "kortix sessions attachments");
+          if (listed.exitCode !== 0)
+            throw new Error(`kortix sessions attachments exited ${listed.exitCode}: ${listed.all}`);
+          const list = JSON.parse(listed.stdout) as {
+            source: string;
+            attachments: Array<{ attachment_id: string; filename: string; url: string; role: string }>;
+          };
+          if (list.source !== "saved") throw new Error(`expected source 'saved', got '${list.source}'`);
+          if (list.attachments.length !== 1)
+            throw new Error(`expected 1 stored file, got ${list.attachments.length}: ${listed.stdout}`);
+          const [only] = list.attachments;
+          if (only!.attachment_id !== attachmentId || only!.url !== ref || only!.filename !== "notes.txt")
+            throw new Error(`listed the wrong file: ${listed.stdout}`);
+
+          const out = `${cli.cwd}/downloads`;
+          const fetched = await cli.run([
+            "sessions", "attachments", sessionId, "--project", project.id,
+            "--download", attachmentId, "--out", out, "--json",
+          ]);
+          throwIfCliInfraFailure(fetched, "kortix sessions attachments --download");
+          if (fetched.exitCode !== 0)
+            throw new Error(`download exited ${fetched.exitCode}: ${fetched.all}`);
+          const result = JSON.parse(fetched.stdout) as {
+            downloaded: Array<{ path: string; bytes: number }>;
+          };
+          const written = result.downloaded[0]!;
+          if (written.path !== `${out}/notes.txt`)
+            throw new Error(`wrote to an unexpected path: ${written.path}`);
+          const bytes = await Bun.file(written.path).text();
+          if (bytes !== contents)
+            throw new Error(`downloaded bytes differ from the stored file: ${JSON.stringify(bytes)}`);
+
+          // A second download never overwrites the first.
+          const again = await cli.run([
+            "sessions", "attachments", sessionId, "--project", project.id,
+            "--download", attachmentId, "--out", out, "--json",
+          ]);
+          if (again.exitCode !== 0) throw new Error(`second download exited ${again.exitCode}: ${again.all}`);
+          const second = (JSON.parse(again.stdout) as { downloaded: Array<{ path: string }> }).downloaded[0]!;
+          if (second.path !== `${out}/notes (1).txt`)
+            throw new Error(`second download did not take a free name: ${second.path}`);
+
+          // Reading the conversation says the file is fetchable, and how.
+          const log = await cli.run(["sessions", "log", sessionId, "--project", project.id]);
+          if (log.exitCode !== 0) throw new Error(`sessions log exited ${log.exitCode}: ${log.all}`);
+          if (!log.stdout.includes("notes.txt") || !log.stdout.includes("kortix sessions attachments"))
+            throw new Error(`the log does not lead to the stored file: ${log.stdout}`);
+
+          // An id the transcript does not reference is refused, not fetched.
+          const unknown = await cli.run([
+            "sessions", "attachments", sessionId, "--project", project.id,
+            "--download", crypto.randomUUID(),
+          ]);
+          if (unknown.exitCode !== 1 || !unknown.stderr.includes("No stored file"))
+            throw new Error(`unknown id was not refused: ${unknown.exitCode} ${unknown.all}`);
+
+          const session = (await owner.get("/v1/projects/:projectId/sessions/:sessionId", { params }))
+            .status(200)
+            .json<{ status: string }>();
+          if (session.status !== "stopped")
+            throw new Error(`listing or downloading changed the session to '${session.status}'`);
+        } finally {
+          cli.dispose();
+        }
       },
     );
     await ctx.step(
