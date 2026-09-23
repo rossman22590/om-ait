@@ -16,6 +16,7 @@ import {
 } from './audit-scope';
 import { db } from './db';
 import { auditDb } from './audit-db';
+import { resolveProjectAccountId } from './project-account-lookup';
 import type { Actor } from '../iam/actor';
 import { type AgentAuditAttribution, resolveAgentAuditAttribution } from './agent-audit-attribution';
 
@@ -583,10 +584,17 @@ async function inboundAuditInput(
 
   const actorUserId =
     bound.actorUserId !== undefined ? bound.actorUserId : agent ? agent.actorUserId : tokenUserId;
+  const projectId =
+    bound.projectId !== undefined ? bound.projectId : (ids.projectId ?? request?.projectId ?? null);
+  // A row that names a project but no account belongs to the project's owner;
+  // without this it lands in nobody's log. Never guess: no project, no account.
   const accountId =
-    bound.accountId !== undefined
+    (bound.accountId !== undefined
       ? bound.accountId
-      : (hono?.accountId ?? request?.accountId ?? scope.queryAccountId ?? null);
+      : (hono?.accountId ?? request?.accountId ?? scope.queryAccountId ?? null)) ??
+    (projectId && UUID_RE.test(projectId)
+      ? await resolveProjectAccountId(projectId).catch(() => null)
+      : null);
   // `system` means an account-level credential with no user — an account API
   // key the auth middleware resolved. An account a route merely bound (the
   // project an invalid token was aimed at) proves no caller: `anonymous`.
@@ -617,8 +625,7 @@ async function inboundAuditInput(
 
   return {
     accountId,
-    projectId:
-      bound.projectId !== undefined ? bound.projectId : (ids.projectId ?? request?.projectId ?? null),
+    projectId,
     sessionId:
       bound.sessionId !== undefined
         ? bound.sessionId

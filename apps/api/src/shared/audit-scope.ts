@@ -261,3 +261,24 @@ const UNAUDITED_PATHS = new Set([
 export function isUnauditedInbound(method: string, path: string): boolean {
   return method === 'OPTIONS' || UNAUDITED_PATHS.has(path);
 }
+
+/**
+ * An external system that proved itself — a webhook whose signature (or
+ * shared secret) verified. The system is the actor; the account and project
+ * are the ones the delivery is FOR, when the caller knows them. Call it from
+ * the verifier's success branch, so only a proven delivery is attributed; a
+ * forged one stays anonymous and is recorded as denied.
+ */
+export function bindIntegrationPrincipal(
+  provider: string,
+  target: { accountId?: string | null; projectId?: string | null } = {},
+): void {
+  bindAuditPrincipal({
+    accountId: target.accountId,
+    projectId: target.projectId,
+    actorUserId: null,
+    actorType: 'system',
+    authoritativeSource: 'integration',
+    authMethod: { kind: 'webhook_signature', provider },
+  });
+}

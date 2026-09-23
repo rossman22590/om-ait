@@ -4,6 +4,7 @@ import {
   annotateAuditEvent,
   attachInboundAuditScope,
   bindAuditPrincipal,
+  bindIntegrationPrincipal,
   currentInboundAuditScope,
   isUnauditedInbound,
   setInboundAuditEntrypoint,
@@ -123,5 +124,26 @@ describe('traffic that is never audited', () => {
     ['GET', '/'],
   ])('%s %s is audited', (method, path) => {
     expect(isUnauditedInbound(method, path)).toBe(false);
+  });
+});
+
+describe('an external system that proved itself', () => {
+  test('a verified webhook is the integration, acting for the account it names', () =>
+    inRequest(() => {
+      const scope = attachInboundAuditScope({ owner: 'edge', method: 'POST' });
+      bindIntegrationPrincipal('slack');
+      bindIntegrationPrincipal('slack', { accountId: ACCOUNT, projectId: USER });
+      expect(scope.principal).toEqual({
+        accountId: ACCOUNT,
+        projectId: USER,
+        actorUserId: null,
+        actorType: 'system',
+        authoritativeSource: 'integration',
+        authMethod: { kind: 'webhook_signature', provider: 'slack' },
+      });
+    }));
+
+  test('without a request it does nothing', () => {
+    expect(() => bindIntegrationPrincipal('stripe')).not.toThrow();
   });
 });

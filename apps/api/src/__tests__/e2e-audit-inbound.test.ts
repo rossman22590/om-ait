@@ -13,6 +13,8 @@ import { type Context, Hono } from 'hono';
 import { runWithContext } from '../lib/request-context';
 
 let auditRows: Array<Record<string, unknown>> = [];
+/** What the project->account lookup finds. */
+let projectRows: Array<{ accountId: string }> = [];
 
 mock.module('../shared/db', () => ({
   db: {
@@ -28,6 +30,7 @@ mock.module('../shared/db', () => ({
       const chain = {
         from: () => chain,
         where: () => chain,
+        limit: async () => projectRows,
         then: (resolve: (rows: unknown[]) => unknown) => Promise.resolve(resolve([])),
       };
       return chain;
@@ -39,6 +42,7 @@ const { auditApiRequest } = await import('../shared/audit');
 const { annotateAuditEvent, attachInboundAuditScope, bindAuditPrincipal } = await import(
   '../shared/audit-scope'
 );
+const { __clearProjectAccountLookupForTests } = await import('../shared/project-account-lookup');
 
 const USER = '00000000-0000-4000-a000-000000000001';
 const ACCOUNT = '00000000-0000-4000-a000-000000000101';
@@ -117,6 +121,8 @@ describe('the request audit writes a row for every request', () => {
 describe('authenticators and handlers write into the request scope', () => {
   beforeEach(() => {
     auditRows = [];
+    // A project's owner never changes, so the lookup caches a found answer.
+    __clearProjectAccountLookupForTests();
   });
 
   test('a self-authenticating route attributes its row by binding a principal', async () => {
@@ -246,6 +252,34 @@ describe('authenticators and handlers write into the request scope', () => {
 
     expect(auditRows).toHaveLength(1);
     expect(auditRows[0]).toMatchObject({ actorType: 'agent', actorUserId: USER });
+  });
+
+  test('a row that names a project but no account lands in the project owner\u2019s log', async () => {
+    projectRows = [{ accountId: ACCOUNT }];
+    const app = gitApp((c) => {
+      // A verified per-project Slack delivery: the project is in the URL, the
+      // account is not.
+      bindAuditPrincipal({ projectId: PROJECT, actorType: 'system', authoritativeSource: 'integration' });
+      return c.body(null, 200);
+    });
+
+    await app.request(`/v1/git/${PROJECT}/git-receive-pack`, { method: 'POST' });
+
+    expect(auditRows[0]).toMatchObject({ projectId: PROJECT, accountId: ACCOUNT });
+    projectRows = [];
+  });
+
+  test('an unknown project leaves the account empty rather than guessing', async () => {
+    projectRows = [];
+    const app = gitApp((c) => {
+      bindAuditPrincipal({ projectId: PROJECT, actorType: 'system' });
+      return c.body(null, 200);
+    });
+
+    await app.request(`/v1/git/${PROJECT}/git-receive-pack`, { method: 'POST' });
+
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]).toMatchObject({ projectId: PROJECT, accountId: null });
   });
 
   test('an unannotated row keeps exactly the metadata it always had', async () => {
