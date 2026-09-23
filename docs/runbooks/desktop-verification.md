@@ -89,8 +89,9 @@ Windows and Linux use the OS-native frame. The web layer does not draw minimize,
 maximize, or close controls on any platform.
 
 `.kx-titlebar-tabs` marks only the top capability bar. Product tab lists keep
-the shared Tabs component's layout. `.kx-titlebar-spacer` reserves native chrome
-for fullscreen overlays. It cannot shrink inside a flex column.
+the shared Tabs component's layout. Settings and account overlays put their first
+header rows in the native-light band. Do not add `.kx-titlebar-spacer` to either
+overlay; it creates a blank strip above the breadcrumb.
 
 The shell has no browser toolbar. No screen may be a soft lock. Two layers
 guarantee an exit:

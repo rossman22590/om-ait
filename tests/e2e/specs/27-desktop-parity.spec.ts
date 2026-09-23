@@ -1486,15 +1486,94 @@ nativeBrowserTest?.(
       );
       const hub = main.getByRole("dialog");
       await expect(hub).toBeVisible({ timeout: 60_000 });
-      const spacer = hub.locator(".kx-titlebar-spacer");
-      await expect(spacer).toBeVisible();
-      const spacerBox = (await spacer.boundingBox())!;
-      expect(spacerBox.height * (await currentZoom())).toBeCloseTo(40, 1);
-      const firstControl = hub.locator("header button,header a").first();
-      await expect(firstControl).toBeVisible();
-      expect((await firstControl.boundingBox())!.y).toBeGreaterThanOrEqual(
-        spacerBox.y + spacerBox.height - 1,
-      );
+      await expect(hub.locator(".kx-titlebar-spacer")).toHaveCount(0);
+      const sidebarRow = hub.locator(".kx-overlay-sidebar-titlebar");
+      const breadcrumbRow = hub.locator(".kx-account-hub-header");
+      const centeredInBand = async (control: Locator) => {
+        const box = (await control.boundingBox())!;
+        const centerY = (box.y + box.height / 2) * (await currentZoom());
+        expect(Math.abs(centerY - 20)).toBeLessThanOrEqual(1);
+      };
+      const clearsLights = async (control: Locator) => {
+        const box = (await control.boundingBox())!;
+        expect(box.x * (await currentZoom())).toBeGreaterThanOrEqual(71.5);
+      };
+      await expect(sidebarRow).toBeVisible();
+      await expect(breadcrumbRow).toBeVisible();
+      await centeredInBand(sidebarRow);
+      await centeredInBand(breadcrumbRow);
+      await centeredInBand(breadcrumbRow.getByRole("navigation", { name: "breadcrumb" }));
+      const back = sidebarRow.getByRole("button", { name: /Back to app/i });
+      const search = sidebarRow.getByRole("button", { name: /Search/i });
+      const collapse = sidebarRow.getByRole("button", { name: "Toggle Sidebar" });
+      for (const control of [back, search, collapse]) {
+        await expect(control).toBeVisible();
+        await centeredInBand(control);
+        await clearsLights(control);
+      }
+      await search.click();
+      await expect(main.locator('[data-slot="command-input"]')).toBeVisible();
+      await main.keyboard.press("Escape");
+      await collapse.click();
+      await expect(breadcrumbRow).toHaveAttribute("data-sidebar-collapsed", "");
+      const reopen = breadcrumbRow.getByRole("button", { name: "Toggle Sidebar" });
+      const breadcrumb = breadcrumbRow.getByRole("navigation", { name: "breadcrumb" });
+      await clearsLights(reopen);
+      await centeredInBand(reopen);
+      await centeredInBand(breadcrumb);
+      const reopenBox = (await reopen.boundingBox())!;
+      const breadcrumbBox = (await breadcrumb.boundingBox())!;
+      expect(breadcrumbBox.x).toBeGreaterThanOrEqual(reopenBox.x + reopenBox.width);
+
+      for (let index = 0; index < 3; index++) await main.keyboard.press("Meta+=");
+      await expect
+        .poll(currentZoom)
+        .toBeGreaterThan(1.2);
+      await clearsLights(reopen);
+      await centeredInBand(reopen);
+      await centeredInBand(breadcrumb);
+      await nativeWindow.evaluate((window) => window.setContentSize(720, 480));
+      await expect
+        .poll(async () => nativeWindow.evaluate((window) => window.getContentSize()))
+        .toEqual([720, 480]);
+      await clearsLights(reopen);
+      await centeredInBand(reopen);
+      await centeredInBand(breadcrumb);
+      await nativeWindow.evaluate((window) => window.setContentSize(1100, 700));
+      await main.keyboard.press("Meta+0");
+      await expect.poll(currentZoom).toBe(0.94);
+
+      await nativeWindow.evaluate(async (window) => {
+        await new Promise<void>((resolve) => {
+          window.once("enter-full-screen", resolve);
+          window.setFullScreen(true);
+        });
+      });
+      await expect(main.locator("html")).toHaveAttribute("data-desktop-fullscreen", "true");
+      expect((await reopen.boundingBox())!.x * (await currentZoom())).toBeLessThan(24);
+      await nativeWindow.evaluate(async (window) => {
+        await new Promise<void>((resolve) => {
+          window.once("leave-full-screen", resolve);
+          window.setFullScreen(false);
+        });
+      });
+      await expect(main.locator("html")).not.toHaveAttribute("data-desktop-fullscreen");
+      await reopen.click();
+      await expect(sidebarRow).toBeVisible();
+      await back.click();
+      await expect(hub).not.toBeVisible();
+
+      await main.keyboard.press("Meta+,");
+      const settings = main.getByRole("dialog");
+      await expect(settings).toBeVisible();
+      await expect(settings.locator(".kx-titlebar-spacer")).toHaveCount(0);
+      const settingsBack = settings.getByRole("button", { name: /Back to app/i });
+      const settingsBreadcrumb = settings.getByRole("navigation", { name: "breadcrumb" });
+      await centeredInBand(settingsBack);
+      await centeredInBand(settingsBreadcrumb);
+      await clearsLights(settingsBack);
+      await settingsBack.click();
+      await expect(settings).not.toBeVisible();
 
       await runDatabaseSql(
         `INSERT INTO kortix.platform_user_roles (account_id, role)
