@@ -719,6 +719,48 @@ for (const runtime of runtimes) {
 
     const nativeTest = process.env.E2E_DESKTOP_NATIVE === "1" ? test : null;
     nativeTest?.(
+      "connector authorization popup keeps its opener callback",
+      async ({ page, desktopApp }) => {
+        if (!desktopApp)
+          throw new Error("native Electron application is required");
+        const windowsBeforePopup = desktopApp.windows().length;
+        const hasPopupHandle = await page.evaluate(() => {
+          let popup: Window | null = null;
+          window.addEventListener("message", (event) => {
+            if (event.source !== popup || event.data !== "connector-auth-reply")
+              return;
+            document.documentElement.dataset.connectorAuthReply = event.data;
+          });
+          popup = window.open("", "connector-auth", "width=520,height=720");
+          return popup !== null;
+        });
+        expect(hasPopupHandle).toBe(true);
+        await expect
+          .poll(() => desktopApp.windows().length)
+          .toBe(windowsBeforePopup + 1);
+        const popup = desktopApp
+          .windows()
+          .find(
+            (candidate) =>
+              candidate !== page && candidate.url() === "about:blank",
+          );
+        if (!popup) throw new Error("connector popup not found");
+        try {
+          expect(popup.url()).toBe("about:blank");
+          expect(await popup.evaluate(() => Boolean(window.opener))).toBe(true);
+          await popup.evaluate(() => {
+            window.opener?.postMessage("connector-auth-reply", "*");
+          });
+          await expect(page.locator("html")).toHaveAttribute(
+            "data-connector-auth-reply",
+            "connector-auth-reply",
+          );
+        } finally {
+          await popup.close();
+        }
+      },
+    );
+    nativeTest?.(
       "dock activation recreates the main window with its persisted native state",
       async ({ desktopApp, baseURL }) => {
         if (!desktopApp)
