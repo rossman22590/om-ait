@@ -5,10 +5,15 @@ import {
   parseFileMentionReferences,
   parseFileReferences,
   parseProjectReferences,
-  parseReplyContext,
+  parseReplyContexts,
   parseSessionReferences,
   parseSystemNotifications,
   parseTriggerEvent,
+  QUOTE_MARKER_RE,
+  quoteMarker,
+  serializeReplyContext,
+  splitAtQuoteMarkers,
+  stripReplyContexts,
   systemNotificationSeverity,
 } from './message-parsing';
 
@@ -42,6 +47,106 @@ describe('parseFileReferences', () => {
     // not a file reference, and swallowing it would delete message content.
     const input = '<file foo="bar">\nnot a ref\n</file>';
     expect(parseFileReferences(input)).toEqual({ cleanText: input, files: [] });
+  });
+});
+
+describe('parseReplyContexts / serializeReplyContext / stripReplyContexts / splitAtQuoteMarkers', () => {
+  const threeInterleaved =
+    '<reply_context>Q1</reply_context>\nreply one\n<reply_context>Q2</reply_context>\nreply two\n<reply_context>Q3</reply_context>\nreply three';
+
+  test('no block leaves the text untouched', () => {
+    const text = 'just a plain message';
+    expect(parseReplyContexts(text)).toEqual({ cleanText: text, quotes: [] });
+  });
+
+  test('a legacy single leading block parses like before', () => {
+    const { cleanText, quotes } = parseReplyContexts('<reply_context>A</reply_context>\n\nhello');
+    expect(quotes).toEqual(['A']);
+    expect(splitAtQuoteMarkers(cleanText, quotes)).toEqual([
+      { kind: 'quote', text: 'A', index: 0 },
+      { kind: 'text', text: 'hello' },
+    ]);
+  });
+
+  test('three interleaved blocks parse and split in document order', () => {
+    const { cleanText, quotes } = parseReplyContexts(threeInterleaved);
+    expect(quotes).toEqual(['Q1', 'Q2', 'Q3']);
+    expect(splitAtQuoteMarkers(cleanText, quotes)).toEqual([
+      { kind: 'quote', text: 'Q1', index: 0 },
+      { kind: 'text', text: 'reply one' },
+      { kind: 'quote', text: 'Q2', index: 1 },
+      { kind: 'text', text: 'reply two' },
+      { kind: 'quote', text: 'Q3', index: 2 },
+      { kind: 'text', text: 'reply three' },
+    ]);
+  });
+
+  test('two adjacent blocks with no text between produce no empty text piece', () => {
+    const { cleanText, quotes } = parseReplyContexts(
+      '<reply_context>A</reply_context>\n<reply_context>B</reply_context>',
+    );
+    expect(splitAtQuoteMarkers(cleanText, quotes)).toEqual([
+      { kind: 'quote', text: 'A', index: 0 },
+      { kind: 'quote', text: 'B', index: 1 },
+    ]);
+  });
+
+  test('a quote body carrying markup and a newline survives verbatim', () => {
+    const { quotes } = parseReplyContexts('<reply_context><b>x</b>\nmore</reply_context>\ntext');
+    expect(quotes).toEqual(['<b>x</b>\nmore']);
+  });
+
+  test('round-trips a quote containing a literal closing tag', () => {
+    const wire = serializeReplyContext('a </reply_context> b');
+    const { quotes } = parseReplyContexts(wire);
+    expect(quotes).toEqual(['a </reply_context> b']);
+  });
+
+  test('an open tag with attributes still parses', () => {
+    const { quotes } = parseReplyContexts('<reply_context foo="x">stuff</reply_context>');
+    expect(quotes).toEqual(['stuff']);
+  });
+
+  test('stripReplyContexts leaves only the reply text, no blank-line runs', () => {
+    expect(stripReplyContexts(threeInterleaved)).toBe('reply one\nreply two\nreply three');
+  });
+
+  test('an unclosed block is left as plain text', () => {
+    const text = '<reply_context>oops, never closed';
+    expect(parseReplyContexts(text)).toEqual({ cleanText: text, quotes: [] });
+  });
+
+  test('parseSystemNotifications finds nothing left behind after parseReplyContexts (regression: 2nd block became a card)', () => {
+    const { cleanText } = parseReplyContexts(threeInterleaved);
+    const { notifications } = parseSystemNotifications(cleanText);
+    expect(notifications).toEqual([]);
+  });
+
+  test('quoteMarker output round-trips through splitAtQuoteMarkers', () => {
+    const text = `${quoteMarker(0)}hello`;
+    expect(splitAtQuoteMarkers(text, ['Q'])).toEqual([
+      { kind: 'quote', text: 'Q', index: 0 },
+      { kind: 'text', text: 'hello' },
+    ]);
+  });
+
+  // Regression guard for a review finding: the marker regex must be built
+  // from an escape form that stays a code-point match even when replayed
+  // WITHOUT the `u` flag (`QUOTE_MARKER_RE.source` reconstructed via
+  // `new RegExp(...)` with no flags argument, then a fresh `g`). A
+  // `\u{XXXX}` brace-form escape only means "match this code point" under
+  // the `u`/`v` flag; outside it, `\u{e000}` parses as the identity escape
+  // `u` followed by the literal text `{e000}` (verified with plain
+  // node/bun: `/\u{e000}/.test('u{e000}')` is `true`). `QUOTE_MARKER_RE` is
+  // written with the 4-hex-digit `` form instead, which is a real
+  // code-point escape in every mode, so this must hold with or without `u`.
+  test('the marker regex source matches its own marker even reconstructed without the u flag', () => {
+    const bare = new RegExp(QUOTE_MARKER_RE.source, 'g');
+    expect(bare.flags.includes('u')).toBe(false);
+    const marker = quoteMarker(3);
+    bare.lastIndex = 0;
+    const match = bare.exec(marker);
+    expect(match?.[1]).toBe('3');
   });
 });
 
@@ -232,12 +337,17 @@ const legacy = {
       .trim();
     return { cleanText: cleaned, sessions };
   },
-  reply(text: string) {
-    const match = text.match(/<reply_context>([\s\S]*?)<\/reply_context>/);
-    if (!match) return { cleanText: text, replyContext: null };
-    const replyContext = match[1]!.trim();
-    const cleanText = text.replace(/<reply_context>[\s\S]*?<\/reply_context>\s*/, '').trim();
-    return { cleanText, replyContext };
+  // The multi-quote regex version of parseReplyContexts (reply-context.ts).
+  replies(text: string) {
+    const quotes: string[] = [];
+    const cleanText = text
+      .replace(/<reply_context\b[^>]*>([\s\S]*?)<\/reply_context>\n?/g, (_full, rawBody: string) => {
+        const index = quotes.length;
+        quotes.push(rawBody.split('&lt;/reply_context&gt;').join('</reply_context>').trim());
+        return quoteMarker(index);
+      })
+      .trim();
+    return { cleanText, quotes };
   },
   notifications(text: string) {
     const notifications: { tag: string; label: string; fields: [string, string][]; body: string }[] = [];
@@ -338,9 +448,10 @@ describe('each parser returns exactly what its regex returned', () => {
     }
   });
 
-  test('parseReplyContext', () => {
-    for (const text of samples(['<reply_context>', '</reply_context>', ' ', '\n', 'quoted', 'answer', '<reply_context'])) {
-      expect(parseReplyContext(text)).toEqual(legacy.reply(text));
+  test('parseReplyContexts', () => {
+    for (const text of samples(['<reply_context>', '</reply_context>', ' ', '\n', 'quoted', 'answer', '<reply_context',
+      '<reply_context a="1">', '<reply_contextx>', '&lt;/reply_context&gt;'])) {
+      expect(parseReplyContexts(text)).toEqual(legacy.replies(text));
     }
   });
 
@@ -372,7 +483,7 @@ describe('no message can freeze the tab that parses it', () => {
   within('20k <file_ref openers that never close', () => parseFileMentionReferences('<file_ref x>'.repeat(20_000)));
   within('18k <agent_ref openers that never close', () => parseAgentMentionReferences('<agent_ref x>'.repeat(18_000)));
   within('240k blank lines before a reference header', () => parseSessionReferences(`${'\n'.repeat(240_000)}x`));
-  within('16k <reply_context> openers that never close', () => parseReplyContext('<reply_context>'.repeat(16_000)));
+  within('16k <reply_context> openers that never close', () => parseReplyContexts('<reply_context>'.repeat(16_000)));
   within('80k notification openers that never close', () => parseSystemNotifications('<a>'.repeat(80_000)));
   // `\s*(.+)$` split the whitespace every way once a `\r` kept `.` from the end.
   within('a notification field with 240k spaces before a \\r', () =>

@@ -197,17 +197,16 @@ export function parseAgentMentionReferences(text: string): {
 // Parse <reply_context> XML from select-and-reply feature
 // ============================================================================
 
-export function parseReplyContext(text: string): {
-  cleanText: string;
-  replyContext: string | null;
-} {
-  const [block] = tagBlocks(text, 'reply_context', { limit: 1 });
-  if (!block) return { cleanText: text, replyContext: null };
-  const replyContext = block.body.trim();
-  // The whitespace after the closing tag goes with the block.
-  const cleanText = (text.slice(0, block.index) + text.slice(block.end).replace(/^\s+/, '')).trim();
-  return { cleanText, replyContext };
-}
+// The functions live in `reply-context.ts` (React-free, so the composer
+// editor can import them directly); re-exported here for existing importers.
+export {
+  parseReplyContexts,
+  QUOTE_MARKER_RE,
+  quoteMarker,
+  serializeReplyContext,
+  splitAtQuoteMarkers,
+  stripReplyContexts,
+} from './reply-context';
 
 // ============================================================================
 // Parse <trigger_event> JSON from the prompt of a trigger-started session

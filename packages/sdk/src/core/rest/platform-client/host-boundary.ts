@@ -356,7 +356,7 @@ export async function downloadAccountAudit(
     actor?: string;
     project_id?: string;
     session_id?: string;
-    actor_type?: 'human' | 'agent' | 'service_account' | 'system';
+    actor_type?: 'human' | 'agent' | 'service_account' | 'system' | 'anonymous';
     source?: string;
     phase?: string;
     outcome?: 'success' | 'failure' | 'denied' | 'pending';

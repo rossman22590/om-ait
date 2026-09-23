@@ -2,10 +2,13 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   WEB_SPACING_PX,
+  commandMessageText,
+  extractReplyContexts,
   interruptedTurnIds,
   isUserMessageEdited,
   parseUserMessageText,
   queuedPromptStatusLabel,
+  quoteMarginBottom,
   rewindHiddenMessageIds,
   userMessageMetaItems,
   webSpace,
@@ -28,7 +31,7 @@ describe('parseUserMessageText', () => {
   test('plain text passes through', () => {
     const parsed = parseUserMessageText('hello');
     expect(parsed.text).toBe('hello');
-    expect(parsed.replyContext).toBeNull();
+    expect(parsed.quotes).toEqual([]);
     expect(parsed.files).toEqual([]);
     expect(parsed.sessions).toEqual([]);
   });
@@ -80,10 +83,65 @@ describe('parseUserMessageText', () => {
     expect(parsed.files).toEqual([]);
   });
 
-  test('extracts reply context', () => {
+  test('extracts a legacy single leading reply context', () => {
     const parsed = parseUserMessageText('<reply_context>quoted bit</reply_context>\nmy answer');
-    expect(parsed.replyContext).toBe('quoted bit');
+    expect(parsed.quotes).toEqual(['quoted bit']);
     expect(parsed.text).toBe('my answer');
+  });
+
+  test('extracts many interleaved reply_context blocks in order', () => {
+    const raw =
+      '<reply_context>first quoted passage</reply_context>\nmy reply to the first\n<reply_context>second quoted passage</reply_context>\nmy reply to the second';
+    const parsed = parseUserMessageText(raw);
+    expect(parsed.quotes).toEqual(['first quoted passage', 'second quoted passage']);
+    expect(parsed.text).toBe('my reply to the first\nmy reply to the second');
+  });
+
+  test('a third block keeps ordering and strips all raw XML', () => {
+    const raw =
+      '<reply_context>a</reply_context>\none\n<reply_context>b</reply_context>\ntwo\n<reply_context>c</reply_context>\nthree';
+    const parsed = parseUserMessageText(raw);
+    expect(parsed.quotes).toEqual(['a', 'b', 'c']);
+    expect(parsed.text).toBe('one\ntwo\nthree');
+    expect(parsed.text).not.toContain('reply_context');
+  });
+
+  test('tolerates attributes on the open tag and surrounding whitespace, and trims the body', () => {
+    const raw = '<reply_context foo="x">   quoted with attrs   </reply_context>\nreply text';
+    const parsed = parseUserMessageText(raw);
+    expect(parsed.quotes).toEqual(['quoted with attrs']);
+    expect(parsed.text).toBe('reply text');
+  });
+
+  test('decodes an escaped closing tag inside the quote body', () => {
+    const raw = '<reply_context>before &lt;/reply_context&gt; after</reply_context>\nreply text';
+    const parsed = parseUserMessageText(raw);
+    expect(parsed.quotes).toEqual(['before </reply_context> after']);
+    expect(parsed.text).toBe('reply text');
+  });
+
+  test('an unclosed block is left as text, not parsed as a quote', () => {
+    const raw = '<reply_context>never closed\nreply text';
+    const parsed = parseUserMessageText(raw);
+    expect(parsed.quotes).toEqual([]);
+    expect(parsed.text).toBe(raw);
+  });
+
+  test('consumes only one trailing newline after a close tag, matching web stripReplyContexts', () => {
+    // Expected value confirmed by running web's own function:
+    // `bun -e` against apps/web/src/features/session/message-parsing.tsx
+    // stripReplyContexts('<reply_context>a</reply_context>   \nrest') === 'rest'
+    const raw = '<reply_context>a</reply_context>   \nrest';
+    const parsed = parseUserMessageText(raw);
+    expect(parsed.quotes).toEqual(['a']);
+    expect(parsed.text).toBe('rest');
+  });
+
+  test('collapses a blank-line run left behind between two blocks to one blank line', () => {
+    const raw = '<reply_context>a</reply_context>\n\n\nmiddle text\n\n\n<reply_context>b</reply_context>\nend';
+    const parsed = parseUserMessageText(raw);
+    expect(parsed.quotes).toEqual(['a', 'b']);
+    expect(parsed.text).toBe('middle text\n\nend');
   });
 
   test('extracts session refs and strips their header', () => {
@@ -198,21 +256,79 @@ describe('rewindHiddenMessageIds', () => {
   });
 });
 
+describe('extractReplyContexts (exported for the command path)', () => {
+  test('returns the quotes in order and the text without any block', () => {
+    expect(
+      extractReplyContexts('<reply_context>first</reply_context>\nrun it\n<reply_context>second</reply_context>'),
+    ).toEqual({ text: 'run it', quotes: ['first', 'second'] });
+  });
+});
+
+describe('commandMessageText — a /command whose args carry quotes', () => {
+  test('the body and the copy/edit text never contain raw <reply_context> XML', () => {
+    const result = commandMessageText('review', '<reply_context>a passage</reply_context>\nrun it');
+    expect(result.body).toBe('run it');
+    expect(result.prompt).toBe('/review run it');
+  });
+
+  test('quote-only args leave an empty body and a bare /name prompt', () => {
+    expect(commandMessageText('review', '<reply_context>a passage</reply_context>')).toEqual({
+      body: '',
+      prompt: '/review',
+    });
+  });
+
+  test('plain args and no args are unchanged', () => {
+    expect(commandMessageText('review', 'this file')).toEqual({ body: 'this file', prompt: '/review this file' });
+    expect(commandMessageText('review', undefined)).toEqual({ body: '', prompt: '/review' });
+  });
+
+  test('the quote is drawn once: parseUserMessageText already carries it in quotes', () => {
+    // The bubble draws `content.quotes`; the command body must not repeat it.
+    const raw = 'Review template\n<reply_context>a passage</reply_context>\nrun it';
+    expect(parseUserMessageText(raw).quotes).toEqual(['a passage']);
+    expect(commandMessageText('review', '<reply_context>a passage</reply_context>\nrun it').body).not.toContain(
+      'a passage',
+    );
+  });
+});
+
+describe('quoteMarginBottom — no trailing gap under the last quote', () => {
+  test('a quote followed by another quote keeps the gap', () => {
+    expect(quoteMarginBottom(0, 2, false)).toBe(webSpace(2));
+  });
+
+  test('the last quote keeps the gap only when text follows it', () => {
+    expect(quoteMarginBottom(1, 2, true)).toBe(webSpace(2));
+    expect(quoteMarginBottom(1, 2, false)).toBe(0);
+    expect(quoteMarginBottom(0, 1, false)).toBe(0);
+  });
+});
+
 // ── Linear-time parsing ──────────────────────────────────────────────────────
 //
 // Every tag in a user message used to be read with a lazy regex that scanned
 // the rest of the message again for each tag that never closed. This is the
 // regex version of parseUserMessageText, kept ONLY as a parity oracle.
+// The multi-quote regex version of extractReplyContexts, kept ONLY as a parity
+// oracle. Its lazy body re-scanned the rest of the message for every opener
+// that never closed.
+function legacyExtractReplyContexts(text: string): { text: string; quotes: string[] } {
+  const quotes: string[] = [];
+  const stripped = text.replace(/<reply_context\b[^>]*>([\s\S]*?)<\/reply_context>\n?/g, (_whole, body: string) => {
+    quotes.push(body.trim().replace(/&lt;\/reply_context&gt;/g, '</reply_context>'));
+    return '';
+  });
+  return { text: stripped.replace(/\n{3,}/g, '\n\n').trim(), quotes };
+}
+
 function legacyParse(raw: string) {
   const unescape = (v: string) => v.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
   let text = (raw ?? '').replace(/<kortix_system[^>]*>[\s\S]*?<\/kortix_system>/gi, '');
   text = text.replace(/\n{3,}/g, '\n\n').trim();
-  let replyContext: string | null = null;
-  const reply = text.match(/<reply_context>([\s\S]*?)<\/reply_context>/);
-  if (reply) {
-    replyContext = reply[1]!.trim();
-    text = text.replace(/<reply_context>[\s\S]*?<\/reply_context>\s*/, '').trim();
-  }
+  const reply = legacyExtractReplyContexts(text);
+  text = reply.text;
+  const quotes = reply.quotes;
   const files: { path: string; mime: string; filename: string }[] = [];
   text = text
     .replace(/<file\s+([^>]*?)>\s*[\s\S]*?<\/file>/g, (whole, attrs: string) => {
@@ -243,7 +359,7 @@ function legacyParse(raw: string) {
     })
     .replace(/\n*Referenced sessions \(use the session_context tool to fetch details when needed\):\n?/g, '')
     .trim();
-  return { text, replyContext, files, sessions };
+  return { text, quotes, files, sessions };
 }
 
 /** Deterministic PRNG (mulberry32), so a failing case reproduces. */
@@ -261,7 +377,7 @@ function random(seed: number): () => number {
 describe('parseUserMessageText returns exactly what the regex version returned', () => {
   test('on 3000 random messages', () => {
     const tokens = ['<kortix_system type="a">', '</kortix_system>', '<KORTIX_SYSTEM', '</Kortix_System>', '<reply_context>',
-      '</reply_context>', 'quoted', '<file path="/w/a.png" mime="image/png" filename="a.png">', '<file note="x">', '</file>',
+      '</reply_context>', '<reply_context a="1">', '<reply_contextx>', '&lt;/reply_context&gt;', 'quoted', '<file path="/w/a.png" mime="image/png" filename="a.png">', '<file note="x">', '</file>',
       '<file', '<project_ref name="p"/>', '<project_ref', '<file_ref path="a.ts" name="a"/>', '<agent_ref name="build"/>', '/>',
       '\nReferenced projects (x):\n', 'Referenced files (', '):', '\nReferenced agents (a):', '<session_ref id="s" title="t" />',
       '\nReferenced sessions (use the session_context tool to fetch details when needed):\n', '\n', '\n\n\n', ' ', 'hello', '>'];
@@ -279,6 +395,24 @@ describe('parseUserMessageText returns exactly what the regex version returned',
   });
 });
 
+describe('extractReplyContexts returns exactly what its regex version returned', () => {
+  test('on 3000 random strings of reply_context fragments', () => {
+    const tokens = ['<reply_context>', '</reply_context>', '<reply_context', '<reply_context a="1">', '<reply_contextx>',
+      '<reply_context-x>', '<REPLY_CONTEXT>', '</reply_context', '&lt;/reply_context&gt;', '>', ' ', '\n', '\n\n\n', 'quoted', 'answer'];
+    const next = random(117);
+    let matched = 0;
+    for (let i = 0; i < 3000; i++) {
+      let text = '';
+      const length = Math.floor(next() * 20);
+      for (let j = 0; j < length; j++) text += tokens[Math.floor(next() * tokens.length)];
+      const expected = legacyExtractReplyContexts(text);
+      expect(extractReplyContexts(text)).toEqual(expected);
+      if (expected.quotes.length > 0) matched++;
+    }
+    expect(matched).toBeGreaterThan(800);
+  });
+});
+
 describe('no user message can freeze the app', () => {
   const within = (label: string, run: () => unknown) =>
     test(label, () => {
@@ -291,6 +425,12 @@ describe('no user message can freeze the app', () => {
   // on a phone is slower.
   within('16k <kortix_system> openers that never close', () => parseUserMessageText('<kortix_system>'.repeat(16_000)));
   within('16k <reply_context> openers that never close', () => parseUserMessageText('<reply_context>'.repeat(16_000)));
+  within('16k <reply_context> openers that never close, extracted directly', () =>
+    extractReplyContexts('<reply_context>'.repeat(16_000)));
+  within('one <reply_context opener and 240k characters with no >', () =>
+    extractReplyContexts(`<reply_context${' '.repeat(240_000)}x`));
+  within('a /command whose args hold 16k unclosed <reply_context> openers', () =>
+    commandMessageText('review', '<reply_context>'.repeat(16_000)));
   within('16k <project_ref openers that never close', () => parseUserMessageText('<project_ref x>'.repeat(16_000)));
   within('20k <file_ref openers that never close', () => parseUserMessageText('<file_ref x>'.repeat(20_000)));
   // Removing the refs joins their blank lines into one 60k-newline run, and
