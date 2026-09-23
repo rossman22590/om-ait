@@ -785,7 +785,16 @@ interface AuditRow {
   resource_id: string | null;
   http_status: number | null;
   correlation_id: string | null;
-  metadata: Record<string, any>;
+  metadata: {
+    http?: string;
+    auth?: { kind?: string; token_id?: string };
+    refs?: Array<{ ref: string; old_sha: string; new_sha: string; kind: string }>;
+  };
+}
+
+function required<T>(value: T | null | undefined, label: string): T {
+  if (value === null || value === undefined) throw new Error(`AUD-7 needs ${label}`);
+  return value;
 }
 
 flow(
@@ -814,9 +823,11 @@ flow(
     const outsider = await team.addMember('member');
     const projectMember = await team.addMember('member');
     const project = await team.project({ managedGit: true });
-    await team.grantProjectRole(project.id, projectMember.userId!, 'member');
-    const ownerId = ctx.P.OWNER.userId!;
-    const databaseUrl = ctx.env.databaseUrl!;
+    const outsiderId = required(outsider.userId, 'the account member\u2019s user id');
+    const projectMemberId = required(projectMember.userId, 'the project member\u2019s user id');
+    await team.grantProjectRole(project.id, projectMemberId, 'member');
+    const ownerId = required(ctx.P.OWNER.userId, 'the owner\u2019s user id');
+    const databaseUrl = required(ctx.env.databaseUrl, 'a database URL');
     const db = new PgClient({ connectionString: databaseUrl,
       ssl: /localhost|127\.0\.0\.1/.test(databaseUrl) ? false : { rejectUnauthorized: false } });
     await db.connect();
@@ -845,9 +856,10 @@ flow(
           env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_CONFIG_COUNT: '1',
             GIT_CONFIG_KEY_0: 'http.extraHeader', GIT_CONFIG_VALUE_0: `Authorization: Bearer ${secret}` } });
         output = result.stdout + result.stderr;
-      } catch (error: any) {
-        code = typeof error.code === 'number' ? error.code : -1;
-        output = String(error.stdout ?? '') + String(error.stderr ?? '');
+      } catch (error) {
+        const failed = error as { code?: unknown; stdout?: unknown; stderr?: unknown };
+        code = typeof failed.code === 'number' ? failed.code : -1;
+        output = String(failed.stdout ?? '') + String(failed.stderr ?? '');
       }
       if ((expected === 'ok') !== (code === 0)) {
         throw new Error(`git ${args[0]}: expected ${expected}, got exit ${code}: ${output.replaceAll(secret, '[redacted]')}`);
@@ -876,13 +888,14 @@ flow(
         res.status(200);
         return res.json<{ events: AuditRow[] }>().events;
       });
-    const expectRow = (row: AuditRow | undefined, expected: Partial<AuditRow>, label: string) => {
+    const expectRow = (row: AuditRow | undefined, expected: Partial<AuditRow>, label: string): AuditRow => {
       if (!row) throw new Error(`${label}: no row`);
       for (const [key, value] of Object.entries(expected)) {
-        if ((row as any)[key] !== value) {
+        if (row[key as keyof AuditRow] !== value) {
           throw new Error(`${label}: expected ${key}=${JSON.stringify(value)}, got ${JSON.stringify(row)}`);
         }
       }
+      return row;
     };
 
     try {
@@ -896,8 +909,7 @@ flow(
       await ctx.step('the owner clones through the Git proxy; a git.clone row names the owner and the token', async () => {
         await git(owner.secret_key, ['clone', remote, '.'], 'ok');
         const rows = await auditRows({ action: 'git.clone', actor: ownerId }, 'the owner’s git.clone row');
-        const row = rows[0];
-        expectRow(row, {
+        const row = expectRow(rows[0], {
           account_id: team.id,
           project_id: project.id,
           actor_user_id: ownerId,
@@ -909,11 +921,11 @@ flow(
           resource_id: project.id,
           http_status: 200,
         }, 'git.clone');
-        if (row!.metadata.auth?.kind !== 'git' || row!.metadata.auth?.token_id !== owner.token_id) {
-          throw new Error(`git.clone must name the token, never its secret: ${JSON.stringify(row!.metadata)}`);
+        if (row.metadata.auth?.kind !== 'git' || row.metadata.auth?.token_id !== owner.token_id) {
+          throw new Error(`git.clone must name the token, never its secret: ${JSON.stringify(row.metadata)}`);
         }
-        if (!/git-upload-pack$/.test(String(row!.metadata.http))) {
-          throw new Error(`git.clone must keep its HTTP identity: ${JSON.stringify(row!.metadata)}`);
+        if (!/git-upload-pack$/.test(String(row.metadata.http))) {
+          throw new Error(`git.clone must keep its HTTP identity: ${JSON.stringify(row.metadata)}`);
         }
         if (JSON.stringify(row).includes(owner.secret_key)) throw new Error('the row contains the token secret');
       });
@@ -929,8 +941,8 @@ flow(
           { action: 'git.push', actor: ownerId, outcome: 'success' },
           'the owner’s git.push row',
         );
-        expectRow(rows[0], { actor_type: 'human', resource_id: project.id, http_status: 200 }, 'git.push');
-        const refs = rows[0]!.metadata.refs as Array<Record<string, string>> | undefined;
+        const row = expectRow(rows[0], { actor_type: 'human', resource_id: project.id, http_status: 200 }, 'git.push');
+        const refs = row.metadata.refs;
         const created = refs?.find((entry) => entry.ref === branch);
         if (!created || created.kind !== 'create' || created.new_sha !== head || !/^0{40}$/.test(created.old_sha ?? '')) {
           throw new Error(`git.push must record ${branch} created at ${head}: ${JSON.stringify(refs)}`);
@@ -943,7 +955,7 @@ flow(
         const rows = await waitFor(
           () => auditRows({ action: 'git.push', actor: ownerId, outcome: 'success' }, 'the owner’s git.push rows'),
           {
-            until: (events) => events.some((row) => (row.metadata.refs ?? []).some((e: any) => e.ref === branch && e.kind === 'delete')),
+            until: (events) => events.some((row) => (row.metadata.refs ?? []).some((entry) => entry.ref === branch && entry.kind === 'delete')),
             timeoutMs: 20_000,
             intervalMs: 500,
             description: `the delete of ${branch} in the audit log`,
@@ -957,25 +969,25 @@ flow(
         const read = await git(outsiderToken.secret_key, ['ls-remote', remote], 'rejected');
         if (!/403|not authorized/i.test(read)) throw new Error(`expected a 403 refusal, got: ${read}`);
         const rows = await auditRows(
-          { actor: outsider.userId!, outcome: 'denied' },
+          { actor: outsiderId, outcome: 'denied' },
           'the account member’s denied git row',
         );
-        expectRow(rows[0], {
+        const row = expectRow(rows[0], {
           account_id: team.id,
           actor_type: 'human',
           authoritative_source: 'api_key',
           http_status: 403,
           action: 'GET /v1/git/:project/info/refs',
         }, 'account member refusal');
-        if (rows[0]!.metadata.auth?.token_id !== outsiderToken.token_id) {
-          throw new Error(`the refusal must name the refused token: ${JSON.stringify(rows[0]!.metadata)}`);
+        if (row.metadata.auth?.token_id !== outsiderToken.token_id) {
+          throw new Error(`the refusal must name the refused token: ${JSON.stringify(row.metadata)}`);
         }
       });
 
       await ctx.step('a project member without gitops.push is refused a push, and the refusal names them', async () => {
         await git(memberToken.secret_key, ['push', remote, 'HEAD:refs/heads/main'], 'rejected');
         const rows = await auditRows(
-          { actor: projectMember.userId!, outcome: 'denied' },
+          { actor: projectMemberId, outcome: 'denied' },
           'the project member’s denied push row',
         );
         expectRow(rows[0], { actor_type: 'human', http_status: 403, action: 'GET /v1/git/:project/info/refs' }, 'project member refusal');
@@ -1028,7 +1040,8 @@ flow(
       for (const tokenId of tokenIds) {
         await db.query('DELETE FROM kortix.account_tokens WHERE token_id = $1', [tokenId]);
       }
-      if (localGitServer) await new Promise<void>((resolve) => localGitServer!.close(() => resolve()));
+      const server = localGitServer;
+      if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
       await db.end();
       await rm(root, { recursive: true, force: true });
     }
