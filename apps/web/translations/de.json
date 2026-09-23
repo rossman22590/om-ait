@@ -1849,6 +1849,9 @@
     "hintSettings": "Drücke {modifier}, um die Einstellungen zu öffnen",
     "hintCompact": "Bitte darum, die Sitzung zu komprimieren, wenn sie lang wird",
     "queueList": "Queue List",
+    "quoteCount": "{count, plural, one {# Zitat} other {# Zitate}}",
+    "expandQuotes": "Zitate ausklappen",
+    "collapseQuotes": "Zitate einklappen",
     "stopUnconfirmed": "Stopp konnte nicht bestätigt werden. Der Agent läuft möglicherweise noch. Versuche es erneut.",
     "queued": "In Warteschlange",
     "queuedFiles": "{count, plural, one {# Datei} other {# Dateien}}"
@@ -7045,7 +7048,7 @@
       "line1113JsxTextSearching": "Suche...",
       "line1153JsxTextTasksDone": "Aufgaben erledigt",
       "line2038JsxTextDropFilesToAttach": "Dateien zum Anhängen ablegen",
-      "line2078JsxAttrAriaLabelClearReply": "Antwort löschen",
+      "removeQuoteAriaLabel": "Zitat entfernen",
       "line2118JsxAttrAriaLabelCancelCommand": "Befehl abbrechen",
       "line2145JsxTextAddToQueue": "Zur Warteschlange hinzufügen",
       "line2185JsxTextEnterDetailsAndPressEnterOrPressEsc": "Details eingeben und Enter drücken oder Esc zum Abbrechen",

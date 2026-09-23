@@ -1849,6 +1849,9 @@
     "hintSettings": "Appuie sur {modifier}, pour ouvrir les paramètres",
     "hintCompact": "Demande à compacter la session lorsqu'elle devient longue",
     "queueList": "Queue List",
+    "quoteCount": "{count, plural, one {# citation} other {# citations}}",
+    "expandQuotes": "Développer les citations",
+    "collapseQuotes": "Réduire les citations",
     "stopUnconfirmed": "L’arrêt n’a pas pu être confirmé. L’agent fonctionne peut-être encore. Réessayez de l’arrêter.",
     "queued": "En attente",
     "queuedFiles": "{count, plural, one {# fichier} other {# fichiers}}"
@@ -7045,7 +7048,7 @@
       "line1113JsxTextSearching": "Recherche...",
       "line1153JsxTextTasksDone": "tâches terminées",
       "line2038JsxTextDropFilesToAttach": "Déposez des fichiers à joindre",
-      "line2078JsxAttrAriaLabelClearReply": "Effacer la réponse",
+      "removeQuoteAriaLabel": "Retirer la citation",
       "line2118JsxAttrAriaLabelCancelCommand": "Annuler la commande",
       "line2145JsxTextAddToQueue": "Ajouter à la file",
       "line2185JsxTextEnterDetailsAndPressEnterOrPressEsc": "Saisissez les détails et appuyez sur Entrée, ou sur Échap pour annuler",

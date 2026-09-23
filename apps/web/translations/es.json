@@ -1849,6 +1849,9 @@
     "hintSettings": "Pulsa {modifier}, para abrir los ajustes",
     "hintCompact": "Pide que se compacte la sesión cuando sea demasiado larga",
     "queueList": "Queue List",
+    "quoteCount": "{count, plural, one {# cita} other {# citas}}",
+    "expandQuotes": "Expandir citas",
+    "collapseQuotes": "Contraer citas",
     "stopUnconfirmed": "No se pudo confirmar la detención. El agente podría seguir ejecutándose. Inténtalo de nuevo.",
     "queued": "En cola",
     "queuedFiles": "{count, plural, one {# archivo} other {# archivos}}"
@@ -7045,7 +7048,7 @@
       "line1113JsxTextSearching": "Buscando...",
       "line1153JsxTextTasksDone": "tareas completadas",
       "line2038JsxTextDropFilesToAttach": "Suelta archivos para adjuntarlos",
-      "line2078JsxAttrAriaLabelClearReply": "Borrar respuesta",
+      "removeQuoteAriaLabel": "Quitar cita",
       "line2118JsxAttrAriaLabelCancelCommand": "Cancelar comando",
       "line2145JsxTextAddToQueue": "Añadir a la cola",
       "line2185JsxTextEnterDetailsAndPressEnterOrPressEsc": "Introduce detalles y pulsa Enter, o Esc para cancelar",

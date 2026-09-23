@@ -1849,6 +1849,9 @@
     "hintSettings": "Притисните {modifier}, да отворите подешавања",
     "hintCompact": "Затражите сажимање сесије када постане дуга",
     "queueList": "Queue List",
+    "quoteCount": "{count, plural, one {# цитат} few {# цитата} other {# цитата}}",
+    "expandQuotes": "Прошири цитате",
+    "collapseQuotes": "Скупи цитате",
     "stopUnconfirmed": "Zaustavljanje nije potvrđeno. Agent je možda i dalje aktivan. Pokušajte ponovo da ga zaustavite.",
     "queued": "На чекању",
     "queuedFiles": "{count, plural, one {# датотека} few {# датотеке} other {# датотека}}"
@@ -7045,7 +7048,7 @@
       "line1113JsxTextSearching": "Тражим…",
       "line1153JsxTextTasksDone": "задаци обављени",
       "line2038JsxTextDropFilesToAttach": "Испустите датотеке да бисте их приложили",
-      "line2078JsxAttrAriaLabelClearReply": "Јасан одговор",
+      "removeQuoteAriaLabel": "Уклони цитат",
       "line2118JsxAttrAriaLabelCancelCommand": "Откажи команду",
       "line2145JsxTextAddToQueue": "Додај у ред",
       "line2185JsxTextEnterDetailsAndPressEnterOrPressEsc": "Enter детаље и притисните Enter, или притисните Есц да откажете",
