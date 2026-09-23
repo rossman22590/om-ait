@@ -11,8 +11,8 @@ import {
 import { OutcomeCard } from '@/features/session/outcomes/outcome-card';
 import type { Outcome } from '@/features/session/outcomes/outcome-types';
 import { useLocalizedUiCatalog } from '@/i18n/use-localized-ui-catalog';
-import { KeyIcon, PlugIcon } from '@phosphor-icons/react';
 import { useTranslations } from '@/i18n/use-translations';
+import { KeyIcon, PlugIcon } from '@phosphor-icons/react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { ConnectorIntake } from './connector-intake';
 import { SecretIntakeForm } from './secret-intake-form';
@@ -150,7 +150,7 @@ export function SetupLinkButton({
         <Modal open={open} onOpenChange={handleOpenChange}>
           <ModalContent className="lg:max-w-lg">
             {/* `pr-12` keeps the text clear of the absolute close button (`top-3 right-3 size-8`). */}
-            <ModalHeader className=" pr-12">
+            <ModalHeader className="pr-12">
               <ModalTitle>{copy.title}</ModalTitle>
               <ModalDescription className="text-pretty">{copy.blurb}</ModalDescription>
             </ModalHeader>

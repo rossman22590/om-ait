@@ -105,8 +105,7 @@ export const OutcomeCard = memo(function OutcomeCard({
   // is typed `Url`, which does not accept `undefined`, and TypeScript cannot
   // carry a `!!x` check on one variable across to another. Holding the value
   // itself is what makes the branch below type-safe.
-  const linkHref =
-    outcome.action.intent === 'link' && !pending ? outcome.action.href : undefined;
+  const linkHref = outcome.action.intent === 'link' && !pending ? outcome.action.href : undefined;
 
   return (
     <Item
