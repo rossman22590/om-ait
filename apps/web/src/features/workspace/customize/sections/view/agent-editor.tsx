@@ -72,7 +72,7 @@ export {
   AGENT_MODE_HELP,
   AGENT_MODE_LABEL,
   AGENT_MODES,
-  KORTIX_CLI_CATALOG,
+  KORTIX_PERMISSIONS_CATALOG,
   PERMISSION_ACTION_LABEL,
   PERMISSION_ACTION_ONLY_GROUP_LABEL,
   PERMISSION_ACTION_ONLY_KEYS,
@@ -83,9 +83,6 @@ export {
   PERMISSION_RULE_KEYS,
   THEME_COLOR_SWATCH,
   THEME_COLORS,
-  WORKSPACE_MODE_HELP,
-  WORKSPACE_MODE_LABEL,
-  WORKSPACE_MODES,
 } from './agent-editor-catalog';
 
 /**
@@ -293,7 +290,7 @@ export const AGENT_CONFIG_SECTIONS = [
   { key: 'skills', label: 'Skills', group: 'Access' },
   { key: 'connectors', label: 'Connectors', group: 'Access' },
   { key: 'secrets', label: 'Secrets', group: 'Access' },
-  { key: 'actions', label: 'Project actions', group: 'Access' },
+  { key: 'actions', label: 'Kortix permissions', group: 'Access' },
   { key: 'model', label: 'Model', group: 'Runtime' },
   { key: 'tools', label: 'Tools', group: 'Runtime' },
   { key: 'workspace', label: 'Workspace', group: 'Runtime' },
@@ -335,6 +332,7 @@ export function AgentConfigSections({
   skills,
   connectors,
   secrets,
+  authority,
 }: {
   section: AgentConfigSectionKey;
   editor: AgentDraft;
@@ -352,6 +350,9 @@ export function AgentConfigSections({
   skills?: React.ReactNode;
   connectors?: React.ReactNode;
   secrets?: React.ReactNode;
+  /** What the agent can do once its Kortix permissions meet its IAM ceiling —
+   *  a page-owned card under the Kortix permissions checklist. */
+  authority?: React.ReactNode;
 }) {
   const { draft, oc, set, setOc } = editor;
   // Every section is a card (`EditorSectionStyle` 'panel'), so a tab holding
@@ -375,7 +376,12 @@ export function AgentConfigSections({
           secrets ?? <SecretsSection draft={draft} set={set} options={options.secretOptions} />
         );
       case 'actions':
-        return <ProjectActionsSection draft={draft} set={set} />;
+        return (
+          <>
+            <ProjectActionsSection draft={draft} set={set} />
+            {authority}
+          </>
+        );
       case 'triggers':
         return <>{triggers}</>;
       case 'model':

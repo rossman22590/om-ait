@@ -484,6 +484,76 @@
       "when": 1789398339291,
       "tag": "20260914150539_project_snapshot_archives",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1789416949254,
+      "tag": "20260914201549_user_provider_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1789543425192,
+      "tag": "20260916072345_personal_provider_pools",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1789560030714,
+      "tag": "20260916120030_account_scim_users",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1789563642253,
+      "tag": "20260916130042_prompt_attachments",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1789588154428,
+      "tag": "20260916194914_pooled_provider_secrets",
+      "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1789623252436,
+      "tag": "20260917053412_account_secret_project_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1789756430086,
+      "tag": "20260918183350_session_turn_end_error",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1790063929219,
+      "tag": "20260922075849_admins_see_all_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1790085063114,
+      "tag": "20260922135103_agent_session_on_behalf_of",
+      "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1790088460441,
+      "tag": "20260922144740_audit_events_on_behalf_of",
+      "breakpoints": true
     }
   ]
 }

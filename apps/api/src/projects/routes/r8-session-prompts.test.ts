@@ -72,7 +72,7 @@ let dbReadDelayMs = 0;
 const afterReadDelay = <T>(value: () => T): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(value()), dbReadDelayMs));
 
-const databaseMock = {
+const queryMock = {
   select: () => ({
     from: (table: unknown) => ({
       where: (predicate: unknown) => {
@@ -121,6 +121,12 @@ const databaseMock = {
   }),
 };
 
+const databaseMock = {
+  ...queryMock,
+  transaction: async <T>(callback: (tx: typeof queryMock) => Promise<T>): Promise<T> =>
+    callback(queryMock),
+};
+
 /**
  * Apply an UPDATE's SET clause the way Postgres would.
  *
@@ -154,7 +160,7 @@ function jsonbPatch(
   const merge = [...rendered.matchAll(/'(\{[^']*\})'::jsonb/g)]
     .map((m) => JSON.parse(m[1]) as Record<string, unknown>)
     .reduce<Record<string, unknown>>((acc, one) => Object.assign(acc, one), {});
-  const remove = [...rendered.matchAll(/-\s*'([a-z_]+)'/g)].map((m) => m[1]);
+  const remove = [...rendered.matchAll(/-\s*'([a-zA-Z_]+)'/g)].map((m) => m[1]);
   return { merge, remove };
 }
 
@@ -215,9 +221,15 @@ function render(node: unknown): string {
 
 mock.module('../../shared/db', () => ({ db: databaseMock, hasDatabase: true }));
 
+let billingCalls = 0;
+
 mock.module('../../billing/services/billing-gate', () => ({
-  checkBillingActive: async () =>
-    billingOk
+  checkBillingActive: async () => {
+    throw new Error('a session route must not take a billing hold');
+  },
+  checkBillingAdmission: async () => {
+    billingCalls += 1;
+    return billingOk
       ? { ok: true }
       : {
           ok: false,
@@ -227,7 +239,8 @@ mock.module('../../billing/services/billing-gate', () => ({
           billingModel: 'credits',
           hasSubscription: false,
           billingState: 'drained',
-        },
+        };
+  },
 }));
 
 mock.module('../session-lifecycle', () => ({
@@ -336,6 +349,7 @@ const validBody = {
 };
 
 beforeEach(() => {
+  billingCalls = 0;
   commandTable = [];
   sessionMetadata = {};
   enqueued = [];
@@ -353,6 +367,19 @@ beforeEach(() => {
 });
 
 describe('POST .../prompts', () => {
+  // The route used to run a connector pre-flight here and answer 409
+  // CONNECTOR_CONNECTION_REQUIRED / 503 CONNECTOR_REQUIREMENTS_UNRESOLVED. Both
+  // are gone: a turn is never refused for an unconnected connector, because
+  // that refusal could not be cleared from the product (a `user`-strategy
+  // connector had no connect flow, so the card had no button and the composer
+  // span on "Thinking"). The connector CALL denies and carries a connect link.
+  //
+  // This test is the guard on that: no connector state may hold a prompt.
+  test('queues the prompt even when the project has an unconnected connector', async () => {
+    const response = await post(validBody);
+    expect(response.status).toBe(202);
+    expect(enqueued).toHaveLength(1);
+  });
   test('queues the prompt and answers 202 with the row it created', async () => {
     const response = await post(validBody);
     expect(response.status).toBe(202);
@@ -392,6 +419,14 @@ describe('POST .../prompts', () => {
   // for a message the user typed before the last reload. The server re-mints
   // against the live root before delivering, which is the only place that can
   // be right — see `remintWireMessageId`.
+  test('persists explicit placement and rejects unsupported locations', async () => {
+    for (const placement of ['transcript', 'composer']) {
+      expect((await post({ ...validBody, placement })).status).toBe(202);
+      expect(enqueued.at(-1)?.placement).toBe(placement);
+    }
+    expect((await post({ ...validBody, placement: 'sidebar' })).status).toBe(400);
+  });
+
   test('remint_on_delivery is carried into the payload', async () => {
     await post({ ...validBody, remint_on_delivery: true });
     expect(enqueued[0].remintOnDelivery).toBe(true);
@@ -406,7 +441,7 @@ describe('POST .../prompts', () => {
     await post(validBody);
     expect(enqueued[0].idempotencyKey).toBe(`prompt:${SESSION_ID}:q_1`);
 
-    enqueueResult = { deduped: true, row: row({ status: 'running' }) };
+    enqueueResult = { deduped: true, row: row({ status: 'running', result: { delivery_started_at: new Date().toISOString() } }) };
     const repeat = await post(validBody);
     expect(repeat.status).toBe(200);
     expect(await repeat.json()).toEqual({
@@ -531,6 +566,8 @@ describe('GET .../prompts', () => {
         state: 'queued',
         reason: null,
         text: 'say hi',
+        full_text: 'say hi',
+        placement: 'composer',
         attempts: 0,
         runtime_retries: 0,
         last_error: null,
@@ -543,12 +580,12 @@ describe('GET .../prompts', () => {
     ]);
   });
 
-  test('a claimed row reads `delivering`, and an admission-refused one reads `waiting` with its reason', async () => {
+  test('an admitted delivery reads `delivering`, and an admission-refused claim stays `waiting`', async () => {
     commandTable = [
-      row({ commandId: PROMPT_ID, status: 'running' }),
+      row({ commandId: PROMPT_ID, status: 'running', result: { delivery_started_at: new Date().toISOString() } }),
       row({
         commandId: '77777777-7777-4777-8777-777777777777',
-        status: 'queued',
+        status: 'running',
         result: { admission_reason: 'older_prompt_pending' },
       }),
     ];
@@ -587,7 +624,7 @@ describe('GET .../prompts', () => {
     commandTable = [row({ status: 'dead_lettered', lastError: 'delivery outcome: failed' })];
     const body = await list();
     expect(body.prompts[0].state).toBe('failed');
-    expect(body.prompts[0].last_error).toBe('delivery outcome: failed');
+    expect(body.prompts[0].last_error).toBe('the session refused it');
   });
 
   test('a FORWARDED row is still listed, as `delivering`', async () => {
@@ -674,6 +711,7 @@ describe('DELETE .../prompts/:promptId', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       removed: {
+        placement: 'composer',
         prompt_id: PROMPT_ID,
         removed_message_ids: [WIRE_ID],
         client_message_id: 'q_1',
@@ -822,6 +860,17 @@ describe('POST .../prompts/hold', () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as { prompts: Array<Record<string, unknown>> };
     expect(body.prompts).toHaveLength(1);
+  });
+
+  test('Stop persists a running delivery as held across reload and Resume clears it', async () => {
+    commandTable = [row({ status: 'running' })];
+    await hold({ held: true });
+    const reloaded = await app().request(base());
+    const body = (await reloaded.json()) as { prompts: Array<Record<string, unknown>> };
+    expect([body.prompts[0].state, body.prompts[0].reason]).toEqual(['waiting', 'held']);
+    await hold({ held: false });
+    expect(commandTable[0].result?.held).not.toBe(true);
+    expect(commandTable[0].payload.stopPausedOnDelivery).toBeUndefined();
   });
 
   test('rejects anything but a boolean — a hold is not a guess', async () => {

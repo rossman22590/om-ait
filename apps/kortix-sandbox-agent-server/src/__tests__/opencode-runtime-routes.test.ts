@@ -1,3 +1,4 @@
+import { publishOpenCodeEvent } from '../harness/open-code/event-bus'
 /**
  * `/kortix/opencode/*` end to end, against a REAL local OpenCode stand-in and a
  * REAL fixture `opencode.db`.
@@ -13,12 +14,13 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import type { Config } from '../config'
-import type { Opencode } from '../opencode'
-import { OpencodeDb } from '../opencode-db'
-import { RuntimeStateStore } from '../runtime-state-projection'
+import type { OpenCodeConfig as Config } from '../harness/open-code/config'
+import type { Opencode } from '../harness/open-code/lifecycle'
+import { OpencodeDb } from '../harness/open-code/opencode-db'
+import { RuntimeStateStore } from '../harness/open-code/runtime-state-projection'
 import { KortixEventBus, kortixEventBus, resetKortixEventBusForTests } from '../kortix-event-bus'
-import { createOpencodeRuntimeRouter } from '../routes/opencode-runtime'
+import { createRuntimeRouter } from '../routes/runtime'
+import { createOpenCodeQueryService } from '../harness/open-code/queries'
 
 const TOKEN = 'sandbox-token'
 const SESSION = 'ses_fc5a2a353ffe4n9mPmwVuEVg5u'
@@ -54,7 +56,7 @@ function startFakeOpencode() {
           return Response.json({ version: '1.18.23' })
         case '/agent':
           return Response.json([
-            { name: 'essentia-agi', description: 'the working agent', mode: 'primary', native: false, permission: {}, options: {}, prompt: SYSTEM_PROMPT },
+            { name: 'sampleco-agi', description: 'the working agent', mode: 'primary', native: false, permission: {}, options: {}, prompt: SYSTEM_PROMPT },
             { name: 'build', description: 'builtin', mode: 'primary', native: true, permission: {}, options: {}, prompt: SYSTEM_PROMPT },
           ])
         case '/command':
@@ -66,7 +68,7 @@ function startFakeOpencode() {
           return Response.json({
             model: 'kortix/codex/gpt-5.6-sol',
             small_model: 'kortix/codex/gpt-5.6-sol',
-            agent: 'essentia-agi',
+            agent: 'sampleco-agi',
             permission: { edit: 'allow' },
             instructions: ['AGENTS.md'],
             provider: { kortix: { models: { a: { name: 'x'.repeat(4000) } } } },
@@ -138,7 +140,7 @@ function buildDb(messages = 6, attachmentBytes = 120_000): void {
         sessionID: SESSION,
         role: i % 2 === 0 ? 'assistant' : 'user',
         time: { created: i * 10, completed: i * 10 + 1 },
-        agent: 'essentia-agi',
+        agent: 'sampleco-agi',
         // Weight the raw row the way a live message is weighted.
         system: 'S'.repeat(2_000),
       }),
@@ -189,7 +191,7 @@ function buildDb(messages = 6, attachmentBytes = 120_000): void {
 }
 
 function makeRouter(options: { dbPath?: string; pinnedSessionId?: () => string | null } = {}) {
-  const cfg = { sandboxToken: TOKEN, workspace: '/workspace' } as Config
+  const cfg = { sandboxToken: TOKEN, workspace: '/workspace', opencodeInternalPort: 4096, opencodeStandbyPort: 4097, defaultOpencodeConfigDir: '/workspace/.kortix/opencode' } as Config
   const opencode = {
     getInternalUrl: () => `http://127.0.0.1:${server.port}`,
     getState: () => 'ok',
@@ -205,12 +207,11 @@ function makeRouter(options: { dbPath?: string; pinnedSessionId?: () => string |
     daemonBuild: () => 7,
   })
   return {
-    app: createOpencodeRuntimeRouter(cfg, {
-      opencode,
+    app: createRuntimeRouter(cfg, createOpenCodeQueryService(opencode, {
       db,
       state,
       pinnedSessionId: options.pinnedSessionId ?? (() => SESSION),
-    }),
+    }).bind({ cfg })),
     state,
     db,
     cfg,
@@ -252,15 +253,14 @@ describe('auth', () => {
   })
 
   test('an unconfigured daemon answers 503, not 401 — the operator gets the real reason', async () => {
-    const cfg = {} as Config
+    const cfg = { opencodeInternalPort: 4096, opencodeStandbyPort: 4097, defaultOpencodeConfigDir: '/workspace/.kortix/opencode' } as Config
     const opencode = { getInternalUrl: () => `http://127.0.0.1:${server.port}` } as unknown as Opencode
     const db = new OpencodeDb(dbPath)
-    const app = createOpencodeRuntimeRouter(cfg, {
-      opencode,
+    const app = createRuntimeRouter(cfg, createOpenCodeQueryService(opencode, {
       db,
       state: new RuntimeStateStore({ opencode, cfg, db, pinnedSessionId: () => null, daemonBuild: () => null }),
       pinnedSessionId: () => null,
-    })
+    }).bind({ cfg }))
     expect((await app.request('http://d/state', { headers: auth })).status).toBe(503)
   })
 })
@@ -280,9 +280,9 @@ describe('GET /state', () => {
     expect(body.identity.head_seq).toEqual({ [SESSION]: 2_016 })
     expect(body.epoch).toBe(kortixEventBus().epoch)
     expect(body.agents.known).toBe(true)
-    expect(body.agents.value.map((a: any) => a.name)).toEqual(['essentia-agi', 'build'])
+    expect(body.agents.value.map((a: any) => a.name)).toEqual(['sampleco-agi', 'build'])
     expect(body.commands.value[0]).toMatchObject({ name: 'init', template_bytes: TEMPLATE.length })
-    expect(body.config.value).toMatchObject({ model: 'kortix/codex/gpt-5.6-sol', default_agent: 'essentia-agi' })
+    expect(body.config.value).toMatchObject({ model: 'kortix/codex/gpt-5.6-sol', default_agent: 'sampleco-agi' })
     expect(body.config.value.enabled_providers).toEqual(['kortix'])
     expect(body.statuses.value).toEqual({ [SESSION]: { type: 'idle' } })
     expect(body.permissions.value).toEqual([])
@@ -513,13 +513,13 @@ describe('GET /events (SSE)', () => {
   test('replays the gap then hands off to live with no loss and no duplication', async () => {
     const { app } = makeRouter()
     const bus = kortixEventBus()
-    for (let i = 1; i <= 5; i++) bus.publishOpencode({ type: 'message.part.delta', properties: { i } })
+    for (let i = 1; i <= 5; i++) publishOpenCodeEvent(bus, { type: 'message.part.delta', properties: { i } })
 
     const res = await app.request('http://d/events?since=2', { headers: auth })
     // hello + replay(3,4,5) + live(6,7)
     const framesPromise = readFrames(res, 6)
     await Bun.sleep(20)
-    bus.publishOpencode({ type: 'session.idle', properties: { sessionID: SESSION } })
+    publishOpenCodeEvent(bus, { type: 'session.idle', properties: { sessionID: SESSION } })
     bus.publishDaemon('kortix.turn', { verdict: 'idle' }, SESSION)
     const frames = await framesPromise
 
@@ -546,12 +546,12 @@ describe('GET /events (SSE)', () => {
     const bus = new KortixEventBus('e-test', 2)
     ;(globalThis as any).__unusedBus = bus
     const live = kortixEventBus()
-    for (let i = 0; i < 5; i++) live.publishOpencode({ type: 'x', properties: {} })
+    for (let i = 0; i < 5; i++) publishOpenCodeEvent(live, { type: 'x', properties: {} })
 
     const res = await app.request('http://d/events?since=3&epoch=some-old-epoch', { headers: auth })
     const framesPromise = readFrames(res, 3)
     await Bun.sleep(20)
-    live.publishOpencode({ type: 'session.idle', properties: { sessionID: SESSION } })
+    publishOpenCodeEvent(live, { type: 'session.idle', properties: { sessionID: SESSION } })
     const frames = await framesPromise
     const events = frames.map(dataOf)
     expect(events[0].type).toBe('kortix.hello')
@@ -560,15 +560,14 @@ describe('GET /events (SSE)', () => {
   })
 
   test('the heartbeat is a TYPED event and carries no seq', async () => {
-    const cfg = { sandboxToken: TOKEN, workspace: '/workspace' } as Config
+    const cfg = { sandboxToken: TOKEN, workspace: '/workspace', opencodeInternalPort: 4096, opencodeStandbyPort: 4097, defaultOpencodeConfigDir: '/workspace/.kortix/opencode' } as Config
     const opencode = { getInternalUrl: () => `http://127.0.0.1:${server.port}` } as unknown as Opencode
     const db = new OpencodeDb(dbPath)
-    const app = createOpencodeRuntimeRouter(cfg, {
-      opencode,
+    const app = createRuntimeRouter(cfg, createOpenCodeQueryService(opencode, {
       db,
       state: new RuntimeStateStore({ opencode, cfg, db, pinnedSessionId: () => SESSION, daemonBuild: () => null }),
       pinnedSessionId: () => SESSION,
-    })
+    }).bind({ cfg }))
     const res = await app.request('http://d/events', { headers: auth })
     const [hello] = await readFrames(res, 1)
     expect(hello).toContain('event: kortix.hello')
@@ -576,7 +575,7 @@ describe('GET /events (SSE)', () => {
     // unit test. What matters here is the WIRE FORM: a `:` comment would be
     // swallowed by every SSE parser and leave consumer watchdogs blind — the
     // defect sse-keepalive.ts records from the 2026-08-26 incident.
-    const { EVENT_HEARTBEAT_MS } = await import('../routes/opencode-runtime')
+    const { EVENT_HEARTBEAT_MS } = await import('../routes/runtime')
     expect(EVENT_HEARTBEAT_MS).toBe(15_000)
   })
 

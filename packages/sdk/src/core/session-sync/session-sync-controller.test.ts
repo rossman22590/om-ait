@@ -88,6 +88,39 @@ function createScheduler() {
 }
 
 describe('SessionSyncController', () => {
+  for (const status of [404, 410]) {
+    test(`does not automatically retry a missing conversation (${status}) but permits explicit recovery`, async () => {
+      const clock = createScheduler();
+      let attempts = 0;
+      let available = false;
+      const controller = createHttpSessionSyncController({
+        baseUrl: 'https://runtime.example.test',
+        sessionId: 'missing-session',
+        fetch: async () => {
+          attempts += 1;
+          return available ? Response.json([]) : Response.json({ error: 'Not found' }, { status });
+        },
+        hydrate: () => {},
+        markLoaded: () => {},
+        scheduler: clock.scheduler,
+      });
+      try {
+        controller.setBusy(true);
+        await controller.reconcile('initial');
+        expect(controller.getSnapshot().freshness).toBe('error');
+        clock.advance(60_000);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(attempts).toBe(1);
+        available = true;
+        await controller.reconcile('manual');
+        expect(attempts).toBe(2);
+        expect(controller.getSnapshot().freshness).toBe('fresh');
+      } finally {
+        controller.destroy();
+      }
+    });
+  }
+
   test('creates an authenticated framework-free HTTP controller for React Native', async () => {
     const requests: Array<{ url: string; authorization: string | null }> = [];
     const hydrated: MessageWithParts[][] = [];
@@ -937,7 +970,7 @@ describe('SessionSyncController', () => {
   /**
    * The blank thread on a HUGE session, and every read returned 200.
    *
-   * Measured on essentia (2026-08-24), a run with hundreds of image reads:
+   * Measured on sampleco (2026-08-24), a run with hundreds of image reads:
    *
    *   message?limit=50            200   8,228 kB   30.39 s
    *   message?limit=50            200  24,460 kB   48.76 s
@@ -1043,7 +1076,7 @@ describe('SessionSyncController', () => {
   /**
    * Time to FIRST PAINT is bytes, not messages.
    *
-   * Measured on a heavy session (essentia, 2026-08-24 — hundreds of image reads,
+   * Measured on a heavy session (sampleco, 2026-08-24 — hundreds of image reads,
    * parts carrying base64): 50 messages weighed 8,228 kB / 24,460 kB / 20,284 kB
    * / 25,125 kB across four reads. That is roughly 165-500 kB PER MESSAGE, so the
    * first screen cost 8-25 MB and 30-49 s.

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { buildOpencodeConfigContent } from '../opencode'
+import { buildOpencodeConfigContent } from '../harness/open-code/lifecycle'
 
 // Native mode = the project's `llm_gateway` flag is OFF: no KORTIX_LLM_* env
 // reaches the box, provider API keys sit in the process env, and OpenCode's own
@@ -22,7 +22,7 @@ describe('buildOpencodeConfigContent — native mode (no gateway env)', () => {
 
   test('with nothing session-specific to inject, only the Kortix-managed overlay remains', async () => {
     const content = await buildOpencodeConfigContent({})
-    // autoupdate:false is unconditional (Essentia 2026-08-22/25: OpenCode's
+    // autoupdate:false is unconditional (SampleCo 2026-08-22/25: OpenCode's
     // self-upgrade via plain `pnpm add -g` left a postinstall-less stub).
     expect(JSON.parse(content!)).toEqual({ autoupdate: false })
   })

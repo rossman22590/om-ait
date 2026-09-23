@@ -62,6 +62,8 @@ const DESCRIPTOR_TIMEOUT_MS = 10_000
  * Classified `unavailable` (transient, retried), never `timeout`.
  */
 export const DEFAULT_INACTIVITY_TIMEOUT_MS = 12_000
+/** Range resumes of one object whose body closed short, before the attempt fails. */
+const MAX_RESUMES = 3
 /** Attempts within the total deadline; only transient failures are retried. */
 export const S3_MAX_ATTEMPTS = 3
 /** Hydration runs after readiness: its own attempts and budget. */
@@ -217,15 +219,56 @@ export async function fetchProjectSnapshotDescriptor(
   } catch (err) {
     throw new ConfigProviderError('descriptor', 'malformed', 'descriptor is not valid JSON', 0, { cause: err })
   }
-  if (
-    body?.format !== PROJECT_SNAPSHOT_FORMAT ||
-    body.commit_sha !== sha ||
-    !objectRefOk(body.tree) ||
-    !Number.isInteger(body.tree?.entries) ||
-    !objectRefOk(body.blobs) ||
-    typeof body.repository?.external_id !== 'string'
-  ) {
+  if (!describesSnapshot(body, sha)) {
     throw new ConfigProviderError('descriptor', 'malformed', 'descriptor does not describe the expected snapshot objects')
+  }
+  return body
+}
+
+function describesSnapshot(body: ProjectSnapshotDescriptor | undefined, sha: string): body is ProjectSnapshotDescriptor {
+  return (
+    body?.format === PROJECT_SNAPSHOT_FORMAT &&
+    body.commit_sha === sha &&
+    objectRefOk(body.tree) &&
+    Number.isInteger(body.tree?.entries) &&
+    objectRefOk(body.blobs) &&
+    typeof body.repository?.external_id === 'string'
+  )
+}
+
+/**
+ * A URL that will die within this margin is not worth starting a transfer on:
+ * a slow provider create already ate into the descriptor's lifetime.
+ */
+const ENV_DESCRIPTOR_EXPIRY_MARGIN_MS = 30_000
+
+/**
+ * The descriptor the API presigned at session create
+ * (KORTIX_PROJECT_SNAPSHOT_DESCRIPTOR, base64 JSON of the proxy's body). Used
+ * for the FIRST attempt only, and only when it names the pinned sha and both
+ * URLs have the margin left; anything else → null, and the proxy is asked as
+ * before. Never fatal: a bad env value costs one round trip, not the boot.
+ */
+export function parseEnvProjectSnapshotDescriptor(cfg: Config, sha: string): ProjectSnapshotDescriptor | null {
+  const raw = cfg.projectSnapshotDescriptor
+  if (!raw) return null
+  let body: ProjectSnapshotDescriptor | undefined
+  try {
+    body = JSON.parse(Buffer.from(raw, 'base64').toString('utf8')) as ProjectSnapshotDescriptor
+  } catch {
+    logger.warn('[config-provider] env descriptor is not base64 JSON; asking the proxy')
+    return null
+  }
+  if (!describesSnapshot(body, sha)) {
+    logger.warn('[config-provider] env descriptor does not describe the pinned snapshot; asking the proxy')
+    return null
+  }
+  const soonest = Math.min(Date.parse(body.tree.expires_at), Date.parse(body.blobs.expires_at))
+  if (!Number.isFinite(soonest) || soonest - Date.now() < ENV_DESCRIPTOR_EXPIRY_MARGIN_MS) {
+    logger.info('[config-provider] env descriptor expired or about to; asking the proxy', {
+      expiresAt: Number.isFinite(soonest) ? new Date(soonest).toISOString() : null,
+    })
+    return null
   }
   return body
 }
@@ -334,36 +377,62 @@ async function streamObject(
   const link = linkedSignal(options.signal, options.timeoutMs)
   const started = Date.now()
   const stage = options.stage
-  let res: Response
-  try {
-    // No Authorization header: the URL IS the authorization, and the object
-    // store would reject a foreign credential anyway.
-    res = await (options.fetchImpl ?? fetch)(url, {
-      headers: { accept: options.accept },
-      signal: link.signal,
-      redirect: 'error',
-    })
-  } catch (err) {
-    link.dispose()
-    const reason = isAbortError(err) ? abortReason(options, link.timedOut()) : 'unavailable'
-    throw new ConfigProviderError(stage, reason, `object request failed: ${errorMessage(err)}`, 0, { cause: err })
-  }
-  try {
+
+  /**
+   * GET the object — or, with `offset`, only its missing tail — and vet the
+   * response before a byte flows. Returns null when a resume is refused (the
+   * store answered anything but exactly `offset..end`): the caller reports the
+   * short transfer and the provider's retry takes over.
+   */
+  const open = async (offset: number): Promise<Readable | null> => {
+    let res: Response
+    try {
+      // No Authorization header: the URL IS the authorization, and the object
+      // store would reject a foreign credential anyway. A SigV4 query presign
+      // signs only `host`, so a Range header does not invalidate it.
+      res = await (options.fetchImpl ?? fetch)(url, {
+        headers: offset > 0 ? { accept: options.accept, range: `bytes=${offset}-` } : { accept: options.accept },
+        signal: link.signal,
+        redirect: 'error',
+      })
+    } catch (err) {
+      const reason = isAbortError(err) ? abortReason(options, link.timedOut()) : 'unavailable'
+      throw new ConfigProviderError(stage, reason, `object request failed: ${errorMessage(err)}`, 0, { cause: err })
+    }
     if (res.status === 403) {
       throw new ConfigProviderError(stage, 'expired-authorization', 'object download authorization was refused (HTTP 403)')
     }
     if (res.status === 404) throw new ConfigProviderError(stage, 'missing', 'archive object not found (HTTP 404)')
-    if (!res.ok) throw new ConfigProviderError(stage, 'unavailable', `object HTTP ${res.status}`)
-    if (!res.body) throw new ConfigProviderError(stage, 'unavailable', 'object response has no body')
-    const declared = Number(res.headers.get('content-length'))
-    if (Number.isFinite(declared) && declared > 0 && declared !== expectedBytes) {
-      throw new ConfigProviderError(stage, declared > expectedBytes ? 'limit-exceeded' : 'digest-mismatch', `object content-length ${declared} != expected ${expectedBytes}`)
+    if (offset > 0) {
+      const range = res.headers.get('content-range')
+      if (res.status !== 206 || range !== `bytes ${offset}-${expectedBytes - 1}/${expectedBytes}`) {
+        await res.body?.cancel().catch(() => {})
+        return null
+      }
+    } else if (!res.ok) {
+      throw new ConfigProviderError(stage, 'unavailable', `object HTTP ${res.status}`)
     }
+    if (!res.body) throw new ConfigProviderError(stage, 'unavailable', 'object response has no body')
+    const want = expectedBytes - offset
+    const declared = Number(res.headers.get('content-length'))
+    if (Number.isFinite(declared) && declared > 0 && declared !== want) {
+      throw new ConfigProviderError(stage, declared > want ? 'limit-exceeded' : 'digest-mismatch', `object content-length ${declared} != expected ${want}`)
+    }
+    return Readable.fromWeb(res.body as never)
+  }
+
+  try {
+    // Only a resume can be refused; the first GET either streams or throws.
+    const first = (await open(0))!
 
     const hash = createHash('sha256')
     let received = 0
+    // Bytes the sources handed to the hasher — the resume offset. `received`
+    // counts what the hasher already transformed, which lags when its consumers
+    // push back, so it cannot name the next byte to ask for.
+    let delivered = 0
+    let resumes = 0
     let firstByteAt = 0
-    const source = Readable.fromWeb(res.body as never)
     let watchdog: ReturnType<typeof setTimeout> | undefined
     let onInactivity: (() => void) | null = null
     const armWatchdog = () => {
@@ -376,11 +445,11 @@ async function streamObject(
         armWatchdog()
         received += chunk.length
         if (received > expectedBytes) {
-          // The response declared exactly `expectedBytes` (checked above), so
-          // an overrun is transport garbage, not a large object: Bun 1.3 (the
-          // sandbox agent's build runtime) re-issues the GET after a mid-body
-          // socket reset and appends the second response to this same stream.
-          // Transient → `unavailable`, retried.
+          // Every response declared exactly its share of `expectedBytes`
+          // (checked in `open`), so an overrun is transport garbage, not a
+          // large object: Bun 1.3 (the sandbox agent's build runtime) re-issues
+          // the GET after a mid-body socket reset and appends the second
+          // response to this same stream. Transient → `unavailable`, retried.
           callback(new ConfigProviderError(stage, 'unavailable', `transfer overran the declared ${expectedBytes} bytes`))
           return
         }
@@ -391,11 +460,12 @@ async function streamObject(
 
     await new Promise<void>((resolve, reject) => {
       let settled = false
+      let current: Readable = first
       const fail = (err: unknown) => {
         if (settled) return
         settled = true
         if (watchdog) clearTimeout(watchdog)
-        source.destroy()
+        current.destroy()
         io.sink.destroy?.()
         if (err instanceof ConfigProviderError) return reject(err)
         if (isAbortError(err) || link.signal.aborted) {
@@ -409,21 +479,57 @@ async function streamObject(
         if (watchdog) clearTimeout(watchdog)
         resolve()
       }
+      // A body that closed short (S3 does this at boot: `transfer closed after
+      // 1572864 of 1573214 bytes`, 3 of 12 dev boots on 2026-09-18) keeps the
+      // same presigned URL valid, so ask for the missing tail instead of
+      // re-downloading the whole object on a fresh descriptor.
+      const settleSource = async () => {
+        if (settled) return
+        if (delivered >= expectedBytes) {
+          hasher.end()
+          return
+        }
+        const short = new ConfigProviderError(stage, 'unavailable', `transfer closed after ${delivered} of ${expectedBytes} bytes`)
+        if (resumes >= MAX_RESUMES) return fail(short)
+        resumes += 1
+        logger.warn('[config-provider] s3 transfer closed early; resuming with Range', {
+          received: delivered,
+          expected: expectedBytes,
+          resume: resumes,
+        })
+        try {
+          const next = await open(delivered)
+          if (settled) return next?.destroy()
+          if (!next) return fail(short)
+          attach(next)
+        } catch (err) {
+          fail(err)
+        }
+      }
+      const attach = (source: Readable) => {
+        current = source
+        let over = false
+        // Bun can close a reset source without `end` or `error`; either way the
+        // byte count, not the event, decides between "complete" and "resume".
+        const finished = () => {
+          if (over) return
+          over = true
+          source.unpipe(hasher)
+          setImmediate(() => void settleSource())
+        }
+        source.on('data', (chunk: Buffer) => {
+          delivered += chunk.length
+        })
+        source.on('error', fail)
+        source.on('end', finished)
+        source.on('close', finished)
+        source.pipe(hasher, { end: false })
+      }
       onInactivity = () => fail(new ConfigProviderError(stage, 'unavailable', `transfer stalled: no bytes for ${inactivityMs}ms`))
       armWatchdog()
-      source.on('error', fail)
       hasher.on('error', fail)
       io.sink.on('error', fail)
       io.sink.on('finish', done)
-      // Bun can close a reset source without `end` or `error`: a short close
-      // is a truncated transfer, not something to wait the watchdog out for.
-      source.on('close', () => {
-        setImmediate(() => {
-          if (!settled && received < expectedBytes) {
-            fail(new ConfigProviderError(stage, 'unavailable', `transfer closed after ${received} of ${expectedBytes} bytes`))
-          }
-        })
-      })
       link.signal.addEventListener('abort', () => fail(link.signal.reason), { once: true })
       if (io.tap) {
         const tap = io.tap
@@ -433,7 +539,8 @@ async function streamObject(
         })
         hasher.pipe(tap)
       }
-      source.pipe(hasher).pipe(io.sink)
+      hasher.pipe(io.sink)
+      attach(first)
     })
     const finishedAt = Date.now()
     if (received < expectedBytes) {
@@ -571,6 +678,13 @@ export async function downloadAndExtractProjectSnapshot(
   gunzip.on('error', (err) => {
     decoderError ??= err
   })
+  // The file sink can finish before the decompressor/parser. Its completion
+  // does not prove that the archive guard has inspected every header.
+  const guardFinished = new Promise<void>((resolve) => {
+    parser.once('end', resolve)
+    parser.once('error', () => resolve())
+    gunzip.once('error', () => resolve())
+  })
   gunzip.pipe(parser)
 
   await mkdir(dirname(file), { recursive: true })
@@ -603,6 +717,7 @@ export async function downloadAndExtractProjectSnapshot(
   }
   const downloadMs = Date.now() - t0
   try {
+    await guardFinished
     // The bytes ARE the published object (digest verified). Now the guard's
     // verdict on its headers is final, and a decoder error means the object
     // itself is not a valid gzip tar — never a transport problem.
@@ -756,6 +871,10 @@ export async function materializeFromS3(
   options: S3ProviderOptions = {},
 ): Promise<S3Acquisition> {
   const { sha, pin } = checkS3Eligibility(req)
+  // The descriptor the API presigned at create serves the FIRST attempt only
+  // (one direct GET from the store, no proxy round trip); every retry asks the
+  // proxy for fresh URLs.
+  let envDescriptor = parseEnvProjectSnapshotDescriptor(req.cfg, sha)
   const deadline = Date.now() + req.deadlineMs
   let attempts = 0
   let lastError: ConfigProviderError | null = null
@@ -767,9 +886,17 @@ export async function materializeFromS3(
     }
     if (req.signal?.aborted) throw new ConfigProviderError('download', 'cancelled', 'acquisition cancelled', attempts - 1)
     const stage = await createStagePath(req.target, 'snapshot')
+    let descriptorSource: 'env' | 'proxy' = 'proxy'
     try {
       const t0 = Date.now()
-      const descriptor = await fetchProjectSnapshotDescriptor(req.cfg, sha, { fetchImpl: options.fetchImpl, signal: req.signal })
+      let descriptor: ProjectSnapshotDescriptor
+      if (envDescriptor) {
+        descriptor = envDescriptor
+        envDescriptor = null
+        descriptorSource = 'env'
+      } else {
+        descriptor = await fetchProjectSnapshotDescriptor(req.cfg, sha, { fetchImpl: options.fetchImpl, signal: req.signal })
+      }
       const descriptorMs = Date.now() - t0
       if (descriptor.tree.sha256 !== pin.sha256 || descriptor.tree.bytes !== pin.bytes) {
         throw new ConfigProviderError('descriptor', 'revision-mismatch', 'descriptor names a different boot object than the session pin')
@@ -795,6 +922,7 @@ export async function materializeFromS3(
           extractMs: downloaded.extractMs,
           verifyMs: Date.now() - v0,
           extractor: downloaded.extractor,
+          descriptorSource,
         },
       }
     } catch (err) {
@@ -805,7 +933,11 @@ export async function materializeFromS3(
           ? err
           : new ConfigProviderError('extract', 'unavailable', errorMessage(err), attempts, { cause: err })
       lastError = new ConfigProviderError(failure.stage, failure.reason, failure.message, attempts, { cause: failure.cause ?? failure })
-      if (!failure.retryable || attempts >= S3_MAX_ATTEMPTS) throw lastError
+      // A URL presigned at create that the store refuses (clock skew, a slow
+      // provider create) is a stale descriptor, not a denial: the next attempt
+      // asks the proxy for a fresh one instead of falling back to Git.
+      const staleEnvUrl = descriptorSource === 'env' && failure.reason === 'expired-authorization'
+      if (!(failure.retryable || staleEnvUrl) || attempts >= S3_MAX_ATTEMPTS) throw lastError
       const backoff = Math.min(300 * 2 ** (attempts - 1) + Math.floor(Math.random() * 250), Math.max(0, deadline - Date.now()))
       logger.warn('[config-provider] s3 attempt failed; retrying', {
         attempt: attempts,

@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterAll, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import {
   accountMembers,
   projectGitConnections,
@@ -44,6 +44,7 @@ let branchCreateCalls = 0;
 let sandboxProvisionCalls = 0;
 let providerStartCalls = 0;
 let providerStopCalls = 0;
+let providerStopHook: (() => void) | null = null;
 let providerStatus = 'stopped';
 let providerStatusSequence: string[] = [];
 let providerStatusAfterStart: string | null = null;
@@ -116,6 +117,7 @@ function resetState() {
   sandboxProvisionCalls = 0;
   providerStartCalls = 0;
   providerStopCalls = 0;
+  providerStopHook = null;
   providerStatus = 'stopped';
   providerStatusSequence = [];
   providerStatusAfterStart = null;
@@ -214,7 +216,7 @@ mock.module('../middleware/auth', () => ({
       c.set('agentGrant', {
         agent: 'contract-agent',
         connectors: 'all',
-        kortixCli: 'all',
+        permissions: 'all',
         env: 'all',
       });
       await next();
@@ -319,14 +321,6 @@ mock.module('../snapshots/builder', () => ({
     contentHash: 'a'.repeat(64),
     built: false,
     isDefault: true,
-  }),
-  ensureFastSandboxImage: async () => ({
-    snapshotName: 'kortix-fast-test',
-    slug: 'default',
-    contentHash: 'f'.repeat(64),
-    built: false,
-    isDefault: true,
-    runtimeProfile: 'fast',
   }),
   ensureMetaSandboxImage: async () => ({
     snapshotName: 'kortix-meta-test',
@@ -440,6 +434,10 @@ mock.module('../platform/providers', () => ({
     }
   },
   getProvider: () => ({
+    resolveIngress: async () => ({
+      url: `https://preview-${providerStartCalls}.test`,
+      headers: { 'x-preview-token': `preview-${providerStartCalls}` },
+    }),
     getStatus: async () => {
       if (providerStatusSessionMetadataUpdate && sessionRow) {
         sessionRow = {
@@ -460,6 +458,7 @@ mock.module('../platform/providers', () => ({
     },
     stop: async () => {
       providerStopCalls += 1;
+      providerStopHook?.();
     },
     remove: async () => undefined,
     ...(providerRecoveryEnabled
@@ -568,7 +567,6 @@ mock.module('../shared/account-limits', () => ({
   }),
   sessionLlmPolicyForTier: () => ({ limit: 60, windowMs: 60_000 }),
   maxProjectsForAccount: async () => 100,
-  accountEntitledToLlmGateway: async () => true,
   FREE_TIER_PROJECT_LIMIT: 1,
   clearAccountLimitCache: () => undefined,
 }));
@@ -643,7 +641,17 @@ mock.module('../shared/db', () => ({
               // asserting on the response alone would pass even if the filter
               // were never applied.
               lastSessionListWhere = predicate ?? null;
-              return Promise.resolve(sessionRow ? [sessionRow] : []);
+              const rows = sessionRow ? [sessionRow] : [];
+              // Thenable AND `.limit()`-able: the session list reads a bounded
+              // keyset PAGE (`.where().orderBy().limit()`), while other callers
+              // still await the ordered read directly.
+              return {
+                limit: async () => rows,
+                then: (
+                  resolve: (value: unknown[]) => unknown,
+                  reject?: (reason: unknown) => unknown,
+                ) => Promise.resolve(rows).then(resolve, reject),
+              };
             }
             return Promise.resolve([]);
           },
@@ -1012,9 +1020,23 @@ mock.module('../shared/db', () => ({
   },
 }));
 
+// Session delete releases prompt attachment references. The contract DB mock
+// does not model those tables; the release SQL is covered by
+// integration-prompt-attachments.test.ts.
+const releasedAttachmentSessions: string[] = [];
+const realPromptAttachments = await import('../projects/prompt-attachments');
+mock.module('../projects/prompt-attachments', () => ({
+  ...realPromptAttachments,
+  releasePromptAttachmentsForSession: async (input: { sessionId: string }) => {
+    releasedAttachmentSessions.push(input.sessionId);
+    return 0;
+  },
+}));
+
 const { projectsApp } = await import('../projects/index');
 const { encryptProjectSecret } = await import('../projects/secrets');
 const { resumeStoppedSandbox } = await import('../projects/routes/shared');
+const { invalidateSandbox, resolveSandboxIngress } = await import('../sandbox-proxy/backend');
 const { applyStoppedState, reconcileSandboxStoppedByExternalId } = await import(
   '../projects/reaping/sandbox-state-sync'
 );
@@ -1260,6 +1282,24 @@ describe('project session API contract', () => {
       releaseProviderStart = resolve;
     });
 
+    const ingressRecord = {
+      sandboxId: SESSION_ID,
+      externalId: 'original-provider-identity',
+      sessionId: SESSION_ID,
+      agentName: 'kortix',
+      projectId: PROJECT_ID,
+      accountId: ACCOUNT_ID,
+      provider: 'platinum',
+      status: 'stopped',
+      baseUrl: '',
+      serviceKey: null,
+    };
+    const ingressRequest = { port: 8000, transport: 'http' } as const;
+    invalidateSandbox(ingressRecord.externalId);
+    expect((await resolveSandboxIngress(ingressRecord, ingressRequest)).headers).toEqual({
+      'x-preview-token': 'preview-0',
+    });
+
     const won = await resumeStoppedSandbox({
       sandboxId: SESSION_ID,
       sessionId: SESSION_ID,
@@ -1296,6 +1336,9 @@ describe('project session API contract', () => {
     expect(sessionRow).toMatchObject({ status: 'running', error: null });
     expect(sessionSandboxRows[0]?.status).toBe('active');
     expect(computeReopenCalls).toBe(1);
+    expect((await resolveSandboxIngress(ingressRecord, ingressRequest)).headers).toEqual({
+      'x-preview-token': 'preview-1',
+    });
   });
 
   test('provider reconciliation observes a stopped row while an in-place resume is starting', async () => {
@@ -1447,7 +1490,7 @@ describe('project session API contract', () => {
       },
     ];
 
-    // Essentia 2026-08-26: this gate used to answer `false` for ever, so the
+    // SampleCo 2026-08-26: this gate used to answer `false` for ever, so the
     // stamp could only be cleared by a human pressing Restart (sessions
     // e06ad0c4 and 9c8749ac). Past the cooldown it is permission to try again.
     expect(
@@ -1477,7 +1520,7 @@ describe('project session API contract', () => {
   });
 
   test('the automatic rung re-baselines the boot clocks but KEEPS the failure accounting', async () => {
-    // Essentia 2026-08-26, session 29861dfa / box inqwpv4a. Attempt 1's
+    // SampleCo 2026-08-26, session 29861dfa / box inqwpv4a. Attempt 1's
     // `opencodeBootWaitFirstSeenAt` survived the cooldown rung, so attempt 2's
     // boot was judged against a 10-minute cap that had already run ~7 minutes.
     // It was parked at 13:34:49.202 — 14 ms before its daemon claimed its first
@@ -1866,7 +1909,7 @@ describe('project session API contract', () => {
   });
 
   test('runtime workspaces deny repository metadata and clone credentials to both session tokens', async () => {
-    sessionRow!.metadata = { workspace_mode: 'runtime' };
+    sessionRow!.metadata = { repository_access: false };
     sessionSandboxRows = [
       {
         sandboxId: SESSION_ID,
@@ -2284,6 +2327,10 @@ describe('project session API contract', () => {
       {
         body: { metadata: { workspace_mode: 'branch' } },
         message: 'metadata key is server-managed: workspace_mode',
+      },
+      {
+        body: { metadata: { repository_access: true } },
+        message: 'metadata key is server-managed: repository_access',
       },
       {
         body: { metadata: { sandbox_slug: 'default' } },
@@ -3804,6 +3851,68 @@ describe('project session API contract', () => {
     });
   });
 
+  test('a restart that loses its claim mid-flight stops and says so in a warning', async () => {
+    // SESS-9 (2026-09): a concurrent writer overwrote `metadata` without the
+    // restart claim. The detached restart then returned without starting the
+    // box and without a log line, so the row sat in `provisioning` for minutes
+    // with nothing to diagnose it by.
+    const { logger } = await import('../lib/logger');
+    const warn = spyOn(logger, 'warn');
+    try {
+      const app = createApp();
+      sessionRow = { ...sessionRow!, status: 'running', opencodeSessionId: 'ses_root_existing' };
+      sessionSandboxRows = [
+        {
+          sandboxId: SESSION_ID,
+          sessionId: SESSION_ID,
+          accountId: ACCOUNT_ID,
+          projectId: PROJECT_ID,
+          provider: 'platinum',
+          externalId: 'box-restart-claim-lost',
+          baseUrl: null,
+          status: 'active',
+          config: {},
+          metadata: {},
+          lastUsedAt: null,
+          createdAt: new Date('2026-01-02T00:00:00Z'),
+          updatedAt: new Date('2026-01-02T00:00:00Z'),
+        },
+      ];
+      providerStatus = 'running';
+      providerStopHook = () => {
+        const { runtimeRestartId: _lost, ...rest } = (sessionSandboxRows[0]!.metadata ?? {}) as Record<
+          string,
+          unknown
+        >;
+        sessionSandboxRows[0] = { ...sessionSandboxRows[0]!, metadata: rest };
+      };
+
+      const res = await app.request(`/v1/projects/${PROJECT_ID}/sessions/${SESSION_ID}/restart`, {
+        method: 'POST',
+      });
+      expect(res.status).toBe(202);
+      const operationId = (await res.json()).operation_id;
+      await flushUntil(() =>
+        warn.mock.calls.some(([message]) => String(message).includes('lost the restart claim')),
+      );
+
+      const abandon = warn.mock.calls.find(([message]) =>
+        String(message).includes('lost the restart claim'),
+      );
+      expect(abandon?.[1]).toMatchObject({
+        session_id: SESSION_ID,
+        external_id: 'box-restart-claim-lost',
+        restart_id: operationId,
+        step: 'after_stop',
+        current_restart_id: null,
+      });
+      expect(providerStopCalls).toBe(1);
+      expect(providerStartCalls).toBe(0);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   test('restart preserves identity when provider accepts start but then reports removed', async () => {
     const app = createApp();
     sessionRow = {
@@ -4374,6 +4483,7 @@ describe('project session API contract', () => {
     expect(await res.json()).toEqual({ ok: true });
     expect(sessionRow?.status).toBe('stopped');
     expect(sessionRow?.branchName).toBe(SESSION_ID);
+    expect(releasedAttachmentSessions).toContain(SESSION_ID);
 
     sessionRow = null;
     const missing = await app.request(`/v1/projects/${PROJECT_ID}/sessions/${SESSION_ID}`, {

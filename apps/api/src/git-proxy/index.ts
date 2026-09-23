@@ -32,8 +32,10 @@ import {
   encodeReportStatus,
   parseReceivePackCommands,
   wantsSideband,
+  type RefUpdate,
 } from './receive-pack';
 import { evaluateRefUpdates, principalLabel } from './ref-policy';
+import { annotateGitTransfer, bindGitProxyPrincipal, gitAuditOutcome, gitPushRefSummary } from './audit';
 import { denialsAfterScopes } from './ref-scopes';
 import {
   FORWARD_REQUEST_HEADERS,
@@ -80,14 +82,13 @@ import {
 } from './compiled-runtime';
 import { prebuildDefaultBranchArtifacts } from './compiled-prebuild';
 import { config } from '../config';
-import { queueProjectSnapshotForRef, readReadyProjectSnapshot, verifyReadyProjectSnapshotObjects } from './project-snapshot';
 import {
-  PROJECT_SNAPSHOT_FORMAT,
-  presignProjectSnapshotDownload,
-  projectSnapshotBlobsKey,
-  projectSnapshotTreeKey,
-  projectSnapshotStorageConfigured,
-} from './project-snapshot-store';
+  buildProjectSnapshotDescriptor,
+  queueProjectSnapshotForRef,
+  readReadyProjectSnapshot,
+  verifyReadyProjectSnapshotObjectsInBackground,
+} from './project-snapshot';
+import { projectSnapshotStorageConfigured } from './project-snapshot-store';
 
 export const gitProxyApp = makeOpenApiApp<AppEnv>();
 
@@ -139,7 +140,13 @@ async function authorize(c: any, projectId: string, scope: GitScope): Promise<Gi
   // Pass the request context so IP-allowlist / require-MFA policy conditions
   // evaluate on the per-project capability path the same way they do on every
   // other project route.
-  return authorizeGitProxy(token, projectId, scope, deriveRequestContext(c));
+  const auth = await authorizeGitProxy(token, projectId, scope, deriveRequestContext(c));
+  // Attribute this request's audit row. Here, not in a handler: every git
+  // route goes through this authenticator, so ref discovery is attributed as
+  // well as the transfers. A refusal inside authorizeGitProxy binds whatever
+  // it proved before refusing.
+  if (auth.ok) bindGitProxyPrincipal(auth.principal, auth.project);
+  return auth;
 }
 
 /**
@@ -163,7 +170,8 @@ async function resolveProjectUpstreamMemo(
   project: ProjectRow,
   scope: GitScope,
 ): Promise<UpstreamGit | null> {
-  const key = `${project.projectId}|${scope}`;
+  const generation = (project.metadata as Record<string, unknown> | null)?.repository_generation ?? '';
+  const key = `${project.projectId}|${scope}|${project.repoUrl}|${generation}`;
   const now = Date.now();
   const hit = upstreamMemo.get(key);
   if (hit && hit.expiresAt > now) return hit.value;
@@ -406,7 +414,7 @@ async function forwardAuthorized(
 async function gateReceivePack(
   c: any,
   auth: Extract<GitProxyAuth, { ok: true }>,
-): Promise<Response | { body: ReadableStream<Uint8Array> }> {
+): Promise<Response | { body: ReadableStream<Uint8Array>; updates: RefUpdate[] }> {
   // git never content-encodes a receive-pack body (it gzips upload-pack
   // requests only, verified against git 2.39.1). If one ever arrives encoded we
   // cannot read the commands, so we refuse instead of forwarding unexamined.
@@ -458,6 +466,13 @@ async function gateReceivePack(
       principal: principalLabel(auth.principal),
       refs: denials.map((d) => d.ref),
     });
+    // git reads the refusal from a 200 report-status body; the row says denied.
+    annotateGitTransfer({
+      action: 'git.push',
+      projectId: auth.project.projectId,
+      outcome: gitAuditOutcome(200, true),
+      refs: gitPushRefSummary(parsed.updates, denied),
+    });
     const report = encodeReportStatus(
       parsed.updates.map((u) => ({ ref: u.ref, reason: denied.get(u.ref) })),
       { sideband: wantsSideband(parsed.capabilities) },
@@ -472,6 +487,7 @@ async function gateReceivePack(
   // through. The pack itself is never buffered.
   const prefix = concatChunks(chunks, buffered);
   return {
+    updates: parsed.updates,
     body: new ReadableStream<Uint8Array>({
       start(controller) {
         if (prefix.length > 0) controller.enqueue(prefix);
@@ -537,7 +553,18 @@ gitProxyApp.openapi(
   async (c) => {
     const projectId = validProjectIdOrResponse(c, c.req.param('project'));
     if (projectId instanceof Response) return projectId;
-    return forward(c, projectId, 'read', '/git-upload-pack');
+    const auth = await authorize(c, projectId, 'read');
+    if (!auth.ok) {
+      if (auth.status === 401) return unauthorized(c, auth.message);
+      return c.text(auth.message, auth.status as 403 | 404);
+    }
+    const res = await forwardAuthorized(c, auth, 'read', '/git-upload-pack', c.req.raw.body);
+    annotateGitTransfer({
+      action: 'git.clone',
+      projectId: auth.project.projectId,
+      outcome: gitAuditOutcome(res.status, false),
+    });
+    return res;
   },
 );
 
@@ -739,44 +766,16 @@ gitProxyApp.openapi(
       return c.json({ error: 'project snapshot storage is not configured' }, 503);
     }
     const { sha } = c.req.valid('query');
-    const row = await readReadyProjectSnapshot(projectId, sha);
-    // Both objects must still be there: a lifecycle expiration re-queues the
-    // row and the box takes the Git path instead of a doomed download.
-    const ready = row ? await verifyReadyProjectSnapshotObjects(row) : null;
+    const ready = await readReadyProjectSnapshot(projectId, sha);
     if (!ready) return c.json({ error: 'not_prepared', sha }, 404);
-    const treeKey = projectSnapshotTreeKey(ready.objectPrefix, ready.archiveSha256);
-    const blobsKey = projectSnapshotBlobsKey(ready.objectPrefix, ready.blobsSha256);
+    // Off the request path: an object that expired re-queues the row for the
+    // next session; this daemon meets the 404 and takes the Git path. This
+    // route is the daemon's FALLBACK — a fresh session normally carries the
+    // descriptor presigned at create (KORTIX_PROJECT_SNAPSHOT_DESCRIPTOR) and
+    // never calls it; a retry or an expired URL does.
+    verifyReadyProjectSnapshotObjectsInBackground(ready);
     try {
-      const [tree, blobs] = await Promise.all([
-        presignProjectSnapshotDownload(treeKey),
-        presignProjectSnapshotDownload(blobsKey),
-      ]);
-      return c.json({
-        format: PROJECT_SNAPSHOT_FORMAT,
-        commit_sha: ready.commitSha,
-        ref: ready.ref,
-        repository: {
-          owner: ready.repository.owner,
-          name: ready.repository.name,
-          external_id: ready.repository.externalId,
-        },
-        // The boot object: working tree + blobless .git. Its digest/size is the
-        // session pin.
-        tree: {
-          url: tree.url,
-          sha256: ready.archiveSha256,
-          bytes: ready.archiveBytes,
-          entries: ready.entryCount,
-          expires_at: tree.expiresAt.toISOString(),
-        },
-        // The hydration object: the tip's blob pack, fetched after activation.
-        blobs: {
-          url: blobs.url,
-          sha256: ready.blobsSha256,
-          bytes: ready.blobsBytes,
-          expires_at: blobs.expiresAt.toISOString(),
-        },
-      });
+      return c.json(await buildProjectSnapshotDescriptor(ready));
     } catch (error) {
       console.warn('[git-proxy] project snapshot descriptor unavailable', {
         projectId,
@@ -1018,12 +1017,22 @@ gitProxyApp.openapi(
     // route authenticates with its own token (git Basic/Bearer), so it must
     // place the grant `authorizeGitProxy` resolved. Without it a session is
     // default-denied beyond its own branch regardless of `project.gitops.ref.any`
-    // / `kortix_cli: all` — see projects/lib/git.ts.
+    // / `kortix_permissions: all` — see projects/lib/git.ts.
     c.set('agentGrant', auth.agentGrant ?? null);
     // Ref policy runs HERE, between authorization and transmission — the only
     // point where both the principal and the refs it wants to move are known.
     const gated = await gateReceivePack(c, auth);
     if (gated instanceof Response) return gated;
-    return forwardAuthorized(c, auth, 'write', '/git-receive-pack', gated.body);
+    const res = await forwardAuthorized(c, auth, 'write', '/git-receive-pack', gated.body);
+    // Every ref's old → new sha on the push's row. An HTTP 2xx means the
+    // upstream accepted the transfer; its per-ref report-status is not parsed.
+    annotateGitTransfer({
+      action: 'git.push',
+      projectId: auth.project.projectId,
+      outcome: gitAuditOutcome(res.status, false),
+      refs: gitPushRefSummary(gated.updates),
+    });
+    return res;
   },
 );
+

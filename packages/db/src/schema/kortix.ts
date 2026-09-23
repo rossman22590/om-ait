@@ -183,6 +183,11 @@ export const accounts = kortixSchema.table('accounts', {
   /** When set, PATs not used in this many days are auto-revoked on
    *  next validate. NULL = no idle gate. Units: days. */
   patIdleRevokeDays: integer('pat_idle_revoke_days'),
+  /** When true, account owners and admins can open EVERY session in the
+   *  account, including members' private ones. Off by default; only an owner
+   *  may change it (`PATCH /accounts/:id/iam/session-oversight`). Members see
+   *  a disclosure in the share dialog while it is on. */
+  adminsSeeAllSessions: boolean('admins_see_all_sessions').default(false).notNull(),
   /** Organization branding (enterprise `branding` entitlement): the product
    *  name plus the Storage URLs of the logo / icon / favicon (light + optional
    *  dark) that replace the Kortix marks for this account's members. `{}` = default Kortix branding. The
@@ -263,6 +268,28 @@ export const accountMemberships = kortixSchema.table(
     joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.accountId] })],
+);
+
+export const accountScimUsers = kortixSchema.table(
+  'account_scim_users',
+  {
+    scimId: uuid('scim_id').notNull(),
+    accountId: uuid('account_id').notNull().references(() => accounts.accountId, { onDelete: 'cascade' }),
+    userId: uuid('user_id'),
+    invitationId: uuid('invitation_id'),
+    userName: text('user_name').notNull(),
+    externalId: text('external_id'),
+    active: boolean('active').default(true).notNull(),
+    profile: jsonb('profile').$type<Record<string, unknown>>().default({}).notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.accountId, table.scimId] }),
+    uniqueIndex('account_scim_users_account_email').on(table.accountId, table.userName),
+    index('account_scim_users_account_user').on(table.accountId, table.userId),
+  ],
 );
 
 // Pending invitations for users not yet members (or not yet signed up). On
@@ -792,6 +819,59 @@ export const projectSecrets = kortixSchema.table(
     // the CONCURRENTLY escape hatch's territory (see MIGRATIONS.md).
   ],
 );
+
+/** Account-owned secret resource. Member grants, rather than a user or project
+ * binding, authorize use. The value stays encrypted in the API data plane. */
+export const accountSecretResources = kortixSchema.table('account_secret_resources', {
+  secretId: uuid('secret_id').defaultRandom().primaryKey(),
+  accountId: uuid('account_id').notNull().references(() => accounts.accountId, { onDelete: 'cascade' }),
+  label: varchar('label', { length: 100 }).notNull(),
+  /** NULL preserves restricted account resources created before project scoping. */
+  projectId: uuid('project_id').references(() => projects.projectId, { onDelete: 'cascade' }),
+  /** New project resources default to project access; old rows remain members-only. */
+  accessMode: varchar('access_mode', { length: 16 }).default('members').notNull(),
+  /** Provider id for model credentials; NULL for other secret resources. */
+  providerId: varchar('provider_id', { length: 100 }),
+  name: varchar('name', { length: 64 }).notNull(),
+  valueEnc: text('value_enc').notNull(),
+  consumer: projectSecretConsumerEnum('consumer').notNull(),
+  strategy: projectSecretStrategyEnum('strategy').notNull(),
+  active: boolean('active').default(true).notNull(),
+  cooldownUntil: timestamp('cooldown_until', { withTimezone: true }),
+  createdBy: uuid('created_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index('account_secret_resources_account_provider').on(table.accountId, table.providerId),
+  unique('account_secret_resources_account_identity').on(table.secretId, table.accountId),
+]);
+
+/** A member's permission to use one account secret resource. */
+export const accountSecretGrants = kortixSchema.table('account_secret_grants', {
+  secretId: uuid('secret_id').notNull(),
+  accountId: uuid('account_id').notNull().references(() => accounts.accountId, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull(),
+  grantedBy: uuid('granted_by').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.secretId, table.userId] }),
+  foreignKey({ columns: [table.userId, table.accountId], foreignColumns: [accountMemberships.userId, accountMemberships.accountId], name: 'account_secret_grants_member_fk' }).onDelete('cascade'),
+  foreignKey({ columns: [table.secretId, table.accountId], foreignColumns: [accountSecretResources.secretId, accountSecretResources.accountId], name: 'account_secret_grants_resource_fk' }).onDelete('cascade'),
+  index('account_secret_grants_member').on(table.accountId, table.userId),
+]);
+
+/** A session's explicit provider pool. Absence means inherit legacy behavior;
+ * an empty array is an explicit selection of no account credentials. */
+export const sessionProviderSecretPools = kortixSchema.table('session_provider_secret_pools', {
+  sessionId: text('session_id').notNull(),
+  providerId: varchar('provider_id', { length: 100 }).notNull(),
+  secretIds: jsonb('secret_ids').$type<string[]>().default([]).notNull(),
+  nextIndex: integer('next_index').default(0).notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.sessionId, table.providerId] }),
+  foreignKey({ columns: [table.sessionId], foreignColumns: [projectSessions.sessionId], name: 'session_provider_pools_session_fk' }).onDelete('cascade'),
+]);
 
 /**
  * Who can see/open a session within the org. `private` (default) = only the
@@ -1974,6 +2054,9 @@ export const sessionTurns = kortixSchema.table(
     messageId: text('message_id'),
     state: varchar('state', { length: 16 }).default('delivering').notNull(),
     endReason: text('end_reason'),
+    // Why a `failed` turn ended, as the daemon reported it: `{ name, message }`.
+    // Null for every other ending and for a failure nobody named.
+    endError: jsonb('end_error').$type<{ name: string | null; message: string | null }>(),
     startedAt: timestamp('started_at', { withTimezone: true }).defaultNow().notNull(),
     acceptedAt: timestamp('accepted_at', { withTimezone: true }),
     endedAt: timestamp('ended_at', { withTimezone: true }),
@@ -2612,12 +2695,15 @@ export const kortixApiKeys = kortixSchema.table(
 /**
  * Per-agent authorization grant stored on a session's account token. The single
  * canonical shape — imported by the resolution, enforcement, and context layers
- * so it's never re-declared. `kortixCli`/`connectors` are `"all"` (everything,
+ * so it's never re-declared. `permissions`/`connectors` are `"all"` (everything,
  * capped at the launching user) or an explicit list; `[]` = deny.
  */
 export interface AgentGrant {
   agent: string;
-  kortixCli: string[] | 'all';
+  /** Kortix permissions: the `project.*` IAM actions this agent may exercise
+   *  (the manifest's `kortix_permissions`). Stored as `kortixCli` before the
+   *  2026-09-22 rename — read rows through `readStoredAgentGrant`. */
+  permissions: string[] | 'all';
   connectors: string[] | 'all';
   /** Project-secret IDENTIFIERS (not env-var keys — see project_secrets.identifier)
    *  this agent may receive as sandbox env (and read via the secrets API). 'all'
@@ -2628,6 +2714,13 @@ export interface AgentGrant {
    *  Optional for back-compat with grants minted before this field existed
    *  (treated as 'all'). */
   env?: string[] | 'all';
+  /** Kortix Apps (by App slug) this agent session may open when the App's
+   *  access mode is `restricted` or `private` (the manifest's
+   *  `agents.<a>.apps`, spec 2026-09-22 §2.5). 'all' = every App in the
+   *  project. ABSENT = none: the resolver omits the key for an agent that
+   *  declares no Apps, and grants minted before this field existed carry none
+   *  — read it through `agentMayOpenApp` (apps/api iam/agent-scope.ts). */
+  apps?: string[] | 'all';
   /**
    * PROVENANCE — which manifest this grant was derived from. Stamped by the
    * resolver (`projects/lib/secret-grant.ts`) and read by the re-mint policy
@@ -2646,6 +2739,32 @@ export interface AgentGrant {
   manifestRevision?: string | null;
   manifestCommit?: string | null;
   resolvedAt?: string;
+}
+
+/**
+ * The JSON actually stored in `account_tokens.agent_grant`. Rows written
+ * before the `kortixCli` → `permissions` rename (2026-09-22) carry the legacy
+ * key; no migration rewrites them. The column is typed as this union so a
+ * read cannot reach `.permissions` without going through
+ * `readStoredAgentGrant`.
+ */
+export type StoredAgentGrant =
+  | AgentGrant
+  | (Omit<AgentGrant, 'permissions'> & { kortixCli: string[] | 'all'; permissions?: undefined });
+
+/**
+ * Normalize a stored agent grant to the current shape. `permissions` wins
+ * when both keys are present; the legacy `kortixCli` key is dropped. A row
+ * with neither key resolves to `[]` (deny) — the same fail-closed outcome
+ * the gates give a malformed grant.
+ */
+export function readStoredAgentGrant(raw: StoredAgentGrant | null | undefined): AgentGrant | null {
+  if (!raw) return null;
+  const { kortixCli, permissions, ...rest } = raw as Omit<AgentGrant, 'permissions'> & {
+    kortixCli?: string[] | 'all';
+    permissions?: string[] | 'all';
+  };
+  return { ...rest, permissions: permissions ?? kortixCli ?? [] };
 }
 
 export const accountTokens = kortixSchema.table(
@@ -2672,12 +2791,12 @@ export const accountTokens = kortixSchema.table(
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     /** Per-agent authorization grant for a sandbox session token: which Kortix
-     *  CLI/API actions + connectors the running agent may use. Resolved
+     *  permissions (`project.*` actions) + connectors the running agent may use. Resolved
      *  from the kortix.yaml `agents` map at session birth. The launching
      *  user's role is still enforced by route IAM, so effective access is
      *  user role ∩ agentGrant. Null for non-agent tokens (laptop CLI PATs,
      *  etc.) — which keep role-only access. */
-    agentGrant: jsonb('agent_grant').$type<AgentGrant>(),
+    agentGrant: jsonb('agent_grant').$type<StoredAgentGrant>(),
     /** Session this token belongs to (sandbox connector token, session_id =
      *  sandbox_id). Lets the LLM gateway attribute usage_events per-session —
      *  the reaper's reliable activity signal + precise billing. Null for
@@ -2697,6 +2816,16 @@ export const accountTokens = kortixSchema.table(
         onDelete: 'cascade',
       },
     ),
+    /** The human this agent-session token acts ON BEHALF OF (spec
+     *  docs/specs/2026-09-22-agents-as-principals.md §2.3). Set at mint to the
+     *  launching human for a human-initiated session; NULL for an unattended
+     *  run (trigger, cron, webhook, channel without a linked user, owner
+     *  fallback). It decides ONLY that human's personal resources, never the
+     *  agent's shared authority. The first prompt from any other human clears
+     *  it permanently for the session (r8 prompt route). FK to auth.users
+     *  (ON DELETE SET NULL) is added NOT VALID by the migration; auth.users is
+     *  outside this Drizzle schema. */
+    onBehalfOfUserId: uuid('on_behalf_of_user_id'),
   },
   (table) => [
     uniqueIndex('idx_account_tokens_public_key').on(table.publicKey),
@@ -3019,6 +3148,11 @@ export const auditEvents = kortixSchema.table(
     agentName: text('agent_name'),
     initiatorActorType: text('initiator_actor_type'),
     initiatorActorId: text('initiator_actor_id'),
+    /** The human an agent session acted on behalf of (spec
+     *  docs/specs/2026-09-22-agents-as-principals.md §2). NULL for a human
+     *  actor, an unattended run (trigger, channel, system), or a session whose
+     *  on_behalf_of another human's prompt cleared. No FK: forensic history. */
+    onBehalfOfUserId: uuid('on_behalf_of_user_id'),
     parentEventId: uuid('parent_event_id'),
     delegationDepth: integer('delegation_depth').default(0).notNull(),
     source: text('source'),
@@ -5850,6 +5984,53 @@ export const connectorCalls = kortixSchema.table(
   ],
 );
 
+// Ownership IDs intentionally have no FK: metadata must outlive project/account
+// deletion until maintenance has removed every private storage object.
+export const promptAttachments = kortixSchema.table(
+  'prompt_attachments',
+  {
+    attachmentId: uuid('attachment_id').defaultRandom().primaryKey(),
+    accountId: uuid('account_id').notNull(),
+    projectId: uuid('project_id').notNull(),
+    userId: uuid('user_id').notNull(),
+    objectPath: text('object_path').notNull().unique(),
+    filename: text('filename').notNull(),
+    mime: text('mime').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    /** Chunked mode only: acknowledged bytes, advanced by compare-and-set. */
+    receivedBytes: integer('received_bytes').default(0).notNull(),
+    sha256: text('sha256'),
+    status: varchar('status', { length: 16 }).default('uploading').notNull(),
+    finalizeToken: uuid('finalize_token'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    check('prompt_attachments_status_check', sql`${table.status} IN ('uploading', 'finalizing', 'ready', 'failed', 'deleting')`),
+    check('prompt_attachments_size_check', sql`${table.sizeBytes} > 0 AND ${table.sizeBytes} <= 52428800`),
+    check('prompt_attachments_received_check', sql`${table.receivedBytes} >= 0 AND ${table.receivedBytes} <= ${table.sizeBytes}`),
+    // Reader: the per-user upload budget in `beginPromptAttachment`.
+    index('idx_prompt_attachments_user_status').on(table.userId, table.status),
+    index('idx_prompt_attachments_expiry').on(table.expiresAt),
+  ],
+);
+
+export const promptAttachmentReferences = kortixSchema.table(
+  'prompt_attachment_references',
+  {
+    commandId: uuid('command_id').notNull(),
+    attachmentId: uuid('attachment_id').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.commandId, table.attachmentId] }),
+    foreignKey({ name: 'prompt_attachment_refs_command_fk', columns: [table.commandId], foreignColumns: [sessionLifecycleCommands.commandId] }).onDelete('cascade'),
+    foreignKey({ name: 'prompt_attachment_refs_attachment_fk', columns: [table.attachmentId], foreignColumns: [promptAttachments.attachmentId] }).onDelete('restrict'),
+    index('idx_prompt_attachment_references_attachment').on(table.attachmentId),
+  ],
+);
+
 /**
  * Private, short-lived files staged for one Connector email call.
  *
@@ -5971,3 +6152,54 @@ export const connectorProjectSettingsRelations = relations(connectorProjectSetti
     references: [projects.projectId],
   }),
 }));
+
+/** Reusable LLM credentials owned by one user, independent of any project. */
+export const userProviderConnections = kortixSchema.table('user_provider_connections', {
+  connectionId: uuid('connection_id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull(),
+  providerId: varchar('provider_id', { length: 128 }).notNull(),
+  authType: varchar('auth_type', { length: 32 }).notNull(),
+  slot: varchar('slot', { length: 64 }).default('default').notNull(),
+  label: varchar('label', { length: 100 }).default('').notNull(),
+  valueEnc: text('value_enc').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex('user_provider_connections_user_provider_slot').on(table.userId, table.providerId, table.slot),
+  unique('user_provider_connections_owner_identity').on(table.connectionId, table.userId, table.providerId),
+  check('user_provider_connections_auth_type', sql`${table.authType} in ('api_key', 'device_oauth')`),
+]);
+
+/** An explicit grant to use a personal provider connection in one project. */
+export const projectUserProviderConnections = kortixSchema.table('project_user_provider_connections', {
+  projectId: uuid('project_id').notNull().references(() => projects.projectId, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull(),
+  providerId: varchar('provider_id', { length: 128 }).notNull(),
+  connectionId: uuid('connection_id').notNull(),
+  pool: boolean('pool').default(false).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.projectId, table.userId, table.providerId] }),
+  foreignKey({
+    columns: [table.connectionId, table.userId, table.providerId],
+    foreignColumns: [userProviderConnections.connectionId, userProviderConnections.userId, userProviderConnections.providerId],
+    name: 'project_user_provider_connections_owner_fk',
+  }).onDelete('cascade'),
+  index('project_user_provider_connections_connection').on(table.connectionId),
+]);
+
+/** A session retains its selected personal pool member across API replicas. */
+export const sessionUserProviderConnections = kortixSchema.table('session_user_provider_connections', {
+  sessionId: text('session_id').notNull().references(() => projectSessions.sessionId, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull(),
+  providerId: varchar('provider_id', { length: 128 }).notNull(),
+  connectionId: uuid('connection_id').notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.sessionId, table.userId, table.providerId] }),
+  foreignKey({
+    columns: [table.connectionId, table.userId, table.providerId],
+    foreignColumns: [userProviderConnections.connectionId, userProviderConnections.userId, userProviderConnections.providerId],
+    name: 'session_user_provider_connections_owner_fk',
+  }).onDelete('cascade'),
+  index('session_user_provider_connections_connection').on(table.connectionId),
+]);

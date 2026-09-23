@@ -3,6 +3,7 @@
 import { setBootstrapAuthToken, setCachedAuthToken } from '@/lib/auth-token';
 import { IDENTITY_MARKER_KEY, shouldResetClientState } from '@/lib/auth/identity-marker';
 import { performSignOut } from '@/lib/auth/perform-sign-out';
+import { isDefinitiveSessionRejection } from '@/lib/auth/session-rejection';
 import { safeGetItem, safeSetItem } from '@/lib/storage/managed-storage';
 import { createClient } from '@/lib/supabase/client';
 import { resetClientState } from '@/lib/utils/reset-client-state';
@@ -103,7 +104,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             AUTH_BOOTSTRAP_TIMEOUT_MS,
           );
           if (!active) return;
-          if (userError) {
+          //
+          // Only the auth server's VERDICT signs out (`isDefinitiveSessionRejection`:
+          // 401, 403, or no session to validate). A round trip that never
+          // completed is not a verdict. This provider also runs inside the
+          // GitHub identity-proof popup, which closes itself 200ms after
+          // posting its token; its in-flight `getUser()` then aborts into a
+          // retryable status-0 error, and signing out on THAT cleared the
+          // cookie every tab shares and broadcast `SIGNED_OUT` to the opener
+          // (dev, 2026-09-17). See `lib/auth/session-rejection.ts`.
+          if (userError && isDefinitiveSessionRejection(userError)) {
             console.warn('[AuthProvider] Stale session detected, signing out:', userError.message);
             await supabase.auth.signOut();
             if (!active) return;
@@ -112,6 +122,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setSession(null);
             setUser(null);
             return;
+          }
+          if (userError) {
+            console.warn(
+              '[AuthProvider] Could not validate the session; keeping it:',
+              userError.message,
+            );
           }
         }
 

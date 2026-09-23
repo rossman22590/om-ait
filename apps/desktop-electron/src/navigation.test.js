@@ -10,7 +10,13 @@ const {
 } = require('./navigation');
 
 const APP = 'https://kortix.com';
-const inApp = (url) => url.startsWith(APP);
+const inApp = (url) => {
+  try {
+    return new URL(url).origin === APP;
+  } catch {
+    return false;
+  }
+};
 const entries = (...urls) => urls.map((url) => ({ url, title: '' }));
 
 describe('historyTarget', () => {
@@ -26,6 +32,15 @@ describe('historyTarget', () => {
       `${APP}/projects/p1`,
       'https://github.com/login/oauth/authorize',
       `${APP}/github/setup`,
+    );
+    expect(historyTarget(list, 2, 'back', inApp)).toBe(0);
+  });
+
+  test('Back skips a hostname that only begins with the app origin', () => {
+    const list = entries(
+      `${APP}/projects/p1`,
+      'https://kortix.com.attacker.example/projects/p2',
+      `${APP}/new`,
     );
     expect(historyTarget(list, 2, 'back', inApp)).toBe(0);
   });

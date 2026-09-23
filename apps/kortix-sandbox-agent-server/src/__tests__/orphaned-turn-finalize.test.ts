@@ -5,23 +5,24 @@
  * A killed or crashed opencode emits neither, so the last assistant message
  * stays incomplete and every client streaming it spins — which is what an agent
  * running `kill <opencode pid>` from its own shell produces, and equally what an
- * OOM produces. The supervisor respawns the box within ~500ms, so the sandbox is
+ * OOM produces. The lifecycle respawns the box within ~500ms, so the sandbox is
  * fine; only the turn is stranded.
  *
  * Boot already finalized such a turn when it adopted a root. These tests cover
- * the extracted version, which the supervisor's unplanned-respawn hook now calls
+ * the extracted version, which the lifecycle's unplanned-respawn hook now calls
  * too.
  */
 import { afterEach, describe, expect, test } from 'bun:test'
 
 
-import { finalizeOrphanedTurn } from '../main'
+import { finalizeOrphanedTurn } from '../harness/open-code/boot'
 import { TURN_PROBE_WINDOW, inspectOpencodeRoot,
   observeOpencodeDelivery,
   opencodeDeliveryInFlight,
   opencodeTurnInFlight,
-} from '../opencode-turn-state';
-import { createHealthRouter, observeRequestedTurn } from '../routes/health';
+} from '../harness/open-code/opencode-turn-state';
+import { createHealthRouter } from '../routes/health';
+import { createOpenCodeDiagnosticsService, observeRequestedTurn } from '../harness/open-code/diagnostics';
 
 const BASE = 'http://127.0.0.1:4096';
 const WORKSPACE = '/workspace';
@@ -99,7 +100,7 @@ describe('finalizeOrphanedTurn', () => {
 
   test('leaves a COMPLETED turn alone', async () => {
     // Aborting a finished turn would be a visible lie in the transcript, and the
-    // supervisor's hook fires on every unplanned respawn — including ones where
+    // lifecycle's hook fires on every unplanned respawn — including ones where
     // nothing was in flight.
     stubFetch(assistantTurn(1_700_000_000));
 
@@ -128,7 +129,7 @@ describe('finalizeOrphanedTurn', () => {
     expect(calls.some((c) => c.includes('/abort'))).toBe(false);
   });
 
-  test('a failing abort is swallowed, never thrown at the supervisor', async () => {
+  test('a failing abort is swallowed, never thrown at the lifecycle', async () => {
     // This runs from the respawn path. A daemon that cannot finish bringing
     // opencode back because it could not tidy up a turn is worse than a spinner.
     stubFetch(assistantTurn(undefined), { abortThrows: true });
@@ -342,7 +343,7 @@ describe('opencodeDeliveryInFlight — lifecycle acceptance recovery', () => {
     expect(await opencodeDeliveryInFlight(BASE, WORKSPACE, SESSION, 'msg_turn_1')).toBeNull();
   });
 
-  // EXPECTATION FLIPPED 2026-08-20 (live incident, Essentia session d1b74954):
+  // EXPECTATION FLIPPED 2026-08-20 (live incident, SampleCo session d1b74954):
   // prompts forwarded INTO a live turn — and OpenCode's own synthetic
   // `<pty_exited>` wake-ups — put a NEWER user message on the root while the
   // SAME loop is still streaming the older turn's steps. The old rule ("a
@@ -726,15 +727,19 @@ describe('observeRequestedTurn — what /kortix/health?turn=1 answers with', () 
       },
     ]);
     const router = createHealthRouter(
-      { projectTarget: '/workspace', autoClone: false, sandboxToken: '' } as never,
       {
+        cfg: { projectTarget: '/workspace', autoClone: false, sandboxToken: '' } as never,
+        bootTime: Date.now(),
+        bootState: { repoMaterializationError: null, timeline: [] },
+        staticWebPort: null,
+        resources: () => null,
+      },
+      createOpenCodeDiagnosticsService({
         getState: () => 'ok',
         getInternalUrl: () => BASE,
         getPid: () => 1,
         getActivePort: () => 4096,
-      } as never,
-      Date.now(),
-      { repoMaterializationError: null, timeline: [] },
+      } as never),
     );
 
     const body = (await (
@@ -749,15 +754,19 @@ describe('observeRequestedTurn — what /kortix/health?turn=1 answers with', () 
   test('/kortix/health?turn=1 reports a root-scoped orphaned prompt on the wire', async () => {
     stubFetch([{ info: { role: 'user', time: { completed: 1 } } }]);
     const router = createHealthRouter(
-      { projectTarget: '/workspace', autoClone: false, sandboxToken: '' } as never,
       {
+        cfg: { projectTarget: '/workspace', autoClone: false, sandboxToken: '' } as never,
+        bootTime: Date.now(),
+        bootState: { repoMaterializationError: null, timeline: [] },
+        staticWebPort: null,
+        resources: () => null,
+      },
+      createOpenCodeDiagnosticsService({
         getState: () => 'ok',
         getInternalUrl: () => BASE,
         getPid: () => 1,
         getActivePort: () => 4096,
-      } as never,
-      Date.now(),
-      { repoMaterializationError: null, timeline: [] },
+      } as never),
     );
 
     const body = (await (
@@ -774,15 +783,19 @@ describe('observeRequestedTurn — what /kortix/health?turn=1 answers with', () 
   test('/kortix/health without ?turn=1 still answers nothing about turns', async () => {
     stubFetch(assistantTurn(undefined));
     const router = createHealthRouter(
-      { projectTarget: '/workspace', autoClone: false, sandboxToken: '' } as never,
       {
+        cfg: { projectTarget: '/workspace', autoClone: false, sandboxToken: '' } as never,
+        bootTime: Date.now(),
+        bootState: { repoMaterializationError: null, timeline: [] },
+        staticWebPort: null,
+        resources: () => null,
+      },
+      createOpenCodeDiagnosticsService({
         getState: () => 'ok',
         getInternalUrl: () => BASE,
         getPid: () => 1,
         getActivePort: () => 4096,
-      } as never,
-      Date.now(),
-      { repoMaterializationError: null, timeline: [] },
+      } as never),
     );
 
     const body = (await (await router.request('/')).json()) as Record<string, unknown>;
@@ -795,7 +808,7 @@ describe('observeRequestedTurn — what /kortix/health?turn=1 answers with', () 
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REPLAY of the incident this gate exists for: Essentia session d1b74954 at
+// REPLAY of the incident this gate exists for: SampleCo session d1b74954 at
 // 2026-08-20T12:48:51Z, reconstructed from the box's own transcript.
 //
 // Turn `msg_01f3518bd002` was STREAMING — its step completed at 12:48:54Z —
@@ -805,7 +818,7 @@ describe('observeRequestedTurn — what /kortix/health?turn=1 answers with', () 
 // authority was destroyed mid-stream (`end_reason='unknown'`). The composer
 // then read "not running" over a visibly working session.
 // ─────────────────────────────────────────────────────────────────────────────
-describe('Essentia d1b74954 replay — a streaming turn under a pty wake-up', () => {
+describe('SampleCo d1b74954 replay — a streaming turn under a pty wake-up', () => {
   const ROOT_2 = 'ses_fea1ccba5ffeW98pYkIvdImthU';
   const LIVE_TURN = 'msg_01f3518bd002UMWkvirVrVsjxE';
   const incidentTranscript = [
@@ -835,7 +848,7 @@ describe('Essentia d1b74954 replay — a streaming turn under a pty wake-up', ()
 });
 
 describe('turn probes read a bounded window, never the whole root', () => {
-  // 2026-08-25, Essentia: one root's full message list was 276.7 MB (inline
+  // 2026-08-25, SampleCo: one root's full message list was 276.7 MB (inline
   // base64 image parts). Parsing it never fit the probe budget, the daemon
   // answered `turn_in_flight: null` on every reaper visit for 2.5 hours after
   // the turn had finished, and the session showed "working" until the ledger

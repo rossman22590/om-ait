@@ -32,6 +32,7 @@ const ACTIVE_RECORD = {
 let authorizeCalls: Array<{ action: string; target: unknown }> = [];
 let authorizeAllowed = true;
 let remintCalls: Array<{ requestedAgent: string | null }> = [];
+const undeclaredAgents = new Set<string>();
 let envSyncCalls: Array<{ requestedAgent: string | null | undefined }> = [];
 
 mock.module('../../config', () => ({ config: {} }));
@@ -64,18 +65,16 @@ mock.module('../../iam', () => ({
       : { allowed: false, reason: 'resource_scope_insufficient' };
   },
 }));
-// The connector pre-flight now runs on every turn-start. This file is about a
-// different concern, so keep it satisfied — unstubbed it reaches a real DB.
-mock.module('../../projects/lib/prompt-connector-preflight', () => ({
-  PromptConnectorPreflightUnresolved: class PromptConnectorPreflightUnresolved extends Error {},
-  missingPromptConnectorConnections: async () => ({ ok: true }),
-}));
 mock.module('../../projects/lib/sandbox-env-sync', () => ({
   syncSandboxEnvForPrompt: async (input: { requestedAgent?: string | null }) => {
     envSyncCalls.push({ requestedAgent: input.requestedAgent });
   },
 }));
 mock.module('../../projects/lib/session-token-grant', () => ({
+  // Declared-agent guard: every name these cases use is declared unless a test
+  // puts it in `undeclaredAgents`.
+  agentLaunchableInProject: async (_projectId: string, agentName: string) =>
+    !undeclaredAgents.has(agentName),
   remintGrantForAgentSwitch: async (input: { requestedAgent: string | null }) => {
     remintCalls.push({ requestedAgent: input.requestedAgent });
     return { action: 'skip' };
@@ -111,8 +110,20 @@ const { __resetPromptDedupe } = await import('../prompt-dedupe');
 
 const ORIGINAL_FETCH = globalThis.fetch;
 let upstreamCalls = 0;
-(globalThis as { fetch: unknown }).fetch = async () => {
+let upstreamBodies: Array<Record<string, unknown>> = [];
+(globalThis as { fetch: unknown }).fetch = async (_url: unknown, init?: { body?: unknown }) => {
   upstreamCalls += 1;
+  if (init?.body) {
+    try {
+      const raw =
+        typeof init.body === 'string'
+          ? init.body
+          : new TextDecoder().decode(init.body as ArrayBuffer);
+      upstreamBodies.push(JSON.parse(raw));
+    } catch {
+      // non-JSON upstream bodies are not asserted here
+    }
+  }
   return Response.json({ ok: true });
 };
 
@@ -150,6 +161,8 @@ beforeEach(() => {
   remintCalls = [];
   envSyncCalls = [];
   upstreamCalls = 0;
+  upstreamBodies = [];
+  undeclaredAgents.clear();
   __resetPromptDedupe();
 });
 
@@ -258,4 +271,35 @@ test('a default-bound session naming the sentinel is still not gated', async () 
 
   expect(response.status).toBe(200);
   expect(authorizeCalls).toEqual([]);
+});
+
+// ── INC-2026-09-15: an agent this project does not declare never reaches a gate ──
+
+test('a prompt naming an agent the project does not declare is delivered as the session agent', async () => {
+  undeclaredAgents.add('chief-of-staff');
+
+  const response = await prompt('chief-of-staff');
+
+  expect(response.status).toBe(200);
+  // Not an authorization question: the name is not this project's at all.
+  expect(authorizeCalls).toEqual([]);
+  // Neither the env sync nor the token re-mint ever sees the foreign name.
+  expect(envSyncCalls.map((c) => c.requestedAgent ?? null)).toEqual([null]);
+  expect(remintCalls).toEqual([{ requestedAgent: null }]);
+  // The runtime receives the prompt with no agent field: OpenCode's default_agent runs.
+  expect(upstreamCalls).toBe(1);
+  expect(upstreamBodies.at(-1)).not.toHaveProperty('agent');
+  expect(upstreamBodies.at(-1)?.parts).toEqual([
+    { type: 'text', text: expect.stringMatching(/^hi /) },
+  ]);
+});
+
+test('a declared agent switch is untouched by the guard', async () => {
+  undeclaredAgents.add('chief-of-staff');
+
+  const response = await prompt('nda-turnaround');
+
+  expect(response.status).toBe(200);
+  expect(remintCalls).toEqual([{ requestedAgent: 'nda-turnaround' }]);
+  expect(upstreamBodies.at(-1)).toMatchObject({ agent: 'nda-turnaround' });
 });

@@ -382,7 +382,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         >
           <LazyMotionProvider>
             <IconProvider>
-              <TooltipProvider delayDuration={300}>
+              <TooltipProvider delayDuration={150}>
                 <AuthProvider>
                   <I18nProvider initialLocale={htmlLang} initialMessages={resolvedMessages}>
                     <WebMcpTools />
@@ -439,7 +439,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     </ReactQueryProvider>
                     {/* Analytics - lazy loaded to not block FCP */}
                     <Suspense fallback={null}>
-                      <Analytics />
+                      {process.env.VERCEL === '1' && <Analytics />}
                     </Suspense>
                     {process.env.NEXT_PUBLIC_GTM_ID && !isDesktopApp && (
                       <Suspense fallback={null}>
@@ -447,7 +447,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                       </Suspense>
                     )}
                     <Suspense fallback={null}>
-                      <SpeedInsights />
+                      {process.env.VERCEL === '1' && <SpeedInsights />}
                     </Suspense>
                     <Suspense fallback={null}>
                       <PostHogIdentify />

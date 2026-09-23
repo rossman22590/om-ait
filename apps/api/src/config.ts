@@ -128,7 +128,7 @@ const envSchema = z.object({
   // Public origin for CLIENT-facing Supabase Storage URLs. On a self-host box
   // SUPABASE_URL is an internal Docker hostname (http://supabase-kong:8000) that
   // no browser/CLI/remote-sandbox can resolve; this is the box's public origin
-  // (e.g. https://essentia.kortix.cloud) used to rewrite signed URLs on the way
+  // (e.g. https://sampleco.kortix.cloud) used to rewrite signed URLs on the way
   // out (see toPublicStorageUrl). Optional: unset on managed cloud, where
   // SUPABASE_URL is already public and no rewrite is needed.
   SUPABASE_PUBLIC_URL: z
@@ -136,6 +136,16 @@ const envSchema = z.object({
     .refine((v) => v === '' || /^https?:\/\//.test(v), { message: 'SUPABASE_PUBLIC_URL must be a valid HTTP(S) URL' })
     .optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1, 'SUPABASE_SERVICE_ROLE_KEY is required'),
+
+  // ── Prompt attachment uploads (optional, non-secret) ────────────────────
+  // `direct` (default): the client PUTs each file once to a signed Storage URL.
+  // `chunked`: the client PUTs bounded chunks through the API. Only for a
+  // deployment whose public edge drops large request bodies (the PR preview).
+  PROMPT_ATTACHMENT_UPLOAD_MODE: z.enum(['direct', 'chunked']).optional().default('direct'),
+  // Bytes per chunk. Read only in `chunked` mode.
+  PROMPT_ATTACHMENT_CHUNK_BYTES: optInt(65536).refine((bytes) => bytes > 0, {
+    message: 'PROMPT_ATTACHMENT_CHUNK_BYTES must be a positive integer',
+  }),
 
   // ── API Key Hashing (REQUIRED) ───────────────────────────────────────────
   API_KEY_SECRET: z.string().min(1, 'API_KEY_SECRET is required — API key hashing will fail'),
@@ -375,10 +385,10 @@ const envSchema = z.object({
 
   // ── LLM Providers (optional — only needed in cloud mode) ─────────────────
   OPENROUTER_API_URL: optUrl('https://openrouter.ai/api/v1'),
-  // Single OpenRouter key for BOTH the router (/v1/router) and the managed LLM
-  // gateway (/v1/llm). The gateway used to read a separate KORTIX_OPENROUTER_API_KEY
-  // — consolidated onto this one var.
+  // OpenRouter remains available for the router and project BYOK connections.
   OPENROUTER_API_KEY: optStr,
+  MORPH_API_URL: optUrl('https://api.morphllm.com/v1'),
+  MORPH_API_KEY: optStr,
   // Whether a session's sandbox gets the `kortix-connectors` OpenCode MCP
   // server (KORTIX_CONNECTORS_MCP_ENABLED in the guest). It exposes the
   // connector meta-tools plus `secret_call`, the only way to use an
@@ -421,7 +431,7 @@ const envSchema = z.object({
   // fully supported first-class path (native OpenCode provider management:
   // provider keys injected into the sandbox env, native `provider/model`
   // refs, no gateway URL in the box) — the deliberate lever for deployments
-  // like Essentia that want their own keys end to end. The master switch
+  // like SampleCo that want their own keys end to end. The master switch
   // still wins — LLM_GATEWAY_ENABLED=false forces native OpenCode for
   // everyone regardless of this value — and an operator can set
   // LLM_GATEWAY_DEFAULT_ENABLED=false to opt a whole environment back to
@@ -434,14 +444,8 @@ const envSchema = z.object({
   // constant baked into the gateway binary. Operators can replace the default
   // and define any number of exact-match fallback policies without code changes.
   LLM_GATEWAY_DEFAULT_MODEL: optStrDefault(PLATFORM_DEFAULT_MODEL_ID),
-  // Target when a DEFAULT-model request carries image input and the default
-  // model lacks vision. Empty = no reroute (the request goes to the default
-  // model as-is). gpt-5.6-luna ($0.20/$1.20) is the vision reroute target —
-  // the default platform model (deepseek-v4-flash) is text-only. Since
-  // 2026-08-27 glm-5.3-flash ($0.075/$0.25) is the cheaper vision-capable
-  // managed model; switching the reroute target is a quality decision that
-  // has not been made yet, so the default stays on Luna.
-  LLM_GATEWAY_VISION_MODEL: optStrDefault('gpt-5.6-luna'),
+  // Image-capable managed model used when the default receives an image.
+  LLM_GATEWAY_VISION_MODEL: optStrDefault('deepseek-v4.1-flash'),
   LLM_GATEWAY_FALLBACK_POLICIES: optFallbackPolicies,
   // Optional JSON array replacing the platform managed-model overlay (transport,
   // upstream id, pricing ref, capabilities). Empty uses the bundled last-known
@@ -453,7 +457,7 @@ const envSchema = z.object({
   // BYOK resilience: when a user's own provider key hits a rate-limit / quota /
   // billing error (429/402/403), fall over to THIS managed model (billed as
   // Kortix credits) so the turn survives instead of erroring. Empty disables.
-  LLM_GATEWAY_BYOK_FALLBACK_MODEL: optStrDefault('deepseek-v4-flash'),
+  LLM_GATEWAY_BYOK_FALLBACK_MODEL: optStrDefault('deepseek-v4.1-flash'),
   // Dev: reverse-proxy /v1/llm-gateway/* to a standalone gateway on this port,
   // so sandboxes reach it through the API's own tunnel (no separate tunnel).
   LLM_GATEWAY_PROXY_PORT: optInt(0),
@@ -462,11 +466,6 @@ const envSchema = z.object({
   // the in-cluster gateway service, e.g. http://kortix-gateway:8090, so the
   // gateway stays internal and sandboxes reach it via the API's public origin.
   LLM_GATEWAY_PROXY_TARGET: optStr,
-  // AWS Bedrock — the managed ("Kortix") models route here via a Bedrock API key
-  // (bearer). Region selects the bedrock-runtime endpoint; the key is an IAM
-  // service-specific credential for bedrock.amazonaws.com.
-  AWS_BEDROCK_REGION: optStr,
-  AWS_BEDROCK_API_KEY: optStr,
   OPENAI_API_URL: optUrl('https://api.openai.com/v1'),
   OPENAI_API_KEY: optStr,
   // xAI / Gemini / Groq route their TEXT models through OpenRouter (see
@@ -523,16 +522,6 @@ const envSchema = z.object({
   // auto-stop backstop a parked box is created with, so an orphaned box
   // reclaims itself even if every API instance dies.
   KORTIX_PI_WORKER_POOL_MAX_AGE_MINUTES: optInt(60),
-  // Additive cold-boot accelerators that keep the standard runtime image and
-  // every tool: Platinum rootfs materialization and the native OpenCode binary
-  // prefetch. It never keeps a sandbox or an OpenCode process running.
-  //
-  // NOT gated here: the fresh-session Git fast path has its own switch,
-  // KORTIX_FAST_GIT_BOOT_ENABLED below (deploy-dev injects an explicit `false`
-  // for THIS flag on every push, so it can never double as that path's kill
-  // switch: deploy-dev.yml injects an explicit `false` for THIS flag on every
-  // push). The per-project warm-image system it also used to gate is gone.
-  KORTIX_FAST_COLD_BOOT_ENABLED: optBoolUnset,
   // The fresh-session Git fast path: KORTIX_SESSION_FRESH, the base-tip +
   // scaffold-delta hint (inline or remote bundle), and the OpenCode config-dir
   // hint that lets the daemon spawn OpenCode before the checkout. Default ON;
@@ -573,6 +562,13 @@ const envSchema = z.object({
    */
   KORTIX_PROJECT_SNAPSHOT_S3_PUBLIC_ENDPOINT: optUrl(''),
   KORTIX_PROJECT_SNAPSHOT_S3_FORCE_PATH_STYLE: optBoolFalse,
+  // S3 Transfer Acceleration for the SANDBOX downloads only: presigned URLs
+  // target <bucket>.s3-accelerate.amazonaws.com, so a box's connection ends at
+  // the nearest AWS edge and the distance to the bucket rides AWS's backbone.
+  // Needs `transfer_acceleration = true` on the bucket (Terraform module).
+  // Ignored when a custom public endpoint (MinIO) is set. The API's own calls
+  // stay on the regional endpoint.
+  KORTIX_PROJECT_SNAPSHOT_S3_ACCELERATE: optBoolFalse,
   /** Optional key prefix inside the bucket (e.g. `dev/`), namespacing environments that share one bucket. */
   KORTIX_PROJECT_SNAPSHOT_S3_PREFIX: optStr,
   KORTIX_PROJECT_SNAPSHOT_S3_ACCESS_KEY_ID: optStr,
@@ -991,17 +987,16 @@ function validateEnv(): z.infer<typeof envSchema> {
   if (!raw.OPENROUTER_API_KEY) {
     issues.push({
       var: 'OPENROUTER_API_KEY',
-      message: 'Not set — primary LLM route will fail with silent 401 errors',
+      message: 'Not set — the optional OpenRouter router is unavailable',
       level: 'warn',
     });
-    if (raw.LLM_GATEWAY_ENABLED === 'true') {
-      issues.push({
-        var: 'LLM_GATEWAY_ENABLED',
-        message:
-          'Gateway is on but OPENROUTER_API_KEY is unset — /v1/llm will 500 "openrouterApiKey missing"',
-        level: 'warn',
-      });
-    }
+  }
+  if (raw.LLM_GATEWAY_ENABLED === 'true' && raw.KORTIX_MANAGED_PROVIDER_ENABLED === 'true' && !raw.OPENROUTER_API_KEY) {
+    issues.push({
+      var: 'OPENROUTER_API_KEY',
+      message: 'Gateway is on but OPENROUTER_API_KEY is unset — Kortix managed models are unavailable',
+      level: 'warn',
+    });
   }
 
   // ── Print results ─────────────────────────────────────────────────────
@@ -1091,6 +1086,8 @@ export const config = {
   SUPABASE_URL: env.SUPABASE_URL,
   SUPABASE_PUBLIC_URL: env.SUPABASE_PUBLIC_URL,
   SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY,
+  PROMPT_ATTACHMENT_UPLOAD_MODE: env.PROMPT_ATTACHMENT_UPLOAD_MODE,
+  PROMPT_ATTACHMENT_CHUNK_BYTES: env.PROMPT_ATTACHMENT_CHUNK_BYTES,
 
   // ─── API Key Hashing ──────────────────────────────────────────────────────
   API_KEY_SECRET: env.API_KEY_SECRET,
@@ -1159,6 +1156,8 @@ export const config = {
   // ─── LLM Providers ────────────────────────────────────────────────────────
   OPENROUTER_API_URL: env.OPENROUTER_API_URL,
   OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
+  MORPH_API_URL: env.MORPH_API_URL,
+  MORPH_API_KEY: env.MORPH_API_KEY,
   CONNECTORS_MCP_ENABLED: env.CONNECTORS_MCP_ENABLED,
   LLM_GATEWAY_ENABLED: env.LLM_GATEWAY_ENABLED,
   // Unset → follow billing (cloud keeps its revenue lineup even if the env
@@ -1175,8 +1174,6 @@ export const config = {
   LLM_GATEWAY_BYOK_FALLBACK_MODEL: env.LLM_GATEWAY_BYOK_FALLBACK_MODEL,
   LLM_GATEWAY_PROXY_PORT: env.LLM_GATEWAY_PROXY_PORT,
   LLM_GATEWAY_PROXY_TARGET: env.LLM_GATEWAY_PROXY_TARGET,
-  AWS_BEDROCK_REGION: env.AWS_BEDROCK_REGION,
-  AWS_BEDROCK_API_KEY: env.AWS_BEDROCK_API_KEY,
   OPENAI_API_URL: env.OPENAI_API_URL,
   OPENAI_API_KEY: env.OPENAI_API_KEY,
   XAI_API_URL: env.XAI_API_URL,
@@ -1203,7 +1200,6 @@ export const config = {
   KORTIX_SNAPSHOT_REAP_PREDECESSOR: env.KORTIX_SNAPSHOT_REAP_PREDECESSOR,
   KORTIX_PI_WORKER_POOL_TARGET: env.KORTIX_PI_WORKER_POOL_TARGET,
   KORTIX_PI_WORKER_POOL_MAX_AGE_MINUTES: env.KORTIX_PI_WORKER_POOL_MAX_AGE_MINUTES,
-  KORTIX_FAST_COLD_BOOT_ENABLED: env.KORTIX_FAST_COLD_BOOT_ENABLED ?? false,
   KORTIX_FAST_GIT_BOOT_ENABLED: env.KORTIX_FAST_GIT_BOOT_ENABLED,
   KORTIX_COMPILED_BOOT_MODE: env.KORTIX_COMPILED_BOOT_MODE,
   KORTIX_PROJECT_SNAPSHOT_MODE: env.KORTIX_PROJECT_SNAPSHOT_MODE,
@@ -1212,6 +1208,7 @@ export const config = {
   KORTIX_PROJECT_SNAPSHOT_S3_ENDPOINT: env.KORTIX_PROJECT_SNAPSHOT_S3_ENDPOINT,
   KORTIX_PROJECT_SNAPSHOT_S3_PUBLIC_ENDPOINT: env.KORTIX_PROJECT_SNAPSHOT_S3_PUBLIC_ENDPOINT,
   KORTIX_PROJECT_SNAPSHOT_S3_FORCE_PATH_STYLE: env.KORTIX_PROJECT_SNAPSHOT_S3_FORCE_PATH_STYLE,
+  KORTIX_PROJECT_SNAPSHOT_S3_ACCELERATE: env.KORTIX_PROJECT_SNAPSHOT_S3_ACCELERATE,
   KORTIX_PROJECT_SNAPSHOT_S3_PREFIX: env.KORTIX_PROJECT_SNAPSHOT_S3_PREFIX,
   KORTIX_PROJECT_SNAPSHOT_S3_ACCESS_KEY_ID: env.KORTIX_PROJECT_SNAPSHOT_S3_ACCESS_KEY_ID,
   KORTIX_PROJECT_SNAPSHOT_S3_SECRET_ACCESS_KEY: env.KORTIX_PROJECT_SNAPSHOT_S3_SECRET_ACCESS_KEY,
@@ -1399,15 +1396,11 @@ export const config = {
 
 // ─── Billing Markup Constants ────────────────────────────────────────────────
 //
-// Two pricing modes based on whose API key is used:
-//   * Kortix keys (user uses our keys):  1.2x provider cost (20% markup)
-//   * User's own keys (passthrough):     0.1x provider cost (10% platform fee)
+// Kortix-managed inference uses 1.2x provider cost (20% markup).
+// BYOK inference always has a zero Kortix charge.
 
 /** Markup when Kortix provides the API key. */
 export const KORTIX_MARKUP = 1.2;
-
-/** Platform fee when user provides their own API key. */
-export const PLATFORM_FEE_MARKUP = 0.1;
 
 // ─── Tool Pricing (Router) ──────────────────────────────────────────────────
 

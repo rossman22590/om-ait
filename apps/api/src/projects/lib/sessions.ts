@@ -4,12 +4,15 @@ import {
   projectSessionGrants,
   projectSessionRuntimeContexts,
   projectSessions,
+  projects,
   sessionLifecycleCommands,
+  sessionProviderSecretPools,
 } from '@kortix/db';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { Context } from 'hono';
+import { HTTPException } from 'hono/http-exception';
 import { isMetaAgentName, META_AGENT_NAME, META_SANDBOX_SLUG, PI_WORKER_SANDBOX_SLUG } from '@kortix/shared';
-import { checkBillingActive } from '../../billing/services/billing-gate';
+import { checkBillingAdmission } from '../../billing/services/billing-gate';
 import { accountMayUseManagedModels } from '../../billing/services/entitlements';
 import { type SandboxProviderName, config } from '../../config';
 import { consumeProjectSessionCreateBudget } from '../../shared/rate-limit';
@@ -44,10 +47,10 @@ import {
   grantFromLoadedAgents,
   loadProjectAgents,
   projectRequiresDeclaredAgents,
-  requiredConnectorsForAgent,
   resolveGovernedAgentGrant,
   sandboxFromLoadedAgents,
-  workspaceFromLoadedAgents,
+  repositoryAccessFromLoadedAgents,
+  legacyReadWorkspaceFromLoadedAgents,
 } from '../agents';
 import { createRemoteSessionBranch , resolveCommitSha } from '../git';
 import { convertPendingPromptToInboxRow } from '../session-lifecycle/pending-prompt';
@@ -63,12 +66,14 @@ import {
 } from '../secrets';
 import { SECRET_CAPABILITIES_ENV_NAME } from '../secret-capabilities';
 import {
+  manifestRuntime,
   resolveCompiledAgentConfigForSession,
   resolveManifestRuntime,
   resolveSelectedAgentConfigForSession,
+  selectSessionHarness,
 } from './compile-agent-config';
-import type { WorkspaceModeV2 } from '@kortix/manifest-schema';
 import { withProjectGitAuth } from './git';
+import { repositoryGeneration } from './repository-generation';
 import { resolveFastBootGitHintWithCache } from './fast-boot-git-hint';
 import { resolveSessionProvider, sessionProviderIsLocked } from './provider-precedence';
 import { RESERVED_SANDBOX_ENV_NAMES, isReservedSandboxEnvName } from './sandbox-env-names';
@@ -86,7 +91,6 @@ import {
 import {
   canonicalConnectorAlias,
   parseSessionConnectorBindings,
-  resolveRequiredConnectorConnections,
   sessionConnectorBindingsRequirePrivateVisibility,
   validateSessionConnectorBindings,
 } from './session-connector-bindings';
@@ -102,7 +106,6 @@ import { sessionCreatedAuditAttribution } from './session-audit';
 import {
   projectImageAllowedForSession,
   resolveSessionSandboxSlug,
-  workspaceModeAllowsFullRepository,
 } from './session-sandbox-metadata';
 import { projectSessionMetadataMerge } from './session-metadata-merge';
 import {
@@ -117,6 +120,7 @@ import {
   resolvePlatformMetaSandbox,
 } from './platform-meta-agent';
 import { prebuildCompiledBootArtifacts } from '../../git-proxy/compiled-prebuild';
+import { resolveSessionPersonalOwner } from './personal-resources';
 import {
   resolveProjectSnapshotMode,
   resolveProjectSnapshotPinForSession,
@@ -452,6 +456,7 @@ export async function buildSessionSandboxEnvVars(input: {
   /** S3 config provider mode + prepared-archive pin — see session-runtime-env.ts. */
   projectSnapshotMode?: 'git' | 'prefer-s3' | 'require-s3';
   projectSnapshotPin?: string | null;
+  projectSnapshotDescriptor?: string | null;
   /** Project git context, so the running agent's `secrets` grant in `agents:`
    *  can be resolved and applied by IDENTIFIER — secrets the agent isn't
    *  granted are dropped from the injected env (a prompt-injected agent then
@@ -461,7 +466,7 @@ export async function buildSessionSandboxEnvVars(input: {
   manifestPath?: string;
   /** The reserved platform coordinator receives no project checkout or secrets. */
   platformMetaAgent?: boolean;
-  workspaceMode?: WorkspaceModeV2 | null;
+  repositoryAccess?: boolean;
 }): Promise<Record<string, string>> {
   // Only user runtime secrets belong here. The sandbox-scoped KORTIX_TOKEN is
   // minted by provisionSessionSandbox() and injected at the provider boundary,
@@ -483,6 +488,16 @@ export async function buildSessionSandboxEnvVars(input: {
   let compiledAgentConfig: string | null = input.platformMetaAgent
     ? buildPlatformMetaOpenCodeConfig()
     : null;
+  // The harness the daemon boots — `selectSessionHarness`: the project's
+  // `pi_harness` flag (on ⇒ pi) OR the manifest's `runtime: pi`. The manifest
+  // is read off the SAME fetch that compiles the agent config, so selecting
+  // pi costs no extra git round trip. Every provisioning path (create,
+  // restart, resume, open/ensure) builds its env here, so a pi project stays
+  // on pi across the session's whole life. The `pi_worker` feature flag is
+  // the one exception: it routes `runtime: pi` to the split worker topology
+  // BEFORE this builder runs (createSession), and never reaches it.
+  let manifestHarness: 'opencode' | 'pi' | null = null;
+  let harness: 'opencode' | 'pi' = 'opencode';
   if (input.defaultBranch && !input.platformMetaAgent) {
     const gitProject = {
       projectId: input.projectId,
@@ -491,16 +506,21 @@ export async function buildSessionSandboxEnvVars(input: {
       manifestPath: input.manifestPath ?? 'kortix.yaml',
       gitAuthToken: null,
     };
+    const onManifest = (raw: Record<string, unknown>) => {
+      manifestHarness = manifestRuntime(raw);
+    };
     compiledAgentConfig =
-      !workspaceModeAllowsFullRepository(input.workspaceMode)
+      !(input.repositoryAccess ?? true)
         ? await resolveSelectedAgentConfigForSession(
             gitProject,
             input.agentName,
             input.baseRef,
+            { onManifest },
           )
           : await resolveCompiledAgentConfigForSession(
               gitProject,
               input.baseRef,
+              { onManifest },
             ).catch(() => null);
 
     // Per-agent secret scoping: an agent declared in `agents:` with a `secrets`
@@ -522,6 +542,20 @@ export async function buildSessionSandboxEnvVars(input: {
       defaultBranch: input.defaultBranch,
       manifestPath: input.manifestPath,
       sessionAgent: input.agentName,
+    });
+  }
+  if (!input.platformMetaAgent) {
+    // One indexed read for the flag: the callers hold the project row in
+    // different shapes (or not at all on the reload paths), and the flag must
+    // apply on every provisioning path, not only create.
+    const [projectRow] = await db
+      .select({ metadata: projects.metadata })
+      .from(projects)
+      .where(eq(projects.projectId, input.projectId))
+      .limit(1);
+    harness = selectSessionHarness({
+      piHarnessFlag: resolveFeatureFlag(projectRow?.metadata, 'pi_harness'),
+      runtime: manifestHarness,
     });
   }
 
@@ -555,7 +589,16 @@ export async function buildSessionSandboxEnvVars(input: {
   // `input.userId` only if the row somehow isn't found (create races its own row
   // in some callers). The agent grant — not the human — remains the authority on
   // WHICH identifiers are eligible; this only picks the per-user override owner.
-  const secretsPrincipalUserId = sessionPolicyRow?.createdBy ?? input.userId;
+  //
+  // Spec 2026-09-22 §2.3 (agent-principal model, flag ON): the override owner
+  // is the session's on-behalf-of human, and only in a private session. A
+  // trigger/channel run or a shared session gets shared values only.
+  const secretsPrincipalUserId = await resolveSessionPersonalOwner({
+    projectId: input.projectId,
+    sessionId: input.sessionId,
+    accountId: input.accountId,
+    legacyUserId: sessionPolicyRow?.createdBy ?? input.userId,
+  });
 
   let runtimeSecrets: {
     env: Record<string, string>;
@@ -664,8 +707,8 @@ export async function buildSessionSandboxEnvVars(input: {
       // and as the session's OpenCode config default.
       opencodeModel: input.opencodeModel,
       compiledAgentConfig,
-      workspaceMode: input.workspaceMode,
-      fastColdBootEnabled: config.KORTIX_FAST_COLD_BOOT_ENABLED,
+      harness,
+      repositoryAccess: input.repositoryAccess,
       compiledBootMode: config.KORTIX_COMPILED_BOOT_MODE,
       freshSession: input.freshSession,
       restoreSessionBranch: input.restoreSessionBranch,
@@ -677,6 +720,7 @@ export async function buildSessionSandboxEnvVars(input: {
       opencodeConfigDir: input.opencodeConfigDir,
       projectSnapshotMode: input.projectSnapshotMode,
       projectSnapshotPin: input.projectSnapshotPin,
+      projectSnapshotDescriptor: input.projectSnapshotDescriptor,
     }),
     // The platform coordinator uses API-level delegation and never receives a
     // project checkout. Keep this override after buildSessionRuntimeEnv so the
@@ -821,6 +865,7 @@ async function loadParentSessionSharing(
 }
 
 export async function createProjectSession(input: {
+  attachmentSourceCommandId?: string;
   project: ProjectRow;
   userId: string;
   requestingPrincipalType: 'human' | 'service_account';
@@ -924,9 +969,6 @@ export async function createProjectSession(input: {
   // / `kortix connectors call` — the whole catalog went empty.
   let inheritUnbound = body.inherit_unbound !== false;
   const connectorBindingsConfigured = body.connector_bindings !== undefined;
-  const requireConnectors: string[] = Array.isArray(body.require_connectors)
-    ? body.require_connectors.filter((a): a is string => typeof a === 'string' && a.length > 0)
-    : [];
 
   // Origin is a POLICY CLASS derived from the caller's token kind (authType)
   // + invocation source (metadata.source), NEVER the body. It gates which
@@ -1054,8 +1096,8 @@ export async function createProjectSession(input: {
       },
     };
   }
-  const workspaceMode = workspaceFromLoadedAgents(agentName, loadedAgents) ?? 'branch';
-  if (workspaceMode === 'read') {
+  const repositoryAccess = repositoryAccessFromLoadedAgents(agentName, loadedAgents);
+  if (legacyReadWorkspaceFromLoadedAgents(agentName, loadedAgents)) {
     return {
       error: {
         status: 409,
@@ -1069,6 +1111,10 @@ export async function createProjectSession(input: {
 
   const freeModelsOnly = !(await accountMayUseManagedModels(accountId));
   const llmGatewayEnabled = projectLlmGatewayEnabled(project.metadata);
+  if (body.provider_secret_pools !== undefined &&
+    (!resolveFeatureFlag(project.metadata, 'pooled_provider_secrets') || !llmGatewayEnabled)) {
+    return { error: { status: 403, body: { error: 'Provider secret pools are unavailable' } } };
+  }
 
   // Model: normalize + fail-fast at create. Two paths, forked on the project's
   // `llm_gateway` flag:
@@ -1120,6 +1166,7 @@ export async function createProjectSession(input: {
         projectId,
         freeModelsOnly,
         model: requestedModel,
+        providerSecretPools: body.provider_secret_pools as Record<string, string[]> | undefined,
       });
       if (!servable) {
         return {
@@ -1144,6 +1191,7 @@ export async function createProjectSession(input: {
         agentName,
         explicit: null,
         freeModelsOnly,
+        providerSecretPools: body.provider_secret_pools as Record<string, string[]> | undefined,
       });
       const concreteModel =
         resolved.model ??
@@ -1166,19 +1214,12 @@ export async function createProjectSession(input: {
     }
   }
 
-  const agentRequiredConnectors = platformMetaAgent
-    ? []
-    : requiredConnectorsForAgent(agentName, loadedAgents);
-  const effectiveRequireConnectors = Array.from(
-    new Set<string>([...requireConnectors, ...agentRequiredConnectors]),
+  // Every connector this session binds explicitly must be granted to the
+  // session's agent. Nothing is required any more: an unconnected connector no
+  // longer refuses the create, it denies at the call with a connect link.
+  const grantCheckAliases = new Set<string>(
+    parsedConnectorBindings.bindings ? Object.keys(parsedConnectorBindings.bindings) : [],
   );
-
-  // Every connector this session touches — whether the caller bound it explicitly
-  // or the agent requires it — must be granted to the session's agent.
-  const grantCheckAliases = new Set<string>([
-    ...(parsedConnectorBindings.bindings ? Object.keys(parsedConnectorBindings.bindings) : []),
-    ...effectiveRequireConnectors,
-  ]);
   let loadedAgentGrant: ReturnType<typeof grantFromLoadedAgents> | undefined;
   if (grantCheckAliases.size > 0) {
     loadedAgentGrant = grantFromLoadedAgents(agentName, loadedAgents);
@@ -1214,49 +1255,6 @@ export async function createProjectSession(input: {
         },
       },
     };
-  }
-  if (effectiveRequireConnectors.length > 0) {
-    const required = await resolveRequiredConnectorConnections({
-      accountId,
-      projectId,
-      actingUserId: userId,
-      actingPrincipalIsServiceAccount: input.requestingPrincipalType === 'service_account',
-      aliases: effectiveRequireConnectors,
-      explicitBindings: validatedConnectorBindings.bindings,
-    });
-    if (!required.ok) {
-      if (required.code === 'REQUIRED_CONNECTOR_CONNECTION_UNAVAILABLE') {
-        return {
-          error: {
-            status: 409,
-            body: {
-              error: `Required ${required.aliases.length === 1 ? 'connection' : 'connections'} ${required.aliases
-                .map((alias) => `"${alias}"`)
-                .join(', ')} ${required.aliases.length === 1 ? 'is' : 'are'} unavailable`,
-              code: required.code,
-              // The prose names the aliases too, but a client that wants to list
-              // them (or diff them across retries) must not have to parse it.
-              connectors: required.aliases,
-            },
-          },
-        };
-      }
-      return {
-        error: {
-          status: 409,
-          body: {
-            code: required.code,
-            message: 'Create the required connections before starting this session.',
-            connector_connections: required.connectorConnections,
-          },
-        },
-      };
-    }
-    const boundAliases = new Set(validatedConnectorBindings.bindings.map((b) => b.alias));
-    for (const binding of required.bindings) {
-      if (!boundAliases.has(binding.alias)) validatedConnectorBindings.bindings.push(binding);
-    }
-    if (!connectorBindingsConfigured) inheritUnbound = true;
   }
   if (
     visibility !== 'private' &&
@@ -1426,7 +1424,8 @@ export async function createProjectSession(input: {
 
   let responseHeaders: Record<string, string> | undefined;
 
-  // The concurrency cap and the billing gate are independent read-only checks —
+  // The concurrency cap and the billing gate are independent read-only checks
+  // (`checkBillingAdmission` debits nothing; see its note on the hold leak) —
   // run them concurrently so a warmed create pays a single DB round-trip instead
   // of two serial ones. Error precedence is preserved exactly: the cap (429) is
   // still evaluated/returned before billing (402).
@@ -1440,7 +1439,7 @@ export async function createProjectSession(input: {
           projectId,
         )
       : Promise.resolve(null),
-    checkBillingActive(accountId),
+    checkBillingAdmission(accountId),
   ]);
   if (capResult) {
     responseHeaders = capResult.headers;
@@ -1555,7 +1554,10 @@ export async function createProjectSession(input: {
     // with it, and the turn-end deadline shortener stops child sandboxes on a
     // tight grace so finished workers don't idle at full compute.
     ...(input.callerSessionId ? { spawned_by_session: input.callerSessionId } : {}),
-    workspace_mode: workspaceMode,
+    repository_access: repositoryAccess,
+    repository_generation: repositoryGeneration(project.metadata as Record<string, unknown>),
+    // Rollback compatibility: older API replicas must also enforce this restriction.
+    workspace_mode: repositoryAccess ? 'branch' : 'runtime',
     sandbox_slug: sandboxSlug,
     audit_v2: {
       actor_type: auditAttribution.actorType,
@@ -1590,13 +1592,6 @@ export async function createProjectSession(input: {
         visibility,
         origin,
         secretsAllowlist,
-        // What the CALLER declared for this session, stored so every later check
-        // can see it. It used to be read once at create and dropped, which left
-        // both the warm-claim re-check and every subsequent prompt blind to it —
-        // and left an unconnected connector with nowhere to be recorded at all.
-        // Only the caller's own list: the agent's manifest half is re-derived per
-        // prompt so a manifest change takes effect without a new session.
-        requiredConnectors: requireConnectors.length > 0 ? requireConnectors : null,
         connectorBindingsConfigured,
         connectorBindingsInheritUnbound: inheritUnbound,
         metadata,
@@ -1604,6 +1599,12 @@ export async function createProjectSession(input: {
       })
       .returning();
     if (!row) throw new Error('Session insert returned no row');
+    const requestedPools = body.provider_secret_pools as Record<string, string[]> | undefined;
+    if (requestedPools && Object.keys(requestedPools).length > 0) {
+      await tx.insert(sessionProviderSecretPools).values(
+        Object.entries(requestedPools).map(([providerId, secretIds]) => ({ sessionId, providerId, secretIds })),
+      );
+    }
     if (parsedRuntimeContext.context !== undefined) {
         await tx
           .insert(projectSessionRuntimeContexts)
@@ -1620,10 +1621,26 @@ export async function createProjectSession(input: {
         // its first prompt durable, or neither does. No conflict handling —
         // `sessionId` is fresh here, so the idempotency key cannot collide
         // without the projectSessions PK colliding first.
-        await tx
+        const insertPrompt = tx
           .insert(sessionLifecycleCommands)
-          .values(pendingPromptConversion.rowValues)
-          .returning({ commandId: sessionLifecycleCommands.commandId });
+          .values(pendingPromptConversion.rowValues);
+        // Only a handle prompt reads its payload back, for binding. A legacy
+        // prompt can carry up to 12 MiB of data-URL parts it never needs again.
+        if ((pendingPromptConversion.rowValues.payload.parts as Array<{ attachment_id?: string }> | undefined)?.some((part) => part.attachment_id)) {
+          const [promptCommand] = await insertPrompt.returning({
+            commandId: sessionLifecycleCommands.commandId,
+            accountId: sessionLifecycleCommands.accountId,
+            projectId: sessionLifecycleCommands.projectId,
+            actorUserId: sessionLifecycleCommands.actorUserId,
+            payload: sessionLifecycleCommands.payload,
+          });
+          if (promptCommand) {
+            const { bindPromptAttachments } = await import('../prompt-attachments');
+            await bindPromptAttachments(tx, promptCommand, input.attachmentSourceCommandId);
+          }
+        } else {
+          await insertPrompt.returning({ commandId: sessionLifecycleCommands.commandId });
+        }
       }
       if (validatedConnectorBindings.bindings.length > 0) {
         await tx
@@ -1662,6 +1679,9 @@ export async function createProjectSession(input: {
     // create on a project pinned to it.) verify-live-schema.ts now gates that drift.
     // Session, context and connection bindings are one transaction. Nothing is
     // visible and provisioning never starts when any child insert fails.
+    if (error instanceof HTTPException && error.status < 500) {
+      return { error: { status: error.status, body: await error.getResponse().json() } };
+    }
     const message = (error as Error).message || 'Insert failed';
     return { error: { status: 500, body: { error: message, retry: true } } };
   }
@@ -1712,9 +1732,7 @@ export async function createProjectSession(input: {
       // Default on (KORTIX_FAST_GIT_BOOT_ENABLED): the hint is what lets the
       // daemon boot with ZERO proxied git requests (scaffold + delta) and spawn
       // OpenCode before the checkout. Bounded by the 2 s race below; a miss
-      // just means the daemon's fetch fallback. Deliberately NOT tied to
-      // KORTIX_FAST_COLD_BOOT_ENABLED (the image/rootfs experiment), which
-      // deploy-dev pins to an explicit `false`.
+      // just means the daemon's fetch fallback.
       // The worker path never clones: the scaffold/delta hint is pure waste
       // there, and the hint alone holds the env build for up to 2 s.
       const fastBootGitHintPromise =
@@ -1801,13 +1819,14 @@ export async function createProjectSession(input: {
           })
         : fastBootGitHintPromise
         .then(async (fastBootGitHint) => {
-          // S3 config provider: pin a PREPARED archive for the exact base tip,
-          // or record the miss and queue the build for the next session. One
-          // indexed read; never a bucket call on the create path.
+          // S3 config provider: pin a PREPARED archive for the exact base tip
+          // and presign its download descriptor right here (local signing, no
+          // bucket call on the create path), or record the miss and queue the
+          // build for the next session. One indexed read.
           const projectSnapshotMode = resolveProjectSnapshotMode(project.metadata);
           const projectSnapshot =
             projectSnapshotMode === 'git'
-              ? { pin: null, cache: 'unconfigured' as const }
+              ? { pin: null, descriptor: null, cache: 'unconfigured' as const }
               : await resolveProjectSnapshotPinForSession({
                   projectId,
                   ref: baseRef,
@@ -1819,14 +1838,19 @@ export async function createProjectSession(input: {
                     sessionId,
                     error: err instanceof Error ? err.message : String(err),
                   });
-                  return { pin: null, cache: 'miss' as const };
+                  return { pin: null, descriptor: null, cache: 'miss' as const };
                 });
           if (projectSnapshotMode !== 'git') {
             tl.mark(`project-snapshot-${projectSnapshot.cache}`);
           }
-          return { fastBootGitHint, projectSnapshotMode, projectSnapshotPin: projectSnapshot.pin };
+          return {
+            fastBootGitHint,
+            projectSnapshotMode,
+            projectSnapshotPin: projectSnapshot.pin,
+            projectSnapshotDescriptor: projectSnapshot.descriptor,
+          };
         })
-        .then(({ fastBootGitHint, projectSnapshotMode, projectSnapshotPin }) =>
+        .then(({ fastBootGitHint, projectSnapshotMode, projectSnapshotPin, projectSnapshotDescriptor }) =>
           buildSessionSandboxEnvVars({
             accountId,
             projectId,
@@ -1841,6 +1865,7 @@ export async function createProjectSession(input: {
             freshSession: true,
             projectSnapshotMode,
             projectSnapshotPin,
+            projectSnapshotDescriptor,
             baseSha: fastBootGitHint?.baseSha,
             gitDeltaBundleBase64: fastBootGitHint?.gitDeltaBundleBase64,
             gitDeltaBundleRemote: fastBootGitHint?.gitDeltaBundleRemote,
@@ -1849,7 +1874,7 @@ export async function createProjectSession(input: {
             opencodeConfigDir: fastBootGitHint?.opencodeConfigDir,
             defaultBranch: project.defaultBranch,
             manifestPath: project.manifestPath,
-            workspaceMode,
+            repositoryAccess,
           }),
         )
         .then((envVars) => {
@@ -1874,7 +1899,7 @@ export async function createProjectSession(input: {
       // fire-and-forget so they never block the IIFE itself.
       const branchAlreadyCreated =
         body.branch_already_created === true || body.branchAlreadyCreated === true;
-      const branchPromise: Promise<void> = branchAlreadyCreated
+      const branchPromise: Promise<void> = !repositoryAccess || branchAlreadyCreated
         ? Promise.resolve()
         : projectWithGitAuthPromise
             .then((projectWithGitAuth) =>
@@ -1913,7 +1938,7 @@ export async function createProjectSession(input: {
         agentName,
         allowProjectImage: piWorkerBoot
           ? false
-          : projectImageAllowedForSession(agentName, workspaceMode),
+          : projectImageAllowedForSession(agentName, repositoryAccess),
         // v0 pins the worker to Daytona: the entrypoint override in
         // ensurePiWorkerImage is only exercised there so far. Lift once the
         // other adapters' entrypoint handling is verified.

@@ -79,6 +79,12 @@ mock.module('../shared/jwt-verify', () => ({
     if (t === 'jwt-owner') return { ok: true, userId: 'user-owner' };
     if (t === 'jwt-other') return { ok: true, userId: 'user-other' };
     if (t === 'jwt-fallback') return { ok: false, reason: 'no-keys' };
+    if (t === 'jwt-unknown-kid') return { ok: false, reason: 'no-key-for-kid' };
+    // Prod on 2026-09-15: JWKS publishes an ES256 key while GoTrue still signs
+    // access tokens with the legacy HS256 secret.
+    if (t === 'jwt-hs256') return { ok: false, reason: 'unsupported-alg:HS256' };
+    if (t === 'jwt-expired') return { ok: false, reason: 'expired' };
+    if (t === 'jwt-bad-signature') return { ok: false, reason: 'bad-signature' };
     return { ok: false, reason: 'invalid' };
   },
 }));
@@ -178,6 +184,20 @@ describe('authenticatePreviewPrincipal', () => {
     mockSupabaseUser = { id: 'user-fallback-owner' };
     expect(await authenticatePreviewPrincipal('jwt-fallback', SANDBOX_ID)).toBe('user-fallback-owner');
   });
+  test('falls back to the network verify path for an unknown kid', async () => {
+    mockSupabaseUser = { id: 'user-fallback-owner' };
+    expect(await authenticatePreviewPrincipal('jwt-unknown-kid', SANDBOX_ID)).toBe('user-fallback-owner');
+  });
+  test('falls back to the network verify path for a legacy HS256 token when JWKS holds an ES256 key', async () => {
+    mockSupabaseUser = { id: 'user-fallback-owner' };
+    expect(await authenticatePreviewPrincipal('jwt-hs256', SANDBOX_ID)).toBe('user-fallback-owner');
+  });
+  test('rejects an expired or badly signed JWT without asking the network', async () => {
+    // The network would say yes; a real local verdict must win anyway.
+    mockSupabaseUser = { id: 'user-fallback-owner' };
+    expect(await authenticatePreviewPrincipal('jwt-expired', SANDBOX_ID)).toBeNull();
+    expect(await authenticatePreviewPrincipal('jwt-bad-signature', SANDBOX_ID)).toBeNull();
+  });
   test('rejects network-fallback user without access', async () => {
     mockSupabaseUser = { id: 'user-fallback-other' };
     expect(await authenticatePreviewPrincipal('jwt-fallback', SANDBOX_ID)).toBeNull();
@@ -228,5 +248,56 @@ describe('authenticatePreviewPrincipalDetailed — session binding', () => {
   test('the string wrapper still behaves exactly as before', async () => {
     expect(await authenticatePreviewPrincipal('kortix_pat_owner', SANDBOX_ID)).toBe('pat-user-owner');
     expect(await authenticatePreviewPrincipal('kortix_pat_bad', SANDBOX_ID)).toBeNull();
+  });
+});
+
+describe('a proven preview credential names its caller in the request audit', () => {
+  // Preview subdomains and the PTY / preview WebSockets are dispatched before
+  // Hono: no auth middleware names their caller. This validator does, the
+  // moment a token is proven — BEFORE the sandbox-ownership check, so a caller
+  // refused on someone else's sandbox is still attributed.
+  const { runWithContext } = require('../lib/request-context');
+  const { attachInboundAuditScope } = require('../shared/audit-scope');
+
+  async function principalAfter(token: string) {
+    return runWithContext('GET', '/', async () => {
+      const scope = attachInboundAuditScope({ owner: 'edge', method: 'GET' });
+      const result = await authenticatePreviewPrincipalDetailed(token, SANDBOX_ID);
+      return { result, principal: scope.principal };
+    });
+  }
+
+  test('a Supabase session is the human user', async () => {
+    const { result, principal } = await principalAfter('jwt-owner');
+    expect(result).toMatchObject({ userId: 'user-owner', principalKind: 'user' });
+    expect(principal).toMatchObject({ actorType: 'human', actorUserId: 'user-owner', authMethod: { kind: 'jwt' } });
+  });
+
+  test('a user refused on another sandbox is still named', async () => {
+    const { result, principal } = await principalAfter('jwt-other');
+    expect(result).toBeNull();
+    expect(principal).toMatchObject({ actorType: 'human', actorUserId: 'user-other' });
+  });
+
+  test('a service account is not written as a user', async () => {
+    const { result, principal } = await principalAfter('kortix_sa_owner');
+    expect(result).toMatchObject({ userId: 'sa-owner', principalKind: 'service_account' });
+    expect(principal).toMatchObject({
+      actorType: 'service_account',
+      actorUserId: null,
+      authMethod: { kind: 'service_account', service_account_id: 'sa-owner' },
+    });
+  });
+
+  test('an account API key is system; its account id is never a user id', async () => {
+    const { result, principal } = await principalAfter('kortix_owner');
+    expect(result).toMatchObject({ userId: 'acct-owner', principalKind: 'account' });
+    expect(principal).toMatchObject({ actorType: 'system', actorUserId: null });
+  });
+
+  test('an invalid token binds nothing', async () => {
+    const { result, principal } = await principalAfter('kortix_pat_forged');
+    expect(result).toBeNull();
+    expect(principal).toEqual({});
   });
 });
