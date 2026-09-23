@@ -152,7 +152,6 @@ describe('ephemeral self-host preview stack', () => {
       'MANAGED_GIT_GITHUB_INSTALL_ID',
       'MANAGED_GIT_GITHUB_OWNER',
       'MANAGED_GIT_GITHUB_TOKEN',
-      'MORPH_API_KEY',
       'OPENROUTER_API_KEY',
       'MORPH_API_KEY',
       'PLATINUM_API_KEY',
@@ -194,7 +193,6 @@ describe('ephemeral self-host preview stack', () => {
         KORTIX_GITHUB_APP_SLUG: 'kortix-preview-test',
         MANAGED_GIT_GITHUB_INSTALL_ID: '67890',
         MANAGED_GIT_GITHUB_OWNER: 'kortix-preview',
-        MORPH_API_KEY: 'morph',
         OPENROUTER_API_KEY: 'openrouter',
         MORPH_API_KEY: 'morph',
         PLATINUM_API_KEY: 'pt_live_example',
@@ -214,7 +212,6 @@ describe('ephemeral self-host preview stack', () => {
     expect(configured.runtimeEnv).toContain('EMAIL_PROVIDER_ORDER=mailpit');
     expect(configured.runtimeEnv).toContain('MANAGED_GIT_PROVIDER=github');
     expect(configured.runtimeEnv).toContain('KORTIX_GITHUB_APP_PRIVATE_KEY=line-one\\nline-two');
-    expect(configured.runtimeEnv).toContain('MORPH_API_KEY=morph');
     expect(configured.runtimeEnv).not.toContain('E2E_AGENTMAIL_API_KEY');
     expect(configured.testEnv).toContain('KE2E_TARGET=preview');
     // Session-token fixtures use the token API; its signing secret stays private.

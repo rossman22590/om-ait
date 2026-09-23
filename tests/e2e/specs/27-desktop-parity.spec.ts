@@ -67,7 +67,11 @@ async function launchDesktop(baseURL: string, profile: string) {
   return app;
 }
 
-async function startBasicProxy() {
+async function startBasicProxy(baseURL: string) {
+  const origin = new URL(baseURL);
+  if (origin.protocol !== "http:" || !["127.0.0.1", "localhost"].includes(origin.hostname)) {
+    throw new Error("The desktop proxy test requires a loopback HTTP origin");
+  }
   const expected = `Basic ${Buffer.from("proxy-user:proxy-pass").toString("base64")}`;
   let challenges = 0;
   let authorizedRequests = 0;
@@ -90,12 +94,21 @@ async function startBasicProxy() {
       outgoing.writeHead(400).end("Invalid proxy target");
       return;
     }
+    if (target.origin !== origin.origin) {
+      outgoing.writeHead(403).end("Proxy target not allowed");
+      return;
+    }
     const headers = { ...incoming.headers };
     delete headers["proxy-authorization"];
     delete headers["proxy-connection"];
     const upstream = requestHttp(
-      target,
-      { method: incoming.method, headers },
+      {
+        hostname: origin.hostname,
+        port: Number(origin.port || 80),
+        path: `${target.pathname}${target.search}`,
+        method: incoming.method,
+        headers,
+      },
       (response) => {
         outgoing.writeHead(response.statusCode || 502, response.headers);
         response.pipe(outgoing);
@@ -2410,8 +2423,8 @@ nativeBrowserTest?.(
   async ({ baseURL }) => {
     browserTest.setTimeout(240_000);
     const profile = await mkdtemp(join(tmpdir(), "kortix-desktop-proxy-"));
-    const firstProxy = await startBasicProxy();
-    const secondProxy = await startBasicProxy();
+    const firstProxy = await startBasicProxy(baseURL!);
+    const secondProxy = await startBasicProxy(baseURL!);
     let app: ElectronApplication | undefined;
     try {
       app = await launchDesktop(baseURL!, profile);
