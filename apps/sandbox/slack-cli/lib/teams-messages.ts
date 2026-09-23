@@ -47,15 +47,29 @@ const ENTITIES: Record<string, string> = {
   '&apos;': "'",
 };
 
-/** Graph returns `body.content` as HTML. The agent needs the words. */
+/**
+ * Graph returns `body.content` as HTML. The agent needs the words.
+ *
+ * No markup may reach the agent, and text the user typed must. Tags go until
+ * none is left, then any bracket a malformed tag left behind (an unclosed
+ * `<script`, which one pass of a tag regex keeps — CodeQL
+ * js/incomplete-multi-character-sanitization). A bracket the user typed is
+ * still `&lt;` / `&gt;` at that point, so it survives and is decoded last.
+ */
 export function stripTeamsHtml(html: string): string {
-  return html
+  let text = html
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|li)>/gi, '\n')
     // A mention renders as <at>Name</at>; keep the name.
     .replace(/<at[^>]*>([^<]*)<\/at>/gi, '@$1')
-    .replace(/<img\b[^>]*>/gi, '[image]')
-    .replace(/<[^>]+>/g, '')
+    .replace(/<img\b[^>]*>/gi, '[image]');
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]*>/g, '');
+  } while (text !== previous);
+  return text
+    .replace(/[<>]/g, '')
     .replace(/&(nbsp|lt|gt|quot|#39|apos);/g, (m) => ENTITIES[m] ?? m)
     .replace(/&amp;/g, '&')
     .replace(/[ \t]+\n/g, '\n')
