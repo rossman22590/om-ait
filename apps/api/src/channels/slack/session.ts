@@ -242,7 +242,14 @@ export async function createOrJoinThreadSession(input: {
     },
     enforceAccountCap: false,
     queuePolicy: 'on_backpressure',
-    idempotencyKey: claimKey,
+    // One key per message, never per thread. The lifecycle keeps a key
+    // forever (a unique index, no retention), so under the thread's key the
+    // thread's first create_session command answered every later create in
+    // it: a failed first start (dead-lettered) failed the re-send the agent
+    // picker asks for, with the same error, every time. Racing messages are
+    // serialized by the thread-create claim; Slack's double delivery of one
+    // mention (app_mention + message) shares the message ts, so one key.
+    idempotencyKey: teamId && threadId && event.ts ? `slack:create:${teamId}:${threadId}:${event.ts}` : claimKey,
     postCreate: teamId && threadId
       ? [{ type: 'bind_chat_thread', platform: 'slack', workspaceId: teamId, threadId }]
       : undefined,

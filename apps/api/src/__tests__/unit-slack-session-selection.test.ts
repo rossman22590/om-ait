@@ -230,6 +230,31 @@ test('channel agent + model override flow into the session body', async () => {
   expect(lastBody?.opencode_model).toBe('anthropic/claude-opus-4-8');
 });
 
+// The lifecycle keeps an idempotency key forever. Under the thread's key, the
+// thread's first create_session command answered every later create in it: a
+// failed first start (dead-lettered) failed the re-send the agent picker asks
+// for with the same error, every time. One key per message; Slack's double
+// delivery of one mention (app_mention + message) shares the message ts.
+test('the create key is per message, not per thread', async () => {
+  const keys: unknown[] = [];
+  setSlackSessionLifecycleForTest({
+    continueSession: async () => 'delivered',
+    createSession: async (input: { idempotencyKey?: string | null }) => {
+      keys.push(input.idempotencyKey);
+      return { status: 'created', sessionId: 'new-sess', row: fakeSessionRow('new-sess') };
+    },
+    resolveProjectAutomationActor: async () => 'user-1',
+  });
+  newThreadFifo();
+  await spawnAgentTurn('proj-1', envelope, event);
+  newThreadFifo();
+  await spawnAgentTurn('proj-1', envelope, { ...event, ts: '100.2' });
+  newThreadFifo();
+  await spawnAgentTurn('proj-1', envelope, { ...event, type: 'message' });
+
+  expect(keys).toEqual(['slack:create:T1:90.0:100.1', 'slack:create:T1:90.0:100.2', 'slack:create:T1:90.0:100.1']);
+});
+
 test('no overrides → agent "default" and NO opencode_model key', async () => {
   selection = { projectId: 'proj-1', agentName: null, opencodeModel: null };
   newThreadFifo();

@@ -542,6 +542,51 @@ describe('createOrJoinTeamsConversationSession — a start failure says what to 
   });
 });
 
+// The lifecycle keeps an idempotency key forever (a unique index, no
+// retention), and a personal or group chat is ONE conversation for life. Under
+// a per-conversation key the chat's first create_session command answered
+// every later create: a failed first start (dead-lettered) failed every later
+// message with the same error, a deleted session answered 409
+// IDEMPOTENCY_KEY_SESSION_DELETED, and `/new` got the old session back.
+describe('createOrJoinTeamsConversationSession — the create key is per message', () => {
+  test('each message that creates a session carries its own key; a redelivery keeps it', async () => {
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+    created.length = 0;
+    selectCount = 0;
+    await createOrJoinTeamsConversationSession({
+      projectId: PROJECT_ID,
+      tenantId: TENANT_ID,
+      conversationId: CONVERSATION_ID,
+      activity: { ...activity, id: 'act-2' },
+    });
+    const second = created[0]!.idempotencyKey;
+    created.length = 0;
+    selectCount = 0;
+    await createOrJoinTeamsConversationSession({
+      projectId: PROJECT_ID,
+      tenantId: TENANT_ID,
+      conversationId: CONVERSATION_ID,
+      activity: { ...activity, id: 'act-2' },
+    });
+
+    expect(second).toBe(`teams:create:${TENANT_ID}:${CONVERSATION_ID}:act-2`);
+    expect(created[0]!.idempotencyKey).toBe(second);
+  });
+
+  test('why: an existing command under the key answers the create — a failed one forever', async () => {
+    const { resultFromExistingCommand } = await import('../projects/session-lifecycle/store');
+    const answer = resultFromExistingCommand({
+      commandId: 'cmd-1',
+      status: 'dead_lettered',
+      lastError: 'agent "reviewer" is not declared',
+      result: {},
+      sessionId: null,
+    } as never);
+    expect(answer.status).toBe('failed');
+    expect(answer.retryable).toBe(false);
+  });
+});
+
 describe('createOrJoinTeamsConversationSession — a started session keeps its claim', () => {
   test('a session that started does not release the claim a racing message must lose', async () => {
     await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });

@@ -502,7 +502,19 @@ export async function createOrJoinTeamsConversationSession(input: {
     },
     enforceAccountCap: false,
     queuePolicy: 'on_backpressure',
-    idempotencyKey: claimKey,
+    // One key per inbound message, never per conversation. The lifecycle
+    // keeps a key forever (a unique index, no retention) and a chat is one
+    // conversation for life, so under the conversation's key its FIRST
+    // create_session command answered every later create: a failed first
+    // start (dead-lettered) failed every later message with the same error, a
+    // deleted session answered 409 IDEMPOTENCY_KEY_SESSION_DELETED — shown as
+    // "connect your account" — and `/new` got the old session back. Racing
+    // messages are already serialized by the thread-create claim; a Teams
+    // redelivery of the same activity still carries the same key.
+    idempotencyKey:
+      tenantId && conversationId && activity.id
+        ? `teams:create:${tenantId}:${conversationId}:${activity.id}`
+        : claimKey,
     postCreate:
       tenantId && conversationId
         ? [{ type: 'bind_chat_thread', platform: 'teams', workspaceId: tenantId, threadId: conversationId }]
