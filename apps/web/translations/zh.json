@@ -14947,7 +14947,13 @@
       "textca9c32c53e90": "正在退出",
       "text24309f7c84ea": "8px 10px",
       "textf7d6d7f585c5": "项目规则适用于每个连接器，并且会优先评估，因此无法在此处更改这些工具。请在“连接器”页面的“全局规则”下进行编辑。",
-      "text3ecb3ffd4f33": "已检查有效权限"
+      "text3ecb3ffd4f33": "已检查有效权限",
+      "texte9e0b20cf289": "已以 {value0} 身份连接",
+      "textbb7a240d3660": "重命名 {value0}",
+      "text64f07c825803": "只更改名称。账户保持连接，无需任何人重新登录。",
+      "text499d7f6dfdfc": "账户已重命名",
+      "text11ef24ea6e15": "无法重命名账户",
+      "text0223e507afd3": "要使用其他账户，请在项目设置中将其添加到此连接器的账户下，并设为默认。"
     },
     "autoFeaturesSessionHeaderSessionChangesIndicatorJsxTextViewChangesaf192a3b": "查看更改",
     "autoAppNotFoundJsxTextGoBackToHome7b70f24a": "回家吧",

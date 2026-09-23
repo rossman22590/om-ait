@@ -14947,7 +14947,13 @@
       "textca9c32c53e90": "Déconnexion",
       "text24309f7c84ea": "8px 10px",
       "textf7d6d7f585c5": "Les règles du projet s’appliquent à chaque connecteur et sont évaluées en premier. Ces outils ne peuvent donc pas être modifiés ici. Modifiez-les sous Règles globales, sur la page Connecteurs.",
-      "text3ecb3ffd4f33": "Autorisations effectives vérifiées"
+      "text3ecb3ffd4f33": "Autorisations effectives vérifiées",
+      "texte9e0b20cf289": "Connecté en tant que {value0}",
+      "textbb7a240d3660": "Renommer {value0}",
+      "text64f07c825803": "Seul le nom change. Le compte reste connecté et personne ne doit se reconnecter.",
+      "text499d7f6dfdfc": "Compte renommé",
+      "text11ef24ea6e15": "Impossible de renommer le compte",
+      "text0223e507afd3": "Pour utiliser un autre compte, ajoutez-le aux comptes de ce connecteur dans les paramètres du projet et définissez-le par défaut."
     },
     "autoFeaturesSessionHeaderSessionChangesIndicatorJsxTextViewChangesaf192a3b": "Afficher les modifications",
     "autoAppNotFoundJsxTextGoBackToHome7b70f24a": "Retourne à la maison",

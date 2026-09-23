@@ -14947,7 +14947,13 @@
       "textca9c32c53e90": "Disconnessione in corso",
       "text24309f7c84ea": "8px 10px",
       "textf7d6d7f585c5": "Le regole del progetto si applicano a ogni connettore e vengono valutate per prime, quindi questi strumenti non possono essere modificati qui. Modificali nelle regole globali della pagina Connettori.",
-      "text3ecb3ffd4f33": "Autorizzazioni effettive verificate"
+      "text3ecb3ffd4f33": "Autorizzazioni effettive verificate",
+      "texte9e0b20cf289": "Connesso come {value0}",
+      "textbb7a240d3660": "Rinomina {value0}",
+      "text64f07c825803": "Cambia solo il nome. L’account resta connesso e nessuno deve accedere di nuovo.",
+      "text499d7f6dfdfc": "Account rinominato",
+      "text11ef24ea6e15": "Impossibile rinominare l’account",
+      "text0223e507afd3": "Per usare un altro account, aggiungilo agli account di questo connettore nelle impostazioni del progetto e impostalo come predefinito."
     },
     "autoFeaturesSessionHeaderSessionChangesIndicatorJsxTextViewChangesaf192a3b": "Visualizza modifiche",
     "autoAppNotFoundJsxTextGoBackToHome7b70f24a": "Torna a casa",

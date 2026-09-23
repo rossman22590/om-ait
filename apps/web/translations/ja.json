@@ -14947,7 +14947,13 @@
       "textca9c32c53e90": "サインアウト中",
       "text24309f7c84ea": "8px 10px",
       "textf7d6d7f585c5": "プロジェクトルールはすべてのコネクターに適用され、最初に評価されるため、ここでは変更できません。コネクターページの「グローバルルール」で編集してください。",
-      "text3ecb3ffd4f33": "実効権限を確認しました"
+      "text3ecb3ffd4f33": "実効権限を確認しました",
+      "texte9e0b20cf289": "{value0} として接続済み",
+      "textbb7a240d3660": "{value0} の名前を変更",
+      "text64f07c825803": "変更されるのは名前だけです。アカウントは接続されたままで、再ログインは不要です。",
+      "text499d7f6dfdfc": "アカウント名を変更しました",
+      "text11ef24ea6e15": "アカウント名を変更できませんでした",
+      "text0223e507afd3": "別のアカウントを使うには、プロジェクト設定でこのコネクタのアカウントに追加し、デフォルトに設定してください。"
     },
     "autoFeaturesSessionHeaderSessionChangesIndicatorJsxTextViewChangesaf192a3b": "変更を表示",
     "autoAppNotFoundJsxTextGoBackToHome7b70f24a": "家に帰りなさい",

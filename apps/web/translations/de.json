@@ -14947,7 +14947,13 @@
       "textca9c32c53e90": "Abmeldung läuft",
       "text24309f7c84ea": "8px 10px",
       "textf7d6d7f585c5": "Projektregeln gelten für jeden Connector und werden zuerst ausgewertet. Daher können diese Tools hier nicht geändert werden. Bearbeite sie unter „Globale Regeln“ auf der Connector-Seite.",
-      "text3ecb3ffd4f33": "Effektive Berechtigungen geprüft"
+      "text3ecb3ffd4f33": "Effektive Berechtigungen geprüft",
+      "texte9e0b20cf289": "Verbunden als {value0}",
+      "textbb7a240d3660": "{value0} umbenennen",
+      "text64f07c825803": "Nur der Name ändert sich. Das Konto bleibt verbunden, niemand muss sich erneut anmelden.",
+      "text499d7f6dfdfc": "Konto umbenannt",
+      "text11ef24ea6e15": "Das Konto konnte nicht umbenannt werden",
+      "text0223e507afd3": "Um ein anderes Konto zu verwenden, füge es in den Projekteinstellungen unter den Konten dieses Connectors hinzu und lege es als Standard fest."
     },
     "autoFeaturesSessionHeaderSessionChangesIndicatorJsxTextViewChangesaf192a3b": "Änderungen anzeigen",
     "autoAppNotFoundJsxTextGoBackToHome7b70f24a": "Geh zurück nach Hause",
