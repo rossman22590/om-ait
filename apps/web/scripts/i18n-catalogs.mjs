@@ -8,10 +8,10 @@
 // `src/lib/starter-prompts.test.ts`). Each catalog is ~1.5 MB and nearly every
 // feature adds keys to all nine, so they conflict on almost every merge of
 // `main`. On 2026-09-22 one such conflict was resolved by a program that
-// rebuilt every object through an unordered key set: 473 of 840 objects in
-// every catalog changed order, each file's diff was ~38,500 lines, and the
-// packages lane failed on every pull request (merge `aba5055432`, landed in
-// `ea09f2f6a8`).
+// rebuilt every object through an unordered key set (merge `aba5055432`,
+// landed in `ea09f2f6a8`): 473 of 840 objects in every catalog changed order,
+// each file's diff was ~38,500 lines, 4 deleted keys came back, and
+// `starter-prompts.test.ts` turned the packages lane red on `main`.
 //
 // This file owns the three things that stop a repeat:
 //
