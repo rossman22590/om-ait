@@ -1348,7 +1348,7 @@ html[data-desktop-platform='macos'] {
      `left: 72px` would render at 72 × 0.9 = 64.8 window px and slide back
      toward them — the exact overlap this file exists to prevent.
 
-     Dividing cancels it: 72/0.9 = 80 CSS px × 0.9 = 72 window px, whatever the
+     Dividing cancels it: 78/0.94 CSS px × 0.94 = 78 window px, whatever the
      user's Cmd+/Cmd- has done. Numerators stay the true window-pixel geometry
      from window-chrome.js, so there is still one source of truth.
      setDesktopZoom() keeps the variable current; the seed above means the
@@ -1361,9 +1361,9 @@ html[data-desktop-platform='macos'] {
   /* Top of a 28px control centered on the lights' midline. */
   --kx-titlebar-control-top: calc(6px / var(--kx-desktop-zoom));
   /* Left of that control — one gutter clear of the lights. */
-  --kx-titlebar-control-left: calc(72px / var(--kx-desktop-zoom));
+  --kx-titlebar-control-left: calc(78px / var(--kx-desktop-zoom));
   /* Where content after that control starts. */
-  --kx-titlebar-content-left: calc(108px / var(--kx-desktop-zoom));
+  --kx-titlebar-content-left: calc(114px / var(--kx-desktop-zoom));
   /* macOS controls are on the LEFT, so the right edge is free. */
   --kx-titlebar-controls-width: 0px;
 }

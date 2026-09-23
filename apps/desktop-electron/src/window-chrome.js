@@ -35,7 +35,7 @@ const MAC_TITLEBAR = {
   /** Left inset of the first (close) light. */
   lightInsetX: 10,
   /** Clear space between the last light and the app's first control. */
-  gutter: 10,
+  gutter: 16,
   /** Box of a web-rendered control sitting in the band. */
   control: 28,
   /** Optical gap between that control and the content following it. */

@@ -81,13 +81,13 @@ describe('macOS title-bar band geometry', () => {
   test('the app control clears the lights by the full gutter', () => {
     const { controlLeft } = macBandMetrics();
     expect(controlLeft - macLightsEndX()).toBe(MAC_TITLEBAR.gutter);
-    expect(controlLeft).toBe(72);
+    expect(controlLeft).toBe(78);
   });
 
   test('content starts after the control, not on top of it', () => {
     const { contentLeft, controlLeft } = macBandMetrics();
     expect(contentLeft).toBe(controlLeft + MAC_TITLEBAR.control + MAC_TITLEBAR.contentGap);
-    expect(contentLeft).toBe(108);
+    expect(contentLeft).toBe(114);
   });
 
   test('every derived offset is a whole pixel', () => {
