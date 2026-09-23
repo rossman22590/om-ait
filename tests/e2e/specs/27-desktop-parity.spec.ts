@@ -6,7 +6,7 @@ import {
   type ElectronApplication,
 } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import {
   createServer,
   request as requestHttp,
@@ -1085,6 +1085,175 @@ for (const runtime of runtimes) {
 
 const nativeBrowserTest =
   process.env.E2E_DESKTOP_NATIVE === "1" ? browserTest : null;
+nativeBrowserTest?.(
+  "27 — desktop parity restores the native theme before the first window and matches popups",
+  async ({ baseURL }) => {
+    browserTest.setTimeout(180_000);
+    const profile = await mkdtemp(join(tmpdir(), "kortix-desktop-theme-"));
+    let app: ElectronApplication | undefined;
+    try {
+      await writeFile(
+        join(profile, "theme.json"),
+        JSON.stringify({ theme: "light" }),
+        "utf8",
+      );
+      app = await launchDesktop(baseURL!, profile);
+      const main = app
+        .windows()
+        .find((window) => window.url().startsWith(baseURL!));
+      if (!main) throw new Error("native main window not found");
+
+      const launchTheme = await app.evaluate(
+        ({ BrowserWindow, nativeTheme }, origin) => {
+          const window = BrowserWindow.getAllWindows().find((candidate) =>
+            candidate.webContents.getURL().startsWith(origin),
+          );
+          return {
+            source: nativeTheme.themeSource,
+            dark: nativeTheme.shouldUseDarkColors,
+            background: window?.getBackgroundColor(),
+          };
+        },
+        baseURL!,
+      );
+      expect(launchTheme).toMatchObject({ source: "light", dark: false });
+      expect(launchTheme.background?.toUpperCase().startsWith("#FFFFFF")).toBe(
+        true,
+      );
+      expect(
+        await main.evaluate(
+          () => matchMedia("(prefers-color-scheme: dark)").matches,
+        ),
+      ).toBe(false);
+
+      await main.evaluate(() =>
+        window.open("", "theme-popup", "width=520,height=720"),
+      );
+      await expect
+        .poll(
+          () =>
+            app!.windows().filter((window) => window.url() === "about:blank")
+              .length,
+        )
+        .toBe(1);
+      const lightPopupBackground = await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .find((window) => window.webContents.getURL() === "about:blank")
+          ?.getBackgroundColor(),
+      );
+      expect(lightPopupBackground?.toUpperCase().startsWith("#FFFFFF")).toBe(
+        true,
+      );
+
+      await app.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()
+          .find((window) => window.webContents.getURL() === "about:blank")
+          ?.close();
+      });
+      await main.evaluate(() =>
+        window.__TAURI__?.core.invoke("set_native_theme", { theme: "dark" }),
+      );
+      await main.evaluate(() =>
+        window.open("", "theme-popup-dark", "width=520,height=720"),
+      );
+      await expect
+        .poll(
+          () =>
+            app!.windows().filter((window) => window.url() === "about:blank")
+              .length,
+        )
+        .toBe(1);
+      const darkPopupBackground = await app.evaluate(({ BrowserWindow }) =>
+        BrowserWindow.getAllWindows()
+          .find((window) => window.webContents.getURL() === "about:blank")
+          ?.getBackgroundColor(),
+      );
+      expect(darkPopupBackground?.toUpperCase().startsWith("#0A0A0A")).toBe(
+        true,
+      );
+    } finally {
+      await app?.close();
+      await rm(profile, { recursive: true, force: true });
+    }
+  },
+);
+nativeBrowserTest?.(
+  "27 — desktop parity recovers when Supabase authentication does not answer",
+  async ({ baseURL }) => {
+    browserTest.setTimeout(180_000);
+    const databaseUrl =
+      process.env.KE2E_DATABASE_URL || process.env.E2E_DATABASE_URL;
+    if (!databaseUrl)
+      throw new Error("Auth recovery requires the configured test database");
+    const profile = await mkdtemp(
+      join(tmpdir(), "kortix-desktop-auth-timeout-"),
+    );
+    const email = `e2e-desktop-auth-timeout-${randomUUID()}@example.test`;
+    const user = await createAuthUser(email, authOptions);
+    const session = await signIn(email, authOptions);
+    let project: ManifestProject | undefined;
+    let app: ElectronApplication | undefined;
+    try {
+      const accounts = await api<{ account_id: string }[]>(
+        session.access_token,
+        "GET",
+        "/accounts",
+      );
+      project = await createManifestProject({
+        api,
+        accessToken: session.access_token,
+        accountId: accounts[0].account_id,
+        userId: user.id,
+        name: "Desktop auth timeout",
+        databaseUrl,
+      });
+      app = await launchDesktop(baseURL!, profile);
+      const main = app
+        .windows()
+        .find((window) => window.url().startsWith(baseURL!));
+      if (!main) throw new Error("native main window not found");
+
+      let blockedUserReads = 0;
+      await main.route("**/auth/v1/user", async () => {
+        blockedUserReads += 1;
+        await new Promise(() => {});
+      });
+      await installBrowserSessionDirect(
+        main,
+        session,
+        `${baseURL}/projects/${project.id}`,
+        authOptions,
+      );
+
+      const alert = main
+        .getByRole("alert")
+        .filter({ hasText: "Authentication is not responding" });
+      await expect(alert).toContainText("Authentication is not responding", {
+        timeout: 25_000,
+      });
+      await expect(
+        alert.getByRole("button", { name: "Retry", exact: true }),
+      ).toBeVisible();
+      await expect(
+        alert.getByRole("button", { name: "Sign out", exact: true }),
+      ).toBeVisible();
+
+      await alert.getByRole("button", { name: "Retry", exact: true }).click();
+      await expect
+        .poll(() => blockedUserReads, { timeout: 10_000 })
+        .toBeGreaterThan(1);
+      await alert
+        .getByRole("button", { name: "Sign out", exact: true })
+        .click();
+      await expect(main).toHaveURL(/\/auth(?:\?|$)/, { timeout: 15_000 });
+    } finally {
+      await project?.dispose();
+      await deleteAuthUser(user.id, authOptions);
+      await app?.close();
+      await rm(profile, { recursive: true, force: true });
+    }
+  },
+);
 nativeBrowserTest?.(
   "27 — desktop parity authenticates an HTTP proxy and recovers from cancel",
   async ({ baseURL }) => {
