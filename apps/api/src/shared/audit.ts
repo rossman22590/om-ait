@@ -12,6 +12,7 @@ import {
   type InboundAuditScope,
   type InboundEntrypoint,
   attachInboundAuditScope,
+  currentInboundAuditScope,
   isUnauditedInbound,
 } from './audit-scope';
 import { db } from './db';
@@ -342,7 +343,49 @@ type AuditTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
  * AsyncLocalStorage scope (`getRequestContext()`) has ended and the caller may
  * have mutated `input`. Everything context- or caller-derived is resolved here.
  */
-function buildAuditRow(input: AuditEventInput): AuditRow {
+const INHERITED_IDENTITY_FIELDS = [
+  'actorUserId',
+  'agentId',
+  'agentName',
+  'onBehalfOfUserId',
+  'initiatorActorType',
+  'initiatorActorId',
+] as const;
+
+/**
+ * Fill what an explicit event left out from the principal its request already
+ * proved — so a domain row written inside a self-authenticating surface (a
+ * SCIM user change, a webhook-driven action) names the same caller as the
+ * request row, without every call site passing it by hand.
+ *
+ * Only `undefined` is filled; an explicit value, `null` included, always wins.
+ * Identity is inherited as a unit: a caller that names an `actorType` gets no
+ * user or agent fields with it, so a `system` row can never carry a user.
+ * Outside a request there is no principal and nothing changes.
+ */
+function withInheritedPrincipal(input: AuditEventInput): AuditEventInput {
+  const principal = currentInboundAuditScope()?.principal;
+  if (!principal) return input;
+  const out: AuditEventInput = { ...input };
+  if (out.accountId === undefined && principal.accountId != null) out.accountId = principal.accountId;
+  if (out.projectId === undefined && principal.projectId != null) out.projectId = principal.projectId;
+  if (out.authoritativeSource === undefined && out.source === undefined && principal.authoritativeSource) {
+    out.authoritativeSource = principal.authoritativeSource;
+  }
+  if (out.actorType === undefined && principal.actorType != null) {
+    out.actorType = principal.actorType;
+    for (const key of INHERITED_IDENTITY_FIELDS) {
+      if (out[key] === undefined && principal[key] !== undefined) out[key] = principal[key];
+    }
+    if (principal.authMethod && !(out.metadata && 'auth' in out.metadata)) {
+      out.metadata = { ...out.metadata, auth: principal.authMethod };
+    }
+  }
+  return out;
+}
+
+function buildAuditRow(rawInput: AuditEventInput): AuditRow {
+  const input = withInheritedPrincipal(rawInput);
   const request = getRequestContext();
   const authoritativeSource = input.authoritativeSource ?? input.source ?? 'api';
   const inputSummary = sanitizeAuditRecord(input.inputSummary);

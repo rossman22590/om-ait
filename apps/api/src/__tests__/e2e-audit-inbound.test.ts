@@ -329,3 +329,67 @@ describe('a request opened by an outer layer is written once, by that layer', ()
     expect(scope.hono).toMatchObject({ tokenUserId: USER, accountId: ACCOUNT, authType: 'supabase' });
   });
 });
+
+describe('an explicit audit event inherits the caller its request already proved', () => {
+  // Domain rows (scim.user.create, a secret rotation, …) used to hand-pass the
+  // actor at every call site, and inside a self-authenticating surface most
+  // passed nothing: SCIM wrote `actor_user_id: null` with no source at all.
+  const { recordAuditEvent } = require('../shared/audit');
+  const SCIM_PRINCIPAL = {
+    accountId: ACCOUNT,
+    actorUserId: null,
+    actorType: 'system' as const,
+    authoritativeSource: 'scim',
+    authMethod: { kind: 'scim_token', token_id: 'scim-tok-1' },
+  };
+
+  beforeEach(() => {
+    auditRows = [];
+  });
+
+  async function inScope(principal: Record<string, unknown>, fn: () => Promise<void>) {
+    await runWithContext('POST', '/scim/v2/Users', async () => {
+      attachInboundAuditScope({ owner: 'edge', method: 'POST' });
+      bindAuditPrincipal(principal);
+      await fn();
+    });
+  }
+
+  test('fields the caller left out come from the bound principal', async () => {
+    await inScope(SCIM_PRINCIPAL, () =>
+      recordAuditEvent({ action: 'scim.user.create', resourceType: 'user', resourceId: 'u1' }),
+    );
+    expect(auditRows[0]).toMatchObject({
+      action: 'scim.user.create',
+      accountId: ACCOUNT,
+      actorType: 'system',
+      actorUserId: null,
+      source: 'scim',
+      authoritativeSource: 'scim',
+    });
+  });
+
+  test('an explicit value always wins, including an explicit null', async () => {
+    await inScope({ ...SCIM_PRINCIPAL, actorUserId: USER, actorType: 'human' }, () =>
+      recordAuditEvent({
+        action: 'scim.user.delete',
+        resourceType: 'user',
+        actorUserId: null,
+        authoritativeSource: 'api',
+      }),
+    );
+    expect(auditRows[0]).toMatchObject({ actorUserId: null, source: 'api' });
+  });
+
+  test('a caller that names an actor type inherits no identity with it', async () => {
+    await inScope({ accountId: ACCOUNT, actorUserId: USER, actorType: 'human' }, () =>
+      recordAuditEvent({ action: 'sandbox.stopped', resourceType: 'sandbox', actorType: 'system' }),
+    );
+    expect(auditRows[0]).toMatchObject({ actorType: 'system', actorUserId: null, accountId: ACCOUNT });
+  });
+
+  test('outside a request nothing is inherited', async () => {
+    await recordAuditEvent({ action: 'sweep.ran', resourceType: 'system' });
+    expect(auditRows[0]).toMatchObject({ actorType: 'system', actorUserId: null, source: 'api' });
+  });
+});
