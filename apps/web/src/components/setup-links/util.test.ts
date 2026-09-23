@@ -206,7 +206,14 @@ describe('partialSetupLinkKind', () => {
 
   test('says nothing while the URL could still be anything', () => {
     withWindowOrigin('https://kortix.com');
-    for (const partial of ['', 'h', 'https:/', 'https://kort', 'https://kortix.com/co', '/connect']) {
+    for (const partial of [
+      '',
+      'h',
+      'https:/',
+      'https://kort',
+      'https://kortix.com/co',
+      '/connect',
+    ]) {
       expect(partialSetupLinkKind(partial)).toBeNull();
     }
   });
