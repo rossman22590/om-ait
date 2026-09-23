@@ -517,6 +517,17 @@ export async function createOrJoinTeamsConversationSession(input: {
         activity_id: activity.id,
         // Frozen at start: a later `/policy` change applies to NEW sessions only.
         conversation_policy: normalizeConversationPolicy(selection?.conversationPolicy),
+        // The team a channel conversation lives in. Each turn gets it as
+        // MS_TEAMS_TEAM_GROUP_ID for that turn only; this is the durable
+        // record, so a channel session can be traced back to its team (Graph
+        // `/teams/{team}/channels/{channel}/…` needs the team id) after the
+        // activity is gone. Absent in a personal or group chat: no team.
+        ...(activity.channelData?.team?.aadGroupId
+          ? {
+              team_group_id: activity.channelData.team.aadGroupId,
+              ...(activity.channelData.team.name ? { team_name: activity.channelData.team.name } : {}),
+            }
+          : {}),
       },
     },
     extraEnvVars: buildTeamsTurnEnv(tenantId, activity),

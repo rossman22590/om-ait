@@ -410,6 +410,30 @@ describe('join policy on a follow-up', () => {
     const meta = created[0].metadata as { teams: { conversation_policy: string } };
     expect(meta.teams.conversation_policy).toBe('project_open');
   });
+
+  test('a channel session records its team', async () => {
+    // The turn env carries MS_TEAMS_TEAM_GROUP_ID for one turn only. Graph
+    // reads of the channel need the team id after that activity is gone.
+    existingThread = [];
+    await createOrJoinTeamsConversationSession({
+      projectId: PROJECT_ID,
+      tenantId: TENANT_ID,
+      conversationId: CONVERSATION_ID,
+      activity: { ...activity, channelData: { team: { id: '19:general@thread.tacv2', aadGroupId: 'group-1', name: 'Platform' } } },
+    });
+    expect((created[0].metadata as { teams: Record<string, unknown> }).teams).toMatchObject({
+      team_group_id: 'group-1',
+      team_name: 'Platform',
+    });
+  });
+
+  test('a personal or group chat session records no team', async () => {
+    existingThread = [];
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+    const teams = (created[0].metadata as { teams: Record<string, unknown> }).teams;
+    expect(teams).not.toHaveProperty('team_group_id');
+    expect(teams).not.toHaveProperty('team_name');
+  });
 });
 
 describe('a turn that died mid-flight does not wedge the conversation', () => {
