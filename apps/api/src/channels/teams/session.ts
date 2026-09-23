@@ -34,7 +34,7 @@ import {
   type TeamsActivity,
   type TeamsLiveTurn,
 } from './types';
-import { describeTeamsConversation, stripTeamsMentions } from './util';
+import { describeTeamsConversation, stripTeamsMentions, teamsMessageText } from './util';
 import { ensureTeamsThreadParticipant, normalizeConversationPolicy, rememberTeamsThreadOwner } from './participants';
 
 const defaultTeamsSessionLifecycle = {
@@ -700,7 +700,7 @@ function renderAttachments(activity: TeamsActivity): string[] {
 
 export function renderFollowUpPrompt(activity: TeamsActivity, imagesUnavailable = false): string {
   const user = activity.from?.name ?? activity.from?.id ?? 'unknown';
-  const text = stripTeamsMentions(activity.text ?? '');
+  const text = teamsMessageText(activity);
   return [
     `New message from ${user} in the same Teams conversation:`,
     '',
@@ -716,7 +716,7 @@ function renderAgentPrompt(activity: TeamsActivity, revived = false): string {
   const tenant = activity.conversation?.tenantId ?? activity.channelData?.tenant?.id ?? 'unknown';
   const conversation = activity.conversation?.id ?? '?';
   const user = activity.from?.name ?? activity.from?.id ?? 'unknown';
-  const text = stripTeamsMentions(activity.text ?? '');
+  const text = teamsMessageText(activity);
   return [
     ...(revived
       ? [
