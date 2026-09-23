@@ -26,6 +26,17 @@ export function shikiWasmAvailable(): boolean {
   return typeof WebAssembly !== 'undefined';
 }
 
+/**
+ * Is this href Streamdown's stand-in for a URL that has not arrived yet?
+ *
+ * While a message streams, Streamdown's `remend` closes a half-written link as
+ * `[label](streamdown:incomplete-link)` so the label renders before the URL is
+ * complete. That href is not a destination. It must never become an anchor.
+ */
+export function isStreamingLinkPlaceholder(href: string | undefined): boolean {
+  return !!href && /^streamdown:/i.test(href);
+}
+
 /** Same-origin link? Internal links route through next/link; the rest open externally. */
 export function isInternalUrl(href: string | undefined): boolean {
   if (!href) return false;

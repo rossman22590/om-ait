@@ -13,7 +13,11 @@ import {
   prepareMarkdownForKatex,
 } from '@/components/markdown/katex-markdown';
 import { MarkdownOrderedList } from '@/components/markdown/ordered-list';
-import { isInternalUrl, shouldUseNextLink } from '@/components/markdown/unified-markdown-utils';
+import {
+  isInternalUrl,
+  isStreamingLinkPlaceholder,
+  shouldUseNextLink,
+} from '@/components/markdown/unified-markdown-utils';
 import { SetupLinkButton } from '@/components/setup-links/setup-link-button';
 import { parseSetupLinkHref } from '@/components/setup-links/util';
 import { useSandboxProxy } from '@/hooks/use-sandbox-proxy';
@@ -23,6 +27,13 @@ import { autoLinkUrls } from '@kortix/shared';
 import Link from 'next/link';
 import React, { useCallback, useMemo } from 'react';
 import { Streamdown } from 'streamdown';
+
+const LINK_CLASS = cn(
+  'font-medium text-kortix-blue',
+  'underline decoration-kortix-blue/40 decoration-[1px] underline-offset-[3px]',
+  'transition-colors hover:decoration-kortix-blue',
+  '[overflow-wrap:anywhere]',
+);
 
 function handleHashClick(e: React.MouseEvent<HTMLAnchorElement>, href: string) {
   if (!href.startsWith('#')) return;
@@ -110,15 +121,15 @@ export const UnifiedMarkdown = React.memo<UnifiedMarkdownProps>(
             );
           }
 
+          // The URL is still streaming: show the label in link style, with
+          // nothing to click until the real href arrives.
+          if (isStreamingLinkPlaceholder(href)) {
+            return <span className={LINK_CLASS}>{children}</span>;
+          }
+
           const resolvedHref = proxy(href) ?? href ?? '#';
           const isHash = resolvedHref.startsWith('#');
           const isExternal = !isInternalUrl(resolvedHref);
-          const linkClass = cn(
-            'font-medium text-kortix-blue',
-            'underline decoration-kortix-blue/40 decoration-[1px] underline-offset-[3px]',
-            'transition-colors hover:decoration-kortix-blue',
-            '[overflow-wrap:anywhere]',
-          );
 
           // Markdown can contain arbitrary same-origin absolute URLs. Next.js
           // treats those as app routes and prefetches them, including typos such
@@ -128,7 +139,7 @@ export const UnifiedMarkdown = React.memo<UnifiedMarkdownProps>(
             return (
               <a
                 href={resolvedHref}
-                className={linkClass}
+                className={LINK_CLASS}
                 {...(isExternal && !isHash ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
               >
                 <InsideLinkContext.Provider value={true}>{children}</InsideLinkContext.Provider>
@@ -140,7 +151,7 @@ export const UnifiedMarkdown = React.memo<UnifiedMarkdownProps>(
             <Link
               href={resolvedHref}
               onClick={isHash ? (e) => handleHashClick(e, resolvedHref) : undefined}
-              className={linkClass}
+              className={LINK_CLASS}
               {...(isExternal && !isHash ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
             >
               <InsideLinkContext.Provider value={true}>{children}</InsideLinkContext.Provider>

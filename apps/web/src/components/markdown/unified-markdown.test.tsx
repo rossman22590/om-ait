@@ -214,3 +214,39 @@ describe('UnifiedMarkdown code fence inside a list', () => {
     expect(html).toContain('docs/readme.md — Click to preview');
   });
 });
+
+// ─── A link whose URL is still streaming ────────────────────────────────────
+// While a turn streams, Streamdown runs `remend` over the text and closes a
+// half-written link as `[label](streamdown:incomplete-link)`. Our sanitize
+// schema is GitHub's, which allows only http(s)/mailto/irc/xmpp hrefs, so it
+// stripped that href and rehype-harden then rendered the link as
+// `label [blocked]` until the closing paren arrived. The static render below is
+// exactly what one streaming block renders: `remend` output, parsed.
+// ────────────────────────────────────────────────────────────────────────────
+
+const INCOMPLETE_LINK_MD = '[Connect Outlook](streamdown:incomplete-link)';
+
+describe('UnifiedMarkdown — a link whose URL is still streaming', () => {
+  test('shows the label, never "[blocked]"', () => {
+    const html = renderToStaticMarkup(withIntl(<UnifiedMarkdown content={INCOMPLETE_LINK_MD} />));
+
+    expect(visibleText(html)).toBe('Connect Outlook');
+    expect(html).not.toContain('Blocked URL');
+  });
+
+  test('is not a link yet: no anchor, no placeholder href', () => {
+    const html = renderToStaticMarkup(withIntl(<UnifiedMarkdown content={INCOMPLETE_LINK_MD} />));
+
+    expect(html).not.toContain('<a');
+    expect(html).not.toContain('streamdown:');
+  });
+
+  test('a disallowed protocol stays blocked', () => {
+    const html = renderToStaticMarkup(
+      withIntl(<UnifiedMarkdown content="[run](javascript:alert(1))" />),
+    );
+
+    expect(html).not.toContain('javascript:');
+    expect(html).not.toContain('<a');
+  });
+});

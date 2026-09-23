@@ -5,6 +5,7 @@ import {
   LANGUAGE_ALIASES,
   isInternalUrl,
   isLinkSafeHref,
+  isStreamingLinkPlaceholder,
   languageLabel,
   looksLikeFilePath,
   looksLikeUrl,
@@ -30,6 +31,21 @@ describe('isInternalUrl', () => {
     expect(isInternalUrl(undefined)).toBe(false);
     expect(isInternalUrl('')).toBe(false);
     expect(isInternalUrl('relative/path')).toBe(false);
+  });
+});
+
+describe('isStreamingLinkPlaceholder', () => {
+  test("recognises remend's stand-in for a URL that has not arrived", () => {
+    expect(isStreamingLinkPlaceholder('streamdown:incomplete-link')).toBe(true);
+    expect(isStreamingLinkPlaceholder('STREAMDOWN:incomplete-link')).toBe(true);
+  });
+
+  test('real destinations are not placeholders', () => {
+    expect(isStreamingLinkPlaceholder(undefined)).toBe(false);
+    expect(isStreamingLinkPlaceholder('')).toBe(false);
+    expect(isStreamingLinkPlaceholder('https://kortix.com/streamdown:x')).toBe(false);
+    expect(isStreamingLinkPlaceholder('#streamdown')).toBe(false);
+    expect(isStreamingLinkPlaceholder('/connect/ksl_abc')).toBe(false);
   });
 });
 
