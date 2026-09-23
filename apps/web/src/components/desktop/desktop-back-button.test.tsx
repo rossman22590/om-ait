@@ -164,7 +164,8 @@ describe('only the desktop shell shows Back', () => {
   // web-drawn window controls on Win/Linux. On desktop it drops below the band.
   test('a band row sits below the title-bar band on desktop', () => {
     const row = css.match(/html\[data-desktop='true'\]\s+\.kx-desktop-band-row\s*\{([^}]*)\}/);
-    expect(row?.[1]).toMatch(/top:\s*calc\(\s*var\(--kx-titlebar-inset\)/);
+    expect(row?.[1]).toMatch(/top:\s*max\(\s*calc\(\s*var\(--kx-titlebar-inset\)/);
+    expect(row?.[1]).toContain('var(--kx-titlebar-control-top) + var(--kx-titlebar-control-size)');
     // Below the band there is nothing to indent past: the row keeps its padding.
     expect(row?.[1]).not.toMatch(/padding/);
     expect(unlayered(row!.index!)).toBe(true);
