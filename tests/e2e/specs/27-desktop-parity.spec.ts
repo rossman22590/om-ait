@@ -1087,6 +1087,193 @@ for (const runtime of runtimes) {
 const nativeBrowserTest =
   process.env.E2E_DESKTOP_NATIVE === "1" ? browserTest : null;
 nativeBrowserTest?.(
+  "27 — desktop parity guards reload, Home, close, and quit with an unsaved agent draft",
+  async ({ baseURL }) => {
+    browserTest.setTimeout(180_000);
+    const databaseUrl =
+      process.env.KE2E_DATABASE_URL || process.env.E2E_DATABASE_URL;
+    if (!databaseUrl)
+      throw new Error("Desktop unsaved-edit test requires the test database");
+    const profile = await mkdtemp(join(tmpdir(), "kortix-desktop-unsaved-"));
+    const email = `e2e-desktop-unsaved-${randomUUID()}@example.test`;
+    const user = await createAuthUser(email, authOptions);
+    const session = await signIn(email, authOptions);
+    let project: ManifestProject | undefined;
+    let app: ElectronApplication | undefined;
+    try {
+      const accounts = await api<{ account_id: string }[]>(
+        session.access_token,
+        "GET",
+        "/accounts",
+      );
+      project = await createManifestProject({
+        api,
+        accessToken: session.access_token,
+        accountId: accounts[0].account_id,
+        userId: user.id,
+        name: "Desktop unsaved draft",
+        databaseUrl,
+      });
+      app = await launchDesktop(baseURL!, profile);
+      const main = app
+        .windows()
+        .find((window) => window.url().startsWith(baseURL!));
+      if (!main) throw new Error("native main window not found");
+      // Electron answers the native unload prompt. Prevent Playwright from
+      // dismissing a Chromium dialog that Electron already consumed.
+      main.on("dialog", () => {});
+      const agentUrl = `${baseURL}/projects/${project.id}/customize/agents/kortix`;
+      await installBrowserSessionDirect(main, session, agentUrl, authOptions);
+      await selectAccountForUi(main, accounts[0].account_id);
+      await dismissOnboarding(main);
+      await main.goto(agentUrl);
+      const description = main.getByRole("textbox", { name: /Description/i });
+      await expect(description).toBeVisible({ timeout: 60_000 });
+      const original = await description.inputValue();
+      const draft = `${original} Unsaved desktop draft`;
+
+      await app.evaluate(({ dialog }) => {
+        const state = {
+          original: dialog.showMessageBoxSync,
+          response: 1,
+          calls: [] as string[],
+        };
+        const shared = globalThis as typeof globalThis & {
+          __kortixUnloadProbe?: typeof state;
+        };
+        shared.__kortixUnloadProbe = state;
+        dialog.showMessageBoxSync = (...args) => {
+          const options = args.at(-1) as { message: string };
+          state.calls.push(options.message);
+          return state.response;
+        };
+      });
+      const setResponse = (response: number) =>
+        app!.evaluate((_, next) => {
+          const shared = globalThis as typeof globalThis & {
+            __kortixUnloadProbe?: { response: number };
+          };
+          if (!shared.__kortixUnloadProbe)
+            throw new Error("unload probe missing");
+          shared.__kortixUnloadProbe.response = next;
+        }, response);
+      const calls = () =>
+        app!.evaluate(() => {
+          const shared = globalThis as typeof globalThis & {
+            __kortixUnloadProbe?: { calls: string[] };
+          };
+          return shared.__kortixUnloadProbe?.calls ?? [];
+        });
+      const agentState = () =>
+        app!.evaluate(async ({ BrowserWindow }, origin) => {
+          const window = BrowserWindow.getAllWindows().find((candidate) =>
+            candidate.webContents.getURL().startsWith(origin),
+          );
+          if (!window) throw new Error("main window not found");
+          return {
+            url: window.webContents.getURL(),
+            description: await window.webContents.executeJavaScript(
+              "document.querySelector('textarea[aria-label=\"Description\"]')?.value ?? null",
+            ),
+          };
+        }, baseURL!);
+
+      await description.fill(draft);
+      await expect(
+        main.getByRole("button", { name: /Save/i }).last(),
+      ).toBeVisible();
+      await main.keyboard.press("Meta+R");
+      await expect.poll(async () => (await calls()).length).toBe(1);
+      expect(await calls()).toEqual(["Leave this page?"]);
+      await expect
+        .poll(agentState)
+        .toEqual({ url: agentUrl, description: draft });
+
+      await setResponse(0);
+      await main.keyboard.press("Meta+R");
+      await expect.poll(async () => (await calls()).length).toBe(2);
+      await expect(description).toHaveValue(original, { timeout: 60_000 });
+      await expect(
+        main.getByRole("button", { name: /Save/i }).last(),
+      ).toBeHidden();
+
+      await Promise.all([
+        main.waitForEvent("domcontentloaded"),
+        main.keyboard.press("Meta+R"),
+      ]);
+      await expect(description).toHaveValue(original);
+      expect(await calls()).toHaveLength(2);
+
+      await description.fill(draft);
+      await setResponse(1);
+      const goHome = () =>
+        app!.evaluate(({ BrowserWindow, Menu }) => {
+          const item = Menu.getApplicationMenu()?.getMenuItemById("kx-go-home");
+          const window = BrowserWindow.getAllWindows()[0];
+          if (!item || !window) throw new Error("Home menu unavailable");
+          item.click(undefined, window, undefined);
+        });
+      await goHome();
+      await expect.poll(async () => (await calls()).length).toBe(3);
+      await expect
+        .poll(agentState)
+        .toEqual({ url: agentUrl, description: draft });
+      await setResponse(0);
+      await goHome();
+      await expect.poll(async () => (await calls()).length).toBe(4);
+      await expect
+        .poll(() => new URL(main.url()).pathname, { timeout: 60_000 })
+        .toMatch(/^\/projects(?:\/[a-z0-9-]+)?$/);
+
+      await main.goto(agentUrl);
+      await expect(description).toBeVisible({ timeout: 60_000 });
+      await description.fill(draft);
+      await setResponse(1);
+      await app.evaluate(({ app }) => {
+        setImmediate(() => app.quit());
+      });
+      await expect.poll(async () => (await calls()).length).toBe(5);
+      expect(main.isClosed()).toBe(false);
+      await expect
+        .poll(agentState)
+        .toEqual({ url: agentUrl, description: draft });
+      const closeWindow = () =>
+        app!.evaluate(({ BrowserWindow }, origin) => {
+          const window = BrowserWindow.getAllWindows().find((candidate) =>
+            candidate.webContents.getURL().startsWith(origin),
+          );
+          if (!window) throw new Error("main window not found");
+          setImmediate(() => window.close());
+        }, baseURL!);
+      await setResponse(1);
+      await closeWindow();
+      await expect.poll(async () => (await calls()).length).toBe(6);
+      expect(main.isClosed()).toBe(false);
+      await expect
+        .poll(agentState)
+        .toEqual({ url: agentUrl, description: draft });
+      await setResponse(0);
+      await closeWindow();
+      await expect.poll(async () => (await calls()).length).toBe(7);
+      await expect.poll(() => main.isClosed()).toBe(true);
+    } finally {
+      if (app) {
+        await app.evaluate(() => {
+          const shared = globalThis as typeof globalThis & {
+            __kortixUnloadProbe?: { response: number };
+          };
+          if (shared.__kortixUnloadProbe)
+            shared.__kortixUnloadProbe.response = 0;
+        });
+        await app.close();
+      }
+      await project?.dispose();
+      await deleteAuthUser(user.id, authOptions);
+      await rm(profile, { recursive: true, force: true });
+    }
+  },
+);
+nativeBrowserTest?.(
   "27 — desktop parity clears native controls on Apps, Files, account hub, and admin",
   async ({ baseURL }) => {
     browserTest.setTimeout(180_000);
@@ -1130,9 +1317,8 @@ nativeBrowserTest?.(
       await dismissOnboarding(main);
       const nativeWindow = await app.browserWindow(main);
       await nativeWindow.evaluate((window) => window.setContentSize(1100, 700));
-      const zoom = await nativeWindow.evaluate((window) =>
-        window.webContents.getZoomFactor(),
-      );
+      const currentZoom = () =>
+        nativeWindow.evaluate((window) => window.webContents.getZoomFactor());
       await main.getByRole("button", { name: "Collapse sidebar" }).click();
 
       for (const route of ["apps", "files"] as const) {
@@ -1140,11 +1326,25 @@ nativeBrowserTest?.(
         const row = main.locator(".kx-titlebar-row").first();
         await expect(row).toBeVisible({ timeout: 60_000 });
         await expect(row).toHaveAttribute("data-sidebar-collapsed", "true");
-        const rowBox = (await row.boundingBox())!;
-        expect((rowBox.y + rowBox.height / 2) * zoom).toBeCloseTo(20, 0);
+        await expect
+          .poll(
+            async () => {
+              const box = (await row.boundingBox())!;
+              return (box.y + box.height / 2) * (await currentZoom());
+            },
+            { timeout: 15_000 },
+          )
+          .toBeCloseTo(20, 0);
         if (route === "apps") {
-          const titleBox = (await row.locator("h1").boundingBox())!;
-          expect((titleBox.y + titleBox.height / 2) * zoom).toBeCloseTo(20, 0);
+          await expect
+            .poll(
+              async () => {
+                const box = (await row.locator("h1").boundingBox())!;
+                return (box.y + box.height / 2) * (await currentZoom());
+              },
+              { timeout: 15_000 },
+            )
+            .toBeCloseTo(20, 0);
         }
         const dragRegion = await row.evaluate((element) => {
           const rect = element.getBoundingClientRect();
@@ -1212,7 +1412,7 @@ nativeBrowserTest?.(
       const spacer = hub.locator(".kx-titlebar-spacer");
       await expect(spacer).toBeVisible();
       const spacerBox = (await spacer.boundingBox())!;
-      expect(spacerBox.height * zoom).toBeCloseTo(40, 1);
+      expect(spacerBox.height * (await currentZoom())).toBeCloseTo(40, 1);
       const firstControl = hub.locator("header button,header a").first();
       await expect(firstControl).toBeVisible();
       expect((await firstControl.boundingBox())!.y).toBeGreaterThanOrEqual(
@@ -1243,8 +1443,12 @@ nativeBrowserTest?.(
       const adminToggle = adminRow.getByRole("button").first();
       await expect(adminToggle).toBeVisible();
       const toggleBox = (await adminToggle.boundingBox())!;
-      expect(toggleBox.x * zoom).toBeGreaterThanOrEqual(72);
-      expect((toggleBox.y + toggleBox.height / 2) * zoom).toBeCloseTo(20, 0);
+      const adminZoom = await currentZoom();
+      expect(toggleBox.x * adminZoom).toBeGreaterThanOrEqual(72);
+      expect((toggleBox.y + toggleBox.height / 2) * adminZoom).toBeCloseTo(
+        20,
+        0,
+      );
     } finally {
       if (adminRoleGranted)
         await runDatabaseSql(
