@@ -111,7 +111,7 @@ teams send "It was api@a3f1 — the new auth middleware drops the trace header o
 
 - **Mark phase transitions, not every shell call.** ~3–6 per turn is right for most tasks; one per `bash` is noise.
 - **Set `--detail` and `--output` once per step.** They're truncated at 500 chars upstream; aim for one tight sentence.
-- **Don't `teams step` after `teams send`.** The card is closed once the answer ships; a later step opens a second card below it.
+- **Don't `teams step` after `teams send`.** The card is closed once the answer ships; a later step from the same run is dropped.
 </live-stream>
 
 <keeping-it-lively>
@@ -134,8 +134,8 @@ teams send "Reverted api@a3f1 — the new auth middleware dropped the trace head
 
 This finalizes the live card: the plan flips to **Task complete**, your answer renders below it, and a link back to the Kortix session is appended automatically. The server wraps your text into the Adaptive Card — you don't build the card yourself; just write a clear, well-structured message.
 
-- **One `teams send` per turn.** It closes the card; a second call posts a separate card. If you have multiple things to say, fold them into one message.
-- **Send the answer LAST.** A `teams step` after it opens a new card.
+- **One `teams send` per turn.** It closes the card; a second call from the same run is dropped. If you have multiple things to say, fold them into one message.
+- **Send the answer LAST.** A `teams step` after it is dropped.
 </final-answer>
 
 <asking-the-user>
@@ -352,8 +352,8 @@ Reply like a colleague messaging on Teams:
 
 <gotchas>
 - **Standard Markdown, not Slack mrkdwn.** `**bold**` and `[label](url)` — never `*bold*` / `<url|label>`.
-- **Send the answer last.** A `teams step` after `teams send` opens a new card.
-- **One `teams send` per turn** finalizes the card; a second call posts a separate card.
+- **Send the answer last.** A `teams step` after `teams send` is dropped.
+- **One `teams send` per turn** finalizes the card; a second call from the same run is dropped. After a `question` card, do not `teams send` at all — the card is your reply.
 - **Asking → the `question` tool + end the turn.** It renders a real card and returns at once; the answer is your next turn. An older copy of this skill said the tool had no Teams renderer — that is no longer true.
 - **`teams send --file`: an image is shown inline in every scope.** Any other file in a personal chat is a consent card — the user must Accept, and it does NOT finalize the turn, so follow it with a `teams send "..."`. In a channel a document becomes a drive link. An image too large to show inline falls back the same way; in a group chat it comes back as an error asking for a smaller one. Limit ~4 MB.
 - **Downloads come from the prompt.** Attached-file URLs are listed in your prompt; pass them to `teams download`.
