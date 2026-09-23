@@ -5,8 +5,11 @@ const SESSION_ID = 'sess-asking';
 let turn: Record<string, unknown> | null = null;
 const finalized: Array<Record<string, unknown>> = [];
 const deleted: string[] = [];
+/** The conversation the session still owns, for a prompt with no card of its own. */
+let ownedRef: Record<string, unknown> | null = null;
 mock.module('../channels/teams/turn', () => ({
   loadTurn: async () => turn,
+  conversationRefForSession: async () => ownedRef,
   finalizeTurn: async (_h: unknown, opts: Record<string, unknown>) => {
     finalized.push(opts);
   },
@@ -46,6 +49,7 @@ beforeEach(() => {
   texts.length = 0;
   cardPosted = null;
   cardOk = true;
+  ownedRef = null;
 });
 
 afterEach(() => {
@@ -106,7 +110,7 @@ describe('postTeamsQuestion', () => {
     expect(res.answers?.[0][0]).toContain('finish this turn now');
   });
 
-  test('no live turn is an error, not a silent drop', async () => {
+  test('no live turn and no conversation is an error, not a silent drop', async () => {
     turn = null;
     const { postTeamsQuestion } = await load();
 
@@ -114,6 +118,23 @@ describe('postTeamsQuestion', () => {
 
     expect(res.ok).toBe(false);
     expect(res.error).toContain('No active Teams turn');
+    expect(finalized).toEqual([]);
+  });
+
+  test('a prompt with no card of its own still asks in the conversation it owns', async () => {
+    // A message sent while another run was going, or a queued start, runs
+    // with no live card. Its question used to be dropped as "no turn".
+    turn = null;
+    ownedRef = { serviceUrl: 'https://smba.trafficmanager.net/emea/', conversationId: 'a:1FQy', tenantId: 'tenant-1', projectId: 'proj-1' };
+    const { postTeamsQuestion } = await load();
+
+    const res = await postTeamsQuestion(SESSION_ID, [
+      { question: 'Deploy to prod?', options: [{ label: 'Yes' }, { label: 'No' }] },
+    ] as never);
+
+    expect(res.ok).toBe(true);
+    expect(JSON.stringify(cardPosted)).toContain('Deploy to prod?');
+    // No card of its own, so nothing to close.
     expect(finalized).toEqual([]);
   });
 });

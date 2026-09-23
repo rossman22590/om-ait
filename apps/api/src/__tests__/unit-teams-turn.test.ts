@@ -34,9 +34,11 @@ mock.module('../channels/teams-api', () => ({
 
 mock.module('../config', () => ({ config: { FRONTEND_URL: 'https://app', MICROSOFT_APP_ID: 'x' } }));
 mock.module('../channels/slack/util', () => ({ sessionWebUrl: () => 'https://app/session' }));
+let knownServiceUrl: string | null = 'https://smba/';
 mock.module('../channels/install-store', () => ({
   saveTeamsServiceUrl: async () => {},
   loadTeamsTenantForProject: async () => 'tenant-1',
+  loadTeamsServiceUrlForProject: async () => knownServiceUrl,
 }));
 
 let dbResults: unknown[][] = [];
@@ -44,7 +46,7 @@ let dbWrites: Array<{ op: string; payload?: unknown }> = [];
 
 function makeChain(op: string): any {
   const chain: any = {};
-  for (const m of ['from', 'where', 'limit', 'onConflictDoUpdate', 'returning']) chain[m] = () => chain;
+  for (const m of ['from', 'where', 'limit', 'onConflictDoUpdate', 'onConflictDoNothing', 'returning']) chain[m] = () => chain;
   chain.values = (payload: unknown) => {
     dbWrites.push({ op: `${op}.values`, payload });
     return chain;
@@ -72,7 +74,19 @@ mock.module('../shared/db', () => ({
   hasDatabase: () => true,
 }));
 
-const { relayTurnAnswer, relayTurnEnd, relayTurnStep } = await import('../channels/teams/turn');
+let runtimeLive = false;
+mock.module('../projects/session-lifecycle/inbox-admission', () => ({
+  sessionHoldsLiveTurn: async () => runtimeLive,
+}));
+const aborted: string[] = [];
+mock.module('../projects/session-lifecycle/abort-runtime-turn', () => ({
+  abortRuntimeTurn: async (id: string) => {
+    aborted.push(id);
+    return true;
+  },
+}));
+
+const { relayTurnAnswer, relayTurnEnd, relayTurnStep, sweepStaleTeamsTurns } = await import('../channels/teams/turn');
 
 function streamRow(over: Record<string, unknown> = {}) {
   return {
@@ -98,6 +112,100 @@ beforeEach(() => {
   dbResults = [];
   nextActivityId = 'act-1';
   updateAccepts = [];
+  knownServiceUrl = 'https://smba/';
+  runtimeLive = false;
+  aborted.length = 0;
+});
+
+// Thirty minutes without a step is not proof of a dead run: a build or a test
+// suite posts nothing while it works. The sweep closed the card AND aborted
+// the runtime turn on that silence alone, killing healthy work.
+describe('the stale-turn sweep', () => {
+  const staleRow = () => streamRow({ messageTs: 'act-1', updatedAt: new Date(Date.now() - 31 * 60 * 1000) });
+
+  test('a run the runtime still holds keeps its card and is not aborted', async () => {
+    runtimeLive = true;
+    dbResults = [[staleRow()], []];
+
+    await sweepStaleTeamsTurns();
+
+    expect(apiCalls).toHaveLength(0);
+    expect(aborted).toEqual([]);
+    // Touched, so it is not reconsidered on every tick.
+    expect(dbWrites.some((w) => w.op === 'update.set' && 'updatedAt' in (w.payload as object))).toBe(true);
+    expect(dbWrites.some((w) => w.op === 'delete')).toBe(false);
+  });
+
+  test('a run the runtime no longer holds is closed, and its runtime turn aborted', async () => {
+    runtimeLive = false;
+    dbResults = [[staleRow()], [{ sessionId: 'sess-1' }], []];
+
+    await sweepStaleTeamsTurns();
+
+    expect(apiCalls.map((c) => c.fn)).toEqual(['updateCard']);
+    expect(JSON.stringify(cardOf(apiCalls[0]))).toContain('This run ended without a reply.');
+    expect(aborted).toEqual(['sess-1']);
+  });
+});
+
+// A card is opened by the Teams message that starts a prompt. A prompt that
+// runs without one — a message sent while another run was going, a queued
+// start, a turn the sweeper closed mid-work — used to have its steps and its
+// answer dropped as "no open turn", and the CLI told the agent to stop.
+describe('work that arrives with no card', () => {
+  const owned = [{ projectId: 'proj-1', tenantId: 'tenant-1', conversationId: 'conv-1' }];
+
+  test('a step opens a new live card in the conversation the session owns', async () => {
+    dbResults = [[], owned, [{ sessionId: 'sess-1' }], []];
+
+    expect(await relayTurnStep('sess-1', 'Reading the logs')).toBe(true);
+
+    expect(apiCalls.map((c) => c.fn)).toEqual(['sendCard']);
+    expect(JSON.stringify(apiCalls[0]!.args[1])).toContain('Reading the logs');
+    expect((apiCalls[0]!.args[0] as { conversationId: string }).conversationId).toBe('conv-1');
+    const opened = dbWrites.find((w) => w.op === 'insert.values')?.payload as { sessionId?: string; messageTs?: unknown };
+    expect(opened?.sessionId).toBe('sess-1');
+  });
+
+  test('an answer is delivered as its own card', async () => {
+    dbResults = [[], owned, [{ sessionId: 'sess-1' }], [{ sessionId: 'sess-1' }], []];
+
+    expect(await relayTurnAnswer('sess-1', 'The queued task is done.')).toBe(true);
+
+    const sent = apiCalls.find((c) => c.fn === 'sendCard');
+    expect(JSON.stringify(sent?.args[1])).toContain('The queued task is done.');
+  });
+
+  test('a session its conversation no longer maps to posts nothing', async () => {
+    // After `/new` the old session must not post into the chat that left it.
+    dbResults = [[], []];
+
+    expect(await relayTurnStep('sess-old', 'Late step')).toBe(false);
+    expect(await relayTurnAnswer('sess-old', 'Late answer')).toBe(false);
+    expect(apiCalls).toHaveLength(0);
+  });
+
+  test('no service URL on record: nothing is opened', async () => {
+    knownServiceUrl = null;
+    dbResults = [[], owned];
+
+    expect(await relayTurnStep('sess-1', 'Step')).toBe(false);
+    expect(apiCalls).toHaveLength(0);
+  });
+
+  test('a turn being closed right now is not reopened under it', async () => {
+    dbResults = [[streamRow({ messageTs: 'act-1', finalized: true })]];
+
+    expect(await relayTurnStep('sess-1', 'Step after send')).toBe(false);
+    expect(apiCalls).toHaveLength(0);
+  });
+
+  test('the end of a turn never opens a card', async () => {
+    dbResults = [[]];
+
+    expect(await relayTurnEnd('sess-1', 'idle')).toBe(false);
+    expect(apiCalls).toHaveLength(0);
+  });
 });
 
 const { TEAMS_CARD_BUDGET_BYTES, TRUNCATION_NOTE, cardBytes } = await import('../channels/teams/cards');

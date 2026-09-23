@@ -1,12 +1,12 @@
 import { and, eq, lt, sql } from 'drizzle-orm';
-import { chatTurnStreams } from '@kortix/db';
+import { chatThreads, chatTurnStreams } from '@kortix/db';
 import { db } from '../../shared/db';
 import { config } from '../../config';
 import { classifyTurnError, type TurnErrorInfo } from '../slack/errors';
 import { sessionWebUrl } from '../slack/util';
 import type { StreamTaskChunk } from '../slack-api';
 import { sendCard, sendText, updateCard } from '../teams-api';
-import { saveTeamsServiceUrl } from '../install-store';
+import { loadTeamsServiceUrlForProject, saveTeamsServiceUrl } from '../install-store';
 import { TRUNCATION_NOTE, buildAnswerCard, buildFinalCard, buildNoticeCard, buildPlanCard, fitBodyToCard } from './cards';
 import { mrkdwnToTeamsMarkdown } from './markdown';
 import { STREAM_TTL_MS, STALE_AFTER_MS } from './app';
@@ -204,6 +204,87 @@ export async function showStopOnLiveCard(handle: TeamsLiveTurn | null): Promise<
   }
 }
 
+/**
+ * The conversation a session still owns, as a reference the bot can post to.
+ * Null when the conversation was detached from it (`/new`) or the project has
+ * no service URL on record yet.
+ */
+export async function conversationRefForSession(sessionId: string): Promise<TeamsConversationRef | null> {
+  if (!sessionId) return null;
+  const [thread] = await db
+    .select({
+      projectId: chatThreads.projectId,
+      tenantId: chatThreads.workspaceId,
+      conversationId: chatThreads.threadId,
+    })
+    .from(chatThreads)
+    .where(and(eq(chatThreads.platform, 'teams'), eq(chatThreads.sessionId, sessionId)))
+    .limit(1);
+  if (!thread) return null;
+  const serviceUrl = await loadTeamsServiceUrlForProject(thread.projectId);
+  if (!serviceUrl) return null;
+  return { serviceUrl, conversationId: thread.conversationId, tenantId: thread.tenantId, projectId: thread.projectId };
+}
+
+/**
+ * Open a new turn for a session whose work is arriving with no card to land
+ * in.
+ *
+ * A card is opened by the Teams message that starts a prompt. Some prompts run
+ * without one: a message sent while another run was going (its card became
+ * "I'll take this after the current step"), a start that was queued (its card
+ * said so and closed), a turn the sweeper closed while the agent was still
+ * working. Their `teams step` and `teams send` found no turn, the CLI told the
+ * agent the turn was over, and the reply never reached Teams at all. Slack's
+ * agent recovers by posting with `--channel/--thread`; Teams had no path.
+ *
+ * The new row carries no card yet: the first step posts the live card and an
+ * answer posts an answer card, exactly as for a turn opened by a message. Only
+ * a session that still owns its conversation qualifies — after `/new` the old
+ * session must not post into the chat that left it. Two relays racing here
+ * share one row: the insert does nothing if a turn already exists.
+ */
+export async function reopenTurn(sessionId: string): Promise<TeamsLiveTurn | null> {
+  const ref = await conversationRefForSession(sessionId);
+  if (!ref) return null;
+  const now = Date.now();
+  const handle: TeamsLiveTurn = {
+    conversationId: ref.conversationId,
+    tenantId: ref.tenantId ?? '',
+    serviceUrl: ref.serviceUrl,
+    triggerActivityId: `reopened-${now}`,
+    messageActivityId: '',
+    steps: [],
+    expiry: now + STREAM_TTL_MS,
+    finalized: false,
+    projectId: ref.projectId ?? '',
+    sessionId,
+    originatingActivity: {} as TeamsActivity,
+  };
+  const channelRef: TeamsChannelRef = { platform: 'teams', serviceUrl: ref.serviceUrl, conversationId: ref.conversationId };
+  const inserted = await db
+    .insert(chatTurnStreams)
+    .values({
+      sessionId,
+      projectId: handle.projectId,
+      teamId: handle.tenantId,
+      channel: handle.conversationId,
+      triggerTs: handle.triggerActivityId,
+      messageTs: null,
+      finalized: false,
+      steps: [],
+      originatingEvent: {},
+      channelRef: channelRef as unknown,
+      expiresAt: new Date(handle.expiry),
+      updatedAt: new Date(now),
+    } as typeof chatTurnStreams.$inferInsert)
+    .onConflictDoNothing({ target: chatTurnStreams.sessionId })
+    .returning({ sessionId: chatTurnStreams.sessionId });
+  if (inserted.length === 0) return loadTurn(sessionId);
+  console.info('[teams-webhook] opened a turn for work that had no card', { sessionId });
+  return handle;
+}
+
 export async function relayTurnStep(
   sessionId: string,
   title: string,
@@ -213,7 +294,9 @@ export async function relayTurnStep(
     sourcesForPrev?: Array<{ url: string; text: string }>;
   } = {},
 ): Promise<boolean> {
-  const handle = await loadTurn(sessionId);
+  // No row at all: this prompt started without a card. A FINALIZED row is a
+  // turn being closed right now, and must not be reopened under it.
+  const handle = (await loadTurn(sessionId)) ?? (await reopenTurn(sessionId));
   if (!handle || handle.finalized) {
     if (!handle) {
       console.warn('[teams-webhook] turn-stream step dropped — no open turn for session', {
@@ -275,7 +358,7 @@ export async function relayTurnAnswer(
   text: string,
   card?: Record<string, unknown>,
 ): Promise<boolean> {
-  const handle = await loadTurn(sessionId);
+  const handle = (await loadTurn(sessionId)) ?? (await reopenTurn(sessionId));
   if (!handle || handle.finalized) return false;
   if (!(await claimFinalize(sessionId))) return false;
   await finalizeTurn(handle, { answer: text, card });
@@ -434,32 +517,58 @@ export async function persistServiceUrl(projectId: string, serviceUrl?: string):
   });
 }
 
-setInterval(() => {
-  void (async () => {
-    try {
-      const cutoff = new Date(Date.now() - STALE_AFTER_MS);
-      const stale = await db
-        .select()
-        .from(chatTurnStreams)
-        .where(
-          and(
-            eq(chatTurnStreams.finalized, false),
-            lt(chatTurnStreams.updatedAt, cutoff),
-            sql`${chatTurnStreams.channelRef}->>'platform' = 'teams'`,
-          ),
-        )
-        .limit(50);
-      for (const row of stale) {
-        if (!(await claimFinalize(row.sessionId))) continue;
-        await finalizeTurn(rowToHandle(row), { error: '_This run ended without a reply._' });
-        await deleteTurn(row.sessionId);
-        await abortDeadRuntimeTurn(row.sessionId);
-      }
-    } catch (err) {
-      console.warn('[teams-webhook] gc tick failed', err);
+/** One pass of the stale-turn sweep. Exported for tests; the interval below runs it. */
+export async function sweepStaleTeamsTurns(): Promise<void> {
+  const cutoff = new Date(Date.now() - STALE_AFTER_MS);
+  const stale = await db
+    .select()
+    .from(chatTurnStreams)
+    .where(
+      and(
+        eq(chatTurnStreams.finalized, false),
+        lt(chatTurnStreams.updatedAt, cutoff),
+        sql`${chatTurnStreams.channelRef}->>'platform' = 'teams'`,
+      ),
+    )
+    .limit(50);
+  for (const row of stale) {
+    // Thirty minutes without a step is not proof of a dead run: one long
+    // command posts nothing while it works. This used to close the card
+    // AND abort the runtime turn, killing healthy work. The runtime's own
+    // turn ledger decides; a live run keeps its card, touched so it is not
+    // reconsidered for another 30 minutes.
+    if (await runtimeStillWorking(row.sessionId)) {
+      await db
+        .update(chatTurnStreams)
+        .set({ updatedAt: new Date() })
+        .where(and(eq(chatTurnStreams.sessionId, row.sessionId), eq(chatTurnStreams.finalized, false)));
+      continue;
     }
-  })();
+    if (!(await claimFinalize(row.sessionId))) continue;
+    await finalizeTurn(rowToHandle(row), { error: '_This run ended without a reply._' });
+    await deleteTurn(row.sessionId);
+    await abortDeadRuntimeTurn(row.sessionId);
+  }
+}
+
+setInterval(() => {
+  sweepStaleTeamsTurns().catch((err) => console.warn('[teams-webhook] gc tick failed', err));
 }, 5 * 60 * 1000).unref();
+
+/**
+ * Does the runtime's turn ledger still hold a live turn for this session?
+ * Unknown counts as no: a sweep that cannot tell must still clear a card
+ * that would otherwise swallow the conversation. Imported lazily for the
+ * same reason as the abort below.
+ */
+async function runtimeStillWorking(sessionId: string): Promise<boolean> {
+  try {
+    const { sessionHoldsLiveTurn } = await import('../../projects/session-lifecycle/inbox-admission');
+    return await sessionHoldsLiveTurn(sessionId);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Closing the card is not ending the run. A turn this sweep reaps has been
