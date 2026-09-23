@@ -33,10 +33,11 @@ const { openInstanceChooser, focusInstanceChooser } = require('./instance-choose
 const { explainNetError, hostOf, normalizeInstanceUrl } = require('./instance-rules');
 const { createInstanceStore } = require('./instance-store');
 const { isConfiguredAppUrl, isTrustedAppSender } = require('./native-sender');
+const { isAppPath, isPreviewHost } = require('./nav-rules');
+const { rendererGoneNeedsRecovery } = require('./renderer-recovery');
 const {
   NAVIGATION_SHORTCUTS,
   historyTarget,
-  isAppPath,
 } = require('./navigation');
 const {
   DESKTOP_CHROME_JS,
@@ -157,17 +158,8 @@ function writeMaximized(maximized) {
 
 /* ─── Navigation gate (port of lib.rs) ───────────────────────────────────── */
 
-// Sandbox previews / tunnels — user content, always in-app.
-function isPreviewHost(host) {
-  return (
-    host.endsWith('.localhost') ||
-    host === 'kortix.cloud' ||
-    host.endsWith('.kortix.cloud')
-  );
-}
-
-// Product + auth route prefixes live in navigation.js (APP_PATH_PREFIXES); its
-// test fails when they miss a route the web middleware allows on desktop.
+// `isPreviewHost` and `isAppPath` live in nav-rules.js, where a test keeps the
+// route list equal to the web middleware's DESKTOP_ALLOWED_ROUTES.
 /**
  * Should `urlStr` render inside the desktop window? (Top-frame navigations
  * only — iframes are never gated, which is the whole point: the Pipedream
@@ -452,6 +444,28 @@ function createMainWindow() {
     },
   );
 
+  // A renderer that crashes, is killed, or runs out of memory leaves only the
+  // window background: no page, no script, no in-app exit. Offer a way back.
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    if (!rendererGoneNeedsRecovery(details)) return;
+    console.warn(`[kortix] renderer gone: ${details?.reason} (exit ${details?.exitCode}).`);
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    void dialog
+      .showMessageBox(mainWindow, {
+        type: 'warning',
+        buttons: ['Reload', 'Go Home'],
+        defaultId: 0,
+        cancelId: 0,
+        message: 'Kortix stopped unexpectedly',
+        detail: 'Reload to return to this page, or go home to your latest project.',
+      })
+      .then(({ response }) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        if (response === 1) goHome();
+        else mainWindow.webContents.reload();
+      });
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
@@ -495,8 +509,7 @@ function navigateWindow(direction) {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
   const wc = mainWindow.webContents;
   if (direction === 'home') {
-    // The instance's landing door resolves the user's latest project.
-    wc.loadURL(instanceStore.appUrl()).catch(() => {}); // did-fail-load reports failures
+    goHome();
     return true;
   }
   const index = mainHistoryTarget(direction);
@@ -505,14 +518,31 @@ function navigateWindow(direction) {
   return true;
 }
 
-/** Enable Back and Forward only when a step has an in-app target. */
+/** Forward needs a history target; Back falls home when there is none. */
 function refreshNavigationMenu() {
   const menu = Menu.getApplicationMenu();
   if (!menu) return;
-  for (const direction of ['back', 'forward']) {
-    const item = menu.getMenuItemById(`kx-go-${direction}`);
-    if (item) item.enabled = mainHistoryTarget(direction) >= 0;
-  }
+  const forward = menu.getMenuItemById('kx-go-forward');
+  if (forward) forward.enabled = mainHistoryTarget('forward') >= 0;
+}
+
+/**
+ * Go ▸ Back (Cmd/Ctrl+[). The shell has no browser toolbar, so without this a
+ * page with no in-app exit is a dead end.
+ *
+ * History traversal must not land on an external URL. With nothing in-app
+ * behind the page, Back goes home.
+ */
+function goBackInApp() {
+  if (!mainWindow) return;
+  const index = mainHistoryTarget('back');
+  if (index < 0) goHome();
+  else mainWindow.webContents.navigationHistory.goToIndex(index);
+}
+
+/** Go ▸ Home (Cmd/Ctrl+Shift+H): a full load of the configured app URL, from any page. */
+function goHome() {
+  navigateMainWindow(instanceStore.appUrl());
 }
 
 /** Save a choice (menu, web bridge) and load the app onto it. Returns the save error, or null. */
@@ -840,8 +870,7 @@ function buildMenu() {
           id: 'kx-go-back',
           label: 'Back',
           accelerator: shortcuts.back,
-          enabled: false,
-          click: () => navigateWindow('back'),
+          click: () => goBackInApp(),
         },
         {
           id: 'kx-go-forward',

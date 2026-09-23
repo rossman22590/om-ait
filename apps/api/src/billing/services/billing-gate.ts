@@ -95,6 +95,42 @@ export class BillingGateError extends HTTPException {
   }
 }
 
+async function resolveAdmissionState(accountId: string) {
+  await ensureFreeTierAccountReady(accountId);
+  const account = await getCreditAccount(accountId);
+  const snapshot = billingSnapshotFromAccount(account);
+  const state = resolveBillingState(snapshot);
+  const billingModel: BillingModel = isPerSeatAccount(snapshot.billingModel)
+    ? 'per_seat'
+    : 'legacy';
+  return { snapshot, state, billingModel };
+}
+
+/**
+ * The same account decision as `checkBillingActive`, without its admission
+ * hold. This is the gate for EVERY caller that is not the LLM gateway: session
+ * create, `/start`, a prompt, an attachment upload, an App wake.
+ *
+ * Only an LLM gateway settle reconciles a hold (`recordGatewayUsage` in
+ * llm-gateway/hooks.ts), so a hold taken anywhere else is never refunded.
+ * Session create, `/start`, the prompt route, and App wake all called
+ * `checkBillingActive` as a yes/no check and dropped `holdUsd`. Each call cost
+ * the account one cent, labelled "LLM gateway admission hold". Measured on one
+ * prod account 2026-09-18: 115,810 holds against 9 real LLM charges ($1.69).
+ */
+export async function checkBillingAdmission(
+  accountId: string,
+): Promise<{ ok: true } | BillingGateBlocked> {
+  if (!config.KORTIX_BILLING_INTERNAL_ENABLED) return { ok: true };
+  const { snapshot, state, billingModel } = await resolveAdmissionState(accountId);
+  return billingStateAllowsRun(state) ? { ok: true } : blockedResult(state, snapshot, billingModel);
+}
+
+/**
+ * LLM GATEWAY ONLY. This call DEBITS the account (the admission hold below),
+ * and the gateway settle is the only code that refunds it. Every other caller
+ * uses `checkBillingAdmission`.
+ */
 export async function checkBillingActive(
   accountId: string,
 ): Promise<BillingGateOk | BillingGateBlocked> {
@@ -105,15 +141,8 @@ export async function checkBillingActive(
     return { ok: true };
   }
 
-  await ensureFreeTierAccountReady(accountId);
-
-  const account = await getCreditAccount(accountId);
-  const snapshot = billingSnapshotFromAccount(account);
-  const state = resolveBillingState(snapshot);
+  const { snapshot, state, billingModel } = await resolveAdmissionState(accountId);
   const balance = snapshot.balance;
-  const billingModel: BillingModel = isPerSeatAccount(snapshot.billingModel)
-    ? 'per_seat'
-    : 'legacy';
 
   if (!billingStateAllowsRun(state)) return blockedResult(state, snapshot, billingModel);
 

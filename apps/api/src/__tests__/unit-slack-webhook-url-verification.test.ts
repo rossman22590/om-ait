@@ -35,6 +35,10 @@ mock.module('../channels/slack/interactivity', () => ({
     handledBlockActions.push(payload);
   },
   handleMessageShortcut: async () => {},
+  // `mock.module` REPLACES the module, so routes.ts importing one more name
+  // from it fails this whole file before a single test runs. The "Request
+  // changes" modal's submit lands here.
+  handleViewSubmission: async () => {},
 }));
 
 await import('../channels/slack/routes');
@@ -111,4 +115,14 @@ describe('BYO Slack Events API URL verification', () => {
     expect(await res.text()).toBe('');
     expect(handledBlockActions).toEqual([payload]);
   });
+});
+
+// An unsigned request is invalid even when this host has no OAuth installation.
+test('OAuth webhook rejects unsigned requests before checking installation configuration', async () => {
+  const response = await slackWebhookApp.request('/', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ type: 'event_callback' }),
+  });
+  expect(response.status).toBe(401);
+  expect(await response.json()).toEqual({ error: 'Invalid signature' });
 });

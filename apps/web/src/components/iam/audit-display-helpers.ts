@@ -92,6 +92,8 @@ const ROUTE_LABEL_OVERRIDES: Record<string, string> = {
   'DELETE /v1/accounts/:accountId/audit/webhooks/:webhookId': 'Deleted audit webhook',
   'GET /v1/accounts/:accountId/iam/mfa-required': 'Viewed MFA requirement',
   'GET /v1/accounts/:accountId/iam/mfa-required/preview': 'Previewed MFA enforcement',
+  'GET /v1/accounts/:accountId/iam/session-oversight': 'Viewed admin session access',
+  'PATCH /v1/accounts/:accountId/iam/session-oversight': 'Changed admin session access',
   'POST /v1/accounts/:accountId/iam/policies:bulk-import': 'Bulk imported IAM policies',
   'POST /v1/accounts/:accountId/iam/sso/provider/from-metadata':
     'Configured SSO provider from metadata',
@@ -128,6 +130,13 @@ const ROUTE_LABEL_OVERRIDES: Record<string, string> = {
   'POST /v1/projects/:projectId/sessions/:sessionId/reload-stream': 'Reloaded session agent config',
   'POST /v1/projects/:projectId/turn-stream': 'Streamed session turn',
   'POST /v1/projects/:projectId/turn-question': 'Submitted session question',
+  'POST /v1/projects/:projectId/attachments': 'Started attachment upload',
+  'PUT /v1/projects/:projectId/attachments/:attachmentId/chunks/:index':
+    'Uploaded attachment chunk',
+  'POST /v1/projects/:projectId/attachments/:attachmentId/complete': 'Completed attachment upload',
+  'DELETE /v1/projects/:projectId/attachments/:attachmentId': 'Removed attachment upload',
+  'GET /v1/projects/:projectId/runtime/prompt-attachments/:attachmentId':
+    'Resolved runtime attachment descriptor',
   'POST /v1/projects/:projectId/sessions/warm': 'Warmed session sandbox',
   'POST /v1/projects/:projectId/sessions/warm/claim': 'Claimed warm session sandbox',
   'GET /v1/projects/:projectId/files/content': 'Viewed file content',
@@ -140,6 +149,7 @@ const ROUTE_LABEL_OVERRIDES: Record<string, string> = {
   'POST /v1/projects/:projectId/connect-requests': 'Created connection request',
   'PUT /v1/projects/:projectId/connections/:connectionId/activate': 'Activated connector',
   'PUT /v1/projects/:projectId/connections/:connectionId/default': 'Set default connector',
+  'PUT /v1/projects/:projectId/connections/:connectionId/label': 'Renamed connector account',
   'PUT /v1/projects/:projectId/connections/:connectionId/revoke': 'Revoked connector',
   'POST /v1/projects/:projectId/connections/me': 'Created personal connector',
   'POST /v1/projects/:projectId/gateway/playground': 'Ran gateway playground request',
@@ -152,6 +162,10 @@ const ROUTE_LABEL_OVERRIDES: Record<string, string> = {
   'POST /v1/projects/:projectId/review/bulk': 'Updated review items in bulk',
   'POST /v1/projects/:projectId/snapshots/fix-with-agent': 'Fixed snapshot with agent',
   'POST /v1/projects/github/installations/linkable': 'Listed linkable GitHub installations',
+  // The instance git backend ("Kortix managed") — one deployment-wide thing
+  // with its own namespace since 2026-09-16, never an account connection.
+  'GET /v1/projects/git/backend': 'Read the instance git backend',
+  'GET /v1/projects/git/backend/repositories': 'Listed instance git backend repositories',
   // Same underlying create as bare `POST /v1/projects/provision` (both run
   // `runProvision` in `apps/api/src/projects/provision-core.ts` — see that
   // route's own doc comment) — this is just the phased-progress transport for
@@ -428,6 +442,8 @@ const IAM_ACTION_MAP: Record<string, { title: string; kind: HumanizedAuditAction
   'iam.member.remove': { title: 'Removed member', kind: 'delete' },
   'iam.mfa_required.enable': { title: 'Required MFA for the account', kind: 'update' },
   'iam.mfa_required.disable': { title: 'Disabled MFA requirement', kind: 'update' },
+  'iam.session_oversight.enable': { title: 'Let admins open every session', kind: 'update' },
+  'iam.session_oversight.disable': { title: 'Stopped admins opening every session', kind: 'update' },
   'iam.session_policy.update': { title: 'Updated session policy', kind: 'update' },
   'iam.pat_policy.update': { title: 'Updated PAT policy', kind: 'update' },
   'iam.sso.provider.update': { title: 'Updated SSO provider', kind: 'update' },
@@ -457,6 +473,10 @@ const IAM_ACTION_MAP: Record<string, { title: string; kind: HumanizedAuditAction
   'project.admin_bypass_read': { title: 'Used admin bypass to view project', kind: 'read' },
   'project.admin_bypass_session_read': {
     title: 'Used admin bypass to view session',
+    kind: 'read',
+  },
+  'project.admin_oversight_session_read': {
+    title: 'Opened a member session as account admin',
     kind: 'read',
   },
   'project.connector.read': { title: 'Read project connector', kind: 'read' },

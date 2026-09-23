@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { BUNDLED_MANAGED_MODELS } from '../opencode'
+import { BUNDLED_MANAGED_MODELS } from '../harness/open-code/lifecycle'
 
 // The bundled managed floor is what OpenCode sees when the live managed fetch
 // is down AND the baked image catalog predates a lineup change. A managed
@@ -24,6 +24,18 @@ const catalogSource = new URL('../../../../packages/llm-catalog/src/index.ts', i
 const { MANAGED_MODELS } = (await import(catalogSource)) as { MANAGED_MODELS: CatalogManagedModel[] }
 
 describe('BUNDLED_MANAGED_MODELS mirrors @kortix/llm-catalog MANAGED_MODELS', () => {
+  test('the default remains usable when the live catalog is unavailable', () => {
+    expect(BUNDLED_MANAGED_MODELS['deepseek-v4.1-flash']).toMatchObject({
+      name: 'DeepSeek V4.1 Flash',
+      provider: 'kortix',
+      reasoning: true,
+      temperature: true,
+      attachment: true,
+      tool_call: true,
+      limit: { context: 1_048_576, output: 16_384 },
+    })
+  })
+
   test('the catalog loaded', () => {
     expect(MANAGED_MODELS.length).toBeGreaterThan(0)
   })

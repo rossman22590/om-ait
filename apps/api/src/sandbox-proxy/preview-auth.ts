@@ -27,8 +27,12 @@ import { validateSecretKey } from '../repositories/api-keys';
 import { validateAccountToken } from '../repositories/account-tokens';
 import { validateServiceAccountToken } from '../repositories/service-accounts';
 import { verifySupabaseJwt } from '../shared/jwt-verify';
+import { isInconclusiveVerifyFailure } from '../shared/jwt-verify-outcome';
 import { getSupabase } from '../shared/supabase';
 import { canAccessPreviewSandbox } from '../shared/preview-ownership';
+import { bindAuditPrincipal } from '../shared/audit-scope';
+import { previewActorFields } from './preview-audit';
+import type { PreviewPrincipalKind } from './preview-session';
 
 /**
  * Validate `token` and, if it grants access to `sandboxId`, return the
@@ -45,6 +49,8 @@ export interface PreviewPrincipal {
    * that distinguishes one end-user's sandbox from another's.
    */
   sessionId: string | null;
+  /** What `userId` is. An account API key's `userId` is an ACCOUNT id. */
+  principalKind: PreviewPrincipalKind;
 }
 
 /**
@@ -63,8 +69,18 @@ export async function authenticatePreviewPrincipalDetailed(
     if (isAccountToken(token)) {
       const r = await validateAccountToken(token);
       if (!r.isValid || !r.userId) return null;
+      // Name the caller now, before the ownership check can refuse it.
+      bindAuditPrincipal(
+        previewActorFields({
+          kind: 'user',
+          principalId: r.userId,
+          sandboxAuthored: r.sessionId != null,
+          method: 'account_token',
+          callerSessionId: r.sessionId ?? null,
+        }),
+      );
       return (await canAccessPreviewSandbox({ previewSandboxId: sandboxId, userId: r.userId }))
-        ? { userId: r.userId, sessionId: r.sessionId ?? null }
+        ? { userId: r.userId, sessionId: r.sessionId ?? null, principalKind: 'user' }
         : null;
     }
 
@@ -72,8 +88,16 @@ export async function authenticatePreviewPrincipalDetailed(
     if (isServiceAccountToken(token)) {
       const r = await validateServiceAccountToken(token);
       if (!r.isValid || !r.serviceAccountId) return null;
+      bindAuditPrincipal(
+        previewActorFields({
+          kind: 'service_account',
+          principalId: r.serviceAccountId,
+          sandboxAuthored: false,
+          method: 'service_account',
+        }),
+      );
       return (await canAccessPreviewSandbox({ previewSandboxId: sandboxId, userId: r.serviceAccountId }))
-        ? { userId: r.serviceAccountId, sessionId: null }
+        ? { userId: r.serviceAccountId, sessionId: null, principalKind: 'service_account' }
         : null;
     }
 
@@ -81,25 +105,44 @@ export async function authenticatePreviewPrincipalDetailed(
     if (isKortixToken(token)) {
       const r = await validateSecretKey(token);
       if (!r.isValid || !r.accountId) return null;
+      bindAuditPrincipal(
+        previewActorFields({
+          kind: 'account',
+          principalId: r.accountId,
+          // A sandbox key is the sandbox itself calling its own preview.
+          sandboxAuthored: r.type === 'sandbox',
+          method: r.type === 'sandbox' ? 'sandbox_token' : 'api_key',
+        }),
+      );
       return (await canAccessPreviewSandbox({ previewSandboxId: sandboxId, accountId: r.accountId }))
-        ? { userId: r.accountId, sessionId: null }
+        ? { userId: r.accountId, sessionId: null, principalKind: 'account' }
         : null;
     }
 
-    // Supabase JWT — fast local verify, network fallback only while JWKS warms.
+    // Supabase JWT — fast local verify, network fallback when the local
+    // verifier cannot reach a verdict. Route on the SAME predicate as both auth
+    // middlewares: a hand-listed reason set here once omitted
+    // `unsupported-alg:HS256`, so every preview origin answered "Sign in" to a
+    // valid legacy-signed session while `/v1/p/...` served it.
     const local = await verifySupabaseJwt(token);
     if (local.ok) {
+      bindAuditPrincipal(
+        previewActorFields({ kind: 'user', principalId: local.userId, sandboxAuthored: false, method: 'jwt' }),
+      );
       return (await canAccessPreviewSandbox({ previewSandboxId: sandboxId, userId: local.userId }))
-        ? { userId: local.userId, sessionId: null }
+        ? { userId: local.userId, sessionId: null, principalKind: 'user' }
         : null;
     }
-    if (local.reason !== 'no-keys' && local.reason !== 'no-key-for-kid') return null;
+    if (!isInconclusiveVerifyFailure(local.reason)) return null;
 
     const supabase = getSupabase();
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) return null;
+    bindAuditPrincipal(
+      previewActorFields({ kind: 'user', principalId: user.id, sandboxAuthored: false, method: 'jwt' }),
+    );
     return (await canAccessPreviewSandbox({ previewSandboxId: sandboxId, userId: user.id }))
-      ? { userId: user.id, sessionId: null }
+      ? { userId: user.id, sessionId: null, principalKind: 'user' }
       : null;
   } catch (err) {
     console.warn('[preview-auth] token validation error:', (err as Error)?.message || err);

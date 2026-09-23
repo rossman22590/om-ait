@@ -17,11 +17,18 @@ import { ErrorState } from '@/features/layout/section/error-state';
 import { useAuth } from '@/features/providers/auth-provider';
 import { InstantSessionShell } from '@/features/session/instant-session-shell';
 import { resolvePinnedRootSessionId } from '@/features/session/pinned-root-session';
+import {
+  PreviousRepositoryNoticeProvider,
+  isPreviousRepositoryRuntimeUnavailableError,
+  isPreviousRepositorySessionError,
+  sessionUsesPreviousRepository,
+} from '@/features/session/previous-repository-session';
 import { ProviderFailureRecovery } from '@/features/session/provider-failure-recovery';
 import {
   pendingSessionPromptForRecovery,
   provisioningFailurePresentation,
 } from '@/features/session/provisioning-failure';
+import { isFirstPromptRow } from '@/features/session/queue-projection';
 import { SandboxLoadingBoundary } from '@/features/session/sandbox-loading-boundary';
 import { useSessionAudit } from '@/features/session/session-audit-shared';
 import { SessionChat } from '@/features/session/session-chat';
@@ -86,7 +93,6 @@ import {
   formatRuntimeError,
   getProjectDetail,
   isSessionFresh,
-  listProjectSessions,
   sessionStartKey,
   setActiveInstanceCookie,
   updateProjectSession,
@@ -101,7 +107,9 @@ import {
   readStartStash,
   startSessionWithPrompt,
   useRuntimeConnectionStore,
+  useProjectSession,
   useSession,
+  useSessionPrompts,
   useWakeEscalation,
 } from '@kortix/sdk/react';
 
@@ -162,6 +170,7 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
   const queryClient = useQueryClient();
   const router = useRouter();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [repositoryMode, setRepositoryMode] = useState<'previous' | undefined>();
 
   // Billing gate. An account that cannot run should not KEEP polling to start a
   // session — the backend would never provision a sandbox, so the poll spins
@@ -192,19 +201,19 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
   const billingState = isBillingEnabled() ? resolveBillingState(accountState) : null;
   const billingBlocked =
     isBillingEnabled() && accountLoaded && !billingStateAllowsRun(billingState);
-  const { data: projectSessions } = useQuery({
-    queryKey: qk.project.sessions(projectId),
-    queryFn: () => listProjectSessions(projectId),
+  // This page needs exactly ONE session — its own. It used to find that row by
+  // scanning the project's whole session list, which was never the right read
+  // and became a wrong one once that list became a bounded page: a session
+  // older than the first page is absent from it, so the page would have opened
+  // with no pin, no agent name and no recovery metadata. `useProjectSession`
+  // reads the row by id, which is exact at any age, costs one indexed lookup
+  // instead of a page scan, and returns `metadata` WHOLE where the list
+  // deliberately trims its heavy write-only keys (`trimListMetadata`).
+  const { data: currentProjectSession } = useProjectSession(projectId, sessionId, {
     enabled: !!user && !!projectId,
-    // The always-mounted sidebar owns title/status polling for this shared key.
-    // A second observer timer here produced independent list requests between
-    // the sidebar's polls during long turns.
-    refetchOnWindowFocus: false,
-    ...contract('inventory'),
   });
-  const currentProjectSession = projectSessions?.find((item) => item.session_id === sessionId);
   const pendingPrompt = pendingSessionPromptForRecovery(sessionId, currentProjectSession?.metadata);
-  const initialOpenCodeSessionId = findInitialSessionPin(projectSessions, sessionId);
+  const initialOpenCodeSessionId = findInitialSessionPin(currentProjectSession);
 
   // ONE hook owns the runtime: POST /start (idempotent provision/resume + the
   // server-resolved OpenCode pin), the sandbox switch, the SSE stream, readiness
@@ -219,7 +228,33 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
     enabled: canPollSessionStart({ hasUser: !!user, billingBlocked }),
     replayStartStash: false,
     initialOpenCodeSessionId,
+    repositoryMode,
   });
+  const previousRepositorySession = isPreviousRepositorySessionError(session.startError);
+  const previousRepositoryRuntimeUnavailable = isPreviousRepositoryRuntimeUnavailableError(
+    session.startError,
+  );
+  const usesPreviousRepository = sessionUsesPreviousRepository(
+    projectDetail?.project.metadata,
+    currentProjectSession?.metadata,
+  );
+  useEffect(() => {
+    if (!previousRepositorySession || repositoryMode === 'previous') return;
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (!cancelled) setRepositoryMode('previous');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [previousRepositorySession, repositoryMode]);
+  useEffect(() => {
+    if (repositoryMode !== 'previous') return;
+    void queryClient.resetQueries({
+      queryKey: sessionStartKey(projectId, sessionId),
+      exact: true,
+    });
+  }, [projectId, queryClient, repositoryMode, sessionId]);
   const sandbox = session.sandbox;
   const startStage = session.stage ?? 'provisioning';
   // The immutable agent this session was created with — known BEFORE the
@@ -319,7 +354,7 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
   // a slow provider. See `core/session/wake-escalation.ts` for the incident.
   //
   // `runtimeReachable` is the DAEMON's answer, not the session row's. Observed
-  // on Essentia 2026-08-26: `/start` answered 202 and the row stayed `running`
+  // on SampleCo 2026-08-26: `/start` answered 202 and the row stayed `running`
   // for 5+ minutes while the E2B resume had silently failed and the proxy
   // answered `503 sandbox_not_ready`. `initialCheckDone` is what makes this
   // real evidence — `useSession` optimistically seeds `healthy: true` the
@@ -380,7 +415,7 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
   });
   // THE progress-aware budget. Every consumer below reads time-since-CHANGE,
   // never time-since-wake-started — the fixed clock this replaces expired
-  // mid-wake on a box that was seconds from ready (Essentia 29861dfa, box
+  // mid-wake on a box that was seconds from ready (SampleCo 29861dfa, box
   // daemon logged `opencode ready` right after the budget ran out).
   const wakeSilentMs = wake.msSinceProgress;
   // A BOOLEAN, not the raw millisecond count, because this is an effect
@@ -488,6 +523,16 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
     return { pending, firstPrompt, newSessionHint: pending || isSessionFresh(sessionId) };
   });
   const [submittedOnShell, setSubmittedOnShell] = useState(false);
+  const [restoredFirstPrompt, setRestoredFirstPrompt] = useState(false);
+  // A reload has no local handoff. Restore the typing surface from the same
+  // durable inbox the shell reads, then let the shell own further polling.
+  const restoreInbox = useSessionPrompts(projectId, sessionId, {
+    enabled: !!user && !chatReady && !handoff.newSessionHint && !restoredFirstPrompt,
+  });
+  const hasPendingFirstPrompt = restoreInbox.prompts.some(isFirstPromptRow);
+  useEffect(() => {
+    if (hasPendingFirstPrompt && session.messages.length === 0) setRestoredFirstPrompt(true);
+  }, [hasPendingFirstPrompt, session.messages.length]);
   // "The shell is painting this session's first prompt right now." TWO producers
   // put a prompt on that surface and only one of them is a send made here:
   //
@@ -511,7 +556,8 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
   const hasFirstPromptPreview = useFirstPromptPreviewStore(
     (state) => !!state.previewBySession[sessionId],
   );
-  const shellShowsFirstPrompt = submittedOnShell || hasFirstPromptPreview || handoff.firstPrompt;
+  const shellShowsFirstPrompt =
+    submittedOnShell || hasFirstPromptPreview || handoff.firstPrompt || restoredFirstPrompt;
   // Mounting the chat takes the same evidence plus one weaker source: a stashed
   // prompt means the message is committed and needs a runtime, so the chat
   // should be warming up. It does NOT pin the shell — a stash can outlive the
@@ -530,7 +576,13 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
     if (session.messages.length > 0) setSawTranscript(true);
   }, [session.messages.length]);
   const hasTranscript = session.messages.length > 0 || sawTranscript;
-  const surface = { newSessionHint: handoff.newSessionHint, hasTranscript };
+  const previousRepositoryHistoryAvailable =
+    hasTranscript &&
+    (usesPreviousRepository ||
+      repositoryMode === 'previous' ||
+      previousRepositorySession ||
+      previousRepositoryRuntimeUnavailable);
+  const surface = { newSessionHint: handoff.newSessionHint, hasTranscript, hasPendingFirstPrompt };
   const overlay = resolveSessionOverlay({ ...surface, shellShowsFirstPrompt });
   // WHICH overlay is settled above; this decides whether it may COVER the chat.
   //
@@ -611,9 +663,15 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
     sandboxStatus: sandbox?.status,
   };
   const unmaterializedFailure =
-    !authLoading && !!user && isUnmaterializedSessionFailure(terminalState);
+    !previousRepositoryHistoryAvailable &&
+    !authLoading &&
+    !!user &&
+    isUnmaterializedSessionFailure(terminalState);
   const dormantWithoutRuntime =
-    !authLoading && !!user && isDormantSessionWithoutRuntime(terminalState);
+    !previousRepositoryHistoryAvailable &&
+    !authLoading &&
+    !!user &&
+    isDormantSessionWithoutRuntime(terminalState);
   const sessionContentAvailable = canMountSessionChat({
     switched: session.switched,
     opencodeSessionId: session.opencodeSessionId,
@@ -720,7 +778,11 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
     if (unmaterializedFailure) {
       return provisioningFailurePresentation({}, sandboxLabel ?? 'session', tI18nComplete);
     }
-    if (session.startError) {
+    if (
+      session.startError &&
+      !previousRepositorySession &&
+      !previousRepositoryRuntimeUnavailable
+    ) {
       return provisioningFailurePresentation(
         {
           failureCategory: 'sandbox-provider',
@@ -798,6 +860,14 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
             </Button>
           }
         />
+      );
+    }
+
+    if (previousRepositorySession && !hasTranscript) {
+      return (
+        <HeaderlessSessionSurface>
+          <SessionStartingLoader stage="starting" projectId={projectId} sessionId={sessionId} />
+        </HeaderlessSessionSurface>
       );
     }
 
@@ -893,7 +963,7 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
     // into a fresh session: the server deliberately preserved this identity
     // instead of attaching a replacement box, and the UI must not undo that.
     // Say what happened, name the id, and stop.
-    if (runtimeIdentityUnavailable) {
+    if (runtimeIdentityUnavailable && !previousRepositoryHistoryAvailable) {
       return (
         <InlineSessionError
           title={tSessionPage('lost.title')}
@@ -978,6 +1048,8 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
               // overlay anyway.
               loaderMounted && 'isolate',
             )}
+            aria-hidden={!overlayDismissed}
+            inert={!overlayDismissed}
           >
             <ProjectSessionRuntimeConnection>
               {mountChat && (
@@ -996,6 +1068,8 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
 
         {loaderMounted && (
           <div
+            aria-hidden={overlayDismissed}
+            inert={overlayDismissed}
             onTransitionEnd={() => {
               if (chatReady) setLoaderMounted(false);
             }}
@@ -1006,7 +1080,7 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
               // (SessionLayout), but the boot loader is a transparent centred
               // block — under it you would see the chat's own compact loader
               // through the gaps, two spinners deep.
-              'bg-background absolute inset-0 flex flex-col transition-opacity duration-300 ease-out',
+              'bg-background absolute inset-0 flex flex-col transition-opacity duration-slow ease-out',
               overlayDismissed ? 'pointer-events-none opacity-0' : 'opacity-100',
             )}
           >
@@ -1020,6 +1094,7 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
                 // The chat underneath owns the prompt from here; the shell's
                 // copy would otherwise dissolve over it for the whole fade.
                 hasTranscript={hasTranscript}
+                draftActive={!overlayDismissed}
               />
             ) : (
               <HeaderlessSessionSurface>
@@ -1055,7 +1130,17 @@ function ProjectSessionView({ projectId, sessionId }: { projectId: string; sessi
 
   return (
     <>
-      <SandboxLoadingBoundary>{inner}</SandboxLoadingBoundary>
+      <SandboxLoadingBoundary>
+        {/* The notice itself mounts in the session header, which owns its
+            position; the route only decides whether this session needs it. */}
+        <PreviousRepositoryNoticeProvider
+          value={
+            usesPreviousRepository || repositoryMode === 'previous' || previousRepositorySession
+          }
+        >
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{inner}</div>
+        </PreviousRepositoryNoticeProvider>
+      </SandboxLoadingBoundary>
       <SessionDeleteModal
         projectId={projectId}
         sessionId={sessionId}

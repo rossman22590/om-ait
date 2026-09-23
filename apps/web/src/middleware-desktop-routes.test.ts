@@ -3,10 +3,13 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const source = readFileSync(join(import.meta.dir, 'middleware.ts'), 'utf8');
-// apps/web/src -> apps/desktop-electron/src/navigation.js, which owns the
-// shell's APP_PATH_PREFIXES (main.js's navigation gate imports it).
-const desktopNavigationSource = readFileSync(
-  join(import.meta.dir, '../../desktop-electron/src/navigation.js'),
+// apps/web/src -> apps/desktop-electron/src/nav-rules.js, the Electron shell's
+// navigation rules. Its comment above APP_PATH_PREFIXES states the list MUST
+// equal DESKTOP_ALLOWED_ROUTES in apps/web/src/middleware.ts, and
+// nav-rules.test.js asserts the two lists are equal. The list used to live in
+// main.js.
+const desktopNavRulesSource = readFileSync(
+  join(import.meta.dir, '../../desktop-electron/src/nav-rules.js'),
   'utf8',
 );
 
@@ -28,13 +31,14 @@ describe('desktop route allowlist', () => {
   // halves of the pair must be asserted, in the SAME test file, or a future
   // drift on either side goes unnoticed again.
   test('/new is reachable inside the desktop shell (Electron main-process half) — MUST stay in sync with the web half above', () => {
-    const shellList = desktopNavigationSource.slice(
-      desktopNavigationSource.indexOf('const APP_PATH_PREFIXES'),
-      desktopNavigationSource.indexOf('function isAppPath'),
-    );
+    const start = desktopNavRulesSource.indexOf('const APP_PATH_PREFIXES');
+    const end = desktopNavRulesSource.indexOf('function isAppPath');
+    // Guard the slice: a moved or renamed anchor yields an empty string, and
+    // an empty list fails with a message that hides where the list went.
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const shellList = desktopNavRulesSource.slice(start, end);
     expect(shellList).toContain("'/new'");
-    // Every route the middleware lets the desktop shell render must also pass
-    // the shell's gate, or a full-document load of it opens the system browser.
     const webList = source.slice(
       source.indexOf('const DESKTOP_ALLOWED_ROUTES'),
       source.indexOf('export async function middleware'),

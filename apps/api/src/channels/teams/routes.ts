@@ -9,6 +9,7 @@ import { handleTeamsActivity } from './dispatch';
 import { handleFileConsentInvoke } from './file-proxy';
 import { handleAdaptiveCardAction } from './interactivity';
 import type { TeamsActivity } from './types';
+import { bindIntegrationPrincipal } from '../../shared/audit-scope';
 
 async function processActivity(c: Context, expectedAppId?: string | null): Promise<Response> {
   let activity: TeamsActivity;
@@ -21,6 +22,7 @@ async function processActivity(c: Context, expectedAppId?: string | null): Promi
   const authHeader = c.req.header('Authorization');
   const valid = await validateInboundActivityJwt(authHeader, activity.serviceUrl, expectedAppId);
   if (!valid) return c.json({ error: 'unauthorized' }, 401);
+  bindIntegrationPrincipal('microsoft_teams');
 
   if (activity.type === 'invoke') {
     if (activity.name === 'adaptiveCard/action') {
@@ -41,11 +43,13 @@ async function processActivity(c: Context, expectedAppId?: string | null): Promi
     return c.json({ status: 200 }, 200);
   }
 
-  try {
-    await handleTeamsActivity(activity);
-  } catch (err) {
+  // Ack now, work later. Bot Framework delivers a conversation's activities in
+  // order and holds the next one until this response arrives; the dispatch
+  // below can wait 10–20 s on a sandbox start or resume, and that wait used to
+  // delay the NEXT message's live card by the same amount.
+  void handleTeamsActivity(activity).catch((err) => {
     console.error('[teams-webhook] dispatch failed', err);
-  }
+  });
 
   return c.body(null, 200);
 }

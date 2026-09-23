@@ -1,6 +1,6 @@
 // forwardToSandbox PLACES the client's wire `messageID` against the target
 // session's actual transcript tip before delivering — for any target session,
-// child sessions included. The 2026-08-18 Essentia incident: a steering prompt
+// child sessions included. The 2026-08-18 SampleCo incident: a steering prompt
 // into a mid-turn child, minted by a tab whose store held none of that child's
 // messages, sorted below the child's tip; OpenCode read it as answered and the
 // turn looped on. See ../prompt-wire-id-repair.ts.
@@ -39,14 +39,12 @@ mock.module('../../shared/preview-ownership', () => ({
   canAccessPreviewSandbox: async () => true,
   canAccessSandboxSession: async () => true,
 }));
-mock.module('../../projects/lib/prompt-connector-preflight', () => ({
-  PromptConnectorPreflightUnresolved: class PromptConnectorPreflightUnresolved extends Error {},
-  missingPromptConnectorConnections: async () => ({ ok: true }),
-}));
 mock.module('../../projects/lib/sandbox-env-sync', () => ({
   syncSandboxEnvForPrompt: async () => {},
 }));
 mock.module('../../projects/lib/session-token-grant', () => ({
+  // The proxy's declared-agent guard; these suites exercise other behavior.
+  agentLaunchableInProject: async () => true,
   remintGrantForAgentSwitch: async () => ({ action: 'skip' }),
   SessionGrantRemintError: class SessionGrantRemintError extends Error {},
 }));

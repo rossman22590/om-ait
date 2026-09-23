@@ -1,6 +1,7 @@
 import type { Message, Part, SessionStatus } from '@opencode-ai/sdk/v2/client';
 import { SandboxNotReadyError, isSandboxNotReadyError } from '../http/opencode-errors';
 import { isAbortError } from '../http/abort-error';
+import { ApiError } from '../http/api/errors';
 
 /**
  * Messages per bounded read — the newest-first window a session opens with,
@@ -23,7 +24,7 @@ export const SESSION_SYNC_PAGE_SIZE = 100;
  * The FIRST page — the one the user waits on.
  *
  * Time to first paint is bytes, not messages. Measured on a heavy session
- * (essentia, 2026-08-24, a run with hundreds of image reads whose parts carried
+ * (sampleco, 2026-08-24, a run with hundreds of image reads whose parts carried
  * base64 — BEFORE the attachment bytes were stripped from the list):
  *
  *   message?limit=50   ->   8,228 kB   30.39 s
@@ -227,7 +228,7 @@ export function createHttpSessionSyncPageLoader(
       if (response.status === 503) {
         throw new SandboxNotReadyError(`session ${response.status}`);
       }
-      throw new Error(`Session synchronization failed: ${response.status}`);
+      throw new ApiError(`Session synchronization failed: ${response.status}`, { status: response.status });
     }
     return {
       messages: (await response.json()) as SessionSyncMessage[],
@@ -324,6 +325,7 @@ export class SessionSyncController {
   private lastTailReadAt: number;
   /** Consecutive failed tail reads, for the retry backoff. Reset by success. */
   private retryAttempt = 0;
+  private tailUnavailable = false;
   private tailRetryTimer: unknown;
   private snapshot: SessionSyncSnapshot = {
     freshness: 'idle',
@@ -478,7 +480,7 @@ export class SessionSyncController {
       //   message?limit=50&before=..  200  25,125 kB   29.23 s
       //   -> 78,097 kB transferred, finish 3.8 min, NOTHING on screen
       //
-      // (essentia, 2026-08-24, a run with hundreds of image reads: fifty
+      // (sampleco, 2026-08-24, a run with hundreds of image reads: fifty
       // messages weigh 8-25 MB because the parts carry the image bytes.)
       //
       // There used to be a backward WALK here that kept fetching pages until
@@ -513,6 +515,7 @@ export class SessionSyncController {
       // about the session. A failed read is not a fact about anything.
       this.options.markLoaded();
       this.retryAttempt = 0;
+      this.tailUnavailable = false;
     } catch (error) {
       if (this.destroyed) return;
       // A superseded/cancelled read is not a failure and never hydrates — it
@@ -524,6 +527,12 @@ export class SessionSyncController {
       // empty-`fresh` — `markLoaded` above ran only on success, so a failed
       // read never records the session as an empty transcript.
       this.update({ freshness: isSandboxNotReadyError(error) ? 'loading' : 'error' });
+      if (error instanceof ApiError && (error.status === 404 || error.status === 410)) {
+        this.tailUnavailable = true;
+        this.cancelTimer(this.tailRetryTimer);
+        this.tailRetryTimer = undefined;
+        return;
+      }
       this.scheduleTailRetry(reason);
     }
   }
@@ -690,7 +699,7 @@ export class SessionSyncController {
   }
 
   private async checkLiveness(): Promise<void> {
-    if (this.destroyed) return;
+    if (this.destroyed || this.tailUnavailable) return;
     const nowMs = this.scheduler.now();
     const quiet = nowMs - this.lastActivityAt > this.livenessIntervalMs;
     // `noteActivity` proves frames are ARRIVING, not that none were lost. A

@@ -1,5 +1,5 @@
-// Window navigation for the desktop shell: which top-frame URLs render in the
-// window, and how Back / Forward / Home move through its history.
+// Window history and shortcuts for the desktop shell. Route rules live in
+// nav-rules.js and are shared with main.js's top-frame navigation gate.
 //
 // The shell has no browser toolbar. A page without an in-page exit — a setup
 // step, an error body, a sandbox preview — leaves the user nowhere to click. So
@@ -10,37 +10,9 @@
 // Pure functions only; main.js owns the Electron side effects.
 
 /**
- * Path prefixes that render inside the window. Must cover every entry of
- * `DESKTOP_ALLOWED_ROUTES` in apps/web/src/middleware.ts — navigation.test.js
- * reads that file and fails on a gap. A route the middleware allows but this
- * list lacks opens in the system browser on a full-document navigation.
+ * nav-rules.test.js checks these prefixes against the web middleware.
  */
-const APP_PATH_PREFIXES = [
-  '/projects',
-  '/new',
-  '/settings',
-  '/accounts',
-  '/invites',
-  '/admin',
-  '/setup',
-  '/connectors',
-  '/marketplace',
-  '/oauth',
-  '/checkout',
-  '/tunnel',
-  '/github',
-  '/cli',
-  '/templates',
-  '/maintenance',
-  '/countryerror',
-  '/debug',
-];
-
-/** @param {string} pathname */
-function isAppPath(pathname) {
-  if (pathname === '/auth' || pathname.startsWith('/auth/')) return true;
-  return APP_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
-}
+const { APP_PATH_PREFIXES, isAppPath } = require('./nav-rules');
 
 /**
  * The history index one Back or Forward step lands on, or -1.

@@ -130,7 +130,7 @@ describe('resolveEffectiveModel — the /model-defaults GET + picker resolution 
     expect(result).toEqual({ model: 'openai/gpt-5.5', source: 'project' });
   });
 
-  test('THE ESSENTIA BUG: a stale/unservable configured default (e.g. disconnected openrouter) never 500s, and degrades to a provider the project HAS connected', async () => {
+  test('THE SAMPLECO BUG: a stale/unservable configured default (e.g. disconnected openrouter) never 500s, and degrades to a provider the project HAS connected', async () => {
     accountDefaults = { account: null, agents: {}, projects: { p1: 'openrouter/some-model' } };
     // The configured openrouter default is no longer servable — no key connected.
     resolveCandidatesImpl = async (model) => {
@@ -387,4 +387,17 @@ describe('resolveDefaultModelForPrincipal — agent-scope pin applies to a sessi
 
     expect(result).toBe('openai/gpt-5.5');
   });
+});
+
+test('model validation carries prospective pool selections into credential resolution', async () => {
+  const resolver = spyOn(resolveCandidatesModule, 'resolveCandidates').mockImplementation(async (_principal, _model, options) => {
+    return options?.providerSecretPools?.anthropic?.includes('selected') ? [{ provider: 'anthropic' } as any] : [];
+  });
+  expect(await isModelServableForAccount({ ...PRINCIPAL_BASE, freeModelsOnly: false, model: 'anthropic/claude-sonnet-4.6', providerSecretPools: { anthropic: ['selected'] } })).toBe(true);
+  expect(resolver.mock.calls[0]?.[2]).toEqual({ providerSecretPools: { anthropic: ['selected'] }, probe: true });
+});
+
+test('existing session validation resolves that session’s pool', async () => {
+  spyOn(resolveCandidatesModule, 'resolveCandidates').mockImplementation(async principal => principal.sessionId === 'pooled-session' ? [{ provider: 'anthropic' } as any] : []);
+  expect(await isModelServableForAccount({ ...PRINCIPAL_BASE, freeModelsOnly: false, model: 'anthropic/claude-sonnet-4.6', sessionId: 'pooled-session' })).toBe(true);
 });

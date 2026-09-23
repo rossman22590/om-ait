@@ -1,7 +1,7 @@
 /**
  * The initial-session claim must retry until established — never wedge.
  *
- * Essentia ef9f344b (2026-08-26 05:2x): a resumed box's opencode answered the
+ * SampleCo ef9f344b (2026-08-26 05:2x): a resumed box's opencode answered the
  * root list too slowly, `resolveExistingRoot` returned `defer` (correct — a
  * prior root was pinned), and NOTHING retried. `runtimeReady` stayed false
  * forever, every proxied request 503'd `initial_opencode_session_pending`, and
@@ -9,7 +9,7 @@
  * Restart. The retry loop turns that dead end into an eventual recovery.
  */
 import { describe, expect, test } from 'bun:test'
-import { initialSessionRetryDelayMs, retryUntilInitialSessionEstablished } from '../main'
+import { initialSessionRetryDelayMs, retryUntilInitialSessionEstablished } from '../harness/open-code/boot'
 
 describe('initialSessionRetryDelayMs', () => {
   test('5s, 10s, 15s … capped at 30s', () => {

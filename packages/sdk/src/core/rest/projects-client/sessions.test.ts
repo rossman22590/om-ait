@@ -11,6 +11,7 @@ import type {
 } from './sessions';
 import {
   createProjectSession,
+  sessionParentId,
   createSessionPrompt,
   createSessionPublicShare,
   claimWarmProjectSession,
@@ -24,8 +25,10 @@ import {
   getSessionPreviewCandidates,
   getSessionOpenBundle,
   getSessionTranscript,
+  getSessionTranscriptSync,
   getSessionTurn,
   listProjectSessions,
+  listProjectSessionsPage,
   listSessionPrompts,
   listSessionPublicShares,
   reloadProjectSessionConfig,
@@ -41,7 +44,10 @@ import {
 } from './sessions';
 
 let calls: { url: string; method: string; body: unknown }[] = [];
-let nextResponse: { status: number; body: unknown } = { status: 200, body: {} };
+let nextResponse: { status: number; body: unknown; headers?: Record<string, string> } = {
+  status: 200,
+  body: {},
+};
 
 beforeEach(() => {
   calls = [];
@@ -54,7 +60,7 @@ beforeEach(() => {
     });
     return new Response(JSON.stringify(nextResponse.body), {
       status: nextResponse.status,
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...(nextResponse.headers ?? {}) },
     });
   }) as unknown as typeof fetch;
 });
@@ -101,6 +107,59 @@ test('listProjectSessions keeps can_manage_sharing and can_manage_lifecycle apar
   const [session] = await listProjectSessions('P1');
   expect(session.can_manage_sharing).toBe(false);
   expect(session.can_manage_lifecycle).toBe(true);
+});
+
+// ─── Paging ────────────────────────────────────────────────────────────────
+// The list is a bounded keyset PAGE. It used to return every session row the
+// viewer could see: a 12,617-session project shipped a multi-megabyte body on a
+// list the sidebar re-polls every 5s. See `listProjectSessionsPage`.
+
+test('listProjectSessions forwards limit and cursor as query parameters', async () => {
+  nextResponse = { status: 200, body: [] };
+  await listProjectSessions('P1', { limit: 25, cursor: 'CURSOR1' });
+  const url = new URL(last().url);
+  expect(url.pathname).toBe('/projects/P1/sessions');
+  expect(url.searchParams.get('limit')).toBe('25');
+  expect(url.searchParams.get('cursor')).toBe('CURSOR1');
+});
+
+test('listProjectSessions sends no paging parameters when none are asked for', async () => {
+  nextResponse = { status: 200, body: [] };
+  await listProjectSessions('P1');
+  expect(last().url).not.toContain('limit=');
+  expect(last().url).not.toContain('cursor=');
+});
+
+test('listProjectSessionsPage reads the continuation token from X-Next-Cursor', async () => {
+  nextResponse = {
+    status: 200,
+    body: [{ session_id: 'S1' }],
+    headers: { 'x-next-cursor': 'NEXT1' },
+  };
+  const page = await listProjectSessionsPage('P1', { limit: 1 });
+  expect(page.items).toEqual([{ session_id: 'S1' }] as unknown as ProjectSession[]);
+  expect(page.next_cursor).toBe('NEXT1');
+});
+
+test('listProjectSessionsPage reports the last page as next_cursor null', async () => {
+  // No header means the server folded the list to its end. A client that
+  // treated "missing" as "unknown" and kept asking would loop forever.
+  nextResponse = { status: 200, body: [{ session_id: 'S1' }] };
+  const page = await listProjectSessionsPage('P1');
+  expect(page.next_cursor).toBeNull();
+});
+
+test('listProjectSessions returns the page body unchanged for existing callers', async () => {
+  // Back-compat: the 200 body stays the bare array. Paging rides a header
+  // precisely so no existing consumer has to learn an envelope.
+  nextResponse = {
+    status: 200,
+    body: [{ session_id: 'S1' }],
+    headers: { 'x-next-cursor': 'NEXT1' },
+  };
+  const result = await listProjectSessions('P1');
+  expect(Array.isArray(result)).toBe(true);
+  expect(result).toEqual([{ session_id: 'S1' }] as unknown as ProjectSession[]);
 });
 
 test('listProjectSessions throws when the response is unsuccessful', async () => {
@@ -394,6 +453,45 @@ test('getSessionTranscript builds the query string from limit/chars options', as
 
   await getSessionTranscript('P1', 'S1');
   expect(last().url).toBe('http://test.local/projects/P1/sessions/S1/transcript');
+});
+
+test('getSessionTranscriptSync pages older windows with the previous window cursor', async () => {
+  // The mirror retains a whole history and every reader asks for a tail, so
+  // without a cursor everything before that tail is stored and unreachable.
+  nextResponse = {
+    status: 200,
+    body: {
+      available: true,
+      reason: null,
+      source: 'mirror',
+      complete: false,
+      captured_at: '2026-09-21T00:00:00.000Z',
+      opencode_session_id: 'ocs-1',
+      message_count: 40,
+      total: 242,
+      next_cursor: 'msg_older',
+      messages: [],
+    },
+  };
+  const envelope = await getSessionTranscriptSync('P1', 'S1', {
+    limit: 40,
+    before: 'msg_tail',
+  });
+  expect(last().url).toContain('before=msg_tail');
+  expect(last().url).toContain('shape=sync');
+  // `complete: false` says the window is partial; these two say by how much and
+  // how to reach the rest.
+  expect(envelope.total).toBe(242);
+  expect(envelope.next_cursor).toBe('msg_older');
+});
+
+test('getSessionTranscriptSync omits the cursor on a first window', async () => {
+  nextResponse = {
+    status: 200,
+    body: { available: false, reason: null, source: 'none', complete: false, captured_at: null, opencode_session_id: null, message_count: 0, messages: [] },
+  };
+  await getSessionTranscriptSync('P1', 'S1', { limit: 40 });
+  expect(last().url).not.toContain('before=');
 });
 
 test('getSessionTurn hits GET /projects/:id/sessions/:id/turn', async () => {
@@ -774,6 +872,10 @@ test('getProjectSessionScope reads canonical session scope', async () => {
   // client can stop calling an inherited default "nothing selected".
   expect(result.connector_bindings_configured).toBe(false);
   expect(result.connector_bindings_inherit_unbound).toBe(true);
+  // A session cannot require a connector any more. The field survives as a
+  // published-type compatibility shim and is always null — a consumer that
+  // branches on it must see "nothing required", never a stale alias list.
+  expect(result.required_connectors).toBeNull();
 });
 
 test('setProjectSessionScope clears a connector override with null', async () => {
@@ -869,6 +971,22 @@ test('createSessionPrompt POSTs the submission name, the wire id, the parts and 
     message_id: 'msg_a',
     deduped: false,
   });
+});
+
+test('createSessionPrompt preserves explicit queue placement on the wire', async () => {
+  for (const placement of ['transcript', 'composer'] as const) {
+    nextResponse = {
+      status: 202,
+      body: { prompt_id: 'cmd-placement', state: 'queued', message_id: 'msg_a', deduped: false },
+    };
+    await createSessionPrompt('P1', 'S1', {
+      clientMessageId: `placement-${placement}`,
+      messageId: 'msg_a',
+      parts: [{ type: 'text', text: 'follow up' }],
+      placement,
+    });
+    expect(last().body).toMatchObject({ placement });
+  }
 });
 
 test('createSessionPrompt asks for a server re-mint only when the caller says its id is stale', async () => {
@@ -1004,6 +1122,36 @@ test('holdSessionPrompts POSTs .../prompts/hold with the flag and returns the qu
   expect(result).toEqual({ prompts: [] });
 });
 
+test('queue row calls never route failures to the host global error handler', async () => {
+  // Every caller of these four already says what went wrong in its own words:
+  // the queue list's remove, retry and resume each toast a specific message,
+  // and the poll is a background read. With `showErrors` left at its TRUE
+  // default the transport ALSO toasted the server's raw prose first, so one
+  // failed remove painted two toasts ("Not found" + "That prompt is no longer
+  // in the queue") — and a failed 1s poll toasted on every tick.
+  // `createSessionPrompt` is deliberately NOT in this list: its 402 has to reach
+  // the host handler, which is what opens the upgrade dialog.
+  const errors: unknown[] = [];
+  configureKortix({
+    backendUrl: 'http://test.local',
+    getToken: async () => 'tok',
+    onError: (err: unknown) => errors.push(err),
+  });
+
+  nextResponse = { status: 500, body: { error: 'boom' } };
+  await listSessionPrompts('P1', 'S1').catch(() => {});
+  nextResponse = { status: 404, body: { error: 'Not found' } };
+  await deleteSessionPrompt('P1', 'S1', 'cmd-1').catch(() => {});
+  nextResponse = { status: 409, body: { error: 'Prompt is already being answered' } };
+  await retrySessionPrompt('P1', 'S1', 'cmd-1').catch(() => {});
+  nextResponse = { status: 503, body: { error: 'unavailable' } };
+  await holdSessionPrompts('P1', 'S1', false).catch(() => {});
+
+  expect(errors).toEqual([]);
+
+  configureKortix({ backendUrl: 'http://test.local', getToken: async () => 'tok' });
+});
+
 test('a prompt call throws on a non-2xx instead of returning a half-answer', async () => {
   nextResponse = { status: 402, body: { error: 'out of credits' } };
   await expect(
@@ -1044,4 +1192,53 @@ test('getSessionOpenBundle asks for the transcript window it was given', async (
 test('getSessionOpenBundle throws when the response is unsuccessful', async () => {
   nextResponse = { status: 500, body: { message: 'boom' } };
   await expect(getSessionOpenBundle('P1', 'S1')).rejects.toBeTruthy();
+});
+
+
+// ── sessionParentId ────────────────────────────────────────────────────────
+//
+// A session spawned by an agent from inside another session carries its parent
+// in `metadata.spawned_by_session` (apps/api/src/projects/lib/sessions.ts:1566,
+// deliberately kept on the LIST payload — see LIST_OMITTED_SESSION_METADATA_KEYS
+// in apps/api/src/projects/lib/serializers.ts:84). `metadata` was
+// `Record<string, unknown>`, so every host re-derived the same `typeof … ===
+// 'string'` cast: apps/web/src/components/projects/session-label.ts:61,
+// apps/web/src/features/workspace/project-sidebar/project-session-list-helpers.ts:359,
+// apps/tui/src/lib/session-groups.ts:145.
+
+const child = (metadata: Record<string, unknown>, sessionId = 'child') =>
+  ({ session_id: sessionId, metadata }) as unknown as ProjectSession;
+
+test('sessionParentId reads metadata.spawned_by_session', () => {
+  expect(sessionParentId(child({ spawned_by_session: 'parent-1' }))).toBe('parent-1');
+});
+
+test('sessionParentId is null for a root session', () => {
+  expect(sessionParentId(child({}))).toBeNull();
+  expect(sessionParentId(child({ spawned_by_session: '' }))).toBeNull();
+  expect(sessionParentId(child({ spawned_by_session: '   ' }))).toBeNull();
+});
+
+test('sessionParentId ignores a non-string value', () => {
+  // The column is jsonb. A malformed row must not produce a parent id that a
+  // caller then uses as a session id.
+  expect(sessionParentId(child({ spawned_by_session: 42 }))).toBeNull();
+  expect(sessionParentId(child({ spawned_by_session: null }))).toBeNull();
+  expect(sessionParentId(child({ spawned_by_session: { id: 'x' } }))).toBeNull();
+});
+
+test('sessionParentId refuses a self-referential link', () => {
+  // A session that is its own parent would make any tree walk loop forever.
+  expect(sessionParentId(child({ spawned_by_session: 'child' }, 'child'))).toBeNull();
+});
+
+test('sessionParentId tolerates a session with no metadata at all', () => {
+  expect(sessionParentId({ session_id: 'a' } as unknown as ProjectSession)).toBeNull();
+});
+
+test('ProjectSession.metadata types spawned_by_session as an optional string', () => {
+  const session = child({ spawned_by_session: 'parent-1' });
+  // No cast: the narrowing is the point of the typed metadata.
+  const parent: string | undefined = session.metadata.spawned_by_session;
+  expect(parent).toBe('parent-1');
 });

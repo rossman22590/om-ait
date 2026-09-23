@@ -289,6 +289,10 @@ async function resolveSupabaseAuth(c: Context, next: Next) {
     // Read by requireScope() to gate Kortix CLI/API actions on top of the
     // user's own role — net effect = userRole ∩ agentGrant.
     c.set('agentGrant', result.agentGrant ?? null);
+    // The human this agent session acts on behalf of (null = unattended, or
+    // cleared by another human's prompt). Personal resources only — see
+    // iam/actor.ts `credentialOnBehalfOf` and projects/lib/on-behalf-of.ts.
+    c.set('onBehalfOfUserId', result.onBehalfOfUserId ?? null);
     setSentryUser({ id: result.userId, accountId: result.accountId });
     setContextField('userId', result.userId);
     if (result.accountId) setContextField('accountId', result.accountId);
@@ -339,7 +343,12 @@ async function resolveSupabaseAuth(c: Context, next: Next) {
     // without a sandbox hop. Write-only, about the caller's own session, and
     // the handler re-checks the token's sandbox against `session_sandboxes`
     // (sandbox id -> session -> account) before it stores anything.
-    path.endsWith('/runtime-projection');
+    path.endsWith('/runtime-projection') ||
+    // A legacy sandbox credential can fetch one descriptor for one persisted
+    // prompt attachment. The route handler re-checks sandbox, session,
+    // account, project, command, reference, and part index. Keep this exact
+    // shape: a broader attachment prefix would expose user upload routes.
+    /^\/v1\/projects\/[^/]+\/runtime\/prompt-attachments\/[^/]+$/.test(path);
   if (isKortixToken(token) && sandboxTokenPathAllowed) {
     const result = await validateSecretKey(token);
     if (!result.isValid) {
@@ -611,6 +620,10 @@ async function resolveCombinedAuth(c: Context, next: Next) {
       c.set('sandboxId', patResult.sessionId);
     }
     c.set('agentGrant', patResult.agentGrant ?? null);
+    // Same as supabaseAuth's PAT branch: the fresh on_behalf_of for personal
+    // resources (projects/lib/personal-resources.ts). combinedAuth fronts the
+    // connector gateway, where a foreign prompt's clear must apply at once.
+    c.set('onBehalfOfUserId', patResult.onBehalfOfUserId ?? null);
     setSentryUser({ id: patResult.userId, accountId: patResult.accountId });
     setContextField('userId', patResult.userId);
     if (patResult.accountId) setContextField('accountId', patResult.accountId);

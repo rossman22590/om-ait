@@ -1,3 +1,4 @@
+import { sessionAttachmentStore } from '../lib/session-attachments';
 import { pauseComputeSession } from '../../billing/services/compute-metering';
 import { config, type SandboxProviderName } from '../../config';
 import { logger } from '../../lib/logger';
@@ -18,7 +19,7 @@ import { allocateSessionRuntime } from '../lib/session-runtime-allocator';
 import {
   projectImageAllowedForSession,
   sandboxSlugFromSessionMetadata,
-  workspaceModeFromSessionMetadata,
+  repositoryAccessFromSessionMetadata,
 } from '../lib/session-sandbox-metadata';
 import {
   buildSessionSandboxEnvVars,
@@ -38,11 +39,10 @@ import {
 } from '../runtime-identity';
 import { inspectSandboxRuntime } from '../runtime-inspection';
 import { prepareInitialSandboxTurn } from '../sandbox-turn-lifecycle';
-import { prepareInPlaceRestartMetadata } from './readiness-clocks';
+import { claimInPlaceRestart } from './runtime-restart-claim';
 import {
   RUNTIME_RESTART_LEASE_MS,
   restartClaimIsActive,
-  runtimeRestartClaimMetadata,
 } from './runtime-restart-fence';
 
 export async function deleteSession(input: {
@@ -64,6 +64,12 @@ export async function deleteSession(input: {
       ),
     )
     .limit(1);
+
+  // Release the session's prompt attachments before the tombstone, so a failed
+  // release fails a delete that can still be retried. The cleanup sweep then
+  // removes each unreferenced object before its metadata.
+  const { releasePromptAttachmentsForSession } = await import('../prompt-attachments');
+  await releasePromptAttachmentsForSession({ sessionId, projectId, accountId });
 
   const deletedAt = new Date();
   const [row] = await db
@@ -87,6 +93,10 @@ export async function deleteSession(input: {
     .returning();
 
   if (!row) return { error: 'Not found', status: 404 };
+
+  await Promise.resolve().then(() => sessionAttachmentStore().removeSession(projectId, sessionId)).catch((error) => {
+    console.error('[session-attachments] cleanup failed', { projectId, sessionId, error });
+  });
 
   if (sandbox) {
     await db
@@ -249,7 +259,7 @@ export async function restartSession(input: {
       agentName: session.agentName ?? 'default',
       allowProjectImage: projectImageAllowedForSession(
         session.agentName,
-        workspaceModeFromSessionMetadata(session.metadata),
+        repositoryAccessFromSessionMetadata(session.metadata),
       ),
       sandboxSlug: sandboxSlugFromSessionMetadata(session.metadata),
       runtimeMetadata,
@@ -273,7 +283,7 @@ export async function restartSession(input: {
           // meta agent config, so the daemon clones the project over the meta
           // workspace and wipes /workspace/AGENTS.md.
           platformMetaAgent: isMetaAgentName(session.agentName ?? ''),
-          workspaceMode: workspaceModeFromSessionMetadata(session.metadata),
+          repositoryAccess: repositoryAccessFromSessionMetadata(session.metadata),
           restoreSessionBranch: true,
         }),
       resolveGitProject: async () => withProjectGitAuth(loaded.row as any),
@@ -370,38 +380,15 @@ export async function restartSession(input: {
     const restartLeaseExpiresAt = new Date(
       restartStartedAt.getTime() + RUNTIME_RESTART_LEASE_MS,
     );
-    const restartMetadata = runtimeRestartClaimMetadata(
-      prepareInPlaceRestartMetadata(existingSandbox.metadata, restartStartedAt),
-      {
+    const claimedRestart = await claimInPlaceRestart({
+      sandboxId: sessionId,
+      externalId,
+      claim: {
         id: restartId,
         startedAt: restartStartedAt,
         leaseExpiresAt: restartLeaseExpiresAt,
       },
-    );
-    // The metadata predicate is the lifecycle lock. `/restart` returns before
-    // the provider stop/start finishes, so an HTTP mutation's `isPending` flag
-    // cannot serialize a second tab, a refresh, or a repeated click. Only one
-    // request may install an unexpired restart id on this session.
-    const [claimedRestart] = await db
-      .update(sessionSandboxes)
-      .set({
-        status: 'provisioning',
-        metadata: restartMetadata,
-        updatedAt: restartStartedAt,
-      })
-      .where(
-        and(
-          eq(sessionSandboxes.sandboxId, sessionId),
-          eq(sessionSandboxes.externalId, externalId),
-          sql`(
-            ${sessionSandboxes.metadata}->>'runtimeRestartId' IS NULL
-            OR ${sessionSandboxes.metadata}->>'runtimeRestartLeaseExpiresAt' IS NULL
-            OR ${sessionSandboxes.metadata}->>'runtimeRestartLeaseExpiresAt' !~ '^\\d{4}-\\d{2}-\\d{2}T'
-            OR ${sessionSandboxes.metadata}->>'runtimeRestartLeaseExpiresAt' <= ${restartStartedAt.toISOString()}
-          )`,
-        ),
-      )
-      .returning({ sandboxId: sessionSandboxes.sandboxId });
+    });
     if (!claimedRestart) {
       const [current] = await db
         .select({ metadata: sessionSandboxes.metadata })
@@ -434,23 +421,35 @@ export async function restartSession(input: {
       })
       .where(eq(projectSessions.sessionId, sessionId));
 
-    const ownsRestart = async () => {
+    // Every abandon is logged. A restart that silently lost its claim left the
+    // row in `provisioning` with nothing in the logs: SESS-9 sat there ~350 s
+    // on every preview because the egress pin overwrote the claim (2026-09).
+    const ownsRestart = async (step: string) => {
       const [current] = await db
         .select({ metadata: sessionSandboxes.metadata })
         .from(sessionSandboxes)
         .where(eq(sessionSandboxes.sandboxId, sessionId))
         .limit(1);
-      return (
-        (current?.metadata as Record<string, unknown> | null)
-          ?.runtimeRestartId === restartId
-      );
+      const holder = (current?.metadata as Record<string, unknown> | null)
+        ?.runtimeRestartId;
+      if (holder === restartId) return true;
+      logger.warn('[projects] restart abandoned: lost the restart claim', {
+        session_id: sessionId,
+        project_id: projectId,
+        external_id: externalId,
+        restart_id: restartId,
+        step,
+        row_found: Boolean(current),
+        current_restart_id: typeof holder === 'string' ? holder : null,
+      });
+      return false;
     };
 
     void (async () => {
       try {
-        if (!(await ownsRestart())) return;
+        if (!(await ownsRestart('before_stop'))) return;
         await provider.stop(externalId).catch(() => {});
-        if (!(await ownsRestart())) return;
+        if (!(await ownsRestart('after_stop'))) return;
         invalidateProviderCache(externalId);
         await db
           .update(sessionSandboxes)
@@ -465,7 +464,7 @@ export async function restartSession(input: {
             ),
           );
         await provider.start(externalId);
-        if (!(await ownsRestart())) return;
+        if (!(await ownsRestart('after_start'))) return;
         // Provider ingress credentials can change on every stop/start cycle.
         // Remove any link resolved while the sandbox was stopped.
         invalidateProviderCache(externalId);
@@ -500,7 +499,7 @@ export async function restartSession(input: {
           }
         }
         if (verifiedStatus === 'removed') {
-          if (!(await ownsRestart())) return;
+          if (!(await ownsRestart('before_recovery'))) return;
           const claim = await claimInPlaceRuntimeRecovery(existingSandbox);
           if (!claim) return;
           const recovery = await provider
@@ -552,7 +551,16 @@ export async function restartSession(input: {
             ),
           )
           .returning({ sandboxId: sessionSandboxes.sandboxId });
-        if (!finalized) return;
+        if (!finalized) {
+          logger.warn('[projects] restart abandoned: lost the restart claim', {
+            session_id: sessionId,
+            project_id: projectId,
+            external_id: externalId,
+            restart_id: restartId,
+            step: 'finalize',
+          });
+          return;
+        }
         await db
           .update(projectSessions)
           .set({ status: 'running', updatedAt: new Date() })
