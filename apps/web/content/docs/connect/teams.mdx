@@ -55,6 +55,12 @@ it; later messages continue it, even after the sandbox stops and resumes. A
 tenant connected to more than one project shows a **project picker** on the
 first unrouted message, and remembers the choice.
 
+In a channel, every new post starts its own session. A personal or group chat
+is one conversation for its whole life, so it keeps one session until you send
+`/new`. Put a message after it (`/new summarize today's deploys`) to start the
+new session with that message. The previous session stays in Kortix, with its
+full history, and the confirmation links to it.
+
 ## Who may join a session
 
 Each conversation has a join policy, set with `/policy` in Teams or from the
@@ -81,6 +87,7 @@ Type these in a chat with the bot (in a channel, `@`-mention it first):
 | `/login`, `/logout`, `/whoami` | Link, unlink, or show your Kortix account |
 | `/status` | The effective project, agent and model here, and the run in progress |
 | `/stop` | Stop the run in progress here |
+| `/new [message]` | Start a new session in this chat (personal and group chats) |
 | `/models`, `/model <ref>` | Pick the model for this conversation |
 | `/agents`, `/agent <name>` | Pick the agent for this conversation |
 | `/projects`, `/use <name>` | List connected projects, or point this one at another |
@@ -119,13 +126,19 @@ model pick is left alone.
 
 ## Questions and forms
 
-The agent asks with controls, not prose. A quick either/or arrives as a card
-with a button per option. Anything that needs typed input or several answers
-arrives as a form: text boxes, dropdowns, toggles and a Submit button, like
-asking in the Kortix app.
+The agent asks with controls, not prose — the same shape as a question in the
+Kortix app:
 
-Either way you answer in place, and your answer reaches the agent as your next
-message in the conversation. You can always ignore the card and just type.
+- **One question, up to six options** — a button per option. One tap answers.
+- **Several questions, a pick-several question, or a longer list** — one form:
+  each question with its options listed, a box for an answer of your own, and a
+  **Send answers** button.
+- **A date, a time, a number, or an on/off choice** — a form with the matching
+  input.
+
+Your answer reaches the agent as your next message, labelled with the question
+it answers, and the session continues from there. You can always ignore the
+card and type your answer instead.
 
 ## Approvals
 
@@ -161,9 +174,18 @@ If the agent set for the conversation has been deleted or renamed, the failure
 arrives as a picker: choose a live agent, then send your message again. The
 list only offers agents you have access to.
 
+## Reading a channel
+
+In a channel the bot only receives messages that mention it, so the discussion
+it was asked about is not in its session. When it needs that context, the agent
+reads the thread it was mentioned in, or the channel's recent posts, through
+the `ChannelMessage.Read.Group` permission the app requests when it is added to
+a team. A team that added the app before that permission was requested must
+remove and re-add it. In a personal chat every message already reaches the
+session, so there is nothing earlier to read.
+
 ## Limits
 
 Teams bots cannot add message reactions, send ephemeral (only-you) messages, or
-search messages — those Slack affordances have no Teams equivalent. Reading a
-channel's message history needs Microsoft's protected `ChannelMessage.Read.All`
-permission, which a tenant admin must approve.
+search messages — those Slack affordances have no Teams equivalent. The agent
+can read a channel only in a team the app was added to.
