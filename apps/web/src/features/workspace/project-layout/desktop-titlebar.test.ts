@@ -23,7 +23,7 @@ const repoRoot = join(import.meta.dir, '../../../../../..');
 const require_ = createRequire(import.meta.url);
 
 const chrome = require_(join(repoRoot, 'apps/desktop-electron/src/window-chrome.js')) as {
-  MAC_TITLEBAR: { band: number; control: number; lightSize: number; lightFrame: number };
+  MAC_TITLEBAR: { band: number; control: number; lightSize: number; lightFrame: number; nativeCenterCorrectionY: number };
   macBandMetrics: () => {
     band: number;
     lightsEnd: number;
@@ -119,9 +119,9 @@ describe('macOS title-bar band: CSS mirrors the Electron geometry', () => {
   test('the app control and the traffic lights share a centre line', () => {
     const controlCentre =
       cssVarPx(block, '--kx-titlebar-control-top') + chrome.MAC_TITLEBAR.control / 2;
-    // `trafficLightPosition.y` is the top of the 24px button frame; the circle
-    // is centred in it.
-    const lightCentre = chrome.macTrafficLightPosition().y + chrome.MAC_TITLEBAR.lightFrame / 2;
+    // AppKit's visible circle sits above the button frame's midpoint.
+    const lightCentre = chrome.macTrafficLightPosition().y + chrome.MAC_TITLEBAR.lightFrame / 2
+      - chrome.MAC_TITLEBAR.nativeCenterCorrectionY;
     expect(controlCentre).toBe(lightCentre);
     expect(controlCentre).toBe(metrics.band / 2);
   });
@@ -143,8 +143,9 @@ describe('no app control overlaps the macOS traffic lights', () => {
   const block = macVarBlock();
   const light = chrome.macTrafficLightPosition();
   const size = chrome.MAC_TITLEBAR.lightSize;
-  /** The visible circle sits centred in the button frame that `light.y` places. */
-  const circleTop = light.y + (chrome.MAC_TITLEBAR.lightFrame - size) / 2;
+  /** The visible circle is corrected for the measured native rendering. */
+  const circleTop = light.y + (chrome.MAC_TITLEBAR.lightFrame - size) / 2
+    - chrome.MAC_TITLEBAR.nativeCenterCorrectionY;
 
   /** The whole three-light cluster, as a window-space rect. */
   const lights = {
@@ -388,6 +389,19 @@ describe('top-reaching standalone surfaces clear native macOS controls', () => {
     expect(sidebar).toContain('kx-titlebar-row kx-titlebar-band-height');
     expect(shell).toContain('kx-titlebar-row kx-titlebar-band-height');
     expect(shell).toContain('data-sidebar-collapsed={open ? undefined :');
+  });
+
+  test('overlay sidebar and collapsed account header clear the native lights', () => {
+    expect(css).toMatch(/html\[data-desktop-platform='macos'\] \.kx-overlay-sidebar-titlebar\s*\{[^}]*padding-left:\s*var\(--kx-titlebar-control-left\)/);
+    expect(css).toMatch(/html\[data-desktop-platform='macos'\] \.kx-account-hub-header\[data-sidebar-collapsed\]\s*\{[^}]*padding-left:\s*var\(--kx-titlebar-control-left\)/);
+    expect(css).toMatch(/html\[data-desktop-platform='macos'\]\[data-desktop-fullscreen='true'\] \.kx-overlay-sidebar-titlebar\s*\{[^}]*padding-left:\s*0/);
+  });
+
+  test('project-only top inset does not push the account sidebar below its breadcrumb', () => {
+    const projectSidebar = readFileSync(join(repoRoot, 'apps/web/src/features/workspace/project-sidebar/project-sidebar.tsx'), 'utf8');
+    expect(projectSidebar).toContain('kx-project-sidebar-header');
+    expect(css).toContain("html[data-desktop-platform='macos'] .kx-project-sidebar-header {");
+    expect(css).not.toContain("[data-side='left'] [data-sidebar='header']");
   });
 
   test('connecting exit clears the full title-bar inset', () => {

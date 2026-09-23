@@ -1226,15 +1226,10 @@ html[data-desktop='true'] .kx-desktop-drag {
 html[data-desktop-platform='macos'] .kx-desktop-drag {
   margin-left: 80px;
 }
-/* ─── Native macOS feel — Linear-style title-bar zone ───────────────────
-   Both columns reserve the same 32px title-bar zone at top so their
-   first content rows align (sidebar workspace selector ↔ inset page
-   header), exactly like Linear. The OS traffic lights live in that zone
-   on the sidebar side; the inset side stays clean. The collapse chevron
-   sits underneath the lights in the sidebar's chevron-row, then the
-   workspace selector below — full width, untouched. */
-html[data-desktop-platform='macos'] [data-side='left'] [data-sidebar='header'] {
-  padding-top: var(--kx-titlebar-inset);
+/* The project sidebar keeps its own top inset, set inline by its component.
+   Do not apply that inset to overlay sidebars: their first row IS the native
+   titlebar band. */
+html[data-desktop-platform='macos'] .kx-project-sidebar-header {
   -webkit-app-region: drag;
   app-region: drag;
 }
@@ -1263,10 +1258,10 @@ html[data-desktop-platform='macos'] .kx-titlebar-tabs {
   app-region: drag;
   height: var(--kx-titlebar-inset) !important;
 }
-html[data-desktop-platform='macos'] [data-side='left'] [data-sidebar='header'] button,
-html[data-desktop-platform='macos'] [data-side='left'] [data-sidebar='header'] a,
-html[data-desktop-platform='macos'] [data-side='left'] [data-sidebar='header'] input,
-html[data-desktop-platform='macos'] [data-side='left'] [data-sidebar='header'] [role='button'],
+html[data-desktop-platform='macos'] .kx-project-sidebar-header button,
+html[data-desktop-platform='macos'] .kx-project-sidebar-header a,
+html[data-desktop-platform='macos'] .kx-project-sidebar-header input,
+html[data-desktop-platform='macos'] .kx-project-sidebar-header [role='button'],
 html[data-desktop-platform='macos'] .kx-titlebar-tabs button,
 html[data-desktop-platform='macos'] .kx-titlebar-tabs a,
 html[data-desktop-platform='macos'] .kx-titlebar-tabs input,
@@ -1514,6 +1509,22 @@ html[data-desktop-platform='macos'] .kx-titlebar-row [role='button'],
 html[data-desktop-platform='macos'] .kx-titlebar-row [role='tab'] {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+/* Overlay sidebars share the native-light row instead of adding a blank strip.
+   Keep their controls out of AppKit's hit area at every renderer zoom. */
+html[data-desktop-platform='macos'] .kx-overlay-sidebar-titlebar {
+  padding-left: var(--kx-titlebar-control-left);
+}
+/* With the account sidebar hidden, its opener occupies the first web-control
+   slot. The breadcrumb follows it, rather than starting under the lights. */
+html[data-desktop-platform='macos'] .kx-account-hub-header[data-sidebar-collapsed] {
+  padding-left: var(--kx-titlebar-control-left);
+}
+html[data-desktop-platform='macos'][data-desktop-fullscreen='true'] .kx-overlay-sidebar-titlebar {
+  padding-left: 0.5rem;
+}
+html[data-desktop-platform='macos'][data-desktop-fullscreen='true'] .kx-account-hub-header[data-sidebar-collapsed] {
+  padding-left: 0.5rem;
 }
 /* Below the sidebar breakpoint, its docked cookie does not describe the
    visible layout. Every top row clears the native controls and shell opener. */

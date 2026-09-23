@@ -88,15 +88,15 @@ describe('project sidebar header', () => {
   // No keystroke exists on touch, so the button is the only way in there.
   test('search renders on mobile too, unlike the collapse toggle', () => {
     const search = header.slice(header.indexOf("aria-label={t('search')}"));
-    expect(search.indexOf('{!isMobile && (')).toBeGreaterThan(-1);
+    expect(search.indexOf('{!isMobile && !peek && (')).toBeGreaterThan(-1);
     const beforeSearch = header.slice(0, header.indexOf("aria-label={t('search')}"));
-    expect(beforeSearch).not.toContain('{!isMobile && (');
+    expect(beforeSearch).not.toContain('{!isMobile && !peek && (');
   });
 
   // Mobile renders the panel as a Sheet: no docked state to collapse, and
   // `state` there still reads the desktop cookie. Same reason the session
   // header's own toggle exempts mobile from its docked-open gate.
   test('the toggle is desktop-only', () => {
-    expect(header).toContain('{!isMobile && (');
+    expect(header).toContain('{!isMobile && !peek && (');
   });
 });

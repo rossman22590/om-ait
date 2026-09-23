@@ -115,7 +115,7 @@ export function ProjectSidebar({ projectId }: { projectId: string }) {
       className="[scrollbar-width:'none'] [-ms-overflow-style:'none'] [&::-webkit-scrollbar]:hidden"
     >
       <SidebarHeader
-        className="space-y-2"
+        className="kx-project-sidebar-header space-y-2"
         style={{
           paddingTop: peek
             ? 'calc(var(--spacing) * 2)'
