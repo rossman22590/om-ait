@@ -1376,8 +1376,8 @@ html[data-desktop-platform='macos'][data-desktop-fullscreen='true'] {
 }
 
 /* AppHeader (the breadcrumb bar on standalone pages like /projects, /accounts):
-   Win/Linux shells clear the OS window controls by reserving space ABOVE the
-   header (a blank strip that holds the control cluster). */
+   Only macOS needs a web-content band; the Win/Linux native frame already
+   keeps its controls outside the page. */
 html[data-desktop='true'] .kx-app-header {
   padding-top: calc(var(--kx-titlebar-inset) + 1rem);
 }
@@ -1476,21 +1476,20 @@ html[data-desktop='true'] .kx-titlebar-spacer {
 
 /* ─── Rows that reach the top of the window ──────────────────────────────
    A row rendered as the first in-flow child of the project shell starts at
-   y=0, so it shares the band with the OS window controls: the macOS traffic
-   lights on the left, the Win/Linux cluster on the right. Wear
-   `.kx-titlebar-row` and it indents past whichever applies. Indent only — the
-   row keeps its own height.
+   y=0, so it shares the band with the native macOS traffic lights. Win/Linux
+   keep their native frame outside web content. Wear `.kx-titlebar-row` for
+   drag and left clearance; use `.kx-titlebar-band-height` when the row must
+   center on the traffic-light band.
 
    The standalone Files header (/projects/[id]/files) wears this too. It used
    to carry a Files-only near-duplicate of these rules, with its own md+ and
    per-platform split, for a header that no longer exists in that shape — see
-   `drive-header.tsx`. One class, one rule.
+   `drive-header.tsx`.
 
    `data-sidebar-collapsed` gates the left indent: an expanded sidebar covers
    the lights (and the shell's toggle self-hides), so indenting then would
    leave a visible hole. Set it from the same `state === 'collapsed'` the row
-   already reads. The right indent is unconditional — the Win/Linux controls
-   are always there, and the variable is 0px on macOS. */
+   already reads. The right indent remains zero with native frames. */
 html[data-desktop='true'] .kx-titlebar-row {
   padding-right: calc(0.5rem + var(--kx-titlebar-controls-width));
 }
@@ -1500,6 +1499,13 @@ html[data-desktop='true'] .kx-titlebar-row[data-sidebar-collapsed] {
 html[data-desktop-platform='macos'] .kx-titlebar-row {
   -webkit-app-region: drag;
   app-region: drag;
+}
+html[data-desktop-platform='macos'] .kx-titlebar-band-height {
+  height: var(--kx-titlebar-inset);
+}
+html[data-desktop-platform='macos'][data-desktop-fullscreen='true'] .kx-titlebar-band-height {
+  height: auto;
+  min-height: 2.75rem;
 }
 html[data-desktop-platform='macos'] .kx-titlebar-row button,
 html[data-desktop-platform='macos'] .kx-titlebar-row a,

@@ -1,5 +1,5 @@
-import { expect, test } from 'bun:test';
 import { readFileSync } from '@/i18n/test-source';
+import { expect, test } from 'bun:test';
 import { resolve } from 'node:path';
 
 const root = resolve(import.meta.dir, '../..');
@@ -101,7 +101,9 @@ test('the Apps header is the capability tab bar, not a settings masthead', () =>
   // dialect of page chrome.
   const BAR = 'kx-titlebar-row relative flex shrink-0 items-center gap-1 border-b px-2';
   expect(tabs).toContain(BAR);
-  expect(view).toContain(BAR);
+  expect(view).toContain('relative flex shrink-0 items-center gap-1 border-b px-2');
+  expect(view).toContain('kx-titlebar-row');
+  expect(view).toContain('kx-titlebar-band-height');
 
   // `CustomizeSectionWrapper` is the settings-section shell: an 80px centred
   // masthead that scrolls away with the content. Apps is an operational grid

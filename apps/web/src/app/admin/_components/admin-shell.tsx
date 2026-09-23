@@ -162,7 +162,7 @@ function AdminHeader() {
 
   return (
     <header
-      className="kx-titlebar-row border-border flex h-11 shrink-0 items-center gap-1 border-b px-2"
+      className="kx-titlebar-row kx-titlebar-band-height border-border flex h-11 shrink-0 items-center gap-1 border-b px-2"
       data-sidebar-collapsed={state === 'collapsed' ? '' : undefined}
     >
       {showToggle ? <SidebarTrigger className="text-muted-foreground" /> : null}

@@ -368,6 +368,13 @@ describe('top-reaching standalone surfaces clear native macOS controls', () => {
 
   test('admin and presentation header rows share the title-bar geometry', () => {
     expect(sources.admin).toContain('kx-titlebar-row');
+    expect(sources.admin).toContain('kx-titlebar-band-height');
+    expect(css).toContain("html[data-desktop-platform='macos'] .kx-titlebar-band-height {");
+    expect(css).toContain('height: var(--kx-titlebar-inset);');
+    expect(css).toContain(
+      "html[data-desktop-platform='macos'][data-desktop-fullscreen='true'] .kx-titlebar-band-height {",
+    );
+    expect(css).toContain('min-height: 2.75rem;');
     expect(sources.presentation).toContain('kx-titlebar-row');
   });
 

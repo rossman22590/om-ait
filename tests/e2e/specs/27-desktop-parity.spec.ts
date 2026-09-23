@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { createApiJsonClient } from "../helpers/http";
+import { runDatabaseSql } from "../helpers/database";
 import {
   createManifestProject,
   type ManifestProject,
@@ -1085,6 +1086,179 @@ for (const runtime of runtimes) {
 
 const nativeBrowserTest =
   process.env.E2E_DESKTOP_NATIVE === "1" ? browserTest : null;
+nativeBrowserTest?.(
+  "27 — desktop parity clears native controls on Apps, Files, account hub, and admin",
+  async ({ baseURL }) => {
+    browserTest.setTimeout(180_000);
+    const databaseUrl =
+      process.env.KE2E_DATABASE_URL || process.env.E2E_DATABASE_URL;
+    if (!databaseUrl)
+      throw new Error("Desktop geometry requires the configured test database");
+    const profile = await mkdtemp(join(tmpdir(), "kortix-desktop-geometry-"));
+    const email = `e2e-desktop-geometry-${randomUUID()}@example.test`;
+    const user = await createAuthUser(email, authOptions);
+    const session = await signIn(email, authOptions);
+    let project: ManifestProject | undefined;
+    let app: ElectronApplication | undefined;
+    let adminRoleGranted = false;
+    try {
+      const accounts = await api<{ account_id: string }[]>(
+        session.access_token,
+        "GET",
+        "/accounts",
+      );
+      project = await createManifestProject({
+        api,
+        accessToken: session.access_token,
+        accountId: accounts[0].account_id,
+        userId: user.id,
+        name: "Desktop header geometry",
+        databaseUrl,
+      });
+      app = await launchDesktop(baseURL!, profile);
+      const main = app
+        .windows()
+        .find((window) => window.url().startsWith(baseURL!));
+      if (!main) throw new Error("native main window not found");
+      await installBrowserSessionDirect(
+        main,
+        session,
+        `${baseURL}/projects/${project.id}`,
+        authOptions,
+      );
+      await selectAccountForUi(main, accounts[0].account_id);
+      await dismissOnboarding(main);
+      const nativeWindow = await app.browserWindow(main);
+      await nativeWindow.evaluate((window) => window.setContentSize(1100, 700));
+      const zoom = await nativeWindow.evaluate((window) =>
+        window.webContents.getZoomFactor(),
+      );
+      await main.getByRole("button", { name: "Collapse sidebar" }).click();
+
+      for (const route of ["apps", "files"] as const) {
+        await main.goto(`${baseURL}/projects/${project.id}/${route}`);
+        const row = main.locator(".kx-titlebar-row").first();
+        await expect(row).toBeVisible({ timeout: 60_000 });
+        await expect(row).toHaveAttribute("data-sidebar-collapsed", "true");
+        const rowBox = (await row.boundingBox())!;
+        expect((rowBox.y + rowBox.height / 2) * zoom).toBeCloseTo(20, 0);
+        if (route === "apps") {
+          const titleBox = (await row.locator("h1").boundingBox())!;
+          expect((titleBox.y + titleBox.height / 2) * zoom).toBeCloseTo(20, 0);
+        }
+        const dragRegion = await row.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          const y = Math.round(rect.top + rect.height / 2);
+          const appRegion = getComputedStyle(element).webkitAppRegion;
+          for (
+            let x = Math.round(rect.left + 160);
+            x < rect.right - 160;
+            x += 16
+          ) {
+            const target = document.elementFromPoint(x, y);
+            if (!target || !element.contains(target)) continue;
+            if (target.closest("button,a,input,[role='button'],[role='tab']"))
+              continue;
+            return { appRegion, emptyPoint: { x, y } };
+          }
+          throw new Error("no empty drag point in header");
+        });
+        expect(dragRegion.appRegion).toBe("drag");
+        expect(dragRegion.emptyPoint.x).toBeGreaterThan(0);
+        const control = row
+          .locator("button,a,input,[role='button'],[role='tab']")
+          .first();
+        await expect(control).toBeVisible();
+        expect(
+          await control.evaluate(
+            (element) => getComputedStyle(element).webkitAppRegion,
+          ),
+        ).toBe("no-drag");
+      }
+
+      await nativeWindow.evaluate(async (window) => {
+        await new Promise<void>((resolve) => {
+          window.once("enter-full-screen", resolve);
+          window.setFullScreen(true);
+        });
+      });
+      await expect(main.locator("html")).toHaveAttribute(
+        "data-desktop-fullscreen",
+        "true",
+      );
+      await expect
+        .poll(async () =>
+          main
+            .locator(".kx-titlebar-band-height")
+            .first()
+            .evaluate((element) => element.getBoundingClientRect().height),
+        )
+        .toBeGreaterThan(40);
+      await nativeWindow.evaluate(async (window) => {
+        await new Promise<void>((resolve) => {
+          window.once("leave-full-screen", resolve);
+          window.setFullScreen(false);
+        });
+      });
+      await expect(main.locator("html")).not.toHaveAttribute(
+        "data-desktop-fullscreen",
+      );
+
+      await main.goto(
+        `${baseURL}/projects/${project.id}?accountId=${accounts[0].account_id}`,
+      );
+      const hub = main.getByRole("dialog");
+      await expect(hub).toBeVisible({ timeout: 60_000 });
+      const spacer = hub.locator(".kx-titlebar-spacer");
+      await expect(spacer).toBeVisible();
+      const spacerBox = (await spacer.boundingBox())!;
+      expect(spacerBox.height * zoom).toBeCloseTo(40, 1);
+      const firstControl = hub.locator("header button,header a").first();
+      await expect(firstControl).toBeVisible();
+      expect((await firstControl.boundingBox())!.y).toBeGreaterThanOrEqual(
+        spacerBox.y + spacerBox.height - 1,
+      );
+
+      await runDatabaseSql(
+        `INSERT INTO kortix.platform_user_roles (account_id, role)
+         VALUES ($1::uuid, 'super_admin'::kortix.platform_role)
+         ON CONFLICT (account_id) DO UPDATE SET role = EXCLUDED.role`,
+        [user.id],
+        databaseUrl,
+      );
+      adminRoleGranted = true;
+      await main
+        .context()
+        .addCookies([
+          { name: "admin_sidebar_state", value: "false", url: baseURL! },
+        ]);
+      await main.goto(`${baseURL}/admin`);
+      await expect(
+        main.getByRole("heading", { name: "Overview" }).first(),
+      ).toBeVisible({
+        timeout: 60_000,
+      });
+      const adminRow = main.locator(".kx-titlebar-row").first();
+      await expect(adminRow).toHaveAttribute("data-sidebar-collapsed", "");
+      const adminToggle = adminRow.getByRole("button").first();
+      await expect(adminToggle).toBeVisible();
+      const toggleBox = (await adminToggle.boundingBox())!;
+      expect(toggleBox.x * zoom).toBeGreaterThanOrEqual(72);
+      expect((toggleBox.y + toggleBox.height / 2) * zoom).toBeCloseTo(20, 0);
+    } finally {
+      if (adminRoleGranted)
+        await runDatabaseSql(
+          "DELETE FROM kortix.platform_user_roles WHERE account_id = $1::uuid",
+          [user.id],
+          databaseUrl,
+        );
+      await project?.dispose();
+      await deleteAuthUser(user.id, authOptions);
+      await app?.close();
+      await rm(profile, { recursive: true, force: true });
+    }
+  },
+);
 nativeBrowserTest?.(
   "27 — desktop parity restores the native theme before the first window and matches popups",
   async ({ baseURL }) => {
