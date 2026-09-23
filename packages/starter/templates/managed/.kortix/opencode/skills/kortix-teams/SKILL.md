@@ -111,16 +111,16 @@ teams send "It was api@a3f1 — the new auth middleware drops the trace header o
 
 - **Mark phase transitions, not every shell call.** ~3–6 per turn is right for most tasks; one per `bash` is noise.
 - **Set `--detail` and `--output` once per step.** They're truncated at 500 chars upstream; aim for one tight sentence.
-- **Don't `teams step` after `teams send`.** The card is closed once the answer ships; further steps drop silently.
+- **Don't `teams step` after `teams send`.** The card is closed once the answer ships; a later step opens a second card below it.
 </live-stream>
 
 <keeping-it-lively>
-Unlike Slack's streaming (which hard-fails after ~5 minutes of silence), the Teams live card is a posted message the server **edits in place** — it does **not** expire if you go quiet, so a long, silent step won't paint a false "error". That's the good news.
+Unlike Slack's streaming (which hard-fails after ~5 minutes of silence), the Teams live card is a posted message the server **edits in place**. It stays open as long as your run is alive, so a long, silent step (a build, a test suite) won't paint a false "error". That's the good news.
 
 The flip side: Teams **rate-limits** how fast a message can be edited, so the server coalesces rapid updates. Two practical consequences:
 
 - **Don't spam steps.** Firing ten `teams step`s in two seconds is pointless — intermediate edits get dropped by the throttle and only the latest survives. Space them at real phase boundaries.
-- **Still don't go dark for ages.** There's no timeout to trip, but a wall of nothing for ten minutes is bad UX. Post a step before anything slow (`git clone`, `pnpm install`, a test suite, a build, deep research, a big LLM call) so the conversation always shows fresh, honest progress.
+- **Still don't go dark for ages.** A live run has no timeout to trip, but a wall of nothing for ten minutes is bad UX. Post a step before anything slow (`git clone`, `pnpm install`, a test suite, a build, deep research, a big LLM call) so the conversation always shows fresh, honest progress.
 
 The rule of thumb: **one checkpoint per meaningful phase** — enough that a teammate watching always knows what's happening, not so many that you're fighting the throttle.
 </keeping-it-lively>
@@ -134,8 +134,8 @@ teams send "Reverted api@a3f1 — the new auth middleware dropped the trace head
 
 This finalizes the live card: the plan flips to **Task complete**, your answer renders below it, and a link back to the Kortix session is appended automatically. The server wraps your text into the Adaptive Card — you don't build the card yourself; just write a clear, well-structured message.
 
-- **One `teams send` per turn.** It closes the card; a second call drops silently. If you have multiple things to say, fold them into one message.
-- **Send the answer LAST.** Any `teams step` after it is ignored.
+- **One `teams send` per turn.** It closes the card; a second call posts a separate card. If you have multiple things to say, fold them into one message.
+- **Send the answer LAST.** A `teams step` after it opens a new card.
 </final-answer>
 
 <asking-the-user>
@@ -352,8 +352,8 @@ Reply like a colleague messaging on Teams:
 
 <gotchas>
 - **Standard Markdown, not Slack mrkdwn.** `**bold**` and `[label](url)` — never `*bold*` / `<url|label>`.
-- **`teams step` after `teams send` drops silently.** Always send the answer last.
-- **One `teams send` per turn** finalizes the card; a second call is ignored.
+- **Send the answer last.** A `teams step` after `teams send` opens a new card.
+- **One `teams send` per turn** finalizes the card; a second call posts a separate card.
 - **Asking → the `question` tool + end the turn.** It renders a real card and returns at once; the answer is your next turn. An older copy of this skill said the tool had no Teams renderer — that is no longer true.
 - **`teams send --file`: an image is shown inline in every scope.** Any other file in a personal chat is a consent card — the user must Accept, and it does NOT finalize the turn, so follow it with a `teams send "..."`. In a channel a document becomes a drive link. An image too large to show inline falls back the same way; in a group chat it comes back as an error asking for a smaller one. Limit ~4 MB.
 - **Downloads come from the prompt.** Attached-file URLs are listed in your prompt; pass them to `teams download`.
