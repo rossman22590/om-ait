@@ -117,8 +117,41 @@ export interface SessionAttachmentReference {
 
 /** Tools whose card an agent uses to hand the user a result. */
 const SHOWN_TOOLS = new Set(["show", "show_user"]);
-/** A prompt's inline file reference, as the runtime writes it into user text. */
-const FILE_TAG = /<file\s+([^>]*?)>[\s\S]*?<\/file>/g;
+/**
+ * The attribute text of every `<file …>…</file>` block — a prompt's inline file
+ * reference, as the runtime writes it into user text.
+ *
+ * NOT A REGEX. `/<file\s+([^>]*?)>[\s\S]*?<\/file>/g` is quadratic: `\s+` and
+ * `[^>]*?` both match whitespace, so `<file` followed by N spaces and no `>` is
+ * re-split N ways (CodeQL js/polynomial-redos; ~10 s at 200k characters). This
+ * reads user text, so each search starts past the previous one and the scan
+ * stops as soon as a delimiter it needs is absent from the rest — if no `>` or
+ * `</file>` follows one opener, none follows any later opener either.
+ *
+ * Same blocks the regex matched: whitespace required after `file`, attributes
+ * up to the first `>`, the body skipped up to the first `</file>`. The platform
+ * uses an identical scanner (`@kortix/shared`'s `fileTagBlocks`); this package
+ * carries its own copy because it is published without that dependency.
+ */
+function fileTagAttributes(text: string): string[] {
+  const found: string[] = [];
+  let from = 0;
+  for (;;) {
+    const index = text.indexOf("<file", from);
+    if (index === -1) return found;
+    const after = index + "<file".length;
+    if (after >= text.length || !/\s/.test(text[after]!)) {
+      from = after;
+      continue;
+    }
+    const gt = text.indexOf(">", after);
+    if (gt === -1) return found;
+    const close = text.indexOf("</file>", gt + 1);
+    if (close === -1) return found;
+    found.push(text.slice(after, gt).trimStart());
+    from = close + "</file>".length;
+  }
+}
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   !!value && typeof value === "object" && !Array.isArray(value);
@@ -196,8 +229,7 @@ export function findSessionAttachments(messages: readonly unknown[]): SessionAtt
       if (part.type === "file") {
         add(part.url, stringOrNull(part.filename), stringOrNull(part.mime), messageId, role);
       } else if (part.type === "text" && typeof part.text === "string") {
-        for (const match of part.text.matchAll(FILE_TAG)) {
-          const attrs = match[1] ?? "";
+        for (const attrs of fileTagAttributes(part.text)) {
           add(
             tagAttribute(attrs, "attachment"),
             tagAttribute(attrs, "filename") ?? basename(tagAttribute(attrs, "path")),

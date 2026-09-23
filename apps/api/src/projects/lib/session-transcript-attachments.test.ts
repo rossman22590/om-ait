@@ -376,3 +376,19 @@ test('the recorded reference survives into the stored mirror row', async () => {
   expect(input.path).toBe('/workspace/out/revenue.png');
   expect(input.title).toBe('Revenue');
 });
+
+test('a pathological prompt cannot stall the capture', async () => {
+  // Recovery scans user text for `<file>` tags synchronously, on the API's
+  // event loop, at every capture. The regex it used took ~10 s on this input
+  // (quadratic: each doubling quadrupled it) and stalled every request on the
+  // process for that long. The text is whatever a user typed.
+  const f = fixture();
+  const evil = `${'<file\t'.repeat(40_000)}${'<file'}${'\t'.repeat(200_000)}`;
+  const started = performance.now();
+  await recoverTranscriptAttachments({
+    ...f.input,
+    messages: [row([{ id: 'p', type: 'text', text: evil }])],
+  });
+  expect(performance.now() - started).toBeLessThan(200);
+  expect(f.paths).toEqual([]);
+});

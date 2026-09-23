@@ -273,3 +273,34 @@ test("a malformed transcript yields nothing rather than throwing", () => {
     ] as never),
   ).toEqual([]);
 });
+
+test("a pathological message cannot stall the scan", () => {
+  // `findSessionAttachments` reads user text, which a user wrote. A regex of
+  // the shape `<file\s+([^>]*?)>` is quadratic on `<file` + whitespace with no
+  // `>` (CodeQL js/polynomial-redos) — ~10 s on this input.
+  const evil = `${"<file\t".repeat(40_000)}<file${"\t".repeat(200_000)}`;
+  const started = performance.now();
+  const found = findSessionAttachments([
+    { info: { id: "m", role: "user" }, parts: [{ id: "p", type: "text", text: evil }] },
+  ]);
+  expect(performance.now() - started).toBeLessThan(100);
+  expect(found).toEqual([]);
+});
+
+test("a <file> tag inside another file's body is not a second reference", () => {
+  // The body of a tag is file CONTENT. A document that mentions a tag in its
+  // text must not have that mention read as an attachment of the session.
+  const found = findSessionAttachments([
+    {
+      info: { id: "m", role: "user" },
+      parts: [
+        {
+          id: "p",
+          type: "text",
+          text: `<file path="/w/outer.txt" filename="outer.txt" attachment="${ref}">see <file path="/w/x" attachment="${refB}"> here</file> after`,
+        },
+      ],
+    },
+  ]);
+  expect(found.map((a) => a.url)).toEqual([ref]);
+});

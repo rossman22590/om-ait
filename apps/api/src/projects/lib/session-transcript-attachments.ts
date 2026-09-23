@@ -1,6 +1,7 @@
 import path from 'node:path';
 import {
   MAX_SESSION_ATTACHMENT_BYTES,
+  fileTagBlocks,
   parseSessionAttachmentRef,
   sessionAttachmentRef,
   type SessionAttachmentScope,
@@ -15,7 +16,6 @@ type SavedFile = SessionAttachmentScope & {
   mime: string;
   bytes: Uint8Array;
 };
-const tags = () => /<file\s+([^>]*?)>\s*[\s\S]*?<\/file>/g;
 const unescape = (value: string) =>
   value
     .replace(/&quot;/g, '"')
@@ -354,33 +354,37 @@ export async function recoverTranscriptAttachments(input: RecoverInput): Promise
         );
         parts.push(url ? { ...part, url } : part);
       } else if (part.type === 'text' && typeof part.text === 'string') {
-        const priorTags = [...String(prior?.text ?? '').matchAll(tags())];
+        // `fileTagBlocks`, not a regex: the regex this replaced was quadratic in
+        // user-controlled text and ran on the API's event loop here, at every
+        // capture — see `@kortix/shared/file-tags`.
+        const priorTags = fileTagBlocks(String(prior?.text ?? ''));
         let text = '';
         let end = 0;
         let ordinal = 0;
-        for (const match of part.text.matchAll(tags())) {
-          const attrs = match[1]!;
+        for (const block of fileTagBlocks(part.text)) {
+          const attrs = block.attrs;
+          const whole = part.text.slice(block.index, block.end);
           const source = attribute(attrs, 'path');
           const existing = attribute(attrs, 'attachment');
-          let replacement = match[0];
+          let replacement = whole;
           if (source && !parseSessionAttachmentRef(existing)) {
             const url = await save(
               source,
               attribute(attrs, 'filename') || path.posix.basename(source),
               attribute(attrs, 'mime') || 'application/octet-stream',
               String(ordinal),
-              attribute(priorTags[ordinal]?.[1] ?? '', 'attachment'),
+              attribute(priorTags[ordinal]?.attrs ?? '', 'attachment'),
             );
             if (url)
               replacement = replacement.replace(
-                /<file\s+[^>]*>/,
+                /<file\s[^>]*>/,
                 (tag) => existing !== undefined
                   ? tag.replace(/\sattachment="[^"]*"/, ` attachment="${url}"`)
                   : `${tag.slice(0, -1)} attachment="${url}">`,
               );
           }
-          text += part.text.slice(end, match.index) + replacement;
-          end = match.index! + match[0].length;
+          text += part.text.slice(end, block.index) + replacement;
+          end = block.end;
           ordinal++;
         }
         parts.push({ ...part, text: text + part.text.slice(end) });

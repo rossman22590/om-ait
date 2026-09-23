@@ -1,6 +1,6 @@
 'use client';
 
-import { fetchSessionAttachment, isSandboxNotReadyError, isSessionAttachmentRef } from '@kortix/sdk';
+import { fetchSessionAttachment, isSessionAttachmentRef } from '@kortix/sdk';
 import { useRuntimeStore } from '@kortix/sdk/react';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
