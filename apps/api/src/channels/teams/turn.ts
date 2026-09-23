@@ -5,9 +5,9 @@ import { config } from '../../config';
 import { classifyTurnError, type TurnErrorInfo } from '../slack/errors';
 import { sessionWebUrl } from '../slack/util';
 import type { StreamTaskChunk } from '../slack-api';
-import { sendCard, updateCard } from '../teams-api';
+import { sendCard, sendText, updateCard } from '../teams-api';
 import { saveTeamsServiceUrl } from '../install-store';
-import { buildAnswerCard, buildFinalCard, buildNoticeCard, buildPlanCard } from './cards';
+import { TRUNCATION_NOTE, buildAnswerCard, buildFinalCard, buildNoticeCard, buildPlanCard, fitBodyToCard } from './cards';
 import { mrkdwnToTeamsMarkdown } from './markdown';
 import { STREAM_TTL_MS, STALE_AFTER_MS } from './app';
 import type { TeamsActivity, TeamsChannelRef, TeamsConversationRef, TeamsLiveTurn } from './types';
@@ -325,18 +325,27 @@ export async function finalizeTurn(
 ): Promise<void> {
   if (handle.finalized && handle.messageActivityId === '' && !opts.answer && !opts.error && !opts.card) return;
   const hasContent = Boolean(opts.answer || opts.error || opts.card);
-  const body = (opts.answer ?? opts.error ?? '').slice(0, 11000);
+  // A bound on the work below, not the delivered length: `fitBodyToCard`
+  // decides that from the card's real size.
+  const raw = opts.answer ?? opts.error ?? '';
+  const body = raw.length > MAX_BODY_CHARS ? raw.slice(0, MAX_BODY_CHARS) : raw;
   const title = opts.title ?? (opts.error ? 'Run failed' : 'Task complete');
   const sessionUrl =
     handle.projectId && handle.sessionId
       ? sessionWebUrl(config.FRONTEND_URL, handle.projectId, handle.sessionId)
       : undefined;
+  const ref = refOf(handle);
 
+  // Did the answer reach the conversation? `updateCard` and `sendCard` report
+  // a refusal by returning, not throwing — and a refused final card used to
+  // leave the live card on its last step with the answer gone.
+  let delivered = false;
   try {
     if (opts.card) {
       const answer = buildAnswerCard(body, sessionUrl, opts.card);
-      if (handle.messageActivityId) await updateCard(refOf(handle), handle.messageActivityId, answer);
-      else await sendCard(refOf(handle), answer);
+      delivered = handle.messageActivityId
+        ? await updateCard(ref, handle.messageActivityId, answer)
+        : Boolean(await sendCard(ref, answer));
     } else if (handle.messageActivityId) {
       const last = handle.steps[handle.steps.length - 1];
       if (last && last.status === 'in_progress') {
@@ -345,20 +354,58 @@ export async function finalizeTurn(
         // the user chose to end, or over a question waiting on them.
         last.status = opts.unfinished ? 'pending' : opts.error ? 'error' : 'complete';
       }
-      await updateCard(
-        refOf(handle),
-        handle.messageActivityId,
-        buildFinalCard({ title, steps: handle.steps, body, sessionUrl }),
-      );
+      const render = (b: string) => buildFinalCard({ title, steps: handle.steps, body: b, sessionUrl });
+      const fitted = fitBodyToCard(body, render);
+      delivered = await updateCard(ref, handle.messageActivityId, render(fitted.body));
     } else if (hasContent) {
-      await sendCard(refOf(handle), buildAnswerCard(body, sessionUrl));
+      const render = (b: string) => buildAnswerCard(b, sessionUrl);
+      delivered = Boolean(await sendCard(ref, render(fitBodyToCard(body, render).body)));
+    } else {
+      delivered = true;
     }
   } catch (err) {
-    console.warn('[teams-webhook] finalize render failed (turn still closed)', {
+    console.warn('[teams-webhook] finalize render failed', {
       sessionId: handle.sessionId,
       err: (err as Error)?.message,
     });
   }
+  if (delivered || !hasContent) return;
+
+  // Teams refused the card — too large, or a card the agent built that Teams
+  // will not render. The answer must not vanish: post it as text, which Teams
+  // takes where it refuses a card, and close the live card so it does not
+  // read as still working. Slack has had this fallback since its own answers
+  // outgrew one section (slack/turn.ts plainFallback).
+  console.warn('[teams-webhook] final card refused; posting the answer as text', { sessionId: handle.sessionId });
+  if (handle.messageActivityId) {
+    await updateCard(
+      ref,
+      handle.messageActivityId,
+      buildFinalCard({ title, steps: handle.steps, body: 'The answer is in the next message.', sessionUrl }),
+    ).catch(() => false);
+  }
+  const text = fitTextMessage(body || 'The agent replied with a card Teams could not show.', sessionUrl);
+  const posted = await sendText(ref, text).catch(() => null);
+  if (!posted) console.warn('[teams-webhook] answer could not be delivered as text either', { sessionId: handle.sessionId });
+}
+
+/** Past this the fitting loop costs more than any card could hold. */
+const MAX_BODY_CHARS = 60_000;
+
+/** A plain-text message stays under Teams' ~28 KB limit with the same margin as a card. */
+const TEXT_BUDGET_BYTES = 20_000;
+
+function fitTextMessage(body: string, sessionUrl?: string): string {
+  const link = sessionUrl ? `\n\n[Open session in Kortix ↗](${sessionUrl})` : '';
+  let out = body;
+  if (Buffer.byteLength(out + link, 'utf8') > TEXT_BUDGET_BYTES) {
+    // Characters, not bytes, are what slice counts: shrink until the bytes fit.
+    while (out.length > 0 && Buffer.byteLength(`${out}\n\n${TRUNCATION_NOTE}${link}`, 'utf8') > TEXT_BUDGET_BYTES) {
+      out = out.slice(0, Math.floor(out.length * 0.9));
+    }
+    out = `${out.trimEnd()}\n\n${TRUNCATION_NOTE}`;
+  }
+  return `${out}${link}`;
 }
 
 export function buildTeamsTurnEnv(tenantId: string, activity: TeamsActivity): Record<string, string> {

@@ -72,12 +72,82 @@ function stepElements(step: StreamTaskChunk): CardElement[] {
   return out;
 }
 
+/**
+ * Teams refuses a message over about 28 KB, card JSON included, and the
+ * refusal is silent to the person waiting: the live card simply stops
+ * changing. Every card that grows with the run is kept under this.
+ */
+export const TEAMS_CARD_BUDGET_BYTES = 24_000;
+
+/** The plan's share of a card, so a long run still leaves room for its answer. */
+const PLAN_BUDGET_BYTES = 12_000;
+
+export const TRUNCATION_NOTE = '_… truncated — open the session for the full output._';
+
+export function cardBytes(value: unknown): number {
+  return Buffer.byteLength(JSON.stringify(value), 'utf8');
+}
+
 function planContainer(title: string, steps: StreamTaskChunk[]): CardElement[] {
   const elements: CardElement[] = [
     { type: 'TextBlock', text: title, weight: 'bolder', size: 'medium', wrap: true },
   ];
-  for (const step of steps) elements.push(...stepElements(step));
+  // Newest steps first into the budget: the step in flight is the one a
+  // reader needs, and the oldest ones are what a long run can spare.
+  const shown: CardElement[][] = [];
+  let used = 0;
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const els = stepElements(steps[i]!);
+    const size = cardBytes(els);
+    if (shown.length > 0 && used + size > PLAN_BUDGET_BYTES) break;
+    shown.unshift(els);
+    used += size;
+  }
+  const hidden = steps.length - shown.length;
+  if (hidden > 0) {
+    elements.push(text(`… ${hidden} earlier ${hidden === 1 ? 'step' : 'steps'}`, { isSubtle: true, size: 'small' }));
+  }
+  for (const els of shown) elements.push(...els);
   return elements;
+}
+
+/**
+ * The longest head of `body` whose rendered card fits the budget, cut at a
+ * line break and marked as cut. The whole body when it fits.
+ *
+ * A long answer used to be cut at 11,000 characters with no mark, and one
+ * whose card still exceeded the limit — a table, code, anything not ASCII —
+ * was refused by Teams and never shown at all.
+ */
+export function fitBodyToCard(
+  body: string,
+  render: (body: string) => unknown,
+  budget = TEAMS_CARD_BUDGET_BYTES,
+): { body: string; truncated: boolean } {
+  if (cardBytes(render(body)) <= budget) return { body, truncated: false };
+  const marked = (head: string) => {
+    let out = head.trimEnd();
+    // An unclosed fence would swallow the note into the code block.
+    if ((out.match(/^```/gm) ?? []).length % 2 === 1) out += '\n```';
+    return `${out}\n\n${TRUNCATION_NOTE}`;
+  };
+  let lo = 0;
+  let hi = body.length;
+  let best = marked('');
+  for (let i = 0; i < 20 && lo < hi; i++) {
+    const mid = Math.ceil((lo + hi) / 2);
+    const head = body.slice(0, mid);
+    const nl = head.lastIndexOf('\n');
+    const cut = nl > mid * 0.6 ? head.slice(0, nl) : head;
+    const candidate = marked(cut);
+    if (cardBytes(render(candidate)) <= budget) {
+      best = candidate;
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return { body: best, truncated: true };
 }
 
 export const TEAMS_STOP_VERB = 'teams_stop';
