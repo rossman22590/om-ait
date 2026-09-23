@@ -36,6 +36,22 @@ could never work. Found in review, PR #7545. **Enforcers:**
 `unit-teams-session.test.ts`, `unit-slack-session-selection.test.ts`,
 `unit-email-channel.test.ts` (key per message).
 
+### A transient git-mirror clone failure is retryable, never an unhandled 500 (2026-09-23)
+
+**Rule:** Classify a bare clone/fetch failure by CAUSE, not by exit kind. Both a
+mid-clone timeout AND a transient upstream failure — network/DNS/socket, GitHub
+5xx, or GitHub's ambiguous `fatal: repository '<url>' not found` for a PRIVATE
+mirror whose App installation token is momentarily unusable — are retryable:
+retry the clone a bounded number of times, and answer a retryable 503 +
+`Retry-After` without paging Sentry. Only a PERMANENT failure (bad ref, real
+auth denial, corrupt local repo) may answer 500. **Incident:** the hourly
+heartbeat probe's `sessions new` cold-cloned a private mirror, got `fatal:
+repository '<url>' not found`, and hard-failed with HTTP 500 (KX-HOURLY FAIL,
+2026-09-23T10:06Z) — while the git proxy served the same repository 200 seconds
+before and after. **Enforcers:** `isTransientGitMirrorError` and
+`cloneBareWithRetry` in `apps/api/src/projects/git/mirror.ts`;
+`mirror-transient.test.ts`, `unit-git-mirror-transient-onerror.test.ts`.
+
 ### A guard that stops work must judge what the kernel judges, and every stop must name its cause (2026-09-22)
 
 **Rule:** A memory guard compares the cgroup WORKING SET (`memory.current -
