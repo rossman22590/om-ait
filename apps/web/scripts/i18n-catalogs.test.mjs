@@ -389,7 +389,11 @@ const gitEnv = {
   GIT_COMMITTER_NAME: 'test',
   GIT_COMMITTER_EMAIL: 'test@example.com',
 };
-for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE']) delete gitEnv[key];
+// GITHUB_BASE_REF is set on a labelled pull request's test run and changes the
+// repair hint that `check` prints.
+for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GITHUB_BASE_REF']) {
+  delete gitEnv[key];
+}
 
 const catalogPath = (locale) => `apps/web/translations/${locale}.json`;
 
@@ -397,8 +401,8 @@ const catalogPath = (locale) => `apps/web/translations/${locale}.json`;
 // .gitattributes, the real registration script, the real driver.
 function repository({ withDriverScript = true } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'i18n-catalogs-'));
-  const run = (command, args) =>
-    spawnSync(command, args, { cwd: dir, env: gitEnv, encoding: 'utf8' });
+  const run = (command, args, env = {}) =>
+    spawnSync(command, args, { cwd: dir, env: { ...gitEnv, ...env }, encoding: 'utf8' });
   const git = (...args) => {
     const result = run('git', args);
     if (result.status !== 0 && !['merge', 'cherry-pick'].includes(args[0])) {
@@ -425,6 +429,7 @@ function repository({ withDriverScript = true } = {}) {
   return {
     git,
     cli: (...args) => run('node', ['apps/web/scripts/i18n-catalogs.mjs', ...args]),
+    cliWithEnv: (env, ...args) => run('node', ['apps/web/scripts/i18n-catalogs.mjs', ...args], env),
     writeText,
     write: (value, locale = 'en') => writeText(serializeCatalog(value), locale),
     read: (locale = 'en') => readFileSync(join(dir, catalogPath(locale)), 'utf8'),
@@ -471,9 +476,19 @@ describe('the check and restore-order commands', () => {
       const check = repo.cli('check', '--base=HEAD');
       expect(check.status).toBe(1);
       expect(check.stdout).toContain('en.json: ok');
-      expect(check.stdout).toContain('de.json: reorders 1 object(s) it shares with HEAD:');
-      expect(check.stdout).toContain('nav: position 1 of 2 holds "agents", HEAD has "home"');
-      expect(check.stdout).toContain('restore-order --from=HEAD');
+      expect(check.stdout).toContain(
+        [
+          'de.json:',
+          '  reorders 1 object(s) it shares with HEAD:',
+          '    nav: position 1 of 2 holds "agents", HEAD has "home"',
+        ].join('\n'),
+      );
+      expect(check.stdout).toContain('restore-order --from=HEAD [');
+
+      // In CI the base is the test merge's parent, which means nothing on a
+      // laptop: the hint names the pull request's base branch instead.
+      const ci = repo.cliWithEnv({ GITHUB_BASE_REF: 'main' }, 'check', '--base=HEAD');
+      expect(ci.stdout).toContain('restore-order --from=origin/main [');
 
       expect(repo.cli('restore-order', '--from=HEAD').status).toBe(0);
       expect(repo.read('de')).toBe(serializeCatalog(catalog));
@@ -491,7 +506,9 @@ describe('the check and restore-order commands', () => {
 
       const check = repo.cli('check');
       expect(check.status).toBe(1);
-      expect(check.stdout).toContain('ja.json: not canonical from line 2');
+      expect(check.stdout).toContain('ja.json:\n  not canonical from line 2;');
+      // Nothing moved, so there is no reorder repair to suggest.
+      expect(check.stdout).not.toContain('restore-order');
       expect(repo.cli('format').status).toBe(0);
       expect(repo.read('ja')).toBe(serializeCatalog(catalog));
       expect(repo.cli('check').status).toBe(0);

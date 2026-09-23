@@ -362,6 +362,7 @@ function runCheck(flags) {
   const base = flags.get('base')?.at(-1);
   if (base) verifyRevision(base);
   let failed = false;
+  let anyReordered = false;
   for (const file of catalogFiles) {
     const name = path.basename(file);
     const text = fs.readFileSync(file, 'utf8');
@@ -370,22 +371,24 @@ function runCheck(flags) {
     const problems = [];
     if (text !== canonical) {
       problems.push(
-        `not canonical from line ${firstDifferentLine(text, canonical)}; ` +
+        `  not canonical from line ${firstDifferentLine(text, canonical)}; ` +
           'run `node apps/web/scripts/i18n-catalogs.mjs format`',
       );
     }
+    let reordered = 0;
     if (base) {
       const before = readAt(base, file);
       const changes = before === undefined ? [] : findKeyOrderChanges(before, value);
+      reordered = changes.length;
       if (changes.length > 0) {
-        problems.push(`reorders ${changes.length} object(s) it shares with ${base}:`);
+        problems.push(`  reorders ${changes.length} object(s) it shares with ${base}:`);
         for (const change of changes.slice(0, 10)) {
           problems.push(
-            `  ${displayPath(change.path)}: position ${change.index + 1} of ${change.shared} ` +
+            `    ${displayPath(change.path)}: position ${change.index + 1} of ${change.shared} ` +
               `holds "${change.actual}", ${base} has "${change.expected}"`,
           );
         }
-        if (changes.length > 10) problems.push(`  … and ${changes.length - 10} more`);
+        if (changes.length > 10) problems.push(`    … and ${changes.length - 10} more`);
       }
     }
     if (problems.length === 0) {
@@ -393,16 +396,19 @@ function runCheck(flags) {
       continue;
     }
     failed = true;
-    console.log(`${name}: ${problems.join('\n')}`);
+    anyReordered ||= reordered > 0;
+    console.log([`${name}:`, ...problems].join('\n'));
   }
-  if (failed && base) {
+  if (anyReordered) {
+    // In CI the base is the test merge's first parent; name the branch instead.
+    const from = process.env.GITHUB_BASE_REF ? `origin/${process.env.GITHUB_BASE_REF}` : base;
     console.log(
       [
         '',
         'A catalog keeps the order its keys were added in. A merge or script that',
-        'rebuilt it reordered keys; no value needs to change to repair it:',
-        `  node apps/web/scripts/i18n-catalogs.mjs restore-order --from=${base} [--from=<your branch before the merge>]`,
-        `If the reorder is intentional (for example STARTER_PROMPTS changed order),`,
+        'rebuilt it reordered keys. Repair it without changing a value:',
+        `  node apps/web/scripts/i18n-catalogs.mjs restore-order --from=${from} [--from=<your branch before the merge>]`,
+        'If the reorder is intentional (for example STARTER_PROMPTS changed order),',
         `label the pull request \`${REORDER_LABEL}\`.`,
       ].join('\n'),
     );
