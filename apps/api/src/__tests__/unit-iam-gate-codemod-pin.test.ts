@@ -239,11 +239,52 @@ describe('the gate codemod is complete', () => {
     // importer that observes `app` before it settles — which is how every
     // project-route integration test started 404-ing instead of exercising its
     // gate. Keep the mounting section await-free.
-    const src = code(join(SRC, 'index.ts'));
-    const lastRoute = src.lastIndexOf('app.route(');
-    const head = src.slice(0, lastRoute);
-    const topLevelAwaits = [...head.matchAll(/^\s{0,2}(?:const|let)?\s*.*=\s*await\s+import\(/gm)];
-    expect(topLevelAwaits.map((m) => m[0].trim())).toEqual([]);
+    //
+    // Parsed, not pattern-matched: "top-level" means "not inside a function
+    // body", and only the syntax tree knows where a function body ends. The
+    // mounting section runs to the end of the last call on `app` that executes
+    // at import — today the 404 handler, below the last `app.route(...)`. Every
+    // form that suspends module evaluation counts, not only `await import(...)`.
+    const file = join(SRC, 'index.ts');
+    const text = readFileSync(file, 'utf8');
+    const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+    const mounts: ts.CallExpression[] = [];
+    const suspensions: ts.Node[] = [];
+    const visit = (node: ts.Node): void => {
+      if (ts.isFunctionLike(node)) return; // runs when called, not when imported
+      if (
+        ts.isAwaitExpression(node) ||
+        (ts.isForOfStatement(node) && node.awaitModifier) ||
+        (ts.isVariableDeclarationList(node) &&
+          (node.flags & ts.NodeFlags.AwaitUsing) === ts.NodeFlags.AwaitUsing)
+      ) {
+        suspensions.push(node);
+      }
+      if (
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        node.expression.expression.text === 'app'
+      ) {
+        mounts.push(node);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sf);
+    // No route table found means the scan below proves nothing.
+    const routes = mounts.filter(
+      (call) => (call.expression as ts.PropertyAccessExpression).name.text === 'route',
+    );
+    expect(routes.length).toBeGreaterThan(0);
+    const end = Math.max(...mounts.map((call) => call.end));
+    const lines = text.split('\n');
+    const topLevelAwaits = suspensions
+      .filter((node) => node.getStart(sf) < end)
+      .map((node) => {
+        const { line } = sf.getLineAndCharacterOfPosition(node.getStart(sf));
+        return `index.ts:${line + 1}: ${lines[line].trim()}`;
+      });
+    expect(topLevelAwaits).toEqual([]);
   });
 });
 
