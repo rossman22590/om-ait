@@ -7,6 +7,7 @@ import {
   createSession as createLifecycleSession,
   resolveProjectAutomationActor as resolveLifecycleAutomationActor,
 } from '../../projects/session-lifecycle';
+import { sessionHoldsLiveTurn } from '../../projects/session-lifecycle/inbox-admission';
 import { currentChannelSelection } from '../slack/selection';
 import { startErrorMessage, TEAMS_START_ERROR_COMMANDS } from '../start-error';
 import { buildAgentUnavailableCard } from './agent-picker';
@@ -41,6 +42,7 @@ const defaultTeamsSessionLifecycle = {
   continueSession: continueLifecycleSession,
   createSession: createLifecycleSession,
   resolveProjectAutomationActor: resolveLifecycleAutomationActor,
+  holdsLiveTurn: sessionHoldsLiveTurn,
 };
 
 let teamsSessionLifecycle = defaultTeamsSessionLifecycle;
@@ -259,7 +261,15 @@ async function deliverFollowUp(input: {
   }
 
   const inflight = await loadTurn(sessionId);
-  if (turnIsLive(inflight, input.sessionStatus)) {
+  // A card that has not moved for 10 minutes is not proof of a dead run: one
+  // long command (a build, a test suite) posts no step while it works. Before
+  // closing it as abandoned, ask the runtime's own turn ledger — the authority
+  // `GET .../turn` and inbox admission read. Closing a live run's card lost
+  // its answer: the card said "ended", and its `teams send` found no turn.
+  const live =
+    turnIsLive(inflight, input.sessionStatus) ||
+    (!!inflight && !inflight.finalized && (await teamsSessionLifecycle.holdsLiveTurn(sessionId).catch(() => false)));
+  if (live) {
     // A turn really is streaming: the running stream keeps its card, ours
     // becomes a short notice and is not saved as the turn.
     if (handle) await noticeOnLiveCard(handle, 'Got it — I’ll take this after the current step.');

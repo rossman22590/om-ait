@@ -453,6 +453,28 @@ describe('a turn that died mid-flight does not wedge the conversation', () => {
     expect(continued).toHaveLength(1);
   });
 
+  test('a quiet card over a run the runtime still holds is NOT closed as abandoned', async () => {
+    // One long command posts no step. Closing its card as "ended" lost the
+    // run's answer: its `teams send` then found no turn.
+    setTeamsSessionLifecycleForTest({
+      createSession: async () => ({ status: 'running', sessionId: 'sess-new' }) as never,
+      continueSession: async (input: Record<string, unknown>) => {
+        continued.push(input);
+        return 'delivered' as never;
+      },
+      resolveProjectAutomationActor: async () => 'user-1',
+      holdsLiveTurn: async () => true,
+    } as never);
+    existingThread = [{ sessionId: 'sess-existing', createdBy: 'user-1', status: 'running' }];
+    inflightTurn = { finalized: false, updatedAt: Date.now() - 20 * 60 * 1000, sessionId: 'sess-existing' };
+
+    await createOrJoinTeamsConversationSession({ projectId: PROJECT_ID, tenantId: TENANT_ID, conversationId: CONVERSATION_ID, activity });
+
+    expect(calls).not.toContain('closeAbandonedTurn');
+    expect(notices).toEqual(['Got it — I’ll take this after the current step.']);
+    expect(continued).toHaveLength(1);
+  });
+
   test('running session but the turn has not moved in over 10 minutes: also treated as abandoned', async () => {
     existingThread = [{ sessionId: 'sess-existing', createdBy: 'user-1', status: 'running' }];
     inflightTurn = { finalized: false, updatedAt: Date.now() - 11 * 60 * 1000, sessionId: 'sess-existing' };
