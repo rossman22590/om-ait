@@ -993,15 +993,11 @@
    survived `prefers-reduced-motion` on `.kx-fade-up` — the movement stopped
    but the staged reveal did not. */
 
+/* No `display` rule belongs under `.streaming-active`: a streaming message
+   must lay out exactly like the settled one. See
+   components/markdown/streaming-layout.test.ts. */
 .kortix-markdown.streaming-active {
   position: relative;
-}
-
-.kortix-markdown.streaming-active p:last-child,
-.kortix-markdown.streaming-active li:last-child,
-.kortix-markdown.streaming-active
-  div:last-child:not(:has(table)):not(:has(.katex)):not(.katex-math-block) {
-  display: inline;
 }
 
 /* KaTeX — block/display math scrolls horizontally; keep inline math in flow */
