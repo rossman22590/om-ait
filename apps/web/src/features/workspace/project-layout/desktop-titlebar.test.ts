@@ -296,6 +296,14 @@ describe('nothing re-hard-codes the band', () => {
     expect(shell).not.toContain('left-[4.5rem]');
   });
 
+  test('the collapsed shell opener paints above page titlebar drag regions', () => {
+    const layout = shell.slice(shell.indexOf('const ProjectSheelLayout ='));
+    expect(layout.indexOf('{desktopShell && !isExpanded && (')).toBeGreaterThan(
+      layout.indexOf('{children}'),
+    );
+    expect(control).toContain('[-webkit-app-region:no-drag]');
+  });
+
   test('the session header takes the band offsets from the shared row class', () => {
     expect(sessionHeader).toContain('kx-titlebar-row');
     expect(sessionHeader).toContain('pt-[var(--kx-titlebar-control-top)]');

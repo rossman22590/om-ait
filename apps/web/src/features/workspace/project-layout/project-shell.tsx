@@ -297,6 +297,9 @@ const ProjectSheelLayout = ({ children }: { children: React.ReactNode }) => {
           the opener lives here, always mounted, on every project view. The
           session header indents its leading buttons past it below md. */}
 
+      {/* Page headers can share z-50 with this fixed control. Paint the
+          control after them so their macOS drag regions cannot take its click. */}
+      {children}
       {desktopShell && !isExpanded && (
         <Hint
           label={
@@ -334,7 +337,6 @@ const ProjectSheelLayout = ({ children }: { children: React.ReactNode }) => {
           draws its own, in its own layout, gated by
           useShowPageSidebarOpener(). Only the desktop shell needs a
           shell-level one, because only there is the corner owned by the OS. */}
-      {children}
     </div>
   );
 };
