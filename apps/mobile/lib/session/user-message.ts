@@ -7,6 +7,14 @@
  */
 
 import { formatMessageDay, isAbortError } from '@kortix/sdk';
+import {
+  fileTagBlocks,
+  referenceHeaders,
+  removeSpans,
+  replaceSpans,
+  selfClosingTags,
+  tagBlocks,
+} from '@kortix/shared';
 
 // ─── Web metrics ─────────────────────────────────────────────────────────────
 
@@ -54,56 +62,66 @@ function unescapeAttr(value: string): string {
     .replace(/&amp;/g, '&');
 }
 
-const FILE_TAG_REGEX = /<file\s+([^>]*?)>\s*[\s\S]*?<\/file>/g;
+/** Pass every `<file …>…</file>` block through `replace(whole, attrs)`. */
+function replaceFileTags(text: string, replace: (whole: string, attrs: string) => string): string {
+  return replaceSpans(text, fileTagBlocks(text), (block) => replace(text.slice(block.index, block.end), block.attrs));
+}
+
+/** Remove every `<tag …/>` and then every `Referenced <noun> (…):` header line. */
+function stripReferences(text: string, tag: string, noun: string): string {
+  const withoutTags = removeSpans(text, selfClosingTags(text, tag));
+  return removeSpans(withoutTags, referenceHeaders(withoutTags, noun));
+}
+
+/** The parenthesised text of the `Referenced sessions (…):` header. */
+const SESSION_REFERENCE_HINT = 'use the session_context tool to fetch details when needed';
 
 /**
  * Strip every structured block a user message carries and keep what the user
  * typed. Order matches web's pipeline: kortix_system, reply context, uploads,
  * project refs, file refs, agent refs, session refs.
+ *
+ * Every tag is found with a scanner from `@kortix/shared/tag-blocks`, never a
+ * lazy regex. The regexes re-scanned the rest of the message for each tag that
+ * never closed: a 240k-character message took ~1 s per tag kind with Bun on a
+ * laptop, more with Hermes on a phone, on every mount of the message.
  */
 export function parseUserMessageText(raw: string): ParsedUserMessageText {
-  let text = (raw ?? '').replace(/<kortix_system[^>]*>[\s\S]*?<\/kortix_system>/gi, '');
+  let text = raw ?? '';
+  text = removeSpans(text, tagBlocks(text, 'kortix_system', { attributes: 'any', ignoreCase: true }));
   text = text.replace(/\n{3,}/g, '\n\n').trim();
 
   let replyContext: string | null = null;
-  const reply = text.match(/<reply_context>([\s\S]*?)<\/reply_context>/);
+  const [reply] = tagBlocks(text, 'reply_context', { limit: 1 });
   if (reply) {
-    replyContext = reply[1]!.trim();
-    text = text.replace(/<reply_context>[\s\S]*?<\/reply_context>\s*/, '').trim();
+    replyContext = reply.body.trim();
+    // The whitespace after the closing tag goes with the block.
+    text = (text.slice(0, reply.index) + text.slice(reply.end).replace(/^\s+/, '')).trim();
   }
 
   const files: ParsedFileRef[] = [];
-  text = text
-    .replace(FILE_TAG_REGEX, (whole, attrs: string) => {
-      const pick = (key: string): string | undefined => {
-        const m = attrs.match(new RegExp(`\\b${key}="([^"]*?)"`));
-        return m ? unescapeAttr(m[1]!) : undefined;
-      };
-      const path = pick('path');
-      const filename = pick('filename');
-      if (path === undefined && filename === undefined) return whole;
-      files.push({ path: path ?? '', mime: pick('mime') ?? '', filename: filename ?? '' });
-      return '';
-    })
-    .trim();
+  text = replaceFileTags(text, (whole, attrs) => {
+    const pick = (key: string): string | undefined => {
+      const m = attrs.match(new RegExp(`\\b${key}="([^"]*?)"`));
+      return m ? unescapeAttr(m[1]!) : undefined;
+    };
+    const path = pick('path');
+    const filename = pick('filename');
+    if (path === undefined && filename === undefined) return whole;
+    files.push({ path: path ?? '', mime: pick('mime') ?? '', filename: filename ?? '' });
+    return '';
+  }).trim();
 
-  text = text
-    .replace(/<project_ref\b[\s\S]*?\/>/g, '')
-    .replace(/\n*Referenced projects \([^)]*\):\n?/g, '')
-    .replace(/<file_ref\b[\s\S]*?\/>/g, '')
-    .replace(/\n*Referenced files \([^)]*\):\n?/g, '')
-    .replace(/<agent_ref\b[\s\S]*?\/>/g, '')
-    .replace(/\n*Referenced agents \([^)]*\):\n?/g, '')
-    .trim();
+  text = stripReferences(text, 'project_ref', 'projects');
+  text = stripReferences(text, 'file_ref', 'files');
+  text = stripReferences(text, 'agent_ref', 'agents').trim();
 
   const sessions: ParsedSessionRef[] = [];
-  text = text
-    .replace(/<session_ref\s+id="([^"]*?)"\s+title="([^"]*?)"\s*\/>/g, (_, id: string, title: string) => {
-      sessions.push({ id, title });
-      return '';
-    })
-    .replace(/\n*Referenced sessions \(use the session_context tool to fetch details when needed\):\n?/g, '')
-    .trim();
+  text = text.replace(/<session_ref\s+id="([^"]*?)"\s+title="([^"]*?)"\s*\/>/g, (_, id: string, title: string) => {
+    sessions.push({ id, title });
+    return '';
+  });
+  text = removeSpans(text, referenceHeaders(text, 'sessions', SESSION_REFERENCE_HINT)).trim();
 
   return { text, replyContext, files, sessions };
 }
