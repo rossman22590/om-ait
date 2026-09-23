@@ -1131,7 +1131,7 @@ const nativeBrowserTest =
 nativeBrowserTest?.(
   "27 — desktop parity guards reload, Home, close, and quit with an unsaved agent draft",
   async ({ baseURL }) => {
-    browserTest.setTimeout(180_000);
+    browserTest.setTimeout(240_000);
     const databaseUrl =
       process.env.KE2E_DATABASE_URL || process.env.E2E_DATABASE_URL;
     if (!databaseUrl)
@@ -1298,6 +1298,41 @@ nativeBrowserTest?.(
       await closeWindow();
       await expect.poll(async () => (await calls()).length).toBe(7);
       await expect.poll(() => main.isClosed()).toBe(true);
+
+      await app.evaluate(({ app }) => app.emit("activate"));
+      await expect
+        .poll(() =>
+          app!.windows().some((window) => window.url().startsWith(baseURL!)),
+        )
+        .toBe(true);
+      const reopened = app
+        .windows()
+        .find((window) => window.url().startsWith(baseURL!));
+      if (!reopened) throw new Error("reopened main window not found");
+      reopened.on("dialog", () => {});
+      await installBrowserSessionDirect(
+        reopened,
+        session,
+        agentUrl,
+        authOptions,
+      );
+      await selectAccountForUi(reopened, accounts[0].account_id);
+      await dismissOnboarding(reopened);
+      await reopened.goto(agentUrl);
+      const reopenedDescription = reopened.getByRole("textbox", {
+        name: /Description/i,
+      });
+      await expect(reopenedDescription).toBeVisible({ timeout: 60_000 });
+      await reopenedDescription.fill(draft);
+      await setResponse(0);
+      const process = app.process();
+      const appClosed = app.waitForEvent("close", { timeout: 15_000 });
+      await app.evaluate(({ app }) => {
+        setImmediate(() => app.quit());
+      });
+      await appClosed;
+      expect(process.exitCode).toBe(0);
+      app = undefined;
     } finally {
       if (app) {
         await app.evaluate(() => {
