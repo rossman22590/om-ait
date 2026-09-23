@@ -72,10 +72,12 @@ export interface AuditPrincipal {
   /** How the caller authenticated, e.g. `human`, `api_key`, `agent`, `scim`. */
   authoritativeSource?: string | null;
   /**
-   * What the caller presented, without the secret: `{ kind: 'scim_token',
-   * token_id }`, `{ kind: 'git_basic' }`. Stored in `metadata.credential`.
+   * HOW the caller authenticated, never the secret itself: `{ kind:
+   * 'scim_token', token_id }`, `{ kind: 'git_basic' }`. Stored as
+   * `metadata.auth`. (Not `credential`: the central redactor blanks any key
+   * with that name, correctly.)
    */
-  credential?: Record<string, unknown> | null;
+  authMethod?: Record<string, unknown> | null;
 }
 
 /** What a handler knows that the transport does not. */

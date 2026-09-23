@@ -1,19 +1,27 @@
 import { createHash } from 'node:crypto';
 import { type Database, auditEvents } from '@kortix/db';
 import type { Context, Next } from 'hono';
-import { getRequestContext } from '../lib/request-context';
+import { getRequestContext, runWithContext } from '../lib/request-context';
 import type { AppEnv } from '../types';
 import { normalizeAuditClientSource } from './audit-client-source';
 import { type AuditRow, getAuditQueue } from './audit-queue';
+import { AnonymousAuditBudget, type AnonymousAuditSummary } from './audit-anonymous-budget';
+import {
+  type HonoIdentitySnapshot,
+  type InboundAuditScope,
+  type InboundEntrypoint,
+  attachInboundAuditScope,
+  isUnauditedInbound,
+} from './audit-scope';
 import { db } from './db';
 import { auditDb } from './audit-db';
 import type { Actor } from '../iam/actor';
 import { type AgentAuditAttribution, resolveAgentAuditAttribution } from './agent-audit-attribution';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SKIPPED_PATHS = new Set(['/v1/health', '/v1/openapi.json', '/v1/docs']);
 
-export type AuditActorType = 'human' | 'agent' | 'service_account' | 'system';
+/** `anonymous`: nothing authenticated the request (a 401, a public route). */
+export type AuditActorType = 'human' | 'agent' | 'service_account' | 'system' | 'anonymous';
 export type AuditOutcome = 'success' | 'failure' | 'denied' | 'pending';
 
 export interface AuditEventInput {
@@ -69,12 +77,6 @@ export interface AuditEventInput {
 
 type AuditContext = Context<AppEnv>;
 
-function clientIp(c: AuditContext): string | null {
-  return (
-    c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || c.req.header('x-real-ip') || null
-  );
-}
-
 function pathIds(path: string): { projectId: string | null; sessionId: string | null } {
   const projectMatch = path.match(/\/projects\/([^/]+)/);
   const sessionMatch = path.match(/\/projects\/[^/]+\/sessions\/([^/]+)/);
@@ -124,31 +126,61 @@ function inferAccountId(c: AuditContext): string | null {
   );
 }
 
-function projectSessionId(c: AuditContext, pathSessionId: string | null): string | null {
-  if (pathSessionId) return pathSessionId;
-  const authType = c.get('authType');
-  if (authType === 'supabase') return null;
-  return c.get('sessionId') ?? null;
+/**
+ * What the Hono auth middleware put on the context, captured once after the
+ * handler ran. The rules below turn it into actor fields; they are the rules
+ * the request audit has always applied.
+ */
+function honoIdentitySnapshot(c: AuditContext): HonoIdentitySnapshot {
+  const request = getRequestContext();
+  const get = (key: string): unknown => (c as unknown as { get(key: string): unknown }).get(key);
+  return {
+    tokenUserId: c.get('userId') ?? request?.userId ?? null,
+    accountId: inferAccountId(c),
+    authType: c.get('authType'),
+    apiKeyType: c.get('apiKeyType'),
+    sessionIdVar: c.get('sessionId') ?? null,
+    hasAgentGrant: c.get('agentGrant') != null,
+    actor: get('actor'),
+    onBehalfOfUserIdVar: get('onBehalfOfUserId') as string | null | undefined,
+    path: c.req.path,
+  };
 }
 
-function inferActorType(c: AuditContext, actorUserId: string | null): AuditActorType | null {
-  const authType = c.get('authType');
+function sessionIdForSnapshot(
+  snapshot: HonoIdentitySnapshot,
+  pathSessionId: string | null,
+): string | null {
+  if (pathSessionId) return pathSessionId;
+  if (snapshot.authType === 'supabase') return null;
+  return snapshot.sessionIdVar;
+}
+
+function actorTypeForSnapshot(
+  snapshot: HonoIdentitySnapshot,
+  actorUserId: string | null,
+): AuditActorType | null {
+  const { authType } = snapshot;
   if (authType === 'service_account') return 'service_account';
-  const hasAgentGrant = c.get('agentGrant') != null;
-  const apiKeyType = c.get('apiKeyType');
   const hasProjectSession =
-    authType !== 'supabase' && (c.get('sessionId') != null || hasAgentGrant);
-  if (hasProjectSession || (authType === 'apiKey' && apiKeyType === 'sandbox')) return 'agent';
+    authType !== 'supabase' && (snapshot.sessionIdVar != null || snapshot.hasAgentGrant);
+  if (hasProjectSession || (authType === 'apiKey' && snapshot.apiKeyType === 'sandbox')) {
+    return 'agent';
+  }
   if (actorUserId) return 'human';
-  return inferAccountId(c) ? 'system' : null;
+  return snapshot.accountId ? 'system' : null;
+}
+
+function auditSourceFor(authType: string | undefined, actorType: AuditActorType | null): string {
+  if (actorType === 'service_account') return 'automation';
+  if (actorType === 'agent') return 'agent';
+  if (authType === 'supabase') return 'human';
+  if (authType === 'apiKey') return 'api_key';
+  return 'api';
 }
 
 export function inferAuditSource(c: AuditContext, actorType: AuditActorType | null): string {
-  if (actorType === 'service_account') return 'automation';
-  if (actorType === 'agent') return 'agent';
-  if (c.get('authType') === 'supabase') return 'human';
-  if (c.get('authType') === 'apiKey') return 'api_key';
-  return 'api';
+  return auditSourceFor(c.get('authType'), actorType);
 }
 
 export function clientReportedAuditSource(c: AuditContext): string | null {
@@ -393,7 +425,7 @@ async function insertAuditEvent(client: AuditInsertClient, input: AuditEventInpu
  * after the action that produced it. `KORTIX_AUDIT_SYNC=1` forces it anywhere;
  * `KORTIX_AUDIT_SYNC=0` forces the queue on under a test runner.
  */
-function auditWritesAreSynchronous(): boolean {
+export function auditWritesAreSynchronous(): boolean {
   const flag = process.env.KORTIX_AUDIT_SYNC;
   if (flag === '1') return true;
   if (flag === '0') return false;
@@ -416,14 +448,40 @@ export async function recordAuditEvent(input: AuditEventInput): Promise<void> {
   getAuditQueue(auditDb()).enqueue(buildAuditRow(input));
 }
 
+/**
+ * Request rows the edge is still building. The edge writes a request's row
+ * AFTER it has handed the response back (attribution can need a lookup), so a
+ * flush must wait for those rows to reach the queue first — otherwise
+ * `GET /audit` could miss the request that immediately preceded it.
+ */
+const pendingInboundEmissions = new Set<Promise<void>>();
+
+export function trackInboundAuditEmission(emission: Promise<void>): void {
+  pendingInboundEmissions.add(emission);
+  void emission.finally(() => pendingInboundEmissions.delete(emission));
+}
+
+async function settlePendingInboundEmissions(): Promise<void> {
+  if (pendingInboundEmissions.size === 0) return;
+  await Promise.allSettled([...pendingInboundEmissions]);
+}
+
 /** Drain buffered audit events. Called on shutdown and by tests. */
 export async function flushAuditEvents(): Promise<void> {
+  await settlePendingInboundEmissions();
   if (auditWritesAreSynchronous()) return;
   await getAuditQueue(auditDb()).flush();
 }
 
 /** Flush and stop the flush timer. Shutdown path only. */
 export async function shutdownAuditEvents(): Promise<void> {
+  await settlePendingInboundEmissions();
+  const suppressed = anonymousBudget.drainSummary(Date.now());
+  if (suppressed) {
+    await recordAuditEvent(anonymousSummaryEvent(suppressed)).catch((error) => {
+      console.error('[audit] Failed to record the anonymous-traffic summary:', error);
+    });
+  }
   if (auditWritesAreSynchronous()) return;
   await getAuditQueue(auditDb()).shutdown();
 }
@@ -446,29 +504,27 @@ export async function runAuditedTransaction<T>(
 }
 
 /**
- * Agent attribution for this request's credential, or null when the request
- * did not authenticate with an agent-session token. Never throws: audit
- * enrichment must not fail the audited request.
+ * Agent attribution for the credential the Hono auth middleware resolved, or
+ * null when the request did not authenticate with an agent-session token.
+ * Never throws: audit enrichment must not fail the audited request.
  */
-async function agentAttributionFor(
-  c: AuditContext,
-  tokenUserId: string | null,
+async function agentAttributionForSnapshot(
+  snapshot: HonoIdentitySnapshot,
 ): Promise<AgentAuditAttribution | null> {
-  const actor = (c as unknown as { get(key: string): unknown }).get('actor') as Actor | undefined;
+  const actor = snapshot.actor as Actor | undefined;
   const credential = actor?.credential;
   if (!credential || credential.kind !== 'agent_session') return null;
   try {
-    const fresh = (c as unknown as { get(key: string): unknown }).get('onBehalfOfUserId') as
-      | string
-      | null
-      | undefined;
     return await resolveAgentAuditAttribution({
-      sessionId: credential.sessionId ?? c.get('sessionId') ?? null,
+      sessionId: credential.sessionId ?? snapshot.sessionIdVar ?? null,
       serviceAccountId: credential.serviceAccountId,
       agentName: credential.agentGrant?.agent ?? null,
       agentPrincipal: credential.agentPrincipal === true,
-      tokenUserId,
-      onBehalfOfUserId: fresh !== undefined ? fresh : (credential.onBehalfOfUserId ?? null),
+      tokenUserId: snapshot.tokenUserId,
+      onBehalfOfUserId:
+        snapshot.onBehalfOfUserIdVar !== undefined
+          ? snapshot.onBehalfOfUserIdVar
+          : (credential.onBehalfOfUserId ?? null),
     });
   } catch (error) {
     console.error('[audit] agent attribution failed:', error);
@@ -476,13 +532,192 @@ async function agentAttributionFor(
   }
 }
 
+/** The resource a non-Hono entrypoint acts on, when no handler said more. */
+const ENTRYPOINT_RESOURCE_TYPE: Record<InboundEntrypoint, string> = {
+  http: 'unknown',
+  preview_origin: 'sandbox_preview_origin',
+  app_origin: 'app',
+  ws_upgrade: 'websocket',
+};
+
+/**
+ * The row for one inbound request. Precedence, per field: what an
+ * authenticator bound or a handler annotated, then what the Hono auth
+ * middleware put on the context, then the request context. A request with no
+ * identity from any of them is `anonymous`.
+ */
+async function inboundAuditInput(
+  scope: InboundAuditScope,
+  status: number,
+): Promise<AuditEventInput> {
+  const request = getRequestContext();
+  const hono = scope.hono;
+  const bound = scope.principal;
+  const annotation = scope.annotation;
+  const ids = hono ? pathIds(hono.path) : { projectId: null, sessionId: null };
+  const agent = hono ? await agentAttributionForSnapshot(hono) : null;
+  const tokenUserId = hono?.tokenUserId ?? null;
+
+  const actorUserId =
+    bound.actorUserId !== undefined ? bound.actorUserId : agent ? agent.actorUserId : tokenUserId;
+  const accountId =
+    bound.accountId !== undefined
+      ? bound.accountId
+      : (hono?.accountId ?? request?.accountId ?? scope.queryAccountId ?? null);
+  const actorType: AuditActorType =
+    bound.actorType ??
+    (hono ? actorTypeForSnapshot(hono, tokenUserId) : null) ??
+    (actorUserId ? 'human' : accountId ? 'system' : 'anonymous');
+  const source =
+    bound.authoritativeSource ??
+    (actorType === 'anonymous' ? 'anonymous' : auditSourceFor(hono?.authType, actorType));
+
+  // Hono stamps the matched template; other entrypoints name their class.
+  // Never the raw path: path segments can be bearer capabilities.
+  const route = scope.route ?? '<unmatched>';
+  const httpAction = `${scope.method} ${route}`;
+  const inferred = hono
+    ? inferResource(hono.path)
+    : { resourceType: ENTRYPOINT_RESOURCE_TYPE[scope.entrypoint], resourceId: null };
+
+  const metadata: Record<string, unknown> = {
+    ...annotation.metadata,
+    method: scope.method,
+    path: route,
+    ...(annotation.action ? { http: httpAction } : {}),
+    ...(scope.entrypoint !== 'http' ? { entrypoint: scope.entrypoint } : {}),
+    ...(bound.authMethod ? { auth: bound.authMethod } : {}),
+  };
+
+  return {
+    accountId,
+    projectId:
+      bound.projectId !== undefined ? bound.projectId : (ids.projectId ?? request?.projectId ?? null),
+    sessionId:
+      bound.sessionId !== undefined
+        ? bound.sessionId
+        : hono
+          ? sessionIdForSnapshot(hono, ids.sessionId ?? request?.sessionId ?? null)
+          : null,
+    actorUserId,
+    actorType,
+    agentId: bound.agentId !== undefined ? bound.agentId : agent?.agentId,
+    agentName: bound.agentName !== undefined ? bound.agentName : agent?.agentName,
+    onBehalfOfUserId:
+      bound.onBehalfOfUserId !== undefined ? bound.onBehalfOfUserId : agent?.onBehalfOfUserId,
+    initiatorActorType:
+      bound.initiatorActorType !== undefined
+        ? bound.initiatorActorType
+        : agent?.initiatorActorType,
+    initiatorActorId:
+      bound.initiatorActorId !== undefined ? bound.initiatorActorId : agent?.initiatorActorId,
+    authoritativeSource: source,
+    clientReportedSource: normalizeAuditClientSource(scope.clientSourceHeader ?? undefined),
+    outcome: annotation.outcome ?? outcomeForStatus(status),
+    action: annotation.action ?? httpAction,
+    resourceType: annotation.resourceType ?? inferred.resourceType,
+    resourceId: annotation.resourceId !== undefined ? annotation.resourceId : inferred.resourceId,
+    httpStatus: status,
+    durationMs: Date.now() - scope.startedAt,
+    requestId: request?.requestId ?? null,
+    traceId: request?.traceId ?? null,
+    correlationId: scope.correlationId,
+    ip: scope.ip,
+    userAgent: scope.userAgent,
+    metadata,
+  };
+}
+
+const anonymousBudget = new AnonymousAuditBudget({
+  perSecond: AnonymousAuditBudget.perSecondFromEnv(process.env.KORTIX_AUDIT_ANONYMOUS_PER_SECOND),
+  summaryEveryMs: 60_000,
+});
+
+function anonymousSummaryEvent(summary: AnonymousAuditSummary): AuditEventInput {
+  return {
+    actorType: 'system',
+    authoritativeSource: 'audit',
+    action: 'audit.anonymous.suppressed',
+    resourceType: 'audit',
+    outcome: 'success',
+    metadata: {
+      window_start: new Date(summary.windowStartMs).toISOString(),
+      window_end: new Date(summary.windowEndMs).toISOString(),
+      suppressed: summary.suppressed,
+      by_status_class: summary.byStatusClass,
+    },
+  };
+}
+
+/**
+ * Write the one row for an inbound request. Idempotent per scope, and never
+ * throws: an audit failure must not fail the request it describes.
+ */
+export async function emitInboundAuditRow(scope: InboundAuditScope, status: number): Promise<void> {
+  if (scope.emitted) return;
+  scope.emitted = true;
+  try {
+    const input = await inboundAuditInput(scope, status);
+    // A deployed app's public traffic is the customer's end users, not a
+    // principal acting on the account. A signed-in viewer is still audited.
+    if (scope.entrypoint === 'app_origin' && input.actorType === 'anonymous') return;
+    if (input.actorType === 'anonymous' && !input.accountId) {
+      const decision = anonymousBudget.admit(Date.now(), status);
+      if (decision.summary) await recordAuditEvent(anonymousSummaryEvent(decision.summary));
+      if (!decision.admit) return;
+    }
+    await recordAuditEvent(input);
+  } catch (error) {
+    console.error('[audit] Failed to record inbound request:', error);
+  }
+}
+
+/**
+ * The request audit for the Hono app.
+ *
+ * Mounted on `*`. When `Bun.serve.fetch` already opened the request's scope
+ * (production), this stamps what only Hono knows — the matched route
+ * template, the handler's status, the auth middleware's identity — and leaves
+ * the write to the edge. When nothing opened a scope (a test driving the app
+ * directly), it opens one and writes the row itself.
+ *
+ * Either way every request gets exactly one row. There is no identity gate:
+ * a request nobody authenticated is written as `anonymous`.
+ */
 export async function auditApiRequest(c: AuditContext, next: Next): Promise<void> {
-  if (c.req.method === 'OPTIONS' || SKIPPED_PATHS.has(c.req.path)) {
+  if (isUnauditedInbound(c.req.method, c.req.path)) {
     await next();
     return;
   }
+  if (!getRequestContext()) {
+    // A bare Hono app has no request context. Open one, so an authenticator's
+    // binding has a scope to land in. Run the body directly — never recurse
+    // into this check, which a mocked request context could fail forever.
+    await runWithContext(
+      c.req.method,
+      c.req.path,
+      () => auditRequestInScope(c, next),
+      c.req.header('traceparent'),
+    );
+    return;
+  }
+  await auditRequestInScope(c, next);
+}
 
-  const startedAt = Date.now();
+async function auditRequestInScope(c: AuditContext, next: Next): Promise<void> {
+  let url: URL | null = null;
+  try {
+    url = new URL(c.req.url);
+  } catch {
+    url = null;
+  }
+  const scope = attachInboundAuditScope({
+    owner: 'hono',
+    method: c.req.method,
+    headers: c.req.raw.headers,
+    url,
+  });
+
   let thrown: unknown;
   try {
     await next();
@@ -490,60 +725,10 @@ export async function auditApiRequest(c: AuditContext, next: Next): Promise<void
     thrown = error;
     throw error;
   } finally {
-    const request = getRequestContext();
-    const tokenUserId = c.get('userId') ?? request?.userId ?? null;
-    const accountId = inferAccountId(c);
-    if (tokenUserId || accountId) {
-      const status = thrown ? errorStatus(thrown) : c.res.status;
-      const inferred = inferResource(c.req.path);
-      const ids = pathIds(c.req.path);
-      const actorType = inferActorType(c, tokenUserId);
-      const auditPath = c.req.routePath || c.req.path;
-      try {
-        // An agent-session credential names the agent, the human it acts on
-        // behalf of, and the initiator (spec 2026-09-22 §2). Under the
-        // agent-principal model `actor_user_id` is that human or nobody —
-        // never the owner stand-in a trigger run's token carries.
-        const agent = await agentAttributionFor(c, tokenUserId);
-        const actorUserId = agent ? agent.actorUserId : tokenUserId;
-        await recordAuditEvent({
-          accountId,
-          projectId: ids.projectId ?? request?.projectId ?? null,
-          sessionId: projectSessionId(c, ids.sessionId ?? request?.sessionId ?? null),
-          actorUserId,
-          actorType,
-          ...(agent
-            ? {
-                agentId: agent.agentId,
-                agentName: agent.agentName,
-                onBehalfOfUserId: agent.onBehalfOfUserId,
-                initiatorActorType: agent.initiatorActorType,
-                initiatorActorId: agent.initiatorActorId,
-              }
-            : {}),
-          authoritativeSource: inferAuditSource(c, actorType),
-          clientReportedSource: clientReportedAuditSource(c),
-          outcome: outcomeForStatus(status),
-          action: `${c.req.method} ${auditPath}`,
-          resourceType: inferred.resourceType,
-          resourceId: inferred.resourceId,
-          httpStatus: status,
-          durationMs: Date.now() - startedAt,
-          requestId: request?.requestId ?? null,
-          traceId: request?.traceId ?? null,
-          correlationId:
-            c.req.header('x-correlation-id') || c.req.header('idempotency-key') || null,
-          ip: clientIp(c),
-          userAgent: c.req.header('user-agent') || null,
-          metadata: {
-            method: c.req.method,
-            path: auditPath,
-          },
-        });
-      } catch (error) {
-        console.error('[audit] Failed to record API request:', error);
-      }
-    }
+    if (scope.entrypoint === 'http') scope.route = c.req.routePath || c.req.path;
+    scope.status = thrown ? errorStatus(thrown) : c.res.status;
+    scope.hono = honoIdentitySnapshot(c);
+    if (scope.owner === 'hono') await emitInboundAuditRow(scope, scope.status);
   }
 }
 
