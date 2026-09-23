@@ -737,7 +737,11 @@ export async function emitInboundAuditRow(scope: InboundAuditScope, status: numb
     // A deployed app's public traffic is the customer's end users, not a
     // principal acting on the account. A signed-in viewer is still audited.
     if (scope.entrypoint === 'app_origin' && input.actorType === 'anonymous') return;
-    if (input.actorType === 'anonymous' && !input.accountId) {
+    // Every anonymous row is budgeted, including one that resolved to a
+    // tenant through the project in its URL: an outsider who knows a project
+    // id sends that request at will, and each row can reach the account's
+    // audit webhooks.
+    if (input.actorType === 'anonymous') {
       const decision = anonymousBudget.admit(Date.now(), status);
       if (decision.summary) await recordAuditEvent(anonymousSummaryEvent(decision.summary));
       if (!decision.admit) return;

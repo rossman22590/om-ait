@@ -1,5 +1,5 @@
 /**
- * A per-process budget for audit rows that carry no principal and no account.
+ * A per-process budget for audit rows that carry no principal.
  *
  * Every request is audited, including ones nobody authenticated. Those rows
  * matter — a burst of 401s is what a credential-stuffing attempt looks like —
@@ -11,7 +11,9 @@
  * So anonymous rows get their own budget. Up to `perSecond` are written as
  * they arrive. The rest are counted, never silently lost: one summary row per
  * `summaryEveryMs` states how many were suppressed and their status classes.
- * Attributed rows never pass through this budget.
+ * An anonymous row that resolved to an account through the project in its
+ * URL is still anonymous and still budgeted. Attributed rows never pass
+ * through this budget.
  */
 
 export interface AnonymousAuditSummary {
