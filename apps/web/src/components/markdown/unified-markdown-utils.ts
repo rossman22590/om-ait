@@ -1,4 +1,8 @@
+import { holdPendingSetupLink } from '@/components/setup-links/util';
+import { stripKortixSystemTags } from '@/lib/utils/kortix-system-tags';
 import { looksLikeFilePath as sharedLooksLikeFilePath } from '@/lib/utils/path-detection';
+import { autoLinkUrls } from '@kortix/shared';
+import { prepareMarkdownForKatex } from '@kortix/shared/markdown-math';
 
 // Pure, deterministic helpers used by the unified markdown renderer. Extracted
 // so they can be unit-tested without pulling in React / Shiki / Streamdown.
@@ -24,6 +28,20 @@ import { looksLikeFilePath as sharedLooksLikeFilePath } from '@/lib/utils/path-d
  */
 export function shikiWasmAvailable(): boolean {
   return typeof WebAssembly !== 'undefined';
+}
+
+/**
+ * The text Streamdown parses: KaTeX delimiters normalised, system tags removed,
+ * bare URLs linked.
+ *
+ * While the message streams, a setup link whose URL is still arriving is held
+ * as a pending card first (`holdPendingSetupLink`), so the reader never sees
+ * its raw `[label](` or a card built from a partial token. Settled text is
+ * never held.
+ */
+export function prepareMarkdownSource(content: string, isStreaming: boolean): string {
+  const prepared = stripKortixSystemTags(prepareMarkdownForKatex(content));
+  return autoLinkUrls(isStreaming ? holdPendingSetupLink(prepared) : prepared);
 }
 
 /**

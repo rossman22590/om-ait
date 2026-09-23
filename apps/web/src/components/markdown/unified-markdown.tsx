@@ -10,20 +10,18 @@ import {
   isKatexClassName,
   katexRemarkPlugins,
   normalizeClassName,
-  prepareMarkdownForKatex,
 } from '@/components/markdown/katex-markdown';
 import { MarkdownOrderedList } from '@/components/markdown/ordered-list';
 import {
   isInternalUrl,
   isStreamingLinkPlaceholder,
+  prepareMarkdownSource,
   shouldUseNextLink,
 } from '@/components/markdown/unified-markdown-utils';
 import { SetupLinkButton } from '@/components/setup-links/setup-link-button';
-import { parseSetupLinkHref } from '@/components/setup-links/util';
+import { parsePendingSetupLinkHref, parseSetupLinkHref } from '@/components/setup-links/util';
 import { useSandboxProxy } from '@/hooks/use-sandbox-proxy';
 import { cn } from '@/lib/utils';
-import { stripKortixSystemTags } from '@/lib/utils/kortix-system-tags';
-import { autoLinkUrls } from '@kortix/shared';
 import Link from 'next/link';
 import React, { useCallback, useMemo } from 'react';
 import { Streamdown } from 'streamdown';
@@ -116,6 +114,17 @@ export const UnifiedMarkdown = React.memo<UnifiedMarkdownProps>(
           if (setupLink) {
             return (
               <SetupLinkButton kind={setupLink.kind} token={setupLink.token}>
+                {children}
+              </SetupLinkButton>
+            );
+          }
+
+          // A setup link whose URL is still streaming: the card it will
+          // become, with nothing to click yet (see `holdPendingSetupLink`).
+          const pendingSetupLink = parsePendingSetupLinkHref(href);
+          if (pendingSetupLink) {
+            return (
+              <SetupLinkButton kind={pendingSetupLink} token={null}>
                 {children}
               </SetupLinkButton>
             );
@@ -333,18 +342,15 @@ export const UnifiedMarkdown = React.memo<UnifiedMarkdownProps>(
 
     const safeContent = typeof content === 'string' ? content : content ? String(content) : '';
 
-    // Three whole-string rewrites (KaTeX prep, system-tag strip, autolink). Run
-    // bare, they re-ran on EVERY render of this component — including every
-    // render caused by something other than a new token — for the full length
-    // of the answer. Memoising on the string collapses that to once per
-    // distinct value. It sits ABOVE the empty-content early return so the hook
-    // order stays fixed.
+    // Whole-string rewrites (KaTeX prep, system-tag strip, the pending setup
+    // link, autolink). Run bare, they re-ran on EVERY render of this component
+    // — including every render caused by something other than a new token —
+    // for the full length of the answer. Memoising on the string collapses
+    // that to once per distinct value. It sits ABOVE the empty-content early
+    // return so the hook order stays fixed.
     const finalContent = useMemo(
-      () =>
-        safeContent
-          ? autoLinkUrls(stripKortixSystemTags(prepareMarkdownForKatex(safeContent)))
-          : '',
-      [safeContent],
+      () => (safeContent ? prepareMarkdownSource(safeContent, isStreaming) : ''),
+      [safeContent, isStreaming],
     );
 
     if (!safeContent) {

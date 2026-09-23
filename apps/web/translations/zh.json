@@ -14947,7 +14947,8 @@
       "textca9c32c53e90": "正在退出",
       "text24309f7c84ea": "8px 10px",
       "textf7d6d7f585c5": "项目规则适用于每个连接器，并且会优先评估，因此无法在此处更改这些工具。请在“连接器”页面的“全局规则”下进行编辑。",
-      "text3ecb3ffd4f33": "已检查有效权限"
+      "text3ecb3ffd4f33": "已检查有效权限",
+      "textae47d51077b4": "正在准备链接…"
     },
     "autoFeaturesSessionHeaderSessionChangesIndicatorJsxTextViewChangesaf192a3b": "查看更改",
     "autoAppNotFoundJsxTextGoBackToHome7b70f24a": "回家吧",

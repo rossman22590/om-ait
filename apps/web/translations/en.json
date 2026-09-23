@@ -14947,7 +14947,8 @@
       "textca9c32c53e90": "Signing out",
       "text24309f7c84ea": "8px 10px",
       "textf7d6d7f585c5": "Project rules apply to every connector and are evaluated first, so those tools cannot be changed here. Edit them under Global rules on the Connectors page.",
-      "text3ecb3ffd4f33": "Checked effective permissions"
+      "text3ecb3ffd4f33": "Checked effective permissions",
+      "textae47d51077b4": "Preparing link…"
     },
     "autoFeaturesSessionHeaderSessionChangesIndicatorJsxTextViewChangesaf192a3b": "View changes",
     "autoAppNotFoundJsxTextGoBackToHome7b70f24a": "Go back to home",

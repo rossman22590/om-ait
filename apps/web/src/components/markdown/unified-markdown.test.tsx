@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import { NextIntlClientProvider } from 'next-intl';
+import { createRequire } from 'node:module';
 import type { ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { UnifiedMarkdown } from './unified-markdown';
+import { prepareMarkdownSource } from './unified-markdown-utils';
 
 function withIntl(node: ReactNode) {
   return (
@@ -248,5 +250,114 @@ describe('UnifiedMarkdown — a link whose URL is still streaming', () => {
 
     expect(html).not.toContain('javascript:');
     expect(html).not.toContain('<a');
+  });
+});
+
+// ─── A setup link while it streams ──────────────────────────────────────────
+// The agent writes `[Connect Outlook](https://…/connect/ksl_…)`, and the token
+// alone is several hundred characters. Before these fixes the reader watched
+// `Connect Outlook [blocked]`, then a raw `[Connect Outlook](` beside a card
+// built from a partial token, then the finished card. Now: the label, then
+// the card it will become with nothing to click, then the live card — in the
+// same place, the same size.
+// ────────────────────────────────────────────────────────────────────────────
+
+const SETUP_TOKEN = `ksl_${'A'.repeat(400)}`;
+// No window here, so any http(s) origin counts as this app's own.
+const SETUP_URL = `https://app.example.com/connect/${SETUP_TOKEN}`;
+const SETUP_LEAD = "Here's a fresh authorization link:\n\n";
+const SETUP_MESSAGE = `${SETUP_LEAD}[Connect Outlook](${SETUP_URL})\n\nIt expires in about 30 minutes.`;
+const PENDING_HREF = '#kortix-setup-link-pending:connector';
+
+function streamedPrefix(through: string): string {
+  const end = SETUP_MESSAGE.indexOf(through) + through.length;
+  if (end < through.length) throw new Error(`"${through}" is not in the message`);
+  return SETUP_MESSAGE.slice(0, end);
+}
+
+describe('prepareMarkdownSource — a setup link while it streams', () => {
+  test('the label phase is left for remend to close', () => {
+    const source = prepareMarkdownSource(streamedPrefix('[Connect Out'), true);
+    expect(source.endsWith('[Connect Out')).toBe(true);
+  });
+
+  test('before the route is known, the half-written URL is not linkified', () => {
+    const source = prepareMarkdownSource(streamedPrefix('(https://app.example.com/co'), true);
+    expect(source.endsWith('[Connect Outlook](https://app.example.com/co')).toBe(true);
+    expect(source).not.toContain('([https://');
+  });
+
+  test('from the setup route until the closing paren, the link is held as pending', () => {
+    for (const through of ['/connect/', '/connect/ksl_AAA', SETUP_TOKEN]) {
+      const source = prepareMarkdownSource(streamedPrefix(through), true);
+      expect(source.endsWith(`[Connect Outlook](${PENDING_HREF})`)).toBe(true);
+      expect(source).not.toContain('ksl_');
+    }
+  });
+
+  test('once the link closes, the real URL is back', () => {
+    const source = prepareMarkdownSource(streamedPrefix(`${SETUP_TOKEN})`), true);
+    expect(source).toContain(`[Connect Outlook](${SETUP_URL})`);
+    expect(source).not.toContain(PENDING_HREF);
+  });
+
+  test('settled text is never held, even when it ends inside a link', () => {
+    const source = prepareMarkdownSource(streamedPrefix('/connect/ksl_AAA'), false);
+    expect(source).not.toContain(PENDING_HREF);
+  });
+});
+
+/**
+ * The exact `remend` Streamdown runs over streaming text. It is Streamdown's
+ * dependency, not this app's, so it is resolved through Streamdown. A server
+ * render cannot run streaming mode (Streamdown fills its blocks in an effect),
+ * so a streaming block is rendered as what it parses: `remend(source)`.
+ */
+const remend: (markdown: string) => string = (() => {
+  const mod = createRequire(require.resolve('streamdown'))('remend');
+  return mod.default ?? mod;
+})();
+
+describe('UnifiedMarkdown — a setup link while it streams', () => {
+  const render = (through: string) =>
+    renderToStaticMarkup(
+      withIntl(
+        <UnifiedMarkdown content={remend(prepareMarkdownSource(streamedPrefix(through), true))} />,
+      ),
+    );
+
+  test('before the setup route is known, the label shows as text', () => {
+    for (const through of ['[Connect Out', '(https://app.example.com/co']) {
+      const html = render(through);
+      expect(html).not.toContain('outcome-card');
+      expect(html).not.toContain('<a');
+    }
+    expect(visibleText(render('(https://app.example.com/co'))).toContain('Connect Outlook');
+  });
+
+  test('the pending card: the finished card, busy, with its action disabled', () => {
+    const html = render('/connect/ksl_AAA');
+    expect(html).toContain('data-testid="outcome-card-external"');
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toMatch(/<button[^>]*\bdisabled=""[^>]*>Connect<\/button>/);
+    expect(visibleText(html)).toContain('Connect Outlook');
+    expect(visibleText(html)).toContain('Preparing link…');
+  });
+
+  test('never shows raw link syntax, a blocked marker, or token characters', () => {
+    for (const through of ['[Connect Out', '(https://app.example.com/co', '/connect/', SETUP_TOKEN]) {
+      const text = visibleText(render(through));
+      expect(text).not.toContain('](');
+      expect(text).not.toContain('[blocked]');
+      expect(text).not.toContain('ksl_');
+    }
+  });
+
+  test('the finished link is the live card', () => {
+    const html = render(`${SETUP_TOKEN})`);
+    expect(html).toContain('data-testid="outcome-card-external"');
+    expect(html).not.toContain('aria-busy');
+    expect(html).not.toMatch(/\bdisabled=""/);
+    expect(visibleText(html)).toContain('Waiting for you');
   });
 });
