@@ -7815,3 +7815,29 @@ covered by the hooks.
   `unit-slack-classify-event.test.ts` asserts the bound SQL parameters include
   the project. The shared OAuth route stays workspace-wide on purpose: it is
   one app, and `/kortix use` can re-bind a channel under older threads.
+
+## One Edge Config key shared by three environments makes them overwrite each other (2026-09-23)
+
+- **Incident (found 2026-09-23 in a performance audit, no user-visible
+  outage yet):** dev, staging, and prod carried the same `EDGE_CONFIG` id and
+  wrote maintenance state to the constant key `maintenance_config`. Every 5 s
+  middleware refresh compared the whole JSON of the Edge value with its own
+  database value. The three databases hold different `updatedAt` values, so
+  every refresh in every environment PATCHed the shared item through the
+  Vercel API. The live value flipped between environments. Prod runtime logs
+  showed `Edge Config write failed (429) rate_limited` and
+  `database read failed: TimeoutError` inside middleware, on user
+  navigations. The prod api-router Worker gates mutating API traffic on
+  `kortix.com/api/maintenance/edge`, which read the shared key: a `blocking`
+  level set on staging or dev could lock prod writes.
+- **Rule:** a store that more than one environment can reach namespaces every
+  key by environment. Derive the environment from a value bound to the owning
+  data plane (the API host), never from `VERCEL_ENV` (staging deploys with
+  `--target preview`). An unknown environment reads and writes no key and
+  fails open. A request path never writes to a store; sync runs on the admin
+  write and in a throttled background task that writes only when `level` or
+  `updatedAt` differ.
+- **Enforcement:** `apps/web/src/lib/maintenance-store.test.ts` asserts the
+  per-environment key, no cross-environment read (cache and last-known value
+  included), fail-open on an unknown host, and zero database reads or fetches
+  on the middleware path. 20 of its 24 store tests fail against the old code.
