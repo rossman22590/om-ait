@@ -15,6 +15,8 @@ flow(
       // `kortix sessions digest` lists, then digests each session.
       "GET /v1/projects/:projectId/sessions",
       "GET /v1/accounts/me",
+      // `kortix sessions log` locates the session, then reads its saved copy.
+      "GET /v1/projects/:projectId/sessions/:sessionId",
     ],
   },
   async (ctx) => {
@@ -189,6 +191,86 @@ flow(
           const reply = digest.transcript.messages.find((m) => m.role === "assistant");
           if (!reply?.text.includes("stored in the database"))
             throw new Error(`digest lost the saved reply: ${JSON.stringify(reply)}`);
+        } finally {
+          cli.dispose();
+        }
+      },
+    );
+    await ctx.step(
+      "the real CLI reads a stopped session's conversation from its saved transcript without waking it",
+      async () => {
+        // `kortix sessions log` used to refuse any session that was not running
+        // and tell the user to restart it — a paid, minutes-long wake just to
+        // read text the server already held.
+        const pat = await ctx.fixtures.pat({ name: ctx.fixtures.name("cli-log") });
+        const cli = new CliSandbox("log");
+        try {
+          const login = await cli.login(pat, { noProject: true, account: ctx.P.OWNER.accountId });
+          if (login.exitCode !== 0)
+            throw new Error(`kortix login exited ${login.exitCode}: ${login.all}`);
+          const run = await cli.run([
+            "sessions",
+            "log",
+            sessionId,
+            "--project",
+            project.id,
+            "--json",
+          ]);
+          throwIfCliInfraFailure(run, "kortix sessions log");
+          if (run.exitCode !== 0)
+            throw new Error(`kortix sessions log exited ${run.exitCode}: ${run.all}`);
+          // stdout stays the same JSON array scripts already parse; the source
+          // is reported on stderr so it cannot break them.
+          const messages = JSON.parse(run.stdout) as Array<{ role: string; text: string }>;
+          if (messages.length !== 2)
+            throw new Error(`expected the 2 saved messages, got ${messages.length}: ${run.stdout}`);
+          if (messages[0]!.role !== "user" || messages[1]!.role !== "assistant")
+            throw new Error(`saved messages out of order: ${run.stdout}`);
+          if (!messages[1]!.text.includes("stored in the database"))
+            throw new Error(`log lost the saved reply: ${run.stdout}`);
+          if (!run.stderr.includes("Saved transcript"))
+            throw new Error(`log did not say where the messages came from: ${run.stderr}`);
+          const status = (await owner.get("/v1/projects/:projectId/sessions/:sessionId", {
+            params: { projectId: project.id, sessionId },
+          })).status(200).json<{ status: string }>();
+          if (status.status !== "stopped")
+            throw new Error(`reading the log changed the session to '${status.status}'`);
+        } finally {
+          cli.dispose();
+        }
+      },
+    );
+    await ctx.step(
+      "a stopped session with nothing saved yet exits 1 and says how to read it live",
+      async () => {
+        const unsaved = await createDatabaseSession(ctx.env, {
+          projectId: project.id,
+          accountId: ctx.P.OWNER.accountId!,
+          userId: ctx.P.OWNER.userId!,
+        });
+        ctx.track("session", unsaved, { projectId: project.id });
+        const db = new Client({ connectionString: ctx.env.databaseUrl! });
+        await db.connect();
+        try {
+          await db.query(
+            "UPDATE kortix.project_sessions SET status = 'stopped' WHERE session_id = $1",
+            [unsaved],
+          );
+        } finally {
+          await db.end();
+        }
+        const pat = await ctx.fixtures.pat({ name: ctx.fixtures.name("cli-log-none") });
+        const cli = new CliSandbox("log-none");
+        try {
+          const login = await cli.login(pat, { noProject: true, account: ctx.P.OWNER.accountId });
+          if (login.exitCode !== 0)
+            throw new Error(`kortix login exited ${login.exitCode}: ${login.all}`);
+          const run = await cli.run(["sessions", "log", unsaved, "--project", project.id]);
+          throwIfCliInfraFailure(run, "kortix sessions log (nothing saved)");
+          if (run.exitCode !== 1)
+            throw new Error(`expected exit 1 with nothing saved, got ${run.exitCode}: ${run.all}`);
+          if (!run.stderr.includes("No saved transcript") || !run.stderr.includes("sessions start"))
+            throw new Error(`nothing-saved message did not guide the user: ${run.stderr}`);
         } finally {
           cli.dispose();
         }
