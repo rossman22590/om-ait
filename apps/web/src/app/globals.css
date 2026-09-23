@@ -1457,7 +1457,7 @@ html[data-desktop='true'] body:has([data-kx-titlebar-owner]) .kx-desktop-back {
 }
 /* A row pinned to the top of a screen without a shell (`/new`, the landing
    door's Log out) sits in the band on desktop: under Back and the traffic
-   lights on the left, under the Win/Linux window controls on the right. Wear
+   lights on the left, below Back on every platform. Wear
    `.kx-below-titlebar` and it drops below the band and clears the controls. */
 html[data-desktop='true'] .kx-below-titlebar {
   margin-top: var(--kx-titlebar-inset);
@@ -1466,16 +1466,18 @@ html[data-desktop='true'] .kx-below-titlebar {
 
 /* A top row positioned on a full-screen frame with no product navigation:
    `/new` and the `/projects/start` sign-out. The top of the window is the
-   title-bar band, where the traffic lights (macOS) and the web-drawn window
-   controls (Win/Linux) sit. On desktop the row drops below the band, with one
-   spacing step of air, and keeps its own side padding.
+   title-bar band, where the traffic lights (macOS) and Back sit. On desktop
+   the row clears both the band and Back, with one spacing step of air.
 
    Positioned rows only: `top` does nothing in flow. An in-flow header (the
    onboarding wizard) puts `.kx-titlebar-spacer` above itself instead.
 
    Unlayered, so it beats the row's own `top-*` utilities. */
 html[data-desktop='true'] .kx-desktop-band-row {
-  top: calc(var(--kx-titlebar-inset) + var(--spacing) * 2);
+  top: max(
+    calc(var(--kx-titlebar-inset) + var(--spacing) * 2),
+    calc(var(--kx-titlebar-control-top) + var(--kx-titlebar-control-size) + var(--spacing))
+  );
 }
 html[data-desktop='true'] .kx-web-only-back {
   display: none;
