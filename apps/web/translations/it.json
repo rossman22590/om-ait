@@ -11631,6 +11631,12 @@
       "text3eb54d5ae20d": "Dal template iniziale. Ogni nuovo progetto lo include, disattivato.",
       "text3ecb3ffd4f33": "Autorizzazioni effettive verificate",
       "textae47d51077b4": "Preparazione del link…",
+      "texte9e0b20cf289": "Connesso come {value0}",
+      "textbb7a240d3660": "Rinomina {value0}",
+      "text64f07c825803": "Cambia solo il nome. L’account resta connesso e nessuno deve accedere di nuovo.",
+      "text499d7f6dfdfc": "Account rinominato",
+      "text11ef24ea6e15": "Impossibile rinominare l’account",
+      "text0223e507afd3": "Per usare un altro account, aggiungilo agli account di questo connettore nelle impostazioni del progetto e impostalo come predefinito.",
       "text3ed7c1e32705": "Leggere un tracker e riscriverlo sono azioni diverse. Imposta la scrittura su Ask: l’esecuzione si ferma sulla chiamata e mostra esattamente quali issue vuole unire o chiudere, poi riprende da lì quando approvi.",
       "text3ee7a9bba1b1": "analyst.md",
       "text3efd6742a383": "Crediti addebitati",
@@ -18632,7 +18638,8 @@
       "textde340d411411": "Questo diagramma è vuoto.",
       "textc53147a0d05b": "Impossibile visualizzare questo diagramma",
       "text91aec62280a3": "Scarica SVG",
-      "text751dfdcf3878": "Riga {value0}"
+      "text751dfdcf3878": "Riga {value0}",
+      "text0a7b76552107": "Account del connettore rinominato"
     }
   },
   "projectOnboarding": {
