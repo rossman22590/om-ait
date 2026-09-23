@@ -99,10 +99,19 @@ already working in that session. A bystander in the channel cannot.
 ## Files
 
 The agent sends files with `teams send --file`, and Kortix picks the delivery
-for the conversation: a **consent card** in a personal chat (the recipient
-accepts, then it lands in their OneDrive), an **inline image** in a channel, or
-a **SharePoint link** for any other file shared to the team. Inbound files and
-pasted images are available to the agent to download and work with.
+for the conversation:
+
+- **An image is shown inline** — in a personal chat, a group chat, or a
+  channel. If it is too large for Teams to carry inline, a personal chat falls
+  back to a consent card (accept, and it lands in your OneDrive) and a channel
+  falls back to the team's files. A group chat cannot receive file transfers,
+  so an oversized image there comes back to the agent as "send a smaller one".
+- **Any other file** arrives as a consent card in a personal chat, or as a
+  SharePoint link when it is shared to a team.
+
+Inbound files and pasted images are available to the agent to download and
+work with — including images pasted into a channel or a group chat, which Teams
+delivers inside the message body rather than as an attachment.
 
 Paste a screenshot and ask about it and the turn runs on a model that can read
 images, even when the conversation's own model is text-only — the session's
