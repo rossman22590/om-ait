@@ -98,7 +98,41 @@ function buildProtectedRanges(text: string): Array<[number, number]> {
     ranges.push([m.index, m.index + m[0].length - 1]);
   }
 
+  // ── A link still being written at the very end  [text](url… ─────────────
+  const openLink = openLinkTailStart(text);
+  if (openLink !== -1) ranges.push([openLink, text.length - 1]);
+
   return ranges;
+}
+
+/**
+ * Where a markdown link left open at the very end of the text starts, or -1.
+ *
+ * Only streaming text ends inside a link: `[label` with no `]` yet, or
+ * `[label](https://…` with no `)` yet. Linkifying the half-written URL there
+ * wraps it in a second link — `[label]([https://…](https://…)` — so the reader
+ * sees a raw `[label](` until the closing paren arrives. Leaving it as written
+ * lets Streamdown's remend close it for display instead.
+ *
+ * Only the last line counts, so a stray `[` earlier in the text protects
+ * nothing. Plain index scans, not a `$`-anchored regex: that backtracks
+ * quadratically on a run of `[` followed by a newline.
+ */
+function openLinkTailStart(text: string): number {
+  const lineStart = text.lastIndexOf('\n') + 1;
+
+  // Destination still open: the last `](` on the line, with no `)` after it.
+  const destination = text.lastIndexOf('](');
+  if (destination >= lineStart && text.indexOf(')', destination + 2) === -1) {
+    const label = text.lastIndexOf('[', destination);
+    if (label >= lineStart) return label;
+  }
+
+  // Label still open: the last `[` on the line, with no `]` after it.
+  const bracket = text.lastIndexOf('[');
+  if (bracket >= lineStart && text.indexOf(']', bracket + 1) === -1) return bracket;
+
+  return -1;
 }
 
 function isInProtectedRange(

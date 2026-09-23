@@ -116,6 +116,43 @@ describe('autoLinkUrls', () => {
     expect(autoLinkUrls('math $x = example.com$ end')).toBe('math $x = example.com$ end');
   });
 
+  // While a turn streams, the text can end inside a link. Linkifying the
+  // half-written URL there wrapped it in a second link, so the reader saw
+  // `[label]([https://…](https://…)` — a raw `[label](` followed by a link to a
+  // truncated URL — until the closing paren arrived. The open link is left as
+  // written; Streamdown's remend closes it for display.
+  describe('a link still being written at the end of the text', () => {
+    test('leaves a half-written destination alone', () => {
+      const input = 'Here it is:\n\n[Connect Outlook](https://dev.example.com/connect/ksl_ab';
+      expect(autoLinkUrls(input)).toBe(input);
+    });
+
+    test('leaves a half-written label alone when the label is a url', () => {
+      expect(autoLinkUrls('see [https://example.com/pa')).toBe('see [https://example.com/pa');
+      expect(autoLinkUrls('see [https://example.com/path](https://example.com/pa')).toBe(
+        'see [https://example.com/path](https://example.com/pa',
+      );
+    });
+
+    test('still linkifies text before the open link', () => {
+      expect(autoLinkUrls('try example.com or [the docs](https://docs.example.com/gu')).toBe(
+        'try [example.com](https://example.com) or [the docs](https://docs.example.com/gu',
+      );
+    });
+
+    test('an unclosed bracket on an earlier line protects nothing after it', () => {
+      expect(autoLinkUrls('arr[0\nsee example.com')).toBe(
+        'arr[0\nsee [example.com](https://example.com)',
+      );
+    });
+
+    test('a finished link at the end is not an open one', () => {
+      expect(autoLinkUrls('[docs](https://docs.example.com) and example.com')).toBe(
+        '[docs](https://docs.example.com) and [example.com](https://example.com)',
+      );
+    });
+  });
+
   test('adversarial (ReDoS-shaped) input stays fast and correct', () => {
     // Before the quantifiers were bounded, these repetitive strings drove the
     // email / markdown-link / angle-link regexes into polynomial backtracking
@@ -131,6 +168,9 @@ describe('autoLinkUrls', () => {
       '['.repeat(50_000), // markdown-link opens that never reach ']('
       '[]('.repeat(15_000), // link prefixes that never close
       '<http://'.repeat(15_000), // angle links that never close '>'
+      `${'['.repeat(50_000)}\nx`, // unclosed labels, then a later line
+      `${'[a]('.repeat(12_000)}\n`, // destinations that never close, then a newline
+      `[${'a '.repeat(25_000)}`, // one label left open to the very end
     ];
     for (const input of cases) {
       const start = Date.now();
