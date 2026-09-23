@@ -93,6 +93,17 @@ Type these in a chat with the bot (in a channel, `@`-mention it first):
 | `/projects`, `/use <name>` | List connected projects, or point this one at another |
 | `/policy [open\|approval\|owner]` | Who may join sessions started here |
 
+## While the agent works
+
+The agent answers in one card: its steps while it works, then the reply. A
+long reply that does not fit in one Teams message is cut at a line, marked as
+cut, and links to the full session in Kortix.
+
+Send another message while it works and it waits for the current run, then
+gets its own card. A run can take as long as it needs: a card is closed as
+dead only when the runtime reports that the run has ended, not because a long
+step posted nothing for a while.
+
 ## Stopping a run
 
 While the agent works, its live card carries a **Stop** button. `/stop` does
