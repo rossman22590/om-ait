@@ -15,6 +15,8 @@ import { ArrowCircleDownIcon as ArrowCircleDownGlyph } from 'phosphor-react-nati
 import { ArrowClockwiseIcon as ArrowClockwiseGlyph } from 'phosphor-react-native/src/icons/ArrowClockwise';
 import { ArrowCounterClockwiseIcon as ArrowCounterClockwiseGlyph } from 'phosphor-react-native/src/icons/ArrowCounterClockwise';
 import { ArrowDownIcon as ArrowDownGlyph } from 'phosphor-react-native/src/icons/ArrowDown';
+import { ArrowElbowDownRightIcon as ArrowElbowDownRightGlyph } from 'phosphor-react-native/src/icons/ArrowElbowDownRight';
+import { ArrowElbowLeftUpIcon as ArrowElbowLeftUpGlyph } from 'phosphor-react-native/src/icons/ArrowElbowLeftUp';
 import { ArrowLeftIcon as ArrowLeftGlyph } from 'phosphor-react-native/src/icons/ArrowLeft';
 import { ArrowRightIcon as ArrowRightGlyph } from 'phosphor-react-native/src/icons/ArrowRight';
 import { ArrowSquareOutIcon as ArrowSquareOutGlyph } from 'phosphor-react-native/src/icons/ArrowSquareOut';
@@ -38,10 +40,10 @@ import { CalendarDotsIcon as CalendarDotsGlyph } from 'phosphor-react-native/src
 import { CalendarIcon as CalendarGlyph } from 'phosphor-react-native/src/icons/Calendar';
 import { CameraIcon as CameraGlyph } from 'phosphor-react-native/src/icons/Camera';
 import { CarIcon as CarGlyph } from 'phosphor-react-native/src/icons/Car';
-import { CaretDoubleDownIcon as CaretDoubleDownGlyph } from 'phosphor-react-native/src/icons/CaretDoubleDown';
 import { CaretDownIcon as CaretDownGlyph } from 'phosphor-react-native/src/icons/CaretDown';
 import { CaretLeftIcon as CaretLeftGlyph } from 'phosphor-react-native/src/icons/CaretLeft';
 import { CaretRightIcon as CaretRightGlyph } from 'phosphor-react-native/src/icons/CaretRight';
+import { CaretUpDownIcon as CaretUpDownGlyph } from 'phosphor-react-native/src/icons/CaretUpDown';
 import { CaretUpIcon as CaretUpGlyph } from 'phosphor-react-native/src/icons/CaretUp';
 import { CertificateIcon as CertificateGlyph } from 'phosphor-react-native/src/icons/Certificate';
 import { ChartBarIcon as ChartBarGlyph } from 'phosphor-react-native/src/icons/ChartBar';
@@ -60,7 +62,6 @@ import { ClockCounterClockwiseIcon as ClockCounterClockwiseGlyph } from 'phospho
 import { ClockIcon as ClockGlyph } from 'phosphor-react-native/src/icons/Clock';
 import { CodeIcon as CodeGlyph } from 'phosphor-react-native/src/icons/Code';
 import { CodeSimpleIcon as CodeSimpleGlyph } from 'phosphor-react-native/src/icons/CodeSimple';
-import { CoinsIcon as CoinsGlyph } from 'phosphor-react-native/src/icons/Coins';
 import { CompassIcon as CompassGlyph } from 'phosphor-react-native/src/icons/Compass';
 import { CpuIcon as CpuGlyph } from 'phosphor-react-native/src/icons/Cpu';
 import { CreditCardIcon as CreditCardGlyph } from 'phosphor-react-native/src/icons/CreditCard';
@@ -130,7 +131,6 @@ import { GearSixIcon as GearSixGlyph } from 'phosphor-react-native/src/icons/Gea
 import { GitBranchIcon as GitBranchGlyph } from 'phosphor-react-native/src/icons/GitBranch';
 import { GitCommitIcon as GitCommitGlyph } from 'phosphor-react-native/src/icons/GitCommit';
 import { GitDiffIcon as GitDiffGlyph } from 'phosphor-react-native/src/icons/GitDiff';
-import { GitForkIcon as GitForkGlyph } from 'phosphor-react-native/src/icons/GitFork';
 import { GitMergeIcon as GitMergeGlyph } from 'phosphor-react-native/src/icons/GitMerge';
 import { GitPullRequestIcon as GitPullRequestGlyph } from 'phosphor-react-native/src/icons/GitPullRequest';
 import { GithubLogoIcon as GithubLogoGlyph } from 'phosphor-react-native/src/icons/GithubLogo';
@@ -142,7 +142,6 @@ import { HardDrivesIcon as HardDrivesGlyph } from 'phosphor-react-native/src/ico
 import { HashIcon as HashGlyph } from 'phosphor-react-native/src/icons/Hash';
 import { HeadphonesIcon as HeadphonesGlyph } from 'phosphor-react-native/src/icons/Headphones';
 import { HeartIcon as HeartGlyph } from 'phosphor-react-native/src/icons/Heart';
-import { HourglassIcon as HourglassGlyph } from 'phosphor-react-native/src/icons/Hourglass';
 import { HouseIcon as HouseGlyph } from 'phosphor-react-native/src/icons/House';
 import { ImageIcon as ImageGlyph } from 'phosphor-react-native/src/icons/Image';
 import { InfinityIcon as InfinityGlyph } from 'phosphor-react-native/src/icons/Infinity';
@@ -190,7 +189,6 @@ import { PuzzlePieceIcon as PuzzlePieceGlyph } from 'phosphor-react-native/src/i
 import { QuestionIcon as QuestionGlyph } from 'phosphor-react-native/src/icons/Question';
 import { RadioButtonIcon as RadioButtonGlyph } from 'phosphor-react-native/src/icons/RadioButton';
 import { ReadCvLogoIcon as ReadCvLogoGlyph } from 'phosphor-react-native/src/icons/ReadCvLogo';
-import { ReceiptIcon as ReceiptGlyph } from 'phosphor-react-native/src/icons/Receipt';
 import { RepeatIcon as RepeatGlyph } from 'phosphor-react-native/src/icons/Repeat';
 import { RobotIcon as RobotGlyph } from 'phosphor-react-native/src/icons/Robot';
 import { RocketIcon as RocketGlyph } from 'phosphor-react-native/src/icons/Rocket';
@@ -221,7 +219,6 @@ import { TagIcon as TagGlyph } from 'phosphor-react-native/src/icons/Tag';
 import { TargetIcon as TargetGlyph } from 'phosphor-react-native/src/icons/Target';
 import { TerminalIcon as TerminalGlyph } from 'phosphor-react-native/src/icons/Terminal';
 import { TerminalWindowIcon as TerminalWindowGlyph } from 'phosphor-react-native/src/icons/TerminalWindow';
-import { TextAlignLeftIcon as TextAlignLeftGlyph } from 'phosphor-react-native/src/icons/TextAlignLeft';
 import { TextTIcon as TextTGlyph } from 'phosphor-react-native/src/icons/TextT';
 import { TimerIcon as TimerGlyph } from 'phosphor-react-native/src/icons/Timer';
 import { TrashIcon as TrashGlyph } from 'phosphor-react-native/src/icons/Trash';
@@ -229,7 +226,6 @@ import { TreeStructureIcon as TreeStructureGlyph } from 'phosphor-react-native/s
 import { TrendUpIcon as TrendUpGlyph } from 'phosphor-react-native/src/icons/TrendUp';
 import { UploadIcon as UploadGlyph } from 'phosphor-react-native/src/icons/Upload';
 import { UserIcon as UserGlyph } from 'phosphor-react-native/src/icons/User';
-import { UserMinusIcon as UserMinusGlyph } from 'phosphor-react-native/src/icons/UserMinus';
 import { UserPlusIcon as UserPlusGlyph } from 'phosphor-react-native/src/icons/UserPlus';
 import { UsersIcon as UsersGlyph } from 'phosphor-react-native/src/icons/Users';
 import { UsersThreeIcon as UsersThreeGlyph } from 'phosphor-react-native/src/icons/UsersThree';
@@ -253,6 +249,11 @@ export const ArrowCircleDownIcon = withAppWeight(ArrowCircleDownGlyph, 'ArrowCir
 export const ArrowClockwiseIcon = withAppWeight(ArrowClockwiseGlyph, 'ArrowClockwiseIcon');
 export const ArrowCounterClockwiseIcon = withAppWeight(ArrowCounterClockwiseGlyph, 'ArrowCounterClockwiseIcon');
 export const ArrowDownIcon = withAppWeight(ArrowDownGlyph, 'ArrowDownIcon');
+export const ArrowElbowDownRightIcon = withAppWeight(
+  ArrowElbowDownRightGlyph,
+  'ArrowElbowDownRightIcon'
+);
+export const ArrowElbowLeftUpIcon = withAppWeight(ArrowElbowLeftUpGlyph, 'ArrowElbowLeftUpIcon');
 export const ArrowLeftIcon = withAppWeight(ArrowLeftGlyph, 'ArrowLeftIcon');
 export const ArrowRightIcon = withAppWeight(ArrowRightGlyph, 'ArrowRightIcon');
 export const ArrowSquareOutIcon = withAppWeight(ArrowSquareOutGlyph, 'ArrowSquareOutIcon');
@@ -276,10 +277,10 @@ export const CalendarDotsIcon = withAppWeight(CalendarDotsGlyph, 'CalendarDotsIc
 export const CalendarIcon = withAppWeight(CalendarGlyph, 'CalendarIcon');
 export const CameraIcon = withAppWeight(CameraGlyph, 'CameraIcon');
 export const CarIcon = withAppWeight(CarGlyph, 'CarIcon');
-export const CaretDoubleDownIcon = withAppWeight(CaretDoubleDownGlyph, 'CaretDoubleDownIcon');
 export const CaretDownIcon = withAppWeight(CaretDownGlyph, 'CaretDownIcon');
 export const CaretLeftIcon = withAppWeight(CaretLeftGlyph, 'CaretLeftIcon');
 export const CaretRightIcon = withAppWeight(CaretRightGlyph, 'CaretRightIcon');
+export const CaretUpDownIcon = withAppWeight(CaretUpDownGlyph, 'CaretUpDownIcon');
 export const CaretUpIcon = withAppWeight(CaretUpGlyph, 'CaretUpIcon');
 export const CertificateIcon = withAppWeight(CertificateGlyph, 'CertificateIcon');
 export const ChartBarIcon = withAppWeight(ChartBarGlyph, 'ChartBarIcon');
@@ -298,7 +299,6 @@ export const ClockCounterClockwiseIcon = withAppWeight(ClockCounterClockwiseGlyp
 export const ClockIcon = withAppWeight(ClockGlyph, 'ClockIcon');
 export const CodeIcon = withAppWeight(CodeGlyph, 'CodeIcon');
 export const CodeSimpleIcon = withAppWeight(CodeSimpleGlyph, 'CodeSimpleIcon');
-export const CoinsIcon = withAppWeight(CoinsGlyph, 'CoinsIcon');
 export const CompassIcon = withAppWeight(CompassGlyph, 'CompassIcon');
 // Web's own copy glyph (apps/web src/features/icon/icons/copy.tsx), not Phosphor's Copy.
 export { KortixCopyIcon as CopyIcon } from './kortix-copy';
@@ -370,7 +370,6 @@ export const GearSixIcon = withAppWeight(GearSixGlyph, 'GearSixIcon');
 export const GitBranchIcon = withAppWeight(GitBranchGlyph, 'GitBranchIcon');
 export const GitCommitIcon = withAppWeight(GitCommitGlyph, 'GitCommitIcon');
 export const GitDiffIcon = withAppWeight(GitDiffGlyph, 'GitDiffIcon');
-export const GitForkIcon = withAppWeight(GitForkGlyph, 'GitForkIcon');
 export const GitMergeIcon = withAppWeight(GitMergeGlyph, 'GitMergeIcon');
 export const GitPullRequestIcon = withAppWeight(GitPullRequestGlyph, 'GitPullRequestIcon');
 export const GithubLogoIcon = withAppWeight(GithubLogoGlyph, 'GithubLogoIcon');
@@ -382,7 +381,6 @@ export const HardDrivesIcon = withAppWeight(HardDrivesGlyph, 'HardDrivesIcon');
 export const HashIcon = withAppWeight(HashGlyph, 'HashIcon');
 export const HeadphonesIcon = withAppWeight(HeadphonesGlyph, 'HeadphonesIcon');
 export const HeartIcon = withAppWeight(HeartGlyph, 'HeartIcon');
-export const HourglassIcon = withAppWeight(HourglassGlyph, 'HourglassIcon');
 export const HouseIcon = withAppWeight(HouseGlyph, 'HouseIcon');
 export const ImageIcon = withAppWeight(ImageGlyph, 'ImageIcon');
 export const InfinityIcon = withAppWeight(InfinityGlyph, 'InfinityIcon');
@@ -432,7 +430,6 @@ export const PuzzlePieceIcon = withAppWeight(PuzzlePieceGlyph, 'PuzzlePieceIcon'
 export const QuestionIcon = withAppWeight(QuestionGlyph, 'QuestionIcon');
 export const RadioButtonIcon = withAppWeight(RadioButtonGlyph, 'RadioButtonIcon');
 export const ReadCvLogoIcon = withAppWeight(ReadCvLogoGlyph, 'ReadCvLogoIcon');
-export const ReceiptIcon = withAppWeight(ReceiptGlyph, 'ReceiptIcon');
 export const RepeatIcon = withAppWeight(RepeatGlyph, 'RepeatIcon');
 export const RobotIcon = withAppWeight(RobotGlyph, 'RobotIcon');
 export const RocketIcon = withAppWeight(RocketGlyph, 'RocketIcon');
@@ -463,7 +460,6 @@ export const TagIcon = withAppWeight(TagGlyph, 'TagIcon');
 export const TargetIcon = withAppWeight(TargetGlyph, 'TargetIcon');
 export const TerminalIcon = withAppWeight(TerminalGlyph, 'TerminalIcon');
 export const TerminalWindowIcon = withAppWeight(TerminalWindowGlyph, 'TerminalWindowIcon');
-export const TextAlignLeftIcon = withAppWeight(TextAlignLeftGlyph, 'TextAlignLeftIcon');
 export const TextTIcon = withAppWeight(TextTGlyph, 'TextTIcon');
 export const TimerIcon = withAppWeight(TimerGlyph, 'TimerIcon');
 export const TrashIcon = withAppWeight(TrashGlyph, 'TrashIcon');
@@ -471,7 +467,6 @@ export const TreeStructureIcon = withAppWeight(TreeStructureGlyph, 'TreeStructur
 export const TrendUpIcon = withAppWeight(TrendUpGlyph, 'TrendUpIcon');
 export const UploadIcon = withAppWeight(UploadGlyph, 'UploadIcon');
 export const UserIcon = withAppWeight(UserGlyph, 'UserIcon');
-export const UserMinusIcon = withAppWeight(UserMinusGlyph, 'UserMinusIcon');
 export const UserPlusIcon = withAppWeight(UserPlusGlyph, 'UserPlusIcon');
 export const UsersIcon = withAppWeight(UsersGlyph, 'UsersIcon');
 export const UsersThreeIcon = withAppWeight(UsersThreeGlyph, 'UsersThreeIcon');
