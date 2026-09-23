@@ -16,6 +16,7 @@
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import ts from 'typescript';
 
 const SRC = join(import.meta.dir, '..');
 
@@ -35,11 +36,56 @@ function walk(dir: string, out: string[] = []): string[] {
  * `authorizeV2`'s trailing optional arguments were the bug) is not a module that
  * calls it — and a pin that cannot tell those apart gets deleted the first time
  * someone writes a good comment.
+ *
+ * Parsed, not pattern-matched. A regex over the raw text cannot tell the `/*`
+ * in `app.use('/v1/*', …)` from a comment opener: it deleted everything from
+ * there to the next star-slash in the file, up to 230 lines in some modules,
+ * and every pin below was blind to whatever sat in that span. A comment is
+ * trivia, so it can only sit in a gap between two tokens. The token leaves of
+ * the syntax tree (every identifier, string, template, regex literal and
+ * operator) are copied verbatim; only the gaps between them are stripped. A
+ * gap holds nothing but punctuation, keywords and trivia — a `/` there always
+ * opens a comment, because division is an operator token. Newlines survive, so
+ * a line in the output is the same line in the file.
  */
+function stripComments(text: string): string {
+  const sf = ts.createSourceFile('pin.ts', text, ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
+  const tokens: ts.Node[] = [];
+  const visit = (node: ts.Node): void => {
+    let leaf = true;
+    ts.forEachChild(node, (child) => {
+      leaf = false;
+      visit(child);
+    });
+    // A childless node that is not a token — an empty block `{ /* ignore */ }`,
+    // an empty object literal — spans only punctuation and trivia. It stays in
+    // the gap and is stripped with it.
+    if (leaf && ts.isToken(node)) tokens.push(node);
+  };
+  visit(sf);
+  const trivia = (gap: string) =>
+    gap.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, (comment) => comment.replace(/[^\n]/g, ''));
+  let out = '';
+  let pos = 0;
+  for (const token of tokens.sort((a, b) => a.pos - b.pos)) {
+    const start = token.getStart(sf);
+    // Zero-width: the end-of-file token, or a token the parser synthesised to
+    // recover from a syntax error. It has no text to copy.
+    if (start >= token.end) continue;
+    out += trivia(text.slice(pos, start)) + text.slice(start, token.end);
+    pos = token.end;
+  }
+  return out + trivia(text.slice(pos));
+}
+
+const stripped = new Map<string, string>();
 function code(file: string): string {
-  return readFileSync(file, 'utf8')
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:'"\\])\/\/.*$/gm, '$1');
+  let src = stripped.get(file);
+  if (src === undefined) {
+    src = stripComments(readFileSync(file, 'utf8'));
+    stripped.set(file, src);
+  }
+  return src;
 }
 
 const ALL = walk(SRC);
@@ -63,6 +109,34 @@ const DELETED_AT_CUTOVER = [
   'iam/read-parity.ts',
   'projects/lib/agent-inheritance.ts',
 ];
+
+describe('the pins read code, not comments', () => {
+  test('the comment stripper keeps every literal and drops only comments', () => {
+    // Lines 1-3: a string, a regex and a template that each hold a comment
+    // opener. The old regex stripper took each for a real one and deleted the
+    // code after it. Lines 4-8: real comments, the last in an empty block.
+    const src = [
+      "app.use('/v1/*', guard); // a line comment",
+      'const leadingSlashes = /^\\/*/;',
+      'const url = `${base}//${path}`;',
+      '/** A JSDoc below the mounts. */',
+      "app.route('/v1/x', x);",
+      '/* a block',
+      '   comment */ const y = 1;',
+      'try { run(); } catch { /* authorizeV2() is gone */ }',
+    ].join('\n');
+    expect(stripComments(src).split('\n')).toEqual([
+      "app.use('/v1/*', guard); ",
+      'const leadingSlashes = /^\\/*/;',
+      'const url = `${base}//${path}`;',
+      '',
+      "app.route('/v1/x', x);",
+      '',
+      ' const y = 1;',
+      'try { run(); } catch {  }',
+    ]);
+  });
+});
 
 describe('the gate codemod is complete', () => {
   test('every module the cutover deleted is actually gone', () => {
