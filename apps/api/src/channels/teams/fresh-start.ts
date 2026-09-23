@@ -4,7 +4,6 @@ import { config } from '../../config';
 import { db } from '../../shared/db';
 import { normalizeConversationPolicy, policyFromMetadata } from './participants';
 import { closeAbandonedTurn, deleteTurn, loadTurn } from './turn';
-import type { TeamsActivity } from './types';
 import { teamsMessageText, type TeamsConversationScope } from './util';
 
 const PLATFORM = 'teams';
@@ -184,7 +183,7 @@ async function mayStartFresh(
  * with. Line breaks survive, so `/new` followed by a pasted log is one message.
  * Empty when the command stands alone.
  */
-export function messageAfterFreshStart(activity: TeamsActivity): string {
+export function messageAfterFreshStart(activity: Parameters<typeof teamsMessageText>[0]): string {
   return teamsMessageText(activity)
     .replace(/^\/(?:new|reset)\b[ \t]*\n?/i, '')
     .trim();
