@@ -461,11 +461,15 @@ export function buildQuestionCard(questions: TeamsQuestion[]): Record<string, un
     const id = questionFieldId(q.question, i);
     const opts = q.options?.filter((o) => o?.label?.trim()) ?? [];
     // Shape of the Kortix web question UI: each question carries its short
-    // header, and several questions are numbered so "question 2" means one
-    // thing. The field ID stays the bare question — `handleForm` relays it to
-    // the agent, which should read the question, not "2. ".
-    const label = numbered ? `${i + 1}. ${q.question}` : q.question;
-    const caption = q.header?.trim() || undefined;
+    // header, and several questions say where they sit ("2 of 3") so
+    // "question 2" means one thing. The position lives in the caption, never
+    // as a "2. " prefix on the label: Teams renders TextBlock markdown, and a
+    // label starting "2. " became an indented ordered list, out of line with
+    // its caption and choices. The field ID stays the bare question —
+    // `handleForm` relays it to the agent, which should read the question.
+    const header = q.header?.trim();
+    const label = q.question;
+    const caption = numbered ? `${i + 1} of ${list.length}${header ? ` · ${header}` : ''}` : header || undefined;
     if (opts.length > 0) {
       fields.push({
         id,

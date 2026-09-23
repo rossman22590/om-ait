@@ -243,21 +243,29 @@ describe('buildQuestionCard — the form reads like the web question UI', () => 
     for (const h of ['Test focus', 'Multi-select', 'Confirm']) expect(text).toContain(h);
   });
 
-  test('several questions are numbered, but the relayed id stays the bare question', () => {
+  test('several questions carry their position in the caption, and the relayed id stays the bare question', () => {
     const card = ask();
     const text = allText(card);
-    expect(text).toContain('1. Which surface are you testing?');
-    expect(text).toContain('2. Which UI elements?');
+    expect(text).toContain('1 of 3 · Test focus');
+    expect(text).toContain('2 of 3 · Multi-select');
     // `handleForm` relays `- <id>: <value>` — the agent should read the
-    // question, not "1. ".
+    // question, not its position.
     expect(String(card.actions?.[0].data.fieldIds)).toStartWith('Which surface are you testing?,');
   });
 
-  test('a single question is not numbered', () => {
+  test('no question label starts like a markdown list item', () => {
+    // Teams renders TextBlock markdown: "1. Which surface…" became an
+    // indented ordered list, out of line with its caption and its choices
+    // (seen in the Adaptive Cards renderer with the Teams host config).
+    const labels = ofType(ask(), 'TextBlock').map((b) => String(b.text));
+    for (const label of labels) expect(label).not.toMatch(/^\d+[.)]\s/);
+  });
+
+  test('a single question carries no position', () => {
     const card = buildQuestionCard([
-      { question: 'Which env?', multiple: true, options: [{ label: 'dev' }, { label: 'prod' }] },
+      { question: 'Which env?', header: 'Env', multiple: true, options: [{ label: 'dev' }, { label: 'prod' }] },
     ]);
-    expect(allText(card)).not.toContain('1. Which env?');
+    expect(allText(card)).not.toContain('1 of 1');
   });
 
   test('past six options the picker becomes a dropdown again', () => {
