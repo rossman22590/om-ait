@@ -49,6 +49,7 @@ import { tunnelRateLimiter } from './core/rate-limiter';
 // and the tunnel is stuck "offline" forever. See the prod-timeout incident note.
 import { fingerprintTunnelCredentialHash, isTunnelToken, verifySecretKey } from '../shared/crypto';
 import { db } from '../shared/db';
+import { runWorkerTick } from '../shared/audit-scope';
 import { reconcileComputerConnectors } from '../connectors/sync';
 import { type AuditEventInput, recordAuditEvent } from '../shared/audit';
 
@@ -404,7 +405,7 @@ function startTunnelService(): void {
 
   // ── Permission expiry cleanup ────────────────────────────────────────
 
-  permissionCleanupInterval = setInterval(async () => {
+  permissionCleanupInterval = setInterval(() => void runWorkerTick('tunnel-cleanup', async () => {
     try {
       await db
         .update(tunnelPermissions)
@@ -442,7 +443,7 @@ function startTunnelService(): void {
     } catch (err) {
       console.warn('[TUNNEL] Permission cleanup error:', err);
     }
-  }, 5 * 60_000);
+  }), 5 * 60_000);
 
   console.log('[TUNNEL] Tunnel service started');
 }

@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, lt, ne, sql } from 'drizzle-orm';
 import { tickRunningComputeCharges } from '../billing/services/compute-metering';
 import { cleanupExpiredConnectorAttachments } from '../connectors/attachments';
 import { db } from '../shared/db';
+import { runWorkerTick } from '../shared/audit-scope';
 import { reconcileStaleBuilds } from '../snapshots/builder';
 import { reconcileSnapshotQuota } from '../snapshots/quota-gc';
 import { type GitBackedProject, deleteRemoteSessionBranch } from './git';
@@ -543,7 +544,7 @@ export function startProjectMaintenance(): void {
     clearInterval(globalForProjectMaintenance.__kortixProjectMaintenanceTimer);
   }
   maintenanceTimer = setInterval(() => {
-    runProjectMaintenance().catch((err) => {
+    runWorkerTick('project-maintenance', runProjectMaintenance).catch((err) => {
       console.error('[project-maintenance] run failed:', err);
     });
   }, maintenanceIntervalMs());

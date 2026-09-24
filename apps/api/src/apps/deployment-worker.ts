@@ -14,6 +14,7 @@ import { pauseComputeSession, startComputeSession } from '../billing/services/co
 import { config, SANDBOX_VERSION, type SandboxProviderName } from '../config';
 import { logger } from '../lib/logger';
 import { db } from '../shared/db';
+import { runWorkerTick } from '../shared/audit-scope';
 import { listResolvedProjectSecrets } from '../projects/secrets';
 import { downloadAppArtifact, extractAppArchive } from './artifacts';
 import { resolveAppRuntimeEnvironment } from './environment';
@@ -611,7 +612,9 @@ function scheduleTriggeredTick(): void {
   queueMicrotask(() => {
     workerKickScheduled = false;
     workerRerunRequested = false;
-    void runAppDeploymentTick().catch(reportWorkerError);
+    // A fresh worker context: the kick usually comes from a deploy request,
+    // and the deployments this tick drives were queued by other principals.
+    void runWorkerTick('app-deployments', runAppDeploymentTick).catch(reportWorkerError);
   });
 }
 

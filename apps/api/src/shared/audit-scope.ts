@@ -40,7 +40,12 @@
  * files replace `shared/audit` wholesale with `mock.module`, so authenticators
  * import their binding API from here, never from `shared/audit`.
  */
-import { getRequestContext, runWithContext } from '../lib/request-context';
+import * as requestContext from '../lib/request-context';
+
+// Namespace import, resolved at call time: several test files replace
+// `lib/request-context` with a partial `mock.module` (no `runWithContext`),
+// and a named import would fail those files at link time.
+const getRequestContext = () => requestContext.getRequestContext();
 
 export type AuditScopeActorType = 'human' | 'agent' | 'service_account' | 'system' | 'anonymous';
 export type AuditScopeOutcome = 'success' | 'failure' | 'denied' | 'pending';
@@ -306,7 +311,7 @@ export function bindIntegrationPrincipal(
  * when a background loop in `apps/api/src` is neither wrapped nor classified.
  */
 export function runWorkerTick<T>(worker: string, tick: () => T | Promise<T>): Promise<T> {
-  return runWithContext('WORKER', worker, async () => {
+  return requestContext.runWithContext('WORKER', worker, async () => {
     attachInboundAuditScope({
       owner: 'worker',
       method: 'WORKER',

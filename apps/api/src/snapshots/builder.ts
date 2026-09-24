@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { OPENCODE_VERSION } from '@kortix/shared';
 import { projectSnapshotBuilds } from '@kortix/db';
 import { db } from '../shared/db';
+import { runWorkerTick } from '../shared/audit-scope';
 import { resolveCommitSha, type GitBackedProject } from '../projects/git';
 import { getSandboxProvider, type BuildLogTap, type BuildSnapshotResult, type ProviderState, type SandboxProviderAdapter } from './providers';
 import { config, type SandboxProviderName } from '../config';
@@ -1392,6 +1393,10 @@ export function kickStartupPreBuild(): void {
   if (process.env.KORTIX_SKIP_STARTUP_PREBUILD === 'true') return;
   if (startupPreBuildKicked) return;
   startupPreBuildKicked = true;
+  void runWorkerTick('startup-prebuild', startupPreBuild);
+}
+
+function startupPreBuild(): void {
   for (const providerId of templateBuildProviders()) {
     void ensurePlatformDefaultImage({ source: 'startup', provider: providerId })
       .then((r) =>
