@@ -10,9 +10,10 @@ Every row in the [audit log](/docs/accounts#audit-log) carries an `action`: `dom
 - Filter by prefix: `?action=gateway.` on the audit API, `kortix audit ls --action gateway.`, or `--action-prefix` on an audit webhook.
 - `metadata.http` keeps the request's route template, for example `DELETE /v1/projects/:projectId/gateway/keys/:keyId`. The raw path is never recorded.
 - A request that matched no route is `api.route.unmatched`.
+- A route with two actions (`secret.strategy.update` or `secret.strategy.changed`) records the second when its handler records that event, for example only for a real change. That event, with its before and after state, is then the request's row.
 - Rows written before 2026-09-24 carry `METHOD /template` as their action. The web app and the CLI show them with the same titles.
 
-This page lists 671 route actions and 58 other events.
+This page lists 671 route actions and 63 other events.
 
 ## `account.`
 
@@ -241,7 +242,7 @@ This page lists 671 route actions and 58 other events.
 | `connector.action.run` | Requested connector call | `POST /v1/connectors/call` (also `POST /v1/connectors/projects/:projectId/call`) |
 | `connector.approval.list` | Listed pending connector approvals | `GET /v1/projects/:projectId/approvals` |
 | `connector.approval.needs_input.list` | Listed approvals needing input | `GET /v1/projects/:projectId/approvals/needs-input` |
-| `connector.approval.resolve` | Resolved connector approval | `POST /v1/projects/:projectId/approvals/:executionId` |
+| `connector.approval.resolve` or `connector.approval.approved` or `connector.approval.denied` | Resolved connector approval | `POST /v1/projects/:projectId/approvals/:executionId` |
 | `connector.attachment.upload` | Uploaded connector attachment | `POST /v1/connectors/attachments` (also `POST /v1/connectors/projects/:projectId/attachments`) |
 | `connector.auth.preview` | Previewed connector authentication | `POST /v1/connectors/projects/:projectId/connectors/auth-discovery` |
 | `connector.authorization_strategy.update` | Updated connector authorization strategy | `PUT /v1/connectors/projects/:projectId/connectors/:slug/authorization-strategy` |
@@ -384,9 +385,9 @@ This page lists 671 route actions and 58 other events.
 | --- | --- | --- |
 | `iam.action.list` | Listed IAM actions | `GET /v1/accounts/:accountId/iam/actions` |
 | `iam.agent_identity.list` | Listed agent identities | `GET /v1/accounts/:accountId/iam/agent-identities` |
-| `iam.assignment.granted` | Granted a role | `POST /v1/accounts/:accountId/iam/assignments` |
+| `iam.assignment.grant` or `iam.assignment.granted` | Granted a role | `POST /v1/accounts/:accountId/iam/assignments` |
 | `iam.assignment.list` | Listed role assignments | `GET /v1/accounts/:accountId/iam/assignments` |
-| `iam.assignment.revoked` | Revoked a role assignment | `DELETE /v1/accounts/:accountId/iam/assignments/:assignmentId` |
+| `iam.assignment.revoke` or `iam.assignment.revoked` | Revoked a role assignment | `DELETE /v1/accounts/:accountId/iam/assignments/:assignmentId` |
 | `iam.audit.export` | Exported audit log | `GET /v1/accounts/:accountId/audit/export` |
 | `iam.audit.list` | Viewed audit log | `GET /v1/accounts/:accountId/audit` |
 | `iam.audit.reconcile` | Reconciled audit log | `POST /v1/accounts/:accountId/audit/reconcile` |
@@ -397,7 +398,7 @@ This page lists 671 route actions and 58 other events.
 | `iam.audit.webhook.list` | Listed audit webhooks | `GET /v1/accounts/:accountId/audit/webhooks` |
 | `iam.audit.webhook.update` | Updated audit webhook | `PATCH /v1/accounts/:accountId/audit/webhooks/:webhookId` |
 | `iam.enterprise_demo.read` | Viewed Enterprise preview | `GET /v1/accounts/:accountId/iam/enterprise-demo` |
-| `iam.enterprise_demo.set` | Updated Enterprise preview | `PUT /v1/accounts/:accountId/iam/enterprise-demo` |
+| `iam.enterprise_demo.set` or `enterprise_demo.enable` or `enterprise_demo.disable` or `enterprise_demo.set` | Updated Enterprise preview | `PUT /v1/accounts/:accountId/iam/enterprise-demo` |
 | `iam.group.create` | Created group | `POST /v1/accounts/:accountId/iam/groups` |
 | `iam.group.delete` | Deleted group | `DELETE /v1/accounts/:accountId/iam/groups/:groupId` |
 | `iam.group.list` | Listed groups | `GET /v1/accounts/:accountId/iam/groups` |
@@ -414,7 +415,7 @@ This page lists 671 route actions and 58 other events.
 | `iam.member.super_admin.set` | Set super-admin status | `PATCH /v1/accounts/:accountId/iam/members/:userId/super-admin` |
 | `iam.mfa_required.preview` | Previewed MFA enforcement | `GET /v1/accounts/:accountId/iam/mfa-required/preview` |
 | `iam.mfa_required.read` | Viewed MFA requirement | `GET /v1/accounts/:accountId/iam/mfa-required` |
-| `iam.mfa_required.set` | Changed MFA requirement | `PATCH /v1/accounts/:accountId/iam/mfa-required` |
+| `iam.mfa_required.set` or `iam.mfa_required.enable` or `iam.mfa_required.disable` | Changed MFA requirement | `PATCH /v1/accounts/:accountId/iam/mfa-required` |
 | `iam.oauth_client.create` | Registered an OAuth app | `POST /v1/accounts/:accountId/iam/oauth-clients` |
 | `iam.oauth_client.delete` | Deleted an OAuth app | `DELETE /v1/accounts/:accountId/iam/oauth-clients/:clientId` |
 | `iam.oauth_client.list` | Listed OAuth apps | `GET /v1/accounts/:accountId/iam/oauth-clients` |
@@ -448,7 +449,7 @@ This page lists 671 route actions and 58 other events.
 | `iam.session.list` | Listed sign-in sessions | `GET /v1/accounts/:accountId/iam/sessions` |
 | `iam.session.revoke` | Revoked sign-in session | `POST /v1/accounts/:accountId/iam/sessions/:sessionId/revoke` |
 | `iam.session_oversight.read` | Viewed admin session access | `GET /v1/accounts/:accountId/iam/session-oversight` |
-| `iam.session_oversight.set` | Changed admin session access | `PATCH /v1/accounts/:accountId/iam/session-oversight` |
+| `iam.session_oversight.set` or `iam.session_oversight.enable` or `iam.session_oversight.disable` | Changed admin session access | `PATCH /v1/accounts/:accountId/iam/session-oversight` |
 | `iam.session_policy.read` | Viewed session policy | `GET /v1/accounts/:accountId/iam/session-policy` |
 | `iam.session_policy.update` | Updated session policy | `PATCH /v1/accounts/:accountId/iam/session-policy` |
 | `iam.sso.mapping.create` | Added SSO group mapping | `POST /v1/accounts/:accountId/iam/sso/mappings` |
@@ -687,20 +688,20 @@ This page lists 671 route actions and 58 other events.
 | `secret.account_resource.rotate` | Rotated pooled provider key | `PUT /v1/accounts/:accountId/secret-resources/:secretId/value` |
 | `secret.agent.grant` | Granted secret to an agent | `POST /v1/projects/:projectId/secrets/:identifier/grant` |
 | `secret.broker.proxy` | Sent request via secret broker | `POST /v1/projects/:projectId/secrets/:identifier/broker` |
-| `secret.deleted` | Removed shared secret | `DELETE /v1/projects/:projectId/secrets/:name` |
+| `secret.delete` or `secret.deleted` | Removed shared secret | `DELETE /v1/projects/:projectId/secrets/:name` |
 | `secret.list` | Listed project secrets | `GET /v1/projects/:projectId/secrets` |
-| `secret.oauth.check` | Checked model provider OAuth login | `POST /v1/projects/:projectId/oauth/:provider/poll` |
-| `secret.oauth.disconnected` | Disconnected model provider OAuth login | `DELETE /v1/projects/:projectId/oauth/:provider` |
+| `secret.oauth.check` or `secret.oauth.connected` | Checked model provider OAuth login | `POST /v1/projects/:projectId/oauth/:provider/poll` |
+| `secret.oauth.disconnect` or `secret.oauth.disconnected` | Disconnected model provider OAuth login | `DELETE /v1/projects/:projectId/oauth/:provider` |
 | `secret.oauth.list` | Listed model provider OAuth logins | `GET /v1/projects/:projectId/oauth` |
 | `secret.oauth.start` | Started model provider OAuth login | `POST /v1/projects/:projectId/oauth/:provider/start` |
 | `secret.personal.delete` | Removed personal secret | `DELETE /v1/projects/:projectId/secrets/:name/personal` |
 | `secret.personal.set` | Set personal secret | `PUT /v1/projects/:projectId/secrets/:name/personal` |
 | `secret.relay.stream` | Streamed request via secret relay | `POST /v1/projects/:projectId/secrets/:identifier/relay` |
 | `secret.request.create` | Created secret request | `POST /v1/projects/:projectId/secret-requests` |
-| `secret.set` | Set project secret | `POST /v1/projects/:projectId/secrets` |
+| `secret.set` or `secret.created` or `secret.updated` | Set project secret | `POST /v1/projects/:projectId/secrets` |
 | `secret.setup_link.read` | Opened secret setup link | `GET /v1/setup-links/secret/:token` |
 | `secret.setup_link.set` | Saved secrets via setup link | `POST /v1/setup-links/secret/:token` |
-| `secret.strategy.changed` | Updated secret delivery strategy | `PUT /v1/projects/:projectId/secrets/:identifier/strategy` |
+| `secret.strategy.update` or `secret.strategy.changed` | Updated secret delivery strategy | `PUT /v1/projects/:projectId/secrets/:identifier/strategy` |
 | `secret.sync` | Synced secrets to active sandboxes | `POST /v1/projects/:projectId/secrets/sync` |
 
 ## `session.`
@@ -897,6 +898,8 @@ Sandboxes, background jobs, database triggers, and handlers record these for som
 | `enterprise_demo.set` | Recorded Enterprise preview override |
 | `git.branch.deleted` | Deleted stale Git branch |
 | `iam.assignment.expired` | Expired a role |
+| `iam.assignment.granted` | Granted a role |
+| `iam.assignment.revoked` | Revoked a role assignment |
 | `iam.mfa_required.disable` | Disabled MFA requirement |
 | `iam.mfa_required.enable` | Required MFA for the account |
 | `iam.session_oversight.disable` | Stopped admins opening every session |
@@ -923,9 +926,12 @@ Sandboxes, background jobs, database triggers, and handlers record these for som
 | `secret.consumer.refreshed` | Refreshed secret credential |
 | `secret.consumer.used` | Used secret |
 | `secret.created` | Created secret |
+| `secret.deleted` | Removed shared secret |
 | `secret.handle.issued` | Issued secret handle to sandbox |
 | `secret.handle.refused` | Refused secret handle |
 | `secret.oauth.connected` | Connected model provider OAuth login |
+| `secret.oauth.disconnected` | Disconnected model provider OAuth login |
+| `secret.strategy.changed` | Updated secret delivery strategy |
 | `secret.updated` | Updated secret |
 | `session.created` | Recorded session creation |
 | `session.event_rate_limited` | Rate-limited session audit events |

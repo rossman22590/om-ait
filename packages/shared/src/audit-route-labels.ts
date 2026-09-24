@@ -10,10 +10,14 @@
  * alias of (a deprecated path, a `/*` twin, PUT next to PATCH).
  *
  * - `action`: `domain.resource.verb`, present tense (`secret.list`,
- *   `gateway.key.revoke`). When the handler writes its own audit event for the
- *   request, use that event's action: the event then becomes the request row.
+ *   `gateway.key.revoke`). When the handler writes the same event on every
+ *   successful request, use that event's action: the event is then the row.
  * - `title`: what the actor did, past tense, sentence case, 2 to 7 words
  *   (`Revoked LLM gateway key`). Customers read it in the audit log.
+ * - `events` (optional): actions the handler records for the request in place
+ *   of its row, when the handler records them only for a real change or picks
+ *   one of several (`secret.strategy.changed`). A recorded one is the row; a
+ *   request that recorded none is its own row, under `action`.
  *
  * `apps/api/src/__tests__/unit-audit-route-labels.test.ts` fails for a route
  * without a line and for a line without a route.
@@ -86,10 +90,10 @@ export const AUDIT_ROUTE_LABELS: Readonly<Record<string, AuditRouteLabel | strin
   'GET /v1/accounts/:accountId/iam/actions': { action: 'iam.action.list', title: 'Listed IAM actions' },
   'GET /v1/accounts/:accountId/iam/agent-identities': { action: 'iam.agent_identity.list', title: 'Listed agent identities' },
   'GET /v1/accounts/:accountId/iam/assignments': { action: 'iam.assignment.list', title: 'Listed role assignments' },
-  'POST /v1/accounts/:accountId/iam/assignments': { action: 'iam.assignment.granted', title: 'Granted a role' },
-  'DELETE /v1/accounts/:accountId/iam/assignments/:assignmentId': { action: 'iam.assignment.revoked', title: 'Revoked a role assignment' },
+  'POST /v1/accounts/:accountId/iam/assignments': { action: 'iam.assignment.grant', title: 'Granted a role', events: ['iam.assignment.granted'] },
+  'DELETE /v1/accounts/:accountId/iam/assignments/:assignmentId': { action: 'iam.assignment.revoke', title: 'Revoked a role assignment', events: ['iam.assignment.revoked'] },
   'GET /v1/accounts/:accountId/iam/enterprise-demo': { action: 'iam.enterprise_demo.read', title: 'Viewed Enterprise preview' },
-  'PUT /v1/accounts/:accountId/iam/enterprise-demo': { action: 'iam.enterprise_demo.set', title: 'Updated Enterprise preview' },
+  'PUT /v1/accounts/:accountId/iam/enterprise-demo': { action: 'iam.enterprise_demo.set', title: 'Updated Enterprise preview', events: ['enterprise_demo.enable', 'enterprise_demo.disable', 'enterprise_demo.set'] },
   'GET /v1/accounts/:accountId/iam/groups': { action: 'iam.group.list', title: 'Listed groups' },
   'POST /v1/accounts/:accountId/iam/groups': { action: 'iam.group.create', title: 'Created group' },
   'DELETE /v1/accounts/:accountId/iam/groups/:groupId': { action: 'iam.group.delete', title: 'Deleted group' },
@@ -105,7 +109,7 @@ export const AUDIT_ROUTE_LABELS: Readonly<Record<string, AuditRouteLabel | strin
   'GET /v1/accounts/:accountId/iam/members/:userId/project-access': { action: 'iam.member.project_access.list', title: 'Listed member project access' },
   'PATCH /v1/accounts/:accountId/iam/members/:userId/super-admin': { action: 'iam.member.super_admin.set', title: 'Set super-admin status' },
   'GET /v1/accounts/:accountId/iam/mfa-required': { action: 'iam.mfa_required.read', title: 'Viewed MFA requirement' },
-  'PATCH /v1/accounts/:accountId/iam/mfa-required': { action: 'iam.mfa_required.set', title: 'Changed MFA requirement' },
+  'PATCH /v1/accounts/:accountId/iam/mfa-required': { action: 'iam.mfa_required.set', title: 'Changed MFA requirement', events: ['iam.mfa_required.enable', 'iam.mfa_required.disable'] },
   'GET /v1/accounts/:accountId/iam/mfa-required/preview': { action: 'iam.mfa_required.preview', title: 'Previewed MFA enforcement' },
   'GET /v1/accounts/:accountId/iam/oauth-clients': { action: 'iam.oauth_client.list', title: 'Listed OAuth apps' },
   'POST /v1/accounts/:accountId/iam/oauth-clients': { action: 'iam.oauth_client.create', title: 'Registered an OAuth app' },
@@ -138,7 +142,7 @@ export const AUDIT_ROUTE_LABELS: Readonly<Record<string, AuditRouteLabel | strin
   'DELETE /v1/accounts/:accountId/iam/service-accounts/:saId': { action: 'iam.service_account.delete', title: 'Deleted service account' },
   'POST /v1/accounts/:accountId/iam/service-accounts/:saId/disable': { action: 'iam.service_account.disable', title: 'Disabled service account' },
   'GET /v1/accounts/:accountId/iam/session-oversight': { action: 'iam.session_oversight.read', title: 'Viewed admin session access' },
-  'PATCH /v1/accounts/:accountId/iam/session-oversight': { action: 'iam.session_oversight.set', title: 'Changed admin session access' },
+  'PATCH /v1/accounts/:accountId/iam/session-oversight': { action: 'iam.session_oversight.set', title: 'Changed admin session access', events: ['iam.session_oversight.enable', 'iam.session_oversight.disable'] },
   'GET /v1/accounts/:accountId/iam/session-policy': { action: 'iam.session_policy.read', title: 'Viewed session policy' },
   'PATCH /v1/accounts/:accountId/iam/session-policy': { action: 'iam.session_policy.update', title: 'Updated session policy' },
   'GET /v1/accounts/:accountId/iam/sessions': { action: 'iam.session.list', title: 'Listed sign-in sessions' },
@@ -383,7 +387,7 @@ export const AUDIT_ROUTE_LABELS: Readonly<Record<string, AuditRouteLabel | strin
   'PUT /v1/projects/:projectId/agents/:agentName/config': { action: 'agent.config.update', title: 'Updated agent configuration' },
   'PUT /v1/projects/:projectId/agents/:agentName/scope': { action: 'agent.scope.update', title: 'Updated agent access scope' },
   'GET /v1/projects/:projectId/approvals': { action: 'connector.approval.list', title: 'Listed pending connector approvals' },
-  'POST /v1/projects/:projectId/approvals/:executionId': { action: 'connector.approval.resolve', title: 'Resolved connector approval' },
+  'POST /v1/projects/:projectId/approvals/:executionId': { action: 'connector.approval.resolve', title: 'Resolved connector approval', events: ['connector.approval.approved', 'connector.approval.denied'] },
   'GET /v1/projects/:projectId/approvals/needs-input': { action: 'connector.approval.needs_input.list', title: 'Listed approvals needing input' },
   'GET /v1/projects/:projectId/apps': { action: 'app.list', title: 'Listed Kortix Apps' },
   'POST /v1/projects/:projectId/apps': { action: 'app.create', title: 'Created Kortix App' },
@@ -520,8 +524,8 @@ export const AUDIT_ROUTE_LABELS: Readonly<Record<string, AuditRouteLabel | strin
   'GET /v1/projects/:projectId/model-picker': { action: 'model.picker.read', title: 'Viewed model picker' },
   'POST /v1/projects/:projectId/monitors/ingest': { action: 'project.monitor.event.ingest', title: 'Ingested monitor events' },
   'GET /v1/projects/:projectId/oauth': { action: 'secret.oauth.list', title: 'Listed model provider OAuth logins' },
-  'DELETE /v1/projects/:projectId/oauth/:provider': { action: 'secret.oauth.disconnected', title: 'Disconnected model provider OAuth login' },
-  'POST /v1/projects/:projectId/oauth/:provider/poll': { action: 'secret.oauth.check', title: 'Checked model provider OAuth login' },
+  'DELETE /v1/projects/:projectId/oauth/:provider': { action: 'secret.oauth.disconnect', title: 'Disconnected model provider OAuth login', events: ['secret.oauth.disconnected'] },
+  'POST /v1/projects/:projectId/oauth/:provider/poll': { action: 'secret.oauth.check', title: 'Checked model provider OAuth login', events: ['secret.oauth.connected'] },
   'POST /v1/projects/:projectId/oauth/:provider/start': { action: 'secret.oauth.start', title: 'Started model provider OAuth login' },
   'PATCH /v1/projects/:projectId/onboarding': { action: 'project.onboarding.update', title: 'Updated project onboarding' },
   'GET /v1/projects/:projectId/resource-grants': { action: 'project.resource_grant.list', title: 'Viewed resource access grants' },
@@ -544,12 +548,12 @@ export const AUDIT_ROUTE_LABELS: Readonly<Record<string, AuditRouteLabel | strin
   'GET /v1/projects/:projectId/sandboxes': 'GET /v1/projects/:projectId/sandbox-templates',
   'POST /v1/projects/:projectId/secret-requests': { action: 'secret.request.create', title: 'Created secret request' },
   'GET /v1/projects/:projectId/secrets': { action: 'secret.list', title: 'Listed project secrets' },
-  'POST /v1/projects/:projectId/secrets': { action: 'secret.set', title: 'Set project secret' },
+  'POST /v1/projects/:projectId/secrets': { action: 'secret.set', title: 'Set project secret', events: ['secret.created', 'secret.updated'] },
   'POST /v1/projects/:projectId/secrets/:identifier/broker': { action: 'secret.broker.proxy', title: 'Sent request via secret broker' },
   'POST /v1/projects/:projectId/secrets/:identifier/grant': { action: 'secret.agent.grant', title: 'Granted secret to an agent' },
   'POST /v1/projects/:projectId/secrets/:identifier/relay': { action: 'secret.relay.stream', title: 'Streamed request via secret relay' },
-  'PUT /v1/projects/:projectId/secrets/:identifier/strategy': { action: 'secret.strategy.changed', title: 'Updated secret delivery strategy' },
-  'DELETE /v1/projects/:projectId/secrets/:name': { action: 'secret.deleted', title: 'Removed shared secret' },
+  'PUT /v1/projects/:projectId/secrets/:identifier/strategy': { action: 'secret.strategy.update', title: 'Updated secret delivery strategy', events: ['secret.strategy.changed'] },
+  'DELETE /v1/projects/:projectId/secrets/:name': { action: 'secret.delete', title: 'Removed shared secret', events: ['secret.deleted'] },
   'DELETE /v1/projects/:projectId/secrets/:name/personal': { action: 'secret.personal.delete', title: 'Removed personal secret' },
   'PUT /v1/projects/:projectId/secrets/:name/personal': { action: 'secret.personal.set', title: 'Set personal secret' },
   'POST /v1/projects/:projectId/secrets/sync': { action: 'secret.sync', title: 'Synced secrets to active sandboxes' },

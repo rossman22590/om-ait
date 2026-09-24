@@ -46,7 +46,8 @@ export async function renderAuditActionsDoc() {
       .map((route) => {
         const aliases = (aliasesOf.get(route.key) ?? []).map(routeCell).join(', ');
         const where = aliases ? `${routeCell(route.key)} (also ${aliases})` : routeCell(route.key);
-        return `| ${code(route.action)} | ${route.title} | ${where} |`;
+        const action = [route.action, ...(route.events ?? [])].map(code).join(' or ');
+        return `| ${action} | ${route.title} | ${where} |`;
       });
     return [`## ${code(`${domain}.`)}`, '', '| Action | Title | Route |', '| --- | --- | --- |', ...rows].join('\n');
   });
@@ -67,6 +68,7 @@ Every row in the [audit log](/docs/accounts#audit-log) carries an \`action\`: \`
 - Filter by prefix: \`?action=gateway.\` on the audit API, \`kortix audit ls --action gateway.\`, or \`--action-prefix\` on an audit webhook.
 - \`metadata.http\` keeps the request's route template, for example \`DELETE /v1/projects/:projectId/gateway/keys/:keyId\`. The raw path is never recorded.
 - A request that matched no route is ${code(UNMATCHED_ROUTE_LABEL.action)}.
+- A route with two actions (\`secret.strategy.update\` or \`secret.strategy.changed\`) records the second when its handler records that event, for example only for a real change. That event, with its before and after state, is then the request's row.
 - Rows written before 2026-09-24 carry \`METHOD /template\` as their action. The web app and the CLI show them with the same titles.
 
 This page lists ${routes.length} route actions and ${events.length} other events.

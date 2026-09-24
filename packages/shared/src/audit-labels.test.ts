@@ -208,14 +208,29 @@ describe('catalog shape', () => {
     expect(clashes).toEqual([]);
   });
 
-  test('no two actions share a title', () => {
+  test('no two actions share a title, except an event its own route lists', () => {
+    const listedBy = new Map<string, string>();
+    for (const [, l] of labels) for (const event of l.events ?? []) listedBy.set(event, l.action);
     const seen = new Map<string, string>();
     const clashes: string[] = [];
     for (const [action, title] of [...labels.map(([, l]) => [l.action, l.title]), ...events]) {
       const prior = seen.get(title as string);
-      if (prior) clashes.push(`${title}: ${prior} , ${action}`);
+      if (prior && listedBy.get(action as string) !== prior) {
+        clashes.push(`${title}: ${prior} , ${action}`);
+      }
       seen.set(title as string, action as string);
     }
     expect(clashes).toEqual([]);
+  });
+
+  test("every event a route lists has its own line, and is never the route's action", () => {
+    const bad: string[] = [];
+    for (const [key, l] of labels) {
+      for (const event of l.events ?? []) {
+        if (!(event in AUDIT_EVENT_LABELS)) bad.push(`${key}: ${event} has no event line`);
+        if (event === l.action) bad.push(`${key}: ${event} is the route's own action`);
+      }
+    }
+    expect(bad).toEqual([]);
   });
 });

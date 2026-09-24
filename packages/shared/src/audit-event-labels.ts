@@ -11,7 +11,9 @@
  * (OpenCode event types). An exact key wins over a family; a longer family
  * wins over a shorter one.
  *
- * Title: what happened, past tense, sentence case, 2 to 7 words.
+ * Title: what happened, past tense, sentence case, 2 to 7 words. An event a
+ * route lists in its `events` may share that route's title: it is the same
+ * change, recorded by the handler.
  * `apps/api/src/__tests__/unit-audit-route-labels.test.ts` fails for an
  * action a writer records without a line here or in the route catalog.
  */
@@ -30,6 +32,8 @@ export const AUDIT_EVENT_LABELS: Readonly<Record<string, string>> = {
   'enterprise_demo.set': 'Recorded Enterprise preview override',
   'enterprise_demo.enable': 'Enabled Enterprise preview',
   'enterprise_demo.disable': 'Disabled Enterprise preview',
+  'iam.assignment.granted': 'Granted a role',
+  'iam.assignment.revoked': 'Revoked a role assignment',
   'iam.assignment.expired': 'Expired a role',
   'iam.mfa_required.enable': 'Required MFA for the account',
   'iam.mfa_required.disable': 'Disabled MFA requirement',
@@ -53,6 +57,9 @@ export const AUDIT_EVENT_LABELS: Readonly<Record<string, string>> = {
   'opencode.tool.updated': 'Updated agent tool call',
   'opencode.message.part.*': 'Updated agent message',
   'secret.created': 'Created secret',
+  'secret.deleted': 'Removed shared secret',
+  'secret.strategy.changed': 'Updated secret delivery strategy',
+  'secret.oauth.disconnected': 'Disconnected model provider OAuth login',
   'secret.updated': 'Updated secret',
   'secret.consumer.used': 'Used secret',
   'secret.consumer.missing': 'Requested a secret that is not set',

@@ -27,6 +27,12 @@ export interface AuditRouteLabel {
   readonly action: string;
   /** Past-tense sentence fragment, e.g. `Deleted LLM gateway key`. */
   readonly title: string;
+  /**
+   * Actions the route's handler records in place of the request row: only on
+   * a real change (`secret.strategy.changed`), or one of several outcomes
+   * (`connector.approval.approved` / `.denied`). A recorded one is the row.
+   */
+  readonly events?: readonly string[];
 }
 
 /** A request that matched no endpoint (a 404 from the router). */

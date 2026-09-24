@@ -796,10 +796,13 @@ export async function emitInboundAuditRow(scope: InboundAuditScope, status: numb
   scope.emitted = true;
   try {
     const input = await inboundAuditInput(scope, status);
-    // The handler already wrote this request's event (`iam.group.create` with
-    // the group in `after`), and the request succeeded: that event is the
-    // row. A failed or refused request keeps its own row, with the status.
-    if (status < 400 && scope.recordedActions.has(input.action)) return;
+    // The handler already wrote this request's event, and the request
+    // succeeded: that event is the row. It is either the route's own action
+    // (`iam.group.create`, with the group in `after`) or one the route label
+    // lists (`secret.strategy.changed`, recorded only for a real change). A
+    // failed or refused request keeps its own row, with the status.
+    const standIns = [input.action, ...(routeLabel(scope)?.events ?? [])];
+    if (status < 400 && standIns.some((action) => scope.recordedActions.has(action))) return;
     // A deployed app's public traffic is the customer's end users, not a
     // principal acting on the account. A signed-in viewer is still audited.
     if (scope.entrypoint === 'app_origin' && input.actorType === 'anonymous') return;

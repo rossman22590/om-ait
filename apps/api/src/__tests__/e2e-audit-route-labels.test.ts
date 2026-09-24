@@ -215,3 +215,57 @@ describe('a handler event with the route action is the request row', () => {
     });
   });
 });
+
+/**
+ * A handler that records an event only when something changed (the secret
+ * strategy handler records `secret.strategy.changed` only for a real change)
+ * lists that event on its route's label. A request that changed something is
+ * then one row, the event; a no-op request is its own row under the request
+ * label, which never claims a change that did not happen (SEC-8).
+ */
+describe("a route label's events stand in for the request row", () => {
+  beforeEach(() => {
+    auditRows = [];
+  });
+
+  const strategyRoute = '/v1/projects/:projectId/secrets/:identifier/strategy';
+
+  function strategyApp(): Hono {
+    const app = new Hono();
+    app.use('*', auditApiRequest);
+    app.put(strategyRoute, async (c) => {
+      if (c.req.header('x-changed')) {
+        await recordAuditEvent({
+          action: 'secret.strategy.changed',
+          resourceType: 'project_secret',
+          resourceId: 's1',
+        });
+      }
+      return c.json({ strategy: 'runtime' });
+    });
+    return app;
+  }
+
+  test('the label names the request and lists the event its handler records', () => {
+    const strategy = label('PUT', strategyRoute);
+    expect(strategy.action).not.toBe('secret.strategy.changed');
+    expect(strategy.events).toContain('secret.strategy.changed');
+  });
+
+  test('a request that changed the strategy is one row: the event', async () => {
+    await strategyApp().request('/v1/projects/p1/secrets/API_KEY/strategy', {
+      method: 'PUT',
+      headers: { 'x-changed': '1' },
+    });
+
+    expect(auditRows.map((row) => row.action)).toEqual(['secret.strategy.changed']);
+  });
+
+  test('a no-op request is its own row, under the request label', async () => {
+    await strategyApp().request('/v1/projects/p1/secrets/API_KEY/strategy', { method: 'PUT' });
+
+    expect(auditRows).toHaveLength(1);
+    expect(auditRows[0]?.action).toBe(label('PUT', strategyRoute).action);
+    expect(auditRows[0]?.metadata).toMatchObject({ http: `PUT ${strategyRoute}` });
+  });
+});
