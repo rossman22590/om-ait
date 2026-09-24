@@ -263,7 +263,7 @@ export const AUDIT_ROUTE_LABELS: Readonly<Record<string, AuditRouteLabel | strin
   'POST /v1/channels/teams/identity/bind': { action: 'channel.teams.identity.connect', title: 'Linked Teams identity' },
   'GET /v1/channels/teams/identity/login/:token': { action: 'channel.teams.login_link.read', title: 'Opened Teams login link' },
   'POST /v1/connectors/attachments': { action: 'connector.attachment.upload', title: 'Uploaded connector attachment' },
-  'POST /v1/connectors/call': { action: 'connector.action.run', title: 'Ran connector action' },
+  'POST /v1/connectors/call': { action: 'connector.action.run', title: 'Requested connector action' },
   'GET /v1/connectors/catalog': { action: 'connector.catalog.list', title: 'Viewed connector catalog' },
   'GET /v1/connectors/connect-status': { action: 'connector.easy_connect_status.read', title: 'Viewed easy-connect status' },
   'GET /v1/connectors/connectors': 'GET /v1/connectors/catalog',

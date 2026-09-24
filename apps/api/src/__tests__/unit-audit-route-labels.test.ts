@@ -14,8 +14,13 @@
  * middleware `(c, next)`.
  */
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
-import { AUDIT_ROUTE_LABELS } from '@kortix/shared/audit-labels';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import {
+  AUDIT_EVENT_LABELS,
+  AUDIT_ROUTE_LABELS,
+  auditLabelForAction,
+} from '@kortix/shared/audit-labels';
 
 const { app } = await import('../index');
 
@@ -64,5 +69,109 @@ describe('audit route labels', () => {
   test('every label names a route that exists', () => {
     const known = new Set([...liveKeys, ...manifestKeys, ...entrypointKeys]);
     expect([...labelled].filter((key) => !known.has(key)).sort()).toEqual([]);
+  });
+});
+
+/**
+ * Every action an audit writer can record has a title: a route's own label,
+ * or a line in `packages/shared/src/audit-event-labels.ts`. The writers are
+ * the files that call the audit API; the actions are the dotted literals on
+ * their `action` lines (ternaries included).
+ *
+ * An action built from a template must start with the literal prefix of a
+ * `.*` family in the event catalog (`connector.${actionPath}` →
+ * `connector.*`). Any other template is refused: that is how raw request
+ * paths, which can carry bearer tokens, reached the audit log as
+ * `RATE_LIMIT POST /v1/setup-links/…`. The rule reads every source file, not
+ * only the writers, because an event is often built in one file and written
+ * in another.
+ */
+const SRC = new URL('..', import.meta.url).pathname;
+const WRITER_RE =
+  /recordAuditEvent\(|annotateAuditEvent\(|auditIam\(|applyAdminOverride\(|enforceRateLimit\(|\baudit\(writer|_ACTION\s*=/;
+const ACTION_LITERAL_RE = /'([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)'/g;
+
+function sourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return entry.name === '__tests__' ? [] : sourceFiles(path);
+    return entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts') ? [path] : [];
+  });
+}
+
+const families = new Set(
+  Object.keys(AUDIT_EVENT_LABELS)
+    .filter((key) => key.endsWith('.*'))
+    .map((key) => key.slice(0, -1)),
+);
+const writerActions = new Map<string, string>();
+const templatedActions: string[] = [];
+for (const file of sourceFiles(SRC)) {
+  const text = readFileSync(file, 'utf8');
+  const writer = WRITER_RE.test(text);
+  for (const [index, line] of text.split('\n').entries()) {
+    const where = `${relative(SRC, file)}:${index + 1}`;
+    const template = /\baction:\s*`([^`$]*)/.exec(line);
+    if (template && !families.has(template[1] ?? '')) templatedActions.push(`${where}: ${line.trim()}`);
+    if (!writer || !/\baction\b|_ACTION\s*=/.test(line)) continue;
+    for (const match of line.matchAll(ACTION_LITERAL_RE)) {
+      if (match[1] && !writerActions.has(match[1])) writerActions.set(match[1], where);
+    }
+  }
+}
+
+/**
+ * Actions database triggers and the reconciliation backfill write in SQL
+ * (`packages/db/migrations/*centralized_audit_v2.sql`,
+ * `shared/audit-reconciliation.ts`). `session.lifecycle.` is suffixed with a
+ * lifecycle command type.
+ */
+const SQL_ACTIONS = ['llm.request', 'llm.usage', 'session.created', 'session.status.changed'];
+const LIFECYCLE_COMMANDS = ['create_session', 'continue_session'];
+
+describe('audit event labels', () => {
+  test('the audit writers were read', () => {
+    expect(writerActions.size).toBeGreaterThan(80);
+  });
+
+  test('every action a writer records has a title', () => {
+    expect(
+      [...writerActions]
+        .filter(([action]) => !auditLabelForAction(action))
+        .map(([action, where]) => `${action}  ${where}`)
+        .sort(),
+    ).toEqual([]);
+  });
+
+  test('a template-built action extends a registered `.*` family', () => {
+    expect(templatedActions).toEqual([]);
+  });
+
+  test('every action the SQL writers record has a title, and is still written there', () => {
+    const migrations = join(SRC, '../../../packages/db/migrations');
+    const sql = [
+      readFileSync(join(SRC, 'shared/audit-reconciliation.ts'), 'utf8'),
+      ...readdirSync(migrations)
+        .filter((name) => name.endsWith('.sql'))
+        .map((name) => readFileSync(join(migrations, name), 'utf8')),
+    ].join('\n');
+    for (const action of SQL_ACTIONS) {
+      expect(sql).toContain(`'${action}'`);
+      expect(auditLabelForAction(action)).not.toBeNull();
+    }
+    expect(sql).toContain("'session.lifecycle.' || l.command_type");
+    for (const command of LIFECYCLE_COMMANDS) {
+      expect(auditLabelForAction(`session.lifecycle.${command}`)).not.toBeNull();
+    }
+  });
+
+  test('every session lifecycle command the API enqueues has a title', () => {
+    const commands = new Set<string>();
+    for (const file of sourceFiles(SRC)) {
+      for (const match of readFileSync(file, 'utf8').matchAll(/commandType:\s*'([a-z_]+)'/g)) {
+        if (match[1]) commands.add(match[1]);
+      }
+    }
+    expect([...commands].sort()).toEqual([...LIFECYCLE_COMMANDS].sort());
   });
 });
