@@ -562,3 +562,12 @@ describe('audit title translation keys', () => {
     ).toBe(renderAuditTitleTranslationKeys());
   });
 });
+
+describe('audit action reference page', () => {
+  test('content/docs/audit-actions.mdx is current: regenerate with scripts/generate-audit-actions-doc.mjs', async () => {
+    const { renderAuditActionsDoc } = await import('../../../scripts/generate-audit-actions-doc.mjs');
+    expect(
+      readFileSync(new URL('../../../content/docs/audit-actions.mdx', import.meta.url), 'utf8'),
+    ).toBe(await renderAuditActionsDoc());
+  });
+});
