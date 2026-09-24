@@ -15,6 +15,7 @@ import { config, SANDBOX_VERSION, type SandboxProviderName } from '../config';
 import { logger } from '../lib/logger';
 import { db } from '../shared/db';
 import { runWorkerTick } from '../shared/audit-scope';
+import { auditDeploymentOutcome, type DeploymentAuditRef } from './deployment-audit';
 import { listResolvedProjectSecrets } from '../projects/secrets';
 import { downloadAppArtifact, extractAppArchive } from './artifacts';
 import { resolveAppRuntimeEnvironment } from './environment';
@@ -288,6 +289,27 @@ async function stopPreviousRuntime(
   await pauseComputeSession(runtime.runtimeId, now);
 }
 
+/** The audit reference for a deployment whose context never loaded. */
+async function deploymentAuditRefFor(claimed: ClaimedDeployment): Promise<DeploymentAuditRef | null> {
+  try {
+    const [app] = await db
+      .select({ accountId: apps.accountId, projectId: apps.projectId })
+      .from(apps)
+      .where(eq(apps.appId, claimed.appId))
+      .limit(1);
+    if (!app) return null;
+    return {
+      appId: claimed.appId,
+      deploymentId: claimed.deploymentId,
+      accountId: app.accountId,
+      projectId: app.projectId,
+      createdBy: claimed.createdBy,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function driveAppDeployment(
   claimed: ClaimedDeployment,
   owner: string,
@@ -305,8 +327,16 @@ export async function driveAppDeployment(
   let runtimeExternalId: string | null = null;
   let runtimeProvider: SandboxProviderName | null = null;
   let temporaryRoot: string | null = null;
+  let auditRef: DeploymentAuditRef | null = null;
   try {
     const context = await deploymentContext(claimed.deploymentId);
+    auditRef = {
+      appId: context.app.appId,
+      deploymentId: claimed.deploymentId,
+      accountId: context.app.accountId,
+      projectId: context.app.projectId,
+      createdBy: claimed.createdBy,
+    };
     const provider = selectedProvider(context.deployment.hostingProvider);
     runtimeProvider = provider;
     await setDeploymentStatus(claimed.deploymentId, owner, 'validating', {
@@ -537,6 +567,7 @@ export async function driveAppDeployment(
       runtimeId,
       data: { previousDeploymentId: previous },
     });
+    await auditDeploymentOutcome(auditRef, { outcome: 'activated', previousDeploymentId: previous });
     await stopPreviousRuntime(hosting, previous).catch((error) => {
       logger.error('[apps] previous runtime stop failed', {
         deploymentId: previous,
@@ -586,7 +617,12 @@ export async function driveAppDeployment(
       runtimeId: runtimeId ?? undefined,
       data: { attempt, terminal },
     }).catch(() => {});
-    if (terminal) return;
+    if (terminal) {
+      // A retry is not an outcome; only the terminal failure is audited.
+      const ref = auditRef ?? (await deploymentAuditRefFor(claimed));
+      if (ref) await auditDeploymentOutcome(ref, { outcome: 'failed', errorCode, attempt });
+      return;
+    }
   } finally {
     clearInterval(heartbeat);
     if (temporaryRoot) await rm(temporaryRoot, { recursive: true, force: true }).catch(() => {});
