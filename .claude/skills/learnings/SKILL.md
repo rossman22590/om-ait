@@ -7816,10 +7816,10 @@ covered by the hooks.
 
 ## A per-project Slack webhook must only act on rows its own project owns
 
-- **Incident (2026-09-22, prod, workspace T07FUFNT3RV):** a plain reply in a
+- **Incident (2026-09-22, prod, `<workspace>`):** a plain reply in a
   `Kortix Company` Slack thread made the `kortix-incident-reporter` bot post
   "Open session in Kortix". The link combined the reporter's project
-  (`0825e40b…`) with Kortix Company's session (`b27cc3c2…`). Kortix Company
+  (`<project_id>`) with Kortix Company's session (`<session_id>`). Kortix Company
   then went silent in that thread. Cause: every BYO Slack app in a workspace
   receives every `message.channels` event. `threadIsOwned` read `chat_threads`
   by workspace and thread only. The reporter took the reply as a follow-up and
@@ -7838,3 +7838,28 @@ covered by the hooks.
   `unit-slack-classify-event.test.ts` asserts the bound SQL parameters include
   the project. The shared OAuth route stays workspace-wide on purpose: it is
   one app, and `/kortix use` can re-bind a channel under older threads.
+
+### 2026-09-24 — A server that answers before the request body ends desyncs every keep-alive client
+
+**Near-miss.** The core lane failed about one run in five on `main` and on
+PRs: 5 of 23 runs on 2026-09-23/24. A flow pushed through the Git proxy. The
+next `git ls-remote` or `git pull` got a bare `400`. GH-17 also failed as
+"expected a Git ref-policy rejection", which is the same fault on a push that
+was meant to be rejected. The local-git fixture answered when `git
+receive-pack` exited. At that time the chunked push body had not ended. Bun's
+`fetch` put the socket back in its pool and wrote the next request onto it.
+The fixture was still parsing the old body. It refused the new request at
+parse level (`HPE_INTERNAL`) and answered `400` before its handler ran, so
+its own error logging never fired. PR #7577.
+
+**Rule.** An HTTP handler answers only after the request body has ended, or
+it closes the connection. A handler that must answer early reads and discards
+the rest of the body. A client that forwards a body the upstream may refuse
+early does not reuse that connection.
+
+**Enforcement.** `tests/unit/local-git-fixture.test.ts` holds back a push
+body's terminator on a raw socket. It asserts that no answer arrives first,
+then sends a second request on the same socket. The receive-pack upstream
+`fetch` in `apps/api/src/git-proxy/index.ts` sets `keepalive: false`.
+`receive-pack-gate.test.ts` asserts that no later upstream request reuses the
+push's connection.
