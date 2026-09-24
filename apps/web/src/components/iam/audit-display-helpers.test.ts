@@ -553,6 +553,25 @@ describe('describeAuditAction — catalog labels', () => {
 });
 
 describe('audit title translation keys', () => {
+  test('every title in the shared audit catalog is translated', async () => {
+    const { AUDIT_EVENT_LABELS, AUDIT_ROUTE_LABELS, UNMATCHED_ROUTE_LABEL } = await import(
+      '@kortix/shared/audit-labels'
+    );
+    const { AUDIT_TITLE_TRANSLATION_KEYS } = await import(
+      './audit-title-translation-keys.generated'
+    );
+    const titles = new Set<string>([
+      ...Object.values(AUDIT_ROUTE_LABELS).flatMap((value) =>
+        typeof value === 'string' ? [] : [value.title],
+      ),
+      ...Object.values(AUDIT_EVENT_LABELS),
+      UNMATCHED_ROUTE_LABEL.title,
+    ]);
+    // A new title needs `hardcodedUi.i18nComplete.text<sha256[:12]>` in all nine
+    // catalogs; then run scripts/generate-audit-title-keys.mjs.
+    expect([...titles].filter((title) => !AUDIT_TITLE_TRANSLATION_KEYS[title]).sort()).toEqual([]);
+  });
+
   test('the generated map is current: regenerate with scripts/generate-audit-title-keys.mjs', async () => {
     const { renderAuditTitleTranslationKeys } = await import(
       '../../../scripts/generate-audit-title-keys.mjs'
