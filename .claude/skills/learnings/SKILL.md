@@ -21,6 +21,14 @@ linked, not inlined.
 
 ## Register
 
+### A background job runs its tick as a named worker, or its changes read as API traffic (2026-09-24)
+
+**Rule:** Wrap every background job's tick in `runWorkerTick('<name>', tick)` (`shared/audit-scope.ts`), at the tick function when handlers also kick it. A tenant-state change the job makes writes its own semantic row, which inherits the worker.
+
+**Near-miss (2026-09-24):** none of the API's 21 background jobs ran with a request context. IAM grant expiry and audit reconciliation rows read `source: api`. Expired tunnel permissions, deleted session branches, App deployment outcomes, and provider transitions wrote no row.
+
+**Enforcement:** `unit-worker-scope-wiring.test.ts` fails when a job stops wrapping its tick, a new `setInterval` file is unclassified, or `index.ts` starts an unclassified job.
+
 ### A get-or-create that finds its row by a mutable field duplicates the row once that field changes (2026-09-23)
 
 **Rule:** When a get-or-create finds "its" row again, match on a field nothing
