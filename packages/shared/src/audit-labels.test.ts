@@ -12,10 +12,12 @@ import {
   AUDIT_ROUTE_LABELS,
   type AuditRouteLabel,
   UNMATCHED_ROUTE_LABEL,
+  auditFamilyDetail,
   auditLabelForAction,
   auditLabelForEntrypoint,
   auditLabelForHttpAction,
   auditLabelForRoute,
+  auditRouteForAction,
 } from './audit-labels';
 
 const KEY_RE = /^(?:(?:GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS|ALL) \/\S*|ENTRY \S+)$/;
@@ -131,6 +133,28 @@ describe('action lookup', () => {
       must(AUDIT_EVENT_LABELS['opencode.tool.updated'], 'opencode.tool.updated'),
     );
     expect(auditLabelForAction('opencode.session.idle')?.action).toBe('opencode.session.idle');
+  });
+
+  test('a route action names the route it labels; an event action names none', () => {
+    expect(auditRouteForAction('project.list')).toEqual({ method: 'GET', route: '/v1/projects' });
+    const [key, label] = must(
+      labels.find(([k]) => k.startsWith('ALL ')),
+      'a catch-all route',
+    );
+    expect(auditRouteForAction(label.action)).toEqual({
+      method: 'ALL',
+      route: key.slice('ALL '.length),
+    });
+    expect(auditRouteForAction('secret.consumer.used')).toBeNull();
+    expect(auditRouteForAction('no.such.action')).toBeNull();
+  });
+
+  test('a family action carries its open-ended tail as detail; an exact action none', () => {
+    expect(auditFamilyDetail('connector.github.create_issue')).toBe('github.create_issue');
+    expect(auditFamilyDetail('connector.computer.fs.read')).toBe('fs.read');
+    expect(auditFamilyDetail('connector.computer.permission.expired')).toBeNull();
+    expect(auditFamilyDetail('project.list')).toBeNull();
+    expect(auditFamilyDetail('no.such.action')).toBeNull();
   });
 
   test('a request no endpoint matched has its own label', () => {

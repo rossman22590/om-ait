@@ -19,6 +19,7 @@ import { join, relative } from 'node:path';
 import {
   AUDIT_EVENT_LABELS,
   AUDIT_ROUTE_LABELS,
+  auditFamilyDetail,
   auditLabelForAction,
 } from '@kortix/shared/audit-labels';
 
@@ -75,8 +76,8 @@ describe('audit route labels', () => {
 /**
  * Every action an audit writer can record has a title: a route's own label,
  * or a line in `packages/shared/src/audit-event-labels.ts`. The writers are
- * the files that call the audit API; the actions are the dotted literals on
- * their `action` lines (ternaries included).
+ * the files that call the audit API or build an `AuditEventInput`; the
+ * actions are the dotted literals on their `action` lines (ternaries included).
  *
  * An action built from a template must start with the literal prefix of a
  * `.*` family in the event catalog (`connector.${actionPath}` →
@@ -88,7 +89,7 @@ describe('audit route labels', () => {
  */
 const SRC = new URL('..', import.meta.url).pathname;
 const WRITER_RE =
-  /recordAuditEvent\(|annotateAuditEvent\(|auditIam\(|applyAdminOverride\(|enforceRateLimit\(|\baudit\(writer|_ACTION\s*=/;
+  /recordAuditEvent\(|annotateAuditEvent\(|auditIam\(|applyAdminOverride\(|enforceRateLimit\(|\bAuditEventInput\b|\baudit\(writer|_ACTION\s*=/;
 const ACTION_LITERAL_RE = /'([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)'/g;
 
 function sourceFiles(dir: string): string[] {
@@ -134,10 +135,10 @@ describe('audit event labels', () => {
     expect(writerActions.size).toBeGreaterThan(80);
   });
 
-  test('every action a writer records has a title', () => {
+  test('every action a writer records has its own title, not only a family one', () => {
     expect(
       [...writerActions]
-        .filter(([action]) => !auditLabelForAction(action))
+        .filter(([action]) => !auditLabelForAction(action) || auditFamilyDetail(action) !== null)
         .map(([action, where]) => `${action}  ${where}`)
         .sort(),
     ).toEqual([]);

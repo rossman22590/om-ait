@@ -47,8 +47,12 @@ function resolve(key: string): AuditRouteLabel | null {
 const byAction = new Map<string, AuditRouteLabel>([
   [UNMATCHED_ROUTE_LABEL.action, UNMATCHED_ROUTE_LABEL],
 ]);
-for (const value of Object.values(AUDIT_ROUTE_LABELS)) {
-  if (typeof value !== 'string' && !byAction.has(value.action)) byAction.set(value.action, value);
+/** The route key each route action labels (its first, non-alias line). */
+const routeKeyByAction = new Map<string, string>();
+for (const [key, value] of Object.entries(AUDIT_ROUTE_LABELS)) {
+  if (typeof value === 'string' || byAction.has(value.action)) continue;
+  byAction.set(value.action, value);
+  routeKeyByAction.set(value.action, key);
 }
 /** `opencode.*` → prefix `opencode.`; the longest prefix is tried first. */
 const families: Array<[prefix: string, title: string]> = [];
@@ -90,4 +94,26 @@ export function auditLabelForAction(action: string): AuditRouteLabel | null {
   if (exact) return exact;
   const family = families.find(([prefix]) => action.startsWith(prefix));
   return family ? { action, title: family[1] } : null;
+}
+
+/**
+ * The route a route action labels: `{ method, route }` (`ALL` for a catch-all
+ * handler, `ENTRY` for a request dispatched before the router). Null for an
+ * event action, which no route writes on its own.
+ */
+export function auditRouteForAction(action: string): { method: string; route: string } | null {
+  const key = routeKeyByAction.get(action);
+  if (!key) return null;
+  const space = key.indexOf(' ');
+  return { method: key.slice(0, space), route: key.slice(space + 1) };
+}
+
+/**
+ * The open-ended tail of an action a `.*` family titles: `github.create_issue`
+ * for `connector.github.create_issue`. Null for an action with its own line.
+ */
+export function auditFamilyDetail(action: string): string | null {
+  if (byAction.has(action)) return null;
+  const family = families.find(([prefix]) => action.startsWith(prefix));
+  return family ? action.slice(family[0].length) : null;
 }
