@@ -50,6 +50,7 @@ import { tunnelRateLimiter } from './core/rate-limiter';
 import { fingerprintTunnelCredentialHash, isTunnelToken, verifySecretKey } from '../shared/crypto';
 import { db } from '../shared/db';
 import { runWorkerTick } from '../shared/audit-scope';
+import { expireTunnelPermissions } from './permission-expiry';
 import { reconcileComputerConnectors } from '../connectors/sync';
 import { type AuditEventInput, recordAuditEvent } from '../shared/audit';
 
@@ -407,12 +408,7 @@ function startTunnelService(): void {
 
   permissionCleanupInterval = setInterval(() => void runWorkerTick('tunnel-cleanup', async () => {
     try {
-      await db
-        .update(tunnelPermissions)
-        .set({ status: 'expired', updatedAt: new Date() })
-        .where(
-          and(eq(tunnelPermissions.status, 'active'), lt(tunnelPermissions.expiresAt, new Date())),
-        );
+      await expireTunnelPermissions(new Date());
       tunnelRateLimiter.cleanup();
 
       // Expire pending device auth requests
