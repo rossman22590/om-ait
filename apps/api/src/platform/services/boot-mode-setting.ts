@@ -25,6 +25,17 @@ export function bootModePolicy(): { stored: boolean; policy: BootModePolicy } {
   return setting.read();
 }
 
+/**
+ * Re-read the policy from the database into this instance's cache. The API
+ * runs several instances, each with its own 30 s cache, so a project read
+ * right after a flag flip can land on one that still holds the old policy
+ * and show Volumes and Stateless sessions in the wrong positions. One
+ * single-row read by primary key.
+ */
+export async function ensureBootModePolicyFresh(): Promise<void> {
+  await setting.readFresh();
+}
+
 export async function refreshBootModePolicy(): Promise<{ stored: boolean; policy: BootModePolicy }> {
   await setting.refresh();
   return setting.read();
@@ -77,6 +88,12 @@ export async function setVolumesForOrg(accountId: string, enabled: boolean | nul
       SET value = ${merged(sql`kortix.platform_settings.value`)}, updated_at = now()
   `);
   await setting.refresh();
+}
+
+/** {@link volumesEnabledFor} on the policy as the database holds it now, not a cached copy. */
+export async function volumesEnabledForFresh(accountId: string | null | undefined): Promise<boolean> {
+  await setting.readFresh();
+  return volumesEnabledFor(accountId);
 }
 
 /**
