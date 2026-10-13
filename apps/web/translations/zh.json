@@ -1795,6 +1795,14 @@
       "ownerOnly": "只有会话所有者或项目管理员可以重启此会话。"
     }
   },
+  "sessionDelete": {
+    "description": "删除 <name>{label}</name> 并移除其沙盒。你可以在 {days} 天内恢复该会话。之后，其消息和文件将被删除。分支会保留。",
+    "bulkDescription": "删除每个选中的会话并移除其沙盒。你可以在 {days} 天内恢复每个会话。之后，其消息和文件将被删除。分支会保留。",
+    "restoring": "正在恢复会话…",
+    "undo": "撤销",
+    "restored": "会话已恢复",
+    "restoreFailed": "无法恢复会话"
+  },
   "modelSelector": {
     "search": "搜索模型",
     "free": "免费",
@@ -6893,8 +6901,6 @@
       "line120JsxTextFailedToLoadSessions": "无法加载会话",
       "line132JsxTextNoSessionsYet": "还没有会话。",
       "line189JsxTextDeleteSession": "删除会话？",
-      "line191JsxTextThisWillPermanentlyDestroyTheBranchAndSandbox": "这将永久销毁以下对象的分支和沙盒：",
-      "line193JsxTextThisActionCannotBeUndone": "。此操作无法撤销。",
       "line312JsxAttrAriaLabelSessionActions": "会话操作"
     },
     "componentsProjectsProjectSidebar": {
@@ -15520,7 +15526,6 @@
       "textac29bffc7691": "harnesses/opencode/",
       "textac2a585fa4dd": "负责汇总，而不是做判断。",
       "textac318011a661": "加载较早的请求",
-      "textac371f652a2d": "这将永久销毁每个会话的分支和沙箱，且无法撤销。",
       "textac4059cfd550": "每次更改都可版本控制、审查和撤销",
       "textac454bda92f9": "正在创建项目…",
       "textac467df56e2a": "    connectors: [gmail-read]",
