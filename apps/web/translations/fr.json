@@ -10870,6 +10870,7 @@
       "text265e52a33b53": "Définissez userName sur l’adresse email utilisée par Kortix : ouvrez la section « Attribute Mapping » (distincte de l’écran d’authentification), dans la colonne « PingOne Directory », développez « Username » et sélectionnez « Email Address ». Dans les préférences/actions de la connexion, définissez ensuite « User Identifier » = userName et « User Filter Expression » = `userName eq \"%s\"`. Une erreur ici est la cause n°1 des échecs PingOne — la valeur par défaut est le nom d’utilisateur interne, pas l’adresse email.",
       "text266240ec402c": "Modèle de facturation",
       "text2672651736ac": "- Le code n’atteint main que via une demande de modification",
+      "text2677201ed3eb": "Départ d’un membre traité",
       "text267d2e1cb01e": "La question la plus importante pour toute entreprise qui adopte l’IA : pouvez-vous remplacer le modèle sans perdre l’expertise institutionnelle acquise ? Une checklist de souveraineté pour évaluer votre plateforme IA.",
       "text268bc1833e83": "Merci",
       "text268f14bbfe11": "Diagnostics",

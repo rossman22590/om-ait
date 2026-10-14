@@ -10870,6 +10870,7 @@
       "text265e52a33b53": "Imposta userName sull'email usata da Kortix per l'associazione: apri la sezione \"Attribute Mapping\" (separata dalla schermata di autenticazione), nella colonna \"PingOne Directory\" espandi \"Username\" e seleziona \"Email Address\". Poi, nelle preferenze/azioni della connessione, imposta \"User Identifier\" = userName e \"User Filter Expression\" = `userName eq \"%s\"`. Un'impostazione errata è la causa principale dei problemi con PingOne: per impostazione predefinita usa il nome utente interno, non l'email.",
       "text266240ec402c": "Modello di fatturazione",
       "text2672651736ac": "- Il lavoro arriva in main solo tramite una change request",
+      "text2677201ed3eb": "Offboarding di un membro completato",
       "text267d2e1cb01e": "La domanda più importante per ogni azienda che adotta l’AI: puoi cambiare modello senza perdere l’esperienza istituzionale costruita? Una checklist di sovranità per valutare la tua piattaforma AI.",
       "text268bc1833e83": "Grazie",
       "text268f14bbfe11": "Diagnostica",

@@ -10870,6 +10870,7 @@
       "text265e52a33b53": "将 userName 设置为 Kortix 用于关联的 email：打开“Attribute Mapping”区域（与身份验证页面分开），在“PingOne Directory”列展开“Username”，选择“Email Address”。然后在连接的首选项/操作中设置“User Identifier” = userName，以及“User Filter Expression” = `userName eq \"%s\"`。这是 PingOne 失败的首要原因——默认使用内部用户名，而不是 email。",
       "text266240ec402c": "计费模式",
       "text2672651736ac": "- 工作只能通过变更请求进入 main",
+      "text2677201ed3eb": "已完成成员离职处理",
       "text267d2e1cb01e": "任何采用 AI 的公司最重要的问题：能否替换模型，而不丢失已经建立的组织专业知识？这是评估 AI 平台的主权性清单。",
       "text268bc1833e83": "谢谢",
       "text268f14bbfe11": "诊断",

@@ -10870,6 +10870,7 @@
       "text265e52a33b53": "Kortixが照合に使用するemailをuserNameに設定します。「Attribute Mapping」セクション（認証画面とは別）を開き、「PingOne Directory」列で「Username」を展開して「Email Address」を選択します。次に接続のpreferences/actionsで「User Identifier」= userName、「User Filter Expression」= `userName eq \"%s\"`に設定します。ここを誤るのがPingOneで最も多い失敗です。デフォルトではemailではなく内部ユーザー名になります。",
       "text266240ec402c": "請求モデル",
       "text2672651736ac": "- 変更リクエストを通じてのみmainに到達する",
+      "text2677201ed3eb": "メンバーをオフボーディングしました",
       "text267d2e1cb01e": "AIを導入するすべての企業にとって最重要の問い：構築した組織の専門知識を失わずにモデルを交換できますか？AIプラットフォームを評価するための主権性チェックリスト。",
       "text268bc1833e83": "ありがとうございます",
       "text268f14bbfe11": "診断",
