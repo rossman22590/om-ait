@@ -89,6 +89,7 @@ import { haptics } from '@/lib/haptics';
 import {
   useAccounts,
   useProject,
+  useProjectSession,
   useProjectSessions,
 } from '@/lib/projects/hooks';
 import { DRAWER_CLOSE, DRAWER_OPEN } from '@/lib/ui/drawer-springs';
@@ -295,22 +296,32 @@ export function ProjectScreen() {
 
   // The thread shows a sub-session of that row, not its root: the header
   // reads the sub-session's title and the title tap (rename of the project
-  // session) is off.
+  // session) is off. A pinned row decides by its pin: the by-id row is read
+  // at connect, so its `runtime_sessions` snapshot misses a sub-agent started
+  // later (KRTX-2316), and that thread then reads its runtime title. A row
+  // with no pin yet decides by the snapshot.
+  const activeRootRuntimeId = activeProjectSession
+    ? (activeProjectSession.runtime_session_id ?? activeProjectSession.opencode_session_id)
+    : null;
   const activeSubsession = useMemo(
     () =>
-      activeProjectSession &&
-      activeSessionId &&
-      activeSessionId !== (activeProjectSession.runtime_session_id ?? activeProjectSession.opencode_session_id)
+      activeProjectSession && activeSessionId && activeSessionId !== activeRootRuntimeId
         ? (runtimeSessionsOf(activeProjectSession).find((item) => item.id === activeSessionId) ?? null)
         : null,
-    [activeProjectSession, activeSessionId]
+    [activeProjectSession, activeSessionId, activeRootRuntimeId]
   );
+  const showsSubsession =
+    !!activeSubsession || (!!activeRootRuntimeId && !!activeSessionId && activeSessionId !== activeRootRuntimeId);
 
+  // The open session's parent: that parent's children start open in the drawer.
+  const activeParentSessionId = activeProjectSession ? sessionParentId(activeProjectSession) : null;
+  // Its row, read by id (KRTX-2316): the first page does not hold an older parent.
+  const activeParentSession = useProjectSession(projectId, activeParentSessionId).data ?? null;
   // The open thread's sub-agent relation (COR-162): the same relation the
   // session list nests by (`metadata.spawned_by_session`), over the same rows.
   const activeSubAgentRelation = useMemo(
-    () => subAgentRelation(activeProjectSession, projectSessions),
-    [activeProjectSession, projectSessions]
+    () => subAgentRelation(activeProjectSession, activeParentSession, projectSessions),
+    [activeProjectSession, activeParentSession, projectSessions]
   );
   const activeSubAgents = useMemo(
     () => (activeProjectSession ? subAgentsOf(activeProjectSession.session_id, projectSessions) : EMPTY_SUB_AGENTS),
@@ -493,9 +504,6 @@ export function ProjectScreen() {
     returnHome();
   }, [projectId, returnHome]);
 
-  // The open session's parent: that parent's children start open in the drawer.
-  const activeParentSessionId = activeProjectSession ? sessionParentId(activeProjectSession) : null;
-
   // The left drawer. It mounts through renderDrawerContent, so it stays mounted while visually closed.
   // The drawer's gear button is gone (COR-123/COR-160 Task 4): the project
   // Settings page is reached from Settings (drawer avatar) → project row.
@@ -612,7 +620,7 @@ export function ProjectScreen() {
           child: false,
         }
       : activeProjectSession && activeSessionId
-        ? { sessionId: activeProjectSession.session_id, rootId: activeSessionId, child: !!activeSubsession }
+        ? { sessionId: activeProjectSession.session_id, rootId: activeSessionId, child: showsSubsession }
         : null;
   const savedCopySessionId = savedCopyTarget?.sessionId ?? null;
   const savedCopyRootId = savedCopyTarget?.rootId ?? null;
@@ -636,16 +644,16 @@ export function ProjectScreen() {
   const connectingViewProjectSessionId =
     activeProjectSession?.session_id ?? connectingProjectSessionId ?? openedProjectSessionId ?? undefined;
   const canOpenSessionActions = !!activeProjectSession;
-  const canRenameSession = !!activeProjectSession && !activeSubsession;
-  const threadTitle = activeSubsession
-    ? subsessionTitle(activeSubsession)
+  const canRenameSession = !!activeProjectSession && !showsSubsession;
+  const threadTitle = showsSubsession
+    ? (activeSubsession ? subsessionTitle(activeSubsession) : undefined)
     : activeProjectSession
       ? sessionDisplayTitle(activeProjectSession)
       : undefined;
   // The row's agent binds the root thread only; a sub-session runs its own.
   // `'default'` is the server's spelling of "no agent bound" (web's session page).
   const boundAgentName =
-    !activeSubsession && activeProjectSession?.agent_name !== 'default'
+    !showsSubsession && activeProjectSession?.agent_name !== 'default'
       ? activeProjectSession?.agent_name
       : null;
 
