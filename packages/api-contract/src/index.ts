@@ -67,9 +67,7 @@ export const FeatureFlagMapSchema = z.object({
   event_triggers: z.boolean(),
   notification_center: z.boolean(),
   volumes: z.boolean(),
-  stateless_sessions: z.boolean(),
   drives: z.boolean(),
-  ephemeral_sandboxes: z.boolean(),
   session_log: z.boolean(),
   session_log_restore: z.boolean(),
 });
@@ -1012,10 +1010,10 @@ export const SessionCreateInputSchema = z
       .optional(),
     provider: SandboxProviderSchema.optional(),
     /**
-     * Run the session on a persistent machine: its whole root disk persists
-     * across stops (installed packages, config, files). Platinum only. A stop
-     * keeps the disk and ends running processes; the machine stays on the
-     * image it was created from until it is reset.
+     * @deprecated INERT. Accepted and ignored: persistent machines left the
+     * product. The key stays because this object is `.strict()` and
+     * `@kortix/sdk` is published: dropping it would turn an old client's
+     * create into a 400.
      */
     persistent_machine: z.boolean().optional(),
     branch_already_created: z.boolean().optional(),
