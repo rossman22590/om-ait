@@ -21120,6 +21120,7 @@
     "zoomOut": "Riduci zoom",
     "mapTwoFingers": "Usa due dita per spostare la mappa",
     "pick": "Scelta",
+    "checklistReady": "{done}/{total} pronti",
     "convertFailed": "Impossibile preparare la trascrizione. Riprova."
   },
   "mobileAppPromo": {

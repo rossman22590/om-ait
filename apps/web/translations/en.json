@@ -21120,6 +21120,7 @@
     "zoomOut": "Zoom out",
     "mapTwoFingers": "Use two fingers to move the map",
     "pick": "Pick",
+    "checklistReady": "{done}/{total} ready",
     "convertFailed": "Could not prepare the transcript. Try again."
   },
   "mobileAppPromo": {

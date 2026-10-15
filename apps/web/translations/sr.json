@@ -21120,6 +21120,7 @@
     "zoomOut": "Умањи",
     "mapTwoFingers": "Користите два прста да померите мапу",
     "pick": "Избор",
+    "checklistReady": "{done}/{total} спремно",
     "convertFailed": "Није могуће припремити транскрипт. Покушајте поново."
   },
   "mobileAppPromo": {
