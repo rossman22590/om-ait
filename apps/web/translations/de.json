@@ -2113,6 +2113,7 @@
     "queuedFiles": "{count, plural, one {# Datei} other {# Dateien}}",
     "queuedCount": "{count} in Warteschlange",
     "editingQueued": "Wird bearbeitet",
+    "queuedActions": "Nachrichtenaktionen",
     "steerNextStep": "Wird beim nächsten Schritt gelesen",
     "queuedByAnotherMember": "Von einem anderen Mitglied gesendet. Nur diese Person kann sie bearbeiten oder senden.",
     "steerFallbackUnsupported": "Wartet auf diesen Durchlauf. Diese Sitzung nimmt während eines Durchlaufs keine Nachrichten an.",

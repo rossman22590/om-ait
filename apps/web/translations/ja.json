@@ -2113,6 +2113,7 @@
     "queuedFiles": "{count, plural, one {#個のファイル} other {#個のファイル}}",
     "queuedCount": "{count} 件キュー中",
     "editingQueued": "編集中",
+    "queuedActions": "メッセージの操作",
     "steerNextStep": "次のステップで読み取り",
     "queuedByAnotherMember": "別のメンバーが送信しました。編集や送信ができるのはそのメンバーのみです。",
     "steerFallbackUnsupported": "このターンの終了を待ちます。このセッションはターン中にメッセージを受け取れません。",

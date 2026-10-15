@@ -2113,6 +2113,7 @@
     "queuedFiles": "{count, plural, one {# arquivo} other {# arquivos}}",
     "queuedCount": "{count} na fila",
     "editingQueued": "Editando",
+    "queuedActions": "Ações da mensagem",
     "steerNextStep": "Lido no próximo passo",
     "queuedByAnotherMember": "Enviada por outro membro. Só essa pessoa pode editá-la ou enviá-la.",
     "steerFallbackUnsupported": "Aguarda este turno. Esta sessão não aceita mensagens durante um turno.",

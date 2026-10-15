@@ -2090,6 +2090,7 @@
     "queuedFiles": "{count, plural, one {# file} other {# files}}",
     "queuedCount": "{count} Queued",
     "editingQueued": "Editing",
+    "queuedActions": "Message actions",
     "steerNextStep": "Read at next step",
     "queuedByAnotherMember": "Sent by another member. Only they can edit or send it.",
     "steerFallbackUnsupported": "Waits for this turn. This session cannot take messages mid-turn.",
