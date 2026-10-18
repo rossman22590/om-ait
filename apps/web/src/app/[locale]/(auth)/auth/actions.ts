@@ -269,6 +269,10 @@ export async function sendEmailCode(prevState: any, formData: FormData) {
     email: normalizedEmail,
     redirectTo: returnUrl,
     codeVerifier,
+    // Which email GoTrue just minted: a new address got the signup
+    // confirmation ("Confirm your email"), an existing one the sign-in link.
+    // The link step names the email the mailbox actually receives (KRTX-2195).
+    mode: flowMode,
   };
 }
 
