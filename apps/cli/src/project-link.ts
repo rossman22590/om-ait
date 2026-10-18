@@ -98,7 +98,13 @@ export function clearLink(cwd = process.cwd()): void {
  * specific binding for that credential and wins, the same precedence
  * resolveProjectContext applies. The connector data plane (pinned to the
  * injected identity) must keep the ambient chain and omits the flag.
- */
+ *
+ * `hostArg` (an explicit `--host`) scopes the same way (KRTX-1936): the
+ * named host owns the chain — a link bound to it, else its stored default —
+ * and the ambient ids (the injected KORTIX_PROJECT_ID, another host's
+ * default) must not leak into it: they live on the caller's own host and
+ * only 404 against the named host's credential, the same scoping
+ * resolveProjectContext applies to `--host`. */
 export function resolveProjectId(
   projectArg?: string,
   opts?: { hostScoped?: boolean; hostArg?: string },
