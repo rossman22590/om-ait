@@ -21987,5 +21987,16 @@
     "failedToast": "Impossibile modificare le automazioni. Riprova.",
     "bannerTitle": "Tutte le automazioni di questo account sono in pausa",
     "bannerDescription": "Qui nulla si avvia da solo finché un proprietario o un amministratore non le riprende nelle impostazioni dell'account. Eseguire un trigger a mano funziona ancora."
+  },
+  "triggerConditions": {
+    "operatorLabel": "Condizione {value0} — operatore",
+    "equals": "è",
+    "not": "non è",
+    "in": "è uno tra",
+    "prefix": "inizia con",
+    "notPrefix": "non inizia con",
+    "exists": "esiste",
+    "missing": "non esiste",
+    "listPlaceholder": "valore 1, valore 2"
   }
 }

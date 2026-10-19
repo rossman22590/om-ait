@@ -21987,5 +21987,16 @@
     "failedToast": "Impossible de modifier les automatisations. Réessayez.",
     "bannerTitle": "Toutes les automatisations de ce compte sont en pause",
     "bannerDescription": "Rien ne s'exécute seul ici tant qu'un propriétaire ou un administrateur ne les reprend pas dans les paramètres du compte. Lancer un déclencheur à la main fonctionne toujours."
+  },
+  "triggerConditions": {
+    "operatorLabel": "Condition {value0} — opérateur",
+    "equals": "est",
+    "not": "n’est pas",
+    "in": "est l’un de",
+    "prefix": "commence par",
+    "notPrefix": "ne commence pas par",
+    "exists": "existe",
+    "missing": "n’existe pas",
+    "listPlaceholder": "valeur 1, valeur 2"
   }
 }

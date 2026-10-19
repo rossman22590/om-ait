@@ -21987,5 +21987,16 @@
     "failedToast": "自動化を変更できませんでした。もう一度お試しください。",
     "bannerTitle": "このアカウントのすべての自動化は一時停止中です",
     "bannerDescription": "オーナーまたは管理者がアカウント設定で再開するまで、ここでは何も自動で実行されません。トリガーの手動実行は引き続き使えます。"
+  },
+  "triggerConditions": {
+    "operatorLabel": "条件 {value0} — 演算子",
+    "equals": "次と一致する",
+    "not": "次と一致しない",
+    "in": "次のいずれかと一致する",
+    "prefix": "次で始まる",
+    "notPrefix": "次で始まらない",
+    "exists": "存在する",
+    "missing": "存在しない",
+    "listPlaceholder": "値 1, 値 2"
   }
 }

@@ -21987,5 +21987,16 @@
     "failedToast": "Automatisierungen konnten nicht geändert werden. Versuche es erneut.",
     "bannerTitle": "Alle Automatisierungen dieses Kontos sind pausiert",
     "bannerDescription": "Hier läuft nichts von selbst, bis ein Inhaber oder Admin sie in den Kontoeinstellungen fortsetzt. Ein manuell ausgeführter Auslöser funktioniert weiterhin."
+  },
+  "triggerConditions": {
+    "operatorLabel": "Bedingung {value0} — Operator",
+    "equals": "ist",
+    "not": "ist nicht",
+    "in": "ist eines von",
+    "prefix": "beginnt mit",
+    "notPrefix": "beginnt nicht mit",
+    "exists": "existiert",
+    "missing": "existiert nicht",
+    "listPlaceholder": "Wert 1, Wert 2"
   }
 }

@@ -21987,5 +21987,16 @@
     "failedToast": "Automatizacije nije moguće promeniti. Pokušaj ponovo.",
     "bannerTitle": "Sve automatizacije ovog naloga su pauzirane",
     "bannerDescription": "Ovde se ništa ne pokreće samo dok ih vlasnik ili administrator ne nastavi u podešavanjima naloga. Ručno pokretanje okidača i dalje radi."
+  },
+  "triggerConditions": {
+    "operatorLabel": "Услов {value0} — оператор",
+    "equals": "је",
+    "not": "није",
+    "in": "је једно од",
+    "prefix": "почиње са",
+    "notPrefix": "не почиње са",
+    "exists": "постоји",
+    "missing": "не постоји",
+    "listPlaceholder": "вредност 1, вредност 2"
   }
 }

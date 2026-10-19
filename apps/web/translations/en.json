@@ -21987,5 +21987,16 @@
     "failedToast": "Couldn't change automations. Try again.",
     "bannerTitle": "All automations in this account are paused",
     "bannerDescription": "Nothing here runs on its own until an owner or admin resumes them in account settings. Running a trigger by hand still works."
+  },
+  "triggerConditions": {
+    "operatorLabel": "Condition {value0} — operator",
+    "equals": "is",
+    "not": "is not",
+    "in": "is one of",
+    "prefix": "starts with",
+    "notPrefix": "does not start with",
+    "exists": "exists",
+    "missing": "does not exist",
+    "listPlaceholder": "value 1, value 2"
   }
 }

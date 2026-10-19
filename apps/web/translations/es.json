@@ -21987,5 +21987,16 @@
     "failedToast": "No se pudieron cambiar las automatizaciones. Inténtalo de nuevo.",
     "bannerTitle": "Todas las automatizaciones de esta cuenta están en pausa",
     "bannerDescription": "Aquí nada se ejecuta por sí solo hasta que un propietario o administrador las reanude en la configuración de la cuenta. Ejecutar un disparador a mano sigue funcionando."
+  },
+  "triggerConditions": {
+    "operatorLabel": "Condición {value0}: operador",
+    "equals": "es",
+    "not": "no es",
+    "in": "es uno de",
+    "prefix": "empieza por",
+    "notPrefix": "no empieza por",
+    "exists": "existe",
+    "missing": "no existe",
+    "listPlaceholder": "valor 1, valor 2"
   }
 }
