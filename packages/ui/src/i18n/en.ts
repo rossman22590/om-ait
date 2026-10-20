@@ -6680,7 +6680,10 @@ const catalog = {
       "dictationDescription": "Dictate a prompt instead of typing it."
     },
     "appStore": "App Store",
-    "googlePlay": "Google Play"
+    "googlePlay": "Google Play",
+    "scanTitle": "Scan to get the app",
+    "scanDescription": "Point your phone's camera at the code. It opens the App Store or Google Play.",
+    "qrLabel": "QR code for the Kortix mobile app"
   },
   "capture": {
     "account": {
