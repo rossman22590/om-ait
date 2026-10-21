@@ -1311,7 +1311,8 @@ awaiting archive. Access policy — `GET/PATCH …/:appId/access` read and persi
 mode; `restricted` without any member or group → 400; `project` persists and
 reads back; `POST …/:appId/access-session` returns a signed URL + expiry for a
 member. `POST …/:appId/deployments` requires a ready artifact and an
-exact source-kind match. Deployment list/detail/logs expose durable state.
+exact source-kind match, and refuses `provider: "daytona"` with 400
+`sandbox_provider_deprecated` (no deployment is created). Deployment list/detail/logs expose durable state.
 Unknown deployment detail and logs return 404.
 Rollback accepts only a ready deployment. Start and stop require an active
 deployment. Finalizing an OCI artifact, using a mismatched OCI image, rolling
@@ -1507,6 +1508,7 @@ These contracts use product IDs. They replace the old route-coverage bucket IDs.
 `MKTP-10` An authorized user adds and removes one marketplace source. Invalid and protected sources are rejected. A body with a wrong-typed field → 400, with or without a JSON content-type.
 `MKTP-11` A project writer starts an agent-driven marketplace installation session. Missing items, unknown items, and unauthorized callers are rejected.
 `PROJ-20` An authenticated user reads whether managed Git is configured.
+`PROJ-44` Daytona is deprecated and no customer may choose it, even where a deployment still configures it. A project whose stored pin is `daytona` reads as unpinned (`default_sandbox_provider: null`) and never lists `daytona` in `available_sandbox_providers`. `PATCH /projects/:id/sandbox-provider {"provider":"daytona"}` → 400 "Daytona is deprecated. New sandboxes run on Platinum." and the project stays unpinned. `POST /projects/:id/sessions {"provider":"daytona"}` → 400 `sandbox_provider_deprecated` before any repository read, and no session exists afterwards. A nonmember gets 403/404.
 `PROJ-43` An authenticated user reads the project-cap state of an account: `ANON` → 401; a member of the account → 200 `{capped, limit, count, message}` where `count` is a number only when the plan caps and `message` is non-null exactly when `capped`; an explicit `account_id` outside the caller's memberships → 403 and a malformed one → 400. The pre-check the /new form uses to show the cap before a create fails.
 `PROJ-27` A project member reads model choices and a project manager sets, reads, and clears model defaults.
 `PROJ-30` A project manager changes the default agent. Invalid agents and unauthorized callers are rejected.
