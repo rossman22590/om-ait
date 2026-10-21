@@ -6,14 +6,10 @@ function served(...ids: string[]): ManagedModel[] {
   return ids.map((id) => ({
     id,
     name: id,
-    upstreamModelId: `vendor/${id}`,
-    transport: 'openrouter',
-    pricingRef: `openrouter/vendor/${id}`,
-    tier: 'balanced',
+    pricing: { inputPerMillion: 1, outputPerMillion: 1 },
     vision: true,
     limit: { context: 200_000, output: 32_000 },
-    openrouterProvider: { only: ['x'], allow_fallbacks: false, zdr: true, data_collection: 'deny' },
-  })) as unknown as ManagedModel[];
+  })) as ManagedModel[];
 }
 
 describe('resolveSessionManagedModel', () => {
