@@ -22391,5 +22391,9 @@
     "notes": "Notes",
     "log": "Log",
     "notFound": "This goal no longer exists."
+  },
+  "agentEditor": {
+    "manage": "Manage",
+    "overviewTitle": "Overview"
   }
 }

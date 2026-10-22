@@ -22391,5 +22391,9 @@
     "notes": "Beleške",
     "log": "Dnevnik",
     "notFound": "Ovaj cilj više ne postoji."
+  },
+  "agentEditor": {
+    "manage": "Upravljaj",
+    "overviewTitle": "Pregled"
   }
 }

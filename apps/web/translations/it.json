@@ -22391,5 +22391,9 @@
     "notes": "Note",
     "log": "Registro",
     "notFound": "Questo obiettivo non esiste più."
+  },
+  "agentEditor": {
+    "manage": "Gestisci",
+    "overviewTitle": "Panoramica"
   }
 }

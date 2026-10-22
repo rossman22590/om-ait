@@ -22391,5 +22391,9 @@
     "notes": "笔记",
     "log": "日志",
     "notFound": "此目标已不存在。"
+  },
+  "agentEditor": {
+    "manage": "管理",
+    "overviewTitle": "概览"
   }
 }

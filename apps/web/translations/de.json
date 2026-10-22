@@ -22391,5 +22391,9 @@
     "notes": "Notizen",
     "log": "Protokoll",
     "notFound": "Dieses Ziel existiert nicht mehr."
+  },
+  "agentEditor": {
+    "manage": "Verwalten",
+    "overviewTitle": "Übersicht"
   }
 }

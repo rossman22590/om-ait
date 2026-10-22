@@ -22391,5 +22391,9 @@
     "notes": "Notes",
     "log": "Journal",
     "notFound": "Cet objectif n'existe plus."
+  },
+  "agentEditor": {
+    "manage": "Gérer",
+    "overviewTitle": "Vue d'ensemble"
   }
 }
