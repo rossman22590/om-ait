@@ -1,6 +1,6 @@
 {
   "generatedAt": "static",
-  "count": 887,
+  "count": 885,
   "routes": [
     {
       "method": "GET",
@@ -3213,14 +3213,6 @@
     {
       "method": "GET",
       "path": "/v1/projects/suna-migration/status"
-    },
-    {
-      "method": "GET",
-      "path": "/v1/public/session-shares/:shareId"
-    },
-    {
-      "method": "GET",
-      "path": "/v1/public/session-shares/:shareId/messages"
     },
     {
       "method": "POST",
