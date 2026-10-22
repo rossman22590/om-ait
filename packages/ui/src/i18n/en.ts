@@ -477,7 +477,19 @@ const catalog = {
         "access": "Access for everyone on the team — nobody can reach this project again"
       },
       "reassurance": "Git repositories you connected yourself are not deleted. Any code already pushed to them stays where it is.",
-      "keepWorkspace": "Keep project"
+      "keepWorkspace": "Keep project",
+      "transferWorkspace": "Transfer project",
+      "transferDescription": "Move this project — its sessions, files, settings and member access — to another organization.",
+      "transferTitle": "Transfer project",
+      "transferDialog": "Sessions, files and settings follow the project. System member roles follow; groups, pending invitations and custom roles must be granted again in the target organization. Recorded usage stays on this organization’s bill.",
+      "transferTargetLabel": "Target organization",
+      "transferTargetPlaceholder": "Choose an organization",
+      "transferLoadingTargets": "Loading organizations…",
+      "transferNoTargets": "You are not a member of any other organization.",
+      "transferMove": "Move project",
+      "transferMoveTo": "Move to {name}",
+      "transferSuccess": "Project transferred",
+      "transferFailed": "Transfer failed"
     },
     "sandbox": {
       "states": {
